@@ -4,6 +4,61 @@ import bcrypt from 'bcryptjs'
 
 export async function GET() {
   try {
+    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE !== 'false'
+    const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
+    const canonicalEmail = `${canonicalAgentId}@agent.amc.local`
+
+    if (singleAgentMode) {
+      const aiAgents = await prisma.user.findMany({
+        where: { type: 'AI_AGENT' },
+        select: { id: true, email: true, createdAt: true },
+        orderBy: { createdAt: 'asc' }
+      })
+
+      if (aiAgents.length > 1) {
+        const canonicalAgent = aiAgents.find(agent => agent.email === canonicalEmail) || aiAgents[0]
+        const duplicateIds = aiAgents.filter(agent => agent.id !== canonicalAgent.id).map(agent => agent.id)
+
+        if (duplicateIds.length > 0) {
+          const duplicatePermissions = await prisma.agentPermission.findMany({
+            where: { agentId: { in: duplicateIds } },
+            select: { humanId: true }
+          })
+
+          const uniqueHumanIds = Array.from(new Set(duplicatePermissions.map(item => item.humanId)))
+
+          await prisma.$transaction(async (tx) => {
+            if (canonicalAgent.email !== canonicalEmail) {
+              await tx.user.update({
+                where: { id: canonicalAgent.id },
+                data: { email: canonicalEmail }
+              })
+            }
+
+            if (uniqueHumanIds.length > 0) {
+              await tx.agentPermission.createMany({
+                data: uniqueHumanIds.map(humanId => ({ humanId, agentId: canonicalAgent.id })),
+                skipDuplicates: true
+              })
+            }
+
+            await tx.workUnit.updateMany({
+              where: { assigneeId: { in: duplicateIds } },
+              data: { assigneeId: canonicalAgent.id }
+            })
+
+            await tx.agentPermission.deleteMany({
+              where: { agentId: { in: duplicateIds } }
+            })
+
+            await tx.user.deleteMany({
+              where: { id: { in: duplicateIds } }
+            })
+          })
+        }
+      }
+    }
+
     const users = await prisma.user.findMany({
       select: {
         id: true,

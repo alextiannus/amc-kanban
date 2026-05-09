@@ -7,6 +7,8 @@ import { use } from 'react'
 export default function AgentProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const [agent, setAgent] = useState<any>(null)
   const [error, setError] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
   const router = useRouter()
   const resolvedParams = use(params)
 
@@ -21,6 +23,39 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
       setAgent(data)
     } else {
       setError('Agent not found or access denied')
+    }
+  }
+
+  const handleAvatarUpload = async () => {
+    if (!selectedFile) {
+      setError('Please select an image first')
+      return
+    }
+
+    setError('')
+    setUploading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('avatar', selectedFile)
+
+      const res = await fetch(`/api/agents/${resolvedParams.id}`, {
+        method: 'PATCH',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error || 'Failed to upload avatar')
+        return
+      }
+
+      setSelectedFile(null)
+      await fetchAgent()
+    } catch {
+      setError('An error occurred while uploading the avatar')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -40,8 +75,45 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-semibold mb-2 dark:text-white">Identity</h2>
-            <p className="text-gray-700 dark:text-gray-300 font-medium">{agent.email}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400">ID: {agent.id}</p>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 border border-gray-200 dark:border-gray-600">
+                {agent.avatar ? (
+                  <img src={agent.avatar} alt="Agent Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-lg font-bold text-gray-500 dark:text-gray-300">
+                    {(agent.nickname || agent.email.split('@')[0]).slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div>
+                <p className="text-gray-700 dark:text-gray-300 font-medium">{agent.email}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">ID: {agent.id}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl font-semibold mb-4 dark:text-white">Update Avatar</h2>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
+            />
+            {selectedFile && (
+              <p className="mt-3 text-sm text-gray-600 dark:text-gray-300 truncate">Selected: {selectedFile.name}</p>
+            )}
+            <button
+              type="button"
+              onClick={handleAvatarUpload}
+              disabled={uploading}
+              className="mt-4 w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {uploading ? 'Uploading...' : 'Save Avatar'}
+            </button>
+            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Only users with access to this AI profile can update its avatar.
+            </p>
           </div>
 
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
