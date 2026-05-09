@@ -58,3 +58,22 @@
 - 首次访问系统的用户自动创建为 `ADMIN`，接管根权限。
 - 全站 HTTPS 与 Secure Cookies 传输，防止重放攻击。
 - 所有外网 API 路由均验证 `X-Api-Key`。
+
+## 6. 产品演进路线 (Product Roadmap)
+
+本部分记录了 AMC 智能工作台从 MVP 走向企业级“大型协同网络”的高阶规划，待核心业务跑通后逐步迭代落地：
+
+### 6.1 ⚡️ 性能与架构演进 (Architecture & Performance)
+- **毫秒级实时通信**: 将基于 `setInterval` 的短轮询机制升级为 Server-Sent Events (SSE) 或 WebSocket (如 Socket.io / Pusher)，大幅降低数据库 QPS，实现任务状态的无缝即时推送。
+- **游标分页与懒加载**: 针对 `Done` 与 `Void` 泳道的历史任务，在 Prisma 层引入 Cursor Pagination，并在前端实现无限滚动 (Infinite Scroll)，确保海量数据下系统的绝对流畅。
+
+### 6.2 🔔 交互与协同体验 (UX & Collaboration)
+- **多渠道主动告警机制**: 引入前端通知系统（如 `sonner`），并打通 Webhook。当 Agent 将任务标记为 `Require Input` 遇到阻碍时，第一时间推送到人类干预者的飞书/Slack/钉钉，减少任务阻塞停滞时间。
+- **细粒度工作审计日志 (Audit Trail)**: 新增独立的 `TaskLog` 数据库模型。以时间轴（Timeline）或评论区的方式，精细化记录 Agent 执行任务的中间进展和思考链路，替代目前笼统的描述字段。
+
+### 6.3 🧠 高阶 AI 编排 (Advanced AI Orchestration)
+- **DAG 工作流与 Agent 协同**: 引入任务依赖模型 (`dependsOn`)，实现单任务的多节点派发。例如：Agent A 完成数据搜索后，自动触发下游 Agent B 进行汇总与排版，实现流水线级别的纯 AI 协同。
+- **AI 效能数据看板 (Performance Analytics)**: 引入 `Recharts` 可视化组件，统计每个 Agent 的“平均耗时”、“拦截率”、“干预频率”等效能指标，用数据驱动底层 Prompt 和工作流的不断进化。
+
+### 6.4 🛡 安全与稳定性防护 (Security)
+- **API 限流与防穿透保护**: 在核心路由入口（如 `/api/tasks`）引入 Redis 令牌桶算法限流（Rate Limiting）。彻底防范因个别外部 AI Agent 逻辑死循环导致的高频攻击，保障核心系统的高可用性。
