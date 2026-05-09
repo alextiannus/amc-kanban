@@ -36,6 +36,10 @@ export default function AdminPage() {
         body: JSON.stringify({ email, type })
       })
       if (res.ok) {
+        const data = await res.json()
+        if (data.temporaryPassword) {
+          alert(`Temporary password (shown once): ${data.temporaryPassword}`)
+        }
         setEmail('')
         fetchUsers()
       } else {
@@ -119,7 +123,7 @@ export default function AdminPage() {
               <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
                 {loading ? 'Adding...' : 'Add'}
               </button>
-              <p className="text-xs text-gray-500 mt-2">Default password is 234567</p>
+              <p className="text-xs text-gray-500 mt-2">A secure temporary password will be shown once after user creation.</p>
             </form>
           </div>
         </div>

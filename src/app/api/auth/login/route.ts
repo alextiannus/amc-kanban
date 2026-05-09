@@ -7,16 +7,25 @@ import { cookies } from 'next/headers'
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
-    const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL || 'alextiannus@gmail.com'
+    const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim()
+    const bootstrapAdminPassword = process.env.BOOTSTRAP_ADMIN_INITIAL_PASSWORD
 
     let user = await prisma.user.findUnique({ where: { email } })
 
     const userCount = await prisma.user.count()
     if (userCount === 0) {
-      const hashedPassword = await bcrypt.hash('234567', 10)
+      if (!bootstrapAdminEmail || !bootstrapAdminPassword) {
+        console.error('Bootstrap admin configuration is missing')
+        return NextResponse.json(
+          { error: 'System is not initialized. Please set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_INITIAL_PASSWORD.' },
+          { status: 500 }
+        )
+      }
+
+      const hashedPassword = await bcrypt.hash(bootstrapAdminPassword, 12)
       await prisma.user.create({
         data: {
-          email: 'alextiannus@gmail.com',
+          email: bootstrapAdminEmail,
           password: hashedPassword,
           role: 'ADMIN',
         }
@@ -34,7 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid password' }, { status: 401 })
     }
 
-    if (user.email === bootstrapAdminEmail && user.role !== 'ADMIN') {
+    if (bootstrapAdminEmail && user.email === bootstrapAdminEmail && user.role !== 'ADMIN') {
       user = await prisma.user.update({
         where: { id: user.id },
         data: { role: 'ADMIN' }

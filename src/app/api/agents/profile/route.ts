@@ -16,10 +16,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized: Bearer token required' }, { status: 401 })
     }
     
-    // For first-time registration: accept any bearer token
-    // For updates: verify API key belongs to existing agent
-    const existingAgent = await getAgentFromApiKey(apiKey)
-    
     const body = await request.json()
     const { agentId, nickname, introduction, workflow, themeColor, avatar, insights } = body
 
@@ -31,6 +27,23 @@ export async function POST(request: Request) {
     const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
     const resolvedAgentId = singleAgentMode ? canonicalAgentId : agentId
     const email = `${resolvedAgentId}@agent.amc.local`
+
+    const authenticatedAgent = await getAgentFromApiKey(apiKey)
+    const targetAgent = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, type: true }
+    })
+
+    if (targetAgent) {
+      if (!authenticatedAgent || authenticatedAgent.id !== targetAgent.id) {
+        return NextResponse.json({ error: 'Forbidden: API key does not match target agent' }, { status: 403 })
+      }
+      if (targetAgent.type !== 'AI_AGENT') {
+        return NextResponse.json({ error: 'Invalid target account type' }, { status: 400 })
+      }
+    } else if (authenticatedAgent) {
+      return NextResponse.json({ error: 'Forbidden: API key already bound to another agent' }, { status: 403 })
+    }
 
     // Upsert the agent identity. In single-agent mode we always reuse the same account.
     const upsertedAgent = await prisma.user.upsert({

@@ -9,14 +9,24 @@ export async function GET(request: Request) {
   try {
     const session = await getSession()
     const apiKey = extractApiKey(request)
+    const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
 
     if (!session?.user && !apiKey) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    if (apiKey && !authenticatedAgent) {
+      return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+    }
+
     let whereClause: any = status ? { status } : {}
 
-    if (!apiKey && session!.user.role !== 'ADMIN') {
+    if (authenticatedAgent) {
+      whereClause = {
+        ...whereClause,
+        assigneeId: authenticatedAgent.id
+      }
+    } else if (session!.user.role !== 'ADMIN') {
       const permissions = await prisma.agentPermission.findMany({
         where: { humanId: session.user.id }
       })
@@ -45,9 +55,14 @@ export async function POST(request: Request) {
   try {
     const session = await getSession()
     const apiKey = extractApiKey(request)
+    const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
 
     if (!session?.user && !apiKey) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (apiKey && !authenticatedAgent) {
+      return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
     const body = await request.json()
@@ -59,6 +74,10 @@ export async function POST(request: Request) {
 
     if (!assigneeId) {
       return NextResponse.json({ error: 'assigneeId is required' }, { status: 400 })
+    }
+
+    if (authenticatedAgent && assigneeId !== authenticatedAgent.id) {
+      return NextResponse.json({ error: 'Forbidden: API key can only create tasks for its own agent' }, { status: 403 })
     }
 
     // Verify assignee exists and is an AI_AGENT

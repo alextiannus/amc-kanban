@@ -1,14 +1,17 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 
-const secretKey = process.env.JWT_SECRET
-if (!secretKey) {
-  throw new Error('JWT_SECRET environment variable is required')
+function getJwtKey() {
+  const secretKey = process.env.JWT_SECRET
+  if (!secretKey) {
+    throw new Error('JWT_SECRET environment variable is required')
+  }
+  return new TextEncoder().encode(secretKey)
 }
-const key = new TextEncoder().encode(secretKey)
-const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL || 'alextiannus@gmail.com'
+const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim()
 
 export async function encrypt(payload: any) {
+  const key = getJwtKey()
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -17,6 +20,7 @@ export async function encrypt(payload: any) {
 }
 
 export async function decrypt(input: string): Promise<any> {
+  const key = getJwtKey()
   const { payload } = await jwtVerify(input, key, {
     algorithms: ['HS256'],
   })
@@ -30,7 +34,7 @@ export async function getSession() {
   try {
     const payload = await decrypt(session)
 
-    if (payload?.user?.email === bootstrapAdminEmail && payload.user.role !== 'ADMIN') {
+    if (bootstrapAdminEmail && payload?.user?.email === bootstrapAdminEmail && payload.user.role !== 'ADMIN') {
       return {
         ...payload,
         user: {

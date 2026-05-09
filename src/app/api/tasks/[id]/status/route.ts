@@ -32,7 +32,7 @@ export async function PATCH(
       isAuthorized = true
     } else if (apiKey) {
       const agent = await getAgentFromApiKey(apiKey)
-      isAuthorized = agent && agent.id === task.assigneeId
+      isAuthorized = Boolean(agent && agent.id === task.assigneeId)
     } else if (session?.user.id) {
       isAuthorized = session.user.role === 'ADMIN'
     }
@@ -55,6 +55,7 @@ export async function PATCH(
 
     return NextResponse.json(updatedTask)
   } catch (error) {
+    console.error('Task status PATCH error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
