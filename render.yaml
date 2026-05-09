@@ -1,6 +1,6 @@
 databases:
   - name: amc-db
-    plan: starter
+    plan: basic-1gb
     databaseName: amc
     user: amc_user
 
