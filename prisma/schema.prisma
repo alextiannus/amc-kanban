@@ -23,6 +23,7 @@ model User {
   workflow     String?
   themeColor   String?
   avatar       String?
+  apiKey       String?  @unique // Each AI Agent has its own API key
   
   // 关系映射
   tasksAsAssignee  WorkUnit[] @relation("TaskAssignee")

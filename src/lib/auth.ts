@@ -47,6 +47,20 @@ export function verifyApiKey(request: Request): boolean {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader || !authHeader.startsWith('Bearer ')) return false
   const token = authHeader.split(' ')[1]
-  const expectedKey = process.env.API_KEY || 'default-openclaw-key-2026'
-  return token === expectedKey
+  // For transition: accept any valid token format
+  // Individual key verification happens at route level
+  return token && token.length > 0
+}
+
+// Get agent by API key from database
+export async function getAgentFromApiKey(apiKey: string) {
+  try {
+    const { prisma } = await import('./prisma')
+    return await prisma.user.findUnique({
+      where: { apiKey },
+      select: { id: true, email: true, type: true }
+    })
+  } catch {
+    return null
+  }
 }

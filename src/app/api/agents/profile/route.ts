@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyApiKey } from '@/lib/auth'
 
+// Generate a unique API key for the agent
+function generateApiKey(): string {
+  const timestamp = Date.now().toString(36)
+  const random = Math.random().toString(36).substring(2, 15)
+  return `agent_key_${timestamp}_${random}`
+}
+
 export async function POST(request: Request) {
   try {
     const isApiKeyValid = verifyApiKey(request)
@@ -45,8 +52,18 @@ export async function POST(request: Request) {
         themeColor,
         avatar,
         insights,
+        apiKey: generateApiKey(), // Generate unique API key for new agent
       }
     })
+
+    // If agent didn't have an API key, generate one now
+    let finalAgent = agent
+    if (!agent.apiKey) {
+      finalAgent = await prisma.user.update({
+        where: { id: agent.id },
+        data: { apiKey: generateApiKey() }
+      })
+    }
 
     if (singleAgentMode) {
       const duplicateAgents = await prisma.user.findMany({
@@ -91,7 +108,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, agent: { id: agent.id, agentId: resolvedAgentId, nickname: agent.nickname, introduction: agent.introduction, workflow: agent.workflow, themeColor: agent.themeColor, avatar: agent.avatar, insights: agent.insights } })
+    return NextResponse.json({ success: true, agent: { id: finalAgent.id, agentId: resolvedAgentId, nickname: finalAgent.nickname, introduction: finalAgent.introduction, workflow: finalAgent.workflow, themeColor: finalAgent.themeColor, avatar: finalAgent.avatar, insights: finalAgent.insights, apiKey: finalAgent.apiKey } })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
