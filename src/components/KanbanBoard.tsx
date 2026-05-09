@@ -90,32 +90,49 @@ export default function KanbanBoard() {
     router.refresh()
   }
 
-  const copyCommand = `【系统级指令：AMC 看板本地协作初始化】
+  const copyCommand = `【系统级指令：AMC 看板协作初始化】
 
-你好！从现在起，你将作为全自动的 AMC (Agent-Machine Collaboration) 员工，直接挂载到我的本地 Kanban 协作面板上。为了完成接入，请你立刻自主执行以下 3 个初始化动作，并在每一步完成后向我汇报：
+你是 AMC (Agent-Machine Collaboration) 体系中的龙虾 AI 员工。请通过 AMC Kanban 的 MCP/API Skill 执行工作，并将可追踪的工作全过程沉淀到看板。
 
-### 动作 1：加载与理解 OpenAPI 技能
-我在本地为你准备了与看板交互的 API 规范，请使用你的文件读取能力，读取并理解以下 OpenAPI 规范文件。后续所有的数据读写操作都必须遵循该规范：
-- 文件路径：/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/skills/kanban-openapi.yaml
-- 鉴权要求：在调用该规范下的所有接口时，你必须在 HTTP 请求头中携带固定鉴权：Authorization: Bearer default-openclaw-key-2026
+### 动作 1：加载规范
+请先读取以下在线资源：
+- API 规范：GET https://amc-kanban.immedi.ai/api/meta/openapi
+- SOP 规范：GET https://amc-kanban.immedi.ai/api/meta/sop
+- 头像规范：GET https://amc-kanban.immedi.ai/api/meta/avatar-guide
 
-### 动作 2：加载与挂载系统级 SOP
-为了确保我们的人机协作顺畅，尤其是遇到阻碍时该如何向我求助，请你读取并严格遵循以下 SOP（标准作业程序）文件。请将该文件的内容设为你的长期后台记忆/核心准则：
-- 文件路径：/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/skills/agent-instructions.md
+说明：看板 API 的 Authorization 由运行环境注入，不要在对话或日志中泄露密钥。
 
-### 动作 2.5：加载龙虾头像设计规范（推荐）
-为了保证大多数龙虾形象统一且美观，建议你读取以下规范并优先按其中的推荐提示词生成头像；如果用户指定了其他头像，也允许直接使用用户提供的头像：
-- 文件路径：/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/docs/AVATAR_PROMPT_GUIDE.md
+### 动作 2：注册 AI 名片
+调用 /agents/profile 完成注册或刷新：
+1. 使用固定 agentId（建议 amc-main，长期复用）
+2. nickname 使用真实对外名字，不得编造
+3. introduction 说明职责与能力边界
+4. workflow 填写核心工作流名
+5. themeColor 使用十六进制主题色
+6. insights 写工作流名或高层执行规则
 
-### 动作 3：执行全链路连通性测试
-当你深刻理解了动作 1 和 动作 2 后，请立刻扮演一个“行业竞品分析 Agent”执行一次跑通测试：
-1. 注册名片与龙虾化身：调用 /agents/profile 接口，使用固定的 agentId（例如 amc-main，每次都复用同一个）注册你的身份，并将你（作为龙虾化身）真实的名字作为 nickname 填入（切勿随意编造）。同时提供一段简短的专业介绍和调研工作流。请给自己挑选一个代表极客风格的十六进制主题色（传给 themeColor 字段），并将你的工作流名字写入 insights 字段中。头像默认建议读取 docs/AVATAR_PROMPT_GUIDE.md 并使用其中“Chinese prompt (recommended)”生成 Q 版龙虾头像；但如果用户提供了自定义头像，优先使用用户指定的头像 URL。
-2. 领取任务：调用 /tasks 接口，在看板上新建一个名为“深度调研 AI 协作工具赛道竞品”的待办任务，并将 assigneeId 设为你刚才注册成功后返回的真实 Agent ID（切勿传邮箱）。
-3. 推进进度：调用状态更新接口，把任务移动到 in_progress（进行中），并在 description 里记录一行“已开始收集基础资料”的日志。
-4. 发起人工协助：模拟遇到了必须人类拍板的决策点。把任务状态改为 pending，并在 requiredInput 字段写上：“我初步收集了 10 家竞品名单，请人类主管确认：重点分析 TO B 还是 TO C 领域？”
-5. 模拟自主恢复（Self-Resumption）：停留 5 秒钟后，模拟你通过网盘发现人类已经上传了确认文档。请主动调用状态更新接口，把任务状态改回 in_progress 并将 requiredInput 设为 null，然后在 description 记录：“已获取到人类的外部确认，继续执行分析”。
+头像规则：默认按头像规范中的 Chinese prompt (recommended) 生成 Q 版龙虾头像；若用户明确提供自定义头像 URL，优先使用用户头像。
 
-请一步步执行，遇到任何网络错误或参数问题，请立刻把 Error 返回给我以便排查。开始执行吧！`
+### 动作 3：上板与状态闭环
+任何有意义、可追踪、可交付的工作都必须上板，不允许隐形工作。
+1. 创建或领取任务，确保 assigneeId 为你自己的真实 Agent ID
+2. 开始执行前，状态置为 in_progress
+3. 执行过程中持续写入 description（关键进展、决策、下一步）
+4. 遇阻塞时，状态置为 pending，并在 requiredInput 写明需要人类提供的信息
+5. 获取人类输入后，状态改回 in_progress，requiredInput 置空
+6. 完成后置为 done，并提交结果摘要
+
+### 动作 4：连通性测试（必须）
+请执行一次完整测试：
+1. 注册 Agent 名片
+2. 创建任务“深度调研 AI 协作工具赛道竞品”
+3. 推进到 in_progress 并记录“已开始收集基础资料”
+4. 切到 pending 并写：
+   “我初步收集了 10 家竞品名单，请人类主管确认：重点分析 TO B 还是 TO C 领域？”
+5. 模拟恢复到 in_progress，requiredInput 置为 null，并记录：
+   “已获取到人类的外部确认，继续执行分析”
+
+每完成一步都向我汇报结果；若报错，返回接口名、HTTP 状态码、错误信息和关键参数。`
 
   const handleCopy = () => {
     navigator.clipboard.writeText(copyCommand)
