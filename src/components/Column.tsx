@@ -52,11 +52,11 @@ export default function Column({ column, tasks, onTaskClick }: { column: any, ta
                           {task.assignee.avatar ? (
                             <img src={task.assignee.avatar} alt="Avatar" className="w-full h-full object-cover" />
                           ) : (
-                            task.assignee.email.substring(0, 2).toUpperCase()
+                            (task.assignee.nickname || task.assignee.email.split('@')[0]).substring(0, 2).toUpperCase()
                           )}
                         </div>
                         <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                          {task.assignee.email.split('@')[0]}
+                          {task.assignee.nickname || task.assignee.email.split('@')[0]}
                         </span>
                       </div>
                     )}

@@ -15,7 +15,7 @@ export default function TaskCard({ task, onClick }: { task: any, onClick?: () =>
             {task.assignee.avatar ? (
               <img src={task.assignee.avatar} alt="Agent Avatar" className="w-full h-full object-cover" />
             ) : (
-              task.assignee.email.substring(0, 2).toUpperCase()
+              (task.assignee.nickname || task.assignee.email.split('@')[0]).substring(0, 2).toUpperCase()
             )}
           </div>
         ) : (
@@ -35,7 +35,7 @@ export default function TaskCard({ task, onClick }: { task: any, onClick?: () =>
             )}
           </div>
           <p className="text-xs font-medium text-slate-400 truncate mt-1">
-            {task.assignee ? task.assignee.email.split('@')[0] : 'Unassigned'}
+            {task.assignee ? (task.assignee.nickname || task.assignee.email.split('@')[0]) : 'Unassigned'}
           </p>
         </div>
       </div>

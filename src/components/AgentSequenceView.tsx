@@ -32,6 +32,7 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       return agent.email.toLowerCase().includes(q) || 
+             (agent.nickname && agent.nickname.toLowerCase().includes(q)) ||
              (agent.insights && agent.insights.toLowerCase().includes(q)) ||
              (agent.introduction && agent.introduction.toLowerCase().includes(q))
     }
@@ -91,10 +92,10 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
                     style={agent.themeColor ? { backgroundColor: `${agent.themeColor}20`, color: agent.themeColor } : undefined}
                     className={`w-14 h-14 rounded-2xl flex items-center justify-center text-sm font-bold overflow-hidden border border-white dark:border-slate-700 shadow-sm flex-shrink-0 ${!agent.themeColor ? 'bg-slate-200 text-slate-600' : ''}`}
                   >
-                    {agent.avatar ? <img src={agent.avatar} alt="Avatar" className="w-full h-full object-cover" /> : agent.email.substring(0, 2).toUpperCase()}
+                    {agent.avatar ? <img src={agent.avatar} alt="Avatar" className="w-full h-full object-cover" /> : (agent.nickname || agent.email.split('@')[0]).substring(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-extrabold text-slate-800 dark:text-slate-100 truncate text-lg">{agent.email.split('@')[0]}</h3>
+                    <h3 className="font-extrabold text-slate-800 dark:text-slate-100 truncate text-lg">{agent.nickname || agent.email.split('@')[0]}</h3>
                     <p className="text-xs font-medium text-slate-400 truncate">{agent.email}</p>
                   </div>
                 </div>

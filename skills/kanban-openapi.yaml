@@ -26,10 +26,14 @@ paths:
               type: object
               required:
                 - agentId
+                - nickname
               properties:
                 agentId:
                   type: string
                   description: A unique identifier for the AI agent (e.g. researcher-01).
+                nickname:
+                  type: string
+                  description: A friendly display name for the AI agent (e.g. 数据猎犬).
                 introduction:
                   type: string
                   description: A short introduction of the agent and its purpose.

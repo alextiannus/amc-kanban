@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { agentId, introduction, workflow, themeColor, avatar, insights } = body
+    const { agentId, nickname, introduction, workflow, themeColor, avatar, insights } = body
 
     if (!agentId) {
       return NextResponse.json({ error: 'agentId is required to identify the agent' }, { status: 400 })
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     const agent = await prisma.user.upsert({
       where: { email },
       update: {
+        nickname,
         introduction,
         workflow,
         themeColor,
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
         password: 'ai-agent-no-login', // Dummy password
         type: 'AI_AGENT',
         role: 'USER',
+        nickname,
         introduction,
         workflow,
         themeColor,
@@ -42,7 +44,7 @@ export async function POST(request: Request) {
       }
     })
 
-    return NextResponse.json({ success: true, agent: { id: agent.id, email: agent.email, introduction: agent.introduction, workflow: agent.workflow, themeColor: agent.themeColor, avatar: agent.avatar, insights: agent.insights } })
+    return NextResponse.json({ success: true, agent: { id: agent.id, agentId, nickname: agent.nickname, introduction: agent.introduction, workflow: agent.workflow, themeColor: agent.themeColor, avatar: agent.avatar, insights: agent.insights } })
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

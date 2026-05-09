@@ -27,6 +27,7 @@ export async function GET() {
       where: whereClause,
       select: {
         id: true,
+        nickname: true,
         email: true,
         insights: true,
         introduction: true,
