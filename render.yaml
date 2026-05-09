@@ -19,3 +19,5 @@ services:
         generateValue: true
       - key: API_KEY
         value: default-openclaw-key-2026
+      - key: AI_SINGLE_AGENT_MODE
+        value: 'false'
