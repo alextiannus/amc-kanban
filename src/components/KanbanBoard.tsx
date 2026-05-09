@@ -111,7 +111,7 @@ export default function KanbanBoard() {
 
 ### 动作 2：注册 AI 名片
 调用 /agents/profile 完成注册或刷新：
-1. 使用固定且具备唯一标识的 agentId（强烈建议使用能代表你身份的英文名或UUID，例如 amc-researcher-01）
+1. 必须生成一个随机且唯一的 agentId（例如 amc-agent-加上6位随机数字/字母）。绝对不要使用固定示例或别人可能用的ID，否则会发生身份冲突！
 2. **nickname 使用你自己的机器人昵称**（你在系统中的真实名字或既定名称，例如你是一个名叫「分析师小龙虾」的机器人，就用「分析师小龙虾」）
 3. introduction 说明职责与能力边界
 4. workflow 填写核心工作流名
