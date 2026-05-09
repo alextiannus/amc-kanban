@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSession, verifyApiKey } from '@/lib/auth'
+import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -8,15 +8,15 @@ export async function GET(request: Request) {
   
   try {
     const session = await getSession()
-    const isApiKeyValid = verifyApiKey(request)
+    const apiKey = extractApiKey(request)
 
-    if (!session?.user && !isApiKeyValid) {
+    if (!session?.user && !apiKey) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     let whereClause: any = status ? { status } : {}
 
-    if (!isApiKeyValid && session!.user.role !== 'ADMIN') {
+    if (!apiKey && session!.user.role !== 'ADMIN') {
       const permissions = await prisma.agentPermission.findMany({
         where: { humanId: session.user.id }
       })
@@ -44,9 +44,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = await getSession()
-    const isApiKeyValid = verifyApiKey(request)
+    const apiKey = extractApiKey(request)
 
-    if (!session?.user && !isApiKeyValid) {
+    if (!session?.user && !apiKey) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -55,6 +55,20 @@ export async function POST(request: Request) {
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+    }
+
+    if (!assigneeId) {
+      return NextResponse.json({ error: 'assigneeId is required' }, { status: 400 })
+    }
+
+    // Verify assignee exists and is an AI_AGENT
+    const assignee = await prisma.user.findUnique({
+      where: { id: assigneeId },
+      select: { id: true, type: true }
+    })
+
+    if (!assignee || assignee.type !== 'AI_AGENT') {
+      return NextResponse.json({ error: 'Invalid assigneeId: must be an AI_AGENT' }, { status: 400 })
     }
 
     const newTask = await prisma.workUnit.create({
@@ -69,6 +83,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newTask)
   } catch (error) {
+    console.error('Error creating task:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

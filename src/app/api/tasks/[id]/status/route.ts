@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSession, verifyApiKey } from '@/lib/auth'
+import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 
 export async function PATCH(
   request: Request,
@@ -8,9 +8,9 @@ export async function PATCH(
 ) {
   try {
     const session = await getSession()
-    const isApiKeyValid = verifyApiKey(request)
+    const apiKey = extractApiKey(request)
 
-    if (!session?.user && !isApiKeyValid) {
+    if (!session?.user && !apiKey) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -19,6 +19,26 @@ export async function PATCH(
 
     if (!status) {
       return NextResponse.json({ error: 'Status is required' }, { status: 400 })
+    }
+
+    // Check authorization
+    const task = await prisma.workUnit.findUnique({ where: { id } })
+    if (!task) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    }
+
+    let isAuthorized = false
+    if (session?.user.role === 'ADMIN') {
+      isAuthorized = true
+    } else if (apiKey) {
+      const agent = await getAgentFromApiKey(apiKey)
+      isAuthorized = agent && agent.id === task.assigneeId
+    } else if (session?.user.id) {
+      isAuthorized = session.user.role === 'ADMIN'
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Forbidden: Only task assignee or admin can update status' }, { status: 403 })
     }
 
     const data: any = { status }

@@ -12,7 +12,8 @@ export async function GET() {
         'Access-Control-Allow-Origin': '*',
       },
     })
-  } catch {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  } catch (error) {
+    console.error('Error serving OpenAPI endpoint:', error)
+    return NextResponse.json({ error: 'Failed to load OpenAPI specification' }, { status: 500 })
   }
 }

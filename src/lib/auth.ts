@@ -1,7 +1,10 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 
-const secretKey = process.env.JWT_SECRET || 'secret-for-kanban-amc'
+const secretKey = process.env.JWT_SECRET
+if (!secretKey) {
+  throw new Error('JWT_SECRET environment variable is required')
+}
 const key = new TextEncoder().encode(secretKey)
 const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL || 'alextiannus@gmail.com'
 
@@ -43,13 +46,12 @@ export async function getSession() {
   }
 }
 
-export function verifyApiKey(request: Request): boolean {
+export function extractApiKey(request: Request): string | null {
   const authHeader = request.headers.get('Authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return false
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null
   const token = authHeader.split(' ')[1]
-  // For transition: accept any valid token format
-  // Individual key verification happens at route level
-  return token && token.length > 0
+  if (!token || token.length < 20) return null
+  return token
 }
 
 // Get agent by API key from database

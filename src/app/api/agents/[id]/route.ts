@@ -89,6 +89,12 @@ export async function PATCH(
 
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
+    
+    // Enforce 5MB file size limit
+    const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+    if (buffer.length > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'File too large. Maximum size is 5MB' }, { status: 413 })
+    }
     const uploadDir = path.join(process.cwd(), 'public/uploads')
 
     try {

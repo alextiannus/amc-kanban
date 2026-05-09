@@ -12,7 +12,8 @@ export async function GET() {
         'Access-Control-Allow-Origin': '*',
       },
     })
-  } catch {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  } catch (error) {
+    console.error('Error serving SOP endpoint:', error)
+    return NextResponse.json({ error: 'Failed to load SOP specification' }, { status: 500 })
   }
 }

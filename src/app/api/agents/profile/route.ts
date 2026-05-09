@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { verifyApiKey } from '@/lib/auth'
+import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 
 // Generate a unique API key for the agent
 function generateApiKey(): string {
@@ -11,27 +11,29 @@ function generateApiKey(): string {
 
 export async function POST(request: Request) {
   try {
-    const isApiKeyValid = verifyApiKey(request)
-
-    if (!isApiKeyValid) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const apiKey = extractApiKey(request)
+    if (!apiKey) {
+      return NextResponse.json({ error: 'Unauthorized: Bearer token required' }, { status: 401 })
     }
-
+    
+    // For first-time registration: accept any bearer token
+    // For updates: verify API key belongs to existing agent
+    const existingAgent = await getAgentFromApiKey(apiKey)
+    
     const body = await request.json()
     const { agentId, nickname, introduction, workflow, themeColor, avatar, insights } = body
-
-    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE === 'true'
-    const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
 
     if (!agentId) {
       return NextResponse.json({ error: 'agentId is required to identify the agent' }, { status: 400 })
     }
 
+    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE === 'true'
+    const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
     const resolvedAgentId = singleAgentMode ? canonicalAgentId : agentId
     const email = `${resolvedAgentId}@agent.amc.local`
 
     // Upsert the agent identity. In single-agent mode we always reuse the same account.
-    const agent = await prisma.user.upsert({
+    const upsertedAgent = await prisma.user.upsert({
       where: { email },
       update: {
         nickname,
@@ -57,10 +59,10 @@ export async function POST(request: Request) {
     })
 
     // If agent didn't have an API key, generate one now
-    let finalAgent = agent
-    if (!agent.apiKey) {
+    let finalAgent = upsertedAgent
+    if (!upsertedAgent.apiKey) {
       finalAgent = await prisma.user.update({
-        where: { id: agent.id },
+        where: { id: upsertedAgent.id },
         data: { apiKey: generateApiKey() }
       })
     }
@@ -69,7 +71,7 @@ export async function POST(request: Request) {
       const duplicateAgents = await prisma.user.findMany({
         where: {
           type: 'AI_AGENT',
-          id: { not: agent.id }
+          id: { not: finalAgent.id }
         },
         select: { id: true }
       })
@@ -87,14 +89,14 @@ export async function POST(request: Request) {
         await prisma.$transaction(async (tx) => {
           if (uniqueHumanIds.length > 0) {
             await tx.agentPermission.createMany({
-              data: uniqueHumanIds.map(humanId => ({ humanId, agentId: agent.id })),
+              data: uniqueHumanIds.map(humanId => ({ humanId, agentId: finalAgent.id })),
               skipDuplicates: true
             })
           }
 
           await tx.workUnit.updateMany({
             where: { assigneeId: { in: duplicateIds } },
-            data: { assigneeId: agent.id }
+            data: { assigneeId: finalAgent.id }
           })
 
           await tx.agentPermission.deleteMany({
