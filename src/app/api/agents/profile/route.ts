@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { agentId, nickname, introduction, workflow, themeColor, avatar, insights } = body
 
-    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE !== 'false'
+    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE === 'true'
     const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
 
     if (!agentId) {

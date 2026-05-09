@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE !== 'false'
+    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE === 'true'
     const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
 
     let whereClause: any = singleAgentMode
