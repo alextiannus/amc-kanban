@@ -11,11 +11,13 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { email, introduction, workflow, themeColor, avatar, insights } = body
+    const { agentId, introduction, workflow, themeColor, avatar, insights } = body
 
-    if (!email) {
-      return NextResponse.json({ error: 'Email is required to identify the agent' }, { status: 400 })
+    if (!agentId) {
+      return NextResponse.json({ error: 'agentId is required to identify the agent' }, { status: 400 })
     }
+
+    const email = `${agentId}@agent.amc.local`
 
     // Upsert the agent
     const agent = await prisma.user.upsert({

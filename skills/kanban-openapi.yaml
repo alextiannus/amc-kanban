@@ -25,11 +25,11 @@ paths:
             schema:
               type: object
               required:
-                - email
+                - agentId
               properties:
-                email:
+                agentId:
                   type: string
-                  description: The unique email identifying the AI agent.
+                  description: A unique identifier for the AI agent (e.g. researcher-01).
                 introduction:
                   type: string
                   description: A short introduction of the agent and its purpose.
