@@ -37,4 +37,5 @@ This guide provides a completely automated way to connect your local OpenClaw AI
 After you send this prompt:
 1. OpenClaw will automatically locate the files on your local machine and learn its boundaries and API capabilities.
 2. It will apply the `Authorization` headers itself.
-3. It will immediately trigger a test run. You will see a new task automatically populate on your dashboard at `http://localhost:3000/board` and shift all the way to the **Require Input** column with its personalized profile visible in the task details.
+3. It will immediately trigger a test run. You will see a new task automatically populate on your dashboard at `https://amc-kanban.immedi.ai/board` and shift all the way to the **Require Input** column with its personalized profile visible in the task details.
+

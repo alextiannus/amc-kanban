@@ -4,7 +4,7 @@ info:
   description: API for AI Agents to interact with the AMC Kanban collaboration board. Enables task creation, state transition, human-in-the-loop requests, and task retrieval.
   version: 1.0.0
 servers:
-  - url: https://your-domain.com/api
+  - url: https://amc-kanban.immedi.ai/api
     description: Production Server
   - url: http://localhost:3000/api
     description: Local Development Server
