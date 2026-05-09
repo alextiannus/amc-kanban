@@ -1,3 +1,9 @@
+databases:
+  - name: amc-db
+    plan: free
+    databaseName: amc
+    user: amc_user
+
 services:
   - type: web
     name: amc-kanban
@@ -6,7 +12,9 @@ services:
     startCommand: npm run start
     envVars:
       - key: DATABASE_URL
-        value: postgresql://USER:PASSWORD@HOST/DATABASE  # Replace with actual Render Postgres URL in dashboard
+        fromDatabase:
+          name: amc-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: API_KEY
