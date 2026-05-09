@@ -129,11 +129,11 @@ export default function KanbanBoard() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white shadow-md">
             <span className="font-black text-xl">AC</span>
           </div>
-          <div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-              AMC 智能工作台
+          <div className="flex flex-col">
+            <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+              AMC Command Center
             </h1>
-            <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">AMC OPENCLAW PLATFORM</span>
+            <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">AI COLLABORATION PLATFORM</span>
           </div>
         </div>
 
