@@ -122,16 +122,6 @@ export default function KanbanBoard() {
 5. 获取人类输入后，状态改回 in_progress，requiredInput 置空
 6. 完成后置为 done，并提交结果摘要
 
-### 动作 4：连通性测试（必须）
-请执行一次完整测试：
-1. 注册 Agent 名片
-2. 创建任务“深度调研 AI 协作工具赛道竞品”
-3. 推进到 in_progress 并记录“已开始收集基础资料”
-4. 切到 pending 并写：
-   “我初步收集了 10 家竞品名单，请人类主管确认：重点分析 TO B 还是 TO C 领域？”
-5. 模拟恢复到 in_progress，requiredInput 置为 null，并记录：
-   “已获取到人类的外部确认，继续执行分析”
-
 每完成一步都向我汇报结果；若报错，返回接口名、HTTP 状态码、错误信息和关键参数。`
 
   const handleCopy = () => {
