@@ -17,11 +17,16 @@ export async function GET(
     const { id } = await params
 
     if (session.user.role !== 'ADMIN') {
-      const permission = await prisma.agentPermission.findFirst({
-        where: { humanId: session.user.id, agentId: id }
+      const permissions = await prisma.agentPermission.findMany({
+        where: { humanId: session.user.id },
+        select: { agentId: true }
       })
-      if (!permission) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+      if (permissions.length > 0) {
+        const hasPermission = permissions.some(permission => permission.agentId === id)
+        if (!hasPermission) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
       }
     }
 
@@ -58,11 +63,16 @@ export async function PATCH(
     const { id } = await params
 
     if (session.user.role !== 'ADMIN') {
-      const permission = await prisma.agentPermission.findFirst({
-        where: { humanId: session.user.id, agentId: id }
+      const permissions = await prisma.agentPermission.findMany({
+        where: { humanId: session.user.id },
+        select: { agentId: true }
       })
-      if (!permission) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+      if (permissions.length > 0) {
+        const hasPermission = permissions.some(permission => permission.agentId === id)
+        if (!hasPermission) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
       }
     }
 

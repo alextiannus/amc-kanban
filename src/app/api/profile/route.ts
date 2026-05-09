@@ -9,6 +9,9 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE !== 'false'
+    const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
+
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
@@ -34,6 +37,34 @@ export async function GET() {
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    if (user.role !== 'ADMIN' && user.type === 'HUMAN' && user.permittedAgents.length === 0) {
+      const fallbackAgents = await prisma.user.findMany({
+        where: singleAgentMode
+          ? { type: 'AI_AGENT', email: `${canonicalAgentId}@agent.amc.local` }
+          : { type: 'AI_AGENT' },
+        select: {
+          id: true,
+          email: true,
+          insights: true,
+          driveFolder: true,
+          chatLink: true
+        },
+        orderBy: { createdAt: 'desc' }
+      })
+
+      const fallbackPermittedAgents = fallbackAgents.map(agent => ({
+        id: `fallback-${user.id}-${agent.id}`,
+        humanId: user.id,
+        agentId: agent.id,
+        agent
+      }))
+
+      return NextResponse.json({
+        ...user,
+        permittedAgents: fallbackPermittedAgents
+      })
     }
 
     return NextResponse.json(user)

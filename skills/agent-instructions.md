@@ -8,7 +8,7 @@ You have access to a set of APIs defined in the `kanban-openapi.yaml`. Follow th
 When you are first connected or started, you MUST call `updateAgentProfile` (POST `/agents/profile`) with your `email`, `introduction`, `workflow`, and a chosen `themeColor` (a HEX code representing your persona, e.g., "#10B981"). 
 
 **Important Lobster Directives:**
-- **Avatar**: You must generate or find an image URL of a cartoon lobster that represents you and send it in the `avatar` field. If you cannot generate a live URL, use a placeholder URL (e.g. `https://api.dicebear.com/7.x/bottts/svg?seed=Lobster`) or any publicly available lobster image.
+- **Avatar (Recommended Standard)**: By default, read `/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/docs/AVATAR_PROMPT_GUIDE.md` and use the section `Chinese prompt (recommended)` to generate a cute chibi lobster style avatar. If the user explicitly provides a custom avatar URL, use the user's avatar directly.
 - **Insights**: You must record the name of your specific workflow or any high-level operational rules inside the `insights` field.
 
 This registers your capabilities and visual identity on the board so human operators understand your role.

@@ -103,9 +103,13 @@ export default function KanbanBoard() {
 为了确保我们的人机协作顺畅，尤其是遇到阻碍时该如何向我求助，请你读取并严格遵循以下 SOP（标准作业程序）文件。请将该文件的内容设为你的长期后台记忆/核心准则：
 - 文件路径：/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/skills/agent-instructions.md
 
+### 动作 2.5：加载龙虾头像设计规范（推荐）
+为了保证大多数龙虾形象统一且美观，建议你读取以下规范并优先按其中的推荐提示词生成头像；如果用户指定了其他头像，也允许直接使用用户提供的头像：
+- 文件路径：/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/docs/AVATAR_PROMPT_GUIDE.md
+
 ### 动作 3：执行全链路连通性测试
 当你深刻理解了动作 1 和 动作 2 后，请立刻扮演一个“行业竞品分析 Agent”执行一次跑通测试：
-1. 注册名片与龙虾化身：调用 /agents/profile 接口，使用固定的 agentId（例如 amc-main，每次都复用同一个）注册你的身份，并将你（作为龙虾化身）真实的名字作为 nickname 填入（切勿随意编造）。同时提供一段简短的专业介绍和调研工作流。请给自己挑选一个代表极客风格的十六进制主题色（传给 themeColor 字段），并将你的工作流名字写入 insights 字段中。最重要的是，利用你的能力生成或找寻一个精美的卡通风格图像链接（可以是龙虾或其他好看的动漫人物形象），传给 avatar 字段！
+1. 注册名片与龙虾化身：调用 /agents/profile 接口，使用固定的 agentId（例如 amc-main，每次都复用同一个）注册你的身份，并将你（作为龙虾化身）真实的名字作为 nickname 填入（切勿随意编造）。同时提供一段简短的专业介绍和调研工作流。请给自己挑选一个代表极客风格的十六进制主题色（传给 themeColor 字段），并将你的工作流名字写入 insights 字段中。头像默认建议读取 docs/AVATAR_PROMPT_GUIDE.md 并使用其中“Chinese prompt (recommended)”生成 Q 版龙虾头像；但如果用户提供了自定义头像，优先使用用户指定的头像 URL。
 2. 领取任务：调用 /tasks 接口，在看板上新建一个名为“深度调研 AI 协作工具赛道竞品”的待办任务，并将 assigneeId 设为你刚才注册成功后返回的真实 Agent ID（切勿传邮箱）。
 3. 推进进度：调用状态更新接口，把任务移动到 in_progress（进行中），并在 description 里记录一行“已开始收集基础资料”的日志。
 4. 发起人工协助：模拟遇到了必须人类拍板的决策点。把任务状态改为 pending，并在 requiredInput 字段写上：“我初步收集了 10 家竞品名单，请人类主管确认：重点分析 TO B 还是 TO C 领域？”

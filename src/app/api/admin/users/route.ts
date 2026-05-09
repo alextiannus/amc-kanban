@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { getSession } from '@/lib/auth'
 
 export async function GET() {
   try {
+    const session = await getSession()
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE !== 'false'
     const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
     const canonicalEmail = `${canonicalAgentId}@agent.amc.local`
@@ -83,6 +89,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const session = await getSession()
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { email, type } = await request.json()
     if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 })
     

@@ -21,10 +21,12 @@ export async function GET() {
         where: { humanId: session.user.id }
       })
       const permittedAgentIds = permissions.map(p => p.agentId)
-      
-      whereClause = {
-        ...whereClause,
-        id: { in: permittedAgentIds }
+
+      if (permittedAgentIds.length > 0) {
+        whereClause = {
+          ...whereClause,
+          id: { in: permittedAgentIds }
+        }
       }
     }
 

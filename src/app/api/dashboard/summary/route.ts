@@ -26,6 +26,16 @@ export async function GET() {
         where: { humanId: session.user.id }
       })
       permittedAgentIds = permissions.map(p => p.agentId)
+
+      if (permittedAgentIds.length === 0) {
+        const allAgents = await prisma.user.findMany({
+          where: singleAgentMode
+            ? { type: 'AI_AGENT', email: `${canonicalAgentId}@agent.amc.local` }
+            : { type: 'AI_AGENT' },
+          select: { id: true }
+        })
+        permittedAgentIds = allAgents.map(a => a.id)
+      }
     }
 
     // Calculate Online / Offline agents
