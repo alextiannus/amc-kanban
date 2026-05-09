@@ -95,6 +95,7 @@ export async function POST(request: Request) {
     }
 
     const { email, type } = await request.json()
+    const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL || 'alextiannus@gmail.com'
     if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 })
     
     const existing = await prisma.user.findUnique({ where: { email } })
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
         email,
         password: hashedPassword,
         type: userType,
-        role: 'USER',
+        role: email === bootstrapAdminEmail ? 'ADMIN' : 'USER',
       }
     })
 

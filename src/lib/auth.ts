@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 
 const secretKey = process.env.JWT_SECRET || 'secret-for-kanban-amc'
 const key = new TextEncoder().encode(secretKey)
+const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL || 'alextiannus@gmail.com'
 
 export async function encrypt(payload: any) {
   return await new SignJWT(payload)
@@ -24,7 +25,19 @@ export async function getSession() {
   const session = cookieStore.get('session')?.value
   if (!session) return null
   try {
-    return await decrypt(session)
+    const payload = await decrypt(session)
+
+    if (payload?.user?.email === bootstrapAdminEmail && payload.user.role !== 'ADMIN') {
+      return {
+        ...payload,
+        user: {
+          ...payload.user,
+          role: 'ADMIN'
+        }
+      }
+    }
+
+    return payload
   } catch (error) {
     return null
   }

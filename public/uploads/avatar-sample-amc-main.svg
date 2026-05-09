@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="AMC AI agent avatar sample">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B1220"/>
+      <stop offset="45%" stop-color="#12233F"/>
+      <stop offset="100%" stop-color="#1B3B73"/>
+    </linearGradient>
+
+    <radialGradient id="halo" cx="50%" cy="36%" r="60%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="#2563EB" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#EEF4FF"/>
+      <stop offset="100%" stop-color="#CBDCFB"/>
+    </linearGradient>
+
+    <linearGradient id="visor" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0EA5E9"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+
+    <linearGradient id="shoulder" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#9BB9F5"/>
+      <stop offset="100%" stop-color="#7096DE"/>
+    </linearGradient>
+
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <clipPath id="headClip">
+      <rect x="312" y="244" width="400" height="360" rx="132"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <circle cx="512" cy="370" r="360" fill="url(#halo)"/>
+
+  <g opacity="0.35">
+    <circle cx="810" cy="190" r="4" fill="#60A5FA"/>
+    <circle cx="865" cy="250" r="3" fill="#93C5FD"/>
+    <circle cx="180" cy="160" r="4" fill="#60A5FA"/>
+    <circle cx="220" cy="220" r="2.5" fill="#93C5FD"/>
+    <circle cx="820" cy="760" r="3" fill="#93C5FD"/>
+    <circle cx="160" cy="780" r="3" fill="#60A5FA"/>
+  </g>
+
+  <g transform="translate(0, 8)">
+    <path d="M280 824c24-102 122-176 232-176s208 74 232 176" fill="url(#shoulder)" opacity="0.95"/>
+    <path d="M322 840c20-76 96-132 190-132s170 56 190 132" fill="#5D86D5" opacity="0.7"/>
+
+    <rect x="312" y="244" width="400" height="360" rx="132" fill="url(#plate)"/>
+    <rect x="312" y="244" width="400" height="360" rx="132" fill="none" stroke="#F7FAFF" stroke-opacity="0.75" stroke-width="6"/>
+
+    <g clip-path="url(#headClip)">
+      <rect x="350" y="352" width="324" height="112" rx="52" fill="url(#visor)" filter="url(#softGlow)"/>
+      <circle cx="430" cy="408" r="20" fill="#DBF4FF"/>
+      <circle cx="594" cy="408" r="20" fill="#DBF4FF"/>
+      <circle cx="430" cy="408" r="10" fill="#60A5FA"/>
+      <circle cx="594" cy="408" r="10" fill="#60A5FA"/>
+      <rect x="470" y="394" width="84" height="28" rx="14" fill="#BAE6FD" opacity="0.9"/>
+
+      <rect x="388" y="488" width="248" height="16" rx="8" fill="#6B8ED3" opacity="0.85"/>
+      <rect x="422" y="520" width="180" height="14" rx="7" fill="#86A8E8" opacity="0.85"/>
+    </g>
+
+    <rect x="494" y="216" width="36" height="52" rx="18" fill="#90B0EB"/>
+    <circle cx="512" cy="206" r="22" fill="#3B82F6" filter="url(#softGlow)"/>
+    <circle cx="512" cy="206" r="10" fill="#E0F2FE"/>
+  </g>
+
+  <g opacity="0.2">
+    <path d="M120 700c116-54 224-64 346-10" stroke="#93C5FD" stroke-width="2" fill="none"/>
+    <path d="M558 694c116-54 224-64 346-10" stroke="#60A5FA" stroke-width="2" fill="none"/>
+  </g>
+</svg>

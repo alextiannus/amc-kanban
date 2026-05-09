@@ -192,6 +192,14 @@ export default function KanbanBoard() {
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{user?.role}</p>
                 </div>
                 <div className="p-2 space-y-1">
+                  {user?.role === 'ADMIN' && (
+                    <button
+                      onClick={() => { setShowProfile(false); router.push('/admin') }}
+                      className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                    >
+                      <Users size={16} /> 用户管理
+                    </button>
+                  )}
                   <button 
                     onClick={() => { setShowProfile(false); setShowSettings(true) }}
                     className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"

@@ -7,6 +7,7 @@ import { cookies } from 'next/headers'
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
+    const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL || 'alextiannus@gmail.com'
 
     let user = await prisma.user.findUnique({ where: { email } })
 
@@ -31,6 +32,13 @@ export async function POST(request: Request) {
     const isValid = await bcrypt.compare(password, user.password)
     if (!isValid) {
       return NextResponse.json({ error: 'Invalid password' }, { status: 401 })
+    }
+
+    if (user.email === bootstrapAdminEmail && user.role !== 'ADMIN') {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { role: 'ADMIN' }
+      })
     }
 
     const sessionData = {
