@@ -9,7 +9,7 @@ async function canHumanAccessTask(humanId: string, assigneeId: string | null) {
   })
 
   if (permissions.length === 0) {
-    return true
+    return false
   }
 
   if (!assigneeId) {

@@ -9,12 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE === 'true'
-    const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
-
-    let whereClause: any = singleAgentMode
-      ? { type: 'AI_AGENT', email: `${canonicalAgentId}@agent.amc.local` }
-      : { type: 'AI_AGENT' }
+    let whereClause: any = { type: 'AI_AGENT' }
 
     if (session.user.role !== 'ADMIN') {
       const permissions = await prisma.agentPermission.findMany({
@@ -27,6 +22,8 @@ export async function GET() {
           ...whereClause,
           id: { in: permittedAgentIds }
         }
+      } else {
+        return NextResponse.json([])
       }
     }
 

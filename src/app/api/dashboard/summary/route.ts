@@ -9,16 +9,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE === 'true'
-    const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
-
     let permittedAgentIds: string[] = []
 
     if (session.user.role === 'ADMIN') {
       const allAgents = await prisma.user.findMany({
-        where: singleAgentMode
-          ? { type: 'AI_AGENT', email: `${canonicalAgentId}@agent.amc.local` }
-          : { type: 'AI_AGENT' }
+        where: { type: 'AI_AGENT' }
       })
       permittedAgentIds = allAgents.map(a => a.id)
     } else {
@@ -28,13 +23,12 @@ export async function GET() {
       permittedAgentIds = permissions.map(p => p.agentId)
 
       if (permittedAgentIds.length === 0) {
-        const allAgents = await prisma.user.findMany({
-          where: singleAgentMode
-            ? { type: 'AI_AGENT', email: `${canonicalAgentId}@agent.amc.local` }
-            : { type: 'AI_AGENT' },
-          select: { id: true }
+        return NextResponse.json({
+          runningAgentsCount: 0,
+          notRunningAgentsCount: 0,
+          pendingTasksCount: 0,
+          completedTasksCount: 0
         })
-        permittedAgentIds = allAgents.map(a => a.id)
       }
     }
 

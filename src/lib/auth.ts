@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
+import crypto from 'crypto'
 
 function getJwtKey() {
   const secretKey = process.env.JWT_SECRET
@@ -61,9 +62,10 @@ export function extractApiKey(request: Request): string | null {
 // Get agent by API key from database
 export async function getAgentFromApiKey(apiKey: string) {
   try {
+    const hashedApiKey = crypto.createHash('sha256').update(apiKey).digest('hex')
     const { prisma } = await import('./prisma')
     return await prisma.user.findUnique({
-      where: { apiKey },
+      where: { apiKey: hashedApiKey },
       select: { id: true, email: true, type: true }
     })
   } catch {

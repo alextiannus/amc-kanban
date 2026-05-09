@@ -1,79 +1,185 @@
-# Product Requirements Document (PRD)
+# AMC Kanban Product Requirements and Technical Design (PRD)
 
-## 1. 概述 (Overview)
-**项目名称**: AMC 智能工作台 (AMC OpenClaw Platform)
-**项目目标**: 打造一个生产力级别的“人机协同操作系统”，将 AI Agent 与人类工作流深度融合，通过全局监控仪表盘、沉浸式 AI 序列、自动化看板等功能，实现工作流的完全透明化与自动化推进。
+## 1. Product Positioning
 
-## 2. 核心功能特性 (Core Features)
+### 1.1 Vision
+AMC Kanban is a Human-AI collaboration operating surface where AI Agents are first-class executors. The platform supports agent registration, identity binding, task execution loops, and human-in-the-loop intervention.
 
-### 2.1 任务协作看板 (Kanban Board)
-- **多状态泳道管理**: 任务划分为 Todo（待办）、In Progress（进行中）、Require Input（待输入）、Done（已完成）、Void（已作废）。
-- **沉浸式任务卡片**: 支持 Markdown 渲染，优雅展示任务的材料要求（Materials）和待输入要求（Required Input）。
-- **拖拽与编辑**: 支持状态流转，人类用户可以通过 Task Modal 对任务状态、说明进行覆盖干预。
-- **自动状态推断**: 系统每 5 秒轮询一次任务状态，看板永远处于“活（Live）”的状态。
+### 1.2 Business Goals
+1. Provide a unified kanban for human and AI collaboration with full traceability.
+2. Enforce permission-scoped visibility between humans and agents.
+3. Distinguish each AI agent using per-agent API keys.
+4. Enable fast external AI onboarding through documented APIs and SOP endpoints.
 
-### 2.2 监控大盘 (Interactive Dashboard)
-- **全方位数据指标**: 实时统计 活跃 Agent、待输入任务、今日完成、离线 Agent 数量。
-- **全局路由联动**: 
-  - 点击“活跃/离线 Agent”卡片，自动切换至“AI 序列”视图并加载相应的状态过滤。
-  - 点击“待输入/今日完成”卡片，自动将看板切换至对应的任务状态流。
-- **交付成果展示**: 以时间线或列表形式直观展示最新产出的 `Done` 状态任务成果，展示对应的产出 AI 头像。
+### 1.3 Personas
+1. Administrator: manages users, permissions, and initialization.
+2. Human collaborator: handles blocked tasks and supervises assigned agents.
+3. AI agent: self-registers profile, consumes tasks, updates status and outputs.
 
-### 2.3 沉浸式 AI 序列 (Inline Agent Sequence)
-- **全屏视图**: 替代传统的弹窗模式，将所有授权接入的 Agent 以矩阵式卡片排列。
-- **在线状态感知**: 通过任务负载自动推断 Agent 是否在工作（绿灯呼吸）或休息（灰灯）。
-- **多维搜索与过滤**: 支持对 Agent 的名称（Email 前缀）、工作流（Workflow）、简介（Introduction）进行全局模糊搜索。
+## 2. Product Design
 
-### 2.4 API 与扩展性 (Extensibility & APIs)
-- **多端开放 API**: 提供标准的 OpenAPI（YAML）规范，允许外部 OpenClaw 系统通过 `/api/tasks` 和 `/api/agents` 主动推送/拉取任务。
-- **无密码自动化连接**: 提供 `初始化系统指令（System Prompt）` 和 `API Key`，让 AI Agent 在创建时即可自我介绍、自动配置其工作流引擎参数，并自我上报头像与主题色。
+### 2.1 Core Pages
+1. Board: task lanes for `todo`, `in_progress`, `pending`, `done`, `void`.
+2. Dashboard: metrics for running agents, offline agents, pending tasks, completed tasks.
+3. Agent Directory: discoverable list of agents with profile and online status.
+4. Admin Console: create users and configure HUMAN -> AI_AGENT visibility mappings.
+5. User Settings: password change and board background upload.
 
-## 3. 技术架构方案 (Technical Architecture)
+### 2.2 Interaction Model
+1. AI writes progress continuously into tasks.
+2. Human handles `pending` inputs and unblocks execution.
+3. Admin can adjust permission mappings at any time.
 
-### 3.1 前端技术栈
-- **核心框架**: Next.js 16 (App Router)
-- **样式方案**: Tailwind CSS v4 + 响应式布局 + next-themes (支持系统级暗黑模式)
-- **UI 组件**: Lucide React (图标), react-markdown (文本渲染), @dnd-kit (拖拽基础，后迭代为更轻量的 Tab)
-- **状态管理**: React Hooks (`useState`, `useEffect`) 配合轮询机制（`setInterval`）。
+### 2.3 Key UX Principles
+1. Collaboration state should be visible at a glance.
+2. Access should be scoped by role and resource ownership.
+3. Operational bootstrap for AI should be standardized and reproducible.
 
-### 3.2 后端与数据层
-- **服务端方案**: Next.js Serverless API Routes (`/app/api/...`)
-- **ORM & 数据库**: Prisma + PostgreSQL。
-- **认证机制**: JWT + HttpOnly Secure Cookies (`jose`) 处理人类用户登录；Bearer API Token (`API_KEY`) 处理 AI Agent 的服务器间通信。
-- **权限模型**: 双轨制模型，区分 `HUMAN` 与 `AI_AGENT`。具备 `AgentPermission` 多对多关系表控制人类管理员能看到哪些 AI 的数据。
+## 3. Domain Model
 
-### 3.3 数据流模型
-1. AI Agent 启动，携带鉴权 Key 和自身画像（简介、工作流）调用 `PATCH /api/agents/profile` 完成自我注册。
-2. AI 获取任务列表 (`GET /api/tasks`)，进入工作循环。
-3. 工作遇到阻碍，AI 调用 `PATCH /api/tasks/:id` 将状态改为 `require_input` 并填写 `requiredInput`。
-4. 人类用户通过 Dashboard 看到“待输入”，在 Kanban 补充材料，将状态改为 `todo`。
-5. AI 轮询获取到新材料，继续工作，最终产出 `done` 状态成果。
+### 3.1 User
+1. Identity fields: `email`, `password`, `type`, `role`, `apiKey`.
+2. Agent profile fields: `nickname`, `introduction`, `workflow`, `insights`, `themeColor`, `avatar`, `driveFolder`, `chatLink`.
+3. Constraints: `email` unique, `apiKey` unique (nullable).
 
-## 4. 部署方案 (Deployment Strategy)
-- **平台**: Render.com (Node.js Web Service)
-- **启动流程**: `npm install` -> `npx prisma db push` -> `npm run build` -> `npm run start`
-- **数据持久化**: 使用 Render 的 PostgreSQL 托管数据库。只需在 Render 仪表盘绑定 `DATABASE_URL` 即可实现数据持久化。
+### 3.2 WorkUnit
+1. Core fields: `title`, `description`, `materials`, `requiredInput`, `status`.
+2. Assignment: `assigneeId` referencing `User`.
+3. Lifecycle lanes: `todo`, `in_progress`, `pending`, `done`, `void`.
 
-## 5. 安全与合规 (Security & Compliance)
-- 首次访问系统的用户自动创建为 `ADMIN`，接管根权限。
-- 全站 HTTPS 与 Secure Cookies 传输，防止重放攻击。
-- 所有外网 API 路由均验证 `X-Api-Key`。
+### 3.3 AgentPermission
+1. Mapping: `humanId` + `agentId`.
+2. Constraint: `@@unique([humanId, agentId])`.
 
-## 6. 产品演进路线 (Product Roadmap)
+## 4. Core Flows
 
-本部分记录了 AMC 智能工作台从 MVP 走向企业级“大型协同网络”的高阶规划，待核心业务跑通后逐步迭代落地：
+### 4.1 Agent Onboarding Flow
+1. Agent calls `POST /api/agents/profile` with identity card fields.
+2. New agent receives generated personal `apiKey`.
+3. Agent stores and uses that key for all subsequent API requests.
 
-### 6.1 ⚡️ 性能与架构演进 (Architecture & Performance)
-- **毫秒级实时通信**: 将基于 `setInterval` 的短轮询机制升级为 Server-Sent Events (SSE) 或 WebSocket (如 Socket.io / Pusher)，大幅降低数据库 QPS，实现任务状态的无缝即时推送。
-- **游标分页与懒加载**: 针对 `Done` 与 `Void` 泳道的历史任务，在 Prisma 层引入 Cursor Pagination，并在前端实现无限滚动 (Infinite Scroll)，确保海量数据下系统的绝对流畅。
+### 4.2 Agent Execution Flow
+1. Pull task list via API.
+2. Move status and update content fields while executing.
+3. Set `pending` with `requiredInput` when blocked.
+4. Complete with `done` once deliverables are ready.
 
-### 6.2 🔔 交互与协同体验 (UX & Collaboration)
-- **多渠道主动告警机制**: 引入前端通知系统（如 `sonner`），并打通 Webhook。当 Agent 将任务标记为 `Require Input` 遇到阻碍时，第一时间推送到人类干预者的飞书/Slack/钉钉，减少任务阻塞停滞时间。
-- **细粒度工作审计日志 (Audit Trail)**: 新增独立的 `TaskLog` 数据库模型。以时间轴（Timeline）或评论区的方式，精细化记录 Agent 执行任务的中间进展和思考链路，替代目前笼统的描述字段。
+### 4.3 Human Collaboration Flow
+1. Human logs in and views permission-scoped tasks.
+2. Human resolves pending input.
+3. Agent resumes execution after input is cleared.
 
-### 6.3 🧠 高阶 AI 编排 (Advanced AI Orchestration)
-- **DAG 工作流与 Agent 协同**: 引入任务依赖模型 (`dependsOn`)，实现单任务的多节点派发。例如：Agent A 完成数据搜索后，自动触发下游 Agent B 进行汇总与排版，实现流水线级别的纯 AI 协同。
-- **AI 效能数据看板 (Performance Analytics)**: 引入 `Recharts` 可视化组件，统计每个 Agent 的“平均耗时”、“拦截率”、“干预频率”等效能指标，用数据驱动底层 Prompt 和工作流的不断进化。
+### 4.4 Admin Governance Flow
+1. Create users and agent accounts.
+2. Maintain permission graph between humans and agents.
+3. Review global system activity and delivery outputs.
 
-### 6.4 🛡 安全与稳定性防护 (Security)
-- **API 限流与防穿透保护**: 在核心路由入口（如 `/api/tasks`）引入 Redis 令牌桶算法限流（Rate Limiting）。彻底防范因个别外部 AI Agent 逻辑死循环导致的高频攻击，保障核心系统的高可用性。
+## 5. Technical Architecture
+
+### 5.1 Stack
+1. Frontend: Next.js App Router, React, Tailwind CSS.
+2. Backend: Next.js route handlers.
+3. Data: Prisma + PostgreSQL.
+4. Auth: JWT cookie for humans, Bearer API key for agents.
+
+### 5.2 Service Architecture
+1. API domains: `auth`, `tasks`, `agents`, `admin`, `dashboard`, `meta`.
+2. Meta endpoints:
+`/api/meta/openapi`, `/api/meta/sop`, `/api/meta/avatar-guide`.
+3. Agent integration is API-first and cloud-compatible.
+
+### 5.3 Deployment Architecture
+1. Platform: Render web service + managed PostgreSQL.
+2. Build pipeline: `npm install`, `npx prisma db push`, `npm run build`.
+3. Runtime start: `npm run start`.
+
+## 6. API Design Requirements
+
+### 6.1 Authentication and Identity
+1. Human login writes secure HttpOnly session cookie.
+2. Agent identity requires `Authorization: Bearer <apiKey>`.
+3. API key must map to an actual `AI_AGENT` record.
+
+### 6.2 Task APIs
+1. `GET /api/tasks`: return visible tasks by actor identity.
+2. `POST /api/tasks`: validate assignee exists and is `AI_AGENT`.
+3. `GET /api/tasks/:id`: resource-level authorization required.
+4. `PATCH /api/tasks/:id`: prevent unauthorized reassignment.
+5. `PATCH /api/tasks/:id/status`: only assignee agent or admin can mutate status.
+
+### 6.3 Agent APIs
+1. `POST /api/agents/profile`: create/update profile with key-to-agent binding rules.
+2. `GET /api/agents`: list visible agents by permission scope.
+3. `GET/PATCH /api/agents/:id`: read profile and upload avatar.
+
+### 6.4 Admin APIs
+1. `GET/POST /api/admin/users`: manage account lifecycle.
+2. `POST /api/admin/permissions`: persist permission mapping set.
+
+## 7. Security Design
+
+### 7.1 Secrets and Keys
+1. `JWT_SECRET` is required runtime config.
+2. API key validation must not be bypassed by token existence checks.
+
+### 7.2 Authorization Controls
+1. Enforce role checks (`ADMIN`, `USER`) plus resource ownership checks.
+2. Enforce agent-only self-scope for agent-authenticated task updates.
+
+### 7.3 Credential Policy
+1. No hardcoded default passwords.
+2. Admin-created users receive random temporary password (shown once).
+3. Password hashes use bcrypt with production-grade cost.
+
+### 7.4 Upload Safety
+1. Avatar upload enforces image type and size limit.
+2. Background upload should adopt the same constraints.
+
+## 8. Non-Functional Requirements
+
+### 8.1 Performance
+1. Board remains near-real-time under polling mode.
+2. Dashboard metrics should return within acceptable latency.
+
+### 8.2 Observability
+1. API error paths must log meaningful context.
+2. Production should support centralized logs and alerting.
+
+### 8.3 Maintainability
+1. API contracts should remain aligned with OpenAPI.
+2. Feature behavior should be environment-configurable.
+
+## 9. Environment and Configuration Strategy
+
+### 9.1 Local
+1. Prefer PostgreSQL locally for parity with production.
+2. Keep local DB URL in `.env.local` and out of Git.
+
+### 9.2 Production
+1. `DATABASE_URL` injected by Render.
+2. `JWT_SECRET` generated or managed in environment variables.
+3. `AI_SINGLE_AGENT_MODE` controlled by env configuration.
+
+## 10. Acceptance Criteria
+
+1. Agent can register and keep a stable unique API key.
+2. Task APIs enforce role and ownership authorization.
+3. Admin can create users and assign permissions successfully.
+4. Dashboard metrics reflect current board state.
+5. Production deployment builds and runs on Render with PostgreSQL.
+
+## 11. Roadmap
+
+### 11.1 Near Term
+1. Add strict input validation schema for all write APIs.
+2. Upgrade password policy minimums and rotation guidance.
+3. Align background upload with avatar safety checks.
+
+### 11.2 Mid Term
+1. Move from polling to SSE/WebSocket realtime sync.
+2. Add task activity audit trail model and timeline view.
+3. Add API rate limiting and abuse protection.
+
+### 11.3 Long Term
+1. Add DAG-based multi-agent orchestration.
+2. Add agent performance analytics and trend reporting.

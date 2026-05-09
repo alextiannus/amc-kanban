@@ -37,6 +37,8 @@ export async function GET(request: Request) {
           ...whereClause,
           assigneeId: { in: permittedAgentIds }
         }
+      } else {
+        return NextResponse.json([])
       }
     }
 
@@ -78,6 +80,13 @@ export async function POST(request: Request) {
 
     if (authenticatedAgent && assigneeId !== authenticatedAgent.id) {
       return NextResponse.json({ error: 'Forbidden: API key can only create tasks for its own agent' }, { status: 403 })
+    } else if (session?.user && session.user.role !== 'ADMIN') {
+      const permissions = await prisma.agentPermission.findMany({
+        where: { humanId: session.user.id, agentId: assigneeId }
+      })
+      if (permissions.length === 0) {
+        return NextResponse.json({ error: 'Forbidden: You do not have permission to assign tasks to this agent' }, { status: 403 })
+      }
     }
 
     // Verify assignee exists and is an AI_AGENT

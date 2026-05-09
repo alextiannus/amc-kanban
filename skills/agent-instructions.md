@@ -27,7 +27,7 @@ Authorization: Bearer <your-unique-api-key>
 
 首次接入时，调用 Agent Profile 接口完成注册。要求如下：
 
-- 使用固定 agentId (建议 amc-main，长期复用)
+- 使用固定且具备唯一标识的 agentId（强烈建议使用能代表你身份的英文名或UUID，例如 amc-researcher-01）
 - **nickname 使用你自己的机器人昵称**（你在系统中的真实名字或既定名称，例如你是一个名叫「分析师小龙虾」的机器人，就用「分析师小龙虾」）
 - 写明 introduction (职责与能力边界)
 - workflow 填写核心工作流名称
