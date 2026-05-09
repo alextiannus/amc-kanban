@@ -1,0 +1,210 @@
+openapi: 3.0.0
+info:
+  title: AMC Kanban Agent API
+  description: API for AI Agents to interact with the AMC Kanban collaboration board. Enables task creation, state transition, human-in-the-loop requests, and task retrieval.
+  version: 1.0.0
+servers:
+  - url: https://your-domain.com/api
+    description: Production Server
+  - url: http://localhost:3000/api
+    description: Local Development Server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /agents/profile:
+    post:
+      summary: Update AI Agent Profile
+      operationId: updateAgentProfile
+      description: Agents must call this endpoint during initialization to register or update their introduction and workflow capabilities.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  description: The unique email identifying the AI agent.
+                introduction:
+                  type: string
+                  description: A short introduction of the agent and its purpose.
+                workflow:
+                  type: string
+                  description: A description of the standard operating procedures or workflow this agent follows.
+                themeColor:
+                  type: string
+                  description: A HEX color code representing the agent's preferred theme color (e.g., "#FF5733").
+                avatar:
+                  type: string
+                  description: A URL to an image representing the agent. If generating one, ensure it is a public URL.
+                insights:
+                  type: string
+                  description: The name of the workflow this agent runs, or high-level operational insights.
+      responses:
+        '200':
+          description: Profile updated successfully
+          
+  /tasks:
+    post:
+      summary: Create a new task on the Kanban board
+      operationId: createTask
+      description: Agents can create tasks for themselves or others to track work.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+                  description: Short, concise title of the task.
+                description:
+                  type: string
+                  description: Detailed description, markdown supported. Logs and progress should be appended here.
+                materials:
+                  type: string
+                  description: Any context, links, or JSON data required to perform the task.
+                status:
+                  type: string
+                  enum: [todo, in_progress, pending, done, void]
+                  default: todo
+                assigneeId:
+                  type: string
+                  description: The user ID (AI Agent ID) this task is assigned to.
+      responses:
+        '200':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+  /tasks/{id}:
+    get:
+      summary: Get task details
+      operationId: getTaskDetails
+      description: Fetch full details of a task including its current description and materials.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+                
+    patch:
+      summary: Update task details
+      operationId: updateTaskDetails
+      description: Update the content, title, or materials of an existing task. Use this to log progress in the description.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                materials:
+                  type: string
+                assigneeId:
+                  type: string
+      responses:
+        '200':
+          description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+  /tasks/{id}/status:
+    patch:
+      summary: Update task status or request human input
+      operationId: updateTaskStatus
+      description: Move the task between columns. Crucially, set status to "pending" and provide "requiredInput" to ask human operators for help.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [todo, in_progress, pending, done, void]
+                requiredInput:
+                  type: string
+                  description: Only used when status is "pending". Explains exactly what the AI needs from the human to proceed. Set to null when clearing.
+      responses:
+        '200':
+          description: Status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+components:
+  schemas:
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+        materials:
+          type: string
+          nullable: true
+        requiredInput:
+          type: string
+          nullable: true
+        assigneeId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    securitySchemes:
+      bearerAuth:
+        type: http
+        scheme: bearer
+        bearerFormat: JWT

@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String
+  type         String   @default("HUMAN") // HUMAN or AI_AGENT
+  role         String   @default("USER")  // ADMIN or USER (针对人类)
+  
+  // AI Agent 独占属性
+  insights     String?
+  driveFolder  String?
+  chatLink     String?
+  introduction String?
+  workflow     String?
+  themeColor   String?
+  avatar       String?
+  
+  // 关系映射
+  tasksAsAssignee  WorkUnit[] @relation("TaskAssignee")
+  
+  // 权限映射表 (人类用户能够看到哪些 AI Agent 的任务)
+  permittedAgents AgentPermission[] @relation("HumanUser")
+  assignedToHumans AgentPermission[] @relation("AiAgent")
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WorkUnit {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  status        String   @default("todo")
+  materials     String?
+  requiredInput String?
+  assigneeId    String?
+  assignee      User?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// 多对多权限关联表
+model AgentPermission {
+  id           String @id @default(cuid())
+  humanId      String
+  agentId      String
+  human        User   @relation("HumanUser", fields: [humanId], references: [id])
+  agent        User   @relation("AiAgent", fields: [agentId], references: [id])
+  @@unique([humanId, agentId])
+}
