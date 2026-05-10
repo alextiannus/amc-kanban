@@ -6,7 +6,7 @@ import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
 import AgentSequenceView from './AgentSequenceView'
 import ArchiveView from './ArchiveView'
-import { LogOut, Activity, XCircle, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, LayoutDashboard, Bot } from 'lucide-react'
+import { LogOut, Activity, XCircle, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, LayoutDashboard, Bot, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 
@@ -255,12 +255,37 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                 </div>
                 <div className="p-2 space-y-1">
                   {user?.role === 'ADMIN' && (
-                    <button
-                      onClick={() => { setShowProfile(false); router.push('/admin') }}
-                      className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                    >
-                      <Users size={16} /> 用户管理
-                    </button>
+                    <>
+                      <button
+                        onClick={() => { setShowProfile(false); router.push('/admin') }}
+                        className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                      >
+                        <Users size={16} /> 用户管理
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setShowProfile(false);
+                          if (confirm('确定要清理所有无主任务吗？这些通常是已被遣散龙虾遗留的测试任务，清理操作不可逆。')) {
+                            try {
+                              const res = await fetch('/api/tasks/unassigned', { method: 'DELETE' });
+                              if (res.ok) {
+                                const data = await res.json();
+                                alert(`清理成功：删除了 ${data.deletedCount} 个无主任务`);
+                                fetchTasks();
+                                fetchSummary();
+                              } else {
+                                alert('清理失败，请确保您是管理员');
+                              }
+                            } catch (error) {
+                              alert('网络错误，请重试');
+                            }
+                          }
+                        }}
+                        className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-xl transition-colors"
+                      >
+                        <Trash2 size={16} /> 清理无主任务
+                      </button>
+                    </>
                   )}
                   <button 
                     onClick={() => { setShowProfile(false); setShowSettings(true) }}
