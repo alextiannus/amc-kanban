@@ -56,6 +56,7 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
               <div 
                 key={task.id} 
                 onClick={() => onTaskClick(task)}
+                style={task.assignee?.themeColor ? { borderColor: task.assignee.themeColor } : undefined}
                 className="bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-5 cursor-pointer transition-all duration-300 flex flex-col sm:flex-row gap-4 sm:items-center"
               >
                 <div className="flex items-center gap-4 flex-shrink-0 w-48">

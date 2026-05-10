@@ -507,7 +507,8 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                     <div 
                       key={task.id} 
                       onClick={() => setSelectedTask(task)}
-                      className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-700 group"
+                      style={task.assignee?.themeColor ? { borderColor: task.assignee.themeColor } : undefined}
+                      className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors border border-transparent group"
                     >
                       <div className="flex items-center gap-3 overflow-hidden">
                         <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-600 flex-shrink-0 border border-white dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">

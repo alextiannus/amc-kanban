@@ -156,6 +156,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                       : [...prev, agent.id]
                   )
                 }}
+                style={agent.themeColor ? { borderColor: agent.themeColor } : undefined}
                 className={`bg-white dark:bg-slate-900 border rounded-3xl p-6 cursor-pointer transition-all duration-300 relative
                 ${expandedAgentIds.includes(agent.id) ? 'border-emerald-500 shadow-lg ring-4 ring-emerald-500/10' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm hover:shadow-md'}`}
               >

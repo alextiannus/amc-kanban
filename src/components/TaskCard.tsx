@@ -9,6 +9,7 @@ const priorityStyles: Record<string, string> = {
 
 export default function TaskCard({ task, onClick, onTagClick }: { task: any, onClick?: () => void, onTagClick?: (tag: string) => void }) {
   const [idCopied, setIdCopied] = useState(false)
+  const assigneeThemeColor = task.assignee?.themeColor
 
   const handleCopyId = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -20,7 +21,8 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
   return (
     <div
       onClick={onClick}
-      className={`group bg-white dark:bg-slate-800 p-5 rounded-3xl cursor-pointer border ${task.status === 'pending' && task.requiredInput ? 'border-amber-400 shadow-md ring-2 ring-amber-400/20' : 'border-slate-100 dark:border-slate-700/60 shadow-sm'} hover:shadow-lg hover:border-emerald-200 dark:hover:border-emerald-900/50 hover:-translate-y-1 transition-all duration-300 flex flex-col gap-4 relative`}
+      style={assigneeThemeColor ? { borderColor: assigneeThemeColor } : undefined}
+      className={`group bg-white dark:bg-slate-800 p-5 rounded-3xl cursor-pointer border ${task.status === 'pending' && task.requiredInput ? 'shadow-md ring-2 ring-amber-400/20' : 'shadow-sm'} border-slate-100 dark:border-slate-700/60 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col gap-4 relative`}
     >
       <div className="flex items-start gap-4">
         {task.assignee ? (
