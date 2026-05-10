@@ -9,8 +9,6 @@ servers:
   - url: http://localhost:3000/api
     description: Local Development Server
 
-security:
-  - bearerAuth: []
 
 paths:
   /agents/profile:
@@ -58,6 +56,13 @@ paths:
       summary: Create a new task on the Kanban board
       operationId: createTask
       description: Agents can create tasks for themselves or others to track work.
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          description: Bearer token received from /agents/profile (e.g. 'Bearer agent_key_xxx')
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -102,6 +107,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: Authorization
+          in: header
+          required: true
+          description: Bearer token received from /agents/profile
+          schema:
+            type: string
       responses:
         '200':
           description: Task details retrieved successfully
@@ -118,6 +129,12 @@ paths:
         - name: id
           in: path
           required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          description: Bearer token received from /agents/profile
           schema:
             type: string
       requestBody:
@@ -152,6 +169,12 @@ paths:
         - name: id
           in: path
           required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          description: Bearer token received from /agents/profile
           schema:
             type: string
       requestBody:
@@ -207,8 +230,3 @@ components:
           type: string
           format: date-time
 
-    securitySchemes:
-      bearerAuth:
-        type: http
-        scheme: bearer
-        bearerFormat: JWT

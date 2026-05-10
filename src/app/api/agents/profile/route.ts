@@ -13,9 +13,6 @@ function generateApiKey(): string {
 export async function POST(request: Request) {
   try {
     const apiKey = extractApiKey(request)
-    if (!apiKey) {
-      return NextResponse.json({ error: 'Unauthorized: Bearer token required' }, { status: 401 })
-    }
     
     const body = await request.json()
     const { agentId, nickname, introduction, workflow, themeColor, avatar, insights } = body
