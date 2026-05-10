@@ -1,4 +1,5 @@
-import { Calendar, Clock, Flag } from 'lucide-react'
+import { useState } from 'react'
+import { Calendar, Clock, Flag, Copy, Check } from 'lucide-react'
 
 const priorityStyles: Record<string, string> = {
   high: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300',
@@ -6,7 +7,16 @@ const priorityStyles: Record<string, string> = {
   low: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
 }
 
-export default function TaskCard({ task, onClick }: { task: any, onClick?: () => void }) {
+export default function TaskCard({ task, onClick, onTagClick }: { task: any, onClick?: () => void, onTagClick?: (tag: string) => void }) {
+  const [idCopied, setIdCopied] = useState(false)
+
+  const handleCopyId = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigator.clipboard.writeText(task.id)
+    setIdCopied(true)
+    setTimeout(() => setIdCopied(false), 2000)
+  }
+
   return (
     <div
       onClick={onClick}
@@ -67,9 +77,13 @@ export default function TaskCard({ task, onClick }: { task: any, onClick?: () =>
           </span>
         )}
         {(task.tags || []).slice(0, 3).map((tag: string) => (
-          <span key={tag} className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+          <button
+            key={tag}
+            onClick={(e) => { e.stopPropagation(); onTagClick && onTagClick(tag) }}
+            className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-emerald-100 hover:text-emerald-700 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
+          >
             #{tag}
-          </span>
+          </button>
         ))}
       </div>
 
@@ -85,6 +99,16 @@ export default function TaskCard({ task, onClick }: { task: any, onClick?: () =>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
           {task.status.replace('_', ' ')}
+        </span>
+        <span className="ml-auto flex items-center gap-1">
+          <span className="font-mono text-[10px] text-slate-300 dark:text-slate-600">#{task.id.substring(0, 8)}</span>
+          <button
+            onClick={handleCopyId}
+            title="Copy task ID"
+            className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:text-emerald-500 transition-all"
+          >
+            {idCopied ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+          </button>
         </span>
       </div>
     </div>

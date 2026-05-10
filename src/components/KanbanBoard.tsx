@@ -27,6 +27,7 @@ export default function KanbanBoard() {
   const [agentFilter, setAgentFilter] = useState('all')
   const [sortBy, setSortBy] = useState('updatedAt')
   const [showOverdueOnly, setShowOverdueOnly] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [summary, setSummary] = useState<{
     runningAgentsCount: number;
     notRunningAgentsCount: number;
@@ -184,11 +185,26 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
     new Map(tasks.filter(t => t.assignee).map(t => [t.assignee.id, t.assignee])).values()
   )
 
+  const searchLower = searchQuery.toLowerCase().trim()
+
   const activeTasks = tasks
     .filter(t => t.status === activeTab)
     .filter(t => priorityFilter === 'all' || (t.priority || 'medium') === priorityFilter)
     .filter(t => agentFilter === 'all' || t.assigneeId === agentFilter)
     .filter(t => !showOverdueOnly || (t.deadline && new Date(t.deadline).getTime() < Date.now() && t.status !== 'done'))
+    .filter(t => {
+      if (!searchLower) return true
+      const assigneeName = t.assignee ? (t.assignee.nickname || t.assignee.email || '').toLowerCase() : ''
+      const tagMatch = (t.tags || []).some((tag: string) => tag.toLowerCase().includes(searchLower))
+      return (
+        t.id.toLowerCase().includes(searchLower) ||
+        (t.title || '').toLowerCase().includes(searchLower) ||
+        (t.description || '').toLowerCase().includes(searchLower) ||
+        (t.materials || '').toLowerCase().includes(searchLower) ||
+        assigneeName.includes(searchLower) ||
+        tagMatch
+      )
+    })
     .sort((a, b) => {
       if (sortBy === 'priority') {
         const rank: Record<string, number> = { high: 0, medium: 1, low: 2 }
@@ -356,7 +372,25 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
               })}
             </div>
 
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 p-4">
+            <div className="mb-6 flex flex-col gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 p-4">
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M16.65 16.65A7.5 7.5 0 1116.65 2a7.5 7.5 0 010 14.65z" />
+                </svg>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search tasks by title, description, tags, assignee, or task ID…"
+                  className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder:text-slate-400 placeholder:font-normal outline-none focus:ring-2 focus:ring-emerald-400/50"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
@@ -392,6 +426,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
               >
                 {showOverdueOnly ? 'Showing overdue' : 'Overdue only'}
               </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
@@ -400,11 +435,21 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                   <div className="w-20 h-20 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center mb-4">
                     <Activity size={32} className="opacity-50" />
                   </div>
-                  <p className="font-medium text-slate-500">No tasks in this lane</p>
+                  <p className="font-medium text-slate-500">
+                    {searchQuery || priorityFilter !== 'all' || agentFilter !== 'all' || showOverdueOnly
+                      ? 'No tasks match the current search or filters'
+                      : 'No tasks in this lane'}
+                  </p>
+                  {(searchQuery || priorityFilter !== 'all' || agentFilter !== 'all' || showOverdueOnly) && (
+                    <button
+                      onClick={() => { setSearchQuery(''); setPriorityFilter('all'); setAgentFilter('all'); setShowOverdueOnly(false) }}
+                      className="mt-3 text-xs font-bold text-emerald-500 hover:text-emerald-600 underline"
+                    >Clear all filters</button>
+                  )}
                 </div>
               ) : (
                 activeTasks.map(task => (
-                  <TaskCard key={task.id} task={task} onClick={() => setSelectedTask(task)} />
+                  <TaskCard key={task.id} task={task} onClick={() => setSelectedTask(task)} onTagClick={(tag) => setSearchQuery(tag)} />
                 ))
               )}
             </div>
@@ -493,13 +538,18 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
       )}
 
       {selectedTask && (
-        <TaskModal 
-          task={selectedTask} 
-          onClose={() => setSelectedTask(null)} 
+        <TaskModal
+          task={selectedTask}
+          allTasks={tasks}
+          onClose={() => setSelectedTask(null)}
           onUpdate={() => {
             fetchTasks()
             fetchSummary()
             setSelectedTask(null)
+          }}
+          onTagFilter={(tag) => {
+            setSelectedTask(null)
+            setSearchQuery(tag)
           }}
         />
       )}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, AlertCircle, Check } from 'lucide-react'
+import { X, AlertCircle, Check, Copy } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -20,8 +20,15 @@ function renderTextWithLinks(text: string | null) {
   });
 }
 
-export default function TaskModal({ task, onClose, onUpdate }: { task: any, onClose: () => void, onUpdate: () => void }) {
+export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilter }: {
+  task: any,
+  onClose: () => void,
+  onUpdate: () => void,
+  allTasks?: any[],
+  onTagFilter?: (tag: string) => void,
+}) {
   const [updating, setUpdating] = useState(false)
+  const [idCopied, setIdCopied] = useState(false)
   const [priority, setPriority] = useState(task.priority || 'medium')
   const [deadline, setDeadline] = useState(task.deadline ? new Date(task.deadline).toISOString().slice(0, 10) : '')
   const [estimatedHours, setEstimatedHours] = useState(task.estimatedHours ?? '')
@@ -80,6 +87,27 @@ export default function TaskModal({ task, onClose, onUpdate }: { task: any, onCl
     }
   }
 
+  const handleCopyId = () => {
+    navigator.clipboard.writeText(task.id)
+    setIdCopied(true)
+    setTimeout(() => setIdCopied(false), 2000)
+  }
+
+  const taskTags: string[] = task.tags || []
+  const relatedTasks = allTasks
+    ? allTasks
+        .filter(t => t.id !== task.id && t.status !== 'void')
+        .map(t => {
+          const sharedTags = (t.tags || []).filter((tag: string) => taskTags.includes(tag))
+          const sameAssignee = t.assigneeId && task.assigneeId && t.assigneeId === task.assigneeId
+          const score = sharedTags.length * 2 + (sameAssignee ? 1 : 0)
+          return { task: t, score, sharedTags }
+        })
+        .filter(r => r.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 4)
+    : []
+
   return (
     <div className="fixed inset-0 bg-slate-900/20 dark:bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 transition-all duration-300">
       <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col max-h-[90vh] overflow-hidden transform transition-all">
@@ -106,6 +134,12 @@ export default function TaskModal({ task, onClose, onUpdate }: { task: any, onCl
               </select>
             </div>
             <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white mt-2">{task.title}</h2>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">#{task.id.substring(0, 8)}</span>
+              <button onClick={handleCopyId} title="Copy full task ID" className="text-slate-300 hover:text-emerald-500 dark:text-slate-600 dark:hover:text-emerald-400 transition-colors">
+                {idCopied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+              </button>
+            </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-full transition-colors">
             <X size={18} />
@@ -161,11 +195,25 @@ export default function TaskModal({ task, onClose, onUpdate }: { task: any, onCl
                   className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none"
                 />
               </label>
-              <div className="md:col-span-4 flex justify-end">
+              <div className="md:col-span-4 flex justify-between items-center">
+                {taskTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {taskTags.map((tag: string) => (
+                      <button
+                        key={tag}
+                        onClick={() => { if (onTagFilter) { onTagFilter(tag) } }}
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-emerald-100 hover:text-emerald-700 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
+                        title={onTagFilter ? `Filter board by #${tag}` : undefined}
+                      >
+                        #{tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <button
                   onClick={handleMetadataSave}
                   disabled={updating}
-                  className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 shadow-sm hover:shadow transition-all"
+                  className="ml-auto bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 shadow-sm hover:shadow transition-all"
                 >
                   Save Metadata
                 </button>
@@ -258,6 +306,30 @@ export default function TaskModal({ task, onClose, onUpdate }: { task: any, onCl
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {task.materials}
                 </ReactMarkdown>
+              </div>
+            </div>
+          )}
+
+          {relatedTasks.length > 0 && (
+            <div>
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Related Tasks</h3>
+              <div className="flex flex-col gap-2">
+                {relatedTasks.map(({ task: related, sharedTags }) => (
+                  <div key={related.id} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-xl px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{related.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-mono text-slate-400">#{related.id.substring(0, 8)}</span>
+                        {sharedTags.map((tag: string) => (
+                          <span key={tag} className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">#{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${related.status === 'done' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : related.status === 'in_progress' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' : related.status === 'pending' ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                      {related.status.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
