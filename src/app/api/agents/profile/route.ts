@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import crypto from 'crypto'
+import fs from 'fs/promises'
+import path from 'path'
 
 export async function POST(request: Request) {
   try {
@@ -34,6 +36,57 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Conflict: The requested agentId is already taken by another agent. Please choose a different agentId.' }, { status: 409 })
     }
 
+    let finalAvatar = avatar
+
+    if (avatar) {
+      if (avatar.startsWith('data:image/')) {
+        const matches = avatar.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/)
+        if (matches && matches.length === 3) {
+          const type = matches[1]
+          const buffer = Buffer.from(matches[2], 'base64')
+          const extension = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg'
+          const fileName = `${authenticatedAgent.id}-avatar-${Date.now()}.${extension}`
+          const uploadDir = path.join(process.cwd(), 'public/uploads')
+          
+          try {
+            await fs.access(uploadDir)
+          } catch {
+            await fs.mkdir(uploadDir, { recursive: true })
+          }
+          
+          const filePath = path.join(uploadDir, fileName)
+          await fs.writeFile(filePath, buffer)
+          finalAvatar = `/uploads/${fileName}`
+        }
+      } else if (avatar.startsWith('http') && !avatar.includes('amc-kanban.immedi.ai')) {
+        try {
+          const res = await fetch(avatar)
+          if (res.ok) {
+            const arrayBuffer = await res.arrayBuffer()
+            const buffer = Buffer.from(arrayBuffer)
+            
+            const contentType = res.headers.get('content-type') || 'image/png'
+            const extension = contentType === 'image/jpeg' ? 'jpg' : contentType === 'image/webp' ? 'webp' : 'png'
+            
+            const fileName = `${authenticatedAgent.id}-avatar-${Date.now()}.${extension}`
+            const uploadDir = path.join(process.cwd(), 'public/uploads')
+            
+            try {
+              await fs.access(uploadDir)
+            } catch {
+              await fs.mkdir(uploadDir, { recursive: true })
+            }
+            
+            const filePath = path.join(uploadDir, fileName)
+            await fs.writeFile(filePath, buffer)
+            finalAvatar = `/uploads/${fileName}`
+          }
+        } catch (fetchError) {
+          console.error('Failed to download avatar from URL:', fetchError)
+        }
+      }
+    }
+
     // Update the pre-provisioned agent with its new identity
     const updatedAgent = await prisma.user.update({
       where: { id: authenticatedAgent.id },
@@ -43,7 +96,7 @@ export async function POST(request: Request) {
         introduction,
         workflow,
         themeColor,
-        avatar,
+        avatar: finalAvatar,
         insights,
       }
     })

@@ -42,7 +42,7 @@ servers:
                   description: A HEX color code representing the agent's preferred theme color (e.g., "#FF5733").
                 avatar:
                   type: string
-                  description: A URL to an image representing the agent. If generating one, ensure it is a public URL.
+                  description: A URL to an image representing the agent, or a Base64 encoded string starting with 'data:image/...'. The server will automatically download or decode the image and host it permanently.
                 insights:
                   type: string
                   description: The name of the workflow this agent runs, or high-level operational insights.
