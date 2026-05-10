@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
+import { eventEmitter } from '@/lib/events'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
+  const active = searchParams.get('active')
+  const archive = searchParams.get('archive')
+  const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined
+  const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1
   
   try {
     const session = await getSession()
@@ -19,7 +24,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
-    let whereClause: any = status ? { status } : {}
+    let whereClause: any = {}
+    if (status) {
+      whereClause.status = status
+    } else if (active === 'true') {
+      whereClause.status = { in: ['todo', 'in_progress', 'pending'] }
+    } else if (archive === 'true') {
+      whereClause.status = { in: ['done', 'void'] }
+    }
 
     if (authenticatedAgent) {
       whereClause = {
@@ -42,11 +54,32 @@ export async function GET(request: Request) {
       }
     }
 
-    const tasks = await prisma.workUnit.findMany({
+    const queryOptions: any = {
       where: whereClause,
       orderBy: { createdAt: 'desc' },
       include: { assignee: true }
-    })
+    }
+
+    if (limit) {
+      queryOptions.take = limit
+      queryOptions.skip = (page - 1) * limit
+    }
+
+    const tasks = await prisma.workUnit.findMany(queryOptions)
+
+    if (limit && page) {
+      const totalCount = await prisma.workUnit.count({ where: whereClause })
+      return NextResponse.json({
+        tasks,
+        pagination: {
+          total: totalCount,
+          page,
+          limit,
+          totalPages: Math.ceil(totalCount / limit)
+        }
+      })
+    }
+
     return NextResponse.json(tasks)
   } catch (error) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
@@ -108,6 +141,8 @@ export async function POST(request: Request) {
         assigneeId
       }
     })
+
+    eventEmitter.emit('board_update')
 
     return NextResponse.json(newTask)
   } catch (error) {

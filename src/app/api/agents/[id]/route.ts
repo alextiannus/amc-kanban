@@ -77,44 +77,62 @@ export async function PATCH(
     }
 
     const formData = await request.formData()
+    
+    // Extract text fields
+    const nickname = formData.get('nickname') as string | null
+    const introduction = formData.get('introduction') as string | null
+    const workflow = formData.get('workflow') as string | null
+    const insights = formData.get('insights') as string | null
+    const themeColor = formData.get('themeColor') as string | null
+    
+    const updateData: any = {}
+    if (nickname !== null) updateData.nickname = nickname
+    if (introduction !== null) updateData.introduction = introduction
+    if (workflow !== null) updateData.workflow = workflow
+    if (insights !== null) updateData.insights = insights
+    if (themeColor !== null) updateData.themeColor = themeColor
+
     const file = formData.get('avatar') as File | null
 
-    if (!file) {
-      return NextResponse.json({ error: 'No avatar file provided' }, { status: 400 })
+    if (file && file.size > 0) {
+      if (!file.type.startsWith('image/')) {
+        return NextResponse.json({ error: 'Avatar must be an image file' }, { status: 400 })
+      }
+
+      const bytes = await file.arrayBuffer()
+      const buffer = Buffer.from(bytes)
+      
+      // Enforce 5MB file size limit
+      const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+      if (buffer.length > MAX_FILE_SIZE) {
+        return NextResponse.json({ error: 'File too large. Maximum size is 5MB' }, { status: 413 })
+      }
+      const uploadDir = path.join(process.cwd(), 'public/uploads')
+
+      try {
+        await fs.access(uploadDir)
+      } catch {
+        await fs.mkdir(uploadDir, { recursive: true })
+      }
+
+      const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+      const fileName = `${id}-avatar-${Date.now()}.${extension}`
+      const filePath = path.join(uploadDir, fileName)
+
+      await fs.writeFile(filePath, buffer)
+      updateData.avatar = `/uploads/${fileName}`
     }
 
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json({ error: 'Avatar must be an image file' }, { status: 400 })
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: 'No data provided to update' }, { status: 400 })
     }
-
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    
-    // Enforce 5MB file size limit
-    const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-    if (buffer.length > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'File too large. Maximum size is 5MB' }, { status: 413 })
-    }
-    const uploadDir = path.join(process.cwd(), 'public/uploads')
-
-    try {
-      await fs.access(uploadDir)
-    } catch {
-      await fs.mkdir(uploadDir, { recursive: true })
-    }
-
-    const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-    const fileName = `${id}-avatar-${Date.now()}.${extension}`
-    const filePath = path.join(uploadDir, fileName)
-
-    await fs.writeFile(filePath, buffer)
 
     const agent = await prisma.user.update({
       where: { id },
-      data: { avatar: `/uploads/${fileName}` }
+      data: updateData
     })
 
-    return NextResponse.json({ success: true, avatar: agent.avatar })
+    return NextResponse.json({ success: true, agent: { id: agent.id, avatar: agent.avatar } })
   } catch (error) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }

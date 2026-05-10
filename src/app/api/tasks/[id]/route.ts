@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
+import { eventEmitter } from '@/lib/events'
 
 async function canHumanAccessTask(humanId: string, assigneeId: string | null) {
   const permissions = await prisma.agentPermission.findMany({
@@ -129,6 +130,8 @@ export async function PATCH(
       where: { id },
       data
     })
+
+    eventEmitter.emit('board_update')
 
     return NextResponse.json(updatedTask)
   } catch (error) {

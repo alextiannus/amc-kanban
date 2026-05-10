@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
+import { eventEmitter } from '@/lib/events'
 
 export async function PATCH(
   request: Request,
@@ -52,6 +53,8 @@ export async function PATCH(
       where: { id },
       data
     })
+
+    eventEmitter.emit('board_update')
 
     return NextResponse.json(updatedTask)
   } catch (error) {

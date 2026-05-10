@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Bot, Search, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import AgentEditModal from './AgentEditModal'
 
 export default function AgentSequenceView({ initialFilter = 'all' }: { initialFilter?: 'all' | 'online' | 'offline' }) {
   const [agents, setAgents] = useState<any[]>([])
@@ -11,6 +12,7 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
   const [filterTab, setFilterTab] = useState<'all' | 'online' | 'offline'>(initialFilter)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
+  const [editingAgent, setEditingAgent] = useState<any | null>(null)
 
   const getCopyCommand = (apiKey: string | null = null) => `【系统级指令：AMC 看板协作初始化】
 
@@ -56,13 +58,20 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
   }, [initialFilter])
 
   useEffect(() => {
-    fetch('/api/agents')
-      .then(res => res.json())
-      .then(data => {
-        setAgents(data)
-        setLoading(false)
-      })
+    fetchAgents()
   }, [])
+
+  const fetchAgents = async () => {
+    try {
+      const res = await fetch('/api/agents')
+      const data = await res.json()
+      setAgents(data)
+      setLoading(false)
+    } catch (e) {
+      console.error(e)
+      setLoading(false)
+    }
+  }
 
   const handleDeleteAgent = async (e: React.MouseEvent, agentId: string) => {
     e.stopPropagation()
@@ -149,14 +158,27 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                 ${expandedAgentIds.includes(agent.id) ? 'border-emerald-500 shadow-lg ring-4 ring-emerald-500/10' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm hover:shadow-md'}`}
               >
                 <div className="absolute top-6 right-6 flex items-center gap-3">
+                  <div className="flex items-center gap-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-2 py-1.5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingAgent(agent)
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                      title="编辑名片"
+                    >
+                      <span className="text-sm">✏️</span>
+                    </button>
+                    <div className="w-px h-4 bg-slate-200 dark:bg-slate-700"></div>
+                    <button
+                      onClick={(e) => handleDeleteAgent(e, agent.id)}
+                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                      title="遣散此 Agent"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                   <span className={`w-3 h-3 rounded-full ${agent.isOnline ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
-                  <button
-                    onClick={(e) => handleDeleteAgent(e, agent.id)}
-                    className="text-slate-300 hover:text-red-500 transition-colors"
-                    title="遣散此 Agent"
-                  >
-                    <Trash2 size={14} />
-                  </button>
                 </div>
 
                 <div className="flex items-center gap-4 mb-5 pr-8">
@@ -244,6 +266,17 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
           </div>
         )}
       </div>
+
+      {editingAgent && (
+        <AgentEditModal 
+          agent={editingAgent} 
+          onClose={() => setEditingAgent(null)}
+          onUpdate={() => {
+            setEditingAgent(null)
+            fetchAgents()
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import TaskCard from './TaskCard'
 import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
 import AgentSequenceView from './AgentSequenceView'
+import ArchiveView from './ArchiveView'
 import { LogOut, Activity, XCircle, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, LayoutDashboard, Bot } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
@@ -13,12 +14,11 @@ export const COLUMNS = [
   { id: 'todo', title: 'To Do' },
   { id: 'in_progress', title: 'In Progress' },
   { id: 'pending', title: 'Require Input', highlight: true },
-  { id: 'done', title: 'Done' },
-  { id: 'void', title: 'Void' },
 ]
 
 export default function KanbanBoard() {
   const [tasks, setTasks] = useState<any[]>([])
+  const [doneTasks, setDoneTasks] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState('pending')
   const [selectedTask, setSelectedTask] = useState<any | null>(null)
   const [summary, setSummary] = useState<{
@@ -32,7 +32,7 @@ export default function KanbanBoard() {
   const [showSettings, setShowSettings] = useState(false)
   
   // Navigation State
-  const [currentView, setCurrentView] = useState<'home' | 'agents'>('home')
+  const [currentView, setCurrentView] = useState<'home' | 'agents' | 'archive'>('home')
   const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
   
   const [copied, setCopied] = useState(false)
@@ -55,13 +55,17 @@ export default function KanbanBoard() {
     fetchSummary()
     fetchUser()
 
-    // Auto-polling for live AI updates
-    const interval = setInterval(() => {
-      fetchTasks()
-      fetchSummary()
-    }, 5000)
+    const eventSource = new EventSource('/api/events')
+    eventSource.onmessage = (event) => {
+      if (event.data === 'update') {
+        fetchTasks()
+        fetchSummary()
+      }
+    }
 
-    return () => clearInterval(interval)
+    return () => {
+      eventSource.close()
+    }
   }, [])
 
   const fetchUser = async () => {
@@ -72,10 +76,21 @@ export default function KanbanBoard() {
   }
 
   const fetchTasks = async () => {
-    const res = await fetch('/api/tasks')
-    if (res.ok) {
-      const data = await res.json()
-      setTasks(data)
+    try {
+      const res = await fetch('/api/tasks?active=true')
+      if (res.ok) {
+        const data = await res.json()
+        setTasks(data)
+      }
+      
+      const doneRes = await fetch('/api/tasks?status=done&limit=10')
+      if (doneRes.ok) {
+        const data = await doneRes.json()
+        // API returns { tasks, pagination } if limit is used
+        setDoneTasks(data.tasks || data)
+      }
+    } catch (e) {
+      console.error(e)
     }
   }
 
@@ -158,7 +173,6 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
   }
 
   const activeTasks = tasks.filter(t => t.status === activeTab)
-  const doneTasks = tasks.filter(t => t.status === 'done')
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex flex-col font-sans transition-colors duration-300">
@@ -188,6 +202,12 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
             className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${currentView === 'agents' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
           >
             <Bot size={16} /> AI 序列
+          </button>
+          <button 
+            onClick={() => setCurrentView('archive')} 
+            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${currentView === 'archive' ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
+          >
+            <Inbox size={16} /> 归档
           </button>
         </div>
         
@@ -373,9 +393,13 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
             </div>
           </div>
         </div>
-      ) : (
+      ) : currentView === 'agents' ? (
         <div className="flex-1">
           <AgentSequenceView initialFilter={agentsFilter} />
+        </div>
+      ) : (
+        <div className="flex-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <ArchiveView onTaskClick={setSelectedTask} />
         </div>
       )}
 
