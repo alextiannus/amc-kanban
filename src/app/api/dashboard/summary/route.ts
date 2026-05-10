@@ -24,6 +24,7 @@ export async function GET() {
 
       if (permittedAgentIds.length === 0) {
         return NextResponse.json({
+          collaborativeAgentsCount: 0,
           runningAgentsCount: 0,
           notRunningAgentsCount: 0,
           pendingTasksCount: 0,
@@ -46,6 +47,7 @@ export async function GET() {
     })
 
     const runningAgentIds = activeTasksCountByAgent.map(item => item.assigneeId)
+    const collaborativeAgentsCount = permittedAgentIds.length
     const runningAgentsCount = runningAgentIds.length
     const notRunningAgentsCount = permittedAgentIds.length - runningAgentsCount
 
@@ -66,6 +68,7 @@ export async function GET() {
     })
 
     return NextResponse.json({
+      collaborativeAgentsCount,
       runningAgentsCount,
       notRunningAgentsCount,
       pendingTasksCount,

@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import TaskCard from './TaskCard'
 import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
 import AgentSequenceView from './AgentSequenceView'
 import ArchiveView from './ArchiveView'
-import { LogOut, Activity, XCircle, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, LayoutDashboard, Bot, Trash2 } from 'lucide-react'
+import AvatarImage from './AvatarImage'
+import { LogOut, Activity, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, LayoutDashboard, Bot, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 
@@ -19,6 +20,7 @@ export const COLUMNS = [
 ]
 
 export default function KanbanBoard() {
+  const SHOW_LANE_FILTERS = false
   const [tasks, setTasks] = useState<any[]>([])
   const [doneTasks, setDoneTasks] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState('pending')
@@ -29,14 +31,16 @@ export default function KanbanBoard() {
   const [showOverdueOnly, setShowOverdueOnly] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [summary, setSummary] = useState<{
+    collaborativeAgentsCount: number;
     runningAgentsCount: number;
     notRunningAgentsCount: number;
     pendingTasksCount: number;
     completedTasksCount: number;
   } | null>(null)
-  const [user, setUser] = useState<{ id: string, email: string, role: string } | null>(null)
+  const [user, setUser] = useState<{ id: string, email: string, role: string, nickname?: string | null, avatar?: string | null } | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const profileMenuRef = useRef<HTMLDivElement | null>(null)
   
   // Navigation State
   const [currentView, setCurrentView] = useState<'home' | 'agents' | 'archive'>('home')
@@ -74,6 +78,26 @@ export default function KanbanBoard() {
       eventSource.close()
     }
   }, [])
+
+  useEffect(() => {
+    if (!showProfile) return
+
+    const handlePointerDownOutside = (event: MouseEvent | TouchEvent) => {
+      if (!profileMenuRef.current) return
+      const target = event.target as Node
+      if (!profileMenuRef.current.contains(target)) {
+        setShowProfile(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDownOutside)
+    document.addEventListener('touchstart', handlePointerDownOutside)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDownOutside)
+      document.removeEventListener('touchstart', handlePointerDownOutside)
+    }
+  }, [showProfile])
 
   const fetchUser = async () => {
     const res = await fetch('/api/auth/me')
@@ -281,18 +305,23 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
             </button>
           )}
 
-          <div className="relative">
+          <div ref={profileMenuRef} className="relative">
             <button 
               onClick={() => setShowProfile(!showProfile)}
-              className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:shadow-md hover:scale-105 transition-all duration-300 border border-slate-200 dark:border-slate-700"
+              className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:shadow-md hover:scale-105 transition-all duration-300 border border-slate-200 dark:border-slate-700 overflow-hidden"
             >
-              {user ? user.email.charAt(0).toUpperCase() : <UserIcon size={18} />}
+              {user?.avatar ? (
+                <img src={user.avatar} alt="User avatar" className="w-full h-full object-cover" />
+              ) : user ? (
+                (user.nickname || user.email).charAt(0).toUpperCase()
+              ) : <UserIcon size={18} />}
             </button>
 
             {showProfile && (
-              <div className="absolute right-0 mt-3 w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all z-50">
+              <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] max-w-64 sm:w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all z-50 max-h-[70vh] overflow-y-auto">
                 <div className="p-4 border-b border-slate-100/50 dark:border-slate-800">
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{user?.email}</p>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{user?.nickname || user?.email}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{user?.email}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{user?.role}</p>
                 </div>
                 <div className="p-2 space-y-1">
@@ -349,6 +378,43 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
         </div>
       </div>
 
+      {currentView === 'home' && (
+        <div className="mb-6 bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
+            <span className="text-emerald-500">⭐</span> 监控大盘
+          </h2>
+
+          {summary ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div onClick={() => openAgentsWithFilter('all')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800/50">
+                <Users size={20} className="text-indigo-500 mb-2 group-hover:scale-110 transition-transform" />
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">协作Agent</p>
+                <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.collaborativeAgentsCount}</p>
+              </div>
+              <div onClick={() => openAgentsWithFilter('online')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border border-transparent hover:border-emerald-100 dark:hover:border-emerald-800/50">
+                <Activity size={20} className="text-emerald-500 mb-2 group-hover:scale-110 transition-transform" />
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">活跃 Agent</p>
+                <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.runningAgentsCount}</p>
+              </div>
+              <div onClick={() => setActiveTab('pending')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors border border-transparent hover:border-amber-100 dark:hover:border-amber-800/50">
+                <AlertCircle size={20} className="text-amber-500 mb-2 group-hover:scale-110 transition-transform" />
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">待输入任务</p>
+                <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.pendingTasksCount}</p>
+              </div>
+              <div onClick={() => setActiveTab('done')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border border-transparent hover:border-blue-100 dark:hover:border-blue-800/50">
+                <CheckCircle2 size={20} className="text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">今日完成</p>
+                <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.completedTasksCount}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="animate-pulse">
+              <div className="w-full h-32 bg-slate-100 dark:bg-slate-800 rounded-2xl"></div>
+            </div>
+          )}
+        </div>
+      )}
+
       {currentView === 'home' ? (
         <div className="flex flex-col xl:flex-row gap-8 items-start animate-in fade-in slide-in-from-bottom-2 duration-300">
           {/* Left Side: Tabs and Grid */}
@@ -390,43 +456,45 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                   </button>
                 )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none"
-              >
-                <option value="all">All priorities</option>
-                <option value="high">High priority</option>
-                <option value="medium">Medium priority</option>
-                <option value="low">Low priority</option>
-              </select>
-              <select
-                value={agentFilter}
-                onChange={(e) => setAgentFilter(e.target.value)}
-                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none"
-              >
-                <option value="all">All agents</option>
-                {agentOptions.map((agent: any) => (
-                  <option key={agent.id} value={agent.id}>{agent.nickname || agent.email}</option>
-                ))}
-              </select>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none"
-              >
-                <option value="updatedAt">Sort: recently updated</option>
-                <option value="priority">Sort: priority</option>
-                <option value="deadline">Sort: deadline</option>
-              </select>
-              <button
-                onClick={() => setShowOverdueOnly(!showOverdueOnly)}
-                className={`rounded-xl px-3 py-2 text-sm font-bold transition-colors ${showOverdueOnly ? 'bg-red-500 text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'}`}
-              >
-                {showOverdueOnly ? 'Showing overdue' : 'Overdue only'}
-              </button>
-              </div>
+              {SHOW_LANE_FILTERS && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <select
+                    value={priorityFilter}
+                    onChange={(e) => setPriorityFilter(e.target.value)}
+                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none"
+                  >
+                    <option value="all">All priorities</option>
+                    <option value="high">High priority</option>
+                    <option value="medium">Medium priority</option>
+                    <option value="low">Low priority</option>
+                  </select>
+                  <select
+                    value={agentFilter}
+                    onChange={(e) => setAgentFilter(e.target.value)}
+                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none"
+                  >
+                    <option value="all">All agents</option>
+                    {agentOptions.map((agent: any) => (
+                      <option key={agent.id} value={agent.id}>{agent.nickname || agent.email}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none"
+                  >
+                    <option value="updatedAt">Sort: recently updated</option>
+                    <option value="priority">Sort: priority</option>
+                    <option value="deadline">Sort: deadline</option>
+                  </select>
+                  <button
+                    onClick={() => setShowOverdueOnly(!showOverdueOnly)}
+                    className={`rounded-xl px-3 py-2 text-sm font-bold transition-colors ${showOverdueOnly ? 'bg-red-500 text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'}`}
+                  >
+                    {showOverdueOnly ? 'Showing overdue' : 'Overdue only'}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
@@ -455,43 +523,8 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
             </div>
           </div>
 
-          {/* Right Side: Dashboard */}
+          {/* Right Side: Delivery */}
           <div className="w-full xl:w-[400px] flex-shrink-0 flex flex-col gap-6">
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
-              <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-6">
-                <span className="text-emerald-500">⭐</span> 监控大盘
-              </h2>
-              
-              {summary ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div onClick={() => openAgentsWithFilter('online')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border border-transparent hover:border-emerald-100 dark:hover:border-emerald-800/50">
-                    <Activity size={20} className="text-emerald-500 mb-2 group-hover:scale-110 transition-transform" />
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">活跃 Agent</p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.runningAgentsCount}</p>
-                  </div>
-                  <div onClick={() => setActiveTab('pending')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors border border-transparent hover:border-amber-100 dark:hover:border-amber-800/50">
-                    <AlertCircle size={20} className="text-amber-500 mb-2 group-hover:scale-110 transition-transform" />
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">待输入任务</p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.pendingTasksCount}</p>
-                  </div>
-                  <div onClick={() => setActiveTab('done')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border border-transparent hover:border-blue-100 dark:hover:border-blue-800/50">
-                    <CheckCircle2 size={20} className="text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">今日完成</p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.completedTasksCount}</p>
-                  </div>
-                  <div onClick={() => openAgentsWithFilter('offline')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700">
-                    <XCircle size={20} className="text-slate-400 mb-2 group-hover:scale-110 transition-transform" />
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">离线 Agent</p>
-                    <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.notRunningAgentsCount}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="animate-pulse flex gap-4 flex-wrap">
-                  <div className="w-full h-32 bg-slate-100 dark:bg-slate-800 rounded-2xl"></div>
-                </div>
-              )}
-            </div>
-
             <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex-1 min-h-[300px]">
               <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-6">
                 <span className="text-amber-500">🏆</span> 交付成果展示
@@ -512,7 +545,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                     >
                       <div className="flex items-center gap-3 overflow-hidden">
                         <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-600 flex-shrink-0 border border-white dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">
-                          {task.assignee?.avatar ? (
+                          {taAvatarImageassignee?.avatar ? (
                             <img src={task.assignee.avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
                           ) : 'AI'}
                         </div>
@@ -555,7 +588,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
         />
       )}
 
-      {showSettings && user && <UserSettingsModal user={user} onClose={() => setShowSettings(false)} />}
+      {showSettings && user && <UserSettingsModal user={user} onClose={() => setShowSettings(false)} onUpdated={fetchUser} />}
       
       {newApiKey && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
