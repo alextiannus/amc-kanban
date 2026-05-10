@@ -3,6 +3,7 @@ import { Bot, Search, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AgentEditModal from './AgentEditModal'
+import AvatarImage from './AvatarImage'
 
 export default function AgentSequenceView({ initialFilter = 'all' }: { initialFilter?: 'all' | 'online' | 'offline' }) {
   const [agents, setAgents] = useState<any[]>([])
@@ -189,7 +190,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                     style={agent.themeColor ? { backgroundColor: `${agent.themeColor}20`, color: agent.themeColor } : undefined}
                     className={`w-14 h-14 rounded-2xl flex items-center justify-center text-sm font-bold overflow-hidden border border-white dark:border-slate-700 shadow-sm flex-shrink-0 ${!agent.themeColor ? 'bg-slate-200 text-slate-600' : ''}`}
                   >
-                    {agent.avatar ? <img src={agent.avatar} alt="Avatar" className="w-full h-full object-cover" /> : (agent.nickname || agent.email.split('@')[0]).substring(0, 2).toUpperCase()}
+                    {agent.avatar ? <AvatarImage src={agent.avatar} alt="Avatar" className="w-full h-full object-cover" /> : (agent.nickname || agent.email.split('@')[0]).substring(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-extrabold text-slate-800 dark:text-slate-100 truncate text-lg">{agent.nickname || agent.email.split('@')[0]}</h3>

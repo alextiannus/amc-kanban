@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Inbox, ChevronLeft, ChevronRight, Activity, Calendar } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import AvatarImage from './AvatarImage'
 
 export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) => void }) {
   const [tasks, setTasks] = useState<any[]>([])
@@ -62,7 +63,7 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
                 <div className="flex items-center gap-4 flex-shrink-0 w-48">
                   <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-900 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200 dark:border-slate-600 shadow-sm overflow-hidden flex-shrink-0">
                     {task.assignee?.avatar ? (
-                      <img src={task.assignee.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                      <AvatarImage src={task.assignee.avatar} alt="Avatar" className="w-full h-full object-cover" />
                     ) : 'AI'}
                   </div>
                   <div>

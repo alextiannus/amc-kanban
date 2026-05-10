@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Calendar, Clock, Flag, Copy, Check } from 'lucide-react'
+import AvatarImage from './AvatarImage'
 
 const priorityStyles: Record<string, string> = {
   high: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300',
@@ -30,7 +31,7 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
             style={task.assignee.themeColor ? { backgroundColor: `${task.assignee.themeColor}20`, color: task.assignee.themeColor } : undefined}
             className={`w-12 h-12 flex-shrink-0 rounded-2xl flex items-center justify-center text-xs font-bold shadow-sm overflow-hidden border border-white dark:border-slate-800 ${!task.assignee.themeColor ? 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' : ''}`}
           >
-            {task.assignee.avatar ? (
+            {taAvatarImageassignee.avatar ? (
               <img src={task.assignee.avatar} alt="Agent Avatar" className="w-full h-full object-cover" />
             ) : (
               (task.assignee.nickname || task.assignee.email.split('@')[0]).substring(0, 2).toUpperCase()

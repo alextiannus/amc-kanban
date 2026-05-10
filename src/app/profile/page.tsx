@@ -35,7 +35,21 @@ export default function ProfilePage() {
 
       <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mb-8">
         <h2 className="text-xl font-semibold mb-2 dark:text-white">Basic Information</h2>
+        <div className="flex items-center gap-4 mb-4">
+          <div className="w-14 h-14 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 flex items-center justify-center text-gray-500 font-bold">
+            {profile.avatar ? (
+              <img src={profile.avatar} alt="User avatar" className="w-full h-full object-cover" />
+            ) : (
+              (profile.nickname || profile.email).charAt(0).toUpperCase()
+            )}
+          </div>
+          <div>
+            <p className="text-gray-900 dark:text-white font-semibold">{profile.nickname || '未设置昵称'}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">可在右上角 个人设置 中上传和修改头像</p>
+          </div>
+        </div>
         <div className="space-y-2 text-gray-700 dark:text-gray-300">
+          <p><span className="font-medium">Nickname:</span> {profile.nickname || '-'}</p>
           <p><span className="font-medium">Email:</span> {profile.email}</p>
           <p><span className="font-medium">Role:</span> {profile.role}</p>
           <p><span className="font-medium">Account Type:</span> {profile.type}</p>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { use } from 'react'
+import AvatarImage from '@/components/AvatarImage'
 
 export default function AgentProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const [agent, setAgent] = useState<any>(null)
@@ -78,7 +79,7 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
             <div className="flex items-center gap-4 mb-4">
               <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 border border-gray-200 dark:border-gray-600">
                 {agent.avatar ? (
-                  <img src={agent.avatar} alt="Agent Avatar" className="w-full h-full object-cover" />
+                  <AvatarImage src={agent.avatar} alt="Agent Avatar" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-lg font-bold text-gray-500 dark:text-gray-300">
                     {(agent.nickname || agent.email.split('@')[0]).slice(0, 2).toUpperCase()}

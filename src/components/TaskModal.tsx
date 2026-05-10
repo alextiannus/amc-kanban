@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, AlertCircle, Check, Copy } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import AvatarImage from './AvatarImage'
 
 function renderTextWithLinks(text: string | null) {
   if (!text) return 'No description provided.';
@@ -29,10 +30,6 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
 }) {
   const [updating, setUpdating] = useState(false)
   const [idCopied, setIdCopied] = useState(false)
-  const [priority, setPriority] = useState(task.priority || 'medium')
-  const [deadline, setDeadline] = useState(task.deadline ? new Date(task.deadline).toISOString().slice(0, 10) : '')
-  const [estimatedHours, setEstimatedHours] = useState(task.estimatedHours ?? '')
-  const [tags, setTags] = useState((task.tags || []).join(', '))
 
   const handleProvideInput = async () => {
     setUpdating(true)
@@ -57,27 +54,6 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, requiredInput: newStatus !== 'pending' ? null : task.requiredInput })
-      })
-      onUpdate()
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setUpdating(false)
-    }
-  }
-
-  const handleMetadataSave = async () => {
-    setUpdating(true)
-    try {
-      await fetch(`/api/tasks/${task.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          priority,
-          deadline: deadline || null,
-          estimatedHours: estimatedHours === '' ? null : Number(estimatedHours),
-          tags: tags.split(',').map((tag: string) => tag.trim()).filter(Boolean),
-        })
       })
       onUpdate()
     } catch (e) {
@@ -149,54 +125,22 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
         <div className="p-6 overflow-y-auto flex-1 space-y-8">
           <div>
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Planning Metadata</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-4">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-4">
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 Priority
-                <select
-                  disabled={updating}
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none"
-                >
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
-              </label>
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200 capitalize">{task.priority || 'medium'}</p>
+              </div>
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 Deadline
-                <input
-                  disabled={updating}
-                  type="date"
-                  value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none"
-                />
-              </label>
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">{task.deadline ? new Date(task.deadline).toLocaleDateString() : 'Not set'}</p>
+              </div>
+              <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 Estimate (h)
-                <input
-                  disabled={updating}
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={estimatedHours}
-                  onChange={(e) => setEstimatedHours(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none"
-                />
-              </label>
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                Tags
-                <input
-                  disabled={updating}
-                  value={tags}
-                  onChange={(e) => setTags(e.target.value)}
-                  placeholder="feature, urgent"
-                  className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 outline-none"
-                />
-              </label>
-              <div className="md:col-span-4 flex justify-between items-center">
-                {taskTags.length > 0 && (
+                <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-200">{task.estimatedHours ?? 'Not set'}</p>
+              </div>
+              <div className="md:col-span-3">
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">Tags</p>
+                {taskTags.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {taskTags.map((tag: string) => (
                       <button
@@ -209,14 +153,9 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
                       </button>
                     ))}
                   </div>
+                ) : (
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">No tags</p>
                 )}
-                <button
-                  onClick={handleMetadataSave}
-                  disabled={updating}
-                  className="ml-auto bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-2 rounded-xl text-sm font-bold disabled:opacity-50 shadow-sm hover:shadow transition-all"
-                >
-                  Save Metadata
-                </button>
               </div>
             </div>
           </div>
@@ -250,7 +189,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
                     className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm overflow-hidden ${task.assignee.type === 'AI_AGENT' && !task.assignee.themeColor && !task.assignee.avatar ? 'bg-gradient-to-br from-amber-400 to-orange-500' : ''}`}
                   >
                     {task.assignee.avatar ? (
-                      <img src={task.assignee.avatar} alt="Agent Avatar" className="w-full h-full object-cover" />
+                      <AvatarImage src={task.assignee.avatar} alt="Agent Avatar" className="w-full h-full object-cover" />
                     ) : (
                       task.assignee.email.substring(0, 2).toUpperCase()
                     )}
