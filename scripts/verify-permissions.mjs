@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs'
 import { PrismaClient } from '@prisma/client'
 
 if (typeof process.loadEnvFile === 'function') {
+  process.loadEnvFile('.env')
   process.loadEnvFile('.env.local')
 }
 
