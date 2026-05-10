@@ -3,6 +3,7 @@ import { X, Check } from 'lucide-react'
 
 export default function UserSettingsModal({ user, onClose, onUpdated }: { user: any, onClose: () => void, onUpdated?: () => void }) {
   const [nickname, setNickname] = useState(user.nickname || '')
+  const [introduction, setIntroduction] = useState(user.introduction || '')
   const [password, setPassword] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(user.avatar || null)
@@ -34,10 +35,11 @@ export default function UserSettingsModal({ user, onClose, onUpdated }: { user: 
     }
 
     const nicknameChanged = (nickname || '').trim() !== (user.nickname || '')
+    const introductionChanged = (introduction || '').trim() !== (user.introduction || '')
     const passwordChanged = password.length > 0
     const avatarChanged = !!avatarFile
 
-    if (!nicknameChanged && !passwordChanged && !avatarChanged) {
+    if (!nicknameChanged && !introductionChanged && !passwordChanged && !avatarChanged) {
       onClose()
       return
     }
@@ -47,6 +49,7 @@ export default function UserSettingsModal({ user, onClose, onUpdated }: { user: 
     try {
       const formData = new FormData()
       formData.append('nickname', (nickname || '').trim())
+      formData.append('introduction', (introduction || '').trim())
       if (passwordChanged) {
         formData.append('password', password)
       }
@@ -77,7 +80,7 @@ export default function UserSettingsModal({ user, onClose, onUpdated }: { user: 
 
   return (
     <div className="fixed inset-0 bg-slate-900/20 dark:bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 p-6 relative">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 p-6 relative max-h-[90vh] overflow-y-auto">
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
           <X size={20} />
         </button>
@@ -97,6 +100,24 @@ export default function UserSettingsModal({ user, onClose, onUpdated }: { user: 
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">账号邮箱</label>
             <input type="text" disabled value={user.email} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-slate-500 cursor-not-allowed" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">身份简介</label>
+            <textarea
+              value={introduction}
+              onChange={e => setIntroduction(e.target.value)}
+              placeholder="请在此描述：品牌名、运营平台、运营理念..."
+              className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none"
+              rows={3}
+            />
+            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-300">
+              <p className="font-semibold">💡 建议包含：</p>
+              <ul className="mt-1 ml-3 space-y-0.5 list-disc text-xs">
+                <li>品牌名</li>
+                <li>运营平台</li>
+                <li>运营理念</li>
+              </ul>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">头像</label>

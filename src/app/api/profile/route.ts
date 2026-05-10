@@ -22,6 +22,7 @@ export async function GET() {
         type: true,
         role: true,
         nickname: true,
+        introduction: true,
         avatar: true,
         permittedAgents: {
           include: { 
@@ -71,11 +72,16 @@ export async function PATCH(request: Request) {
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData()
       const nickname = formData.get('nickname')
+      const introduction = formData.get('introduction')
       const password = formData.get('password')
       const avatarFile = formData.get('avatar') as File | null
 
       if (typeof nickname === 'string') {
         updateData.nickname = nickname.trim() || null
+      }
+
+      if (typeof introduction === 'string') {
+        updateData.introduction = introduction.trim() || null
       }
 
       if (typeof password === 'string' && password.length > 0) {
@@ -141,6 +147,7 @@ export async function PATCH(request: Request) {
         role: true,
         type: true,
         nickname: true,
+        introduction: true,
         avatar: true,
       }
     })

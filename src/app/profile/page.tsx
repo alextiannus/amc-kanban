@@ -53,6 +53,12 @@ export default function ProfilePage() {
           <p><span className="font-medium">Email:</span> {profile.email}</p>
           <p><span className="font-medium">Role:</span> {profile.role}</p>
           <p><span className="font-medium">Account Type:</span> {profile.type}</p>
+          {profile.introduction && (
+            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <p className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">📋 身份简介：</p>
+              <p className="text-sm text-blue-800 dark:text-blue-200 whitespace-pre-wrap">{profile.introduction}</p>
+            </div>
+          )}
         </div>
       </div>
 

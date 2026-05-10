@@ -13,8 +13,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AMC Command Center",
+  title: "AMC Dashboard",
   description: "AI Agent Collaboration Platform",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/amc-dashboard-logo.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico",
+  },
 };
 
 import { ThemeProvider } from "../components/ThemeProvider";

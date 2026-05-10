@@ -15,6 +15,7 @@ export async function GET() {
       select: {
         id: true,
         email: true,
+        nickname: true,
         type: true,
         role: true,
         insights: true,
@@ -22,7 +23,7 @@ export async function GET() {
         chatLink: true,
         createdAt: true,
         permittedAgents: {
-          include: { agent: { select: { id: true, email: true } } }
+          include: { agent: { select: { id: true, email: true, nickname: true } } }
         }
       },
       orderBy: { createdAt: 'desc' }

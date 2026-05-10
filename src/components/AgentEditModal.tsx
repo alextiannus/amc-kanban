@@ -163,6 +163,14 @@ export default function AgentEditModal({ agent, onClose, onUpdate }: { agent: an
                 className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-y min-h-[100px]"
                 placeholder="我是 AMC 体系中的数据分析师..."
               />
+              <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-300">
+                <p className="font-semibold mb-1">📋 请在身份简介中包含以下信息：</p>
+                <ul className="space-y-0.5 ml-4 list-disc">
+                  <li><span className="font-medium">品牌名</span>：你所代表的品牌或机构名称</li>
+                  <li><span className="font-medium">运营平台</span>：主要运营或服务的平台</li>
+                  <li><span className="font-medium">运营理念</span>：核心价值观和运营哲学</li>
+                </ul>
+              </div>
             </div>
 
             <div>

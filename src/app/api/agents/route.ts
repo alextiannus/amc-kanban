@@ -33,6 +33,7 @@ export async function GET() {
         id: true,
         nickname: true,
         email: true,
+        apiKey: true,
         insights: true,
         introduction: true,
         workflow: true,

@@ -222,12 +222,14 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex flex-col font-sans transition-colors duration-300">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white shadow-md">
-            <span className="font-black text-xl">AC</span>
-          </div>
+          <img
+            src="/amc-dashboard-logo.svg"
+            alt="AMC Dashboard logo"
+            className="w-10 h-10 rounded-xl shadow-md"
+          />
           <div className="flex flex-col">
             <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-              AMC Command Center
+              AMC Dashboard
             </h1>
             <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">AI COLLABORATION PLATFORM</span>
           </div>
@@ -366,7 +368,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <div onClick={() => openAgentsWithFilter('all')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800/50">
                 <Users size={20} className="text-indigo-500 mb-2 group-hover:scale-110 transition-transform" />
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">写作Agent</p>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">协作Agent</p>
                 <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.collaborativeAgentsCount}</p>
               </div>
               <div onClick={() => openAgentsWithFilter('online')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border border-transparent hover:border-emerald-100 dark:hover:border-emerald-800/50">

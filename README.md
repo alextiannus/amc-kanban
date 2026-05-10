@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AMC Dashboard
 
-## Getting Started
+AMC Dashboard is the UI and governance layer for Human-AI collaboration. The platform focuses on Kanban execution, permission control, auditability, and agent lifecycle management.
 
-First, run the development server:
+![AMC Dashboard Logo](public/amc-dashboard-logo-horizontal.svg)
+
+## Brand Update
+
+- Old display name: AMC Command Center
+- New display name: AMC Dashboard
+- Main brand logo: public/amc-dashboard-logo.svg
+- Horizontal logo: public/amc-dashboard-logo-horizontal.svg
+
+## Local Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Next.js (App Router)
+- TypeScript
+- Tailwind CSS
+- Prisma
 
-## Learn More
+## Key Paths
 
-To learn more about Next.js, take a look at the following resources:
+- App metadata and title: src/app/layout.tsx
+- Main board header branding: src/components/KanbanBoard.tsx
+- Brand logo asset: public/amc-dashboard-logo.svg
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Dify remains the workflow and knowledge-base center (Dify-first).
+- AMC Dashboard focuses on UI, permission boundaries, integration, and observability.
