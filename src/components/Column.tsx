@@ -50,8 +50,8 @@ export default function Column({ column, tasks, onTaskClick }: { column: any, ta
                           style={task.assignee.themeColor ? { backgroundColor: task.assignee.themeColor } : undefined}
                           className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shadow-sm overflow-hidden ${task.assignee.type === 'AI_AGENT' && !task.assignee.themeColor && !task.assignee.avatar ? 'bg-gradient-to-br from-amber-400 to-orange-500' : task.assignee.type !== 'AI_AGENT' && !task.assignee.avatar ? 'bg-gradient-to-br from-emerald-400 to-teal-500' : ''}`}
                         >
-                          {taAvatarImageassignee.avatar ? (
-                            <img src={task.assignee.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                          {task.assignee.avatar ? (
+                            <AvatarImage src={task.assignee.avatar} alt="Avatar" className="w-full h-full object-cover" />
                           ) : (
                             (task.assignee.nickname || task.assignee.email.split('@')[0]).substring(0, 2).toUpperCase()
                           )}

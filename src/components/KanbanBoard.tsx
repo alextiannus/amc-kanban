@@ -545,8 +545,8 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                     >
                       <div className="flex items-center gap-3 overflow-hidden">
                         <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-600 flex-shrink-0 border border-white dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">
-                          {taAvatarImageassignee?.avatar ? (
-                            <img src={task.assignee.avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+                          {task.assignee?.avatar ? (
+                            <AvatarImage src={task.assignee.avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
                           ) : 'AI'}
                         </div>
                         <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{task.title}</p>

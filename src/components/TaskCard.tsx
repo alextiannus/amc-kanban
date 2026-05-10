@@ -31,8 +31,8 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
             style={task.assignee.themeColor ? { backgroundColor: `${task.assignee.themeColor}20`, color: task.assignee.themeColor } : undefined}
             className={`w-12 h-12 flex-shrink-0 rounded-2xl flex items-center justify-center text-xs font-bold shadow-sm overflow-hidden border border-white dark:border-slate-800 ${!task.assignee.themeColor ? 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' : ''}`}
           >
-            {taAvatarImageassignee.avatar ? (
-              <img src={task.assignee.avatar} alt="Agent Avatar" className="w-full h-full object-cover" />
+            {task.assignee.avatar ? (
+              <AvatarImage src={task.assignee.avatar} alt="Agent Avatar" className="w-full h-full object-cover" />
             ) : (
               (task.assignee.nickname || task.assignee.email.split('@')[0]).substring(0, 2).toUpperCase()
             )}
