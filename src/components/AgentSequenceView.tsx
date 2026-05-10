@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Bot, Search } from 'lucide-react'
+import { Bot, Search, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -63,6 +63,24 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
         setLoading(false)
       })
   }, [])
+
+  const handleDeleteAgent = async (e: React.MouseEvent, agentId: string) => {
+    e.stopPropagation()
+    if (!confirm('确定要遣散这只龙虾吗？它的所有未完成工作将会停滞，且此操作不可逆。')) return
+
+    try {
+      const res = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setAgents(prev => prev.filter(a => a.id !== agentId))
+        setExpandedAgentIds(prev => prev.filter(id => id !== agentId))
+      } else {
+        const data = await res.json()
+        alert(data.error || '删除失败，请重试')
+      }
+    } catch (error) {
+      alert('删除时发生网络错误')
+    }
+  }
 
   const filteredAgents = agents.filter(agent => {
     // 1. Filter by status
@@ -130,8 +148,15 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                 className={`bg-white dark:bg-slate-900 border rounded-3xl p-6 cursor-pointer transition-all duration-300 relative
                 ${expandedAgentIds.includes(agent.id) ? 'border-emerald-500 shadow-lg ring-4 ring-emerald-500/10' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm hover:shadow-md'}`}
               >
-                <div className="absolute top-6 right-6 flex items-center gap-1">
+                <div className="absolute top-6 right-6 flex items-center gap-3">
                   <span className={`w-3 h-3 rounded-full ${agent.isOnline ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
+                  <button
+                    onClick={(e) => handleDeleteAgent(e, agent.id)}
+                    className="text-slate-300 hover:text-red-500 transition-colors"
+                    title="遣散此 Agent"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-4 mb-5 pr-8">

@@ -119,3 +119,42 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession()
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id } = await params
+
+    if (session.user.role !== 'ADMIN') {
+      const permission = await prisma.agentPermission.findFirst({
+        where: { 
+          humanId: session.user.id,
+          agentId: id
+        }
+      })
+      if (!permission) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
+    // Delete permissions first to satisfy constraints if any
+    await prisma.agentPermission.deleteMany({
+      where: { agentId: id }
+    })
+
+    await prisma.user.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}
