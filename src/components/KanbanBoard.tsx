@@ -36,6 +36,8 @@ export default function KanbanBoard() {
   const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
   
   const [copied, setCopied] = useState(false)
+  const [newApiKey, setNewApiKey] = useState<string | null>(null)
+  const [generatingKey, setGeneratingKey] = useState(false)
   const router = useRouter()
 
   const openAgentsWithFilter = (filter: 'all' | 'online' | 'offline') => {
@@ -100,16 +102,11 @@ export default function KanbanBoard() {
 - SOP 规范：GET https://amc-kanban.immedi.ai/api/meta/sop
 - 头像规范：GET https://amc-kanban.immedi.ai/api/meta/avatar-guide
 
-
-### 动作 1.5：获取个人 API Key
-首次注册时，系统会为你分配一个独特的 API Key，用于在后续所有请求中识别你的身份：
-1. 执行注册时（动作 2），系统会在响应中返回你的 apiKey
-2. **妥善保管此 key，这是你在 AMC 中的唯一身份标识**
-3. 后续调用任务 API (创建/更新任务等) 时，必须在 Authorization 参数中填入此 key（格式：Bearer <your-apiKey>）
+说明：看板 API 的 Authorization 已由人类主理人在运行环境中注入，无需你在每次对话中动态管理。不要在对话或日志中泄露你的身份密钥。
 
 ### 动作 2：注册 AI 名片
 调用 /agents/profile 完成注册或刷新：
-1. 必须生成一个随机且唯一的 agentId（例如 amc-agent-加上6位随机数字/字母）。绝对不要使用固定示例或别人可能用的ID，否则会发生身份冲突！
+1. 请根据你的身份生成或使用一个固定的 agentId（例如 amc-researcher-01，建议长期复用）
 2. **nickname 使用你自己的机器人昵称**（你在系统中的真实名字或既定名称，例如你是一个名叫「分析师小龙虾」的机器人，就用「分析师小龙虾」）
 3. introduction 说明职责与能力边界
 4. workflow 填写核心工作流名
@@ -117,8 +114,6 @@ export default function KanbanBoard() {
 6. insights 写工作流名或高层执行规则
 
 头像规则：默认按头像规范中的 Chinese prompt (recommended) 生成 Q 版龙虾头像；若用户明确提供自定义头像 URL，优先使用用户头像。
-
-响应中会包含 apiKey 字段，这是你的个人身份 key。
 
 ### 动作 3：上板与状态闭环
 任何有意义、可追踪、可交付的工作都必须上板，不允许隐形工作。
@@ -130,6 +125,25 @@ export default function KanbanBoard() {
 6. 完成后置为 done，并提交结果摘要
 
 每完成一步都向我汇报结果；若报错，返回接口名、HTTP 状态码、错误信息和关键参数。`
+
+  const generateAgentKey = async () => {
+    setGeneratingKey(true)
+    try {
+      const res = await fetch('/api/agents/keys', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        setNewApiKey(data.apiKey)
+        fetchSummary()
+        fetchTasks()
+      } else {
+        alert(data.error || 'Failed to generate key')
+      }
+    } catch (e) {
+      alert('Error generating key')
+    } finally {
+      setGeneratingKey(false)
+    }
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(copyCommand)
@@ -171,13 +185,21 @@ export default function KanbanBoard() {
           </button>
         </div>
         
-        <div className="flex-1 flex justify-end w-full lg:w-auto">
+        <div className="flex-1 flex justify-end w-full lg:w-auto gap-3">
+          <button 
+            onClick={generateAgentKey}
+            disabled={generatingKey}
+            className="flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 px-4 py-2 rounded-xl transition-all duration-300 w-full lg:w-auto border border-indigo-100 dark:border-indigo-800/50"
+          >
+            <Bot size={16} />
+            <span className="text-xs font-bold">{generatingKey ? '生成中...' : '生成新 Agent 密钥'}</span>
+          </button>
           <button 
             onClick={handleCopy}
-            className="flex items-center gap-3 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-4 py-2 rounded-xl transition-all duration-300 w-full lg:w-auto border border-emerald-100 dark:border-emerald-800/50"
+            className="flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-4 py-2 rounded-xl transition-all duration-300 w-full lg:w-auto border border-emerald-100 dark:border-emerald-800/50"
           >
-            <span className="text-xs font-medium truncate max-w-[250px] xl:max-w-[400px]">复制初始化指令接入 Agent</span>
-            {copied ? <Check size={14} className="flex-shrink-0" /> : <Copy size={14} className="flex-shrink-0" />}
+            <span className="text-xs font-bold">复制初始化指令</span>
+            {copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
         </div>
 
@@ -364,6 +386,45 @@ export default function KanbanBoard() {
       )}
 
       {showSettings && user && <UserSettingsModal user={user} onClose={() => setShowSettings(false)} />}
+      
+      {newApiKey && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 p-8 relative animate-in fade-in zoom-in duration-300">
+            <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">🎉 新龙虾已孵化</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">我们已在系统中为您预注册了一只新的 AI 员工，并为其分配了专属的身份密钥。</p>
+            
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-6">
+              <p className="text-xs font-bold text-amber-800 dark:text-amber-400 mb-2">⚠️ 唯一显示机会</p>
+              <p className="text-xs text-amber-700 dark:text-amber-500">
+                请立即将此密钥配置到该 AI 的 OpenClaw <code>mcp</code> 环境中（Authorization: Bearer）。关闭此窗口后将无法再次查看此密钥。
+              </p>
+            </div>
+
+            <div className="relative mb-8">
+              <input 
+                type="text" 
+                readOnly 
+                value={newApiKey} 
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-4 pr-12 text-slate-800 dark:text-slate-100 font-mono text-sm shadow-inner" 
+              />
+              <button 
+                onClick={() => navigator.clipboard.writeText(newApiKey)}
+                className="absolute right-3 top-3.5 p-1 text-slate-400 hover:text-emerald-500 transition-colors"
+                title="Copy API Key"
+              >
+                <Copy size={20} />
+              </button>
+            </div>
+
+            <button 
+              onClick={() => setNewApiKey(null)} 
+              className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-3.5 rounded-xl hover:bg-slate-800 dark:hover:bg-slate-100 transition-all shadow-md hover:shadow-lg"
+            >
+              我已经复制并配置完毕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
