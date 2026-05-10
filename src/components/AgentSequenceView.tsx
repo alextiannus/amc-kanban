@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm'
 
 export default function AgentSequenceView({ initialFilter = 'all' }: { initialFilter?: 'all' | 'online' | 'offline' }) {
   const [agents, setAgents] = useState<any[]>([])
-  const [selectedAgent, setSelectedAgent] = useState<any | null>(null)
+  const [expandedAgentIds, setExpandedAgentIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterTab, setFilterTab] = useState<'all' | 'online' | 'offline'>(initialFilter)
@@ -120,9 +120,15 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
             {filteredAgents.map(agent => (
               <div 
                 key={agent.id} 
-                onClick={() => setSelectedAgent(selectedAgent?.id === agent.id ? null : agent)}
+                onClick={() => {
+                  setExpandedAgentIds(prev => 
+                    prev.includes(agent.id) 
+                      ? prev.filter(id => id !== agent.id)
+                      : [...prev, agent.id]
+                  )
+                }}
                 className={`bg-white dark:bg-slate-900 border rounded-3xl p-6 cursor-pointer transition-all duration-300 relative
-                ${selectedAgent?.id === agent.id ? 'border-emerald-500 shadow-lg ring-4 ring-emerald-500/10' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm hover:shadow-md'}`}
+                ${expandedAgentIds.includes(agent.id) ? 'border-emerald-500 shadow-lg ring-4 ring-emerald-500/10' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm hover:shadow-md'}`}
               >
                 <div className="absolute top-6 right-6 flex items-center gap-1">
                   <span className={`w-3 h-3 rounded-full ${agent.isOnline ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
@@ -148,7 +154,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                   </div>
                 )}
 
-                {selectedAgent?.id === agent.id && (
+                {expandedAgentIds.includes(agent.id) && (
                   <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-5 animate-in fade-in slide-in-from-top-2">
                     {agent.apiKey && (
                       <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
