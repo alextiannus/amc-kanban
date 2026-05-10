@@ -22,11 +22,9 @@ export async function GET(
         select: { agentId: true }
       })
 
-      if (permissions.length > 0) {
-        const hasPermission = permissions.some(permission => permission.agentId === id)
-        if (!hasPermission) {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-        }
+      const hasPermission = permissions.some(permission => permission.agentId === id)
+      if (!hasPermission) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
     }
 
@@ -43,7 +41,7 @@ export async function GET(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
 
-    const { password, ...agentData } = agent
+    const { password, apiKey, ...agentData } = agent
     return NextResponse.json(agentData)
   } catch (error) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
@@ -68,11 +66,9 @@ export async function PATCH(
         select: { agentId: true }
       })
 
-      if (permissions.length > 0) {
-        const hasPermission = permissions.some(permission => permission.agentId === id)
-        if (!hasPermission) {
-          return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-        }
+      const hasPermission = permissions.some(permission => permission.agentId === id)
+      if (!hasPermission) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
     }
 

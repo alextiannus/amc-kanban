@@ -39,7 +39,6 @@ export async function GET() {
         themeColor: true,
         avatar: true,
         createdAt: true,
-        apiKey: true,
         tasksAsAssignee: {
           where: {
             status: { in: ['todo', 'in_progress', 'pending'] }
