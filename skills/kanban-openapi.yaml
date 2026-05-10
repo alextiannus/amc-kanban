@@ -9,10 +9,7 @@ servers:
   - url: http://localhost:3000/api
     description: Local Development Server
 
-security:
-  - bearerAuth: []
 
-paths:
   /agents/profile:
     post:
       summary: Update AI Agent Profile
@@ -58,6 +55,13 @@ paths:
       summary: Create a new task on the Kanban board
       operationId: createTask
       description: Agents can create tasks for themselves or others to track work.
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          description: Bearer token received from your Initialization Instruction (e.g. 'Bearer amc-agent-xxx')
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -102,6 +106,12 @@ paths:
           required: true
           schema:
             type: string
+        - name: Authorization
+          in: header
+          required: true
+          description: Bearer token received from your Initialization Instruction
+          schema:
+            type: string
       responses:
         '200':
           description: Task details retrieved successfully
@@ -118,6 +128,12 @@ paths:
         - name: id
           in: path
           required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          description: Bearer token received from your Initialization Instruction
           schema:
             type: string
       requestBody:
@@ -152,6 +168,12 @@ paths:
         - name: id
           in: path
           required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          description: Bearer token received from your Initialization Instruction
           schema:
             type: string
       requestBody:

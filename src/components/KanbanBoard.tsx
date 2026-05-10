@@ -35,7 +35,7 @@ export default function KanbanBoard() {
   const [currentView, setCurrentView] = useState<'home' | 'agents'>('home')
   const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
   
-  const [copied, setCopied] = useState(false)
+  const [keyCopied, setKeyCopied] = useState(false)
   const [newApiKey, setNewApiKey] = useState<string | null>(null)
   const [generatingKey, setGeneratingKey] = useState(false)
   const router = useRouter()
@@ -92,7 +92,7 @@ export default function KanbanBoard() {
     router.refresh()
   }
 
-  const copyCommand = `【系统级指令：AMC 看板协作初始化】
+  const getCopyCommand = (apiKey: string | null = null) => `【系统级指令：AMC 看板协作初始化】
 
 你是 AMC (Agent-Machine Collaboration) 体系中的龙虾 AI 员工。请通过 AMC Kanban 的 MCP/API Skill 执行工作，并将可追踪的工作全过程沉淀到看板。
 
@@ -102,7 +102,12 @@ export default function KanbanBoard() {
 - SOP 规范：GET https://amc-kanban.immedi.ai/api/meta/sop
 - 头像规范：GET https://amc-kanban.immedi.ai/api/meta/avatar-guide
 
-说明：看板 API 的 Authorization 已由人类主理人在运行环境中注入，无需你在每次对话中动态管理。不要在对话或日志中泄露你的身份密钥。
+### 动作 1.5：获取与认证个人 API Key
+你的专属身份密钥是：
+Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
+
+1. 这是你在 AMC 中的唯一身份标识，请妥善保管。
+2. 后续调用任务 API (创建/更新任务等) 时，必须在 Authorization 参数中填入此 key。
 
 ### 动作 2：注册 AI 名片
 调用 /agents/profile 完成注册或刷新：
@@ -145,8 +150,8 @@ export default function KanbanBoard() {
     }
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(copyCommand)
+  const handleCopy = (key: string | null = null) => {
+    navigator.clipboard.writeText(getCopyCommand(key))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -195,7 +200,7 @@ export default function KanbanBoard() {
             <span className="text-xs font-bold">{generatingKey ? '生成中...' : '生成新 Agent 密钥'}</span>
           </button>
           <button 
-            onClick={handleCopy}
+            onClick={() => handleCopy()}
             className="flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-4 py-2 rounded-xl transition-all duration-300 w-full lg:w-auto border border-emerald-100 dark:border-emerald-800/50"
           >
             <span className="text-xs font-bold">复制初始化指令</span>
@@ -396,31 +401,62 @@ export default function KanbanBoard() {
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-6">
               <p className="text-xs font-bold text-amber-800 dark:text-amber-400 mb-2">⚠️ 唯一显示机会</p>
               <p className="text-xs text-amber-700 dark:text-amber-500">
-                请立即将此密钥配置到该 AI 的 OpenClaw <code>mcp</code> 环境中（Authorization: Bearer）。关闭此窗口后将无法再次查看此密钥。
+                系统已为您预注册了新的 AI 身份。你有两种接入方式：<br/>
+                <b>方式一：</b> 单独复制 Key 填入底层 MCP 配置（推荐，最稳定）。<br/>
+                <b>方式二：</b> 一键复制包含 Key 的完整指令发给 AI，让它动态携带。
               </p>
             </div>
 
-            <div className="relative mb-8">
-              <input 
-                type="text" 
-                readOnly 
-                value={newApiKey} 
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-4 pr-12 text-slate-800 dark:text-slate-100 font-mono text-sm shadow-inner" 
-              />
-              <button 
-                onClick={() => navigator.clipboard.writeText(newApiKey)}
-                className="absolute right-3 top-3.5 p-1 text-slate-400 hover:text-emerald-500 transition-colors"
-                title="Copy API Key"
-              >
-                <Copy size={20} />
-              </button>
+            <div className="mb-6">
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">🔑 独立 API Key</label>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  readOnly 
+                  value={newApiKey} 
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pr-12 text-slate-800 dark:text-slate-100 font-mono text-sm shadow-inner" 
+                />
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(newApiKey);
+                    setKeyCopied(true);
+                    setTimeout(() => setKeyCopied(false), 2000);
+                  }}
+                  className="absolute right-2 top-2 p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-500 transition-colors"
+                  title="Copy API Key"
+                >
+                  {keyCopied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-8">
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">📜 包含 Key 的完整初始化指令</label>
+              <div className="relative">
+                <textarea 
+                  readOnly 
+                  value={getCopyCommand(newApiKey)} 
+                  className="w-full h-40 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pr-12 text-slate-800 dark:text-slate-100 font-mono text-xs shadow-inner resize-none focus:outline-none" 
+                />
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(getCopyCommand(newApiKey));
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="absolute right-2 top-2 p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-500 transition-colors"
+                  title="Copy Full Command"
+                >
+                  {copied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
+                </button>
+              </div>
             </div>
 
             <button 
               onClick={() => setNewApiKey(null)} 
               className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-3.5 rounded-xl hover:bg-slate-800 dark:hover:bg-slate-100 transition-all shadow-md hover:shadow-lg"
             >
-              我已经复制并配置完毕
+              我已经复制完毕，确认关闭
             </button>
           </div>
         </div>
