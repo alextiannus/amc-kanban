@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import TaskCard from './TaskCard'
 import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
 import AgentSequenceView from './AgentSequenceView'
 import ArchiveView from './ArchiveView'
-import AvatarImage from './AvatarImage'
 import { LogOut, Activity, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, LayoutDashboard, Bot, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
@@ -40,7 +39,6 @@ export default function KanbanBoard() {
   const [user, setUser] = useState<{ id: string, email: string, role: string, nickname?: string | null, avatar?: string | null } | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const profileMenuRef = useRef<HTMLDivElement | null>(null)
   
   // Navigation State
   const [currentView, setCurrentView] = useState<'home' | 'agents' | 'archive'>('home')
@@ -78,26 +76,6 @@ export default function KanbanBoard() {
       eventSource.close()
     }
   }, [])
-
-  useEffect(() => {
-    if (!showProfile) return
-
-    const handlePointerDownOutside = (event: MouseEvent | TouchEvent) => {
-      if (!profileMenuRef.current) return
-      const target = event.target as Node
-      if (!profileMenuRef.current.contains(target)) {
-        setShowProfile(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handlePointerDownOutside)
-    document.addEventListener('touchstart', handlePointerDownOutside)
-
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDownOutside)
-      document.removeEventListener('touchstart', handlePointerDownOutside)
-    }
-  }, [showProfile])
 
   const fetchUser = async () => {
     const res = await fetch('/api/auth/me')
@@ -305,7 +283,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
             </button>
           )}
 
-          <div ref={profileMenuRef} className="relative">
+          <div className="relative">
             <button 
               onClick={() => setShowProfile(!showProfile)}
               className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:shadow-md hover:scale-105 transition-all duration-300 border border-slate-200 dark:border-slate-700 overflow-hidden"
@@ -388,7 +366,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
               <div onClick={() => openAgentsWithFilter('all')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800/50">
                 <Users size={20} className="text-indigo-500 mb-2 group-hover:scale-110 transition-transform" />
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">协作Agent</p>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">写作Agent</p>
                 <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.collaborativeAgentsCount}</p>
               </div>
               <div onClick={() => openAgentsWithFilter('online')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border border-transparent hover:border-emerald-100 dark:hover:border-emerald-800/50">
@@ -546,7 +524,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                       <div className="flex items-center gap-3 overflow-hidden">
                         <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-600 flex-shrink-0 border border-white dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">
                           {task.assignee?.avatar ? (
-                            <AvatarImage src={task.assignee.avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+                            <img src={task.assignee.avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
                           ) : 'AI'}
                         </div>
                         <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{task.title}</p>
