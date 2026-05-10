@@ -16,7 +16,6 @@ export async function POST(request: Request) {
 
     // 1. Generate unique key
     const plaintextApiKey = generateApiKey()
-    const hashedApiKey = crypto.createHash('sha256').update(plaintextApiKey).digest('hex')
     const agentUuid = crypto.randomUUID()
     const tempEmail = `pending-${agentUuid}@agent.amc.local`
 
@@ -27,7 +26,7 @@ export async function POST(request: Request) {
         password: crypto.randomBytes(16).toString('hex'), // random unguessable password
         type: 'AI_AGENT',
         nickname: '🤖 未初始化龙虾',
-        apiKey: hashedApiKey
+        apiKey: plaintextApiKey
       }
     })
 

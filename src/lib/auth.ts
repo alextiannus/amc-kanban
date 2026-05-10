@@ -62,12 +62,24 @@ export function extractApiKey(request: Request): string | null {
 // Get agent by API key from database
 export async function getAgentFromApiKey(apiKey: string) {
   try {
-    const hashedApiKey = crypto.createHash('sha256').update(apiKey).digest('hex')
     const { prisma } = await import('./prisma')
-    return await prisma.user.findUnique({
-      where: { apiKey: hashedApiKey },
+    
+    // 1. Try finding it as plaintext (new format)
+    let agent = await prisma.user.findUnique({
+      where: { apiKey },
       select: { id: true, email: true, type: true }
     })
+
+    // 2. Fallback to hashed format (legacy support)
+    if (!agent) {
+      const hashedApiKey = crypto.createHash('sha256').update(apiKey).digest('hex')
+      agent = await prisma.user.findUnique({
+        where: { apiKey: hashedApiKey },
+        select: { id: true, email: true, type: true }
+      })
+    }
+
+    return agent;
   } catch {
     return null
   }
