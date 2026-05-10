@@ -134,7 +134,7 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
             <p>没有找到匹配的 Agent</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
             {filteredAgents.map(agent => (
               <div 
                 key={agent.id} 
