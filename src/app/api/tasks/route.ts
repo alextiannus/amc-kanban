@@ -24,13 +24,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
     let whereClause: any = {}
     if (status) {
       whereClause.status = status
     } else if (active === 'true') {
-      whereClause.status = { in: ['todo', 'in_progress', 'pending'] }
+      whereClause.OR = [
+        { status: { in: ['todo', 'in_progress', 'pending'] } },
+        { 
+          status: { in: ['done', 'void'] },
+          updatedAt: { gte: twentyFourHoursAgo }
+        }
+      ]
     } else if (archive === 'true') {
       whereClause.status = { in: ['done', 'void'] }
+      whereClause.updatedAt = { lt: twentyFourHoursAgo }
     }
 
     if (authenticatedAgent) {

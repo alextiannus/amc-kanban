@@ -14,6 +14,8 @@ export const COLUMNS = [
   { id: 'todo', title: 'To Do' },
   { id: 'in_progress', title: 'In Progress' },
   { id: 'pending', title: 'Require Input', highlight: true },
+  { id: 'done', title: 'Done' },
+  { id: 'void', title: 'Void' },
 ]
 
 export default function KanbanBoard() {
