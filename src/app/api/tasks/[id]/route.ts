@@ -39,7 +39,17 @@ export async function GET(
       where: { id },
       include: {
         assignee: {
-          select: { id: true, email: true, type: true }
+          select: {
+            id: true,
+            email: true,
+            type: true,
+            nickname: true,
+            insights: true,
+            introduction: true,
+            workflow: true,
+            themeColor: true,
+            avatar: true,
+          }
         }
       }
     })
@@ -108,6 +118,20 @@ export async function PATCH(
 
     if (authenticatedAgent && assigneeId !== undefined && assigneeId !== authenticatedAgent.id) {
       return NextResponse.json({ error: 'Forbidden: API key cannot reassign task to another agent' }, { status: 403 })
+    }
+
+    if (session?.user && session.user.role !== 'ADMIN' && assigneeId !== undefined && assigneeId !== null) {
+      const canAssignToAgent = await prisma.agentPermission.findFirst({
+        where: {
+          humanId: session.user.id,
+          agentId: assigneeId,
+        },
+        select: { id: true }
+      })
+
+      if (!canAssignToAgent) {
+        return NextResponse.json({ error: 'Forbidden: You do not have permission to assign tasks to this agent' }, { status: 403 })
+      }
     }
 
     if (assigneeId !== undefined && assigneeId !== null) {

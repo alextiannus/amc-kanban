@@ -67,7 +67,21 @@ export async function GET(request: Request) {
     const queryOptions: any = {
       where: whereClause,
       orderBy: { createdAt: 'desc' },
-      include: { assignee: true }
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            email: true,
+            type: true,
+            nickname: true,
+            insights: true,
+            introduction: true,
+            workflow: true,
+            themeColor: true,
+            avatar: true,
+          }
+        }
+      }
     }
 
     if (limit) {
