@@ -35,6 +35,7 @@ export default function KanbanBoard() {
   const [currentView, setCurrentView] = useState<'home' | 'agents'>('home')
   const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
   
+  const [copied, setCopied] = useState(false)
   const [keyCopied, setKeyCopied] = useState(false)
   const [newApiKey, setNewApiKey] = useState<string | null>(null)
   const [generatingKey, setGeneratingKey] = useState(false)
