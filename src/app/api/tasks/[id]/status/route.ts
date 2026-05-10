@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
+import { actorFromContext, writeAuditLog } from '@/lib/audit'
 
 export async function PATCH(
   request: Request,
@@ -29,13 +30,16 @@ export async function PATCH(
     }
 
     let isAuthorized = false
+    const agent = apiKey ? await getAgentFromApiKey(apiKey) : null
     if (session?.user.role === 'ADMIN') {
       isAuthorized = true
-    } else if (apiKey) {
-      const agent = await getAgentFromApiKey(apiKey)
-      isAuthorized = Boolean(agent && agent.id === task.assigneeId)
+    } else if (agent) {
+      isAuthorized = agent.id === task.assigneeId
     } else if (session?.user.id) {
-      isAuthorized = session.user.role === 'ADMIN'
+      const permission = task.assigneeId ? await prisma.agentPermission.findFirst({
+        where: { humanId: session.user.id, agentId: task.assigneeId }
+      }) : null
+      isAuthorized = Boolean(permission)
     }
 
     if (!isAuthorized) {
@@ -52,6 +56,15 @@ export async function PATCH(
     const updatedTask = await prisma.workUnit.update({
       where: { id },
       data
+    })
+
+    await writeAuditLog({
+      actor: actorFromContext(session?.user, agent),
+      action: 'STATUS_CHANGED',
+      resourceId: updatedTask.id,
+      oldValue: { status: task.status, requiredInput: task.requiredInput },
+      newValue: { status: updatedTask.status, requiredInput: updatedTask.requiredInput },
+      metadata: { source: apiKey ? 'api' : 'web' }
     })
 
     eventEmitter.emit('board_update')

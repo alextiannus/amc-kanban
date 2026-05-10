@@ -1,4 +1,10 @@
-import { AlertCircle } from 'lucide-react'
+import { Calendar, Clock, Flag } from 'lucide-react'
+
+const priorityStyles: Record<string, string> = {
+  high: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300',
+  medium: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300',
+  low: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+}
 
 export default function TaskCard({ task, onClick }: { task: any, onClick?: () => void }) {
   return (
@@ -46,13 +52,25 @@ export default function TaskCard({ task, onClick }: { task: any, onClick?: () =>
         </p>
       </div>
 
-      <div className="flex items-center gap-2 mt-1">
-        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> {task.assignee?.insights ? '专属流程' : '学习成长'}
+      <div className="flex items-center gap-2 mt-1 flex-wrap">
+        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${priorityStyles[task.priority || 'medium'] || priorityStyles.medium}`}>
+          <Flag size={12} /> {(task.priority || 'medium').toUpperCase()}
         </span>
-        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-          效率工具
-        </span>
+        {task.deadline && (
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 flex items-center gap-1.5">
+            <Calendar size={12} /> {new Date(task.deadline).toLocaleDateString()}
+          </span>
+        )}
+        {task.estimatedHours != null && (
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 flex items-center gap-1.5">
+            <Clock size={12} /> {task.estimatedHours}h
+          </span>
+        )}
+        {(task.tags || []).slice(0, 3).map((tag: string) => (
+          <span key={tag} className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+            #{tag}
+          </span>
+        ))}
       </div>
 
       <div className="flex items-center gap-4 mt-2 pt-4 border-t border-slate-100 dark:border-slate-800/60 text-xs font-semibold text-slate-400">

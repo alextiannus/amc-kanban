@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
+import { actorFromContext, writeAuditLog } from '@/lib/audit'
 
 async function canHumanAccessTask(humanId: string, assigneeId: string | null) {
   const permissions = await prisma.agentPermission.findMany({
@@ -103,7 +104,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { title, description, materials, assigneeId } = body
+    const { title, description, materials, assigneeId, priority, estimatedHours, deadline, tags } = body
 
     if (authenticatedAgent && assigneeId !== undefined && assigneeId !== authenticatedAgent.id) {
       return NextResponse.json({ error: 'Forbidden: API key cannot reassign task to another agent' }, { status: 403 })
@@ -125,10 +126,23 @@ export async function PATCH(
     if (description !== undefined) data.description = description
     if (materials !== undefined) data.materials = materials
     if (assigneeId !== undefined) data.assigneeId = assigneeId
+    if (priority !== undefined) data.priority = priority || 'medium'
+    if (estimatedHours !== undefined) data.estimatedHours = estimatedHours !== null && estimatedHours !== '' ? Number(estimatedHours) : null
+    if (deadline !== undefined) data.deadline = deadline ? new Date(deadline) : null
+    if (tags !== undefined) data.tags = Array.isArray(tags) ? tags : typeof tags === 'string' ? tags.split(',').map((tag: string) => tag.trim()).filter(Boolean) : []
 
     const updatedTask = await prisma.workUnit.update({
       where: { id },
       data
+    })
+
+    await writeAuditLog({
+      actor: actorFromContext(session?.user, authenticatedAgent),
+      action: 'TASK_UPDATED',
+      resourceId: updatedTask.id,
+      oldValue: existingTask,
+      newValue: updatedTask,
+      metadata: { changedFields: Object.keys(data), source: apiKey ? 'api' : 'web' }
     })
 
     eventEmitter.emit('board_update')

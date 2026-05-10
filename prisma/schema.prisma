@@ -37,16 +37,39 @@ model User {
 }
 
 model WorkUnit {
-  id            String   @id @default(cuid())
-  title         String
-  description   String?
-  status        String   @default("todo")
-  materials     String?
-  requiredInput String?
-  assigneeId    String?
-  assignee      User?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String    @id @default(cuid())
+  title          String
+  description    String?
+  status         String    @default("todo")
+  materials      String?
+  requiredInput  String?
+  priority       String    @default("medium")
+  estimatedHours Float?
+  deadline       DateTime?
+  tags           String[]  @default([])
+  assigneeId     String?
+  assignee       User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  actorId      String?
+  actorType    String   @default("SYSTEM")
+  actorName    String?
+  action       String
+  resourceId   String
+  resourceType String   @default("WorkUnit")
+  oldValue     Json?
+  newValue     Json?
+  reason       String?
+  metadata     Json?
+
+  @@index([resourceId, resourceType])
+  @@index([actorId])
+  @@index([timestamp])
 }
 
 // 多对多权限关联表

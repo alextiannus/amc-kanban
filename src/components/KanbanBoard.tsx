@@ -23,6 +23,10 @@ export default function KanbanBoard() {
   const [doneTasks, setDoneTasks] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState('pending')
   const [selectedTask, setSelectedTask] = useState<any | null>(null)
+  const [priorityFilter, setPriorityFilter] = useState('all')
+  const [agentFilter, setAgentFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('updatedAt')
+  const [showOverdueOnly, setShowOverdueOnly] = useState(false)
   const [summary, setSummary] = useState<{
     runningAgentsCount: number;
     notRunningAgentsCount: number;
@@ -176,7 +180,25 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const activeTasks = tasks.filter(t => t.status === activeTab)
+  const agentOptions = Array.from(
+    new Map(tasks.filter(t => t.assignee).map(t => [t.assignee.id, t.assignee])).values()
+  )
+
+  const activeTasks = tasks
+    .filter(t => t.status === activeTab)
+    .filter(t => priorityFilter === 'all' || (t.priority || 'medium') === priorityFilter)
+    .filter(t => agentFilter === 'all' || t.assigneeId === agentFilter)
+    .filter(t => !showOverdueOnly || (t.deadline && new Date(t.deadline).getTime() < Date.now() && t.status !== 'done'))
+    .sort((a, b) => {
+      if (sortBy === 'priority') {
+        const rank: Record<string, number> = { high: 0, medium: 1, low: 2 }
+        return (rank[a.priority || 'medium'] ?? 1) - (rank[b.priority || 'medium'] ?? 1)
+      }
+      if (sortBy === 'deadline') {
+        return new Date(a.deadline || '9999-12-31').getTime() - new Date(b.deadline || '9999-12-31').getTime()
+      }
+      return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
+    })
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex flex-col font-sans transition-colors duration-300">
@@ -332,6 +354,44 @@ Authorization: Bearer ${apiKey || '<YOUR_API_KEY_HERE>'}
                   </button>
                 )
               })}
+            </div>
+
+            <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-3 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 p-4">
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none"
+              >
+                <option value="all">All priorities</option>
+                <option value="high">High priority</option>
+                <option value="medium">Medium priority</option>
+                <option value="low">Low priority</option>
+              </select>
+              <select
+                value={agentFilter}
+                onChange={(e) => setAgentFilter(e.target.value)}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none"
+              >
+                <option value="all">All agents</option>
+                {agentOptions.map((agent: any) => (
+                  <option key={agent.id} value={agent.id}>{agent.nickname || agent.email}</option>
+                ))}
+              </select>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none"
+              >
+                <option value="updatedAt">Sort: recently updated</option>
+                <option value="priority">Sort: priority</option>
+                <option value="deadline">Sort: deadline</option>
+              </select>
+              <button
+                onClick={() => setShowOverdueOnly(!showOverdueOnly)}
+                className={`rounded-xl px-3 py-2 text-sm font-bold transition-colors ${showOverdueOnly ? 'bg-red-500 text-white' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'}`}
+              >
+                {showOverdueOnly ? 'Showing overdue' : 'Overdue only'}
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">

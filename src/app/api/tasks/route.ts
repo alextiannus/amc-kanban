@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
+import { actorFromContext, writeAuditLog } from '@/lib/audit'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { title, description, materials, status, assigneeId } = body
+    const { title, description, materials, status, assigneeId, priority, estimatedHours, deadline, tags } = body
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
@@ -147,8 +148,20 @@ export async function POST(request: Request) {
         description,
         materials,
         status: status || 'todo',
-        assigneeId
+        assigneeId,
+        priority: priority || 'medium',
+        estimatedHours: estimatedHours !== undefined && estimatedHours !== null && estimatedHours !== '' ? Number(estimatedHours) : null,
+        deadline: deadline ? new Date(deadline) : null,
+        tags: Array.isArray(tags) ? tags : typeof tags === 'string' ? tags.split(',').map((tag: string) => tag.trim()).filter(Boolean) : []
       }
+    })
+
+    await writeAuditLog({
+      actor: actorFromContext(session?.user, authenticatedAgent),
+      action: 'TASK_CREATED',
+      resourceId: newTask.id,
+      newValue: newTask,
+      metadata: { source: apiKey ? 'api' : 'web' }
     })
 
     eventEmitter.emit('board_update')
