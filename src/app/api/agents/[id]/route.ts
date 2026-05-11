@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
-import fs from 'fs/promises'
-import path from 'path'
 
 export async function GET(
   request: Request,
@@ -44,7 +42,7 @@ export async function GET(
     // Convert avatar data to data URI if present
     let avatarUrl = agent.avatar
     if ((agent as any).avatarData && (agent as any).avatarMimeType) {
-      const base64 = (agent as any).avatarData.toString('base64')
+      const base64 = Buffer.from((agent as any).avatarData).toString('base64')
       avatarUrl = `data:${(agent as any).avatarMimeType};base64,${base64}`
     }
 
@@ -146,8 +144,14 @@ export async function PATCH(
         data: updateData
       })
       
+      // Build data URI from stored binary data for response
+      let avatarUrl = agent.avatar
+      if (avatarUpdated && (agent as any).avatarData && (agent as any).avatarMimeType) {
+        const base64 = Buffer.from((agent as any).avatarData).toString('base64')
+        avatarUrl = `data:${(agent as any).avatarMimeType};base64,${base64}`
+      }
       console.log(`[AVATAR] Agent updated successfully. Avatar updated: ${avatarUpdated}`)
-      return NextResponse.json({ success: true, agent: { id: agent.id, avatar: agent.avatar } })
+      return NextResponse.json({ success: true, agent: { id: agent.id, avatar: avatarUrl } })
     } catch (dbError: any) {
       console.error(`[AVATAR] Database update failed: ${dbError.message}`)
       return NextResponse.json({ error: `Database error: ${dbError.message}` }, { status: 500 })
