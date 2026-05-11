@@ -62,8 +62,10 @@ export async function POST(request: Request) {
       }
     })
 
-    // 生成邀请链接
-    const baseUrl = process.env.NEXT_PUBLIC_KANBAN_HOST || 'http://localhost:3000'
+    // 生成邀请链接，优先使用环境变量，其次取实际请求 origin
+    const requestUrl = new URL(request.url)
+    const baseUrl = process.env.NEXT_PUBLIC_KANBAN_HOST
+      || (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai')
     const { link: invitationLink } = generateInvitationLink(
       email,
       temporaryPassword,
