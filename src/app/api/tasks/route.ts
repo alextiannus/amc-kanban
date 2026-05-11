@@ -125,19 +125,21 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { title, description, materials, status, assigneeId, priority, estimatedHours, deadline, tags } = body
+    let { title, description, materials, status, assigneeId, priority, estimatedHours, deadline, tags } = body
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
 
-    if (!assigneeId) {
+    // If authenticated as Agent via API key, auto-set assigneeId to self
+    if (authenticatedAgent) {
+      assigneeId = authenticatedAgent.id
+    } else if (!assigneeId) {
       return NextResponse.json({ error: 'assigneeId is required' }, { status: 400 })
     }
 
-    if (authenticatedAgent && assigneeId !== authenticatedAgent.id) {
-      return NextResponse.json({ error: 'Forbidden: API key can only create tasks for its own agent' }, { status: 403 })
-    } else if (session?.user && session.user.role !== 'ADMIN') {
+    // Check permissions: Human users can only create tasks for permitted agents
+    if (session?.user && session.user.role !== 'ADMIN') {
       const permissions = await prisma.agentPermission.findMany({
         where: { humanId: session.user.id, agentId: assigneeId }
       })
