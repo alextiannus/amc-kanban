@@ -12,6 +12,10 @@ export default function AdminPage() {
 
   const [selectedHuman, setSelectedHuman] = useState<any | null>(null)
   const [assignedAgentIds, setAssignedAgentIds] = useState<string[]>([])
+  
+  // 邀请链接相关状态
+  const [invitationData, setInvitationData] = useState<any | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     fetchUsers()
@@ -37,9 +41,7 @@ export default function AdminPage() {
       })
       if (res.ok) {
         const data = await res.json()
-        if (data.temporaryPassword) {
-          alert(`Temporary password (shown once): ${data.temporaryPassword}`)
-        }
+        setInvitationData(data)
         setEmail('')
         fetchUsers()
       } else {
@@ -186,6 +188,109 @@ export default function AdminPage() {
             <div className="flex justify-end gap-3">
               <button onClick={() => setSelectedHuman(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200">Cancel</button>
               <button onClick={savePermissions} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">Save Permissions</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {invitationData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-xl shadow-xl p-8">
+            <h2 className="text-2xl font-bold mb-2 text-slate-900 dark:text-white">用户创建成功！</h2>
+            <p className="text-slate-600 dark:text-gray-400 mb-6">已生成邀请链接，请复制并发送给新用户</p>
+            
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-gray-300">用户邮箱</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={invitationData.user.email}
+                    readOnly
+                    className="flex-1 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 font-mono text-sm"
+                  />
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(invitationData.user.email)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                  >
+                    {copied ? '✓' : '复制'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-gray-300">临时密码</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={invitationData.temporaryPassword}
+                    readOnly
+                    className="flex-1 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 font-mono text-sm"
+                  />
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(invitationData.temporaryPassword)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                  >
+                    {copied ? '✓' : '复制'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-gray-300">邀请链接</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={invitationData.invitationLink}
+                    readOnly
+                    className="flex-1 border dark:border-gray-600 bg-gray-50 dark:bg-gray-700 dark:text-white rounded-md px-3 py-2 font-mono text-sm break-all"
+                  />
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(invitationData.invitationLink)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition whitespace-nowrap"
+                  >
+                    {copied ? '✓ 已复制' : '复制链接'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                <span className="font-semibold">⚠️ 重要提示：</span> 这个邀请链接有效期为7天，请立即发送给新用户。用户点击链接后可以看到完整的登录信息和欢迎语。
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => {
+                  const fullText = `邀请链接: ${invitationData.invitationLink}\n\n用户邮箱: ${invitationData.user.email}\n临时密码: ${invitationData.temporaryPassword}`
+                  navigator.clipboard.writeText(fullText)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                }}
+                className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                复制全部信息
+              </button>
+              <button 
+                onClick={() => setInvitationData(null)}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
+              >
+                完成
+              </button>
             </div>
           </div>
         </div>

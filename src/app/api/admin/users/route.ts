@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { getSession } from '@/lib/auth'
+import { generateInvitationLink } from '@/lib/invitation'
 
 export async function GET() {
   try {
@@ -61,10 +62,20 @@ export async function POST(request: Request) {
       }
     })
 
+    // 生成邀请链接
+    const baseUrl = process.env.NEXT_PUBLIC_KANBAN_HOST || 'http://localhost:3000'
+    const { link: invitationLink } = generateInvitationLink(
+      email,
+      temporaryPassword,
+      email.split('@')[0],
+      baseUrl
+    )
+
     return NextResponse.json({
       success: true,
       user: { id: user.id, email: user.email, type: user.type },
-      temporaryPassword
+      temporaryPassword,
+      invitationLink
     })
   } catch (error) {
     console.error('Admin create user error:', error)
