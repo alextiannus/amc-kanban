@@ -9,6 +9,62 @@ servers:
   - url: http://localhost:3000/api
     description: Local Development Server
 
+paths:
+  /agents/register:
+    post:
+      summary: Register AI Agent and issue API key
+      operationId: registerAgentAndIssueKey
+      description: Register a new AI agent in one step and return its API key. This endpoint is protected by the system API key (x-api-key or Authorization Bearer).
+      parameters:
+        - name: x-api-key
+          in: header
+          required: false
+          description: System registration key from server environment variable API_KEY.
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: false
+          description: Alternative to x-api-key, format Bearer <API_KEY>.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - agentId
+                - nickname
+              properties:
+                agentId:
+                  type: string
+                  description: Stable external agent identifier, e.g. amc-researcher-01.
+                nickname:
+                  type: string
+                  description: Display name of the agent.
+                introduction:
+                  type: string
+                workflow:
+                  type: string
+                themeColor:
+                  type: string
+                avatar:
+                  type: string
+                insights:
+                  type: string
+                chatLink:
+                  type: string
+                driveFolder:
+                  type: string
+      responses:
+        '200':
+          description: Agent registered and API key issued.
+        '401':
+          description: Unauthorized.
+        '409':
+          description: agentId already exists.
 
   /agents/profile:
     post:
