@@ -52,29 +52,23 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     })
 
-    // Convert avatar data to data URI
-    const agentsWithDataUri = agents.map((agent: any) => {
+    // Convert avatar data to data URI and format response
+    const formattedAgents = agents.map((agent: any) => {
       let avatarUrl = agent.avatar
       
       // If we have binary avatar data in DB, convert to data URI
       if (agent.avatarData && agent.avatarMimeType) {
-        const base64 = agent.avatarData.toString('base64')
+        const base64 = Buffer.from(agent.avatarData).toString('base64')
         avatarUrl = `data:${agent.avatarMimeType};base64,${base64}`
       }
 
-      // Remove the raw binary data from response (too large)
-      const { avatarData, avatarMimeType, ...rest } = agent
+      const { avatarData, avatarMimeType, tasksAsAssignee, ...rest } = agent
       return {
         ...rest,
-        avatar: avatarUrl
+        avatar: avatarUrl,
+        isOnline: tasksAsAssignee.length > 0,
       }
     })
-
-    const formattedAgents = agents.map(agent => ({
-      ...agent,
-      isOnline: agent.tasksAsAssignee.length > 0,
-      tasksAsAssignee: undefined // don't expose tasks array
-    }))
 
     return NextResponse.json(formattedAgents)
   } catch (error) {

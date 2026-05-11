@@ -58,9 +58,12 @@ export default function AvatarImage({
     )
   }
 
+  // For data URIs, don't add cache buster (it would break the URL)
+  const imgSrc = src.startsWith('data:') ? src : `${src}?cb=${cacheBuster}`
+
   return (
     <img 
-      src={src ? `${src}?cb=${cacheBuster}` : ''} 
+      src={imgSrc} 
       alt={alt}
       className={className}
       onError={handleError}
