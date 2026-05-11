@@ -13,14 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AMC Dashboard",
-  description: "AI Agent Collaboration Platform",
+  title: "AMC AI Marketing Content",
+  description: "AI Marketing Content · 智能内容营销协作平台",
   icons: {
     icon: [
-      { url: "/favicon.ico", sizes: "any" },
       { url: "/logo.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
     ],
-    shortcut: "/favicon.ico",
+    shortcut: "/logo.svg",
   },
 };
 
