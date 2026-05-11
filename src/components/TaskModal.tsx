@@ -4,6 +4,10 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AvatarImage from './AvatarImage'
 
+const markdownComponents = {
+  a: ({ ...props }: any) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+}
+
 function renderTextWithLinks(text: string | null) {
   if (!text) return 'No description provided.';
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -229,7 +233,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Description / Logs</h3>
             <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 text-sm text-slate-700 dark:text-slate-300 leading-relaxed break-words prose prose-sm dark:prose-invert max-w-none prose-a:text-blue-500 prose-headings:font-bold">
               {task.description ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {task.description}
                 </ReactMarkdown>
               ) : (
@@ -242,7 +246,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
             <div>
               <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Research Materials</h3>
               <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 text-sm text-slate-700 dark:text-slate-300 leading-relaxed break-words prose prose-sm dark:prose-invert max-w-none prose-a:text-blue-500 prose-headings:font-bold">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {task.materials}
                 </ReactMarkdown>
               </div>

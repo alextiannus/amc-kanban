@@ -4,6 +4,10 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AvatarImage from './AvatarImage'
 
+const markdownComponents = {
+  a: ({ ...props }: any) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+}
+
 export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) => void }) {
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -77,7 +81,7 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base mb-1 truncate">{task.title}</h3>
                   <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 prose prose-sm dark:prose-invert">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{task.description || '无详细描述'}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{task.description || '无详细描述'}</ReactMarkdown>
                   </div>
                 </div>
 
