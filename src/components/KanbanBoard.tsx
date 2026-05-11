@@ -192,7 +192,7 @@ export default function KanbanBoard() {
           <img
             src="/logo.svg"
             alt="AMC logo"
-            className="h-12 w-auto"
+            className="h-16 md:h-20 w-auto"
           />
         </div>
 
@@ -247,9 +247,10 @@ export default function KanbanBoard() {
           )}
 
           <div className="relative">
-            <button 
+            <button
               onClick={() => setShowProfile(!showProfile)}
-              className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:shadow-md hover:scale-105 transition-all duration-300 border border-slate-200 dark:border-slate-700 overflow-hidden"
+              className="flex items-center justify-center w-12 h-12 md:w-10 md:h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:shadow-md hover:scale-105 transition-all duration-300 border border-slate-200 dark:border-slate-700 overflow-hidden
+                fixed top-4 right-4 z-50 md:static md:top-auto md:right-auto"
             >
               {user?.avatar ? (
                 <img src={user.avatar} alt="User avatar" className="w-full h-full object-cover" />
