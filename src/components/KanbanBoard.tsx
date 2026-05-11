@@ -188,18 +188,12 @@ export default function KanbanBoard() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex flex-col font-sans transition-colors duration-300">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 shrink-0">
           <img
-            src="/amc-dashboard-logo.svg"
-            alt="AMC Dashboard logo"
-            className="w-10 h-10 rounded-xl shadow-md"
+            src="/logo.svg"
+            alt="AMC logo"
+            className="h-12 w-auto"
           />
-          <div className="flex flex-col">
-            <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-              AMC Dashboard
-            </h1>
-            <span className="text-xs font-bold tracking-widest text-slate-400 uppercase">AI COLLABORATION PLATFORM</span>
-          </div>
         </div>
 
         {/* Top Navigation Menu */}
