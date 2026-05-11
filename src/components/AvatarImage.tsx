@@ -17,11 +17,14 @@ export default function AvatarImage({
 }: AvatarImageProps) {
   const [hasError, setHasError] = useState(false)
   const [isLoading, setIsLoading] = useState(!!src)
+  const [cacheBuster, setCacheBuster] = useState(0)
 
   useEffect(() => {
-    // Reset image state whenever src changes so successful new uploads can render.
+    // Reset image state whenever src changes, and add cache buster
     setHasError(false)
     setIsLoading(!!src)
+    // Add timestamp to URL to bust browser cache on new uploads
+    setCacheBuster(Date.now())
   }, [src])
 
   const handleError = () => {
@@ -57,11 +60,12 @@ export default function AvatarImage({
 
   return (
     <img 
-      src={src} 
+      src={src ? `${src}?cb=${cacheBuster}` : ''} 
       alt={alt}
       className={className}
       onError={handleError}
       onLoad={handleLoad}
     />
   )
+}
 }

@@ -54,8 +54,13 @@ export default function AgentEditModal({ agent, onClose, onUpdate }: { agent: an
 
       const result = await res.json()
       console.log('Avatar upload response:', result)
+      console.log('Closing modal after successful upload...')
+      
+      // Wait a moment for the server to finish writing files, then close modal
       setIsSubmitting(false)
-      onUpdate()
+      setTimeout(() => {
+        onUpdate()
+      }, 500)
     } catch (err: any) {
       console.error('Avatar upload error:', err)
       setError(err.message)

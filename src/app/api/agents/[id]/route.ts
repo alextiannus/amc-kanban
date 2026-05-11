@@ -89,6 +89,7 @@ export async function PATCH(
     if (themeColor !== null) updateData.themeColor = themeColor
 
     const file = formData.get('avatar') as File | null
+    let avatarUpdated = false
 
     if (file && file.size > 0) {
       console.log(`[AVATAR] Processing avatar upload for agent ${id}:`, {
@@ -130,6 +131,7 @@ export async function PATCH(
         await fs.writeFile(filePath, buffer)
         console.log(`[AVATAR] File written successfully: ${filePath}`)
         updateData.avatar = `/uploads/${fileName}`
+        avatarUpdated = true
         console.log(`[AVATAR] Avatar URL set to: ${updateData.avatar}`)
       } catch (writeError: any) {
         console.error(`[AVATAR] Failed to write file: ${writeError.message}`)
@@ -138,6 +140,7 @@ export async function PATCH(
     }
 
     if (Object.keys(updateData).length === 0) {
+      console.warn(`[AVATAR] No data provided to update for agent ${id}`)
       return NextResponse.json({ error: 'No data provided to update' }, { status: 400 })
     }
 
@@ -149,7 +152,7 @@ export async function PATCH(
         data: updateData
       })
       
-      console.log(`[AVATAR] Agent updated successfully. New avatar: ${agent.avatar}`)
+      console.log(`[AVATAR] Agent updated successfully. Avatar updated: ${avatarUpdated}, new value: ${agent.avatar}`)
       return NextResponse.json({ success: true, agent: { id: agent.id, avatar: agent.avatar } })
     } catch (dbError: any) {
       console.error(`[AVATAR] Database update failed: ${dbError.message}`)
