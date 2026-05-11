@@ -114,28 +114,66 @@ export async function PATCH(
       }
       
       const uploadDir = path.join(process.cwd(), 'public/uploads')
+      console.log(`[AVATAR] Upload directory path: ${uploadDir}`)
 
+      // Try to access and create if needed
       try {
         await fs.access(uploadDir)
-        console.log(`[AVATAR] Upload directory exists: ${uploadDir}`)
+        console.log(`[AVATAR] Upload directory exists and is accessible`)
       } catch {
-        console.log(`[AVATAR] Creating upload directory: ${uploadDir}`)
-        await fs.mkdir(uploadDir, { recursive: true })
+        try {
+          console.log(`[AVATAR] Creating upload directory...`)
+          await fs.mkdir(uploadDir, { recursive: true })
+          console.log(`[AVATAR] Upload directory created successfully`)
+          // Verify it was created
+          await fs.access(uploadDir)
+          console.log(`[AVATAR] Upload directory verified as accessible`)
+        } catch (mkdirError: any) {
+          console.error(`[AVATAR] Failed to create upload directory: ${mkdirError.message}`)
+          console.error(`[AVATAR] Error details:`, mkdirError)
+          return NextResponse.json({ 
+            error: `Cannot create upload directory: ${mkdirError.message}` 
+          }, { status: 500 })
+        }
       }
 
       const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
       const fileName = `${id}-avatar-${Date.now()}.${extension}`
       const filePath = path.join(uploadDir, fileName)
 
+      console.log(`[AVATAR] Attempting to write file: ${filePath}`)
+      console.log(`[AVATAR] File size: ${buffer.length} bytes`)
+
       try {
+        // Write the file
         await fs.writeFile(filePath, buffer)
-        console.log(`[AVATAR] File written successfully: ${filePath}`)
+        console.log(`[AVATAR] File written successfully`)
+
+        // Verify the file was written
+        try {
+          const stat = await fs.stat(filePath)
+          console.log(`[AVATAR] File verified: ${stat.size} bytes, readable: ${stat.isFile()}`)
+        } catch (statError: any) {
+          console.error(`[AVATAR] File written but cannot be verified: ${statError.message}`)
+        }
+
         updateData.avatar = `/uploads/${fileName}`
         avatarUpdated = true
         console.log(`[AVATAR] Avatar URL set to: ${updateData.avatar}`)
       } catch (writeError: any) {
         console.error(`[AVATAR] Failed to write file: ${writeError.message}`)
-        return NextResponse.json({ error: `File write failed: ${writeError.message}` }, { status: 500 })
+        console.error(`[AVATAR] Error code: ${writeError.code}`)
+        console.error(`[AVATAR] Error details:`, writeError)
+        
+        // Provide more helpful error message
+        let userMessage = `File write failed: ${writeError.message}`
+        if (writeError.code === 'EACCES') {
+          userMessage = 'Permission denied: Cannot write to upload directory'
+        } else if (writeError.code === 'ENOSPC') {
+          userMessage = 'No space left on device'
+        }
+        
+        return NextResponse.json({ error: userMessage }, { status: 500 })
       }
     }
 

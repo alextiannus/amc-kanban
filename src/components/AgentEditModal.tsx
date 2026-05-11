@@ -89,6 +89,18 @@ export default function AgentEditModal({ agent, onClose, onUpdate }: { agent: an
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
+          <div className="mb-4 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs text-slate-600 dark:text-slate-400 font-mono flex items-center justify-between">
+            <span>ID: {agent.id}</span>
+            <button 
+              onClick={() => {
+                navigator.clipboard.writeText(agent.id)
+              }}
+              className="ml-2 px-2 py-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded text-xs"
+            >
+              Copy
+            </button>
+          </div>
+
           {error && (
             <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm font-medium border border-red-100 dark:border-red-900/50">
               {error}
