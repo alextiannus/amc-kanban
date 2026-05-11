@@ -91,7 +91,14 @@ export async function PATCH(
     const file = formData.get('avatar') as File | null
 
     if (file && file.size > 0) {
+      console.log(`[AVATAR] Processing avatar upload for agent ${id}:`, {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      })
+
       if (!file.type.startsWith('image/')) {
+        console.error(`[AVATAR] Invalid file type: ${file.type}`)
         return NextResponse.json({ error: 'Avatar must be an image file' }, { status: 400 })
       }
 
@@ -101,13 +108,17 @@ export async function PATCH(
       // Enforce 5MB file size limit
       const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
       if (buffer.length > MAX_FILE_SIZE) {
+        console.error(`[AVATAR] File too large: ${buffer.length} bytes`)
         return NextResponse.json({ error: 'File too large. Maximum size is 5MB' }, { status: 413 })
       }
+      
       const uploadDir = path.join(process.cwd(), 'public/uploads')
 
       try {
         await fs.access(uploadDir)
+        console.log(`[AVATAR] Upload directory exists: ${uploadDir}`)
       } catch {
+        console.log(`[AVATAR] Creating upload directory: ${uploadDir}`)
         await fs.mkdir(uploadDir, { recursive: true })
       }
 
@@ -115,22 +126,38 @@ export async function PATCH(
       const fileName = `${id}-avatar-${Date.now()}.${extension}`
       const filePath = path.join(uploadDir, fileName)
 
-      await fs.writeFile(filePath, buffer)
-      updateData.avatar = `/uploads/${fileName}`
+      try {
+        await fs.writeFile(filePath, buffer)
+        console.log(`[AVATAR] File written successfully: ${filePath}`)
+        updateData.avatar = `/uploads/${fileName}`
+        console.log(`[AVATAR] Avatar URL set to: ${updateData.avatar}`)
+      } catch (writeError: any) {
+        console.error(`[AVATAR] Failed to write file: ${writeError.message}`)
+        return NextResponse.json({ error: `File write failed: ${writeError.message}` }, { status: 500 })
+      }
     }
 
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json({ error: 'No data provided to update' }, { status: 400 })
     }
 
-    const agent = await prisma.user.update({
-      where: { id },
-      data: updateData
-    })
-
-    return NextResponse.json({ success: true, agent: { id: agent.id, avatar: agent.avatar } })
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    console.log(`[AVATAR] Updating agent ${id} with data:`, Object.keys(updateData))
+    
+    try {
+      const agent = await prisma.user.update({
+        where: { id },
+        data: updateData
+      })
+      
+      console.log(`[AVATAR] Agent updated successfully. New avatar: ${agent.avatar}`)
+      return NextResponse.json({ success: true, agent: { id: agent.id, avatar: agent.avatar } })
+    } catch (dbError: any) {
+      console.error(`[AVATAR] Database update failed: ${dbError.message}`)
+      return NextResponse.json({ error: `Database error: ${dbError.message}` }, { status: 500 })
+    }
+  } catch (error: any) {
+    console.error(`[AVATAR] Unexpected error: ${error.message}`, error)
+    return NextResponse.json({ error: `Internal Server Error: ${error.message}` }, { status: 500 })
   }
 }
 

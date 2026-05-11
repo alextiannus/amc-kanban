@@ -48,11 +48,16 @@ export default function AgentEditModal({ agent, onClose, onUpdate }: { agent: an
 
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Failed to update agent')
+        console.error('Upload failed with status:', res.status, data)
+        throw new Error(data.error || `Failed to update agent (${res.status})`)
       }
 
+      const result = await res.json()
+      console.log('Avatar upload response:', result)
+      setIsSubmitting(false)
       onUpdate()
     } catch (err: any) {
+      console.error('Avatar upload error:', err)
       setError(err.message)
       setIsSubmitting(false)
     }
