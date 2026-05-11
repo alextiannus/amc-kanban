@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { withResolvedAvatar } from '@/lib/avatarUtils'
 
 export async function GET(
   request: Request,
@@ -39,15 +40,8 @@ export async function GET(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
 
-    // Convert avatar data to data URI if present
-    let avatarUrl = agent.avatar
-    if ((agent as any).avatarData && (agent as any).avatarMimeType) {
-      const base64 = Buffer.from((agent as any).avatarData).toString('base64')
-      avatarUrl = `data:${(agent as any).avatarMimeType};base64,${base64}`
-    }
-
-    const { password, apiKey, avatarData, avatarMimeType, ...agentData } = agent as any
-    return NextResponse.json({ ...agentData, avatar: avatarUrl })
+    const { password, apiKey, ...agentData } = agent as any
+    return NextResponse.json(withResolvedAvatar(agentData))
   } catch (error) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
@@ -145,11 +139,8 @@ export async function PATCH(
       })
       
       // Build data URI from stored binary data for response
-      let avatarUrl = agent.avatar
-      if (avatarUpdated && (agent as any).avatarData && (agent as any).avatarMimeType) {
-        const base64 = Buffer.from((agent as any).avatarData).toString('base64')
-        avatarUrl = `data:${(agent as any).avatarMimeType};base64,${base64}`
-      }
+      const updatedAgent = await prisma.user.findUnique({ where: { id } }) as any
+      const avatarUrl = updatedAgent ? withResolvedAvatar(updatedAgent).avatar : null
       console.log(`[AVATAR] Agent updated successfully. Avatar updated: ${avatarUpdated}`)
       return NextResponse.json({ success: true, agent: { id: agent.id, avatar: avatarUrl } })
     } catch (dbError: any) {

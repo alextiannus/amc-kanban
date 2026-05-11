@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
 
 export async function GET() {
   try {
@@ -38,9 +39,7 @@ export async function GET() {
         introduction: true,
         workflow: true,
         themeColor: true,
-        avatar: true,
-        avatarData: true,
-        avatarMimeType: true,
+        ...avatarSelect,
         createdAt: true,
         tasksAsAssignee: {
           where: {
@@ -54,18 +53,9 @@ export async function GET() {
 
     // Convert avatar data to data URI and format response
     const formattedAgents = agents.map((agent: any) => {
-      let avatarUrl = agent.avatar
-      
-      // If we have binary avatar data in DB, convert to data URI
-      if (agent.avatarData && agent.avatarMimeType) {
-        const base64 = Buffer.from(agent.avatarData).toString('base64')
-        avatarUrl = `data:${agent.avatarMimeType};base64,${base64}`
-      }
-
-      const { avatarData, avatarMimeType, tasksAsAssignee, ...rest } = agent
+      const { tasksAsAssignee, ...rest } = agent
       return {
-        ...rest,
-        avatar: avatarUrl,
+        ...withResolvedAvatar(rest),
         isOnline: tasksAsAssignee.length > 0,
       }
     })

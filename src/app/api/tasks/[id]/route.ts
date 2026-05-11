@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
+import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
 
 async function canHumanAccessTask(humanId: string, assigneeId: string | null) {
   const permissions = await prisma.agentPermission.findMany({
@@ -48,7 +49,7 @@ export async function GET(
             introduction: true,
             workflow: true,
             themeColor: true,
-            avatar: true,
+            ...avatarSelect,
           }
         }
       }
@@ -72,7 +73,11 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    return NextResponse.json(task)
+    const taskWithAvatar = {
+      ...task,
+      assignee: (task as any).assignee ? withResolvedAvatar((task as any).assignee) : null
+    }
+    return NextResponse.json(taskWithAvatar)
   } catch (error) {
     console.error('Task detail GET error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

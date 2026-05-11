@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
+import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -78,7 +79,7 @@ export async function GET(request: Request) {
             introduction: true,
             workflow: true,
             themeColor: true,
-            avatar: true,
+            ...avatarSelect,
           }
         }
       }
@@ -90,11 +91,15 @@ export async function GET(request: Request) {
     }
 
     const tasks = await prisma.workUnit.findMany(queryOptions)
+    const tasksWithAvatar = tasks.map((t: any) => ({
+      ...t,
+      assignee: t.assignee ? withResolvedAvatar(t.assignee) : null
+    }))
 
     if (limit && page) {
       const totalCount = await prisma.workUnit.count({ where: whereClause })
       return NextResponse.json({
-        tasks,
+        tasks: tasksWithAvatar,
         pagination: {
           total: totalCount,
           page,
@@ -104,7 +109,7 @@ export async function GET(request: Request) {
       })
     }
 
-    return NextResponse.json(tasks)
+    return NextResponse.json(tasksWithAvatar)
   } catch (error) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
