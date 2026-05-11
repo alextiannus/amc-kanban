@@ -33,18 +33,25 @@ export default function AvatarImage({
     setIsLoading(false)
   }
 
-  if (!src || hasError) {
-    // Show default lobster avatar
+  if (!src) {
+    // No source provided - show placeholder
     return (
-      <img 
-        src="/default-lobster-avatar.svg" 
-        alt={alt}
-        className={className}
-        onError={() => {
-          // Fallback if SVG also fails
-          setHasError(true)
-        }}
-      />
+      <div 
+        className={`${className} bg-gradient-to-br from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center`}
+      >
+        <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold">无头像</span>
+      </div>
+    )
+  }
+
+  if (hasError) {
+    // Image failed to load - show error state
+    return (
+      <div 
+        className={`${className} bg-red-100 dark:bg-red-900/20 flex items-center justify-center border-2 border-dashed border-red-300 dark:border-red-700`}
+      >
+        <span className="text-red-600 dark:text-red-400 text-xs font-semibold text-center px-2">加载失败</span>
+      </div>
     )
   }
 
