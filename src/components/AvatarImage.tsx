@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface AvatarImageProps {
   src?: string | null
@@ -17,6 +17,12 @@ export default function AvatarImage({
 }: AvatarImageProps) {
   const [hasError, setHasError] = useState(false)
   const [isLoading, setIsLoading] = useState(!!src)
+
+  useEffect(() => {
+    // Reset image state whenever src changes so successful new uploads can render.
+    setHasError(false)
+    setIsLoading(!!src)
+  }, [src])
 
   const handleError = () => {
     setHasError(true)
