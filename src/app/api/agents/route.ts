@@ -39,6 +39,8 @@ export async function GET() {
         workflow: true,
         themeColor: true,
         avatar: true,
+        avatarData: true,
+        avatarMimeType: true,
         createdAt: true,
         tasksAsAssignee: {
           where: {
@@ -48,6 +50,24 @@ export async function GET() {
         }
       },
       orderBy: { createdAt: 'desc' }
+    })
+
+    // Convert avatar data to data URI
+    const agentsWithDataUri = agents.map((agent: any) => {
+      let avatarUrl = agent.avatar
+      
+      // If we have binary avatar data in DB, convert to data URI
+      if (agent.avatarData && agent.avatarMimeType) {
+        const base64 = agent.avatarData.toString('base64')
+        avatarUrl = `data:${agent.avatarMimeType};base64,${base64}`
+      }
+
+      // Remove the raw binary data from response (too large)
+      const { avatarData, avatarMimeType, ...rest } = agent
+      return {
+        ...rest,
+        avatar: avatarUrl
+      }
     })
 
     const formattedAgents = agents.map(agent => ({

@@ -41,8 +41,15 @@ export async function GET(
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
 
-    const { password, apiKey, ...agentData } = agent
-    return NextResponse.json(agentData)
+    // Convert avatar data to data URI if present
+    let avatarUrl = agent.avatar
+    if ((agent as any).avatarData && (agent as any).avatarMimeType) {
+      const base64 = (agent as any).avatarData.toString('base64')
+      avatarUrl = `data:${(agent as any).avatarMimeType};base64,${base64}`
+    }
+
+    const { password, apiKey, avatarData, avatarMimeType, ...agentData } = agent as any
+    return NextResponse.json({ ...agentData, avatar: avatarUrl })
   } catch (error) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
@@ -112,68 +119,17 @@ export async function PATCH(
         console.error(`[AVATAR] File too large: ${buffer.length} bytes`)
         return NextResponse.json({ error: 'File too large. Maximum size is 5MB' }, { status: 413 })
       }
-      
-      const uploadDir = path.join(process.cwd(), 'public/uploads')
-      console.log(`[AVATAR] Upload directory path: ${uploadDir}`)
-
-      // Try to access and create if needed
-      try {
-        await fs.access(uploadDir)
-        console.log(`[AVATAR] Upload directory exists and is accessible`)
-      } catch {
-        try {
-          console.log(`[AVATAR] Creating upload directory...`)
-          await fs.mkdir(uploadDir, { recursive: true })
-          console.log(`[AVATAR] Upload directory created successfully`)
-          // Verify it was created
-          await fs.access(uploadDir)
-          console.log(`[AVATAR] Upload directory verified as accessible`)
-        } catch (mkdirError: any) {
-          console.error(`[AVATAR] Failed to create upload directory: ${mkdirError.message}`)
-          console.error(`[AVATAR] Error details:`, mkdirError)
-          return NextResponse.json({ 
-            error: `Cannot create upload directory: ${mkdirError.message}` 
-          }, { status: 500 })
-        }
-      }
-
-      const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-      const fileName = `${id}-avatar-${Date.now()}.${extension}`
-      const filePath = path.join(uploadDir, fileName)
-
-      console.log(`[AVATAR] Attempting to write file: ${filePath}`)
-      console.log(`[AVATAR] File size: ${buffer.length} bytes`)
 
       try {
-        // Write the file
-        await fs.writeFile(filePath, buffer)
-        console.log(`[AVATAR] File written successfully`)
-
-        // Verify the file was written
-        try {
-          const stat = await fs.stat(filePath)
-          console.log(`[AVATAR] File verified: ${stat.size} bytes, readable: ${stat.isFile()}`)
-        } catch (statError: any) {
-          console.error(`[AVATAR] File written but cannot be verified: ${statError.message}`)
-        }
-
-        updateData.avatar = `/uploads/${fileName}`
+        // Store directly in database as binary data
+        updateData.avatarData = buffer
+        updateData.avatarMimeType = file.type
         avatarUpdated = true
-        console.log(`[AVATAR] Avatar URL set to: ${updateData.avatar}`)
-      } catch (writeError: any) {
-        console.error(`[AVATAR] Failed to write file: ${writeError.message}`)
-        console.error(`[AVATAR] Error code: ${writeError.code}`)
-        console.error(`[AVATAR] Error details:`, writeError)
         
-        // Provide more helpful error message
-        let userMessage = `File write failed: ${writeError.message}`
-        if (writeError.code === 'EACCES') {
-          userMessage = 'Permission denied: Cannot write to upload directory'
-        } else if (writeError.code === 'ENOSPC') {
-          userMessage = 'No space left on device'
-        }
-        
-        return NextResponse.json({ error: userMessage }, { status: 500 })
+        console.log(`[AVATAR] Avatar will be stored in database: ${file.type}, ${buffer.length} bytes`)
+      } catch (bufferError: any) {
+        console.error(`[AVATAR] Failed to process buffer: ${bufferError.message}`)
+        return NextResponse.json({ error: `Buffer processing failed: ${bufferError.message}` }, { status: 500 })
       }
     }
 
@@ -190,7 +146,7 @@ export async function PATCH(
         data: updateData
       })
       
-      console.log(`[AVATAR] Agent updated successfully. Avatar updated: ${avatarUpdated}, new value: ${agent.avatar}`)
+      console.log(`[AVATAR] Agent updated successfully. Avatar updated: ${avatarUpdated}`)
       return NextResponse.json({ success: true, agent: { id: agent.id, avatar: agent.avatar } })
     } catch (dbError: any) {
       console.error(`[AVATAR] Database update failed: ${dbError.message}`)

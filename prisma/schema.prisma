@@ -22,7 +22,9 @@ model User {
   introduction String?
   workflow     String?
   themeColor   String?
-  avatar       String?
+  avatar       String?  // Deprecated: kept for backwards compatibility
+  avatarData   Bytes?    // Binary avatar image data stored in DB
+  avatarMimeType String? // MIME type: image/jpeg, image/png, etc
   apiKey       String?  @unique // Each AI Agent has its own API key
   
   // 关系映射
