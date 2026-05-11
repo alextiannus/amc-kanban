@@ -3,11 +3,7 @@ import { Inbox, ChevronLeft, ChevronRight, Activity, Calendar } from 'lucide-rea
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AvatarImage from './AvatarImage'
-
-const markdownComponents = {
-  a: ({ ...props }: any) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-}
-
+import ArchiveFilters from './ArchiveFilters'
 export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) => void }) {
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,10 +35,14 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 p-6 flex flex-col h-full min-h-[600px]">
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
-        <h2 className="text-xl font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-          🗄️ 归档库 <span className="text-sm font-normal text-slate-400 bg-slate-50 dark:bg-slate-950 px-3 py-1 rounded-full">{total} 个历史任务</span>
-        </h2>
+      <div className="flex flex-col gap-4 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+            🗄️ 归档库 <span className="text-sm font-normal text-slate-400 bg-slate-50 dark:bg-slate-950 px-3 py-1 rounded-full">{total} 个历史任务</span>
+          </h2>
+        </div>
+        {/* 筛选区块 */}
+        <ArchiveFilters tasks={allTasks} onFilter={handleFilter} />
       </div>
 
       <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
