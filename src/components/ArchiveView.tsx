@@ -4,12 +4,23 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AvatarImage from './AvatarImage'
 import ArchiveFilters from './ArchiveFilters'
+const markdownComponents: any = {
+  p: ({ children }: any) => <span>{children}</span>,
+  a: ({ href, children }: any) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+      {children}
+    </a>
+  ),
+}
+
 export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) => void }) {
+  const [allTasks, setAllTasks] = useState<any[]>([])
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
+  const [filters, setFilters] = useState({ agent: '', workflow: '', dateFrom: '', dateTo: '' })
   const limit = 20
 
   useEffect(() => {
@@ -22,7 +33,8 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
       const res = await fetch(`/api/tasks?archive=true&page=${page}&limit=${limit}`)
       if (res.ok) {
         const data = await res.json()
-        setTasks(data.tasks)
+        setAllTasks(data.tasks)
+        applyFilters(data.tasks)
         setTotalPages(data.pagination.totalPages)
         setTotal(data.pagination.total)
       }
@@ -31,6 +43,30 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
     } finally {
       setLoading(false)
     }
+  }
+
+  const applyFilters = (taskList: any[]) => {
+    let filtered = taskList
+    if (filters.agent) {
+      filtered = filtered.filter(t => t.assignee?.id === filters.agent)
+    }
+    if (filters.workflow) {
+      filtered = filtered.filter(t => t.workflow === filters.workflow)
+    }
+    if (filters.dateFrom) {
+      filtered = filtered.filter(t => new Date(t.createdAt) >= new Date(filters.dateFrom))
+    }
+    if (filters.dateTo) {
+      const endDate = new Date(filters.dateTo)
+      endDate.setHours(23, 59, 59, 999)
+      filtered = filtered.filter(t => new Date(t.createdAt) <= endDate)
+    }
+    setTasks(filtered)
+  }
+
+  const handleFilter = (newFilters: any) => {
+    setFilters(newFilters)
+    applyFilters(allTasks)
   }
 
   return (
