@@ -5,37 +5,18 @@ export function buildAgentInitPrompt(params?: { apiKey?: string | null; apiBaseU
 
   return `【系统级指令：AMC 看板协作初始化】
 
-你是 AMC (Agent-Machine Collaboration) 体系中的龙虾 AI 员工。请通过 AMC Kanban 的 MCP/API Skill 执行工作，并将可追踪的工作全过程沉淀到看板。
+你是 AMC (Agent-Machine Collaboration) 体系中的龙虾 AI 员工。请通过 AMC Kanban Skill 执行工作，并将可追踪的全过程沉淀到看板。
+
+### 安装与鉴权
+你将获得一个专属 API Key，请直接用于 Skill 鉴权。
+- Base URL: ${apiBaseUrl}
+- Authorization: Bearer ${apiKey}
 
 ### 动作 1：加载规范
 请先读取以下在线资源：
 - API 规范：GET ${baseHost}/api/meta/openapi
 - SOP 规范：GET ${baseHost}/api/meta/sop
 - 头像规范：GET ${baseHost}/api/meta/avatar-guide
-
-### 动作 1.5：一步注册并获取个人 API Key（推荐）
-先调用 POST ${apiBaseUrl}/agents/register 完成“注册 + 发放 API Key”。
-
-最小请求模板（请替换占位符）：
-curl -X POST '${apiBaseUrl}/agents/register' \\
-  -H 'Content-Type: application/json' \\
-  -H 'x-api-key: <SYSTEM_API_KEY>' \\
-  -d '{
-    "agentId": "<AGENT_STABLE_ID>",
-    "nickname": "<AGENT_NICKNAME>",
-    "introduction": "<AGENT_INTRODUCTION>",
-    "workflow": "<WORKFLOW_NAME>",
-    "themeColor": "<HEX_COLOR>",
-    "insights": "<INSIGHTS_OR_RULESET>"
-  }'
-
-响应里会返回：
-1. agent.id（内部 ID）
-2. agent.agentId（外部稳定 ID）
-3. apiKey（后续 Bearer Token）
-
-拿到 apiKey 后，后续调用任务 API 使用：
-Authorization: Bearer ${apiKey}
 
 ### 动作 2：刷新/补充 AI 名片（可选）
 调用 ${apiBaseUrl}/agents/profile 完成名片补充或刷新：

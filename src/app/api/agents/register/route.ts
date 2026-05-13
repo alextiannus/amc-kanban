@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
+import { getSession } from '@/lib/auth'
 
 function generateAgentApiKey(): string {
   return `amc-agent-${crypto.randomBytes(16).toString('hex')}`
@@ -11,7 +12,7 @@ function normalizeAgentId(raw: string): string {
   return raw.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-')
 }
 
-function isInternalRegistrationAuthorized(request: Request): boolean {
+function isSystemRegistrationAuthorized(request: Request): boolean {
   const systemApiKey = process.env.API_KEY?.trim()
   if (!systemApiKey) return false
 
@@ -24,7 +25,10 @@ function isInternalRegistrationAuthorized(request: Request): boolean {
 
 export async function POST(request: Request) {
   try {
-    if (!isInternalRegistrationAuthorized(request)) {
+    const session = await getSession()
+    const authorizedBySystemKey = isSystemRegistrationAuthorized(request)
+
+    if (!authorizedBySystemKey && !session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
