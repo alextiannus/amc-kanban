@@ -204,6 +204,76 @@ paths:
               schema:
                 $ref: '#/components/schemas/Task'
 
+  /analytics/activity:
+    get:
+      summary: Query execution activity timeline
+      operationId: getExecutionActivity
+      description: Explore execution events by time window, behavior, and result.
+      parameters:
+        - name: preset
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [today, yesterday, 7d, 30d, week]
+        - name: start
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: end
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: agentId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: behavior
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [created, started, pending, input_added, completed, reworked, reopened, updated]
+        - name: result
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Activity query result
+
+  /analytics/agents/{id}/weekly:
+    get:
+      summary: Get weekly execution metrics for one agent
+      operationId: getAgentWeeklyExecutionMetrics
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: start
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: end
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Weekly execution metrics and completed task list
+
 components:
   schemas:
     Task:
