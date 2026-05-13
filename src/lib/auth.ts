@@ -52,11 +52,21 @@ export async function getSession() {
 }
 
 export function extractApiKey(request: Request): string | null {
-  const authHeader = request.headers.get('Authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null
-  const token = authHeader.split(' ')[1]
-  if (!token || token.length < 20) return null
-  return token
+  const apiKeyHeader = request.headers.get('x-api-key')?.trim()
+  if (apiKeyHeader && apiKeyHeader.length >= 20) {
+    return apiKeyHeader
+  }
+
+  const authHeader = request.headers.get('Authorization')?.trim()
+  if (!authHeader) return null
+
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim()
+    return token.length >= 20 ? token : null
+  }
+
+  // Backward compatibility: allow passing raw API key in Authorization header.
+  return authHeader.length >= 20 ? authHeader : null
 }
 
 // Get agent by API key from database
