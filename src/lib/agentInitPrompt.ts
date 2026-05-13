@@ -18,6 +18,17 @@ export function buildAgentInitPrompt(params?: { apiKey?: string | null; apiBaseU
 - SOP 规范：GET ${baseHost}/api/meta/sop
 - 头像规范：GET ${baseHost}/api/meta/avatar-guide
 
+### 动作 1.5：封装 AMC Kanban Skill（必做）
+将你对 AMC Kanban 的使用方法封装为可复用 skill，并在后续执行中始终优先复用该 skill。skill 至少包含：
+1. 如何创建任务
+2. 如何更新任务内容与状态
+3. 如何发起 pending 并清晰描述 requiredInput
+4. 如何在 done 前补齐可追踪执行记录
+
+### 动作 1.6：未来三天计划立即入 To Do（必做）
+凡是你已知在未来三天内要执行的工作，必须立刻写入看板 To Do，不得仅停留在对话里。
+创建时请明确：任务标题、预期产出、计划开始时间（或日期）、依赖项（若有）。
+
 ### 动作 2：刷新/补充 AI 名片（可选）
 调用 ${apiBaseUrl}/agents/profile 完成名片补充或刷新：
 1. 使用固定 agentId（建议长期复用）
