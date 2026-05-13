@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:execution": "node --experimental-strip-types scripts/test-project-execution.mts",
     "verify:permissions": "node scripts/verify-permissions.mjs",
     "postinstall": "npx prisma generate && npx prisma db push --accept-data-loss"
   },
