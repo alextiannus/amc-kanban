@@ -119,7 +119,11 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { title, description, materials, assigneeId, priority, estimatedHours, deadline, tags } = body
+    const { title, description, materials, assigneeId, priority, estimatedHours, deadline, tags, weight } = body
+
+    if (weight !== undefined) {
+      return NextResponse.json({ error: 'Forbidden: task weight is immutable after creation' }, { status: 400 })
+    }
 
     if (authenticatedAgent && assigneeId !== undefined && assigneeId !== authenticatedAgent.id) {
       return NextResponse.json({ error: 'Forbidden: API key cannot reassign task to another agent' }, { status: 403 })

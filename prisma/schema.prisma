@@ -43,6 +43,7 @@ model WorkUnit {
   title          String
   description    String?
   status         String    @default("todo")
+  weight         Int       @default(3)
   materials      String?
   requiredInput  String?
   priority       String    @default("medium")

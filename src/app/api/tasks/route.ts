@@ -5,6 +5,12 @@ import { eventEmitter } from '@/lib/events'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
 
+function normalizeTaskWeight(input: unknown): number {
+  const parsed = Number(input)
+  if ([1, 3, 5].includes(parsed)) return parsed
+  return 3
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
@@ -130,7 +136,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    let { title, description, materials, status, assigneeId, priority, estimatedHours, deadline, tags } = body
+    let { title, description, materials, status, assigneeId, priority, estimatedHours, deadline, tags, weight } = body
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
@@ -169,6 +175,7 @@ export async function POST(request: Request) {
         description,
         materials,
         status: status || 'todo',
+        weight: normalizeTaskWeight(weight),
         assigneeId,
         priority: priority || 'medium',
         estimatedHours: estimatedHours !== undefined && estimatedHours !== null && estimatedHours !== '' ? Number(estimatedHours) : null,

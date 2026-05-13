@@ -10,6 +10,7 @@ type StatusChangeEvent = {
 type TaskLike = {
   id: string
   status: string
+  weight?: number | null
   priority?: string | null
   estimatedHours?: number | null
   createdAt: Date
@@ -65,6 +66,10 @@ function safeHours(ms: number) {
 
 // Temporary mapping before dedicated task weight field is introduced.
 export function inferTaskWeight(task: TaskLike): number {
+  if (typeof task.weight === 'number' && [1, 3, 5].includes(task.weight)) {
+    return task.weight
+  }
+
   if (typeof task.estimatedHours === 'number' && task.estimatedHours > 0) {
     if (task.estimatedHours >= 16) return 5
     if (task.estimatedHours >= 4) return 3

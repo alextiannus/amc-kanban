@@ -67,6 +67,7 @@ export async function GET(
         id: true,
         title: true,
         status: true,
+        weight: true,
         priority: true,
         estimatedHours: true,
         createdAt: true,
@@ -136,6 +137,7 @@ export async function GET(
         .map(task => ({
           id: task.id,
           title: task.title,
+          weight: task.weight,
           priority: task.priority,
           estimatedHours: task.estimatedHours,
           createdAt: task.createdAt,
