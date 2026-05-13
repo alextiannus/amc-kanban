@@ -212,7 +212,7 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
                             }}
                             className="w-full px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 mt-1"
                           >
-                            📜 {copiedCommand === agent.id ? '指令已复制' : '一键复制完整初始化指令'}
+                            📜 {copiedCommand === agent.id ? 'Skill 已复制' : '一键复制完整初始化 Skill'}
                           </button>
                         </div>
                       </div>

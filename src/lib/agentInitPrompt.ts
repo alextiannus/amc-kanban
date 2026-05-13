@@ -3,7 +3,7 @@ export function buildAgentInitPrompt(params?: { apiKey?: string | null; apiBaseU
   const apiBaseUrl = params?.apiBaseUrl || '<KANBAN_API_BASE_URL>'
   const baseHost = apiBaseUrl.replace(/\/api\/?$/, '')
 
-  return `【系统级指令：AMC 看板协作初始化】
+  return `【系统级 Skill：AMC 看板协作初始化】
 
 你是 AMC (Agent-Machine Collaboration) 体系中的龙虾 AI 员工。请通过 AMC Kanban Skill 执行工作，并将可追踪的全过程沉淀到看板。
 

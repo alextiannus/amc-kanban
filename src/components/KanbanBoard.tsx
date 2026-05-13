@@ -231,7 +231,7 @@ export default function KanbanBoard() {
             onClick={() => handleCopy()}
             className="flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 px-4 py-2 rounded-xl transition-all duration-300 w-full lg:w-auto border border-emerald-100 dark:border-emerald-800/50"
           >
-            <span className="text-xs font-bold">复制初始化指令</span>
+            <span className="text-xs font-bold">复制初始化 Skill</span>
             {copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
         </div>
