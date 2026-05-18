@@ -54,13 +54,23 @@ export default function KanbanBoard() {
   const [currentView, setCurrentView] = useState<'home' | 'agents' | 'archive' | 'dashboard'>('home')
   const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
 
-  // Brand State
-  const [brands] = useState<Brand[]>([
-    { id: '1', name: '御膳房', location: 'New York' },
-    { id: '2', name: 'Golden Dragon', location: 'Los Angeles' },
-  ])
-  const [activeBrand, setActiveBrand] = useState<Brand>(brands[0])
+  // Brand State — loaded from API
+  const [brands, setBrands] = useState<Brand[]>([])
+  const [activeBrand, setActiveBrand] = useState<Brand | null>(null)
   const [showBrandMenu, setShowBrandMenu] = useState(false)
+
+  const fetchBrands = async () => {
+    try {
+      const res = await fetch('/api/brands')
+      if (res.ok) {
+        const list: Brand[] = await res.json()
+        setBrands(list)
+        if (list.length > 0) setActiveBrand(prev => prev ?? list[0])
+      }
+    } catch (e) {
+      console.error('[KanbanBoard] fetchBrands', e)
+    }
+  }
   
   const [copied, setCopied] = useState(false)
   const [keyCopied, setKeyCopied] = useState(false)
@@ -81,6 +91,7 @@ export default function KanbanBoard() {
     fetchTasks()
     fetchSummary()
     fetchUser()
+    fetchBrands()
 
     const eventSource = new EventSource('/api/events')
     eventSource.onmessage = (event) => {
@@ -546,7 +557,7 @@ export default function KanbanBoard() {
       ) : (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
           <MobileLayout>
-            <DashboardHome brand={activeBrand} />
+            <DashboardHome brand={activeBrand ?? undefined} />
           </MobileLayout>
         </div>
       )}
