@@ -321,41 +321,54 @@ function ActivityCard({ icon, label, sub, time, status, actionLabel, onAction }:
 }) {
   const meta = status ? STATUS_META[status] : null
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-4 flex items-start gap-3 hover:shadow-md transition-shadow group cursor-pointer">
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex-shrink-0 group-hover:scale-105 transition-transform">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700 transition-all group">
+      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110 ${
+        status === 'done' ? 'bg-emerald-50 dark:bg-emerald-900/20' :
+        status === 'pending' ? 'bg-amber-50 dark:bg-amber-900/20' :
+        status === 'scheduled' ? 'bg-indigo-50 dark:bg-indigo-900/20' :
+        'bg-slate-100 dark:bg-slate-800'
+      }`}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-extrabold text-slate-800 dark:text-slate-100 leading-snug">{label}</p>
-        {sub && <p className="text-xs text-slate-400 mt-0.5 truncate">{sub}</p>}
-        <div className="flex items-center gap-2 mt-2 flex-wrap">
-          {meta && (
-            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
-          )}
-          <span className="text-[10px] text-slate-400 font-medium">{time}</span>
-        </div>
+        <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug truncate">{label}</p>
+        {sub && <p className="text-[11px] text-slate-400 mt-0.5 truncate">{sub}</p>}
       </div>
-      {actionLabel && onAction && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onAction() }}
-          className="flex-shrink-0 text-[11px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl transition-colors self-center shadow-sm shadow-emerald-500/20"
-        >
-          {actionLabel}
-        </button>
-      )}
+      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+        <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">{time}</span>
+        {meta && (
+          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${meta.cls}`}>{meta.label}</span>
+        )}
+        {actionLabel && onAction && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAction() }}
+            className="text-[10px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 py-1 rounded-lg transition-colors shadow-sm shadow-emerald-500/20"
+          >
+            {actionLabel}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
 
 // ── Conversion Card ─────────────────────────────────────────────────────────
 function ConversionCard({ label, value, sub, progress, color }: { label: string, value: string, sub: string, progress: number, color: string }) {
+  const isEmpty = value === '0' || value === '' || Number(value) === 0
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm">
-      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-      <p className="text-3xl font-black text-slate-800 dark:text-slate-100">{value}</p>
-      <p className="text-xs text-slate-400 mt-1">{sub}</p>
-      <div className="mt-3 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-        <div className={`h-full ${color} rounded-full`} style={{ width: `${progress}%` }} />
+    <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{label}</p>
+      <p className={`text-3xl font-black leading-none mb-1 ${
+        isEmpty ? 'text-slate-200 dark:text-slate-700' : 'text-slate-800 dark:text-slate-100'
+      }`}>
+        {isEmpty ? '—' : value}
+      </p>
+      <p className="text-[11px] text-slate-400 mb-3">{sub}</p>
+      <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${color} rounded-full transition-all duration-700`}
+          style={{ width: `${Math.min(progress, 100)}%` }}
+        />
       </div>
     </div>
   )
@@ -808,14 +821,17 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
         </section>
       )}
 
-      {/* ── AI 今日战报 (真实数据) ───────────────────────────────────── */}
+      {/* ── AI 活动战报 ───────────────────────────────────────────────── */}
       <section>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <Shield className="w-4 h-4 text-slate-400" /> AI 活动战报
+            <Zap className="w-4 h-4 text-amber-500" /> AI 活动战报
           </h3>
+          {recentDrafts.length > 0 && (
+            <span className="text-[10px] font-bold text-slate-400">最近 {recentDrafts.length} 条</span>
+          )}
         </div>
-        {/* Build activity feed from real data */}
+        {/* Feed from real data */}
         {(() => {
           // Combine drafts + sentiment alerts into one feed
           const feed: Array<{ key: string; node: React.ReactNode }> = []
@@ -893,16 +909,16 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
 
           if (feed.length === 0) {
             return (
-              <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-                <Shield className="w-10 h-10 text-slate-200 dark:text-slate-700" />
+              <div className="flex flex-col items-center justify-center py-10 gap-2.5 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+                <Zap className="w-8 h-8 text-slate-200 dark:text-slate-700" />
                 <p className="text-sm font-bold text-slate-400">暂无活动记录</p>
-                <p className="text-xs text-slate-300 dark:text-slate-600">AI Agent 完成任务后，战报将在此显示</p>
+                <p className="text-[11px] text-slate-300 dark:text-slate-600">AI Agent 执行任务后，战报将实时出现在此</p>
               </div>
             )
           }
 
           return (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
               {feed.map(f => <React.Fragment key={f.key}>{f.node}</React.Fragment>)}
             </div>
           )
@@ -911,32 +927,32 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
 
       {/* ── ROI / Conversion tracking ───────────────────────────────── */}
       <section>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-emerald-500" /> 本周转化跟踪
           </h3>
-          <span className="text-[10px] font-bold text-slate-400">by AI Agent</span>
+          <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-full">by AI Agent · 7d</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <ConversionCard
             label="导航点击"
             value={String(navClicks)}
             sub="来自 IG / TikTok 帖子"
-            progress={Math.round((navClicks / maxConv) * 100)}
+            progress={Math.round((navClicks / Math.max(maxConv, 1)) * 100)}
             color="bg-pink-400"
           />
           <ConversionCard
             label="预订链接点击"
             value={String(bookingClicks)}
             sub="来自小红书、Google"
-            progress={Math.round((bookingClicks / maxConv) * 100)}
+            progress={Math.round((bookingClicks / Math.max(maxConv, 1)) * 100)}
             color="bg-emerald-400"
           />
           <ConversionCard
             label="折扣码核销"
             value={String(couponRedemptions)}
             sub="整体折扣码使用"
-            progress={Math.round((couponRedemptions / maxConv) * 100)}
+            progress={Math.round((couponRedemptions / Math.max(maxConv, 1)) * 100)}
             color="bg-indigo-400"
           />
         </div>
