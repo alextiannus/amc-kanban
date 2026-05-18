@@ -411,7 +411,6 @@ function BrandSwitcher({ brands, activeBrand, onChange }: {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
@@ -420,31 +419,43 @@ function BrandSwitcher({ brands, activeBrand, onChange }: {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  if (brands.length <= 1) return null
+  // Even with 1 brand, show a non-interactive label so user knows which brand they're on
+  if (brands.length <= 1) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 truncate max-w-[140px]">
+        <Store size={11} className="flex-shrink-0" />
+        <span className="truncate">{activeBrand.name}</span>
+      </div>
+    )
+  }
 
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(p => !p)}
-        className="flex items-center gap-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 transition-all"
+        className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all max-w-[160px]"
       >
-        <ChevronDown size={12} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-        切换
+        <Store size={11} className="flex-shrink-0 text-blue-500" />
+        <span className="truncate">{activeBrand.name}</span>
+        <ChevronDown size={11} className={`flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-2 z-50 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden min-w-[180px]">
+        <div className="absolute top-full left-0 mt-2 z-50 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden min-w-[200px]">
+          <div className="px-3 pt-2.5 pb-1">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">切换品牌</p>
+          </div>
           {brands.map(b => (
             <button
               key={b.id}
               onClick={() => { onChange(b); setOpen(false) }}
               className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${
-                activeBrand.id === b.id ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200'
+                activeBrand.id === b.id ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''
               }`}
             >
-              <Store size={13} className="flex-shrink-0" />
+              <Store size={13} className={`flex-shrink-0 ${activeBrand.id === b.id ? 'text-blue-500' : 'text-slate-400'}`} />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold truncate">{b.name}</p>
-                {b.location && <p className="text-[10px] text-slate-400">{b.location}</p>}
+                <p className={`text-xs font-bold truncate ${activeBrand.id === b.id ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200'}`}>{b.name}</p>
+                {b.location && <p className="text-[10px] text-slate-400 truncate">{b.location}</p>}
               </div>
               {activeBrand.id === b.id && <Check size={12} className="flex-shrink-0 text-blue-500" />}
             </button>
@@ -646,10 +657,10 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
                 )}
               </div>
             </div>
-            <BrandSwitcher brands={brandList} activeBrand={activeBrand} onChange={setActiveBrand} />
           </div>
 
           <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
+            <BrandSwitcher brands={brandList} activeBrand={activeBrand} onChange={setActiveBrand} />
             <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 px-2.5 py-1.5 rounded-xl">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">AI 在线</span>
