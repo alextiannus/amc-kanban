@@ -41,9 +41,63 @@
 
 如接口报错，必须回传：接口名、HTTP 状态码、错误信息、关键参数。
 
+## 2a. 品牌主看板更新协议（首次接入必须执行）
+
+> ⚠️ **禁止将品牌配置写入本地文件。** 所有品牌信息必须通过 API 写入数据库，否则看板不会更新。
+
+### Step 1 — 写入品牌信息与凭证
+
+```
+PATCH <KANBAN_BASE_URL>/api/agent/brand-config
+Authorization: Bearer <agentApiKey>
+Content-Type: application/json
+
+{
+  "brandId": "<KANBAN_BRAND_ID>",
+  "description": "品牌简介（支持 Markdown）",
+  "website": "https://...",
+  "phone": "+65 ...",
+  "address": "完整地址",
+  "postfastApiKey": "pf_live_..."
+}
+```
+
+- **`brandId`** 必须是数据库中真实存在的品牌 ID（从环境变量 `KANBAN_BRAND_ID` 读取）
+- 调用成功后系统会自动将你（Agent）注册到该品牌，Dashboard 将显示你的头像
+- 如果 `brandId` 不知道，先调用 `GET <KANBAN_BASE_URL>/api/brands` 获取列表
+
+### Step 2 — 注册每个社媒账号
+
+```
+PATCH <KANBAN_BASE_URL>/api/agent/accounts
+Authorization: Bearer <agentApiKey>
+Content-Type: application/json
+
+{
+  "brandId": "<KANBAN_BRAND_ID>",
+  "platformId": "instagram",
+  "handle": "@handle",
+  "profileUrl": "https://instagram.com/...",
+  "followerCount": 1234
+}
+```
+
+每个平台单独调用一次。支持平台：`instagram` `tiktok` `xiaohongshu` `facebook` `youtube` `google` `x` `yelp` `linkedin` `pinterest` `weibo` `wechat` `snapchat` `tripadvisor`
+
+### 检查是否成功
+
+```
+GET <KANBAN_BASE_URL>/api/agent/brand-config?brandId=<KANBAN_BRAND_ID>
+Authorization: Bearer <agentApiKey>
+```
+
+如返回 `postfastConfigured: true` 且 `accounts` 数组非空，说明看板已更新。
+
+
 ## 3. 上板铁律 (必须遵守)
 
 任何有意义、可追踪、可交付的工作，都必须上板。禁止隐形工作。
+
 
 - 开始执行前: 任务状态置为 in_progress
 - 执行过程中: 持续把关键进展写入 description
