@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -21,17 +22,27 @@ export async function GET(_req: Request, { params }: Params) {
 
   if (!isOwner && !isLinkedAgent) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const agents = await prisma.brandAgent.findMany({
+  const brandAgents = await prisma.brandAgent.findMany({
     where: { brandId: id },
     include: {
       agent: {
-        select: { id: true, nickname: true, email: true, avatar: true, introduction: true, insights: true, themeColor: true, type: true },
+        select: {
+          id: true, nickname: true, email: true,
+          introduction: true, insights: true, themeColor: true, type: true,
+          ...avatarSelect,
+        },
       },
     },
     orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
   })
 
-  return NextResponse.json(agents)
+  // Resolve binary avatar data → data URI, same as /api/agents
+  const result = brandAgents.map(ba => ({
+    ...ba,
+    agent: ba.agent ? withResolvedAvatar(ba.agent) : null,
+  }))
+
+  return NextResponse.json(result)
 }
 
 /**
