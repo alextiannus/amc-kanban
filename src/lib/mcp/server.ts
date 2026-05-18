@@ -128,7 +128,18 @@ export function createAmcMcpServer(agentApiKey: string) {
       await prisma.brand.update({ where: { id: brandId }, data: updateData })
 
       if (input.postfastApiKey) {
-        try { await postfastFetchAccounts(brandId, input.postfastApiKey) } catch { /* non-fatal */ }
+        try {
+          const pfResult = await postfastFetchAccounts(input.postfastApiKey)
+          if (pfResult.success && pfResult.accounts.length > 0) {
+            for (const acc of pfResult.accounts) {
+              await prisma.socialAccount.upsert({
+                where: { brandId_platformId_handle: { brandId, platformId: acc.platformId, handle: acc.handle } },
+                create: { brandId, platformId: acc.platformId, handle: acc.handle, displayName: acc.displayName ?? acc.handle },
+                update: { displayName: acc.displayName ?? acc.handle },
+              })
+            }
+          }
+        } catch { /* non-fatal — PostFast sync failure should not block brand update */ }
       }
 
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, updated: Object.keys(updateData), brandId }) }] }
@@ -292,9 +303,9 @@ export function createAmcMcpServer(agentApiKey: string) {
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const account = await prisma.socialAccount.upsert({
-        where: { brandId_platformId: { brandId, platformId } },
+        where: { brandId_platformId_handle: { brandId, platformId, handle } },
         create: { brandId, platformId, handle, displayName: displayName || handle, profileUrl: profileUrl || null, loginUsername: loginUsername || null, loginPassword: loginPassword || null },
-        update: { handle, displayName: displayName || handle, profileUrl: profileUrl || null, loginUsername: loginUsername || null, loginPassword: loginPassword || null },
+        update: { displayName: displayName || handle, profileUrl: profileUrl || null, loginUsername: loginUsername || null, loginPassword: loginPassword || null },
       })
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, accountId: account.id, platformId, handle }) }] }
     }
