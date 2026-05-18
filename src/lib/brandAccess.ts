@@ -16,6 +16,10 @@ import { prisma } from './prisma'
  * (checks BrandOwner table OR legacy Brand.ownerId for backward compat).
  */
 export async function canOwnBrand(brandId: string, userId: string): Promise<boolean> {
+  // ADMIN users have full access to all brands
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
+  if (user?.role === 'ADMIN') return true
+
   // Primary: BrandOwner join table
   const ownerRow = await prisma.brandOwner.findUnique({
     where: { brandId_userId: { brandId, userId } },

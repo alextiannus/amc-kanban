@@ -37,7 +37,17 @@ export async function GET() {
       return NextResponse.json(agentLinks.map(l => l.brand))
     }
 
-    // Human user — brands via BrandOwner join table
+    // ADMIN human — see ALL brands across the system
+    // (Agents may create brands with themselves as ownerId; admins need full visibility)
+    if (session.user.role === 'ADMIN') {
+      const allBrands = await prisma.brand.findMany({
+        include: { accounts: accountsSelect, _count: countsSelect },
+        orderBy: { createdAt: 'asc' },
+      })
+      return NextResponse.json(allBrands)
+    }
+
+    // Regular human user — brands via BrandOwner join table
     const ownerLinks = await prisma.brandOwner.findMany({
       where: { userId: session.user.id },
       include: {

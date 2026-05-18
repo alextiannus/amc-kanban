@@ -15,8 +15,9 @@ export async function GET(_req: Request, { params }: Params) {
 
   const { id } = await params
 
-  // Access check: owner OR linked agent
-  const isOwner = !!(await prisma.brand.findFirst({ where: { id, ownerId: session.user.id } }))
+  // Access check: admin sees all; owner OR linked agent for others
+  const isAdmin = session.user.role === 'ADMIN'
+  const isOwner = isAdmin || !!(await prisma.brand.findFirst({ where: { id, ownerId: session.user.id } }))
   const isLinkedAgent = !isOwner && session.user.type === 'AI_AGENT'
     && !!(await prisma.brandAgent.findFirst({ where: { brandId: id, agentId: session.user.id, active: true } }))
 
