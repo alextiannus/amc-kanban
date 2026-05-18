@@ -573,8 +573,8 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
     }
   }
 
+
   // ── Add account ───────────────────────────────────────────────────────────
-  // Handled inside AddAccountModal — reload detail on done
   const onAccountAdded = () => { if (activeBrand?.id) loadDetail(activeBrand.id) }
 
   // ── Conversion stats ─────────────────────────────────────────────────────
@@ -589,60 +589,75 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (brandLoading) {
     return (
-      <div className="p-8 flex items-center justify-center">
-        <div className="text-sm text-slate-400 animate-pulse">加载品牌数据中…</div>
+      <div className="p-8 flex items-center justify-center min-h-[60vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin" />
+          <p className="text-xs text-slate-400 font-medium">加载品牌数据…</p>
+        </div>
       </div>
     )
   }
   if (!activeBrand) {
     return (
-      <div className="p-8 flex flex-col items-center justify-center gap-4">
-        <Store className="w-10 h-10 text-slate-300" />
-        <p className="text-sm text-slate-500">暂无品牌，请先创建品牌</p>
+      <div className="p-8 flex flex-col items-center justify-center gap-4 min-h-[60vh]">
+        <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+          <Store className="w-8 h-8 text-slate-400" />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-bold text-slate-600 dark:text-slate-300">暂无品牌</p>
+          <p className="text-xs text-slate-400 mt-1">请先让 Agent 初始化品牌，或手动创建</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto pb-36 space-y-8">
+    <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto pb-36 space-y-6">
 
       {/* ── Brand Header Card ───────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+        {/* Gradient accent strip */}
+        <div className="h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
 
         {/* Top bar: brand name + controls */}
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-4 border-b border-slate-50 dark:border-slate-800">
-          <div className="flex items-center gap-2 flex-1 flex-wrap">
-            <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">{activeBrand.name}</h2>
-            {activeBrand.location && (
-              <span className="text-sm font-medium text-slate-400">· {activeBrand.location}</span>
-            )}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4 px-6 pt-5 pb-4 border-b border-slate-50 dark:border-slate-800/80">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-blue-500/20">
+              <Store className="w-5 h-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 leading-tight">{activeBrand.name}</h2>
+                {activeBrand.location && (
+                  <span className="text-sm text-slate-400 font-medium hidden sm:inline">· {activeBrand.location}</span>
+                )}
+              </div>
+            </div>
             <BrandSwitcher brands={brandList} activeBrand={activeBrand} onChange={setActiveBrand} />
           </div>
 
-          {/* Controls row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 px-3 py-1.5 rounded-xl">
+          <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
+            <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 px-2.5 py-1.5 rounded-xl">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">AI 在线</span>
+              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">AI 在线</span>
             </div>
             {pendingReviewCount > 0 && (
-              <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 px-3 py-1.5 rounded-xl">
+              <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 px-2.5 py-1.5 rounded-xl">
                 <Zap className="w-3 h-3 text-blue-500" />
-                <span className="text-xs font-bold text-blue-700 dark:text-blue-400">{pendingReviewCount} 条待审核</span>
+                <span className="text-[11px] font-bold text-blue-700 dark:text-blue-400">{pendingReviewCount} 待审核</span>
               </div>
             )}
             {pendingItems.some(i => i.priority === 'urgent' || i.type === 'sentiment_alert') && (
-              <div className="flex items-center gap-1.5 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 px-3 py-1.5 rounded-xl">
+              <div className="flex items-center gap-1.5 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 px-2.5 py-1.5 rounded-xl">
                 <AlertCircle className="w-3 h-3 text-red-500" />
-                <span className="text-xs font-bold text-red-700 dark:text-red-400">
-                  {pendingItems.filter(i => i.priority === 'urgent' || i.type === 'sentiment_alert').length} 条差评待处理
+                <span className="text-[11px] font-bold text-red-700 dark:text-red-400">
+                  {pendingItems.filter(i => i.priority === 'urgent' || i.type === 'sentiment_alert').length} 差评
                 </span>
               </div>
             )}
-            {/* Settings button */}
             <button
               onClick={() => setShowSettings(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10"
               title="集成配置"
             >
               <Settings className="w-3 h-3" />
@@ -651,47 +666,48 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
           </div>
         </div>
 
-        {/* Brand profile — structured business card */}
-        <div className="px-5 py-4">
+        {/* Brand profile body */}
+        <div className="px-6 py-5">
           {brandDetail?.description ? (
-            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
+            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-4 max-w-3xl">
               {brandDetail.description}
             </p>
           ) : (
             <button
               onClick={() => setShowSettings(true)}
-              className="w-full flex items-center gap-3 p-3 mb-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-left hover:border-blue-300 dark:hover:border-blue-600 group transition-colors"
+              className="w-full flex items-center gap-3 p-3.5 mb-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 text-left hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50/40 dark:hover:bg-blue-900/10 group transition-all"
             >
-              <span className="text-xl">🏢</span>
+              <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors flex-shrink-0">
+                <Store className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+              </div>
               <div>
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">配置品牌介绍</p>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">点击添加品牌简介、网站、地址等信息</p>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">添加品牌介绍</p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">品牌故事、特色、定位等信息</p>
               </div>
             </button>
           )}
 
-          {/* Metadata row */}
           {(activeBrand.location || brandDetail?.website || brandDetail?.phone || brandDetail?.address) && (
-            <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+            <div className="flex flex-wrap gap-2">
               {activeBrand.location && (
-                <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1">
-                  <span className="text-[10px]">📍</span> {activeBrand.location}
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 px-2.5 py-1 rounded-lg">
+                  📍 {activeBrand.location}
                 </span>
               )}
               {brandDetail?.address && (
-                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <span className="text-[10px]">🏢</span> {brandDetail.address}
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 px-2.5 py-1 rounded-lg">
+                  🏢 {brandDetail.address}
                 </span>
               )}
               {brandDetail?.website && (
                 <a href={brandDetail.website} target="_blank" rel="noopener noreferrer"
-                  className="text-[11px] font-medium text-blue-500 hover:underline flex items-center gap-1 truncate max-w-[200px]">
-                  <span className="text-[10px]">🌐</span> {brandDetail.website.replace(/^https?:\/\//, '')}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 px-2.5 py-1 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors truncate max-w-[200px]">
+                  🌐 {brandDetail.website.replace(/^https?:\/\//, '')}
                 </a>
               )}
               {brandDetail?.phone && (
-                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <span className="text-[10px]">📞</span> {brandDetail.phone}
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 px-2.5 py-1 rounded-lg">
+                  📞 {brandDetail.phone}
                 </span>
               )}
             </div>
