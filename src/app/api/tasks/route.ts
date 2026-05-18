@@ -16,6 +16,7 @@ export async function GET(request: Request) {
   const status = searchParams.get('status')
   const active = searchParams.get('active')
   const archive = searchParams.get('archive')
+  const brandId = searchParams.get('brandId')          // filter by brand-linked agents
   const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined
   const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1
   
@@ -51,23 +52,38 @@ export async function GET(request: Request) {
     }
 
     if (authenticatedAgent) {
-      whereClause = {
-        ...whereClause,
-        assigneeId: authenticatedAgent.id
-      }
+      whereClause = { ...whereClause, assigneeId: authenticatedAgent.id }
     } else if (session!.user.role !== 'ADMIN') {
       const permissions = await prisma.agentPermission.findMany({
-        where: { humanId: session.user.id }
+        where: { humanId: session!.user.id }
       })
       const permittedAgentIds = permissions.map(p => p.agentId)
 
       if (permittedAgentIds.length > 0) {
-        whereClause = {
-          ...whereClause,
-          assigneeId: { in: permittedAgentIds }
-        }
+        whereClause = { ...whereClause, assigneeId: { in: permittedAgentIds } }
       } else {
         return NextResponse.json([])
+      }
+    }
+
+    // Further narrow to a specific brand's agents when brandId is provided
+    if (brandId) {
+      const brandLinks = await prisma.brandAgent.findMany({
+        where: { brandId, active: true },
+        select: { agentId: true },
+      })
+      const brandAgentIds = brandLinks.map(l => l.agentId)
+
+      if (brandAgentIds.length === 0) return NextResponse.json([])
+
+      // Intersect with any existing assigneeId filter
+      if (whereClause.assigneeId) {
+        const existing = Array.isArray(whereClause.assigneeId.in)
+          ? whereClause.assigneeId.in
+          : [whereClause.assigneeId]
+        whereClause.assigneeId = { in: existing.filter((id: string) => brandAgentIds.includes(id)) }
+      } else {
+        whereClause.assigneeId = { in: brandAgentIds }
       }
     }
 

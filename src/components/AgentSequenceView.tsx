@@ -1,56 +1,159 @@
+'use client'
+
 import { useState, useEffect, useCallback } from 'react'
-import { Bot, Search, Trash2, Zap, Star, Check, Calendar, AlertCircle } from 'lucide-react'
+import { Bot, Search, Trash2, Zap, Inbox } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AgentEditModal from './AgentEditModal'
 import AvatarImage from './AvatarImage'
+import TaskCard from './TaskCard'
+import TaskModal from './TaskModal'
 import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
+import { COLUMNS } from './KanbanBoard'
 
 const markdownComponents = {
   a: ({ ...props }: any) => <a {...props} target="_blank" rel="noopener noreferrer" />,
 }
 
-// ── Activity card (same design as DashboardHome ActivityCard) ──────────────
-type ActivityStatus = 'done' | 'pending' | 'scheduled'
-const STATUS_META: Record<ActivityStatus, { label: string; cls: string }> = {
-  done:      { label: '已发布', cls: 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' },
-  pending:   { label: '待审核', cls: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' },
-  scheduled: { label: '已排期', cls: 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400' },
-}
+// ── Mini Kanban Board (brand-scoped AI activity swim-lane) ─────────────────
+function BrandKanbanLane({ brandId }: { brandId: string }) {
+  const [tasks, setTasks] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('pending')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedTask, setSelectedTask] = useState<any | null>(null)
 
-function ActivityCard({ icon, label, sub, time, status }: {
-  icon: React.ReactNode
-  label: string
-  sub?: string
-  time: string
-  status?: ActivityStatus
-}) {
-  const meta = status ? STATUS_META[status] : null
+  const fetchTasks = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/tasks?active=true&brandId=${brandId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setTasks(Array.isArray(data) ? data : data.tasks ?? [])
+      }
+    } catch { /* ignore */ }
+    setLoading(false)
+  }, [brandId])
+
+  useEffect(() => { fetchTasks() }, [fetchTasks])
+
+  const searchLower = searchQuery.toLowerCase().trim()
+
+  const activeTasks = tasks
+    .filter(t => t.status === activeTab)
+    .filter(t => {
+      if (!searchLower) return true
+      const assigneeName = t.assignee ? (t.assignee.nickname || t.assignee.email || '').toLowerCase() : ''
+      const tagMatch = (t.tags || []).some((tag: string) => tag.toLowerCase().includes(searchLower))
+      return (
+        t.id.toLowerCase().includes(searchLower) ||
+        (t.title || '').toLowerCase().includes(searchLower) ||
+        (t.description || '').toLowerCase().includes(searchLower) ||
+        (t.materials || '').toLowerCase().includes(searchLower) ||
+        assigneeName.includes(searchLower) ||
+        tagMatch
+      )
+    })
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700 transition-all group">
-      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110 ${
-        status === 'done'      ? 'bg-emerald-50 dark:bg-emerald-900/20' :
-        status === 'pending'   ? 'bg-amber-50 dark:bg-amber-900/20' :
-        status === 'scheduled' ? 'bg-indigo-50 dark:bg-indigo-900/20' :
-        'bg-slate-100 dark:bg-slate-800'
-      }`}>
-        {icon}
+    <>
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+        {/* Tab bar — identical to KanbanBoard */}
+        <div className="px-6 pt-6 pb-0">
+          <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide">
+            {COLUMNS.map(col => {
+              const count = tasks.filter(t => t.status === col.id).length
+              const isActive = activeTab === col.id
+              return (
+                <button
+                  key={col.id}
+                  onClick={() => setActiveTab(col.id)}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-300 whitespace-nowrap flex-shrink-0 ${
+                    isActive
+                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                      : 'bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-700'
+                  }`}
+                >
+                  {col.title}
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Search — identical to KanbanBoard */}
+          <div className="mb-5 relative">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M16.65 16.65A7.5 7.5 0 1116.65 2a7.5 7.5 0 010 14.65z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="搜索任务标题、描述、标签或 Agent…"
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder:text-slate-400 placeholder:font-normal outline-none focus:ring-2 focus:ring-emerald-400/50"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Task grid */}
+        <div className="px-6 pb-6">
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-48 bg-slate-100 dark:bg-slate-800 rounded-3xl animate-pulse" />
+              ))}
+            </div>
+          ) : activeTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-400 opacity-60">
+              <Inbox size={36} className="mb-3" />
+              <p className="text-sm font-bold">
+                {searchQuery ? '没有找到匹配的任务' : `${COLUMNS.find(c => c.id === activeTab)?.title} 暂无任务`}
+              </p>
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="mt-3 text-xs font-bold text-emerald-600 hover:underline">
+                  清除搜索
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeTasks.map(task => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onClick={() => setSelectedTask(task)}
+                  onTagClick={tag => setSearchQuery(tag)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug truncate">{label}</p>
-        {sub && <p className="text-[11px] text-slate-400 mt-0.5 truncate">{sub}</p>}
-      </div>
-      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-        <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">{time}</span>
-        {meta && (
-          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${meta.cls}`}>{meta.label}</span>
-        )}
-      </div>
-    </div>
+
+      {/* Task detail modal */}
+      {selectedTask && (
+        <TaskModal
+          task={selectedTask}
+          allTasks={tasks}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={() => { fetchTasks(); setSelectedTask(null) }}
+          onTagFilter={tag => { setSelectedTask(null); setSearchQuery(tag) }}
+        />
+      )}
+    </>
   )
 }
 
-// ── Main ────────────────────────────────────────────────────────────────────
+// ── Main: AgentSequenceView ─────────────────────────────────────────────────
 export default function AgentSequenceView({
   initialFilter = 'all',
   brandId,
@@ -67,9 +170,6 @@ export default function AgentSequenceView({
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
   const [editingAgent, setEditingAgent] = useState<any | null>(null)
 
-  // Activity feed state (brand-scoped)
-  const [brandDetail, setBrandDetail] = useState<any>(null)
-
   const getCopyCommand = (apiKey: string | null = null) => {
     const hostFromEnv = process.env.NEXT_PUBLIC_KANBAN_HOST
     const hostFromWindow = typeof window !== 'undefined' ? window.location.origin : null
@@ -80,25 +180,14 @@ export default function AgentSequenceView({
   useEffect(() => { setFilterTab(initialFilter) }, [initialFilter])
   useEffect(() => { fetchAgents() }, [])
 
-  // Fetch brand detail for activity feed
-  const fetchBrandDetail = useCallback(async () => {
-    if (!brandId) return
-    try {
-      const res = await fetch(`/api/brands/${brandId}`)
-      if (res.ok) setBrandDetail(await res.json())
-    } catch { /* ignore */ }
-  }, [brandId])
-
-  useEffect(() => { fetchBrandDetail() }, [fetchBrandDetail])
-
   const fetchAgents = async () => {
     try {
       const res = await fetch('/api/agents')
       const data = await res.json()
       setAgents(data)
-      setLoading(false)
     } catch (e) {
       console.error(e)
+    } finally {
       setLoading(false)
     }
   }
@@ -120,123 +209,67 @@ export default function AgentSequenceView({
     }
   }
 
-  // Filter agents — if brandId provided, show only agents linked to this brand
   const filteredAgents = agents.filter(agent => {
     if (filterTab === 'online' && !agent.isOnline) return false
     if (filterTab === 'offline' && agent.isOnline) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      return agent.email.toLowerCase().includes(q) ||
-             (agent.nickname && agent.nickname.toLowerCase().includes(q)) ||
-             (agent.insights && agent.insights.toLowerCase().includes(q)) ||
-             (agent.introduction && agent.introduction.toLowerCase().includes(q))
+      return (
+        agent.email.toLowerCase().includes(q) ||
+        (agent.nickname && agent.nickname.toLowerCase().includes(q)) ||
+        (agent.insights && agent.insights.toLowerCase().includes(q)) ||
+        (agent.introduction && agent.introduction.toLowerCase().includes(q))
+      )
     }
     return true
   })
 
-  // Build activity feed from brand's action items + recent drafts
-  const activityFeed: Array<{ key: string; node: React.ReactNode }> = []
-
-  if (brandDetail) {
-    const actionItems: any[] = brandDetail.actionItems ?? []
-    const recentDrafts: any[] = brandDetail.recentDrafts ?? []
-
-    actionItems
-      .filter(i => i.type === 'sentiment_alert')
-      .forEach(i => {
-        activityFeed.push({
-          key: i.id,
-          node: (
-            <ActivityCard
-              icon={<Star className="w-4 h-4 text-amber-500" />}
-              label={i.title}
-              sub={i.account ? `${i.account.platformId} · ${i.account.handle}` : undefined}
-              time={new Date(i.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-              status="pending"
-            />
-          ),
-        })
-      })
-
-    recentDrafts.forEach(d => {
-      const platform = d.account?.platformId ?? ''
-      const handle = d.account?.handle ?? ''
-      const sub = [platform, handle].filter(Boolean).join(' · ')
-      const caption = d.caption?.slice(0, 40) + (d.caption?.length > 40 ? '…' : '')
-
-      if (d.status === 'published') {
-        activityFeed.push({
-          key: d.id,
-          node: (
-            <ActivityCard
-              icon={<Check className="w-4 h-4 text-emerald-500" />}
-              label={`已发布: ${caption}`}
-              sub={sub || undefined}
-              time={d.publishedAt ? new Date(d.publishedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '已发布'}
-              status="done"
-            />
-          ),
-        })
-      } else if (d.status === 'scheduled') {
-        activityFeed.push({
-          key: d.id,
-          node: (
-            <ActivityCard
-              icon={<Calendar className="w-4 h-4 text-indigo-500" />}
-              label={`已排期: ${caption}`}
-              sub={sub || undefined}
-              time={d.scheduledAt ? new Date(d.scheduledAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '已排期'}
-              status="scheduled"
-            />
-          ),
-        })
-      } else if (d.status === 'pending_review') {
-        activityFeed.push({
-          key: d.id,
-          node: (
-            <ActivityCard
-              icon={<AlertCircle className="w-4 h-4 text-amber-500" />}
-              label={`待审核: ${caption}`}
-              sub={sub || undefined}
-              time={new Date(d.updatedAt ?? d.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-              status="pending"
-            />
-          ),
-        })
-      }
-    })
-  }
-
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-300">
+      {/* ── Header bar ──────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
         <h2 className="text-xl font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-          🤖 AI 序列 <span className="text-sm font-normal text-slate-400 bg-slate-50 dark:bg-slate-950 px-3 py-1 rounded-full">{filteredAgents.length} Agents</span>
+          🤖 AI 序列{' '}
+          <span className="text-sm font-normal text-slate-400 bg-slate-50 dark:bg-slate-950 px-3 py-1 rounded-full">
+            {filteredAgents.length} Agents
+          </span>
         </h2>
-        
+
         <div className="flex flex-col sm:flex-row gap-4 items-center w-full sm:w-auto">
           <div className="relative w-full sm:w-64">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="搜索邮箱、工作流或简介..." 
+            <input
+              type="text"
+              placeholder="搜索邮箱、工作流或简介..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
             />
           </div>
           <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto">
-            <button onClick={() => setFilterTab('all')} className={`flex-1 sm:px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${filterTab === 'all' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>全部</button>
-            <button onClick={() => setFilterTab('online')} className={`flex-1 sm:px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${filterTab === 'online' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>在线</button>
-            <button onClick={() => setFilterTab('offline')} className={`flex-1 sm:px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${filterTab === 'offline' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>离线</button>
+            {(['all', 'online', 'offline'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilterTab(f)}
+                className={`flex-1 sm:px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                  filterTab === f
+                    ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                {f === 'all' ? '全部' : f === 'online' ? '在线' : '离线'}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Agent grid */}
-      <div className="pb-8">
+      {/* ── Agent cards grid ─────────────────────────────────────────── */}
+      <div className="mb-10">
         {loading ? (
-          <div className="flex justify-center py-20 text-slate-400"><Bot size={32} className="animate-pulse" /></div>
+          <div className="flex justify-center py-20 text-slate-400">
+            <Bot size={32} className="animate-pulse" />
+          </div>
         ) : filteredAgents.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <Bot size={48} className="mb-4 opacity-50" />
@@ -245,23 +278,27 @@ export default function AgentSequenceView({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
             {filteredAgents.map(agent => (
-              <div 
-                key={agent.id} 
-                onClick={() => {
-                  setExpandedAgentIds(prev => 
-                    prev.includes(agent.id) 
+              <div
+                key={agent.id}
+                onClick={() =>
+                  setExpandedAgentIds(prev =>
+                    prev.includes(agent.id)
                       ? prev.filter(id => id !== agent.id)
                       : [...prev, agent.id]
                   )
-                }}
+                }
                 style={agent.themeColor ? { borderColor: agent.themeColor } : undefined}
-                className={`group bg-white dark:bg-slate-900 border rounded-3xl p-6 cursor-pointer transition-all duration-300 relative
-                ${expandedAgentIds.includes(agent.id) ? 'border-emerald-500 shadow-lg ring-4 ring-emerald-500/10' : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm hover:shadow-md'}`}
+                className={`group bg-white dark:bg-slate-900 border rounded-3xl p-6 cursor-pointer transition-all duration-300 relative ${
+                  expandedAgentIds.includes(agent.id)
+                    ? 'border-emerald-500 shadow-lg ring-4 ring-emerald-500/10'
+                    : 'border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm hover:shadow-md'
+                }`}
               >
+                {/* Top-right actions + online dot */}
                 <div className="absolute top-6 right-6 flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-2 py-1.5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <button
-                      onClick={(e) => { e.stopPropagation(); setEditingAgent(agent) }}
+                      onClick={e => { e.stopPropagation(); setEditingAgent(agent) }}
                       className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
                       title="编辑名片"
                     >
@@ -269,83 +306,101 @@ export default function AgentSequenceView({
                     </button>
                     <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
                     <button
-                      onClick={(e) => handleDeleteAgent(e, agent.id)}
+                      onClick={e => handleDeleteAgent(e, agent.id)}
                       className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                       title="遣散此 Agent"
                     >
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  <span className={`w-3 h-3 rounded-full ${agent.isOnline ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                  <span
+                    className={`w-3 h-3 rounded-full ${
+                      agent.isOnline
+                        ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse'
+                        : 'bg-slate-300 dark:bg-slate-600'
+                    }`}
+                  />
                 </div>
 
+                {/* Avatar + name */}
                 <div className="flex items-center gap-4 mb-5 pr-8">
-                  <div 
+                  <div
                     style={agent.themeColor ? { backgroundColor: `${agent.themeColor}20`, color: agent.themeColor } : undefined}
                     className={`w-14 h-14 rounded-2xl flex items-center justify-center text-sm font-bold overflow-hidden border border-white dark:border-slate-700 shadow-sm flex-shrink-0 ${!agent.themeColor ? 'bg-slate-200 text-slate-600' : ''}`}
                   >
-                    {agent.avatar ? <AvatarImage src={agent.avatar} alt="Avatar" className="w-full h-full object-cover" /> : (agent.nickname || agent.email.split('@')[0]).substring(0, 2).toUpperCase()}
+                    {agent.avatar
+                      ? <AvatarImage src={agent.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                      : (agent.nickname || agent.email.split('@')[0]).substring(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-extrabold text-slate-800 dark:text-slate-100 truncate text-lg">{agent.nickname || agent.email.split('@')[0]}</h3>
+                    <h3 className="font-extrabold text-slate-800 dark:text-slate-100 truncate text-lg">
+                      {agent.nickname || agent.email.split('@')[0]}
+                    </h3>
                     <p className="text-xs font-medium text-slate-400 truncate">{agent.email}</p>
                   </div>
                 </div>
-                
+
+                {/* Workflow badge + insights */}
                 {agent.insights && (
                   <div className="mb-2">
-                    <span className="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded flex w-fit mb-2">Workflow</span>
-                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">{agent.insights}</p>
+                    <span className="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded flex w-fit mb-2">
+                      Workflow
+                    </span>
+                    <p className="text-sm font-medium text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                      {agent.insights}
+                    </p>
                   </div>
                 )}
 
+                {/* Expanded: credentials + intro + workflow */}
                 {expandedAgentIds.includes(agent.id) && (
                   <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-5 animate-in fade-in slide-in-from-top-2">
                     {agent.apiKey && (
                       <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-3 flex items-center gap-2">
-                          🔑 凭证管理
-                        </span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-3">🔑 凭证管理</span>
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center gap-2">
-                            <input 
-                              type="text" 
-                              readOnly 
-                              value={agent.apiKey} 
-                              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-600 dark:text-slate-300 font-mono text-xs focus:outline-none" 
+                            <input
+                              type="text"
+                              readOnly
+                              value={agent.apiKey}
+                              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-600 dark:text-slate-300 font-mono text-xs focus:outline-none"
                             />
-                            <button 
-                              onClick={(e) => {
+                            <button
+                              onClick={e => {
                                 e.stopPropagation()
                                 navigator.clipboard.writeText(agent.apiKey)
                                 setCopiedKey(agent.id)
                                 setTimeout(() => setCopiedKey(null), 2000)
                               }}
-                              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold transition-colors whitespace-nowrap flex-shrink-0"
+                              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold transition-colors whitespace-nowrap flex-shrink-0"
                             >
                               {copiedKey === agent.id ? '已复制 Key' : '复制 Key'}
                             </button>
                           </div>
-                          <button 
-                            onClick={(e) => {
+                          <button
+                            onClick={e => {
                               e.stopPropagation()
                               navigator.clipboard.writeText(getCopyCommand(agent.apiKey))
                               setCopiedCommand(agent.id)
                               setTimeout(() => setCopiedCommand(null), 2000)
                             }}
-                            className="w-full px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 mt-1"
+                            className="w-full px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 mt-1"
                           >
                             📜 {copiedCommand === agent.id ? 'Skill 已复制' : '一键复制完整初始化 Skill'}
                           </button>
                         </div>
                       </div>
                     )}
-
                     {agent.introduction && (
                       <div>
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-2 flex items-center gap-2"><Bot size={14}/> 个人简介</span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-2 flex items-center gap-2">
+                          <Bot size={14} /> 个人简介
+                        </span>
                         <div className="text-sm text-slate-600 dark:text-slate-400 prose prose-sm dark:prose-invert">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{agent.introduction}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                            {agent.introduction}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     )}
@@ -353,7 +408,9 @@ export default function AgentSequenceView({
                       <div>
                         <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-2">执行流</span>
                         <div className="text-sm text-slate-600 dark:text-slate-400 prose prose-sm dark:prose-invert">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{agent.workflow}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                            {agent.workflow}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     )}
@@ -365,44 +422,39 @@ export default function AgentSequenceView({
         )}
       </div>
 
-      {/* ── AI 活动战报 (brand-scoped) ────────────────────────────────── */}
+      {/* ── AI 活动战报 — brand-scoped Kanban swim-lane ──────────────── */}
       <section className="pb-10">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <Zap className="w-4 h-4 text-amber-500" /> AI 活动战报
+        <div className="flex items-center gap-2 mb-4">
+          <Zap className="w-4 h-4 text-amber-500" />
+          <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+            AI 活动战报
           </h3>
-          {activityFeed.length > 0 && (
-            <span className="text-[10px] font-bold text-slate-400">最近 {activityFeed.length} 条</span>
+          {brandId && (
+            <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-full ml-1">
+              仅显示本品牌 AI 员工的工作
+            </span>
           )}
         </div>
 
-        {!brandId ? (
+        {brandId ? (
+          <BrandKanbanLane brandId={brandId} />
+        ) : (
           <div className="flex flex-col items-center justify-center py-10 gap-2.5 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
             <Zap className="w-8 h-8 text-slate-200 dark:text-slate-700" />
             <p className="text-sm font-bold text-slate-400">请先选择品牌</p>
-            <p className="text-[11px] text-slate-300 dark:text-slate-600">在顶部切换品牌后，对应品牌的 AI 活动将显示在此</p>
-          </div>
-        ) : activityFeed.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 gap-2.5 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-            <Zap className="w-8 h-8 text-slate-200 dark:text-slate-700" />
-            <p className="text-sm font-bold text-slate-400">暂无活动记录</p>
-            <p className="text-[11px] text-slate-300 dark:text-slate-600">AI Agent 执行任务后，战报将实时出现在此</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {activityFeed.map((f, i) => <div key={f.key ?? i}>{f.node}</div>)}
+            <p className="text-[11px] text-slate-300 dark:text-slate-600">
+              在顶部切换品牌后，对应品牌的 AI 员工活动泳道将显示在此
+            </p>
           </div>
         )}
       </section>
 
+      {/* Agent edit modal */}
       {editingAgent && (
-        <AgentEditModal 
-          agent={editingAgent} 
+        <AgentEditModal
+          agent={editingAgent}
           onClose={() => setEditingAgent(null)}
-          onUpdate={() => {
-            setEditingAgent(null)
-            fetchAgents()
-          }}
+          onUpdate={() => { setEditingAgent(null); fetchAgents() }}
         />
       )}
     </div>
