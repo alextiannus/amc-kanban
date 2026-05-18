@@ -33,10 +33,11 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
       const res = await fetch(`/api/tasks?archive=true&page=${page}&limit=${limit}`)
       if (res.ok) {
         const data = await res.json()
-        setAllTasks(data.tasks)
-        applyFilters(data.tasks)
-        setTotalPages(data.pagination.totalPages)
-        setTotal(data.pagination.total)
+        const taskList = data.tasks ?? (Array.isArray(data) ? data : [])
+        setAllTasks(taskList)
+        applyFilters(taskList)
+        setTotalPages(data.pagination?.totalPages ?? 1)
+        setTotal(data.pagination?.total ?? taskList.length)
       }
     } catch (e) {
       console.error(e)

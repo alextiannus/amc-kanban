@@ -6,10 +6,19 @@ import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
 import AgentSequenceView from './AgentSequenceView'
 import ArchiveView from './ArchiveView'
-import { LogOut, Activity, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, LayoutDashboard, Bot, Trash2 } from 'lucide-react'
+import { LogOut, Activity, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, LayoutDashboard, Bot, Trash2, ChevronDown, Store, Link2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
+import MobileLayout from './dashboard/MobileLayout'
+import DashboardHome from './dashboard/DashboardHome'
+
+// ── Brand types ─────────────────────────────────────────────────────────────
+interface Brand {
+  id: string
+  name: string
+  location?: string
+}
 
 export const COLUMNS = [
   { id: 'todo', title: 'To Do' },
@@ -42,8 +51,16 @@ export default function KanbanBoard() {
   const [showSettings, setShowSettings] = useState(false)
   
   // Navigation State
-  const [currentView, setCurrentView] = useState<'home' | 'agents' | 'archive'>('home')
+  const [currentView, setCurrentView] = useState<'home' | 'agents' | 'archive' | 'dashboard'>('home')
   const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
+
+  // Brand State
+  const [brands] = useState<Brand[]>([
+    { id: '1', name: '御膳房', location: 'New York' },
+    { id: '2', name: 'Golden Dragon', location: 'Los Angeles' },
+  ])
+  const [activeBrand, setActiveBrand] = useState<Brand>(brands[0])
+  const [showBrandMenu, setShowBrandMenu] = useState(false)
   
   const [copied, setCopied] = useState(false)
   const [keyCopied, setKeyCopied] = useState(false)
@@ -216,8 +233,15 @@ export default function KanbanBoard() {
           >
             <Inbox size={16} /> 归档
           </button>
+          <button 
+            onClick={() => setCurrentView('dashboard')} 
+            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${currentView === 'dashboard' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
+          >
+            <Store size={16} /> 品牌主看板
+          </button>
         </div>
         
+
         <div className="flex-1 flex justify-end w-full lg:w-auto gap-3">
           <button 
             onClick={generateAgentKey}
@@ -266,14 +290,17 @@ export default function KanbanBoard() {
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{user?.role}</p>
                 </div>
                 <div className="p-2 space-y-1">
-                  {user?.role === 'ADMIN' && (
+                  {/* Admin & boss users both get user management */}
+                  {(user?.role === 'ADMIN' || user?.role === 'USER') && (
                     <>
-                      <button
-                        onClick={() => { setShowProfile(false); router.push('/admin') }}
-                        className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                      >
-                        <Users size={16} /> 用户管理
-                      </button>
+                      {user?.role === 'ADMIN' && (
+                        <button
+                          onClick={() => { setShowProfile(false); router.push('/admin') }}
+                          className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                        >
+                          <Users size={16} /> 用户管理
+                        </button>
+                      )}
                       <button
                         onClick={async () => {
                           setShowProfile(false);
@@ -304,6 +331,12 @@ export default function KanbanBoard() {
                     className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
                   >
                     <Settings size={16} /> 个人设置
+                  </button>
+                  <button 
+                    onClick={() => { setShowProfile(false); router.push('/profile') }}
+                    className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                  >
+                    <Link2 size={16} /> 平台链接配置
                   </button>
                   <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
                   <button 
@@ -506,9 +539,15 @@ export default function KanbanBoard() {
         <div className="flex-1">
           <AgentSequenceView initialFilter={agentsFilter} />
         </div>
-      ) : (
+      ) : currentView === 'archive' ? (
         <div className="flex-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
           <ArchiveView onTaskClick={setSelectedTask} />
+        </div>
+      ) : (
+        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+          <MobileLayout>
+            <DashboardHome brand={activeBrand} />
+          </MobileLayout>
         </div>
       )}
 

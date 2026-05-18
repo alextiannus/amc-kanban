@@ -27,13 +27,15 @@ model User {
   avatarMimeType String? // MIME type: image/jpeg, image/png, etc
   apiKey       String?  @unique // Each AI Agent has its own API key
   
-  // 关系映射
+  // 关계映射
   tasksAsAssignee  WorkUnit[] @relation("TaskAssignee")
-  
-  // 权限映射表 (人类用户能够看到哪些 AI Agent 的任务)
-  permittedAgents AgentPermission[] @relation("HumanUser")
+  brands           Brand[]    @relation("BrandOwner")
+
+  // 권한 매핑표 (인간 사용자가 어떤 AI Agent의 作业을 볼 수 있는지)
+  permittedAgents  AgentPermission[] @relation("HumanUser")
   assignedToHumans AgentPermission[] @relation("AiAgent")
-  
+  brandMemberships BrandAgent[]      @relation("BrandAgents")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -83,4 +85,194 @@ model AgentPermission {
   human        User   @relation("HumanUser", fields: [humanId], references: [id])
   agent        User   @relation("AiAgent", fields: [agentId], references: [id])
   @@unique([humanId, agentId])
+}
+
+// 品牌 ← → AI Agent 绑定（每个品牌可有多个 Agent 协作）
+model BrandAgent {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  agentId   String
+  agent     User     @relation("BrandAgents", fields: [agentId], references: [id])
+  role      String   @default("worker") // worker | lead
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  @@unique([brandId, agentId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AMC Brand Dashboard Models
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Brand {
+  id             String   @id @default(cuid())
+  ownerId        String
+  owner          User     @relation("BrandOwner", fields: [ownerId], references: [id])
+  name           String
+  location       String?
+  timezone       String   @default("America/New_York")
+  autoPilot      Boolean  @default(false)
+
+  // Brand profile (Agent can populate these)
+  description    String?  // Brand tagline / about text
+  logoUrl        String?  // Brand logo image URL
+  website        String?  // Brand website URL
+  phone          String?  // Contact phone
+  address        String?  // Full address
+
+  // Integration credentials (stored encrypted in production)
+  postfastApiKey    String?   // PostFast API key — for social media publishing
+  googlePlaceId     String?   // Google Business Profile Place ID
+  googleApiKey      String?   // Google API key (Maps + My Business)
+  larkAppId         String?   // Lark/Feishu App ID
+  larkAppSecret     String?   // Lark/Feishu App Secret
+  larkDriveToken    String?   // Lark Drive access token (auto-refreshed)
+  larkDriveFolderId String?   // Lark Drive folder for brand media assets
+  larkBotWebhook    String?   // Lark custom bot webhook URL (owner notifications)
+  larkOwnerId       String?   // Owner's Lark open_id (for direct messages)
+
+  accounts    SocialAccount[]
+  contents    ContentDraft[]
+  assets      MediaAsset[]
+  actionItems ActionItem[]
+  conversions ConversionEvent[]
+  brandAgents BrandAgent[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model SocialAccount {
+  id             String    @id @default(cuid())
+  brandId        String
+  brand          Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  platformId     String
+  handle         String
+  displayName    String?
+  accessToken    String?
+  refreshToken   String?
+  expiresAt      DateTime?
+  autoPilot      Boolean   @default(false)
+  followerCount  Int?
+  followerDelta  Int?      @default(0)
+  ratingScore    Float?
+  snapshotAt     DateTime?
+
+  drafts         ContentDraft[]
+  actionItems    ActionItem[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([brandId, platformId, handle])
+  @@index([brandId])
+}
+
+model ContentDraft {
+  id             String         @id @default(cuid())
+  brandId        String
+  brand          Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  accountId      String?
+  account        SocialAccount? @relation(fields: [accountId], references: [id])
+  caption        String
+  captionLang    String         @default("en")
+  mediaUrls      String[]       @default([])
+  hashtags       String[]       @default([])
+  scheduledAt    DateTime?
+  status         String         @default("draft")
+  agentId        String?
+  agentNote      String?
+  rejectionNote  String?
+  platformPostId String?
+  publishedAt    DateTime?
+
+  actionItem     ActionItem?
+  assetRefs      ContentAssetRef[]
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([brandId, status])
+}
+
+model ActionItem {
+  id           String         @id @default(cuid())
+  brandId      String
+  brand        Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  accountId    String?
+  account      SocialAccount? @relation(fields: [accountId], references: [id])
+  type         String
+  priority     String         @default("normal")
+  title        String
+  description  String
+  payload      Json?
+  status       String         @default("pending")
+  resolvedAt   DateTime?
+  resolvedBy   String?
+  resolvedNote String?
+  agentId      String?
+  expiresAt    DateTime?
+  draftId      String?        @unique
+  draft        ContentDraft?  @relation(fields: [draftId], references: [id])
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([brandId, status, priority])
+}
+
+model MediaAsset {
+  id           String    @id @default(cuid())
+  brandId      String
+  brand        Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  url          String
+  filename     String?
+  mimeType     String
+  sizeBytes    Int?
+  width        Int?
+  height       Int?
+  aiTags       String[]  @default([])
+  aiCategory   String?
+  aiCaption    String?
+  aiReady      Boolean   @default(false)
+  usedCount    Int       @default(0)
+  lastUsedAt   DateTime?
+  uploadedBy   String?
+  sourceType   String    @default("upload")
+
+  contentRefs  ContentAssetRef[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([brandId, aiReady])
+  @@index([brandId, aiCategory])
+}
+
+model ContentAssetRef {
+  id        String       @id @default(cuid())
+  draftId   String
+  draft     ContentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  assetId   String
+  asset     MediaAsset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  order     Int          @default(0)
+
+  @@unique([draftId, assetId])
+}
+
+model ConversionEvent {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  type        String
+  source      String
+  referPostId String?
+  couponCode  String?
+  metadata    Json?
+  occurredAt  DateTime @default(now())
+
+  @@index([brandId, occurredAt])
+  @@index([brandId, type, source])
 }

@@ -1,0 +1,67 @@
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+async function getAgent(request: Request) {
+  const auth = request.headers.get('authorization') || ''
+  const key = auth.replace('Bearer ', '').trim()
+  if (!key) return null
+  return prisma.user.findFirst({ where: { apiKey: key, type: 'AI_AGENT' } })
+}
+
+// GET /api/agent/pending-approvals
+// Agent polls for approved drafts ready to publish (status = "publishing")
+// Returns drafts with account info for PostFast to use
+export async function GET(request: Request) {
+  const agent = await getAgent(request)
+  if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const url = new URL(request.url)
+  const brandId = url.searchParams.get('brandId')
+
+  const drafts = await prisma.contentDraft.findMany({
+    where: {
+      status: 'publishing',
+      agentId: agent.id,
+      ...(brandId ? { brandId } : {}),
+    },
+    include: {
+      account: {
+        select: { platformId: true, handle: true, accessToken: true },
+      },
+      assetRefs: {
+        include: { asset: { select: { url: true, mimeType: true } } },
+        orderBy: { order: 'asc' },
+      },
+    },
+    orderBy: { updatedAt: 'asc' },
+    take: 20,
+  })
+
+  return NextResponse.json(drafts)
+}
+
+// POST /api/agent/pending-approvals — Agent reports publish result
+// Body: { draftId, success, platformPostId?, error? }
+export async function POST(request: Request) {
+  const agent = await getAgent(request)
+  if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await request.json()
+  const { draftId, success, platformPostId, error } = body
+
+  if (!draftId) return NextResponse.json({ error: 'draftId required' }, { status: 400 })
+
+  const draft = await prisma.contentDraft.findFirst({
+    where: { id: draftId, agentId: agent.id },
+  })
+  if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+
+  await prisma.contentDraft.update({
+    where: { id: draftId },
+    data: success
+      ? { status: 'published', publishedAt: new Date(), platformPostId: platformPostId || null }
+      : { status: 'draft', agentNote: `发布失败: ${error || 'unknown error'}` },
+  })
+
+  return NextResponse.json({ ok: true })
+}
