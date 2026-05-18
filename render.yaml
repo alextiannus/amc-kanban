@@ -21,3 +21,7 @@ services:
         value: default-openclaw-key-2026
       - key: AI_SINGLE_AGENT_MODE
         value: 'false'
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_INITIAL_PASSWORD
+        sync: false
