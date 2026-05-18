@@ -2,8 +2,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Check, X, TrendingUp, TrendingDown, AlertCircle, Star,
-  Calendar, Zap, Shield, BarChart2, ChevronDown, Store
+  Calendar, Zap, Shield, BarChart2, ChevronDown, Store, Settings, Bot
 } from 'lucide-react'
+import AvatarImage from '@/components/AvatarImage'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
 
 // ── Action Card (豆腐块 — no swipe, desktop-friendly) ──────────────────────
@@ -492,6 +493,7 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const [autoPilot, setAutoPilot] = useState(false)
   const [showAddAccount, setShowAddAccount] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   // Sync autoPilot from DB
   useEffect(() => { setAutoPilot(apiAutoPilot) }, [apiAutoPilot])
@@ -570,51 +572,21 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto pb-36 space-y-8">
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-start gap-4">
-          <div className="flex-1">
-            {/* Brand name + location + switcher */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">{activeBrand.name}</h2>
-              {activeBrand.location && (
-                <span className="text-sm font-medium text-slate-400">· {activeBrand.location}</span>
-              )}
-              <BrandSwitcher brands={brandList} activeBrand={activeBrand} onChange={setActiveBrand} />
-            </div>
-            {brandDetail?.description
-              ? <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{brandDetail.description}</p>
-              : <p className="text-sm text-slate-400 dark:text-slate-500 mt-0.5">AI 员工实时运营状态总览</p>
-            }
+      {/* ── Brand Header Card ───────────────────────────────────────────── */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
 
-            {/* Agent avatars row */}
-            {brandAgents.length > 0 && (
-              <div className="flex items-center gap-1.5 mt-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">协作 Agent</span>
-                {brandAgents.map(ba => (
-                  <div
-                    key={ba.id}
-                    title={ba.agent?.nickname || ba.agent?.email}
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-black flex-shrink-0 ring-2 ring-white dark:ring-slate-900 overflow-hidden"
-                    style={{ background: ba.agent?.themeColor || '#6366f1' }}
-                  >
-                    {ba.agent?.avatar
-                      ? <img src={ba.agent.avatar} alt="" className="w-full h-full object-cover" />
-                      : (ba.agent?.nickname || ba.agent?.email || '?').charAt(0).toUpperCase()}
-                  </div>
-                ))}
-              </div>
+        {/* Top bar: brand name + controls */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3 p-4 border-b border-slate-50 dark:border-slate-800">
+          <div className="flex items-center gap-2 flex-1 flex-wrap">
+            <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">{activeBrand.name}</h2>
+            {activeBrand.location && (
+              <span className="text-sm font-medium text-slate-400">· {activeBrand.location}</span>
             )}
-
-            {/* Brand settings panel — collapsible, embedded in brand card */}
-            {activeBrand.id && (
-              <BrandSettingsPanel
-                brandId={activeBrand.id}
-                initialSettings={brandSettings}
-              />
-            )}
+            <BrandSwitcher brands={brandList} activeBrand={activeBrand} onChange={setActiveBrand} />
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
+          {/* Controls row */}
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 px-3 py-1.5 rounded-xl">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">AI 在线</span>
@@ -633,6 +605,15 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
                 </span>
               </div>
             )}
+            {/* Settings button */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400"
+              title="集成配置"
+            >
+              <Settings className="w-3 h-3" />
+              配置
+            </button>
             {/* Autopilot toggle */}
             <button
               onClick={toggleAutoPilot}
@@ -645,6 +626,84 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
               <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 transition-all ${autoPilot ? 'bg-white border-white/50' : 'border-slate-300 dark:border-slate-600'}`} />
               {autoPilot ? '自动驾驶已开启' : '开启自动驾驶'}
             </button>
+          </div>
+        </div>
+
+        {/* Brand profile overview — always visible */}
+        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Left: description + metadata */}
+          <div className="space-y-2">
+            {brandDetail?.description ? (
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                {brandDetail.description}
+              </p>
+            ) : (
+              <p className="text-sm text-slate-400 dark:text-slate-500 italic">AI 员工实时运营状态总览</p>
+            )}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {brandDetail?.website && (
+                <a href={brandDetail.website} target="_blank" rel="noopener noreferrer"
+                  className="text-[11px] font-medium text-blue-500 hover:underline truncate max-w-[200px]">
+                  🌐 {brandDetail.website.replace(/^https?:\/\//, '')}
+                </a>
+              )}
+              {brandDetail?.phone && (
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">📞 {brandDetail.phone}</span>
+              )}
+              {brandDetail?.address && (
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">📍 {brandDetail.address}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Right: collaborating agents */}
+          <div>
+            {brandAgents.length > 0 ? (
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2.5 flex items-center gap-1.5">
+                  <Bot className="w-3 h-3" /> 协作 Agent
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {brandAgents.map(ba => (
+                    <div
+                      key={ba.id}
+                      className="flex items-center gap-2.5 p-2.5 rounded-2xl border bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600 transition-colors"
+                      style={ba.agent?.themeColor ? { borderColor: `${ba.agent.themeColor}40` } : undefined}
+                    >
+                      {/* Avatar */}
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-black flex-shrink-0 overflow-hidden border border-white dark:border-slate-700 shadow-sm"
+                        style={{ background: ba.agent?.themeColor || '#6366f1' }}
+                      >
+                        {ba.agent?.avatar
+                          ? <AvatarImage src={ba.agent.avatar} alt="" className="w-full h-full object-cover" />
+                          : (ba.agent?.nickname || ba.agent?.email || '?').charAt(0).toUpperCase()}
+                      </div>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-extrabold text-slate-800 dark:text-slate-100 truncate">
+                          {ba.agent?.nickname || ba.agent?.email?.split('@')[0]}
+                        </p>
+                        {ba.agent?.insights && (
+                          <p className="text-[10px] text-slate-400 truncate">{ba.agent.insights}</p>
+                        )}
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                            ba.active ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]' : 'bg-slate-300 dark:bg-slate-600'
+                          }`} />
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500">{ba.role}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full py-4 gap-2 text-center">
+                <Bot className="w-7 h-7 text-slate-200 dark:text-slate-700" />
+                <p className="text-xs text-slate-400">暂无 Agent 连接</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -835,6 +894,16 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
           brandId={activeBrand.id}
           onDone={onAccountAdded}
           onClose={() => setShowAddAccount(false)}
+        />
+      )}
+
+      {/* ── Brand Settings Modal (集成配置) ────────────────────────────── */}
+      {activeBrand?.id && (
+        <BrandSettingsPanel
+          brandId={activeBrand.id}
+          open={showSettings}
+          onClose={() => setShowSettings(false)}
+          initialSettings={brandSettings}
         />
       )}
 

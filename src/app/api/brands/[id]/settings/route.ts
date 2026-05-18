@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canOwnBrand } from '@/lib/brandAccess'
 import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER } from '@/lib/integrations/lark'
+import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -130,10 +131,47 @@ export async function PATCH(request: Request, { params }: Params) {
     }
   }
 
+  // Auto-sync PostFast accounts when API key is present
+  // Trigger: a postfastApiKey was just set, or the brand already has one
+  let postfastSync: { synced: number; accounts: string[] } | undefined
+  const activeKey = updated.postfastApiKey
+  if (activeKey && (body.postfastApiKey !== undefined || body.postfastApiKey === undefined)) {
+    try {
+      const pfResult = await postfastFetchAccounts(activeKey)
+      if (pfResult.success && pfResult.accounts.length > 0) {
+        // Upsert each PostFast account into SocialAccount table
+        for (const acc of pfResult.accounts) {
+          await prisma.socialAccount.upsert({
+            where: { brandId_platformId_handle: { brandId: id, platformId: acc.platformId, handle: acc.handle } },
+            create: {
+              brandId: id,
+              platformId: acc.platformId,
+              handle: acc.handle,
+              displayName: acc.displayName ?? acc.handle,
+            },
+            update: {
+              displayName: acc.displayName ?? acc.handle,
+            },
+          })
+        }
+        postfastSync = {
+          synced: pfResult.accounts.length,
+          accounts: pfResult.accounts.map(a => `${a.platformId}:${a.handle}`),
+        }
+        console.log(`[Settings] PostFast sync: ${pfResult.accounts.length} accounts for brand ${id}`)
+      } else if (!pfResult.success) {
+        console.warn(`[Settings] PostFast account fetch failed: ${pfResult.error}`)
+      }
+    } catch (e) {
+      console.warn('[Settings] PostFast sync failed (non-fatal):', e)
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     larkFolderUrl,
     postfastConfigured: !!updated.postfastApiKey,
+    postfastSync,
     googleConfigured: !!(updated.googlePlaceId && updated.googleApiKey),
     larkConfigured: !!(updated.larkAppId && updated.larkAppSecret),
     larkDriveConfigured: !!updated.larkDriveFolderId,

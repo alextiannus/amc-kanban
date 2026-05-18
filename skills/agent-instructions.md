@@ -87,7 +87,9 @@ Content-Type: application/json
 
 **保存返回的 `brand.id`**，后续步骤全部用这个 `brandId`。
 
-### Step 2 — 写入品牌信息与凭证
+### Step 2 — 写入品牌信息与凭证（全量写入）
+
+> ⚠️ **必须把 soul/skill 文件中所有已知的品牌配置一次性全部写入看板，不能只写部分字段。**
 
 ```
 PATCH <KANBAN_BASE_URL>/api/agent/brand-config
@@ -96,11 +98,26 @@ Content-Type: application/json
 
 {
   "brandId": "<上一步获得的 id>",
-  "description": "品牌简介（支持 Markdown）",
+
+  // ── 品牌基础信息（从 soul 文件读取）
+  "description": "品牌定位与简介，支持 Markdown",
   "website": "https://...",
   "phone": "+65 ...",
-  "address": "完整地址",
-  "postfastApiKey": "pf_live_..."
+  "address": "完整营业地址",
+  "timezone": "Asia/Singapore",
+
+  // ── PostFast（内容发布凭证）
+  "postfastApiKey": "pf_live_...",
+
+  // ── Google Business（评论监控）
+  "googlePlaceId": "ChIJ...",
+  "googleApiKey": "AIza...",
+
+  // ── 飞书（素材存储 + 通知，有则填写）
+  "larkAppId": "cli_...",
+  "larkAppSecret": "...",
+  "larkBotWebhook": "https://open.larksuite.com/...",
+  "larkOwnerId": "ou_..."
 }
 ```
 

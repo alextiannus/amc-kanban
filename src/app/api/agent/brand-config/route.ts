@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER } from '@/lib/integrations/lark'
+import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 
 async function getAgent(request: Request) {
   const auth = request.headers.get('authorization') || ''
@@ -215,10 +216,36 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // Auto-sync PostFast accounts when API key is present
+  let postfastSync: { synced: number; accounts: string[] } | undefined
+  const activeKey = updated.postfastApiKey
+  if (activeKey) {
+    try {
+      const pfResult = await postfastFetchAccounts(activeKey)
+      if (pfResult.success && pfResult.accounts.length > 0) {
+        for (const acc of pfResult.accounts) {
+          await prisma.socialAccount.upsert({
+            where: { brandId_platformId_handle: { brandId, platformId: acc.platformId, handle: acc.handle } },
+            create: { brandId, platformId: acc.platformId, handle: acc.handle, displayName: acc.displayName ?? acc.handle },
+            update: { displayName: acc.displayName ?? acc.handle },
+          })
+        }
+        postfastSync = {
+          synced: pfResult.accounts.length,
+          accounts: pfResult.accounts.map(a => `${a.platformId}:${a.handle}`),
+        }
+        console.log(`[Agent] PostFast sync: ${pfResult.accounts.length} accounts for brand ${brandId}`)
+      }
+    } catch (e) {
+      console.warn('[Agent] PostFast sync failed (non-fatal):', e)
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     updated: Object.keys(updateData),
     larkFolderUrl,
+    postfastSync,
     brand: {
       id: updated.id,
       name: updated.name,
