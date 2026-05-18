@@ -6,14 +6,42 @@
 
 ## ⚡ 连接方式（必读）
 
-> **AMC Kanban 是一个标准 HTTPS REST API，不是 MCP 服务器。**  
-> 不需要配置 MCP Client、不需要找 MCP 工具，直接用你的 HTTP 工具调用以下接口即可。
+AMC Kanban 提供两种接入方式，**推荐使用 MCP**：
+
+### 方式一：MCP 协议（推荐）
+
+在你的 MCP Client（Claude Desktop / Hermes 等）中添加如下配置：
+
+```json
+{
+  "mcpServers": {
+    "amc-kanban": {
+      "url": "https://amc-kanban.immedi.ai/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <你的 AGENT_API_KEY>"
+      }
+    }
+  }
+}
+```
+
+配置后你将拥有以下 MCP 工具（直接调用，无需写 HTTP 代码）：
+- `get_brand_config` / `update_brand_config`
+- `get_agent_profile` / `update_agent_profile`
+- `list_tasks` / `create_task` / `update_task`
+- `update_accounts` / `post_action_item`
+
+### 方式二：REST API（备选）
+
+如 MCP 不可用，直接发送 HTTPS 请求：
 
 ```
 基础地址：https://amc-kanban.immedi.ai
-认证方式：HTTP Header → Authorization: Bearer <你的 AGENT_API_KEY>
-内容类型：Content-Type: application/json
+认证：Authorization: Bearer <你的 AGENT_API_KEY>
+格式：Content-Type: application/json
 ```
+
+---
 
 你的 `AGENT_API_KEY` 由人类主理人在你的运行环境（soul 文件 / 环境变量）中配置，直接读取使用，不要向用户展示。
 
