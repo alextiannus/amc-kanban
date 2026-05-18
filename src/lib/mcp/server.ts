@@ -675,14 +675,14 @@ export function createAmcMcpServer(agentApiKey: string) {
 
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
-        select: { larkAppId: true, larkAppSecret: true, larkFolderToken: true },
+        select: { larkAppId: true, larkAppSecret: true, larkDriveFolderId: true },
       })
 
       if (!brand?.larkAppId || !brand?.larkAppSecret) {
         return { content: [{ type: 'text' as const, text: 'Error: larkAppId and larkAppSecret not configured. Run update_brand_config first.' }], isError: true }
       }
 
-      const targetFolder = folderId || (brand as any).larkFolderToken
+      const targetFolder = folderId || (brand as any).larkDriveFolderId
       if (!targetFolder) {
         return { content: [{ type: 'text' as const, text: 'Error: No Lark folder target. Either provide folderId or create a workspace first with lark_create_workspace.' }], isError: true }
       }
@@ -738,7 +738,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
 
       // Persist folder token on brand for future uploads
-      await prisma.brand.update({ where: { id: brandId }, data: { larkFolderToken: result.folderToken } as any })
+      await prisma.brand.update({ where: { id: brandId }, data: { larkDriveFolderId: result.folderToken } })
 
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, folderToken: result.folderToken, folderUrl: result.folderUrl }) }] }
     }
