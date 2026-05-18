@@ -6,14 +6,20 @@ type Params = { params: Promise<{ id: string }> }
 
 /**
  * GET /api/brands/[id]/agents — list agents assigned to this brand
+ * Accessible by: brand owner (HUMAN) OR any AI_AGENT linked to this brand
  */
 export async function GET(_req: Request, { params }: Params) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const brand = await prisma.brand.findFirst({ where: { id, ownerId: session.user.id } })
-  if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Access check: owner OR linked agent
+  const isOwner = !!(await prisma.brand.findFirst({ where: { id, ownerId: session.user.id } }))
+  const isLinkedAgent = !isOwner && session.user.type === 'AI_AGENT'
+    && !!(await prisma.brandAgent.findFirst({ where: { brandId: id, agentId: session.user.id, active: true } }))
+
+  if (!isOwner && !isLinkedAgent) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const agents = await prisma.brandAgent.findMany({
     where: { brandId: id },

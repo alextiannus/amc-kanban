@@ -2,35 +2,55 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-// GET /api/brands — list all brands for the logged-in user
+// GET /api/brands — list brands for the logged-in user
+// - HUMAN users: brands they own (ownerId)
+// - AI_AGENT users: brands linked via BrandAgent table
 export async function GET() {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const accountsSelect = {
+    orderBy: { createdAt: 'asc' as const },
+    select: {
+      id: true,
+      platformId: true,
+      handle: true,
+      displayName: true,
+      autoPilot: true,
+      followerCount: true,
+      followerDelta: true,
+      ratingScore: true,
+      snapshotAt: true,
+    },
+  }
+  const countsSelect = {
+    select: {
+      actionItems: { where: { status: 'pending' } },
+      contents: { where: { status: 'pending_review' } },
+    },
+  }
+
   try {
+    // AI Agent — return brands linked via BrandAgent join table
+    if (session.user.type === 'AI_AGENT') {
+      const agentLinks = await prisma.brandAgent.findMany({
+        where: { agentId: session.user.id, active: true },
+        include: {
+          brand: {
+            include: { accounts: accountsSelect, _count: countsSelect },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+      return NextResponse.json(agentLinks.map(l => l.brand))
+    }
+
+    // Human user — return brands they own
     const brands = await prisma.brand.findMany({
       where: { ownerId: session.user.id },
       include: {
-        accounts: {
-          orderBy: { createdAt: 'asc' },
-          select: {
-            id: true,
-            platformId: true,
-            handle: true,
-            displayName: true,
-            autoPilot: true,
-            followerCount: true,
-            followerDelta: true,
-            ratingScore: true,
-            snapshotAt: true,
-          },
-        },
-        _count: {
-          select: {
-            actionItems: { where: { status: 'pending' } },
-            contents: { where: { status: 'pending_review' } },
-          },
-        },
+        accounts: accountsSelect,
+        _count: countsSelect,
       },
       orderBy: { createdAt: 'asc' },
     })

@@ -4,20 +4,28 @@ import { prisma } from '@/lib/prisma'
 
 type Params = { params: Promise<{ id: string }> }
 
-async function getBrandOrFail(id: string, ownerId: string) {
-  const brand = await prisma.brand.findFirst({ where: { id, ownerId } })
-  if (!brand) return null
-  return brand
+/** Returns true if the session user may read this brand */
+async function canReadBrand(brandId: string, userId: string, userType: string): Promise<boolean> {
+  if (userType === 'AI_AGENT') {
+    const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: userId, active: true } })
+    return !!link
+  }
+  const brand = await prisma.brand.findFirst({ where: { id: brandId, ownerId: userId } })
+  return !!brand
 }
 
-// GET /api/brands/[id] — brand detail with accounts, pending counts, conversion summary
+// GET /api/brands/[id] — brand detail with accounts, pending counts, conversion summary, recent drafts
 export async function GET(_req: Request, { params }: Params) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
+
+  const ok = await canReadBrand(id, session.user.id, session.user.type ?? 'HUMAN')
+  if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
   const brand = await prisma.brand.findFirst({
-    where: { id, ownerId: session.user.id },
+    where: { id },
     include: {
       accounts: {
         orderBy: { createdAt: 'asc' },
@@ -57,7 +65,17 @@ export async function GET(_req: Request, { params }: Params) {
     _count: { id: true },
   })
 
-  return NextResponse.json({ ...brand, weekConversions: conversions })
+  // Recent drafts (last 10) for activity feed — ordered by most recent update
+  const recentDrafts = await prisma.contentDraft.findMany({
+    where: { brandId: id },
+    orderBy: { updatedAt: 'desc' },
+    take: 10,
+    include: {
+      account: { select: { platformId: true, handle: true } },
+    },
+  })
+
+  return NextResponse.json({ ...brand, weekConversions: conversions, recentDrafts })
 }
 
 // PATCH /api/brands/[id] — update name, location, autoPilot
@@ -66,7 +84,8 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const brand = await getBrandOrFail(id, session.user.id)
+  // PATCH is owner-only — AI Agents may not modify brand metadata
+  const brand = await prisma.brand.findFirst({ where: { id, ownerId: session.user.id } })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json()

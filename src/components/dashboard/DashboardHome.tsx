@@ -1,8 +1,8 @@
 'use client'
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  Check, X, TrendingUp, TrendingDown, AlertCircle, Star, MessageSquare,
-  Calendar, ChevronRight, Zap, Shield, BarChart2, ChevronDown, Store
+  Check, X, TrendingUp, TrendingDown, AlertCircle, Star,
+  Calendar, Zap, Shield, BarChart2, ChevronDown, Store
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
 
@@ -485,6 +485,8 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
   const apiAccounts: any[] = brandDetail?.accounts ?? []
   const apiAutoPilot: boolean = brandDetail?.autoPilot ?? false
   const weekConversions: any[] = brandDetail?.weekConversions ?? []
+  const recentDrafts: any[] = brandDetail?.recentDrafts ?? []
+  const pendingReviewCount: number = brandDetail?._count?.contents ?? 0
 
   // ── Local UI state ───────────────────────────────────────────────────────
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
@@ -617,10 +619,12 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">AI 在线</span>
             </div>
-            <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 px-3 py-1.5 rounded-xl">
-              <Zap className="w-3 h-3 text-blue-500" />
-              <span className="text-xs font-bold text-blue-700 dark:text-blue-400">今日 3 条待发</span>
-            </div>
+            {pendingReviewCount > 0 && (
+              <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 px-3 py-1.5 rounded-xl">
+                <Zap className="w-3 h-3 text-blue-500" />
+                <span className="text-xs font-bold text-blue-700 dark:text-blue-400">{pendingReviewCount} 条待审核</span>
+              </div>
+            )}
             {pendingItems.some(i => i.priority === 'urgent' || i.type === 'sentiment_alert') && (
               <div className="flex items-center gap-1.5 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 px-3 py-1.5 rounded-xl">
                 <AlertCircle className="w-3 h-3 text-red-500" />
@@ -691,63 +695,105 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
         </section>
       )}
 
-      {/* ── AI 今日战报 (豆腐块) ─────────────────────────────────────── */}
+      {/* ── AI 今日战报 (真实数据) ───────────────────────────────────── */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <Shield className="w-4 h-4 text-slate-400" /> AI 今日战报
+            <Shield className="w-4 h-4 text-slate-400" /> AI 活动战报
           </h3>
-          <button className="text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center gap-1">
-            查看全部 <ChevronRight className="w-3.5 h-3.5" />
-          </button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <ActivityCard
-            icon={<Check className="w-4 h-4 text-emerald-500" />}
-            label="已发布 (IG): 午市套餐优惠"
-            sub="Instagram · 图文帖"
-            time="今天 10:00"
-            status="done"
-          />
-          <ActivityCard
-            icon={<Check className="w-4 h-4 text-emerald-500" />}
-            label="已发布 (小红书): 午市套餐优惠"
-            sub="小红书 · 笔记"
-            time="今天 10:15"
-            status="done"
-          />
-          <ActivityCard
-            icon={<Calendar className="w-4 h-4 text-indigo-500" />}
-            label="计划中 (TikTok): 周末海鲜特价"
-            sub="TikTok · 短视频 · 明晚 6PM"
-            time="明晚排期"
-            status="scheduled"
-          />
-          <ActivityCard
-            icon={<AlertCircle className="w-4 h-4 text-amber-500" />}
-            label="待审核 (IG): 母亲节预热海报"
-            sub="Instagram · 图文帖"
-            time="刚刚"
-            status="pending"
-            actionLabel="立即审核"
-            onAction={() => {}}
-          />
-          <ActivityCard
-            icon={<MessageSquare className="w-4 h-4 text-blue-500" />}
-            label="已自动回复私信 3 条"
-            sub="关于营业时间与订位询问"
-            time="今日"
-          />
-          <ActivityCard
-            icon={<Star className="w-4 h-4 text-amber-500" />}
-            label="监控到差评，等待您处理"
-            sub="Google Maps · 2 星评价"
-            time="14:32"
-            status="pending"
-            actionLabel="查看回复"
-            onAction={() => {}}
-          />
-        </div>
+        {/* Build activity feed from real data */}
+        {(() => {
+          // Combine drafts + sentiment alerts into one feed
+          const feed: Array<{ key: string; node: React.ReactNode }> = []
+
+          // Sentiment alerts from actionItems
+          apiActionItems
+            .filter(i => i.type === 'sentiment_alert')
+            .forEach(i => {
+              feed.push({
+                key: i.id,
+                node: (
+                  <ActivityCard
+                    icon={<Star className="w-4 h-4 text-amber-500" />}
+                    label={i.title}
+                    sub={i.account ? `${i.account.platformId} · ${i.account.handle}` : undefined}
+                    time={new Date(i.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                    status="pending"
+                    actionLabel="查看回复"
+                    onAction={() => {}}
+                  />
+                ),
+              })
+            })
+
+          // Content drafts
+          recentDrafts.forEach(d => {
+            const platform = d.account?.platformId ?? ''
+            const handle = d.account?.handle ?? ''
+            const sub = [platform, handle].filter(Boolean).join(' · ')
+            const caption = d.caption?.slice(0, 40) + (d.caption?.length > 40 ? '…' : '')
+
+            if (d.status === 'published') {
+              feed.push({
+                key: d.id,
+                node: (
+                  <ActivityCard
+                    icon={<Check className="w-4 h-4 text-emerald-500" />}
+                    label={`已发布: ${caption}`}
+                    sub={sub || undefined}
+                    time={d.publishedAt ? new Date(d.publishedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '已发布'}
+                    status="done"
+                  />
+                ),
+              })
+            } else if (d.status === 'scheduled') {
+              feed.push({
+                key: d.id,
+                node: (
+                  <ActivityCard
+                    icon={<Calendar className="w-4 h-4 text-indigo-500" />}
+                    label={`已排期: ${caption}`}
+                    sub={sub || undefined}
+                    time={d.scheduledAt ? new Date(d.scheduledAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '已排期'}
+                    status="scheduled"
+                  />
+                ),
+              })
+            } else if (d.status === 'pending_review') {
+              feed.push({
+                key: d.id,
+                node: (
+                  <ActivityCard
+                    icon={<AlertCircle className="w-4 h-4 text-amber-500" />}
+                    label={`待审核: ${caption}`}
+                    sub={sub || undefined}
+                    time={new Date(d.updatedAt ?? d.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    status="pending"
+                    actionLabel="立即审核"
+                    onAction={() => {}}
+                  />
+                ),
+              })
+            }
+          })
+
+          if (feed.length === 0) {
+            return (
+              <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                <Shield className="w-10 h-10 text-slate-200 dark:text-slate-700" />
+                <p className="text-sm font-bold text-slate-400">暂无活动记录</p>
+                <p className="text-xs text-slate-300 dark:text-slate-600">AI Agent 完成任务后，战报将在此显示</p>
+              </div>
+            )
+          }
+
+          return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {feed.map(f => <React.Fragment key={f.key}>{f.node}</React.Fragment>)}
+            </div>
+          )
+        })()}
       </section>
 
       {/* ── ROI / Conversion tracking ───────────────────────────────── */}
