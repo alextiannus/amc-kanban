@@ -25,7 +25,7 @@ export async function GET(_req: Request, { params }: Params) {
     where: { brandId: id },
     include: {
       agent: {
-        select: { id: true, nickname: true, email: true, avatar: true, introduction: true, themeColor: true, type: true },
+        select: { id: true, nickname: true, email: true, avatar: true, introduction: true, insights: true, themeColor: true, type: true },
       },
     },
     orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
