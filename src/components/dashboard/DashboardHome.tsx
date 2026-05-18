@@ -731,54 +731,60 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
             </div>
           </button>
         </div>
-        {/* Agent cards — same style as AgentSequenceView grid cards */}
+        {/* Agent cards — 与 AI序列 完全一致的样式 */}
         <div className="p-4">
           {brandAgents.length > 0 ? (
-            <div className="flex gap-4 overflow-x-auto pb-2 -mx-0.5 px-0.5">
+            <div className="flex gap-6 overflow-x-auto pb-3 -mx-0.5 px-0.5">
               {brandAgents.map(ba => (
                 <div
                   key={ba.id}
-                  className="bg-white dark:bg-slate-900 border rounded-3xl p-5 flex-shrink-0 w-52 relative transition-all duration-200 hover:shadow-md cursor-default"
+                  className="group bg-white dark:bg-slate-900 border rounded-3xl p-6 flex-shrink-0 relative transition-all duration-300 hover:shadow-md"
                   style={ba.agent?.themeColor
-                    ? { borderColor: ba.agent.themeColor }
-                    : { borderColor: '#e2e8f0' }}
+                    ? { borderColor: ba.agent.themeColor, minWidth: '220px', maxWidth: '240px' }
+                    : { borderColor: '#e2e8f0', minWidth: '220px', maxWidth: '240px' }}
                 >
-                  {/* Online dot */}
-                  <span className={`absolute top-5 right-5 w-3 h-3 rounded-full ${
-                    ba.active ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'
+                  {/* Online dot — top-6 right-6，与 AgentSequenceView 一致 */}
+                  <span className={`absolute top-6 right-6 w-3 h-3 rounded-full ${
+                    ba.active
+                      ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse'
+                      : 'bg-slate-300 dark:bg-slate-600'
                   }`} />
-                  {/* Avatar + name — same as AgentSequenceView */}
-                  <div className="flex items-center gap-3 mb-4 pr-6">
+
+                  {/* Avatar + name row */}
+                  <div className="flex items-center gap-4 mb-5 pr-8">
                     <div
-                      className="w-14 h-14 rounded-2xl flex items-center justify-center text-sm font-bold overflow-hidden border border-white dark:border-slate-700 shadow-sm flex-shrink-0"
+                      className={`w-14 h-14 rounded-2xl flex items-center justify-center text-sm font-bold overflow-hidden border border-white dark:border-slate-700 shadow-sm flex-shrink-0 ${
+                        !ba.agent?.themeColor ? 'bg-slate-200 text-slate-600' : ''
+                      }`}
                       style={ba.agent?.themeColor
                         ? { backgroundColor: `${ba.agent.themeColor}20`, color: ba.agent.themeColor }
-                        : { background: '#e2e8f0', color: '#64748b' }}
+                        : undefined}
                     >
                       {ba.agent?.avatar
-                        ? <AvatarImage src={ba.agent.avatar} alt="" className="w-full h-full object-cover" />
+                        ? <AvatarImage src={ba.agent.avatar} alt="Avatar" className="w-full h-full object-cover" />
                         : (ba.agent?.nickname || ba.agent?.email || '?').substring(0, 2).toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-extrabold text-slate-800 dark:text-slate-100 truncate text-base leading-tight">
+                      <h3 className="font-extrabold text-slate-800 dark:text-slate-100 truncate text-lg leading-tight">
                         {ba.agent?.nickname || ba.agent?.email?.split('@')[0]}
                       </h3>
-                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{ba.agent?.email}</p>
+                      <p className="text-xs font-medium text-slate-400 truncate mt-0.5">
+                        {ba.agent?.email}
+                      </p>
                     </div>
                   </div>
-                  {/* Workflow / Insights */}
+
+                  {/* Workflow badge + insights */}
                   {ba.agent?.insights && (
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded flex w-fit mb-1.5">Workflow</span>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{ba.agent.insights}</p>
+                    <div className="mb-2">
+                      <span className="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded flex w-fit mb-2">
+                        Workflow
+                      </span>
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                        {ba.agent.insights}
+                      </p>
                     </div>
                   )}
-                  {/* Role badge */}
-                  <div className="mt-3">
-                    <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                      {ba.role}
-                    </span>
-                  </div>
                 </div>
               ))}
             </div>
