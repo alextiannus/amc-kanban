@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { createBrandWorkspace } from '@/lib/integrations/lark'
 
 // GET /api/brands — list all brands for the logged-in user
 export async function GET() {
@@ -65,23 +64,7 @@ export async function POST(request: Request) {
     },
   })
 
-  // 2. Auto-create Lark workspace folder (non-blocking — brand is returned regardless)
-  try {
-    const workspace = await createBrandWorkspace(brand.name)
-    if (workspace.success && workspace.folderToken) {
-      await prisma.brand.update({
-        where: { id: brand.id },
-        data: { larkDriveFolderId: workspace.folderToken },
-      })
-      console.log(`[Brand] Created Lark workspace for "${brand.name}": ${workspace.folderUrl}`)
-      return NextResponse.json({ ...brand, larkDriveFolderId: workspace.folderToken, larkFolderUrl: workspace.folderUrl }, { status: 201 })
-    } else {
-      // Lark not configured or failed — still return brand without workspace
-      console.warn(`[Brand] Lark workspace not created: ${workspace.error}`)
-    }
-  } catch (e) {
-    console.warn('[Brand] Lark workspace creation failed (non-fatal):', e)
-  }
-
+  // Brand record created — Lark workspace will be auto-created when the brand's
+  // Lark credentials are saved for the first time via PATCH /api/brands/[id]/settings
   return NextResponse.json(brand, { status: 201 })
 }

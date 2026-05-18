@@ -28,7 +28,7 @@ const GOOGLE_FIELDS: IntegrationField[] = [
 const LARK_FIELDS: IntegrationField[] = [
   { key: 'larkAppId', label: 'Lark App ID', placeholder: 'cli_...', type: 'text' },
   { key: 'larkAppSecret', label: 'Lark App Secret', placeholder: '••••••••', type: 'password' },
-  { key: 'larkDriveFolderId', label: 'Drive 文件夹 Token', placeholder: 'fldcn...', type: 'text', helpText: '存储品牌素材的飞书云文档文件夹' },
+  { key: 'larkParentFolderToken', label: '根目录文件夹 Token', placeholder: 'PbugfutjllCDM0dqMiIlN0orgZd', type: 'text', helpText: '品牌 Workspace 将自动创建于此文件夹下（默认：Immedi.ai / AI Workspaces）' },
   { key: 'larkBotWebhook', label: 'Bot Webhook URL', placeholder: 'https://open.larksuite.com/...', type: 'url', helpText: '老板通知 Webhook（自定义机器人）' },
   { key: 'larkOwnerId', label: '老板 Lark open_id', placeholder: 'ou_...', type: 'text', helpText: '接收私信通知的飞书账号 ID' },
 ]

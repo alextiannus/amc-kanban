@@ -122,14 +122,15 @@ model Brand {
 
   // Integration credentials (stored encrypted in production)
   postfastApiKey    String?   // PostFast API key — for social media publishing
-  googlePlaceId     String?   // Google Business Profile Place ID
-  googleApiKey      String?   // Google API key (Maps + My Business)
-  larkAppId         String?   // Lark/Feishu App ID
-  larkAppSecret     String?   // Lark/Feishu App Secret
-  larkDriveToken    String?   // Lark Drive access token (auto-refreshed)
-  larkDriveFolderId String?   // Lark Drive folder for brand media assets
-  larkBotWebhook    String?   // Lark custom bot webhook URL (owner notifications)
-  larkOwnerId       String?   // Owner's Lark open_id (for direct messages)
+  googlePlaceId          String?   // Google Business Profile Place ID
+  googleApiKey           String?   // Google API key (Maps + My Business)
+  larkAppId              String?   // Lark/Feishu App ID
+  larkAppSecret          String?   // Lark/Feishu App Secret
+  larkDriveToken         String?   // Lark Drive access token (auto-refreshed)
+  larkParentFolderToken  String?   // Root folder under which to create the brand workspace (e.g. AI Workspaces folder)
+  larkDriveFolderId      String?   // Brand workspace folder token (auto-created as Workspace_<name>)
+  larkBotWebhook         String?   // Lark custom bot webhook URL (owner notifications)
+  larkOwnerId            String?   // Owner's Lark open_id (for direct messages)
 
   accounts    SocialAccount[]
   contents    ContentDraft[]

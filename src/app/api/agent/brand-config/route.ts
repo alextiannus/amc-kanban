@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createBrandWorkspace } from '@/lib/integrations/lark'
+import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER } from '@/lib/integrations/lark'
 
 async function getAgent(request: Request) {
   const auth = request.headers.get('authorization') || ''
@@ -76,7 +76,7 @@ export async function PATCH(request: Request) {
 
   // Whitelist: which fields an Agent is allowed to write
   const AGENT_WRITABLE_PROFILE = ['name', 'description', 'logoUrl', 'website', 'phone', 'address', 'location', 'timezone'] as const
-  const AGENT_WRITABLE_CREDENTIALS = ['postfastApiKey', 'googlePlaceId', 'googleApiKey', 'larkAppId', 'larkAppSecret', 'larkDriveFolderId', 'larkBotWebhook', 'larkOwnerId'] as const
+  const AGENT_WRITABLE_CREDENTIALS = ['postfastApiKey', 'googlePlaceId', 'googleApiKey', 'larkAppId', 'larkAppSecret', 'larkParentFolderToken', 'larkDriveFolderId', 'larkBotWebhook', 'larkOwnerId'] as const
   const ALL_WRITABLE = [...AGENT_WRITABLE_PROFILE, ...AGENT_WRITABLE_CREDENTIALS]
 
   const updateData: Record<string, unknown> = {}
@@ -98,7 +98,7 @@ export async function PATCH(request: Request) {
       id: true, name: true, description: true, logoUrl: true,
       website: true, phone: true, address: true, location: true,
       postfastApiKey: true, googlePlaceId: true, googleApiKey: true,
-      larkAppId: true, larkAppSecret: true, larkDriveFolderId: true,
+      larkAppId: true, larkAppSecret: true, larkParentFolderToken: true, larkDriveFolderId: true,
     },
   })
 
@@ -109,11 +109,16 @@ export async function PATCH(request: Request) {
     update: { active: true },
   })
 
-  // Auto-create Lark workspace folder if brand doesn't have one yet
+  // Auto-create Lark workspace folder if brand has Lark creds but no workspace yet
   let larkFolderUrl: string | undefined
-  if (!updated.larkDriveFolderId) {
+  if (updated.larkAppId && updated.larkAppSecret && !updated.larkDriveFolderId) {
     try {
-      const workspace = await createBrandWorkspace(updated.name)
+      const workspace = await createBrandWorkspace({
+        appId: updated.larkAppId,
+        appSecret: updated.larkAppSecret,
+        parentFolderToken: updated.larkParentFolderToken ?? DEFAULT_LARK_PARENT_FOLDER,
+        brandName: updated.name,
+      })
       if (workspace.success && workspace.folderToken) {
         await prisma.brand.update({
           where: { id: brandId },

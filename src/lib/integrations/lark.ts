@@ -9,43 +9,46 @@
 
 const LARK_BASE = 'https://open.feishu.cn/open-apis'
 
-// ── System-level Lark config (platform, not per-brand) ────────────────────
-// Reads from LARK_SYSTEM_APP_ID / LARK_SYSTEM_APP_SECRET / LARK_ROOT_FOLDER_TOKEN
-export const SYSTEM_LARK = {
-  get appId()     { return process.env.LARK_SYSTEM_APP_ID     || '' },
-  get appSecret() { return process.env.LARK_SYSTEM_APP_SECRET || '' },
-  get rootFolder(){ return process.env.LARK_ROOT_FOLDER_TOKEN || 'PbugfutjllCDM0dqMiIlN0orgZd' },
-  get configured(){ return !!(process.env.LARK_SYSTEM_APP_ID && process.env.LARK_SYSTEM_APP_SECRET) },
-}
+// ── Default parent folder (AI Workspaces root) ────────────────────────────
+// https://12eat-ai.sg.larksuite.com/drive/folder/PbugfutjllCDM0dqMiIlN0orgZd
+export const DEFAULT_LARK_PARENT_FOLDER = 'PbugfutjllCDM0dqMiIlN0orgZd'
 
 // ── Create Brand Workspace Folder ──────────────────────────────────────────
 
 export interface WorkspaceResult {
   success: boolean
   folderToken?: string      // token for Workspace_<brandName> subfolder
-  folderUrl?: string        // deep-link URL to the folder in Lark
+  folderUrl?: string        // deep-link to folder in Lark
   error?: string
 }
 
 /**
- * Creates `Workspace_<brandName>` under the system root folder.
- * Uses platform-level credentials (LARK_SYSTEM_APP_*).
- * Safe to call multiple times — returns error if folder already exists (caller should handle).
+ * Creates `Workspace_<brandName>` inside the brand's configured parent folder.
+ * All credentials are per-brand (appId, appSecret, parentFolderToken).
+ * parentFolderToken defaults to the shared AI Workspaces root if not set.
  */
-export async function createBrandWorkspace(brandName: string): Promise<WorkspaceResult> {
-  if (!SYSTEM_LARK.configured) {
-    return { success: false, error: 'System Lark credentials not configured (LARK_SYSTEM_APP_ID / LARK_SYSTEM_APP_SECRET)' }
+export async function createBrandWorkspace(input: {
+  appId: string
+  appSecret: string
+  parentFolderToken?: string   // defaults to DEFAULT_LARK_PARENT_FOLDER
+  brandName: string
+}): Promise<WorkspaceResult> {
+  const { appId, appSecret, brandName } = input
+  const parentFolder = input.parentFolderToken || DEFAULT_LARK_PARENT_FOLDER
+
+  if (!appId || !appSecret) {
+    return { success: false, error: 'Brand Lark App ID and Secret are required to create a workspace' }
   }
 
-  const token = await getLarkTenantToken(SYSTEM_LARK.appId, SYSTEM_LARK.appSecret)
-  if (!token) return { success: false, error: 'Failed to obtain Lark system access token' }
+  const token = await getLarkTenantToken(appId, appSecret)
+  if (!token) return { success: false, error: 'Failed to obtain Lark access token — check App ID / Secret' }
 
-  // Sanitise brand name for use as folder name
+  // Sanitise brand name for folder title
   const safeName = brandName.trim().replace(/[/\\:*?"<>|]/g, '_')
   const folderName = `Workspace_${safeName}`
 
   try {
-    const res = await fetch(`${LARK_BASE}/drive/explorer/v2/folder/${SYSTEM_LARK.rootFolder}`, {
+    const res = await fetch(`${LARK_BASE}/drive/explorer/v2/folder/${parentFolder}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
