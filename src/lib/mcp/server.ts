@@ -3,6 +3,9 @@
  *
  * All agent-facing REST capabilities exposed as MCP tools.
  * Uses WebStandardStreamableHTTPServerTransport (Web Fetch API compatible).
+ *
+ * NOTE: server.tool() takes a raw ZodRawShape (plain object of zod types),
+ * NOT a z.object(). The SDK wraps it internally.
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -30,9 +33,9 @@ export function createAmcMcpServer(agentApiKey: string) {
   server.tool(
     'get_brand_config',
     'Get brand config and linked social accounts for brands this agent manages.',
-    z.object({
+    {
       brandId: z.string().optional().describe('Specific brand ID. Omit to list all linked brands.'),
-    }),
+    },
     async ({ brandId }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
@@ -72,7 +75,7 @@ export function createAmcMcpServer(agentApiKey: string) {
   server.tool(
     'update_brand_config',
     'Create or update brand profile and integration credentials. Write interview results and brand description here.',
-    z.object({
+    {
       brandId: z.string().optional().describe('Brand ID to update. Omit only when creating a new brand.'),
       name: z.string().optional(),
       description: z.string().optional().describe('Full brand intro ≥200 chars. Synthesize all interview content + AI understanding. Markdown supported. Shown on brand dashboard.'),
@@ -88,7 +91,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       larkAppSecret: z.string().optional(),
       larkBotWebhook: z.string().optional(),
       larkOwnerId: z.string().optional(),
-    }),
+    },
     async (input) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
@@ -118,7 +121,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       const updateData: Record<string, unknown> = {}
       if (name) updateData.name = name
       for (const key of WRITABLE) {
-        const val = (input as any)[key]
+        const val = (input as Record<string, unknown>)[key]
         if (val !== undefined && val !== '') updateData[key] = val
       }
 
@@ -133,7 +136,10 @@ export function createAmcMcpServer(agentApiKey: string) {
   )
 
   // ── get_agent_profile ───────────────────────────────────────────────────
-  server.tool('get_agent_profile', 'Get this agent\'s own profile from AMC Kanban.', z.object({}),
+  server.tool(
+    'get_agent_profile',
+    'Get this agent\'s own profile from AMC Kanban.',
+    {},
     async () => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
@@ -146,14 +152,14 @@ export function createAmcMcpServer(agentApiKey: string) {
   server.tool(
     'update_agent_profile',
     'Update agent nickname, avatar, introduction, themeColor, workflow, or insights.',
-    z.object({
+    {
       nickname: z.string().optional(),
       avatar: z.string().optional().describe('Public URL or base64 data URI (data:image/png;base64,...). System stores it permanently.'),
       introduction: z.string().optional(),
       workflow: z.string().optional(),
       themeColor: z.string().optional().describe('HEX color e.g. #6366f1'),
       insights: z.string().optional(),
-    }),
+    },
     async (input) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
@@ -189,24 +195,24 @@ export function createAmcMcpServer(agentApiKey: string) {
   server.tool(
     'list_tasks',
     'List Kanban work units. Filter by brandId, status, or tasks assigned to this agent.',
-    z.object({
+    {
       brandId: z.string().optional(),
       status: z.enum(['todo', 'in_progress', 'pending', 'done', 'archived']).optional(),
       assignedToMe: z.boolean().optional(),
       limit: z.number().int().min(1).max(100).optional().default(20),
-    }),
+    },
     async ({ brandId, status, assignedToMe, limit }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const where: any = {}
+      const where: Record<string, unknown> = {}
       if (brandId) where.brandId = brandId
       if (status) where.status = status
       if (assignedToMe) where.assigneeId = agent.id
 
       const tasks = await prisma.workUnit.findMany({
         where,
-        take: limit,
+        take: limit ?? 20,
         orderBy: { createdAt: 'desc' },
         select: { id: true, title: true, description: true, status: true, priority: true, weight: true, assigneeId: true, createdAt: true },
       })
@@ -218,15 +224,14 @@ export function createAmcMcpServer(agentApiKey: string) {
   server.tool(
     'create_task',
     'Create a new Kanban work unit to log work items, content drafts, or action items.',
-    z.object({
-      brandId: z.string().optional().describe('Brand this task belongs to (optional if not brand-specific)'),
+    {
       title: z.string().describe('Concise, action-oriented task title'),
       description: z.string().optional().describe('Details, context, or content draft. Markdown supported.'),
       status: z.enum(['todo', 'in_progress', 'pending']).optional().default('todo'),
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
       weight: z.number().int().optional().describe('1 = light, 3 = normal, 5 = heavy'),
-    }),
-    async ({ brandId, title, description, status, priority, weight }) => {
+    },
+    async ({ title, description, status, priority, weight }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
@@ -248,13 +253,13 @@ export function createAmcMcpServer(agentApiKey: string) {
   server.tool(
     'update_task',
     'Update an existing work unit — status, description, title, or priority.',
-    z.object({
+    {
       taskId: z.string(),
       title: z.string().optional(),
       description: z.string().optional(),
       status: z.enum(['todo', 'in_progress', 'pending', 'done', 'archived']).optional(),
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
-    }),
+    },
     async ({ taskId, ...fields }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
@@ -273,7 +278,7 @@ export function createAmcMcpServer(agentApiKey: string) {
   server.tool(
     'update_accounts',
     'Add or update a social media account for a brand.',
-    z.object({
+    {
       brandId: z.string(),
       platformId: z.enum(['instagram', 'tiktok', 'xiaohongshu', 'facebook', 'youtube', 'twitter', 'linkedin', 'wechat']),
       handle: z.string(),
@@ -281,7 +286,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       profileUrl: z.string().optional(),
       loginUsername: z.string().optional(),
       loginPassword: z.string().optional(),
-    }),
+    },
     async ({ brandId, platformId, handle, displayName, profileUrl, loginUsername, loginPassword }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
@@ -299,14 +304,14 @@ export function createAmcMcpServer(agentApiKey: string) {
   server.tool(
     'post_action_item',
     'Submit an action item (alert or content pending review) to the brand dashboard.',
-    z.object({
+    {
       brandId: z.string(),
       type: z.enum(['sentiment_alert', 'content_draft', 'competitor_alert', 'performance_update']),
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
       title: z.string(),
       description: z.string().describe('Full content or action details'),
       platform: z.string().optional(),
-    }),
+    },
     async ({ brandId, type, priority, title, description, platform }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
