@@ -97,7 +97,10 @@ Content-Type: application/json
 {
   "brandId": "<Step 0 获得的 id>",
 
-  "description": "<品牌定位与简介，可使用 Markdown>",
+  // ⚠️ description 必须包含品牌访谈的全部核心内容，不能只填一句话。
+  // 应包含：品牌故事/起源、核心菜品或产品、目标客群、品牌调性、特色卖点、运营理念等。
+  // 支持 Markdown 格式（使用 **加粗**、换行、列表等增强可读性）。
+  "description": "品牌故事、定位、特色、目标客群等完整介绍（来自访谈内容，不少于 100 字）",
   "website": "<官网 URL>",
   "phone": "<联系电话>",
   "address": "<完整营业地址>",

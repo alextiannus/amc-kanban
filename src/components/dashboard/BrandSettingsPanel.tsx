@@ -12,7 +12,7 @@ interface IntegrationField {
 }
 
 const POSTFAST_FIELDS: IntegrationField[] = [
-  { key: 'postfastApiKey', label: 'PostFast API Key', placeholder: '••••••••', type: 'password', helpText: '用于自动发布内容到各社交平台' },
+  { key: 'postfastApiKey', label: 'PostFast API Key', placeholder: 'pf_live_...', type: 'text', helpText: '用于自动发布内容到各社交平台（内部使用，明文显示）' },
 ]
 
 const GOOGLE_FIELDS: IntegrationField[] = [

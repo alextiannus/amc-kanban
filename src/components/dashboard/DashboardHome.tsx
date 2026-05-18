@@ -98,27 +98,40 @@ function PlatformLogo({ icon, name, size = 20 }: { icon: string; name: string; s
 function KpiCard({ account }: { account: ConnectedAccount }) {
   const platform = ALL_PLATFORMS.find(p => p.id === account.platformId)
   if (!platform) return null
+  // Extract a hex color from the icon URL for tinting
+  const colorMatch = platform.icon.match(/\/([A-Fa-f0-9]{6})$/)
+  const tint = colorMatch ? `#${colorMatch[1]}` : '#6366f1'
   const inner = (
-    <div className={`bg-white dark:bg-slate-900 rounded-2xl p-3 border shadow-sm transition-all flex flex-col gap-2 min-w-0 relative ${
+    <div className={`bg-white dark:bg-slate-900 rounded-2xl p-4 border shadow-sm transition-all flex flex-col gap-3 min-w-0 relative overflow-hidden ${
       account.profileUrl
-        ? 'border-slate-100 dark:border-slate-800 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer group'
+        ? 'border-slate-100 dark:border-slate-800 hover:shadow-lg hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer group'
         : 'border-slate-100 dark:border-slate-800'
     }`}>
-      {/* External link indicator */}
+      {/* Subtle tinted top bar */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl" style={{ background: tint }} />
       {account.profileUrl && (
-        <ExternalLink className="absolute top-2.5 right-2.5 w-3 h-3 text-slate-300 dark:text-slate-600 group-hover:text-blue-400 transition-colors" />
+        <ExternalLink className="absolute top-3.5 right-3.5 w-3 h-3 text-slate-300 dark:text-slate-600 group-hover:text-blue-400 transition-colors" />
       )}
-      <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 dark:bg-slate-800 flex-shrink-0 group-hover:scale-110 transition-transform overflow-hidden border border-slate-100 dark:border-slate-700">
-          <PlatformLogo icon={platform.icon} name={platform.name} size={16} />
+      <div className="flex items-center gap-3">
+        {/* Bigger logo with platform-tinted background */}
+        <div
+          className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform overflow-hidden border border-white dark:border-slate-700 shadow-sm"
+          style={{ background: `${tint}18` }}
+        >
+          <PlatformLogo icon={platform.icon} name={platform.name} size={24} />
         </div>
-        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate leading-tight pr-4">{account.handle || platform.name}</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-extrabold text-slate-700 dark:text-slate-200 truncate pr-5">{account.handle || platform.name}</p>
+          <p className="text-[10px] text-slate-400 truncate">{platform.name}</p>
+        </div>
       </div>
-      <p className="text-xl font-black text-slate-900 dark:text-slate-100 leading-none">{account.value}</p>
-      <div className={`flex items-center gap-0.5 text-[10px] font-bold ${account.deltaPositive ? 'text-emerald-500' : 'text-red-500'}`}>
-        {account.deltaPositive ? <TrendingUp className="w-3 h-3 flex-shrink-0" /> : <TrendingDown className="w-3 h-3 flex-shrink-0" />}
-        <span>{account.delta}</span>
-        <span className="text-slate-400 font-medium ml-1">{platform.metric}</span>
+      <div>
+        <p className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">{account.value}</p>
+        <div className={`flex items-center gap-0.5 text-[10px] font-bold mt-1 ${account.deltaPositive ? 'text-emerald-500' : 'text-red-500'}`}>
+          {account.deltaPositive ? <TrendingUp className="w-3 h-3 flex-shrink-0" /> : <TrendingDown className="w-3 h-3 flex-shrink-0" />}
+          <span>{account.delta}</span>
+          <span className="text-slate-400 font-medium ml-1">{platform.metric}</span>
+        </div>
       </div>
     </div>
   )
@@ -688,7 +701,7 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
 
       {/* ── AI 序列行 ───────────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
-        {/* Header: label + mode switcher */}
+        {/* Header: label + iOS-style toggle */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-50 dark:border-slate-800">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
             <Bot className="w-3 h-3" /> 协作 AI 员工
@@ -698,68 +711,67 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
               </span>
             )}
           </p>
-          {/* Mode switcher: 老板审批 | 自动驾驶 */}
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl gap-0.5">
-            <button
-              onClick={() => !autoPilot || toggleAutoPilot()}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-xs font-bold transition-all ${
-                !autoPilot
-                  ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-              }`}
-              title="老板审批模式：AI 提案，人工确认后发布"
-            >
-              <span>👑</span>
-              老板审批
-            </button>
-            <button
-              onClick={() => autoPilot || toggleAutoPilot()}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-xs font-bold transition-all ${
-                autoPilot
-                  ? 'bg-indigo-500 text-white shadow-sm shadow-indigo-500/30'
-                  : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-              }`}
-              title="自动驾驶模式：AI 自主运营，无需人工审批"
-            >
-              <span>🤖</span>
-              自动驾驶
-            </button>
-          </div>
+          {/* iOS-style toggle switch */}
+          <button
+            onClick={toggleAutoPilot}
+            className="flex items-center gap-2.5 group"
+            title={autoPilot ? '当前：自动驾驶 — 点击切换为老板审批' : '当前：老板审批 — 点击切换为自动驾驶'}
+          >
+            <span className={`text-[11px] font-bold transition-colors ${autoPilot ? 'text-indigo-500' : 'text-amber-600 dark:text-amber-400'}`}>
+              {autoPilot ? '🤖 自动驾驶' : '👑 老板审批'}
+            </span>
+            <div className={`relative w-10 h-5.5 rounded-full transition-colors duration-300 flex-shrink-0 ${autoPilot ? 'bg-indigo-500' : 'bg-amber-400'}`}
+              style={{ height: '22px' }}>
+              <div className={`absolute top-0.5 w-4.5 h-4.5 bg-white rounded-full shadow-sm transition-all duration-300 ${autoPilot ? 'left-[22px]' : 'left-0.5'}`}
+                style={{ width: '18px', height: '18px' }} />
+            </div>
+          </button>
         </div>
-        {/* Agent cards */}
+        {/* Agent cards — same style as AgentSequenceView grid cards */}
         <div className="p-4">
           {brandAgents.length > 0 ? (
-            <div className="flex gap-3 overflow-x-auto pb-1 -mx-0.5 px-0.5">
+            <div className="flex gap-4 overflow-x-auto pb-2 -mx-0.5 px-0.5">
               {brandAgents.map(ba => (
                 <div
                   key={ba.id}
-                  className="flex items-center gap-3 p-3 rounded-2xl border bg-slate-50 dark:bg-slate-800/50 flex-shrink-0 w-52 relative"
+                  className="bg-white dark:bg-slate-900 border rounded-3xl p-5 flex-shrink-0 w-52 relative transition-all duration-200 hover:shadow-md cursor-default"
                   style={ba.agent?.themeColor
-                    ? { borderColor: `${ba.agent.themeColor}50`, boxShadow: `0 0 0 1px ${ba.agent.themeColor}15` }
+                    ? { borderColor: ba.agent.themeColor }
                     : { borderColor: '#e2e8f0' }}
                 >
                   {/* Online dot */}
-                  <span className={`absolute top-3 right-3 w-2 h-2 rounded-full ${
-                    ba.active ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'
+                  <span className={`absolute top-5 right-5 w-3 h-3 rounded-full ${
+                    ba.active ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'
                   }`} />
-                  {/* Avatar */}
-                  <div
-                    className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-sm font-black flex-shrink-0 overflow-hidden border-2 border-white dark:border-slate-700 shadow-sm"
-                    style={{ background: ba.agent?.themeColor || '#6366f1' }}
-                  >
-                    {ba.agent?.avatar
-                      ? <AvatarImage src={ba.agent.avatar} alt="" className="w-full h-full object-cover" />
-                      : (ba.agent?.nickname || ba.agent?.email || '?').charAt(0).toUpperCase()}
+                  {/* Avatar + name — same as AgentSequenceView */}
+                  <div className="flex items-center gap-3 mb-4 pr-6">
+                    <div
+                      className="w-14 h-14 rounded-2xl flex items-center justify-center text-sm font-bold overflow-hidden border border-white dark:border-slate-700 shadow-sm flex-shrink-0"
+                      style={ba.agent?.themeColor
+                        ? { backgroundColor: `${ba.agent.themeColor}20`, color: ba.agent.themeColor }
+                        : { background: '#e2e8f0', color: '#64748b' }}
+                    >
+                      {ba.agent?.avatar
+                        ? <AvatarImage src={ba.agent.avatar} alt="" className="w-full h-full object-cover" />
+                        : (ba.agent?.nickname || ba.agent?.email || '?').substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-extrabold text-slate-800 dark:text-slate-100 truncate text-base leading-tight">
+                        {ba.agent?.nickname || ba.agent?.email?.split('@')[0]}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 truncate mt-0.5">{ba.agent?.email}</p>
+                    </div>
                   </div>
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
-                      {ba.agent?.nickname || ba.agent?.email?.split('@')[0]}
-                    </p>
-                    {ba.agent?.insights && (
-                      <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed mt-0.5">{ba.agent.insights}</p>
-                    )}
-                    <span className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 mt-1">
+                  {/* Workflow / Insights */}
+                  {ba.agent?.insights && (
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded flex w-fit mb-1.5">Workflow</span>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{ba.agent.insights}</p>
+                    </div>
+                  )}
+                  {/* Role badge */}
+                  <div className="mt-3">
+                    <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                       {ba.role}
                     </span>
                   </div>
