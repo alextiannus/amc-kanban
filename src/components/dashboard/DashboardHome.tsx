@@ -4,8 +4,21 @@ import {
   Check, X, TrendingUp, TrendingDown, AlertCircle, Star,
   Calendar, Zap, Shield, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink
 } from 'lucide-react'
-import AvatarImage from '@/components/AvatarImage'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
+
+// ── AgentAvatar: img with graceful initials fallback (no "加载失败" box) ─────
+function AgentAvatar({ src, initials, themeColor }: { src: string; initials: string; themeColor?: string | null }) {
+  const [failed, setFailed] = React.useState(false)
+  if (failed) return <>{initials}</>
+  return (
+    <img
+      src={src}
+      alt="Avatar"
+      className="w-full h-full object-cover"
+      onError={() => setFailed(true)}
+    />
+  )
+}
 
 // ── Action Card (豆腐块 — no swipe, desktop-friendly) ──────────────────────
 function ActionCard({ id, type, title, description, platform, onApprove, onReject }: {
@@ -720,7 +733,7 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
         {/* Header: label + iOS-style toggle */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-50 dark:border-slate-800">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-            <Bot className="w-3 h-3" /> 协作 AI 员工
+            <Bot className="w-3 h-3" /> AI 序列
             {brandAgents.length > 0 && (
               <span className="text-[10px] font-normal normal-case tracking-normal text-slate-300 dark:text-slate-600 ml-1">
                 {brandAgents.length} 人在线
@@ -776,7 +789,7 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
                         className={`w-14 h-14 rounded-2xl flex items-center justify-center text-sm font-bold overflow-hidden border border-white dark:border-slate-700 shadow-sm flex-shrink-0 ${!agent.themeColor ? 'bg-slate-200 text-slate-600' : ''}`}
                       >
                         {agent.avatar
-                          ? <AvatarImage src={agent.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                          ? <AgentAvatar src={agent.avatar} initials={(agent.nickname || agent.email || '?').substring(0, 2).toUpperCase()} themeColor={agent.themeColor} />
                           : (agent.nickname || agent.email || '?').substring(0, 2).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
