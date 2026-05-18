@@ -279,7 +279,7 @@ export async function postfastUploadFile(
     const res = await fetch(signedUploadUrl, {
       method: 'PUT',
       headers: { 'Content-Type': mimeType },
-      body: fileBuffer,
+      body: new Uint8Array(fileBuffer),   // Buffer → Uint8Array satisfies BodyInit
       signal: AbortSignal.timeout(60_000),
     })
     if (!res.ok) return { success: false, error: `Upload HTTP ${res.status}` }
