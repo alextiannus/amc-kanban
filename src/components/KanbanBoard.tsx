@@ -51,7 +51,7 @@ export default function KanbanBoard() {
   const [showSettings, setShowSettings] = useState(false)
   
   // Navigation State
-  const [currentView, setCurrentView] = useState<'home' | 'agents' | 'archive' | 'dashboard'>('home')
+  const [currentView, setCurrentView] = useState<'home' | 'agents' | 'archive' | 'dashboard'>('dashboard')
   const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
 
   // Brand State — loaded from API

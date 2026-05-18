@@ -747,6 +747,26 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
         </div>
       </div>
 
+      {/* ── KPI Grid ──────────────────────────────────────────────────── */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <BarChart2 className="w-4 h-4" /> 账号资产配置
+          </h3>
+          <button
+            onClick={() => setShowAddAccount(true)}
+            className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-100 dark:border-emerald-800/50 px-3 py-1.5 rounded-xl transition-all"
+          >
+            <span className="text-base leading-none font-black">+</span> 添加新账号
+          </button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {connectedAccounts.map(acc => (
+            <KpiCard key={acc.uid} account={acc} />
+          ))}
+        </div>
+      </section>
+
       {/* ── AI 序列行 ───────────────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
         {/* Header: label + iOS-style toggle */}
@@ -779,7 +799,7 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
             </div>
           </button>
         </div>
-        {/* Agent cards — 与 AgentSequenceView 逐字相同的卡片 */}
+        {/* Agent cards */}
         <div className="p-4">
           {brandAgents.length > 0 ? (
             <div className="flex gap-6 overflow-x-auto pb-3 -mx-0.5 px-0.5">
@@ -792,7 +812,7 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
                     style={agent.themeColor ? { borderColor: agent.themeColor } : undefined}
                     className="group bg-white dark:bg-slate-900 border rounded-3xl p-6 flex-shrink-0 w-56 cursor-default transition-all duration-300 relative border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm hover:shadow-md"
                   >
-                    {/* Online dot — top-6 right-6, same as AgentSequenceView */}
+                    {/* Online dot */}
                     <div className="absolute top-6 right-6 flex items-center gap-3">
                       <span className={`w-3 h-3 rounded-full ${
                         ba.active
@@ -801,7 +821,7 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
                       }`} />
                     </div>
 
-                    {/* Avatar + name — exact AgentSequenceView lines 159-170 */}
+                    {/* Avatar + name */}
                     <div className="flex items-center gap-4 mb-5 pr-8">
                       <div
                         style={agent.themeColor ? { backgroundColor: `${agent.themeColor}20`, color: agent.themeColor } : undefined}
@@ -817,7 +837,7 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
                       </div>
                     </div>
 
-                    {/* WORKFLOW badge + insights — exact AgentSequenceView lines 172-177 */}
+                    {/* WORKFLOW badge + insights */}
                     {agent.insights && (
                       <div className="mb-2">
                         <span className="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded flex w-fit mb-2">Workflow</span>
@@ -836,26 +856,6 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
           )}
         </div>
       </div>
-
-      {/* ── KPI Grid ──────────────────────────────────────────────────── */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <BarChart2 className="w-4 h-4" /> 账号资产配置
-          </h3>
-          <button
-            onClick={() => setShowAddAccount(true)}
-            className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-100 dark:border-emerald-800/50 px-3 py-1.5 rounded-xl transition-all"
-          >
-            <span className="text-base leading-none font-black">+</span> 添加新账号
-          </button>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {connectedAccounts.map(acc => (
-            <KpiCard key={acc.uid} account={acc} />
-          ))}
-        </div>
-      </section>
 
       {/* ── Pending Action Items (豆腐块) ────────────────────────────── */}
       {pendingItems.length > 0 && (
