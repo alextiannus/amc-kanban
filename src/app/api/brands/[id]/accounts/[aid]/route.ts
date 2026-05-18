@@ -16,7 +16,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const { id: brandId, aid } = await params
 
   // Verify brand ownership
-  const brand = await prisma.brand.findFirst({ where: { id: brandId, ownerId: session.user.id } })
+  const brand = await prisma.brand.findFirst({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const account = await prisma.socialAccount.findFirst({ where: { id: aid, brandId } })
@@ -51,7 +51,7 @@ export async function DELETE(_req: Request, { params }: Params) {
 
   const { id: brandId, aid } = await params
 
-  const brand = await prisma.brand.findFirst({ where: { id: brandId, ownerId: session.user.id } })
+  const brand = await prisma.brand.findFirst({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   await prisma.socialAccount.deleteMany({ where: { id: aid, brandId } })

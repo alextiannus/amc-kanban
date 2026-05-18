@@ -17,40 +17,122 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const brandId = url.searchParams.get('brandId')
-  if (!brandId) return NextResponse.json({ error: 'brandId required' }, { status: 400 })
+
+  // No brandId → return all brands this agent is linked to
+  if (!brandId) {
+    const links = await prisma.brandAgent.findMany({
+      where: { agentId: agent.id, active: true },
+      include: {
+        brand: {
+          select: {
+            id: true, name: true, description: true, location: true, timezone: true,
+            autoPilot: true, postfastApiKey: true, googlePlaceId: true, googleApiKey: true,
+            larkAppId: true, larkAppSecret: true, larkDriveToken: true, larkDriveFolderId: true,
+            larkBotWebhook: true, larkOwnerId: true,
+            accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
+          },
+        },
+      },
+    })
+    return NextResponse.json(links.map(l => l.brand))
+  }
 
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
     select: {
-      id: true,
-      name: true,
-      description: true,
-      logoUrl: true,
-      website: true,
-      phone: true,
-      address: true,
-      location: true,
-      timezone: true,
-      autoPilot: true,
-      postfastApiKey: true,
-      googlePlaceId: true,
-      googleApiKey: true,
-      larkAppId: true,
-      larkAppSecret: true,
-      larkDriveToken: true,
-      larkDriveFolderId: true,
-      larkBotWebhook: true,
-      larkOwnerId: true,
-      accounts: {
-        select: { id: true, platformId: true, handle: true, autoPilot: true },
-      },
+      id: true, name: true, description: true, logoUrl: true,
+      website: true, phone: true, address: true, location: true,
+      timezone: true, autoPilot: true,
+      postfastApiKey: true, googlePlaceId: true, googleApiKey: true,
+      larkAppId: true, larkAppSecret: true, larkDriveToken: true,
+      larkDriveFolderId: true, larkBotWebhook: true, larkOwnerId: true,
+      accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
     },
   })
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-
   return NextResponse.json(brand)
 }
+
+// POST /api/agent/brand-config
+// Agent creates a new brand autonomously.
+// Owners = all HUMAN users who have this agent in their AgentPermission table.
+// If no humans are linked, falls back to the first ADMIN user.
+//
+// Body: { name, location?, timezone? }
+export async function POST(request: Request) {
+  const agent = await getAgent(request)
+  if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await request.json()
+  const { name, location, timezone } = body
+
+  if (!name?.trim()) {
+    return NextResponse.json({ error: 'name is required' }, { status: 400 })
+  }
+
+  // Find all human users linked to this agent via AgentPermission
+  const permissions = await prisma.agentPermission.findMany({
+    where: { agentId: agent.id },
+    include: { human: { select: { id: true, email: true, role: true } } },
+  })
+  let linkedHumans = permissions.map(p => p.human)
+
+  // Fallback: use first ADMIN if agent has no linked humans yet
+  if (linkedHumans.length === 0) {
+    const admin = await prisma.user.findFirst({
+      where: { role: 'ADMIN' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, email: true, role: true },
+    })
+    if (!admin) {
+      return NextResponse.json(
+        { error: 'No admin user found. Please complete system bootstrap first.' },
+        { status: 503 }
+      )
+    }
+    linkedHumans = [admin]
+  }
+
+  const primaryOwnerId = linkedHumans[0].id
+
+  // Create the brand (ownerId = primary owner for legacy compat)
+  const brand = await prisma.brand.create({
+    data: {
+      ownerId: primaryOwnerId,
+      name: name.trim(),
+      location: location?.trim() || null,
+      timezone: timezone || 'Asia/Singapore',
+    },
+  })
+
+  // Add ALL linked humans as owners
+  await prisma.brandOwner.createMany({
+    data: linkedHumans.map(h => ({ brandId: brand.id, userId: h.id })),
+    skipDuplicates: true,
+  })
+
+  // Auto-link this agent to the new brand
+  await prisma.brandAgent.upsert({
+    where: { brandId_agentId: { brandId: brand.id, agentId: agent.id } },
+    create: { brandId: brand.id, agentId: agent.id, role: 'worker', active: true },
+    update: { active: true },
+  })
+
+  return NextResponse.json({
+    ok: true,
+    created: true,
+    owners: linkedHumans.map(h => ({ id: h.id, email: h.email })),
+    brand: {
+      id: brand.id,
+      name: brand.name,
+      location: brand.location,
+      timezone: brand.timezone,
+    },
+  }, { status: 201 })
+}
+
+
 
 // PATCH /api/agent/brand-config
 // Agent writes brand profile info AND/OR integration credentials

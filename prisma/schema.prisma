@@ -27,11 +27,11 @@ model User {
   avatarMimeType String? // MIME type: image/jpeg, image/png, etc
   apiKey       String?  @unique // Each AI Agent has its own API key
   
-  // 关계映射
-  tasksAsAssignee  WorkUnit[] @relation("TaskAssignee")
-  brands           Brand[]    @relation("BrandOwner")
+  // 关系映射
+  tasksAsAssignee  WorkUnit[]        @relation("TaskAssignee")
+  ownedBrands      BrandOwner[]      @relation("BrandOwners")
 
-  // 권한 매핑표 (인간 사용자가 어떤 AI Agent의 作业을 볼 수 있는지)
+  // 权限映射表（人类用户能看到哪些 AI Agent 的工作）
   permittedAgents  AgentPermission[] @relation("HumanUser")
   assignedToHumans AgentPermission[] @relation("AiAgent")
   brandMemberships BrandAgent[]      @relation("BrandAgents")
@@ -100,14 +100,28 @@ model BrandAgent {
   @@unique([brandId, agentId])
 }
 
+// 品牌 ← → 人类 Owner（每个品牌可有多个 Owner）
+model BrandOwner {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("BrandOwners", fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  @@unique([brandId, userId])
+  @@index([brandId])
+  @@index([userId])
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AMC Brand Dashboard Models
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Brand {
   id             String   @id @default(cuid())
-  ownerId        String
-  owner          User     @relation("BrandOwner", fields: [ownerId], references: [id])
+  // Legacy single-owner field — kept for zero-downtime migration,
+  // new code uses the BrandOwner join table for multi-owner support.
+  ownerId        String?
   name           String
   location       String?
   timezone       String   @default("America/New_York")
@@ -121,17 +135,18 @@ model Brand {
   address        String?  // Full address
 
   // Integration credentials (stored encrypted in production)
-  postfastApiKey    String?   // PostFast API key — for social media publishing
-  googlePlaceId          String?   // Google Business Profile Place ID
-  googleApiKey           String?   // Google API key (Maps + My Business)
-  larkAppId              String?   // Lark/Feishu App ID
-  larkAppSecret          String?   // Lark/Feishu App Secret
-  larkDriveToken         String?   // Lark Drive access token (auto-refreshed)
-  larkParentFolderToken  String?   // Root folder under which to create the brand workspace (e.g. AI Workspaces folder)
-  larkDriveFolderId      String?   // Brand workspace folder token (auto-created as Workspace_<name>)
-  larkBotWebhook         String?   // Lark custom bot webhook URL (owner notifications)
-  larkOwnerId            String?   // Owner's Lark open_id (for direct messages)
+  postfastApiKey         String?
+  googlePlaceId          String?
+  googleApiKey           String?
+  larkAppId              String?
+  larkAppSecret          String?
+  larkDriveToken         String?
+  larkParentFolderToken  String?
+  larkDriveFolderId      String?
+  larkBotWebhook         String?
+  larkOwnerId            String?
 
+  owners      BrandOwner[]
   accounts    SocialAccount[]
   contents    ContentDraft[]
   assets      MediaAsset[]

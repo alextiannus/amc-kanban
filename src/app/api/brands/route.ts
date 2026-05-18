@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 // GET /api/brands — list brands for the logged-in user
-// - HUMAN users: brands they own (ownerId)
+// - HUMAN users: brands they own (BrandOwner join table)
 // - AI_AGENT users: brands linked via BrandAgent table
 export async function GET() {
   const session = await getSession()
@@ -12,15 +12,9 @@ export async function GET() {
   const accountsSelect = {
     orderBy: { createdAt: 'asc' as const },
     select: {
-      id: true,
-      platformId: true,
-      handle: true,
-      displayName: true,
-      autoPilot: true,
-      followerCount: true,
-      followerDelta: true,
-      ratingScore: true,
-      snapshotAt: true,
+      id: true, platformId: true, handle: true, displayName: true,
+      autoPilot: true, followerCount: true, followerDelta: true,
+      ratingScore: true, snapshotAt: true,
     },
   }
   const countsSelect = {
@@ -36,33 +30,41 @@ export async function GET() {
       const agentLinks = await prisma.brandAgent.findMany({
         where: { agentId: session.user.id, active: true },
         include: {
-          brand: {
-            include: { accounts: accountsSelect, _count: countsSelect },
-          },
+          brand: { include: { accounts: accountsSelect, _count: countsSelect } },
         },
         orderBy: { createdAt: 'asc' },
       })
       return NextResponse.json(agentLinks.map(l => l.brand))
     }
 
-    // Human user — return brands they own
-    const brands = await prisma.brand.findMany({
-      where: { ownerId: session.user.id },
+    // Human user — brands via BrandOwner join table
+    const ownerLinks = await prisma.brandOwner.findMany({
+      where: { userId: session.user.id },
       include: {
-        accounts: accountsSelect,
-        _count: countsSelect,
+        brand: { include: { accounts: accountsSelect, _count: countsSelect } },
       },
       orderBy: { createdAt: 'asc' },
     })
 
-    return NextResponse.json(brands)
+    // Fallback: also include legacy ownerId brands not yet in BrandOwner
+    const linkedBrandIds = new Set(ownerLinks.map(l => l.brandId))
+    const legacyBrands = await prisma.brand.findMany({
+      where: { ownerId: session.user.id, id: { notIn: [...linkedBrandIds] } },
+      include: { accounts: accountsSelect, _count: countsSelect },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    return NextResponse.json([
+      ...ownerLinks.map(l => l.brand),
+      ...legacyBrands,
+    ])
   } catch (e: any) {
     console.error('[GET /api/brands]', e)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
 
-// POST /api/brands — create a new brand
+// POST /api/brands — create a new brand (human session required)
 export async function POST(request: Request) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -74,7 +76,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  // 1. Create brand record first
+  // Create brand (ownerId kept for legacy compat)
   const brand = await prisma.brand.create({
     data: {
       ownerId: session.user.id,
@@ -84,7 +86,12 @@ export async function POST(request: Request) {
     },
   })
 
-  // Brand record created — Lark workspace will be auto-created when the brand's
-  // Lark credentials are saved for the first time via PATCH /api/brands/[id]/settings
+  // Add creator as first owner in multi-owner table
+  await prisma.brandOwner.upsert({
+    where: { brandId_userId: { brandId: brand.id, userId: session.user.id } },
+    create: { brandId: brand.id, userId: session.user.id },
+    update: {},
+  })
+
   return NextResponse.json(brand, { status: 201 })
 }

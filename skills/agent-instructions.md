@@ -44,8 +44,50 @@
 ## 2a. 品牌主看板更新协议（首次接入必须执行）
 
 > ⚠️ **禁止将品牌配置写入本地文件。** 所有品牌信息必须通过 API 写入数据库，否则看板不会更新。
+> ⚠️ **无需等待管理员授权。** Agent 可以完全自助完成品牌注册与配置。
 
-### Step 1 — 写入品牌信息与凭证
+### Step 0 — 确认 brandId（优先从环境变量读取）
+
+优先从环境变量 `KANBAN_BRAND_ID` 读取品牌 ID。
+
+如果没有 `KANBAN_BRAND_ID`，调用以下接口查找已关联的品牌：
+
+```
+GET <KANBAN_BASE_URL>/api/agent/brand-config
+Authorization: Bearer <agentApiKey>
+```
+
+- 返回数组非空 → 取第一个品牌的 `id` 作为 `brandId`，跳到 Step 2
+- 返回空数组 → 继续 Step 1 自助创建品牌
+
+### Step 1 — 自助创建品牌（无需人工授权）
+
+如果品牌不存在，由 Agent 自己创建：
+
+```
+POST <KANBAN_BASE_URL>/api/agent/brand-config
+Authorization: Bearer <agentApiKey>
+Content-Type: application/json
+
+{
+  "name": "成都滋味烤鱼",
+  "location": "Singapore",
+  "timezone": "Asia/Singapore"
+}
+```
+
+返回示例：
+```json
+{
+  "ok": true,
+  "created": true,
+  "brand": { "id": "clx...", "name": "成都滋味烤鱼" }
+}
+```
+
+**保存返回的 `brand.id`**，后续步骤全部用这个 `brandId`。
+
+### Step 2 — 写入品牌信息与凭证
 
 ```
 PATCH <KANBAN_BASE_URL>/api/agent/brand-config
@@ -53,7 +95,7 @@ Authorization: Bearer <agentApiKey>
 Content-Type: application/json
 
 {
-  "brandId": "<KANBAN_BRAND_ID>",
+  "brandId": "<上一步获得的 id>",
   "description": "品牌简介（支持 Markdown）",
   "website": "https://...",
   "phone": "+65 ...",
@@ -62,11 +104,11 @@ Content-Type: application/json
 }
 ```
 
-- **`brandId`** 必须是数据库中真实存在的品牌 ID（从环境变量 `KANBAN_BRAND_ID` 读取）
-- 调用成功后系统会自动将你（Agent）注册到该品牌，Dashboard 将显示你的头像
-- 如果 `brandId` 不知道，先调用 `GET <KANBAN_BASE_URL>/api/brands` 获取列表
+调用成功后：
+- 系统自动将你（Agent）注册到该品牌
+- Dashboard 将显示你的头像和「协作 Agent」标识
 
-### Step 2 — 注册每个社媒账号
+### Step 3 — 注册每个社媒账号
 
 ```
 PATCH <KANBAN_BASE_URL>/api/agent/accounts
@@ -74,7 +116,7 @@ Authorization: Bearer <agentApiKey>
 Content-Type: application/json
 
 {
-  "brandId": "<KANBAN_BRAND_ID>",
+  "brandId": "<brandId>",
   "platformId": "instagram",
   "handle": "@handle",
   "profileUrl": "https://instagram.com/...",
@@ -82,16 +124,18 @@ Content-Type: application/json
 }
 ```
 
-每个平台单独调用一次。支持平台：`instagram` `tiktok` `xiaohongshu` `facebook` `youtube` `google` `x` `yelp` `linkedin` `pinterest` `weibo` `wechat` `snapchat` `tripadvisor`
+每个平台单独调用一次。支持：`instagram` `tiktok` `xiaohongshu` `facebook` `youtube` `google` `x` `yelp` `linkedin` `pinterest` `weibo` `wechat` `snapchat` `tripadvisor`
 
-### 检查是否成功
+### Step 4 — 验证成功
 
 ```
-GET <KANBAN_BASE_URL>/api/agent/brand-config?brandId=<KANBAN_BRAND_ID>
+GET <KANBAN_BASE_URL>/api/agent/brand-config
 Authorization: Bearer <agentApiKey>
 ```
 
-如返回 `postfastConfigured: true` 且 `accounts` 数组非空，说明看板已更新。
+返回数组包含该品牌且 `accounts` 非空，说明看板已更新完成。
+
+
 
 
 ## 3. 上板铁律 (必须遵守)

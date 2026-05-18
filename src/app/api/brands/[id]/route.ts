@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { canOwnBrand, canAgentAccessBrand } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
 /** Returns true if the session user may read this brand */
 async function canReadBrand(brandId: string, userId: string, userType: string): Promise<boolean> {
-  if (userType === 'AI_AGENT') {
-    const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: userId, active: true } })
-    return !!link
-  }
-  const brand = await prisma.brand.findFirst({ where: { id: brandId, ownerId: userId } })
-  return !!brand
+  if (userType === 'AI_AGENT') return canAgentAccessBrand(brandId, userId)
+  return canOwnBrand(brandId, userId)
 }
 
 // GET /api/brands/[id] — brand detail with accounts, pending counts, conversion summary, recent drafts
@@ -85,8 +82,9 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const { id } = await params
   // PATCH is owner-only — AI Agents may not modify brand metadata
-  const brand = await prisma.brand.findFirst({ where: { id, ownerId: session.user.id } })
-  if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!(await canOwnBrand(id, session.user.id))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   const body = await request.json()
   const { name, location, timezone, autoPilot } = body

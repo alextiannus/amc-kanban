@@ -15,7 +15,7 @@ export async function POST(request: Request, { params }: Params) {
 
   const { id: brandId } = await params
 
-  const brand = await prisma.brand.findFirst({ where: { id: brandId, ownerId: session.user.id } })
+  const brand = await prisma.brand.findFirst({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json()
