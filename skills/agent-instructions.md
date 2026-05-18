@@ -26,10 +26,27 @@ AMC Kanban 提供两种接入方式，**推荐使用 MCP**：
 ```
 
 配置后你将拥有以下 MCP 工具（直接调用，无需写 HTTP 代码）：
+
+**核心**
 - `get_brand_config` / `update_brand_config`
 - `get_agent_profile` / `update_agent_profile`
 - `list_tasks` / `create_task` / `update_task`
 - `update_accounts` / `post_action_item`
+
+**PostFast（社媒发布 & 评论回复）**
+- `postfast_publish` — 发布/排期社媒帖子
+- `postfast_reply_review` — 回复 Google/Yelp 评论（经由 PostFast）
+
+**Google Business**
+- `google_get_reviews` — 拉取 Google 商家最新评论
+- `google_reply_review` — 回复 Google 评论（推荐 PostFast 代理）
+
+**Lark / 飞书**
+- `lark_notify` — 向品牌主理人发送消息卡片
+- `lark_upload_file` — 上传文件到品牌 Lark Drive 工作区
+- `lark_create_workspace` — 在 Lark Drive 创建品牌工作区文件夹
+
+> 📖 完整使用示例和工作流，请加载 Skill: `GET https://amc-kanban.immedi.ai/api/meta/skills/amc-integrations`
 
 ### 方式二：REST API（备选）
 

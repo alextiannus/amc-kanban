@@ -334,5 +334,262 @@ export function createAmcMcpServer(agentApiKey: string) {
     }
   )
 
+  // ── postfast_publish ────────────────────────────────────────────────────
+  server.tool(
+    'postfast_publish',
+    'Publish or schedule a social media post via PostFast. Credentials are auto-loaded from brand config.',
+    {
+      brandId: z.string().describe('Brand ID — PostFast API key is read from brand config automatically.'),
+      platform: z.enum(['instagram', 'tiktok', 'xiaohongshu', 'facebook', 'youtube', 'x', 'linkedin', 'threads', 'bluesky', 'pinterest', 'snapchat'])
+        .describe('Target platform'),
+      caption: z.string().describe('Post caption / body text'),
+      mediaUrls: z.array(z.string()).optional().describe('Public image or video URLs to attach'),
+      hashtags: z.array(z.string()).optional().describe('Hashtags without the # prefix'),
+      scheduledAt: z.string().optional().describe('ISO 8601 datetime to schedule (omit = publish immediately)'),
+    },
+    async ({ brandId, platform, caption, mediaUrls, hashtags, scheduledAt }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
+      if (!brand?.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: PostFast API key not configured for this brand. Run update_brand_config first.' }], isError: true }
+
+      const { postfastPublish } = await import('@/lib/integrations/postfast')
+      const result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaUrls, hashtags, scheduledAt })
+
+      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform, scheduledAt: scheduledAt ?? 'immediate' }) }] }
+    }
+  )
+
+  // ── postfast_reply_review ───────────────────────────────────────────────
+  server.tool(
+    'postfast_reply_review',
+    'Reply to a Google or Yelp review via PostFast. Credentials are auto-loaded from brand config.',
+    {
+      brandId: z.string(),
+      platform: z.enum(['google', 'yelp']).describe('Review platform'),
+      reviewId: z.string().describe('Review ID from google_get_reviews or external source'),
+      replyText: z.string().describe('Reply message to post publicly'),
+    },
+    async ({ brandId, platform, reviewId, replyText }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
+      if (!brand?.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: PostFast API key not configured for this brand.' }], isError: true }
+
+      const { postfastReplyReview } = await import('@/lib/integrations/postfast')
+      const result = await postfastReplyReview({ apiKey: brand.postfastApiKey, platform, reviewId, replyText })
+
+      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, platform, replied: true }) }] }
+    }
+  )
+
+  // ── google_get_reviews ──────────────────────────────────────────────────
+  server.tool(
+    'google_get_reviews',
+    'Fetch the latest Google Business reviews for a brand. Returns reviewer, rating, comment, and existing reply.',
+    {
+      brandId: z.string().describe('Brand ID — googlePlaceId and googleApiKey are auto-loaded from brand config.'),
+      limit: z.number().int().min(1).max(20).optional().default(10),
+    },
+    async ({ brandId, limit }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { googlePlaceId: true, googleApiKey: true } })
+      if (!brand?.googlePlaceId || !brand?.googleApiKey) {
+        return { content: [{ type: 'text' as const, text: 'Error: googlePlaceId and googleApiKey not configured for this brand. Run update_brand_config first.' }], isError: true }
+      }
+
+      const { fetchGoogleReviews } = await import('@/lib/integrations/google')
+      const result = await fetchGoogleReviews(brand.googlePlaceId, brand.googleApiKey)
+
+      if (result.error) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      const reviews = result.reviews.slice(0, limit ?? 10)
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: reviews.length, reviews }, null, 2) }] }
+    }
+  )
+
+  // ── google_reply_review ─────────────────────────────────────────────────
+  server.tool(
+    'google_reply_review',
+    'Post a reply to a Google Business review. Uses PostFast if configured (recommended), otherwise direct Google API.',
+    {
+      brandId: z.string(),
+      reviewId: z.string().describe('Review ID from google_get_reviews'),
+      replyText: z.string().describe('Public reply text (max ~4096 chars)'),
+    },
+    async ({ brandId, reviewId, replyText }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: { postfastApiKey: true, googlePlaceId: true },
+      })
+
+      // Prefer PostFast route (handles OAuth for us)
+      if (brand?.postfastApiKey) {
+        const { postfastReplyReview } = await import('@/lib/integrations/postfast')
+        const result = await postfastReplyReview({ apiKey: brand.postfastApiKey, platform: 'google', reviewId, replyText })
+        if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, via: 'postfast' }) }] }
+      }
+
+      return { content: [{ type: 'text' as const, text: 'Error: PostFast API key required for Google review replies. Configure it in update_brand_config.' }], isError: true }
+    }
+  )
+
+  // ── lark_notify ─────────────────────────────────────────────────────────
+  server.tool(
+    'lark_notify',
+    'Send a notification to the brand owner via Lark/Feishu bot. Supports webhook (simple) and direct message modes.',
+    {
+      brandId: z.string().describe('Brand ID — Lark credentials are auto-loaded from brand config.'),
+      title: z.string().describe('Card header title'),
+      content: z.string().describe('Message body (Lark Markdown supported)'),
+      actionUrl: z.string().optional().describe('Optional deep-link button URL, e.g. link to Kanban task'),
+      urgent: z.boolean().optional().describe('Set true to render card in red (urgent alert)'),
+    },
+    async ({ brandId, title, content, actionUrl, urgent }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: { larkBotWebhook: true, larkAppId: true, larkAppSecret: true, larkOwnerId: true },
+      })
+
+      if (!brand?.larkBotWebhook && !brand?.larkOwnerId) {
+        return { content: [{ type: 'text' as const, text: 'Error: larkBotWebhook or larkOwnerId not configured. Run update_brand_config first.' }], isError: true }
+      }
+
+      const { sendLarkWebhookNotification, sendLarkDirectMessage } = await import('@/lib/integrations/lark')
+
+      let result: { success: boolean; error?: string }
+
+      if (brand.larkBotWebhook) {
+        result = await sendLarkWebhookNotification({ webhookUrl: brand.larkBotWebhook, title, content, actionUrl, urgent })
+      } else {
+        result = await sendLarkDirectMessage({
+          appId: brand.larkAppId!,
+          appSecret: brand.larkAppSecret!,
+          ownerId: brand.larkOwnerId!,
+          title, content, actionUrl, urgent,
+        })
+      }
+
+      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, channel: brand.larkBotWebhook ? 'webhook' : 'direct_message' }) }] }
+    }
+  )
+
+  // ── lark_upload_file ────────────────────────────────────────────────────
+  server.tool(
+    'lark_upload_file',
+    'Upload a file (image, PDF, video) to the brand\'s Lark Drive workspace. Returns a file token usable as asset URL.',
+    {
+      brandId: z.string(),
+      filename: z.string().describe('File name including extension, e.g. "banner.jpg"'),
+      mimeType: z.string().describe('MIME type e.g. "image/jpeg", "application/pdf"'),
+      fileBase64: z.string().describe('Base64-encoded file content (without data: prefix)'),
+      folderId: z.string().optional().describe('Lark folder token to upload into. Defaults to brand workspace root.'),
+    },
+    async ({ brandId, filename, mimeType, fileBase64, folderId }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: { larkAppId: true, larkAppSecret: true, larkFolderToken: true },
+      })
+
+      if (!brand?.larkAppId || !brand?.larkAppSecret) {
+        return { content: [{ type: 'text' as const, text: 'Error: larkAppId and larkAppSecret not configured. Run update_brand_config first.' }], isError: true }
+      }
+
+      const targetFolder = folderId || (brand as any).larkFolderToken
+      if (!targetFolder) {
+        return { content: [{ type: 'text' as const, text: 'Error: No Lark folder target. Either provide folderId or create a workspace first with lark_create_workspace.' }], isError: true }
+      }
+
+      const fileBuffer = Buffer.from(fileBase64, 'base64')
+      const { uploadToLarkDrive } = await import('@/lib/integrations/lark')
+      const result = await uploadToLarkDrive({
+        appId: brand.larkAppId,
+        appSecret: brand.larkAppSecret,
+        folderId: targetFolder,
+        filename,
+        mimeType,
+        fileBuffer,
+      })
+
+      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, fileToken: result.fileToken, downloadUrl: result.downloadUrl, filename }) }] }
+    }
+  )
+
+  // ── lark_create_workspace ───────────────────────────────────────────────
+  server.tool(
+    'lark_create_workspace',
+    'Create a brand workspace folder in Lark Drive. Call once per brand. Returns folder token for future uploads.',
+    {
+      brandId: z.string(),
+      parentFolderToken: z.string().optional().describe('Override parent folder. Defaults to the shared AI Workspaces root.'),
+    },
+    async ({ brandId, parentFolderToken }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: { name: true, larkAppId: true, larkAppSecret: true },
+      })
+
+      if (!brand?.larkAppId || !brand?.larkAppSecret) {
+        return { content: [{ type: 'text' as const, text: 'Error: larkAppId and larkAppSecret not configured. Run update_brand_config first.' }], isError: true }
+      }
+
+      const { createBrandWorkspace } = await import('@/lib/integrations/lark')
+      const result = await createBrandWorkspace({
+        appId: brand.larkAppId,
+        appSecret: brand.larkAppSecret,
+        parentFolderToken,
+        brandName: brand.name,
+      })
+
+      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+
+      // Persist folder token on brand for future uploads
+      await prisma.brand.update({ where: { id: brandId }, data: { larkFolderToken: result.folderToken } as any })
+
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, folderToken: result.folderToken, folderUrl: result.folderUrl }) }] }
+    }
+  )
+
   return server
 }
