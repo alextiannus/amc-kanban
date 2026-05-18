@@ -533,11 +533,19 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
 
   useEffect(() => {
     if (activeBrand?.id) {
+      // Clear stale data immediately so the UI doesn't show the previous brand's content
+      setBrandDetail(null)
+      setBrandSettings(null)
+      setBrandAgents([])
+      setDismissedIds(new Set())
+      setAutoPilot(false)
+      // Load new brand data
       loadDetail(activeBrand.id)
       loadSettings(activeBrand.id)
       loadAgents(activeBrand.id)
     }
-  }, [activeBrand?.id, loadDetail, loadSettings, loadAgents])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBrand?.id])
 
   // Derive data from brandDetail or fall back to empty
   const apiActionItems: any[] = brandDetail?.actionItems ?? []
