@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getLarkTenantToken } from '@/lib/integrations/lark'
 import { getPlaceRating } from '@/lib/integrations/google'
+import { postfastTestConnection } from '@/lib/integrations/postfast'
 
 /**
  * GET /api/integrations/status?brandId=<id>
@@ -29,12 +30,21 @@ export async function GET(request: Request) {
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const results = await Promise.allSettled([
-    // PostFast: check if key is set (no free ping endpoint, just validate format)
-    Promise.resolve({
-      name: 'postfast',
-      ok: !!brand.postfastApiKey,
-      message: brand.postfastApiKey ? '已配置' : '未配置 API Key',
-    }),
+    // PostFast: live ping via account list
+    (async () => {
+      if (!brand.postfastApiKey) {
+        return { name: 'postfast', ok: false, message: '未配置 PostFast API Key', accountCount: 0 }
+      }
+      const r = await postfastTestConnection(brand.postfastApiKey)
+      return {
+        name: 'postfast',
+        ok: r.success,
+        accountCount: r.accountCount ?? 0,
+        message: r.success
+          ? `连通正常 (${r.accountCount} 个账号已连接)`
+          : `连接失败: ${r.error}`,
+      }
+    })(),
 
     // Google: try fetching place rating
     (async () => {

@@ -1,141 +1,365 @@
 /**
- * PostFast Integration
- * Wraps the PostFast API for multi-platform social media publishing.
- * Brand owner configures their PostFast API key in Brand Settings.
+ * PostFast Integration — Complete API wrapper
+ * Covers: accounts, posts (CRUD + schedule), media upload, connect links, review replies.
+ * Base URL: https://api.postfa.st
+ * Auth: pf-api-key header
  */
 
 const POSTFAST_BASE = 'https://api.postfa.st'
 
-// Map PostFast platform names → our internal platformId
+// ── Platform name normalisation ────────────────────────────────────────────
+
 const PLATFORM_MAP: Record<string, string> = {
-  INSTAGRAM:    'instagram',
-  TIKTOK:       'tiktok',
-  FACEBOOK:     'facebook',
-  YOUTUBE:      'youtube',
-  X:            'x',
-  TWITTER:      'x',
-  LINKEDIN:     'linkedin',
-  XIAOHONGSHU:  'xiaohongshu',
-  BLUESKY:      'bluesky',
-  THREADS:      'threads',
-  PINTEREST:    'pinterest',
-  SNAPCHAT:     'snapchat',
+  INSTAGRAM:      'instagram',
+  TIKTOK:         'tiktok',
+  FACEBOOK:       'facebook',
+  YOUTUBE:        'youtube',
+  X:              'x',
+  TWITTER:        'x',
+  LINKEDIN:       'linkedin',
+  XIAOHONGSHU:    'xiaohongshu',
+  BLUESKY:        'bluesky',
+  THREADS:        'threads',
+  PINTEREST:      'pinterest',
+  SNAPCHAT:       'snapchat',
+  TELEGRAM:       'telegram',
+  GOOGLE:         'google',
+  GBP:            'google',
 }
+
+// ── Shared fetch helper ────────────────────────────────────────────────────
+
+async function pfFetch(
+  apiKey: string,
+  path: string,
+  options: RequestInit = {}
+): Promise<{ ok: boolean; status: number; data: any; error?: string }> {
+  try {
+    const res = await fetch(`${POSTFAST_BASE}${path}`, {
+      ...options,
+      headers: {
+        'pf-api-key': apiKey,
+        'Content-Type': 'application/json',
+        ...(options.headers as Record<string, string> ?? {}),
+      },
+      signal: AbortSignal.timeout(15_000),
+    })
+    let data: any = {}
+    try { data = await res.json() } catch { /* plain-text response */ }
+    if (!res.ok) {
+      return { ok: false, status: res.status, data, error: data?.message ?? data?.error ?? `HTTP ${res.status}` }
+    }
+    return { ok: true, status: res.status, data }
+  } catch (e: any) {
+    return { ok: false, status: 0, data: null, error: e.message }
+  }
+}
+
+// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface PostFastAccount {
-  id: string           // PostFast internal account ID
-  platform: string     // e.g. "INSTAGRAM"
-  platformId: string   // our normalized id e.g. "instagram"
-  handle: string       // @username or display name
+  id: string
+  platform: string      // raw PostFast platform e.g. "INSTAGRAM"
+  platformId: string    // normalised e.g. "instagram"
+  handle: string
   displayName?: string
+  profileUrl?: string
+  connected?: boolean
 }
 
-/**
- * Fetch all social accounts connected to this PostFast workspace.
- * GET /social-media/my-social-accounts
- */
-export async function postfastFetchAccounts(apiKey: string): Promise<{
-  success: boolean
-  accounts: PostFastAccount[]
-  error?: string
-}> {
-  try {
-    const res = await fetch(`${POSTFAST_BASE}/social-media/my-social-accounts`, {
-      headers: { 'pf-api-key': apiKey },
-      // Short timeout to avoid long hangs
-      signal: AbortSignal.timeout(10_000),
-    })
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      return { success: false, accounts: [], error: err.message ?? `PostFast HTTP ${res.status}` }
-    }
-
-    const raw: any[] = await res.json()
-    const accounts: PostFastAccount[] = raw.map(a => {
-      const pfPlatform = (a.platform ?? '').toUpperCase()
-      return {
-        id: a.id,
-        platform: pfPlatform,
-        platformId: PLATFORM_MAP[pfPlatform] ?? pfPlatform.toLowerCase(),
-        handle: a.platformUsername || a.displayName || a.id,
-        displayName: a.displayName,
-      }
-    })
-
-    return { success: true, accounts }
-  } catch (e: any) {
-    return { success: false, accounts: [], error: e.message }
+export interface PostFastPost {
+  id: string
+  platform: string
+  platformId: string
+  caption: string
+  status: 'scheduled' | 'published' | 'failed' | 'draft'
+  scheduledAt?: string
+  publishedAt?: string
+  postUrl?: string
+  mediaUrls?: string[]
+  hashtags?: string[]
+  engagementStats?: {
+    likes?: number
+    comments?: number
+    shares?: number
+    impressions?: number
+    reach?: number
   }
 }
 
 export interface PostFastPublishInput {
   apiKey: string
-  platform: string        // instagram | xiaohongshu | tiktok | facebook | youtube | ...
+  platform: string
   caption: string
-  mediaUrls?: string[]
+  mediaStorageKeys?: string[]   // keys from signed upload (preferred)
+  mediaUrls?: string[]          // public URLs (fallback)
   hashtags?: string[]
-  scheduledAt?: string    // ISO8601
+  scheduledAt?: string          // ISO 8601 UTC
+  accountId?: string            // specific account ID to post from
 }
 
 export interface PostFastPublishResult {
   success: boolean
   postId?: string
   url?: string
+  scheduledAt?: string
   error?: string
 }
 
-export async function postfastPublish(input: PostFastPublishInput): Promise<PostFastPublishResult> {
-  try {
-    const res = await fetch(`${POSTFAST_BASE}/social-posts`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'pf-api-key': input.apiKey,
-      },
-      body: JSON.stringify({
-        platform: input.platform,
-        caption: input.caption,
-        media_urls: input.mediaUrls ?? [],
-        hashtags: input.hashtags ?? [],
-        scheduled_at: input.scheduledAt ?? null,
-      }),
-    })
+// ── Account Management ─────────────────────────────────────────────────────
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      return { success: false, error: err.message ?? `PostFast HTTP ${res.status}` }
+/**
+ * GET /social-media/my-social-accounts
+ * Fetch all connected social accounts for this PostFast workspace.
+ */
+export async function postfastFetchAccounts(apiKey: string): Promise<{
+  success: boolean
+  accounts: PostFastAccount[]
+  error?: string
+}> {
+  const r = await pfFetch(apiKey, '/social-media/my-social-accounts')
+  if (!r.ok) return { success: false, accounts: [], error: r.error }
+
+  const raw: any[] = Array.isArray(r.data) ? r.data : []
+  const accounts: PostFastAccount[] = raw.map(a => {
+    const pfPlatform = (a.platform ?? '').toUpperCase()
+    return {
+      id: a.id,
+      platform: pfPlatform,
+      platformId: PLATFORM_MAP[pfPlatform] ?? pfPlatform.toLowerCase(),
+      handle: a.platformUsername || a.displayName || a.id,
+      displayName: a.displayName,
+      profileUrl: a.profileUrl,
+      connected: a.isConnected !== false,
     }
+  })
+  return { success: true, accounts }
+}
 
-    const data = await res.json()
-    return { success: true, postId: data.post_id, url: data.url }
+/**
+ * POST /social-media/connect-link
+ * Generate a secure link to let a client connect their social accounts.
+ */
+export async function postfastGenerateConnectLink(apiKey: string, options?: {
+  label?: string
+  redirectUrl?: string
+}): Promise<{ success: boolean; connectUrl?: string; error?: string }> {
+  const r = await pfFetch(apiKey, '/social-media/connect-link', {
+    method: 'POST',
+    body: JSON.stringify(options ?? {}),
+  })
+  if (!r.ok) return { success: false, error: r.error }
+  return { success: true, connectUrl: r.data?.link ?? r.data?.url ?? r.data?.connectUrl }
+}
+
+/**
+ * GET /social-media/:id/gbp-locations
+ * Fetch Google Business Profile locations for an account.
+ */
+export async function postfastGetGBPLocations(apiKey: string, accountId: string): Promise<{
+  success: boolean
+  locations: Array<{ id: string; name: string; address?: string; placeId?: string }>
+  error?: string
+}> {
+  const r = await pfFetch(apiKey, `/social-media/${accountId}/gbp-locations`)
+  if (!r.ok) return { success: false, locations: [], error: r.error }
+  const locs = (Array.isArray(r.data) ? r.data : r.data?.locations ?? []).map((l: any) => ({
+    id: l.id ?? l.locationId,
+    name: l.name ?? l.locationName,
+    address: l.address,
+    placeId: l.placeId ?? l.googlePlaceId,
+  }))
+  return { success: true, locations: locs }
+}
+
+// ── Post Management ────────────────────────────────────────────────────────
+
+/**
+ * GET /social-posts
+ * List scheduled / published posts with optional filters.
+ */
+export async function postfastListPosts(apiKey: string, options?: {
+  status?: 'scheduled' | 'published' | 'failed' | 'draft'
+  platform?: string
+  limit?: number
+  page?: number
+}): Promise<{ success: boolean; posts: PostFastPost[]; total?: number; error?: string }> {
+  const params = new URLSearchParams()
+  if (options?.status) params.set('status', options.status)
+  if (options?.platform) params.set('platform', options.platform.toUpperCase())
+  if (options?.limit) params.set('limit', String(options.limit))
+  if (options?.page) params.set('page', String(options.page))
+
+  const r = await pfFetch(apiKey, `/social-posts?${params}`)
+  if (!r.ok) return { success: false, posts: [], error: r.error }
+
+  const rawPosts: any[] = Array.isArray(r.data) ? r.data : (r.data?.posts ?? r.data?.data ?? [])
+  const posts: PostFastPost[] = rawPosts.map(p => {
+    const pfPlatform = (p.platform ?? '').toUpperCase()
+    return {
+      id: p.id,
+      platform: pfPlatform,
+      platformId: PLATFORM_MAP[pfPlatform] ?? pfPlatform.toLowerCase(),
+      caption: p.caption ?? p.content ?? '',
+      status: p.status?.toLowerCase() ?? 'draft',
+      scheduledAt: p.scheduledAt ?? p.scheduled_at,
+      publishedAt: p.publishedAt ?? p.published_at,
+      postUrl: p.url ?? p.postUrl,
+      mediaUrls: p.mediaUrls ?? p.media_urls ?? [],
+      hashtags: p.hashtags ?? [],
+      engagementStats: p.analytics ?? p.engagement ?? undefined,
+    }
+  })
+  return { success: true, posts, total: r.data?.total ?? rawPosts.length }
+}
+
+/**
+ * DELETE /social-posts/:id
+ * Cancel and remove a scheduled post.
+ */
+export async function postfastDeletePost(apiKey: string, postId: string): Promise<{
+  success: boolean
+  error?: string
+}> {
+  const r = await pfFetch(apiKey, `/social-posts/${postId}`, { method: 'DELETE' })
+  if (!r.ok) return { success: false, error: r.error }
+  return { success: true }
+}
+
+// ── Media Upload (Signed URLs) ─────────────────────────────────────────────
+
+export interface PostFastUploadSlot {
+  uploadUrl: string        // PUT this URL with the file bytes
+  storageKey: string       // pass this key in postfastPublish.mediaStorageKeys
+  fileToken: string        // same as storageKey for reference
+  expiresAt?: string
+}
+
+/**
+ * POST /file/get-signed-upload-urls
+ * Get signed S3 upload URLs. Upload files there, then pass storageKey to publish.
+ */
+export async function postfastGetSignedUploadUrls(apiKey: string, files: Array<{
+  filename: string
+  mimeType: string
+  sizeBytes: number
+}>): Promise<{ success: boolean; slots: PostFastUploadSlot[]; error?: string }> {
+  const r = await pfFetch(apiKey, '/file/get-signed-upload-urls', {
+    method: 'POST',
+    body: JSON.stringify({
+      files: files.map(f => ({
+        file_name: f.filename,
+        content_type: f.mimeType,
+        file_size: f.sizeBytes,
+      })),
+    }),
+  })
+  if (!r.ok) return { success: false, slots: [], error: r.error }
+
+  const raw: any[] = Array.isArray(r.data) ? r.data : (r.data?.urls ?? r.data?.files ?? [])
+  const slots: PostFastUploadSlot[] = raw.map(s => ({
+    uploadUrl: s.uploadUrl ?? s.upload_url ?? s.signedUrl ?? s.signed_url,
+    storageKey: s.storageKey ?? s.storage_key ?? s.key ?? s.fileToken ?? s.file_token,
+    fileToken: s.fileToken ?? s.file_token ?? s.storageKey ?? s.storage_key,
+    expiresAt: s.expiresAt ?? s.expires_at,
+  }))
+  return { success: true, slots }
+}
+
+/**
+ * Upload a file buffer to PostFast using a signed URL.
+ * Returns the storageKey to use in postfastPublish.
+ */
+export async function postfastUploadFile(
+  signedUploadUrl: string,
+  fileBuffer: Buffer,
+  mimeType: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch(signedUploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': mimeType },
+      body: fileBuffer,
+      signal: AbortSignal.timeout(60_000),
+    })
+    if (!res.ok) return { success: false, error: `Upload HTTP ${res.status}` }
+    return { success: true }
   } catch (e: any) {
     return { success: false, error: e.message }
   }
 }
 
+// ── Publish ────────────────────────────────────────────────────────────────
+
+/**
+ * POST /social-posts
+ * Publish or schedule a post. Prefers mediaStorageKeys from signed upload over mediaUrls.
+ */
+export async function postfastPublish(input: PostFastPublishInput): Promise<PostFastPublishResult> {
+  const body: Record<string, unknown> = {
+    platform: input.platform.toUpperCase(),
+    caption: input.caption,
+    hashtags: input.hashtags ?? [],
+    scheduled_at: input.scheduledAt ?? null,
+  }
+
+  if (input.accountId) body.account_id = input.accountId
+
+  if (input.mediaStorageKeys && input.mediaStorageKeys.length > 0) {
+    body.media_storage_keys = input.mediaStorageKeys
+  } else if (input.mediaUrls && input.mediaUrls.length > 0) {
+    body.media_urls = input.mediaUrls
+  }
+
+  const r = await pfFetch(input.apiKey, '/social-posts', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  if (!r.ok) return { success: false, error: r.error }
+  return {
+    success: true,
+    postId: r.data?.post_id ?? r.data?.id,
+    url: r.data?.url ?? r.data?.postUrl,
+    scheduledAt: input.scheduledAt,
+  }
+}
+
+// ── Review Replies ─────────────────────────────────────────────────────────
+
+/**
+ * POST /reviews/reply
+ * Reply to a Google or Yelp review via PostFast.
+ */
 export async function postfastReplyReview(input: {
   apiKey: string
   platform: 'google' | 'yelp'
   reviewId: string
   replyText: string
 }): Promise<{ success: boolean; error?: string }> {
-  try {
-    const res = await fetch(`${POSTFAST_BASE}/reviews/reply`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'pf-api-key': input.apiKey },
-      body: JSON.stringify({
-        platform: input.platform,
-        review_id: input.reviewId,
-        reply: input.replyText,
-      }),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      return { success: false, error: err.message ?? `HTTP ${res.status}` }
-    }
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
-  }
+  const r = await pfFetch(input.apiKey, '/reviews/reply', {
+    method: 'POST',
+    body: JSON.stringify({
+      platform: input.platform,
+      review_id: input.reviewId,
+      reply: input.replyText,
+    }),
+  })
+  if (!r.ok) return { success: false, error: r.error }
+  return { success: true }
+}
+
+// ── Connection Test ────────────────────────────────────────────────────────
+
+/**
+ * Validate an API key by fetching the account list.
+ * Returns success + account count on success.
+ */
+export async function postfastTestConnection(apiKey: string): Promise<{
+  success: boolean
+  accountCount?: number
+  error?: string
+}> {
+  const r = await postfastFetchAccounts(apiKey)
+  if (!r.success) return { success: false, error: r.error }
+  return { success: true, accountCount: r.accounts.length }
 }

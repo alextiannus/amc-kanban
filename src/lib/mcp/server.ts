@@ -334,20 +334,173 @@ export function createAmcMcpServer(agentApiKey: string) {
     }
   )
 
+  // ── postfast_list_accounts ──────────────────────────────────────────────
+  server.tool(
+    'postfast_list_accounts',
+    'List all social media accounts connected to this brand\'s PostFast workspace.',
+    {
+      brandId: z.string(),
+    },
+    async ({ brandId }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
+      if (!brand?.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: PostFast API key not configured. Run update_brand_config first.' }], isError: true }
+
+      const { postfastFetchAccounts } = await import('@/lib/integrations/postfast')
+      const result = await postfastFetchAccounts(brand.postfastApiKey)
+      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: result.accounts.length, accounts: result.accounts }, null, 2) }] }
+    }
+  )
+
+  // ── postfast_list_posts ─────────────────────────────────────────────────
+  server.tool(
+    'postfast_list_posts',
+    'List scheduled or published social media posts in this brand\'s PostFast workspace.',
+    {
+      brandId: z.string(),
+      status: z.enum(['scheduled', 'published', 'failed', 'draft']).optional().describe('Filter by post status'),
+      platform: z.string().optional().describe('Filter by platform e.g. instagram, tiktok'),
+      limit: z.number().int().min(1).max(50).optional().default(20),
+    },
+    async ({ brandId, status, platform, limit }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
+      if (!brand?.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: PostFast API key not configured.' }], isError: true }
+
+      const { postfastListPosts } = await import('@/lib/integrations/postfast')
+      const result = await postfastListPosts(brand.postfastApiKey, { status, platform, limit: limit ?? 20 })
+      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, total: result.total, posts: result.posts }, null, 2) }] }
+    }
+  )
+
+  // ── postfast_delete_post ────────────────────────────────────────────────
+  server.tool(
+    'postfast_delete_post',
+    'Cancel and delete a scheduled post from PostFast. Only works on posts with status=scheduled.',
+    {
+      brandId: z.string(),
+      postId: z.string().describe('PostFast post ID from postfast_list_posts'),
+    },
+    async ({ brandId, postId }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
+      if (!brand?.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: PostFast API key not configured.' }], isError: true }
+
+      const { postfastDeletePost } = await import('@/lib/integrations/postfast')
+      const result = await postfastDeletePost(brand.postfastApiKey, postId)
+      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, deleted: true, postId }) }] }
+    }
+  )
+
+  // ── postfast_upload_media ───────────────────────────────────────────────
+  server.tool(
+    'postfast_upload_media',
+    'Upload a media file (image/video) to PostFast. Returns a storageKey to attach to postfast_publish. Use this for better quality than direct URLs.',
+    {
+      brandId: z.string(),
+      filename: z.string().describe('File name with extension e.g. "photo.jpg"'),
+      mimeType: z.string().describe('MIME type e.g. "image/jpeg", "video/mp4"'),
+      fileBase64: z.string().describe('Base64-encoded file content (no data: prefix)'),
+      sizeBytes: z.number().int().optional().describe('File size in bytes (helps PostFast allocate storage)'),
+    },
+    async ({ brandId, filename, mimeType, fileBase64, sizeBytes }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
+      if (!brand?.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: PostFast API key not configured.' }], isError: true }
+
+      const fileBuffer = Buffer.from(fileBase64, 'base64')
+      const { postfastGetSignedUploadUrls, postfastUploadFile } = await import('@/lib/integrations/postfast')
+
+      // Step 1: Get signed upload URL
+      const urlResult = await postfastGetSignedUploadUrls(brand.postfastApiKey, [{
+        filename,
+        mimeType,
+        sizeBytes: sizeBytes ?? fileBuffer.length,
+      }])
+      if (!urlResult.success || urlResult.slots.length === 0) {
+        return { content: [{ type: 'text' as const, text: `Error: Failed to get upload URL — ${urlResult.error}` }], isError: true }
+      }
+
+      const slot = urlResult.slots[0]
+
+      // Step 2: Upload file
+      const uploadResult = await postfastUploadFile(slot.uploadUrl, fileBuffer, mimeType)
+      if (!uploadResult.success) {
+        return { content: [{ type: 'text' as const, text: `Error: Upload failed — ${uploadResult.error}` }], isError: true }
+      }
+
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, storageKey: slot.storageKey, fileToken: slot.fileToken, filename, mimeType, tip: 'Pass storageKey in postfast_publish.mediaStorageKeys' }) }] }
+    }
+  )
+
+  // ── postfast_generate_connect_link ──────────────────────────────────────
+  server.tool(
+    'postfast_generate_connect_link',
+    'Generate a secure PostFast connect link so brand owners can link their social accounts without a PostFast login.',
+    {
+      brandId: z.string(),
+      label: z.string().optional().describe('Label shown on the connect page e.g. brand name'),
+      redirectUrl: z.string().optional().describe('URL to redirect to after connection'),
+    },
+    async ({ brandId, label, redirectUrl }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true, name: true } })
+      if (!brand?.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: PostFast API key not configured.' }], isError: true }
+
+      const { postfastGenerateConnectLink } = await import('@/lib/integrations/postfast')
+      const result = await postfastGenerateConnectLink(brand.postfastApiKey, {
+        label: label ?? brand.name,
+        redirectUrl,
+      })
+      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, connectUrl: result.connectUrl, tip: 'Share this URL with the brand owner to connect their accounts' }) }] }
+    }
+  )
+
   // ── postfast_publish ────────────────────────────────────────────────────
   server.tool(
     'postfast_publish',
-    'Publish or schedule a social media post via PostFast. Credentials are auto-loaded from brand config.',
+    'Publish or schedule a social media post via PostFast. For best quality, upload media first with postfast_upload_media and pass the storageKey here.',
     {
       brandId: z.string().describe('Brand ID — PostFast API key is read from brand config automatically.'),
-      platform: z.enum(['instagram', 'tiktok', 'xiaohongshu', 'facebook', 'youtube', 'x', 'linkedin', 'threads', 'bluesky', 'pinterest', 'snapchat'])
+      platform: z.enum(['instagram', 'tiktok', 'xiaohongshu', 'facebook', 'youtube', 'x', 'linkedin', 'threads', 'bluesky', 'pinterest', 'snapchat', 'telegram', 'google'])
         .describe('Target platform'),
       caption: z.string().describe('Post caption / body text'),
-      mediaUrls: z.array(z.string()).optional().describe('Public image or video URLs to attach'),
+      mediaStorageKeys: z.array(z.string()).optional().describe('Storage keys from postfast_upload_media (preferred over mediaUrls)'),
+      mediaUrls: z.array(z.string()).optional().describe('Public image or video URLs (fallback when storage keys unavailable)'),
       hashtags: z.array(z.string()).optional().describe('Hashtags without the # prefix'),
-      scheduledAt: z.string().optional().describe('ISO 8601 datetime to schedule (omit = publish immediately)'),
+      scheduledAt: z.string().optional().describe('ISO 8601 UTC datetime to schedule (omit = publish immediately)'),
+      accountId: z.string().optional().describe('Specific PostFast account ID to post from (from postfast_list_accounts)'),
     },
-    async ({ brandId, platform, caption, mediaUrls, hashtags, scheduledAt }) => {
+    async ({ brandId, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
@@ -358,7 +511,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       if (!brand?.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: PostFast API key not configured for this brand. Run update_brand_config first.' }], isError: true }
 
       const { postfastPublish } = await import('@/lib/integrations/postfast')
-      const result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaUrls, hashtags, scheduledAt })
+      const result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId })
 
       if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform, scheduledAt: scheduledAt ?? 'immediate' }) }] }

@@ -1,19 +1,19 @@
 # AMC Skill: Integrations — PostFast · Google Business · Lark Drive
 
-> **版本**: v1.1 · **适用**: OpenClaw / Claude / 任意支持 MCP 的 AI Agent
+> **版本**: v2.0 · **适用**: OpenClaw / Claude / 任意支持 MCP 的 AI Agent
 
-本 Skill 描述如何通过 AMC Kanban MCP 服务，让 AI Agent 直接调用 PostFast 发布、Google Business 评论管理、Lark Drive 文件管理功能，**无需在 Agent 侧持有任何第三方密钥**（凭证由主理人配置在品牌设置中，MCP 服务端自动注入）。
+本 Skill 描述如何通过 AMC Kanban MCP 服务，让 AI Agent 直接调用 PostFast 完整功能、Google Business 评论管理、Lark Drive 文件管理，**无需在 Agent 侧持有任何第三方密钥**（凭证由主理人配置在品牌设置中，MCP 服务端自动注入）。
 
 ---
 
 ## 🔗 接入前提
 
 1. 已通过 `agent-instructions.md` 完成 Agent 注册及品牌初始化
-2. 主理人已在 **品牌主看板 → 设置** 中填写所需集成凭证（见下表）
+2. 主理人已在 **品牌主看板 → 设置** 中填写所需集成凭证
 
 | 功能模块 | 需配置字段 |
 |---------|-----------|
-| PostFast 发布 | `postfastApiKey` |
+| PostFast 所有功能 | `postfastApiKey` |
 | Google 评论读取 | `googlePlaceId` + `googleApiKey` |
 | Google 评论回复 | `postfastApiKey`（PostFast 代理 OAuth）|
 | Lark 通知 | `larkBotWebhook` 或 `larkAppId`+`larkAppSecret`+`larkOwnerId` |
@@ -21,9 +21,91 @@
 
 ---
 
-## 📡 MCP 工具速查
+## 📡 完整 MCP 工具列表（共 20 个）
 
-### PostFast — 社媒发布
+### PostFast — 账号管理
+
+#### `postfast_list_accounts`
+列出品牌 PostFast 工作区中所有已连接的社媒账号。
+
+```json
+{ "brandId": "<品牌ID>" }
+```
+
+**返回**: `{ ok, count, accounts: [{ id, platformId, handle, displayName, connected }] }`
+
+> 获取 `accountId` 后可在 `postfast_publish` 中指定具体账号发布。
+
+---
+
+#### `postfast_generate_connect_link`
+生成安全连接链接，让品牌主理人无需 PostFast 账号即可授权连接社媒账号。
+
+```json
+{
+  "brandId": "<品牌ID>",
+  "label": "成都滋味烤鱼",
+  "redirectUrl": "https://amc-kanban.immedi.ai/settings"
+}
+```
+
+**返回**: `{ ok, connectUrl }`
+
+---
+
+### PostFast — 帖子管理
+
+#### `postfast_list_posts`
+列出已排期或已发布的帖子。
+
+```json
+{
+  "brandId": "<品牌ID>",
+  "status": "scheduled",
+  "platform": "instagram",
+  "limit": 20
+}
+```
+
+**返回**: `{ ok, total, posts: [{ id, platform, caption, status, scheduledAt, postUrl, engagementStats }] }`
+
+`status` 枚举: `scheduled` | `published` | `failed` | `draft`
+
+---
+
+#### `postfast_delete_post`
+取消并删除一条已排期的帖子。
+
+```json
+{
+  "brandId": "<品牌ID>",
+  "postId": "<来自 postfast_list_posts 的 id>"
+}
+```
+
+**返回**: `{ ok, deleted, postId }`
+
+> ⚠️ 只能删除 `status=scheduled` 的帖子，已发布帖子无法通过 API 删除。
+
+---
+
+### PostFast — 媒体上传 + 发布
+
+#### `postfast_upload_media`
+上传媒体文件到 PostFast，返回 `storageKey` 用于发布时附加。比直接传 URL 质量更高。
+
+```json
+{
+  "brandId": "<品牌ID>",
+  "filename": "june_banner.jpg",
+  "mimeType": "image/jpeg",
+  "fileBase64": "<base64字符串，不含 data: 前缀>"
+}
+```
+
+**返回**: `{ ok, storageKey, fileToken, filename }`
+
+---
 
 #### `postfast_publish`
 发布或排期一条社媒帖子。
@@ -33,16 +115,19 @@
   "brandId": "<品牌ID>",
   "platform": "instagram",
   "caption": "今日特惠 🔥 红油水煮鱼只要 ¥58！",
-  "mediaUrls": ["https://cdn.example.com/fish.jpg"],
+  "mediaStorageKeys": ["<来自 postfast_upload_media 的 storageKey>"],
   "hashtags": ["成都美食", "水煮鱼"],
-  "scheduledAt": "2025-06-01T11:00:00+08:00"
+  "scheduledAt": "2025-06-01T03:00:00Z",
+  "accountId": "<可选，指定特定账号>"
 }
 ```
 
-**返回**: `{ ok, postId, url, platform, scheduledAt }`  
-**支持平台**: `instagram` `tiktok` `xiaohongshu` `facebook` `youtube` `x` `linkedin` `threads` `bluesky` `pinterest` `snapchat`
+**返回**: `{ ok, postId, url, platform, scheduledAt }`
 
-> ⚠️ `scheduledAt` 省略 = 立即发布。格式必须是 ISO 8601 含时区。
+**支持平台**: `instagram` `tiktok` `xiaohongshu` `facebook` `youtube` `x` `linkedin` `threads` `bluesky` `pinterest` `snapchat` `telegram` `google`
+
+> ✅ **推荐流程**: `postfast_upload_media` → 拿 `storageKey` → `postfast_publish`  
+> ⚠️ `scheduledAt` 必须是 **UTC 时间** ISO 8601 格式（如 `2025-06-01T03:00:00Z` = 北京时间11:00）
 
 ---
 
@@ -53,7 +138,7 @@
 {
   "brandId": "<品牌ID>",
   "platform": "google",
-  "reviewId": "<reviewId from google_get_reviews>",
+  "reviewId": "<reviewId>",
   "replyText": "感谢您的光临！期待下次再见 🙏"
 }
 ```
@@ -65,38 +150,13 @@
 ### Google Business — 评论管理
 
 #### `google_get_reviews`
-拉取品牌最新 Google 评论。
+拉取品牌最新 Google 评论（最多 20 条）。
 
 ```json
-{
-  "brandId": "<品牌ID>",
-  "limit": 10
-}
+{ "brandId": "<品牌ID>", "limit": 10 }
 ```
 
-**返回**:
-```json
-{
-  "ok": true,
-  "count": 5,
-  "reviews": [
-    {
-      "reviewId": "...",
-      "reviewer": "张三",
-      "rating": 5,
-      "comment": "超好吃！",
-      "createTime": "2025-05-15T10:30:00Z",
-      "replyText": null
-    }
-  ]
-}
-```
-
-**推荐工作流**:
-1. 调用 `google_get_reviews` 获取未回复评论（`replyText == null`）
-2. 分析评论情感 → 生成个性化回复草稿
-3. 调用 `google_reply_review` 发布回复
-4. 调用 `create_task` / `update_task` 记录完成情况
+**返回**: `{ ok, count, reviews: [{ reviewId, reviewer, rating, comment, createTime, replyText }] }`
 
 ---
 
@@ -123,8 +183,8 @@
 ```json
 {
   "brandId": "<品牌ID>",
-  "title": "🔔 新任务已完成",
-  "content": "**小红书帖子**已排期发布，预计明日上午11点推送。\n\n[查看帖子详情](https://xhs.com/...)",
+  "title": "🔔 帖子已成功排期",
+  "content": "**小红书帖子**已排期，预计明日上午11点推送。",
   "actionUrl": "https://amc-kanban.immedi.ai/board",
   "urgent": false
 }
@@ -132,66 +192,72 @@
 
 **返回**: `{ ok, channel: "webhook" | "direct_message" }`
 
-> 推荐使用 `urgent: true` 发送需要人类立即处理的警报（卡片变红）。
-
 ---
 
 #### `lark_create_workspace`
-为品牌在 Lark Drive 创建工作区文件夹（每个品牌调用一次即可）。
+在 Lark Drive 创建品牌工作区文件夹（每个品牌调用一次）。
 
 ```json
-{
-  "brandId": "<品牌ID>"
-}
+{ "brandId": "<品牌ID>" }
 ```
 
-**返回**: `{ ok, folderToken, folderUrl }`  
-系统会自动把 `folderToken` 保存到品牌配置，后续 `lark_upload_file` 自动使用。
+**返回**: `{ ok, folderToken, folderUrl }`
 
 ---
 
 #### `lark_upload_file`
-上传文件到品牌 Lark Drive 工作区。
+上传文件到品牌 Lark Drive 工作区（素材归档）。
 
 ```json
 {
   "brandId": "<品牌ID>",
   "filename": "campaign_banner_june.jpg",
   "mimeType": "image/jpeg",
-  "fileBase64": "<base64字符串，不含 data: 前缀>"
+  "fileBase64": "<base64字符串>"
 }
 ```
 
-**返回**: `{ ok, fileToken, downloadUrl, filename }`  
-`fileToken` 可用作帖子的素材引用传给 `postfast_publish.mediaUrls`（通过代理下载 URL）。
+**返回**: `{ ok, fileToken, downloadUrl, filename }`
 
 ---
 
 ## 🧭 推荐工作流
 
-### 内容发布全链路（推荐）
+### 完整内容发布全链路
 
 ```
-1. list_tasks(assignedToMe=true, status="in_progress")
-   → 找到待发布任务
+1. postfast_list_accounts(brandId)
+   → 确认平台账号已连接
 
-2. google_get_reviews(brandId, limit=5)
-   → 分析评论情绪，生成对应内容方向
+2. 生成图文内容（AI 创作）
 
-3. (可选) lark_upload_file(...)
-   → 上传配图，获取 fileToken/downloadUrl
+3. postfast_upload_media(brandId, filename, mimeType, fileBase64)
+   → 获取 storageKey
 
-4. postfast_publish(brandId, platform, caption, mediaUrls, scheduledAt)
-   → 发布帖子
+4. postfast_publish(brandId, platform, caption, mediaStorageKeys=[storageKey], scheduledAt)
+   → 发布或排期
 
 5. update_task(taskId, status="done", description="已发布至 Instagram，postId=xxx")
    → 看板记录
 
-6. lark_notify(brandId, title="发布成功", content="...")
+6. lark_notify(brandId, title="发布成功 ✅", content="...")
    → 通知主理人
 ```
 
-### 评论批量回复（推荐每日）
+### 排期日历管理
+
+```
+1. postfast_list_posts(brandId, status="scheduled")
+   → 查看本周所有排期帖子
+
+2. 如需调整：
+   → postfast_delete_post(brandId, postId)   // 取消旧排期
+   → postfast_publish(...)                    // 重新排期
+
+3. create_task / update_task 更新看板记录
+```
+
+### Google 评论批量回复（推荐每日）
 
 ```
 1. create_task(title="Google评论巡检 YYYY-MM-DD", status="in_progress")
@@ -199,28 +265,62 @@
 2. google_get_reviews(brandId, limit=20)
    → 筛选 replyText == null 的未回复评论
 
-3. for each unanswered review:
-     → 生成个性化、有温度的回复（参考品牌描述和语调）
-     → google_reply_review(brandId, reviewId, replyText)
+3. for each:
+   → 生成个性化回复（参考品牌描述和语调）
+   → google_reply_review(brandId, reviewId, replyText)
 
-4. update_task(taskId, status="done", description="已回复 N 条评论")
+4. update_task(status="done")
+5. lark_notify(title="评论巡检完成 ✅", content="今日回复 N 条评论")
+```
 
-5. lark_notify(title="评论巡检完成", content="今日回复 N 条 Google 评论")
+### 新品牌社媒账号连接
+
+```
+1. postfast_generate_connect_link(brandId, label="品牌名")
+   → 获取 connectUrl
+
+2. lark_notify(brandId, title="请连接您的社媒账号",
+     content="点击链接连接您的社媒账号：[connectUrl]",
+     actionUrl=connectUrl)
+   → 把链接发给品牌主理人
+
+3. （主理人点击链接完成授权后）
+   postfast_list_accounts(brandId)
+   → 确认账号已连接
 ```
 
 ---
 
 ## ⚠️ 注意事项
 
-- **所有 MCP 工具只接受 brandId**，不需要传 API Key — 凭证由 AMC 服务端从数据库自动加载
-- 发布前检查平台账号是否已配置（通过 `get_brand_config` 查看 `accounts` 列表）
-- `mediaUrls` 必须是**公开可访问**的 URL，PostFast 会从该 URL 下载素材
-- Lark Drive 上传大文件（>20MB）时建议分片，或先压缩后上传
-- Google 评论回复**必须配置 PostFast**（PostFast 代管 Google OAuth），直接 Google API 需要品牌主自行申请 OAuth
+- **Agent 侧零密钥** — 所有 API Key 由 AMC 服务端从数据库自动注入，Agent 永远不接触原始凭证
+- `scheduledAt` 必须是 **UTC 时间** — 北京时间 11:00 = `T03:00:00Z`
+- `mediaStorageKeys` > `mediaUrls` — 优先使用 PostFast 原生上传（质量/速度更好）
+- Google 评论回复**必须配置 PostFast**（PostFast 代管 Google OAuth）
+- Lark Drive 上传大文件（>20MB）建议先压缩
 
 ---
 
-## 📋 MCP 连接配置（OpenClaw / Claude Desktop）
+## 📋 REST API 备选（MCP 不可用时）
+
+```
+POST https://amc-kanban.immedi.ai/api/integrations/postfast
+Authorization: Bearer <AGENT_API_KEY>
+Content-Type: application/json
+
+{
+  "brandId": "<品牌ID>",
+  "action": "list_posts",
+  "status": "scheduled",
+  "limit": 20
+}
+```
+
+**可用 action**: `test_connection` · `list_accounts` · `list_posts` · `delete_post` · `generate_connect_link` · `get_gbp_locations`
+
+---
+
+## 📋 MCP 连接配置
 
 ```json
 {
@@ -235,14 +335,17 @@
 }
 ```
 
-完整工具列表（共 15 个）：
+### 完整工具列表（20 个）
 
 | 类别 | 工具 |
 |------|------|
 | 品牌配置 | `get_brand_config` · `update_brand_config` |
 | Agent 档案 | `get_agent_profile` · `update_agent_profile` |
 | 看板任务 | `list_tasks` · `create_task` · `update_task` |
-| 账号管理 | `update_accounts` · `post_action_item` |
-| PostFast | `postfast_publish` · `postfast_reply_review` |
+| 账号 & 动态 | `update_accounts` · `post_action_item` |
+| PostFast 账号 | `postfast_list_accounts` · `postfast_generate_connect_link` |
+| PostFast 帖子 | `postfast_list_posts` · `postfast_delete_post` |
+| PostFast 媒体 | `postfast_upload_media` |
+| PostFast 发布 | `postfast_publish` · `postfast_reply_review` |
 | Google Business | `google_get_reviews` · `google_reply_review` |
 | Lark | `lark_notify` · `lark_upload_file` · `lark_create_workspace` |
