@@ -5,6 +5,7 @@ import {
   Calendar, Zap, Shield, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
+import BrandKanbanLane from '../BrandKanbanLane'
 
 // ── AgentAvatar: img with graceful initials fallback (no "加载失败" box) ─────
 function AgentAvatar({ src, initials, themeColor }: { src: string; initials: string; themeColor?: string | null }) {
@@ -883,108 +884,22 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
         </section>
       )}
 
-      {/* ── AI 活动战报 ───────────────────────────────────────────────── */}
+      {/* ── AI 活动战报 — 品牌泳道工作看板 ──────────────────────────── */}
       <section>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <Zap className="w-4 h-4 text-amber-500" /> AI 活动战报
+        <div className="flex items-center gap-2 mb-4">
+          <Zap className="w-4 h-4 text-amber-500" />
+          <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+            AI 活动战报
           </h3>
-          {recentDrafts.length > 0 && (
-            <span className="text-[10px] font-bold text-slate-400">最近 {recentDrafts.length} 条</span>
-          )}
         </div>
-        {/* Feed from real data */}
-        {(() => {
-          // Combine drafts + sentiment alerts into one feed
-          const feed: Array<{ key: string; node: React.ReactNode }> = []
-
-          // Sentiment alerts from actionItems
-          apiActionItems
-            .filter(i => i.type === 'sentiment_alert')
-            .forEach(i => {
-              feed.push({
-                key: i.id,
-                node: (
-                  <ActivityCard
-                    icon={<Star className="w-4 h-4 text-amber-500" />}
-                    label={i.title}
-                    sub={i.account ? `${i.account.platformId} · ${i.account.handle}` : undefined}
-                    time={new Date(i.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                    status="pending"
-                    actionLabel="查看回复"
-                    onAction={() => {}}
-                  />
-                ),
-              })
-            })
-
-          // Content drafts
-          recentDrafts.forEach(d => {
-            const platform = d.account?.platformId ?? ''
-            const handle = d.account?.handle ?? ''
-            const sub = [platform, handle].filter(Boolean).join(' · ')
-            const caption = d.caption?.slice(0, 40) + (d.caption?.length > 40 ? '…' : '')
-
-            if (d.status === 'published') {
-              feed.push({
-                key: d.id,
-                node: (
-                  <ActivityCard
-                    icon={<Check className="w-4 h-4 text-emerald-500" />}
-                    label={`已发布: ${caption}`}
-                    sub={sub || undefined}
-                    time={d.publishedAt ? new Date(d.publishedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '已发布'}
-                    status="done"
-                  />
-                ),
-              })
-            } else if (d.status === 'scheduled') {
-              feed.push({
-                key: d.id,
-                node: (
-                  <ActivityCard
-                    icon={<Calendar className="w-4 h-4 text-indigo-500" />}
-                    label={`已排期: ${caption}`}
-                    sub={sub || undefined}
-                    time={d.scheduledAt ? new Date(d.scheduledAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '已排期'}
-                    status="scheduled"
-                  />
-                ),
-              })
-            } else if (d.status === 'pending_review') {
-              feed.push({
-                key: d.id,
-                node: (
-                  <ActivityCard
-                    icon={<AlertCircle className="w-4 h-4 text-amber-500" />}
-                    label={`待审核: ${caption}`}
-                    sub={sub || undefined}
-                    time={new Date(d.updatedAt ?? d.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    status="pending"
-                    actionLabel="立即审核"
-                    onAction={() => {}}
-                  />
-                ),
-              })
-            }
-          })
-
-          if (feed.length === 0) {
-            return (
-              <div className="flex flex-col items-center justify-center py-10 gap-2.5 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-                <Zap className="w-8 h-8 text-slate-200 dark:text-slate-700" />
-                <p className="text-sm font-bold text-slate-400">暂无活动记录</p>
-                <p className="text-[11px] text-slate-300 dark:text-slate-600">AI Agent 执行任务后，战报将实时出现在此</p>
-              </div>
-            )
-          }
-
-          return (
-            <div className="space-y-2">
-              {feed.map(f => <React.Fragment key={f.key}>{f.node}</React.Fragment>)}
-            </div>
-          )
-        })()}
+        {activeBrand ? (
+          <BrandKanbanLane brandId={activeBrand.id} />
+        ) : (
+          <div className="flex flex-col items-center justify-center py-10 gap-2.5 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <Zap className="w-8 h-8 text-slate-200 dark:text-slate-700" />
+            <p className="text-sm font-bold text-slate-400">请先选择品牌</p>
+          </div>
+        )}
       </section>
 
       {/* ── ROI / Conversion tracking ───────────────────────────────── */}
