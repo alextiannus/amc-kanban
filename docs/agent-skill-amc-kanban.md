@@ -1,10 +1,12 @@
 ---
 title: AMC Kanban Agent Skill
 category: operations
-version: 1.0.0
+version: 1.1.0
 description: >
-  Allows an OpenClaw AI Agent to interact with the AMC Kanban board:
-  submit action items for brand owner review, report social account snapshots,
+  Allows an OpenClaw AI Agent to fully manage the AMC Kanban board:
+  initialize brand profiles via MCP interview, configure integration credentials,
+  register and update social media accounts (including login credentials),
+  submit action items for brand owner review, report monitoring snapshots,
   poll approved content drafts, and report publish results.
   This is the primary interface between the AI agent and the brand owner.
 ---
@@ -15,10 +17,13 @@ description: >
 
 The AMC Kanban is a **brand owner monitoring dashboard**. The AI Agent does the work; the brand owner reviews and approves via the Kanban. This skill enables the agent to:
 
-1. **Push action items** (content approval requests, sentiment alerts, material requests)
-2. **Report monitoring snapshots** (follower counts, ratings)
-3. **Poll for approved drafts** ready to publish via PostFast
-4. **Report publish results** back to the Kanban
+1. **Configure brand profile** — fill in brand info via interview (markdown description)
+2. **Configure integrations** — set PostFast, Google Business, Lark credentials per brand
+3. **Register social accounts** — upsert accounts with profile URL and login credentials
+4. **Push action items** — content approvals, sentiment alerts, material requests
+5. **Report monitoring snapshots** — follower counts, ratings
+6. **Poll approved drafts** — ready to publish via PostFast
+7. **Report publish results** — back to Kanban
 
 ## Authentication
 
@@ -29,6 +34,124 @@ Authorization: Bearer <agentApiKey>
 ```
 
 The `agentApiKey` is set in the agent's User profile (`User.apiKey`) in the Kanban database.
+
+---
+
+## Endpoint: Configure Brand Profile & Credentials
+
+**When to use:** After brand onboarding interview. Update description, website, integration keys.
+
+```
+PATCH <KANBAN_BASE_URL>/api/agent/brand-config
+Authorization: Bearer <agentApiKey>
+Content-Type: application/json
+```
+
+### Request Body
+
+All fields optional. Only include fields you want to update.
+
+```json
+{
+  "brandId": "clx...",
+
+  // Brand profile (rendered as markdown in the dashboard)
+  "description": "# 御膳房\n正宗中式海鲜餐厅，主打新鲜波士顿龙虾...\n\n## 品牌特色\n- 每日直供...",
+  "website": "https://yushanfang.com",
+  "phone": "+1 212-555-0100",
+  "address": "123 Main St, New York, NY 10001",
+
+  // Integration credentials
+  "postfastApiKey": "pf_live_...",
+  "googlePlaceId": "ChIJ...",
+  "googleApiKey": "AIza...",
+  "larkAppId": "cli_...",
+  "larkAppSecret": "xxx",
+  "larkParentFolderToken": "PbugfutjllCDM0dqMiIlN0orgZd",
+  "larkBotWebhook": "https://open.larksuite.com/open-apis/bot/v2/hook/...",
+  "larkOwnerId": "ou_..."
+}
+```
+
+> **Note:** When `larkAppId` + `larkAppSecret` are first set and `larkDriveFolderId` is empty,
+> the system will **automatically create** a `Workspace_<品牌名>` folder inside `larkParentFolderToken`.
+> The folder token is saved to the brand and returned as `larkFolderUrl`.
+
+> **Note:** The agent is also **automatically registered** to the brand on first PATCH
+> (via `BrandAgent` upsert). The dashboard AI Agent tab will show the agent as connected.
+
+### Response
+
+```json
+{
+  "ok": true,
+  "updated": ["description", "postfastApiKey"],
+  "larkFolderUrl": "https://12eat-ai.sg.larksuite.com/drive/folder/...",
+  "brand": {
+    "id": "clx...",
+    "name": "御膳房",
+    "description": "# 御膳房\n...",
+    "postfastConfigured": true,
+    "googleConfigured": false,
+    "larkConfigured": true,
+    "larkDriveConfigured": true
+  }
+}
+```
+
+---
+
+## Endpoint: Upsert Social Account
+
+**When to use:** After collecting brand's social media account info. Creates or updates by
+`(brandId, platformId, handle)` — safe to call multiple times.
+
+```
+PATCH <KANBAN_BASE_URL>/api/agent/accounts
+Authorization: Bearer <agentApiKey>
+Content-Type: application/json
+```
+
+### Supported Platforms
+
+`google` | `instagram` | `tiktok` | `xiaohongshu` | `facebook` | `youtube` |
+`x` | `yelp` | `linkedin` | `pinterest` | `weibo` | `wechat` | `snapchat` | `tripadvisor`
+
+### Request Body
+
+```json
+{
+  "brandId": "clx...",
+  "platformId": "instagram",
+  "handle": "@yushanfang_nyc",
+  "displayName": "Yu Shan Fang Restaurant NYC",
+  "profileUrl": "https://www.instagram.com/yushanfang_nyc",
+  "loginUsername": "yushanfang@gmail.com",
+  "loginPassword": "S3cur3P@ss!",
+  "followerCount": 1234,
+  "ratingScore": 4.8
+}
+```
+
+> **Security:** `loginPassword` is stored securely and only returned to Admin users in the dashboard.
+> The agent response **never** includes `loginPassword`.
+
+### Response
+
+```json
+{
+  "ok": true,
+  "account": {
+    "id": "clx...",
+    "platformId": "instagram",
+    "handle": "@yushanfang_nyc",
+    "displayName": "Yu Shan Fang Restaurant NYC",
+    "profileUrl": "https://www.instagram.com/yushanfang_nyc",
+    "loginUsername": "yushanfang@gmail.com",
+    "followerCount": 1234
+  }
+}
+```
 
 ---
 
@@ -101,7 +224,8 @@ Content-Type: application/json
 { "id": "clx...", "status": "pending", "brandId": "clx..." }
 ```
 
-> **Note:** If `Brand.autoPilot = true`, `status` will be `"auto_resolved"` and the draft will immediately move to `"publishing"` — no owner review needed.
+> **Note:** If `Brand.autoPilot = true`, `status` will be `"auto_resolved"` and the draft
+> will immediately move to `"publishing"` — no owner review needed.
 
 ---
 
@@ -136,12 +260,6 @@ Array of approved `ContentDraft` records with account and asset info:
 ]
 ```
 
-**Publishing flow:**
-1. Agent receives draft with `status: "publishing"`
-2. Agent uses `account.platformId` + `caption` + `mediaUrls` to call PostFast MCP
-3. Agent gets PostFast `postId` back
-4. Agent reports result (see below)
-
 ---
 
 ## Endpoint: Report Publish Result
@@ -159,15 +277,6 @@ Content-Type: application/json
   "draftId": "clx...",
   "success": true,
   "platformPostId": "instagram_post_id_123"
-}
-```
-
-On failure:
-```json
-{
-  "draftId": "clx...",
-  "success": false,
-  "error": "PostFast API rate limit exceeded"
 }
 ```
 
@@ -194,23 +303,23 @@ Content-Type: application/json
 
 ---
 
-## PostFast Integration
-
-The brand owner configures their **PostFast API key** in the Kanban settings UI:
-`Settings → 集成配置 → PostFast API Key`
-
-This key is stored in `Brand.postfastApiKey`. When the agent polls approved drafts, it should:
-
-1. Fetch the brand's PostFast key via:
-   ```
-   GET <KANBAN_BASE_URL>/api/agent/brand-config?brandId=<brandId>
-   ```
-2. Use `postfastApiKey` to call the PostFast MCP publishing tool
-3. Pass `platformId`, `caption`, `mediaUrls`, `hashtags`, `scheduledAt` to PostFast
-
----
-
 ## Recommended Agent Workflow (OpenClaw Skill Loop)
+
+### First-Time Brand Initialization
+
+```
+1. Interview brand owner (via Lark bot or direct message) to collect:
+   - Brand description, website, phone, address
+   - Social media accounts (platform, handle, profile URL, login credentials)
+   - Integration credentials (PostFast, Google, Lark)
+
+2. PATCH /api/agent/brand-config  ← write brand profile + all integration creds
+   (system auto-creates Lark Workspace folder + auto-registers agent to brand)
+
+3. PATCH /api/agent/accounts (per account)  ← register each social account
+```
+
+### Ongoing Operations
 
 ```
 Every 30 min:
@@ -223,13 +332,14 @@ Every 30 min:
 Every 6 hours:
   4. Monitor platform APIs for new reviews/ratings
   5. POST /api/agent/snapshots  ← update follower/rating data
-  6. If bad review found (≤ 3 stars):
+  6. PATCH /api/agent/accounts  ← update follower counts per account
+  7. If bad review found (≤ 3 stars):
        → POST /api/agent/action-items (sentiment_alert, priority: urgent)
 
 Weekly:
-  7. Scan upcoming holidays/events
-  8. Generate content drafts proactively
-  9. POST /api/agent/action-items (content_approval) for each
+  8. Scan upcoming holidays/events
+  9. Generate content drafts proactively
+ 10. POST /api/agent/action-items (content_approval) for each
 ```
 
 ---

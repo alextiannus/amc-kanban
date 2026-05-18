@@ -25,6 +25,8 @@ export async function GET(_req: Request, { params }: Params) {
           id: true, platformId: true, handle: true, displayName: true,
           autoPilot: true, followerCount: true, followerDelta: true,
           ratingScore: true, snapshotAt: true,
+          profileUrl: true,   // public URL — safe to expose
+          // loginUsername / loginPassword intentionally excluded (admin-only via /api/admin/brand-credentials)
         },
       },
       actionItems: {

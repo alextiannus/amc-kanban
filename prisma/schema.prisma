@@ -156,6 +156,12 @@ model SocialAccount {
   refreshToken   String?
   expiresAt      DateTime?
   autoPilot      Boolean   @default(false)
+
+  // Login credentials (loginPassword: admin-visible only in API responses)
+  profileUrl     String?   // public profile URL e.g. https://instagram.com/handle
+  loginUsername  String?   // account login email or username
+  loginPassword  String?   // account password — returned masked to non-admin callers
+
   followerCount  Int?
   followerDelta  Int?      @default(0)
   ratingScore    Float?

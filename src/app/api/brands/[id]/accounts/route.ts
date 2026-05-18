@@ -4,6 +4,10 @@ import { prisma } from '@/lib/prisma'
 
 type Params = { params: Promise<{ id: string }> }
 
+function maskPw(pw: string | null) {
+  return pw ? `••••••${pw.slice(-2)}` : null
+}
+
 // POST /api/brands/[id]/accounts — connect a new social account
 export async function POST(request: Request, { params }: Params) {
   const session = await getSession()
@@ -15,7 +19,7 @@ export async function POST(request: Request, { params }: Params) {
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json()
-  const { platformId, handle, displayName } = body
+  const { platformId, handle, displayName, profileUrl, loginUsername, loginPassword } = body
 
   if (!platformId || !handle) {
     return NextResponse.json({ error: 'platformId and handle required' }, { status: 400 })
@@ -27,8 +31,15 @@ export async function POST(request: Request, { params }: Params) {
       platformId,
       handle: handle.trim(),
       displayName: displayName?.trim() || null,
+      profileUrl: profileUrl?.trim() || null,
+      loginUsername: loginUsername?.trim() || null,
+      loginPassword: loginPassword || null,
     },
   })
 
-  return NextResponse.json(account, { status: 201 })
+  const isAdmin = session.user.role === 'ADMIN'
+  return NextResponse.json({
+    ...account,
+    loginPassword: isAdmin ? account.loginPassword : maskPw(account.loginPassword),
+  }, { status: 201 })
 }

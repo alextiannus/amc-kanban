@@ -73,6 +73,7 @@ interface ConnectedAccount {
   uid: string          // unique instance id (allows multiple of same platform)
   platformId: string
   handle: string       // @username or account label
+  profileUrl?: string  // public profile page
   value: string        // metric value
   delta: string
   deltaPositive: boolean
@@ -96,7 +97,7 @@ function PlatformLogo({ icon, name, size = 20 }: { icon: string; name: string; s
 function KpiCard({ account }: { account: ConnectedAccount }) {
   const platform = ALL_PLATFORMS.find(p => p.id === account.platformId)
   if (!platform) return null
-  return (
+  const inner = (
     <div className="bg-white dark:bg-slate-900 rounded-2xl p-3 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow group cursor-pointer flex flex-col gap-2 min-w-0">
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 dark:bg-slate-800 flex-shrink-0 group-hover:scale-110 transition-transform overflow-hidden border border-slate-100 dark:border-slate-700">
@@ -112,40 +113,180 @@ function KpiCard({ account }: { account: ConnectedAccount }) {
       </div>
     </div>
   )
+  if (account.profileUrl) {
+    return (
+      <a href={account.profileUrl} target="_blank" rel="noopener noreferrer" className="block">
+        {inner}
+      </a>
+    )
+  }
+  return inner
 }
 
-// ── Add Account Modal ────────────────────────────────────────────────
-function AddAccountModal({ onAdd, onClose }: {
-  onAdd: (platformId: string) => void
+// ── Add Account Modal — two-step: pick platform → fill credentials ──────────
+function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
+  brandId: string
+  onDone: () => void
   onClose: () => void
+  isAdmin?: boolean
 }) {
+  const [step, setStep] = useState<'pick' | 'form'>('pick')
+  const [selectedPlatform, setSelectedPlatform] = useState<typeof ALL_PLATFORMS[0] | null>(null)
+  const [form, setForm] = useState({ handle: '', profileUrl: '', loginUsername: '', loginPassword: '' })
+  const [saving, setSaving] = useState(false)
+  const [showPw, setShowPw] = useState(false)
+
+  const handlePick = (p: typeof ALL_PLATFORMS[0]) => {
+    setSelectedPlatform(p)
+    setForm({ handle: '', profileUrl: '', loginUsername: '', loginPassword: '' })
+    setStep('form')
+  }
+
+  const handleSubmit = async () => {
+    if (!form.handle.trim()) return
+    setSaving(true)
+    try {
+      await fetch(`/api/brands/${brandId}/accounts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platformId: selectedPlatform!.id,
+          handle: form.handle.trim(),
+          profileUrl: form.profileUrl.trim() || null,
+          loginUsername: form.loginUsername.trim() || null,
+          loginPassword: form.loginPassword || null,
+        }),
+      })
+      onDone()
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-2xl border border-slate-100 dark:border-slate-800 max-h-[80vh] flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-2xl border border-slate-100 dark:border-slate-800 max-h-[90vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
-          <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100">添加新账号</h3>
+          {step === 'form' && (
+            <button onClick={() => setStep('pick')} className="mr-3 w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+              ←
+            </button>
+          )}
+          <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex-1">
+            {step === 'pick' ? '选择平台' : `添加 ${selectedPlatform?.name} 账号`}
+          </h3>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <p className="px-6 pt-3 pb-1 text-xs text-slate-400">选择平台后将引导您完成授权（可反复添加同一平台的多个账号）</p>
-        <div className="overflow-y-auto p-6 pt-3 grid grid-cols-3 sm:grid-cols-4 gap-3">
-          {ALL_PLATFORMS.map(p => (
-            <button
-              key={p.id}
-              onClick={() => { onAdd(p.id); onClose() }}
-              className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all group active:scale-95"
-            >
-              <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-100 dark:border-slate-700">
-                <PlatformLogo icon={p.icon} name={p.name} size={22} />
+
+        {/* Step 1: Platform grid */}
+        {step === 'pick' && (
+          <div className="overflow-y-auto p-6 pt-3 grid grid-cols-3 sm:grid-cols-4 gap-3">
+            {ALL_PLATFORMS.map(p => (
+              <button
+                key={p.id}
+                onClick={() => handlePick(p)}
+                className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all group active:scale-95"
+              >
+                <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-100 dark:border-slate-700">
+                  <PlatformLogo icon={p.icon} name={p.name} size={22} />
+                </div>
+                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 text-center leading-tight">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Step 2: Credential form */}
+        {step === 'form' && selectedPlatform && (
+          <div className="overflow-y-auto p-6 space-y-4">
+            {/* Platform badge */}
+            <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-700">
+              <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center border border-slate-100 dark:border-slate-700">
+                <PlatformLogo icon={selectedPlatform.icon} name={selectedPlatform.name} size={20} />
               </div>
-              <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 text-center leading-tight">{p.name}</span>
+              <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{selectedPlatform.name}</span>
+            </div>
+
+            {/* Handle */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">账号 Handle *</label>
+              <input
+                value={form.handle}
+                onChange={e => setForm(p => ({ ...p, handle: e.target.value }))}
+                placeholder={`@${selectedPlatform.name.toLowerCase()} 用户名`}
+                className="w-full px-3 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                id="add-account-handle"
+              />
+            </div>
+
+            {/* Profile URL */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">主页链接</label>
+              <input
+                type="url"
+                value={form.profileUrl}
+                onChange={e => setForm(p => ({ ...p, profileUrl: e.target.value }))}
+                placeholder={`https://${selectedPlatform.id}.com/...`}
+                className="w-full px-3 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                id="add-account-profile-url"
+              />
+            </div>
+
+            {/* Login credentials */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">登录凭证（Admin 可查看）</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">登录账号 / 邮箱</label>
+                  <input
+                    value={form.loginUsername}
+                    onChange={e => setForm(p => ({ ...p, loginUsername: e.target.value }))}
+                    placeholder="login@example.com"
+                    className="w-full px-3 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                    id="add-account-login"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">密码</label>
+                  <div className="relative">
+                    <input
+                      type={showPw ? 'text' : 'password'}
+                      value={form.loginPassword}
+                      onChange={e => setForm(p => ({ ...p, loginPassword: e.target.value }))}
+                      placeholder="••••••••"
+                      className="w-full px-3 py-2.5 pr-10 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                      id="add-account-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw(p => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-xs font-bold"
+                    >
+                      {showPw ? '隐藏' : '显示'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Submit */}
+            <button
+              onClick={handleSubmit}
+              disabled={!form.handle.trim() || saving}
+              className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-all disabled:opacity-50 shadow-sm shadow-blue-500/20"
+              id="add-account-submit"
+            >
+              {saving ? '保存中…' : '保存账号'}
             </button>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -361,6 +502,7 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
     uid: a.id,
     platformId: a.platformId,
     handle: a.handle,
+    profileUrl: a.profileUrl ?? undefined,
     value: a.ratingScore ? `${a.ratingScore}★` : fmtFollower(a.followerCount),
     delta: a.followerDelta != null
       ? `${a.followerDelta >= 0 ? '+' : ''}${a.followerDelta}`
@@ -394,17 +536,8 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
   }
 
   // ── Add account ───────────────────────────────────────────────────────────
-  const addAccount = async (platformId: string) => {
-    const platform = ALL_PLATFORMS.find(p => p.id === platformId)
-    if (!platform || !activeBrand?.id) return
-    const existing = connectedAccounts.filter(a => a.platformId === platformId).length
-    const handle = existing > 0 ? `${platform.name} 账号 ${existing + 1}` : platform.name
-    await fetch(`/api/brands/${activeBrand.id}/accounts`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ platformId, handle }),
-    })
-    loadDetail(activeBrand.id)
-  }
+  // Handled inside AddAccountModal — reload detail on done
+  const onAccountAdded = () => { if (activeBrand?.id) loadDetail(activeBrand.id) }
 
   // ── Conversion stats ─────────────────────────────────────────────────────
   const countConv = (type: string) => weekConversions
@@ -651,8 +784,12 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
       </section>
 
       {/* ── Add Account Modal ──────────────────────────────────────────── */}
-      {showAddAccount && (
-        <AddAccountModal onAdd={addAccount} onClose={() => setShowAddAccount(false)} />
+      {showAddAccount && activeBrand?.id && (
+        <AddAccountModal
+          brandId={activeBrand.id}
+          onDone={onAccountAdded}
+          onClose={() => setShowAddAccount(false)}
+        />
       )}
 
     </div>
