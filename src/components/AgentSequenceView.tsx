@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Bot, Search, Trash2 } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Bot, Search, Trash2, Zap, Star, Check, Calendar, AlertCircle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AgentEditModal from './AgentEditModal'
@@ -10,7 +10,54 @@ const markdownComponents = {
   a: ({ ...props }: any) => <a {...props} target="_blank" rel="noopener noreferrer" />,
 }
 
-export default function AgentSequenceView({ initialFilter = 'all' }: { initialFilter?: 'all' | 'online' | 'offline' }) {
+// ── Activity card (same design as DashboardHome ActivityCard) ──────────────
+type ActivityStatus = 'done' | 'pending' | 'scheduled'
+const STATUS_META: Record<ActivityStatus, { label: string; cls: string }> = {
+  done:      { label: '已发布', cls: 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400' },
+  pending:   { label: '待审核', cls: 'bg-amber-100 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400' },
+  scheduled: { label: '已排期', cls: 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400' },
+}
+
+function ActivityCard({ icon, label, sub, time, status }: {
+  icon: React.ReactNode
+  label: string
+  sub?: string
+  time: string
+  status?: ActivityStatus
+}) {
+  const meta = status ? STATUS_META[status] : null
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700 transition-all group">
+      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110 ${
+        status === 'done'      ? 'bg-emerald-50 dark:bg-emerald-900/20' :
+        status === 'pending'   ? 'bg-amber-50 dark:bg-amber-900/20' :
+        status === 'scheduled' ? 'bg-indigo-50 dark:bg-indigo-900/20' :
+        'bg-slate-100 dark:bg-slate-800'
+      }`}>
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug truncate">{label}</p>
+        {sub && <p className="text-[11px] text-slate-400 mt-0.5 truncate">{sub}</p>}
+      </div>
+      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+        <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">{time}</span>
+        {meta && (
+          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${meta.cls}`}>{meta.label}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main ────────────────────────────────────────────────────────────────────
+export default function AgentSequenceView({
+  initialFilter = 'all',
+  brandId,
+}: {
+  initialFilter?: 'all' | 'online' | 'offline'
+  brandId?: string
+}) {
   const [agents, setAgents] = useState<any[]>([])
   const [expandedAgentIds, setExpandedAgentIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -20,6 +67,9 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
   const [editingAgent, setEditingAgent] = useState<any | null>(null)
 
+  // Activity feed state (brand-scoped)
+  const [brandDetail, setBrandDetail] = useState<any>(null)
+
   const getCopyCommand = (apiKey: string | null = null) => {
     const hostFromEnv = process.env.NEXT_PUBLIC_KANBAN_HOST
     const hostFromWindow = typeof window !== 'undefined' ? window.location.origin : null
@@ -27,13 +77,19 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
     return buildAgentInitPrompt({ apiKey, apiBaseUrl: `${baseHost}/api` })
   }
 
-  useEffect(() => {
-    setFilterTab(initialFilter)
-  }, [initialFilter])
+  useEffect(() => { setFilterTab(initialFilter) }, [initialFilter])
+  useEffect(() => { fetchAgents() }, [])
 
-  useEffect(() => {
-    fetchAgents()
-  }, [])
+  // Fetch brand detail for activity feed
+  const fetchBrandDetail = useCallback(async () => {
+    if (!brandId) return
+    try {
+      const res = await fetch(`/api/brands/${brandId}`)
+      if (res.ok) setBrandDetail(await res.json())
+    } catch { /* ignore */ }
+  }, [brandId])
+
+  useEffect(() => { fetchBrandDetail() }, [fetchBrandDetail])
 
   const fetchAgents = async () => {
     try {
@@ -50,7 +106,6 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
   const handleDeleteAgent = async (e: React.MouseEvent, agentId: string) => {
     e.stopPropagation()
     if (!confirm('确定要遣散这只龙虾吗？它的所有未完成工作将会停滞，且此操作不可逆。')) return
-
     try {
       const res = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' })
       if (res.ok) {
@@ -60,26 +115,97 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
         const data = await res.json()
         alert(data.error || '删除失败，请重试')
       }
-    } catch (error) {
+    } catch {
       alert('删除时发生网络错误')
     }
   }
 
+  // Filter agents — if brandId provided, show only agents linked to this brand
   const filteredAgents = agents.filter(agent => {
-    // 1. Filter by status
     if (filterTab === 'online' && !agent.isOnline) return false
     if (filterTab === 'offline' && agent.isOnline) return false
-    
-    // 2. Filter by search query
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      return agent.email.toLowerCase().includes(q) || 
+      return agent.email.toLowerCase().includes(q) ||
              (agent.nickname && agent.nickname.toLowerCase().includes(q)) ||
              (agent.insights && agent.insights.toLowerCase().includes(q)) ||
              (agent.introduction && agent.introduction.toLowerCase().includes(q))
     }
     return true
   })
+
+  // Build activity feed from brand's action items + recent drafts
+  const activityFeed: Array<{ key: string; node: React.ReactNode }> = []
+
+  if (brandDetail) {
+    const actionItems: any[] = brandDetail.actionItems ?? []
+    const recentDrafts: any[] = brandDetail.recentDrafts ?? []
+
+    actionItems
+      .filter(i => i.type === 'sentiment_alert')
+      .forEach(i => {
+        activityFeed.push({
+          key: i.id,
+          node: (
+            <ActivityCard
+              icon={<Star className="w-4 h-4 text-amber-500" />}
+              label={i.title}
+              sub={i.account ? `${i.account.platformId} · ${i.account.handle}` : undefined}
+              time={new Date(i.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+              status="pending"
+            />
+          ),
+        })
+      })
+
+    recentDrafts.forEach(d => {
+      const platform = d.account?.platformId ?? ''
+      const handle = d.account?.handle ?? ''
+      const sub = [platform, handle].filter(Boolean).join(' · ')
+      const caption = d.caption?.slice(0, 40) + (d.caption?.length > 40 ? '…' : '')
+
+      if (d.status === 'published') {
+        activityFeed.push({
+          key: d.id,
+          node: (
+            <ActivityCard
+              icon={<Check className="w-4 h-4 text-emerald-500" />}
+              label={`已发布: ${caption}`}
+              sub={sub || undefined}
+              time={d.publishedAt ? new Date(d.publishedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '已发布'}
+              status="done"
+            />
+          ),
+        })
+      } else if (d.status === 'scheduled') {
+        activityFeed.push({
+          key: d.id,
+          node: (
+            <ActivityCard
+              icon={<Calendar className="w-4 h-4 text-indigo-500" />}
+              label={`已排期: ${caption}`}
+              sub={sub || undefined}
+              time={d.scheduledAt ? new Date(d.scheduledAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '已排期'}
+              status="scheduled"
+            />
+          ),
+        })
+      } else if (d.status === 'pending_review') {
+        activityFeed.push({
+          key: d.id,
+          node: (
+            <ActivityCard
+              icon={<AlertCircle className="w-4 h-4 text-amber-500" />}
+              label={`待审核: ${caption}`}
+              sub={sub || undefined}
+              time={new Date(d.updatedAt ?? d.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              status="pending"
+            />
+          ),
+        })
+      }
+    })
+  }
 
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-300">
@@ -88,7 +214,6 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
           🤖 AI 序列 <span className="text-sm font-normal text-slate-400 bg-slate-50 dark:bg-slate-950 px-3 py-1 rounded-full">{filteredAgents.length} Agents</span>
         </h2>
         
-        {/* Controls: Search & Filters */}
         <div className="flex flex-col sm:flex-row gap-4 items-center w-full sm:w-auto">
           <div className="relative w-full sm:w-64">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -108,7 +233,8 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
         </div>
       </div>
 
-      <div className="flex-1 pb-10">
+      {/* Agent grid */}
+      <div className="pb-8">
         {loading ? (
           <div className="flex justify-center py-20 text-slate-400"><Bot size={32} className="animate-pulse" /></div>
         ) : filteredAgents.length === 0 ? (
@@ -135,16 +261,13 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
                 <div className="absolute top-6 right-6 flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm px-2 py-1.5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setEditingAgent(agent)
-                      }}
+                      onClick={(e) => { e.stopPropagation(); setEditingAgent(agent) }}
                       className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
                       title="编辑名片"
                     >
                       <span className="text-sm">✏️</span>
                     </button>
-                    <div className="w-px h-4 bg-slate-200 dark:bg-slate-700"></div>
+                    <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
                     <button
                       onClick={(e) => handleDeleteAgent(e, agent.id)}
                       className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
@@ -153,7 +276,7 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
                       <Trash2 size={14} />
                     </button>
                   </div>
-                  <span className={`w-3 h-3 rounded-full ${agent.isOnline ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`}></span>
+                  <span className={`w-3 h-3 rounded-full ${agent.isOnline ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
                 </div>
 
                 <div className="flex items-center gap-4 mb-5 pr-8">
@@ -193,10 +316,10 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
                             />
                             <button 
                               onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard.writeText(agent.apiKey);
-                                setCopiedKey(agent.id);
-                                setTimeout(() => setCopiedKey(null), 2000);
+                                e.stopPropagation()
+                                navigator.clipboard.writeText(agent.apiKey)
+                                setCopiedKey(agent.id)
+                                setTimeout(() => setCopiedKey(null), 2000)
                               }}
                               className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold transition-colors whitespace-nowrap flex-shrink-0"
                             >
@@ -205,10 +328,10 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
                           </div>
                           <button 
                             onClick={(e) => {
-                              e.stopPropagation();
-                              navigator.clipboard.writeText(getCopyCommand(agent.apiKey));
-                              setCopiedCommand(agent.id);
-                              setTimeout(() => setCopiedCommand(null), 2000);
+                              e.stopPropagation()
+                              navigator.clipboard.writeText(getCopyCommand(agent.apiKey))
+                              setCopiedCommand(agent.id)
+                              setTimeout(() => setCopiedCommand(null), 2000)
                             }}
                             className="w-full px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 mt-1"
                           >
@@ -241,6 +364,36 @@ export default function AgentSequenceView({ initialFilter = 'all' }: { initialFi
           </div>
         )}
       </div>
+
+      {/* ── AI 活动战报 (brand-scoped) ────────────────────────────────── */}
+      <section className="pb-10">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-500" /> AI 活动战报
+          </h3>
+          {activityFeed.length > 0 && (
+            <span className="text-[10px] font-bold text-slate-400">最近 {activityFeed.length} 条</span>
+          )}
+        </div>
+
+        {!brandId ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-2.5 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <Zap className="w-8 h-8 text-slate-200 dark:text-slate-700" />
+            <p className="text-sm font-bold text-slate-400">请先选择品牌</p>
+            <p className="text-[11px] text-slate-300 dark:text-slate-600">在顶部切换品牌后，对应品牌的 AI 活动将显示在此</p>
+          </div>
+        ) : activityFeed.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-2.5 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
+            <Zap className="w-8 h-8 text-slate-200 dark:text-slate-700" />
+            <p className="text-sm font-bold text-slate-400">暂无活动记录</p>
+            <p className="text-[11px] text-slate-300 dark:text-slate-600">AI Agent 执行任务后，战报将实时出现在此</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {activityFeed.map((f, i) => <div key={f.key ?? i}>{f.node}</div>)}
+          </div>
+        )}
+      </section>
 
       {editingAgent && (
         <AgentEditModal 

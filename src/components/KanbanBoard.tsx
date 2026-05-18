@@ -401,9 +401,9 @@ export default function KanbanBoard() {
       )}
 
       {currentView === 'home' ? (
-        <div className="flex flex-col xl:flex-row gap-8 items-start animate-in fade-in slide-in-from-bottom-2 duration-300">
-          {/* Left Side: Tabs and Grid */}
-          <div className="flex-1 w-full bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
+        <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {/* Task grid: all tabs including Done rendered inline */}
+          <div className="w-full bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
               {COLUMNS.map(col => {
                 const count = tasks.filter(t => t.status === col.id).length;
@@ -507,48 +507,10 @@ export default function KanbanBoard() {
               )}
             </div>
           </div>
-
-          {/* Right Side: Delivery */}
-          <div className="w-full xl:w-[400px] flex-shrink-0 flex flex-col gap-6">
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex-1 min-h-[300px]">
-              <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-6">
-                <span className="text-amber-500">🏆</span> 交付成果展示
-              </h2>
-              <div className="space-y-4">
-                {doneTasks.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-slate-400 opacity-60">
-                    <Inbox size={32} className="mb-3" />
-                    <p className="text-sm font-medium">暂无交付成果</p>
-                  </div>
-                ) : (
-                  doneTasks.map(task => (
-                    <div 
-                      key={task.id} 
-                      onClick={() => setSelectedTask(task)}
-                      style={task.assignee?.themeColor ? { borderColor: task.assignee.themeColor } : undefined}
-                      className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors border border-transparent group"
-                    >
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-600 flex-shrink-0 border border-white dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">
-                          {task.assignee?.avatar ? (
-                            <img src={task.assignee.avatar} alt="Avatar" className="w-full h-full rounded-full object-cover" />
-                          ) : 'AI'}
-                        </div>
-                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{task.title}</p>
-                      </div>
-                      <span className="text-xs text-slate-400 whitespace-nowrap ml-2 font-medium">
-                        {new Date(task.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
         </div>
       ) : currentView === 'agents' ? (
         <div className="flex-1">
-          <AgentSequenceView initialFilter={agentsFilter} />
+          <AgentSequenceView initialFilter={agentsFilter} brandId={activeBrand?.id} />
         </div>
       ) : currentView === 'archive' ? (
         <div className="flex-1 animate-in fade-in slide-in-from-bottom-2 duration-300">

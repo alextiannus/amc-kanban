@@ -59,11 +59,26 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
         </div>
       </div>
       
-      <div className="flex-1">
-        <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
-          {task.description || task.materials || "暂无详细描述，点击查看更多信息。"}
-        </p>
-      </div>
+      {task.status === 'done' ? (
+        /* ── 交付成果 — shown directly on Done cards ──────────────── */
+        (task.description || task.materials) ? (
+          <div className="bg-emerald-50 dark:bg-emerald-900/15 border border-emerald-100 dark:border-emerald-800/40 rounded-2xl px-3.5 py-2.5">
+            <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              交付成果
+            </p>
+            <p className="text-xs text-emerald-800 dark:text-emerald-200 line-clamp-3 leading-relaxed font-medium">
+              {task.description || task.materials}
+            </p>
+          </div>
+        ) : null
+      ) : (
+        <div className="flex-1">
+          <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+            {task.description || task.materials || "暂无详细描述，点击查看更多信息。"}
+          </p>
+        </div>
+      )}
 
       <div className="flex items-center gap-2 mt-1 flex-wrap">
         <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 ${priorityStyles[task.priority || 'medium'] || priorityStyles.medium}`}>
