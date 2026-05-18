@@ -41,28 +41,29 @@
 
 如接口报错，必须回传：接口名、HTTP 状态码、错误信息、关键参数。
 
-## 2a. 品牌主看板更新协议（首次接入必须执行）
+## 2a. 品牌主看板更新协议（首次接入必须执行，每次初始化必须执行）
 
-> ⚠️ **禁止将品牌配置写入本地文件。** 所有品牌信息必须通过 API 写入数据库，否则看板不会更新。
-> ⚠️ **无需等待管理员授权。** Agent 可以完全自助完成品牌注册与配置。
+> ⚠️ **禁止将品牌配置写入本地文件。** 所有品牌信息必须通过 API 写入数据库，否则看板不会更新。  
+> ⚠️ **无需等待管理员授权。** Agent 可以完全自助完成品牌注册与配置。  
+> ⚠️ **无论品牌是否已存在，Step 2（全量写入品牌信息）每次初始化都必须执行。**
 
-### Step 0 — 确认 brandId（优先从环境变量读取）
+---
 
-优先从环境变量 `KANBAN_BRAND_ID` 读取品牌 ID。
+### Step 0 — 获取 brandId（查询或创建）
 
-如果没有 `KANBAN_BRAND_ID`，调用以下接口查找已关联的品牌：
+**决策树（顺序执行，直到拿到 brandId）：**
+
+**0-A. 先查询已有品牌**
 
 ```
 GET <KANBAN_BASE_URL>/api/agent/brand-config
 Authorization: Bearer <agentApiKey>
 ```
 
-- 返回数组非空 → 取第一个品牌的 `id` 作为 `brandId`，跳到 Step 2
-- 返回空数组 → 继续 Step 1 自助创建品牌
+- **返回数组非空** → 取第一个元素的 `id` 字段作为 `brandId`，**直接跳到 Step 2**
+- **返回空数组** → 继续 0-B 创建品牌
 
-### Step 1 — 自助创建品牌（无需人工授权）
-
-如果品牌不存在，由 Agent 自己创建：
+**0-B. 创建新品牌（仅当 0-A 返回空时）**
 
 ```
 POST <KANBAN_BASE_URL>/api/agent/brand-config
@@ -70,26 +71,23 @@ Authorization: Bearer <agentApiKey>
 Content-Type: application/json
 
 {
-  "name": "成都滋味烤鱼",
-  "location": "Singapore",
+  "name": "<品牌中文名>",
+  "location": "<城市, 国家>",
   "timezone": "Asia/Singapore"
 }
 ```
 
-返回示例：
-```json
-{
-  "ok": true,
-  "created": true,
-  "brand": { "id": "clx...", "name": "成都滋味烤鱼" }
-}
-```
+响应：`{ "ok": true, "brand": { "id": "clx...", "name": "..." } }`
 
-**保存返回的 `brand.id`**，后续步骤全部用这个 `brandId`。
+取响应中的 `brand.id` 作为 `brandId`，继续 Step 2。
 
-### Step 2 — 写入品牌信息与凭证（全量写入）
+> ❌ **严禁**：在 0-A 返回非空数组后仍然调用 POST 创建品牌（会导致重复品牌）
 
-> ⚠️ **必须把 soul/skill 文件中所有已知的品牌配置一次性全部写入看板，不能只写部分字段。**
+---
+
+### Step 2 — 全量写入品牌信息与凭证（**每次初始化必须执行，不可跳过**）
+
+拿到 `brandId` 后，**立即**调用以下接口，将 soul/skill 文件中所有已知配置一次性写入：
 
 ```
 PATCH <KANBAN_BASE_URL>/api/agent/brand-config
@@ -97,35 +95,38 @@ Authorization: Bearer <agentApiKey>
 Content-Type: application/json
 
 {
-  "brandId": "<上一步获得的 id>",
+  "brandId": "<Step 0 获得的 id>",
 
-  // ── 品牌基础信息（从 soul 文件读取）
-  "description": "品牌定位与简介，支持 Markdown",
-  "website": "https://...",
-  "phone": "+65 ...",
-  "address": "完整营业地址",
+  "description": "<品牌定位与简介，可使用 Markdown>",
+  "website": "<官网 URL>",
+  "phone": "<联系电话>",
+  "address": "<完整营业地址>",
   "timezone": "Asia/Singapore",
 
-  // ── PostFast（内容发布凭证）
-  "postfastApiKey": "pf_live_...",
+  "postfastApiKey": "<pf_live_...>",
 
-  // ── Google Business（评论监控）
-  "googlePlaceId": "ChIJ...",
-  "googleApiKey": "AIza...",
+  "googlePlaceId": "<ChIJ...>",
+  "googleApiKey": "<AIza...>",
 
-  // ── 飞书（素材存储 + 通知，有则填写）
-  "larkAppId": "cli_...",
-  "larkAppSecret": "...",
-  "larkBotWebhook": "https://open.larksuite.com/...",
-  "larkOwnerId": "ou_..."
+  "larkAppId": "<cli_...>",
+  "larkAppSecret": "<secret>",
+  "larkBotWebhook": "<https://open.larksuite.com/...>",
+  "larkOwnerId": "<ou_...>"
 }
 ```
 
-调用成功后：
-- 系统自动将你（Agent）注册到该品牌
-- Dashboard 将显示你的头像和「协作 Agent」标识
+**规则：**
+- 只填写 soul 文件中**实际存在的字段**，没有的字段省略（不要填空字符串）
+- `postfastApiKey` 写入后系统自动拉取已配置的社交账号，无需手动创建
+- 调用成功返回 `{ "ok": true, "updated": [...] }` 即确认写入
 
-### Step 3 — 注册每个社媒账号
+---
+
+### Step 3 — （可选）手动添加社媒账号
+
+如果 postfastApiKey 已写入，账号会自动从 PostFast 同步，可跳过此步。
+
+如需手动添加，每个平台单独调用：
 
 ```
 PATCH <KANBAN_BASE_URL>/api/agent/accounts
@@ -141,16 +142,20 @@ Content-Type: application/json
 }
 ```
 
-每个平台单独调用一次。支持：`instagram` `tiktok` `xiaohongshu` `facebook` `youtube` `google` `x` `yelp` `linkedin` `pinterest` `weibo` `wechat` `snapchat` `tripadvisor`
+支持平台：`instagram` `tiktok` `xiaohongshu` `facebook` `youtube` `google` `x` `yelp` `linkedin` `pinterest` `weibo` `wechat` `snapchat` `tripadvisor`
 
-### Step 4 — 验证成功
+---
+
+### Step 4 — 验证
 
 ```
 GET <KANBAN_BASE_URL>/api/agent/brand-config
 Authorization: Bearer <agentApiKey>
 ```
 
-返回数组包含该品牌且 `accounts` 非空，说明看板已更新完成。
+返回数组包含该品牌且 brand 对象中 `description` / `website` 等字段非空，说明看板已更新完成。
+
+
 
 
 
