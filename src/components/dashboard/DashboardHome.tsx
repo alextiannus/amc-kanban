@@ -717,13 +717,17 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
             className="flex items-center gap-2.5 group"
             title={autoPilot ? '当前：自动驾驶 — 点击切换为老板审批' : '当前：老板审批 — 点击切换为自动驾驶'}
           >
-            <span className={`text-[11px] font-bold transition-colors ${autoPilot ? 'text-indigo-500' : 'text-amber-600 dark:text-amber-400'}`}>
-              {autoPilot ? '🤖 自动驾驶' : '👑 老板审批'}
+            <span className={`text-[11px] font-bold tracking-wide transition-colors ${autoPilot ? 'text-indigo-500 dark:text-indigo-400' : 'text-amber-600 dark:text-amber-400'}`}>
+              {autoPilot ? '自动驾驶' : '老板审批'}
             </span>
-            <div className={`relative w-10 h-5.5 rounded-full transition-colors duration-300 flex-shrink-0 ${autoPilot ? 'bg-indigo-500' : 'bg-amber-400'}`}
-              style={{ height: '22px' }}>
-              <div className={`absolute top-0.5 w-4.5 h-4.5 bg-white rounded-full shadow-sm transition-all duration-300 ${autoPilot ? 'left-[22px]' : 'left-0.5'}`}
-                style={{ width: '18px', height: '18px' }} />
+            <div
+              className={`relative rounded-full transition-colors duration-300 flex-shrink-0 ${autoPilot ? 'bg-indigo-500' : 'bg-amber-400'}`}
+              style={{ width: '36px', height: '20px' }}
+            >
+              <div
+                className="absolute top-0.5 bg-white rounded-full shadow-sm transition-all duration-300"
+                style={{ width: '16px', height: '16px', left: autoPilot ? '18px' : '2px' }}
+              />
             </div>
           </button>
         </div>
