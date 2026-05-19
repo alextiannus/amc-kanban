@@ -510,23 +510,23 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
         }
         if (!activeBrand) {
           setActiveBrand(mapped[0])
+          onActiveBrandIdChange?.(mapped[0].id)
         }
       })
       .catch(console.error)
       .finally(() => setBrandLoading(false))
   }, [])
 
-  useEffect(() => { if (propBrand) setActiveBrand(propBrand) }, [propBrand?.id])
+  useEffect(() => {
+    // If parent passes a default brand, only apply it when no persisted/selected brand is active.
+    if (propBrand && !activeBrandId) setActiveBrand(propBrand)
+  }, [propBrand?.id, activeBrandId])
 
   useEffect(() => {
     if (!activeBrandId || brandList.length === 0) return
     const target = brandList.find(b => b.id === activeBrandId)
     if (target && target.id !== activeBrand?.id) setActiveBrand(target)
   }, [activeBrandId, brandList, activeBrand?.id])
-
-  useEffect(() => {
-    if (activeBrand?.id) onActiveBrandIdChange?.(activeBrand.id)
-  }, [activeBrand?.id, onActiveBrandIdChange])
 
   // ── Brand detail (accounts, action items) ───────────────────────────────
   const [brandDetail, setBrandDetail] = useState<any>(null)
