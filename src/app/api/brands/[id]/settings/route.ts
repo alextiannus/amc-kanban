@@ -140,35 +140,54 @@ export async function PATCH(request: Request, { params }: Params) {
       const pfResult = await postfastFetchAccounts(activeKey)
       if (pfResult.success && pfResult.accounts.length > 0) {
         // Upsert each PostFast account into SocialAccount table
+        const syncResults = { success: 0, failed: 0, errors: [] as string[] }
         for (const acc of pfResult.accounts) {
-          await prisma.socialAccount.upsert({
-            where: { brandId_platformId_handle: { brandId: id, platformId: acc.platformId, handle: acc.handle } },
-            create: {
-              brandId: id,
-              platformId: acc.platformId,
-              handle: acc.handle,
-              displayName: acc.displayName ?? acc.handle,
-              profileUrl: acc.profileUrl ?? null,
-              followerCount: acc.followerCount ?? null,
-              followerDelta: acc.followerDelta ?? 0,
-              ratingScore: acc.ratingScore ?? null,
-              snapshotAt: new Date(),
-            },
-            update: {
-              displayName: acc.displayName ?? acc.handle,
-              profileUrl: acc.profileUrl ?? null,
-              followerCount: acc.followerCount ?? null,
-              followerDelta: acc.followerDelta ?? 0,
-              ratingScore: acc.ratingScore ?? null,
-              snapshotAt: new Date(),
-            },
-          })
+          try {
+            // Validate required fields
+            if (!acc.platformId || !acc.handle) {
+              syncResults.failed++
+              const reason = `missing ${!acc.platformId ? 'platformId' : 'handle'}`
+              syncResults.errors.push(`${acc.platform}:${acc.id} - ${reason}`)
+              console.warn(`[Settings] Skipping account ${acc.platform}:${acc.id} - ${reason}`)
+              continue
+            }
+            
+            await prisma.socialAccount.upsert({
+              where: { brandId_platformId_handle: { brandId: id, platformId: acc.platformId, handle: acc.handle } },
+              create: {
+                brandId: id,
+                platformId: acc.platformId,
+                handle: acc.handle,
+                displayName: acc.displayName ?? acc.handle,
+                profileUrl: acc.profileUrl ?? null,
+                followerCount: acc.followerCount ?? null,
+                followerDelta: acc.followerDelta ?? 0,
+                ratingScore: acc.ratingScore ?? null,
+                snapshotAt: new Date(),
+              },
+              update: {
+                displayName: acc.displayName ?? acc.handle,
+                profileUrl: acc.profileUrl ?? null,
+                followerCount: acc.followerCount ?? null,
+                followerDelta: acc.followerDelta ?? 0,
+                ratingScore: acc.ratingScore ?? null,
+                snapshotAt: new Date(),
+              },
+            })
+            syncResults.success++
+            console.log(`[Settings] ✓ Synced ${acc.platformId}:${acc.handle}`)
+          } catch (e: any) {
+            syncResults.failed++
+            const errMsg = e.message?.split('\n')[0] ?? String(e)
+            syncResults.errors.push(`${acc.platformId}:${acc.handle} - ${errMsg}`)
+            console.error(`[Settings] ✗ Failed to sync ${acc.platformId}:${acc.handle}:`, errMsg)
+          }
         }
         postfastSync = {
-          synced: pfResult.accounts.length,
+          synced: syncResults.success,
           accounts: pfResult.accounts.map(a => `${a.platformId}:${a.handle}`),
         }
-        console.log(`[Settings] PostFast sync: ${pfResult.accounts.length} accounts for brand ${id}`)
+        console.log(`[Settings] PostFast sync complete: ${syncResults.success}/${pfResult.accounts.length} accounts synced for brand ${id}` + (syncResults.errors.length > 0 ? ` (${syncResults.failed} failed: ${syncResults.errors.join('; ')})` : ''))
       } else if (!pfResult.success) {
         console.warn(`[Settings] PostFast account fetch failed: ${pfResult.error}`)
       }
