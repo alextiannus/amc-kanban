@@ -55,7 +55,10 @@ export async function GET(request: Request) {
   const drafts = await prisma.contentDraft.findMany({
     where: {
       brandId: { in: scopedBrandIds },
-      scheduledAt: { gte: rangeStart, lt: rangeEnd },
+      OR: [
+        { scheduledAt: { gte: rangeStart, lt: rangeEnd } },
+        { publishedAt: { gte: rangeStart, lt: rangeEnd } },
+      ],
     },
     include: {
       brand: { select: { id: true, name: true } },
@@ -64,8 +67,47 @@ export async function GET(request: Request) {
     orderBy: [{ scheduledAt: 'asc' }, { updatedAt: 'desc' }],
   })
 
+  const brands = await prisma.brand.findMany({
+    where: { id: { in: scopedBrandIds } },
+    select: { id: true, name: true },
+  })
+  const brandNameMap = new Map(brands.map(brand => [brand.id, brand.name]))
+
+  const brandAgentLinks = await prisma.brandAgent.findMany({
+    where: { brandId: { in: scopedBrandIds }, active: true },
+    select: { agentId: true },
+  })
+  const brandAgentIds = Array.from(new Set(brandAgentLinks.map(link => link.agentId)))
+
+  const tasks = brandAgentIds.length > 0
+    ? await prisma.workUnit.findMany({
+        where: {
+          assigneeId: { in: brandAgentIds },
+          OR: [
+            // Planned work: tasks scheduled by deadline in the viewed month.
+            { deadline: { gte: rangeStart, lt: rangeEnd } },
+            // Past happened: completed/cancelled in the viewed month.
+            { status: { in: ['done', 'void'] }, updatedAt: { gte: rangeStart, lt: rangeEnd } },
+            // Planned without deadline: newly created active tasks in the viewed month.
+            { status: { in: ['todo', 'in_progress', 'pending'] }, deadline: null, createdAt: { gte: rangeStart, lt: rangeEnd } },
+          ],
+        },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          deadline: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: [{ updatedAt: 'desc' }],
+      })
+    : []
+
   const events = drafts.map(draft => {
-    const scheduledAt = draft.scheduledAt ?? draft.updatedAt
+    const eventAt = draft.status === 'published'
+      ? (draft.publishedAt ?? draft.scheduledAt ?? draft.updatedAt)
+      : (draft.scheduledAt ?? draft.updatedAt)
     const platform = draft.account?.platformId || '全平台'
     const status = draft.status === 'published'
       ? 'done'
@@ -82,12 +124,47 @@ export async function GET(request: Request) {
       platform,
       title: draft.caption,
       status,
-      time: scheduledAt.toISOString(),
-      scheduledAt: scheduledAt.toISOString(),
+      time: eventAt.toISOString(),
+      scheduledAt: eventAt.toISOString(),
       mediaUrls: draft.mediaUrls,
       captionLang: draft.captionLang,
     }
   })
 
-  return NextResponse.json({ events })
+  const taskEvents = tasks
+    .filter(task => Boolean(task.deadline))
+    .map(task => {
+      const eventTime = task.status === 'done' || task.status === 'void'
+        ? task.updatedAt
+        : (task.deadline ?? task.createdAt)
+      const status = task.status === 'done'
+        ? 'done'
+        : task.status === 'void'
+          ? 'done'
+        : task.status === 'pending'
+          ? 'pending'
+          : 'scheduled'
+      const title = task.status === 'void'
+        ? `[已取消] ${task.title}`
+        : task.status === 'done'
+          ? `[已完成] ${task.title}`
+          : task.title
+
+      return {
+        id: `task_${task.id}`,
+        brandId: requestedBrandId ?? '',
+        brandName: requestedBrandId ? (brandNameMap.get(requestedBrandId) ?? '当前品牌') : '任务',
+        platform: '任务',
+        title,
+        status,
+        time: eventTime.toISOString(),
+        scheduledAt: eventTime.toISOString(),
+      }
+    })
+
+  const mergedEvents = [...events, ...taskEvents].sort((a, b) => {
+    return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
+  })
+
+  return NextResponse.json({ events: mergedEvents })
 }
