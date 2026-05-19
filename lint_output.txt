@@ -1,0 +1,1091 @@
+
+> temp-app@0.1.0 lint
+> eslint
+
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/next.config.js
+  1:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/prisma/seed.ts
+  85:27  warning  'tiktok' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/scripts/test-api.mts
+   16:26  warning  'before' is defined but never used        @typescript-eslint/no-unused-vars
+   16:34  warning  'after' is defined but never used         @typescript-eslint/no-unused-vars
+  136:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:61  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:43  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:69  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:93  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  158:51  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  160:30  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  161:26  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  177:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  177:49  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  178:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  178:49  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  190:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  191:38  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  192:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  193:52  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  200:27  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  201:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  202:48  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  213:38  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  214:28  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  214:50  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  227:24  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  228:27  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  236:27  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  262:54  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  370:55  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/scripts/verify-permissions.mjs
+  211:11  warning  'humanA' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/admin/page.tsx
+   7:38  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  13:54  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  17:56  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  21:5   error    Error: Cannot access variable before it is declared
+
+`fetchUsers` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/admin/page.tsx:21:5
+  19 |
+  20 |   useEffect(() => {
+> 21 |     fetchUsers()
+     |     ^^^^^^^^^^ `fetchUsers` accessed before it is declared
+  22 |   }, [])
+  23 |
+  24 |   const fetchUsers = async () => {
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/admin/page.tsx:24:3
+  22 |   }, [])
+  23 |
+> 24 |   const fetchUsers = async () => {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 25 |     const res = await fetch('/api/admin/users')
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 26 |     if (res.ok) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 27 |       const data = await res.json()
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 28 |       setUsers(data)
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 29 |     }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |   }
+     | ^^^^ `fetchUsers` is declared here
+  31 |
+  32 |   const handleAddUser = async (e: React.FormEvent) => {
+  33 |     e.preventDefault()  react-hooks/immutability
+  50:13  warning  'err' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+  57:39  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  59:56  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  74:13  warning  'err' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/agents/[id]/page.tsx
+    9:38  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-explicit-any
+   17:5   error    Error: Cannot access variable before it is declared
+
+`fetchAgent` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/agents/[id]/page.tsx:17:5
+  15 |
+  16 |   useEffect(() => {
+> 17 |     fetchAgent()
+     |     ^^^^^^^^^^ `fetchAgent` accessed before it is declared
+  18 |   }, [])
+  19 |
+  20 |   const fetchAgent = async () => {
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/agents/[id]/page.tsx:20:3
+  18 |   }, [])
+  19 |
+> 20 |   const fetchAgent = async () => {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |     const res = await fetch(`/api/agents/${resolvedParams.id}`)
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |     if (res.ok) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |       const data = await res.json()
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 24 |       setAgent(data)
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 25 |     } else {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 26 |       setError('Agent not found or access denied')
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 27 |     }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 28 |   }
+     | ^^^^ `fetchAgent` is declared here
+  29 |
+  30 |   const handleAvatarUpload = async () => {
+  31 |     if (!selectedFile) {  react-hooks/immutability
+   18:6   warning  React Hook useEffect has a missing dependency: 'fetchAgent'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       react-hooks/exhaustive-deps
+  154:51  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/admin/debug/avatar/route.ts
+  47:16  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  69:19  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/admin/permissions/route.ts
+  54:12  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/admin/users/route.ts
+  33:12  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/agent/insights/route.ts
+  25:12  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/agent/profile/route.ts
+  20:13  warning  'password' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  22:12  warning  'error' is defined but never used              @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/agents/[id]/route.ts
+   43:13  warning  'password' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   43:23  warning  'apiKey' is assigned a value but never used    @typescript-eslint/no-unused-vars
+   43:57  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   45:12  warning  'error' is defined but never used              @typescript-eslint/no-unused-vars
+   83:23  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  122:29  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  142:79  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  146:23  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  150:19  error    Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  190:12  warning  'error' is defined but never used              @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/agents/keys/route.ts
+  10:28  warning  'request' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/agents/profile/route.ts
+  4:8  warning  'crypto' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/agents/route.ts
+  13:22  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  55:48  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  64:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/analytics/activity/route.ts
+   8:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  10:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  51:61  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  51:97  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/analytics/agents/[id]/weekly/route.ts
+  6:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  8:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/brands/[id]/actions/[aid]/approve/route.ts
+  98:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/brands/[id]/actions/route.ts
+  4:10  warning  'eventEmitter' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/brands/route.ts
+  71:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/dashboard/summary/route.ts
+  77:12  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/integrations/postfast/route.ts
+  74:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/profile/route.ts
+   14:11  warning  'singleAgentMode' is assigned a value but never used   @typescript-eslint/no-unused-vars
+   15:11  warning  'canonicalAgentId' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   57:12  warning  'error' is defined but never used                      @typescript-eslint/no-unused-vars
+   70:23  error    Unexpected any. Specify a different type               @typescript-eslint/no-explicit-any
+   91:24  error    A `require()` style import is forbidden                @typescript-eslint/no-require-imports
+  132:24  error    A `require()` style import is forbidden                @typescript-eslint/no-require-imports
+  156:12  warning  'error' is defined but never used                      @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/tasks/[id]/route.ts
+   78:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   78:70  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  157:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/tasks/[id]/status/route.ts
+  49:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/tasks/route.ts
+   38:22   error    Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   90:25   error    Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+  116:43   error    Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+  135:12   warning  'error' is defined but never used                          @typescript-eslint/no-unused-vars
+  155:11   error    'title' is never reassigned. Use 'const' instead           prefer-const
+  155:18   error    'description' is never reassigned. Use 'const' instead     prefer-const
+  155:31   error    'materials' is never reassigned. Use 'const' instead       prefer-const
+  155:42   error    'status' is never reassigned. Use 'const' instead          prefer-const
+  155:62   error    'priority' is never reassigned. Use 'const' instead        prefer-const
+  155:72   error    'estimatedHours' is never reassigned. Use 'const' instead  prefer-const
+  155:88   error    'deadline' is never reassigned. Use 'const' instead        prefer-const
+  155:98   error    'tags' is never reassigned. Use 'const' instead            prefer-const
+  155:104  error    'weight' is never reassigned. Use 'const' instead          prefer-const
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/api/tasks/unassigned/route.ts
+  6:30  warning  'request' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/invite/[token]/page.tsx
+  10:36  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+  25:11  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/invite/[token]/page.tsx:25:11
+  23 |         
+  24 |         if (linkAge > sevenDaysMs) {
+> 25 |           setError('邀请链接已过期（有效期为7天）')
+     |           ^^^^^^^^ Avoid calling setState() directly within an effect
+  26 |         } else {
+  27 |           setData(invitationData)
+  28 |         }  react-hooks/set-state-in-effect
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/page.tsx
+  34:14  warning  'err' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/profile/page.tsx
+   8:42  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+  12:5   error    Error: Cannot access variable before it is declared
+
+`fetchProfile` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/profile/page.tsx:12:5
+  10 |
+  11 |   useEffect(() => {
+> 12 |     fetchProfile()
+     |     ^^^^^^^^^^^^ `fetchProfile` accessed before it is declared
+  13 |   }, [])
+  14 |
+  15 |   const fetchProfile = async () => {
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/app/profile/page.tsx:15:3
+  13 |   }, [])
+  14 |
+> 15 |   const fetchProfile = async () => {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 16 |     const res = await fetch('/api/profile')
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 17 |     if (res.ok) {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 18 |       const data = await res.json()
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 19 |       setProfile(data)
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 20 |     } else {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |       router.push('/')
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |     }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 23 |   }
+     | ^^^^ `fetchProfile` is declared here
+  24 |
+  25 |   if (!profile) return <div className="p-8 text-center text-gray-500">Loading profile...</div>
+  26 |  react-hooks/immutability
+  13:6   warning  React Hook useEffect has a missing dependency: 'fetchProfile'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              react-hooks/exhaustive-deps
+  41:15  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @next/next/no-img-element
+  71:47  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/AgentEditModal.tsx
+    4:79  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+   64:19  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  119:21  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/AgentSequenceView.tsx
+  12:21  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+  17:3   warning  'brandId' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+  22:40  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+  29:52  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+  38:21  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/AgentSequenceView.tsx:38:21
+  36 |   }
+  37 |
+> 38 |   useEffect(() => { setFilterTab(initialFilter) }, [initialFilter])
+     |                     ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  39 |   useEffect(() => { fetchAgents() }, [])
+  40 |
+  41 |   const fetchAgents = async () => {                                                           react-hooks/set-state-in-effect
+  39:21  error    Error: Cannot access variable before it is declared
+
+`fetchAgents` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/AgentSequenceView.tsx:39:21
+  37 |
+  38 |   useEffect(() => { setFilterTab(initialFilter) }, [initialFilter])
+> 39 |   useEffect(() => { fetchAgents() }, [])
+     |                     ^^^^^^^^^^^ `fetchAgents` accessed before it is declared
+  40 |
+  41 |   const fetchAgents = async () => {
+  42 |     try {
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/AgentSequenceView.tsx:41:3
+  39 |   useEffect(() => { fetchAgents() }, [])
+  40 |
+> 41 |   const fetchAgents = async () => {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 42 |     try {
+     | ^^^^^^^^^
+> 43 |       const res = await fetch('/api/agents')
+     …
+     | ^^^^^^^^^
+> 50 |     }
+     | ^^^^^^^^^
+> 51 |   }
+     | ^^^^ `fetchAgents` is declared here
+  52 |
+  53 |   const handleDeleteAgent = async (e: React.MouseEvent, agentId: string) => {
+  54 |     e.stopPropagation()  react-hooks/immutability
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/ArchiveFilters.tsx
+  4:70  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  4:96  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/ArchiveView.tsx
+   7:27  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+   8:21  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+   9:27  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+  16:76  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+  17:44  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+  18:38  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+  27:5   error    Error: Cannot access variable before it is declared
+
+`fetchArchiveTasks` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/ArchiveView.tsx:27:5
+  25 |
+  26 |   useEffect(() => {
+> 27 |     fetchArchiveTasks()
+     |     ^^^^^^^^^^^^^^^^^ `fetchArchiveTasks` accessed before it is declared
+  28 |   }, [page])
+  29 |
+  30 |   const fetchArchiveTasks = async () => {
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/ArchiveView.tsx:30:3
+  28 |   }, [page])
+  29 |
+> 30 |   const fetchArchiveTasks = async () => {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |     setLoading(true)
+     | ^^^^^^^^^^^^^^^^^^^^
+> 32 |     try {
+     …
+     | ^^^^^^^^^^^^^^^^^^^^
+> 46 |     }
+     | ^^^^^^^^^^^^^^^^^^^^
+> 47 |   }
+     | ^^^^ `fetchArchiveTasks` is declared here
+  48 |
+  49 |   const applyFilters = (taskList: any[]) => {
+  50 |     let filtered = taskList  react-hooks/immutability
+  28:6   warning  React Hook useEffect has a missing dependency: 'fetchArchiveTasks'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-hooks/exhaustive-deps
+  49:35  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+  68:37  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/AvatarImage.tsx
+  15:3   warning  'fallbackClassName' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+  16:3   warning  'size' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+  19:10  warning  'isLoading' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+  24:5   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/AvatarImage.tsx:24:5
+  22 |   useEffect(() => {
+  23 |     // Reset image state whenever src changes, and add cache buster
+> 24 |     setHasError(false)
+     |     ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  25 |     setIsLoading(!!src)
+  26 |     // Add timestamp to URL to bust browser cache on new uploads
+  27 |     setCacheBuster(Date.now())  react-hooks/set-state-in-effect
+  65:5   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @next/next/no-img-element
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/BrandKanbanLane.tsx
+  15:38  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  19:52  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  33:21  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/BrandKanbanLane.tsx:33:21
+  31 |   }, [brandId])
+  32 |
+> 33 |   useEffect(() => { fetchTasks() }, [fetchTasks])
+     |                     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  34 |
+  35 |   const searchLower = searchQuery.toLowerCase().trim()
+  36 |  react-hooks/set-state-in-effect
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/Column.tsx
+  6:74   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  6:86   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  6:110  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/KanbanBoard.tsx
+    9:134  warning  'ChevronDown' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+   32:9    warning  'SHOW_LANE_FILTERS' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+   33:38   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+   34:10   warning  'doneTasks' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+   34:46   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+   36:52   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-explicit-any
+   37:26   warning  'setPriorityFilter' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+   38:23   warning  'setAgentFilter' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+   39:18   warning  'setSortBy' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+   40:27   warning  'setShowOverdueOnly' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+   58:10   warning  'brands' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+   60:10   warning  'showBrandMenu' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+   60:25   warning  'setShowBrandMenu' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-unused-vars
+   90:5    error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/KanbanBoard.tsx:90:5
+  88 |
+  89 |   useEffect(() => {
+> 90 |     setMounted(true)
+     |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  91 |     fetchTasks()
+  92 |     fetchSummary()
+  93 |     fetchUser()                                                                                                                                                                                                                                                                                                                                                                            react-hooks/set-state-in-effect
+   91:5    error    Error: Cannot access variable before it is declared
+
+`fetchTasks` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/KanbanBoard.tsx:91:5
+  89 |   useEffect(() => {
+  90 |     setMounted(true)
+> 91 |     fetchTasks()
+     |     ^^^^^^^^^^ `fetchTasks` accessed before it is declared
+  92 |     fetchSummary()
+  93 |     fetchUser()
+  94 |     fetchBrands()
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/KanbanBoard.tsx:116:3
+  114 |   }
+  115 |
+> 116 |   const fetchTasks = async () => {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 117 |     try {
+      | ^^^^^^^^^
+> 118 |       const res = await fetch('/api/tasks?active=true')
+      …
+      | ^^^^^^^^^
+> 132 |     }
+      | ^^^^^^^^^
+> 133 |   }
+      | ^^^^ `fetchTasks` is declared here
+  134 |
+  135 |   const fetchSummary = async () => {
+  136 |     const res = await fetch('/api/dashboard/summary')                                                                                                                                                                                                                                                                                                                                     react-hooks/immutability
+   92:5    error    Error: Cannot access variable before it is declared
+
+`fetchSummary` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/KanbanBoard.tsx:92:5
+  90 |     setMounted(true)
+  91 |     fetchTasks()
+> 92 |     fetchSummary()
+     |     ^^^^^^^^^^^^ `fetchSummary` accessed before it is declared
+  93 |     fetchUser()
+  94 |     fetchBrands()
+  95 |
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/KanbanBoard.tsx:135:3
+  133 |   }
+  134 |
+> 135 |   const fetchSummary = async () => {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 136 |     const res = await fetch('/api/dashboard/summary')
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 137 |     if (res.ok) {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 138 |       const data = await res.json()
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 139 |       setSummary(data)
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 140 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 141 |   }
+      | ^^^^ `fetchSummary` is declared here
+  142 |
+  143 |   const handleLogout = async () => {
+  144 |     await fetch('/api/auth/logout', { method: 'POST' })  react-hooks/immutability
+   93:5    error    Error: Cannot access variable before it is declared
+
+`fetchUser` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/KanbanBoard.tsx:93:5
+  91 |     fetchTasks()
+  92 |     fetchSummary()
+> 93 |     fetchUser()
+     |     ^^^^^^^^^ `fetchUser` accessed before it is declared
+  94 |     fetchBrands()
+  95 |
+  96 |     const eventSource = new EventSource('/api/events')
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/KanbanBoard.tsx:109:3
+  107 |   }, [])
+  108 |
+> 109 |   const fetchUser = async () => {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 110 |     const res = await fetch('/api/auth/me')
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 111 |     if (res.ok) {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 112 |       setUser(await res.json())
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 113 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 114 |   }
+      | ^^^^ `fetchUser` is declared here
+  115 |
+  116 |   const fetchTasks = async () => {
+  117 |     try {                                                                                                                                                                                react-hooks/immutability
+  168:14   warning  'e' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+  181:9    warning  'agentOptions' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+  191:86   error    Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/KanbanBoard.tsx:191:86
+  189 |     .filter(t => priorityFilter === 'all' || (t.priority || 'medium') === priorityFilter)
+  190 |     .filter(t => agentFilter === 'all' || t.assigneeId === agentFilter)
+> 191 |     .filter(t => !showOverdueOnly || (t.deadline && new Date(t.deadline).getTime() < Date.now() && t.status !== 'done'))
+      |                                                                                      ^^^^^^^^^^ Cannot call impure function
+  192 |     .filter(t => {
+  193 |       if (!searchLower) return true
+  194 |       const assigneeName = t.assignee ? (t.assignee.nickname || t.assignee.email || '').toLowerCase() : ''                                                                                                                                                                                                                                                                                                                             react-hooks/purity
+  220:11   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @next/next/no-img-element
+  284:17   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @next/next/no-img-element
+  323:38   warning  'error' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/TaskCard.tsx
+   11:73  error    Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  100:52  warning  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/TaskModal.tsx
+   7:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  28:9   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  31:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/UserSettingsModal.tsx
+    4:81  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+   74:14  warning  'e' is defined but never used                                                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+  127:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx
+   35:36  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+   46:60  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+   83:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:83:7
+  81 |
+  82 |     if (initialSettings) {
+> 83 |       setForm(buildInitialForm(initialSettings))
+     |       ^^^^^^^ Avoid calling setState() directly within an effect
+  84 |       setStatus({
+  85 |         postfast: !!initialSettings.postfastConfigured,
+  86 |         google: !!initialSettings.googleConfigured,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              react-hooks/set-state-in-effect
+   95:15  error    Error: Cannot access variable before it is declared
+
+`fetchStatus` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:95:15
+  93 |
+  94 |   useEffect(() => {
+> 95 |     if (open) fetchStatus()
+     |               ^^^^^^^^^^^ `fetchStatus` accessed before it is declared
+  96 |   }, [open, brandId])
+  97 |
+  98 |   const fetchStatus = async () => {
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:98:3
+   96 |   }, [open, brandId])
+   97 |
+>  98 |   const fetchStatus = async () => {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+>  99 |     const res = await fetch(`/api/integrations/status?brandId=${brandId}`)
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 100 |     if (res.ok) {
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 101 |       const data = await res.json()
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 102 |       const s: Record<string, boolean> = {}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 103 |       data.statuses?.forEach((st: any) => { s[st.name] = st.ok })
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 104 |       setStatus(s)
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 105 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 106 |   }
+      | ^^^^ `fetchStatus` is declared here
+  107 |
+  108 |   const handleSave = async () => {
+  109 |     setSaving(true)  react-hooks/immutability
+   96:6   warning  React Hook useEffect has a missing dependency: 'fetchStatus'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 react-hooks/exhaustive-deps
+  103:35  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-explicit-any
+  194:12  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:194:12
+  192 |
+  193 |           {/* PostFast */}
+> 194 |           <Section label="PostFast（内容发布）" badge={<StatusBadge ok={status.postfast} />}>
+      |            ^^^^^^^ This component is created during render
+  195 |             {POSTFAST_FIELDS.map(f => <Field key={f.key} f={f} />)}
+  196 |           </Section>
+  197 |           <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:156:19
+  154 |     )
+  155 |
+> 156 |   const Section = ({ label, badge, children }: { label: string; badge: React.ReactNode; children: React.ReactNode }) => (
+      |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 157 |     <div>
+      | ^^^^^^^^^
+> 158 |       <div className="flex items-center justify-between mb-3">
+      | ^^^^^^^^^
+> 159 |         <p className="text-xs font-extrabold text-slate-700 dark:text-slate-200">{label}</p>
+      | ^^^^^^^^^
+> 160 |         {badge}
+      | ^^^^^^^^^
+> 161 |       </div>
+      | ^^^^^^^^^
+> 162 |       <div className="space-y-3">{children}</div>
+      | ^^^^^^^^^
+> 163 |     </div>
+      | ^^^^^^^^^
+> 164 |   )
+      | ^^^^ The component is created during render here
+  165 |
+  166 |   return (
+  167 |     // Backdrop                                                                                                                                                                                  react-hooks/static-components
+  194:51  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:194:51
+  192 |
+  193 |           {/* PostFast */}
+> 194 |           <Section label="PostFast（内容发布）" badge={<StatusBadge ok={status.postfast} />}>
+      |                                                   ^^^^^^^^^^^ This component is created during render
+  195 |             {POSTFAST_FIELDS.map(f => <Field key={f.key} f={f} />)}
+  196 |           </Section>
+  197 |           <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:149:23
+  147 |   )
+  148 |
+> 149 |   const StatusBadge = ({ ok }: { ok?: boolean }) =>
+      |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 150 |     ok ? (
+      | ^^^^^^^^^^
+> 151 |       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">已连接</span>
+      | ^^^^^^^^^^
+> 152 |     ) : (
+      | ^^^^^^^^^^
+> 153 |       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">未配置</span>
+      | ^^^^^^^^^^
+> 154 |     )
+      | ^^^^^^ The component is created during render here
+  155 |
+  156 |   const Section = ({ label, badge, children }: { label: string; badge: React.ReactNode; children: React.ReactNode }) => (
+  157 |     <div>                                                                                                                                                                                              react-hooks/static-components
+  200:12  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:200:12
+  198 |
+  199 |           {/* Google Business */}
+> 200 |           <Section label="Google Business（评论监控）" badge={<StatusBadge ok={status.google} />}>
+      |            ^^^^^^^ This component is created during render
+  201 |             {GOOGLE_FIELDS.map(f => <Field key={f.key} f={f} />)}
+  202 |           </Section>
+  203 |           <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:156:19
+  154 |     )
+  155 |
+> 156 |   const Section = ({ label, badge, children }: { label: string; badge: React.ReactNode; children: React.ReactNode }) => (
+      |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 157 |     <div>
+      | ^^^^^^^^^
+> 158 |       <div className="flex items-center justify-between mb-3">
+      | ^^^^^^^^^
+> 159 |         <p className="text-xs font-extrabold text-slate-700 dark:text-slate-200">{label}</p>
+      | ^^^^^^^^^
+> 160 |         {badge}
+      | ^^^^^^^^^
+> 161 |       </div>
+      | ^^^^^^^^^
+> 162 |       <div className="space-y-3">{children}</div>
+      | ^^^^^^^^^
+> 163 |     </div>
+      | ^^^^^^^^^
+> 164 |   )
+      | ^^^^ The component is created during render here
+  165 |
+  166 |   return (
+  167 |     // Backdrop                                                                                                                                                                        react-hooks/static-components
+  200:58  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:200:58
+  198 |
+  199 |           {/* Google Business */}
+> 200 |           <Section label="Google Business（评论监控）" badge={<StatusBadge ok={status.google} />}>
+      |                                                          ^^^^^^^^^^^ This component is created during render
+  201 |             {GOOGLE_FIELDS.map(f => <Field key={f.key} f={f} />)}
+  202 |           </Section>
+  203 |           <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:149:23
+  147 |   )
+  148 |
+> 149 |   const StatusBadge = ({ ok }: { ok?: boolean }) =>
+      |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 150 |     ok ? (
+      | ^^^^^^^^^^
+> 151 |       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">已连接</span>
+      | ^^^^^^^^^^
+> 152 |     ) : (
+      | ^^^^^^^^^^
+> 153 |       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">未配置</span>
+      | ^^^^^^^^^^
+> 154 |     )
+      | ^^^^^^ The component is created during render here
+  155 |
+  156 |   const Section = ({ label, badge, children }: { label: string; badge: React.ReactNode; children: React.ReactNode }) => (
+  157 |     <div>                                                                                                                                                                             react-hooks/static-components
+  206:12  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:206:12
+  204 |
+  205 |           {/* Lark */}
+> 206 |           <Section label="飞书（素材存储 + 通知）" badge={<StatusBadge ok={status.lark} />}>
+      |            ^^^^^^^ This component is created during render
+  207 |             {initialSettings?.larkDriveFolderId && (
+  208 |               <a
+  209 |                 href={`https://12eat-ai.sg.larksuite.com/drive/folder/${initialSettings.larkDriveFolderId}`}
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:156:19
+  154 |     )
+  155 |
+> 156 |   const Section = ({ label, badge, children }: { label: string; badge: React.ReactNode; children: React.ReactNode }) => (
+      |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 157 |     <div>
+      | ^^^^^^^^^
+> 158 |       <div className="flex items-center justify-between mb-3">
+      | ^^^^^^^^^
+> 159 |         <p className="text-xs font-extrabold text-slate-700 dark:text-slate-200">{label}</p>
+      | ^^^^^^^^^
+> 160 |         {badge}
+      | ^^^^^^^^^
+> 161 |       </div>
+      | ^^^^^^^^^
+> 162 |       <div className="space-y-3">{children}</div>
+      | ^^^^^^^^^
+> 163 |     </div>
+      | ^^^^^^^^^
+> 164 |   )
+      | ^^^^ The component is created during render here
+  165 |
+  166 |   return (
+  167 |     // Backdrop                                                                                                                                                                   react-hooks/static-components
+  206:50  error    Error: Cannot create components during render
+
+Components created during render will reset their state each time they are created. Declare components outside of render.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:206:50
+  204 |
+  205 |           {/* Lark */}
+> 206 |           <Section label="飞书（素材存储 + 通知）" badge={<StatusBadge ok={status.lark} />}>
+      |                                                  ^^^^^^^^^^^ This component is created during render
+  207 |             {initialSettings?.larkDriveFolderId && (
+  208 |               <a
+  209 |                 href={`https://12eat-ai.sg.larksuite.com/drive/folder/${initialSettings.larkDriveFolderId}`}
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/BrandSettingsPanel.tsx:149:23
+  147 |   )
+  148 |
+> 149 |   const StatusBadge = ({ ok }: { ok?: boolean }) =>
+      |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 150 |     ok ? (
+      | ^^^^^^^^^^
+> 151 |       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">已连接</span>
+      | ^^^^^^^^^^
+> 152 |     ) : (
+      | ^^^^^^^^^^
+> 153 |       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">未配置</span>
+      | ^^^^^^^^^^
+> 154 |     )
+      | ^^^^^^ The component is created during render here
+  155 |
+  156 |   const Section = ({ label, badge, children }: { label: string; badge: React.ReactNode; children: React.ReactNode }) => (
+  157 |     <div>                                                                                                                                                                                react-hooks/static-components
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/DashboardAssets.tsx
+  222:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/DashboardCalendar.tsx
+  168:55  warning  'i' is defined but never used  @typescript-eslint/no-unused-vars
+  201:40  warning  'i' is defined but never used  @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/DashboardHome.tsx
+    5:3   warning  'Calendar' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+    5:18  warning  'Shield' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+   11:39  warning  'themeColor' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-unused-vars
+   15:5   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @next/next/no-img-element
+  163:54  warning  'isAdmin' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+  340:10  warning  'ActivityCard' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+  500:20  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  517:6   warning  React Hook useEffect has missing dependencies: 'activeBrand' and 'activeBrandId'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 react-hooks/exhaustive-deps
+  519:36  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/DashboardHome.tsx:519:36
+  517 |   }, [])
+  518 |
+> 519 |   useEffect(() => { if (propBrand) setActiveBrand(propBrand) }, [propBrand?.id])
+      |                                    ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  520 |
+  521 |   useEffect(() => {
+  522 |     if (!activeBrandId || brandList.length === 0) return                                                                                                               react-hooks/set-state-in-effect
+  519:65  warning  React Hook useEffect has a missing dependency: 'propBrand'. Either include it or remove the dependency array. If 'setActiveBrand' needs the current value of 'propBrand', you can also switch to useReducer instead of useState and read 'propBrand' in the reducer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+  524:50  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/DashboardHome.tsx:524:50
+  522 |     if (!activeBrandId || brandList.length === 0) return
+  523 |     const target = brandList.find(b => b.id === activeBrandId)
+> 524 |     if (target && target.id !== activeBrand?.id) setActiveBrand(target)
+      |                                                  ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  525 |   }, [activeBrandId, brandList, activeBrand?.id])
+  526 |
+  527 |   useEffect(() => {  react-hooks/set-state-in-effect
+  532:50  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  533:10  warning  'detailLoading' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+  544:54  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  551:50  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  560:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/DashboardHome.tsx:560:7
+  558 |     if (activeBrand?.id) {
+  559 |       // Clear stale data immediately so the UI doesn't show the previous brand's content
+> 560 |       setBrandDetail(null)
+      |       ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  561 |       setBrandSettings(null)
+  562 |       setBrandAgents([])
+  563 |       setDismissedIds(new Set())                                                                             react-hooks/set-state-in-effect
+  563:7   error    Error: Cannot access variable before it is declared
+
+`setDismissedIds` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/DashboardHome.tsx:563:7
+  561 |       setBrandSettings(null)
+  562 |       setBrandAgents([])
+> 563 |       setDismissedIds(new Set())
+      |       ^^^^^^^^^^^^^^^ `setDismissedIds` accessed before it is declared
+  564 |       setAutoPilot(false)
+  565 |       // Load new brand data
+  566 |       loadDetail(activeBrand.id)
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/DashboardHome.tsx:582:24
+  580 |
+  581 |   // ── Local UI state ───────────────────────────────────────────────────────
+> 582 |   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
+      |                        ^^^^^^^^^^^^^^^ `setDismissedIds` is declared here
+  583 |   const [autoPilot, setAutoPilot] = useState(false)
+  584 |   const [showAddAccount, setShowAddAccount] = useState(false)
+  585 |   const [showSettings, setShowSettings] = useState(false)                                                                  react-hooks/immutability
+  564:7   error    Error: Cannot access variable before it is declared
+
+`setAutoPilot` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/DashboardHome.tsx:564:7
+  562 |       setBrandAgents([])
+  563 |       setDismissedIds(new Set())
+> 564 |       setAutoPilot(false)
+      |       ^^^^^^^^^^^^ `setAutoPilot` accessed before it is declared
+  565 |       // Load new brand data
+  566 |       loadDetail(activeBrand.id)
+  567 |       loadSettings(activeBrand.id)
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/DashboardHome.tsx:583:21
+  581 |   // ── Local UI state ───────────────────────────────────────────────────────
+  582 |   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
+> 583 |   const [autoPilot, setAutoPilot] = useState(false)
+      |                     ^^^^^^^^^^^^ `setAutoPilot` is declared here
+  584 |   const [showAddAccount, setShowAddAccount] = useState(false)
+  585 |   const [showSettings, setShowSettings] = useState(false)
+  586 |                                                                              react-hooks/immutability
+  574:25  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  575:22  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  577:26  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  578:9   warning  'recentDrafts' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  578:23  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+  836:37  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/FloatingAIAssistant.tsx
+   3:45  warning  'ChevronDown' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-unused-vars
+   3:58  warning  'Check' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-unused-vars
+  49:36  error    Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/FloatingAIAssistant.tsx:49:36
+  47 |   const sendMessage = (text: string) => {
+  48 |     if (!text.trim()) return
+> 49 |     const userMsg: Message = { id: Date.now(), role: 'user', content: text }
+     |                                    ^^^^^^^^^^ Cannot call impure function
+  50 |     setMessages(p => [...p, userMsg])
+  51 |     setInputText('')
+  52 |     setIsTyping(true)  react-hooks/purity
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/MobileLayout.tsx
+  19:18  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/MobileLayout.tsx:19:18
+  17 |     try {
+  18 |       const saved = window.localStorage.getItem('dashboard.activeBrandId')
+> 19 |       if (saved) setActiveBrandId(saved)
+     |                  ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  20 |     } catch {
+  21 |       // Ignore storage errors and continue without persistence.
+  22 |     }  react-hooks/set-state-in-effect
+  35:57  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/components/dashboard/SwipeableActionCard.tsx
+   2:17  warning  'useState' is defined but never used            @typescript-eslint/no-unused-vars
+   4:20  warning  'Edit' is defined but never used                @typescript-eslint/no-unused-vars
+   4:26  warning  'Send' is defined but never used                @typescript-eslint/no-unused-vars
+   4:32  warning  'Sparkles' is defined but never used            @typescript-eslint/no-unused-vars
+  21:9   warning  'bgApprove' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  22:9   warning  'bgReject' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  24:33  error    Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+  24:44  error    Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/hooks/useBrand.ts
+   22:27  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+   68:17  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+   76:18  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/hooks/useBrand.ts:76:18
+  74 |
+  75 |   useEffect(() => {
+> 76 |     if (brandId) load(brandId)
+     |                  ^^^^ Avoid calling setState() directly within an effect
+  77 |     return () => abortRef.current?.abort()
+  78 |   }, [brandId, load])
+  79 |  react-hooks/set-state-in-effect
+  116:15  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/lib/audit.ts
+  27:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  47:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  47:61  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/lib/auth.ts
+  14:40  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  23:55  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  49:12  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/lib/avatarUtils.ts
+  30:85   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  30:107  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/lib/integrations/google.ts
+  42:56  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  51:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  83:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/lib/integrations/lark.ts
+   73:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  157:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  231:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/lib/integrations/postfast.ts
+   36:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   47:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   53:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  123:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  166:83  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  196:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  259:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  287:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/src/lib/mcp/server.ts
+  160:25  warning  '_' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  160:36  warning  '__' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  160:52  warning  '___' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  160:78  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  329:59  warning  'platform' is defined but never used      @typescript-eslint/no-unused-vars
+  688:50  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 258 problems (175 errors, 83 warnings)
+
