@@ -46,6 +46,8 @@ AMC Kanban 提供两种接入方式，**推荐使用 MCP**：
 - `lark_upload_file` — 上传文件到品牌 Lark Drive 工作区
 - `lark_create_workspace` — 在 Lark Drive 创建品牌工作区文件夹
 
+> 约束：如果品牌已配置 `larkAppId` + `larkAppSecret`，先用 `lark_create_workspace` 写入 `larkDriveFolderId`，再用 `lark_upload_file` 上传素材并回流到看板素材库。
+
 > 📖 完整使用示例和工作流，请加载 Skill: `GET https://amc-kanban.immedi.ai/api/meta/skills/amc-integrations`
 
 ### 方式二：REST API（备选）

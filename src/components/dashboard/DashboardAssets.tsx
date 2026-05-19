@@ -1,35 +1,16 @@
 'use client'
-import React, { useState } from 'react'
-import { Search, Upload, Image as ImageIcon, Video, FileText, Tag, MoreHorizontal, Check, ChevronRight, Sparkles, Filter, X } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { Search, Upload, Image as ImageIcon, Video, Tag, Check, Sparkles, Filter, X } from 'lucide-react'
 
 // Category definitions
-const CATEGORIES = [
-  { id: 'all', label: '全部', count: 38 },
-  { id: 'food', label: '菜品', count: 18, color: 'text-orange-500' },
-  { id: 'interior', label: '店内环境', count: 8, color: 'text-blue-500' },
-  { id: 'event', label: '活动/节日', count: 6, color: 'text-purple-500' },
-  { id: 'review', label: '客户反馈', count: 4, color: 'text-emerald-500' },
-  { id: 'raw', label: '未分类', count: 2, color: 'text-slate-400' },
+const CATEGORY_META = [
+  { id: 'all', label: '全部', color: 'text-slate-500' },
+  { id: 'food', label: '菜品', color: 'text-orange-500' },
+  { id: 'interior', label: '店内环境', color: 'text-blue-500' },
+  { id: 'event', label: '活动/节日', color: 'text-purple-500' },
+  { id: 'review', label: '客户反馈', color: 'text-emerald-500' },
+  { id: 'raw', label: '未分类', color: 'text-slate-400' },
 ]
-
-// Mock asset data
-const MOCK_ASSETS = [
-  { id: '1', cat: 'food', type: 'image', label: '波士顿大龙虾 (新品)', tags: ['龙虾', '新品', '海鲜'], used: 2, date: '今天', aiReady: true },
-  { id: '2', cat: 'food', type: 'image', label: '午市套餐合辑', tags: ['套餐', '午市'], used: 5, date: '昨天', aiReady: true },
-  { id: '3', cat: 'interior', type: 'image', label: '大堂环境 (夜景)', tags: ['环境', '氛围', '大堂'], used: 3, date: '3天前', aiReady: true },
-  { id: '4', cat: 'food', type: 'video', label: '厨师现场烹饪视频', tags: ['视频', '厨房', '烹饪'], used: 1, date: '3天前', aiReady: false },
-  { id: '5', cat: 'event', type: 'image', label: '母亲节活动布置', tags: ['母亲节', '节日', '布置'], used: 0, date: '1周前', aiReady: false },
-  { id: '6', cat: 'review', type: 'image', label: '顾客分享截图 #1', tags: ['UGC', '顾客', '好评'], used: 0, date: '1周前', aiReady: true },
-  { id: '7', cat: 'food', type: 'image', label: '蟹粉小笼包特写', tags: ['点心', '上海', '特色'], used: 4, date: '2周前', aiReady: true },
-  { id: '8', cat: 'interior', type: 'image', label: '门面外观 (白天)', tags: ['外观', '招牌'], used: 2, date: '2周前', aiReady: true },
-  { id: '9', cat: 'raw', type: 'image', label: '未处理图片 #1', tags: [], used: 0, date: '今天', aiReady: false },
-]
-
-const TYPE_ICON: Record<string, React.ReactNode> = {
-  image: <ImageIcon className="w-4 h-4" />,
-  video: <Video className="w-4 h-4" />,
-  doc: <FileText className="w-4 h-4" />,
-}
 
 const GRADIENT_PLACEHOLDERS = [
   'from-orange-100 to-rose-100 dark:from-orange-900/30 dark:to-rose-900/30',
@@ -39,21 +20,94 @@ const GRADIENT_PLACEHOLDERS = [
   'from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30',
 ]
 
+interface DashboardAsset {
+  id: string
+  brandId: string
+  brandName: string
+  url: string
+  filename: string | null
+  mimeType: string
+  aiTags: string[]
+  aiCategory: string | null
+  aiCaption: string | null
+  aiReady: boolean
+  usedCount: number
+  lastUsedAt: string | null
+  sourceType: string
+  createdAt: string
+}
+
+function toCategory(asset: DashboardAsset) {
+  return asset.aiCategory || 'raw'
+}
+
+function isPreviewable(asset: DashboardAsset) {
+  const url = asset.url || ''
+  return /^https?:\/\//.test(url) || url.startsWith('/')
+}
+
+function relativeDate(value: string) {
+  const date = new Date(value)
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diffDays = Math.round((startOfToday.getTime() - startOfDate.getTime()) / (24 * 60 * 60 * 1000))
+
+  if (diffDays <= 0) return '今天'
+  if (diffDays === 1) return '昨天'
+  if (diffDays < 7) return `${diffDays}天前`
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
+
 export default function DashboardAssets() {
   const [activeCategory, setActiveCategory] = useState('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [dragOver, setDragOver] = useState(false)
+  const [assets, setAssets] = useState<DashboardAsset[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch('/api/dashboard/assets')
+        if (!res.ok) throw new Error('load failed')
+        const data = await res.json()
+        if (!cancelled) setAssets(data.assets || [])
+      } catch {
+        if (!cancelled) setError('素材库加载失败')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   const toggleSelect = (id: string) => {
     setSelected(p => p.includes(id) ? p.filter(s => s !== id) : [...p, id])
   }
 
-  const filtered = MOCK_ASSETS.filter(a => {
-    const catMatch = activeCategory === 'all' || a.cat === activeCategory
-    const searchMatch = !search || a.label.toLowerCase().includes(search.toLowerCase()) || a.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))
+  const filtered = assets.filter(a => {
+    const catMatch = activeCategory === 'all' || toCategory(a) === activeCategory
+    const query = search.trim().toLowerCase()
+    const label = (a.aiCaption || a.filename || '').toLowerCase()
+    const brand = a.brandName.toLowerCase()
+    const tags = a.aiTags.some(t => t.toLowerCase().includes(query))
+    const searchMatch = !query || label.includes(query) || brand.includes(query) || tags
     return catMatch && searchMatch
   })
+
+  const categories = CATEGORY_META.map(cat => ({
+    ...cat,
+    count: cat.id === 'all' ? assets.length : assets.filter(asset => toCategory(asset) === cat.id).length,
+  }))
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto pb-36 space-y-6">
@@ -62,7 +116,7 @@ export default function DashboardAssets() {
       <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1">
           <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">素材库</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">AI 自动打标 · 随手扔随时用</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">AI 自动打标 · 随手投喂，自动沉淀为可复用素材</p>
         </div>
         <div className="flex items-center gap-2">
           {selected.length > 0 && (
@@ -108,7 +162,7 @@ export default function DashboardAssets() {
 
       {/* Category Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
-        {CATEGORIES.map(cat => (
+        {categories.map(cat => (
           <button
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
@@ -143,6 +197,11 @@ export default function DashboardAssets() {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {filtered.map((asset, i) => {
           const isSelected = selected.includes(asset.id)
+          const category = toCategory(asset)
+          const categoryMeta = categories.find(c => c.id === category)
+          const previewable = isPreviewable(asset)
+          const displayLabel = asset.aiCaption || asset.filename || '未命名素材'
+          const dateLabel = relativeDate(asset.lastUsedAt || asset.createdAt)
           return (
             <div
               key={asset.id}
@@ -151,10 +210,16 @@ export default function DashboardAssets() {
                 ${isSelected ? 'ring-2 ring-emerald-400 border-emerald-300 dark:border-emerald-600' : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700'}`}
             >
               {/* Thumbnail placeholder */}
-              <div className={`aspect-square bg-gradient-to-br ${GRADIENT_PLACEHOLDERS[i % GRADIENT_PLACEHOLDERS.length]} flex items-center justify-center`}>
-                <div className="text-slate-400 dark:text-slate-500 opacity-50">
-                  {asset.type === 'video' ? <Video className="w-10 h-10" /> : <ImageIcon className="w-10 h-10" />}
-                </div>
+              <div className={`aspect-square bg-gradient-to-br ${GRADIENT_PLACEHOLDERS[i % GRADIENT_PLACEHOLDERS.length]} flex items-center justify-center overflow-hidden`}>
+                {previewable && asset.mimeType.startsWith('image/') ? (
+                  <img src={asset.url} alt={displayLabel} className="w-full h-full object-cover" />
+                ) : previewable && asset.mimeType.startsWith('video/') ? (
+                  <video src={asset.url} className="w-full h-full object-cover" muted playsInline loop autoPlay />
+                ) : (
+                  <div className="text-slate-400 dark:text-slate-500 opacity-50">
+                    {asset.mimeType.startsWith('video/') ? <Video className="w-10 h-10" /> : <ImageIcon className="w-10 h-10" />}
+                  </div>
+                )}
               </div>
 
               {/* Select checkbox */}
@@ -163,15 +228,20 @@ export default function DashboardAssets() {
                 {isSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
               </div>
 
+              {/* Brand badge */}
+              <div className="absolute top-2 right-2 bg-slate-900/75 text-white text-[9px] font-black px-2 py-0.5 rounded-full backdrop-blur-sm max-w-[72%] truncate">
+                {asset.brandName}
+              </div>
+
               {/* AI Ready badge */}
               {asset.aiReady && (
-                <div className="absolute top-2 right-2 bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
+                <div className="absolute top-9 right-2 bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Sparkles className="w-2.5 h-2.5" /> AI就绪
                 </div>
               )}
 
               {/* Type badge */}
-              {asset.type === 'video' && (
+              {asset.mimeType.startsWith('video/') && (
                 <div className="absolute bottom-2 left-2 bg-slate-900/80 text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Video className="w-2.5 h-2.5" /> 视频
                 </div>
@@ -179,17 +249,23 @@ export default function DashboardAssets() {
 
               {/* Info */}
               <div className="bg-white dark:bg-slate-900 p-3">
-                <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{asset.label}</p>
-                {asset.tags.length > 0 && (
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{displayLabel}</p>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${categoryMeta?.color || 'text-slate-500 border-slate-200 dark:border-slate-700'}`}>
+                    {categoryMeta?.label || '未分类'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 truncate">{asset.brandName}</span>
+                </div>
+                {asset.aiTags.length > 0 && (
                   <div className="flex items-center gap-1 mt-1.5 overflow-hidden">
                     <Tag className="w-2.5 h-2.5 text-slate-400 flex-shrink-0" />
-                    <p className="text-[10px] text-slate-400 truncate">{asset.tags.slice(0, 2).join(' · ')}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{asset.aiTags.slice(0, 2).join(' · ')}</p>
                   </div>
                 )}
                 <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50 dark:border-slate-800">
-                  <span className="text-[10px] text-slate-400">{asset.date}</span>
-                  {asset.used > 0 && (
-                    <span className="text-[10px] font-bold text-indigo-500">已用 {asset.used} 次</span>
+                  <span className="text-[10px] text-slate-400">{dateLabel}</span>
+                  {asset.usedCount > 0 && (
+                    <span className="text-[10px] font-bold text-indigo-500">已用 {asset.usedCount} 次</span>
                   )}
                 </div>
               </div>
@@ -202,9 +278,13 @@ export default function DashboardAssets() {
       {filtered.length === 0 && (
         <div className="py-16 text-center text-slate-400">
           <ImageIcon className="w-12 h-12 mx-auto mb-4 opacity-20" />
-          <p className="font-bold text-slate-500">没有找到匹配的素材</p>
-          <p className="text-sm mt-1">试试修改搜索词或类别筛选</p>
+          <p className="font-bold text-slate-500">{assets.length === 0 ? '当前还没有素材' : '没有找到匹配的素材'}</p>
+          <p className="text-sm mt-1">{assets.length === 0 ? '上传图片或视频后，AI 会自动识别并入库' : '试试修改搜索词或类别筛选'}</p>
         </div>
+      )}
+
+      {!loading && error && (
+        <div className="px-1 text-xs text-rose-500 font-medium">{error}</div>
       )}
 
     </div>

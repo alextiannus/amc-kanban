@@ -17,7 +17,7 @@
 | Google 评论读取 | `googlePlaceId` + `googleApiKey` |
 | Google 评论回复 | `postfastApiKey`（PostFast 代理 OAuth）|
 | Lark 通知 | `larkBotWebhook` 或 `larkAppId`+`larkAppSecret`+`larkOwnerId` |
-| Lark Drive 上传 | `larkAppId` + `larkAppSecret` |
+| Lark Drive 上传 | `larkAppId` + `larkAppSecret` + `larkDriveFolderId` |
 
 ---
 

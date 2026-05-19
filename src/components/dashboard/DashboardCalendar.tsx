@@ -1,6 +1,6 @@
 'use client'
-import React, { useState } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Check, Clock, Edit2 } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 const MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
@@ -20,18 +20,15 @@ const STATUS_COLORS: Record<string, string> = {
   'scheduled': 'bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400',
 }
 
-// Mock event data keyed by day-of-month (for May 2025 demo)
-const MOCK_EVENTS: Record<number, { platform: string, title: string, status: 'done' | 'pending' | 'scheduled', time: string }[]> = {
-  3: [{ platform: 'IG', title: '周末龙虾特价', status: 'done', time: '11:00' }],
-  5: [{ platform: '小红书', title: '新品探店笔记', status: 'done', time: '19:00' }],
-  8: [{ platform: 'IG', title: '午市套餐优惠', status: 'done', time: '10:00' }, { platform: '小红书', title: '午市套餐优惠', status: 'done', time: '10:15' }],
-  12: [{ platform: 'TikTok', title: '餐厅环境 VLOG', status: 'done', time: '18:00' }],
-  15: [{ platform: 'Google', title: '差评回复跟进', status: 'done', time: '09:30' }],
-  18: [{ platform: 'IG', title: '母亲节预热海报', status: 'pending', time: '今天' }, { platform: '小红书', title: '母亲节预热', status: 'scheduled', time: '20:00' }],
-  20: [{ platform: '全平台', title: '母亲节大促推送', status: 'scheduled', time: '10:00' }],
-  23: [{ platform: 'TikTok', title: '周末海鲜特价短视频', status: 'scheduled', time: '18:00' }],
-  25: [{ platform: 'IG', title: '万圣节预热 (AI 提案)', status: 'scheduled', time: '12:00' }],
-  28: [{ platform: '小红书', title: '月末好物推荐', status: 'scheduled', time: '19:00' }],
+interface CalendarEvent {
+  id: string
+  brandId: string
+  brandName: string
+  platform: string
+  title: string
+  status: 'done' | 'pending' | 'scheduled'
+  time: string
+  scheduledAt: string
 }
 
 export default function DashboardCalendar() {
@@ -39,6 +36,32 @@ export default function DashboardCalendar() {
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate())
+  const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
+        const res = await fetch(`/api/dashboard/calendar?month=${month}`)
+        if (!res.ok) throw new Error('load failed')
+        const data = await res.json()
+        if (!cancelled) setEvents(data.events || [])
+      } catch {
+        if (!cancelled) setError('日历数据加载失败')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [viewYear, viewMonth])
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
@@ -62,7 +85,14 @@ export default function DashboardCalendar() {
   while (cells.length % 7 !== 0) cells.push(null)
 
   const isToday = (d: number) => d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
-  const selectedEvents = selectedDay ? (MOCK_EVENTS[selectedDay] || []) : []
+  const eventsByDay = events.reduce<Record<number, CalendarEvent[]>>((acc, event) => {
+    const day = new Date(event.scheduledAt).getDate()
+    acc[day] = acc[day] || []
+    acc[day].push(event)
+    return acc
+  }, {})
+  const selectedEvents = selectedDay ? (eventsByDay[selectedDay] || []) : []
+  const formatTime = (value: string) => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto pb-36 space-y-6">
@@ -73,9 +103,6 @@ export default function DashboardCalendar() {
           <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">发布日历</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">AI 员工内容排期与执行状态</p>
         </div>
-        <button className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-sm shadow-emerald-500/20">
-          <Plus className="w-4 h-4" /> 新增排期
-        </button>
       </div>
 
       {/* Calendar */}
@@ -106,7 +133,7 @@ export default function DashboardCalendar() {
         {/* Days Grid */}
         <div className="grid grid-cols-7 divide-x divide-y divide-slate-50 dark:divide-slate-800/60">
           {cells.map((day, idx) => {
-            const events = day ? (MOCK_EVENTS[day] || []) : []
+            const dayEvents = day ? (eventsByDay[day] || []) : []
             const selected = day === selectedDay
             const todayCell = day ? isToday(day) : false
 
@@ -126,14 +153,14 @@ export default function DashboardCalendar() {
                         ${todayCell ? 'bg-emerald-500 text-white' : 'text-slate-700 dark:text-slate-200'}`}>
                         {day}
                       </span>
-                      {events.length > 2 && (
-                        <span className="text-[9px] font-black text-slate-400">+{events.length - 1}</span>
+                      {dayEvents.length > 2 && (
+                        <span className="text-[9px] font-black text-slate-400">+{dayEvents.length - 1}</span>
                       )}
                     </div>
                     {/* Event pills */}
                     <div className="space-y-1">
-                      {events.slice(0, 2).map((ev, i) => (
-                        <div key={i} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border truncate ${PLATFORM_COLORS[ev.platform] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                      {dayEvents.slice(0, 2).map((ev, i) => (
+                        <div key={ev.id} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border truncate ${PLATFORM_COLORS[ev.platform] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                           {ev.platform} · {ev.title.length > 8 ? ev.title.slice(0, 8) + '…' : ev.title}
                         </div>
                       ))}
@@ -153,39 +180,31 @@ export default function DashboardCalendar() {
             <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100">
               {viewMonth + 1}月{selectedDay}日 的排期
             </h3>
-            <button className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 hover:underline">
-              <Plus className="w-3.5 h-3.5" /> 添加任务
-            </button>
           </div>
+          {loading && (
+            <div className="p-6 text-sm text-slate-400 border-b border-slate-50 dark:border-slate-800/60">正在加载排期...</div>
+          )}
           {selectedEvents.length === 0 ? (
             <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-sm">
               <Clock className="w-8 h-8 mx-auto mb-3 opacity-30" />
               <p className="font-medium">当天无排期内容</p>
-              <p className="text-xs mt-1">AI 员工将根据节日和内容策略自动提案</p>
+              <p className="text-xs mt-1">从内容草稿中安排发布时间后，这里会自动显示</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-50 dark:divide-slate-800">
               {selectedEvents.map((ev, i) => (
-                <div key={i} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                <div key={ev.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                   <div className={`text-[10px] font-black px-2.5 py-1.5 rounded-xl border ${PLATFORM_COLORS[ev.platform] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                     {ev.platform}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">{ev.title}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{ev.time}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{ev.brandName} · {formatTime(ev.time)}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${STATUS_COLORS[ev.status]}`}>
                       {ev.status === 'done' ? '已发布' : ev.status === 'pending' ? '待审核' : '已排期'}
                     </span>
-                    {ev.status === 'pending' && (
-                      <button className="flex items-center gap-1 text-[10px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white px-2.5 py-1 rounded-xl transition-colors">
-                        <Check className="w-3 h-3" /> 批准
-                      </button>
-                    )}
-                    <button className="w-7 h-7 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 transition-colors">
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 </div>
               ))}
@@ -205,6 +224,14 @@ export default function DashboardCalendar() {
           </div>
         ))}
       </div>
+
+      {!loading && error && (
+        <div className="px-1 text-xs text-rose-500 font-medium">{error}</div>
+      )}
+
+      {!loading && !error && events.length === 0 && (
+        <div className="px-1 text-xs text-slate-400 font-medium">本月还没有排期内容，先在内容草稿里设置发布时间。</div>
+      )}
 
     </div>
   )

@@ -8,10 +8,10 @@ export function buildAgentInitPrompt(params?: { apiKey?: string | null; apiBaseU
 你是 AMC (Agent-Machine Collaboration) 体系中的龙虾 AI 员工。请通过 AMC Kanban Skill 执行工作，并将可追踪的全过程沉淀到看板。
 
 ### 安装 AMC 插件
-在 OpenClaw 环境中，首先通过 npm 安装 AMC 官方插件：
+在 OpenClaw 环境中，首先通过插件管理器安装 AMC 官方插件：
 
 \`\`\`bash
-npm install -g git-plugin-amc
+npm plugins install git-plugin-amc
 \`\`\`
 
 安装后，在你的 OpenClaw MCP 配置中注册以下环境变量：
@@ -54,6 +54,7 @@ PATCH ${apiBaseUrl}/agent/brand-config
   "googleApiKey": "<GOOGLE_API_KEY>",
   "larkAppId": "<LARK_APP_ID>",
   "larkAppSecret": "<LARK_APP_SECRET>",
+  "larkParentFolderToken": "<DRIVE_PARENT_FOLDER_TOKEN>",
   "larkDriveFolderId": "<DRIVE_FOLDER_TOKEN>",
   "larkBotWebhook": "<LARK_BOT_WEBHOOK_URL>"
 }

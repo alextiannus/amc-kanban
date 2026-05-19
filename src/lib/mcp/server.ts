@@ -49,7 +49,8 @@ export function createAmcMcpServer(agentApiKey: string) {
             id: true, name: true, description: true, website: true, phone: true,
             address: true, location: true, timezone: true, autoPilot: true,
             postfastApiKey: true, googlePlaceId: true, googleApiKey: true,
-            larkAppId: true, larkAppSecret: true, larkBotWebhook: true, larkOwnerId: true,
+            larkAppId: true, larkAppSecret: true, larkParentFolderToken: true, larkDriveFolderId: true,
+            larkBotWebhook: true, larkOwnerId: true,
             accounts: { select: { id: true, platformId: true, handle: true, displayName: true, autoPilot: true } },
           },
         })
@@ -89,6 +90,8 @@ export function createAmcMcpServer(agentApiKey: string) {
       googleApiKey: z.string().optional(),
       larkAppId: z.string().optional(),
       larkAppSecret: z.string().optional(),
+      larkParentFolderToken: z.string().optional(),
+      larkDriveFolderId: z.string().optional(),
       larkBotWebhook: z.string().optional(),
       larkOwnerId: z.string().optional(),
     },
@@ -117,7 +120,7 @@ export function createAmcMcpServer(agentApiKey: string) {
 
       const WRITABLE = ['name', 'description', 'website', 'phone', 'address', 'location', 'timezone',
         'postfastApiKey', 'googlePlaceId', 'googleApiKey', 'larkAppId', 'larkAppSecret',
-        'larkBotWebhook', 'larkOwnerId'] as const
+        'larkParentFolderToken', 'larkDriveFolderId', 'larkBotWebhook', 'larkOwnerId'] as const
       const updateData: Record<string, unknown> = {}
       if (name) updateData.name = name
       for (const key of WRITABLE) {
@@ -699,6 +702,19 @@ export function createAmcMcpServer(agentApiKey: string) {
       })
 
       if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+
+      await prisma.mediaAsset.create({
+        data: {
+          brandId,
+          url: result.fileToken!,
+          filename,
+          mimeType,
+          uploadedBy: agent.id,
+          sourceType: 'mcp_lark_upload',
+          aiReady: mimeType.startsWith('image/') || mimeType.startsWith('video/'),
+        },
+      })
+
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, fileToken: result.fileToken, downloadUrl: result.downloadUrl, filename }) }] }
     }
   )
