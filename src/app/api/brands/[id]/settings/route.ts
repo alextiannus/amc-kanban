@@ -148,9 +148,19 @@ export async function PATCH(request: Request, { params }: Params) {
               platformId: acc.platformId,
               handle: acc.handle,
               displayName: acc.displayName ?? acc.handle,
+              profileUrl: acc.profileUrl ?? null,
+              followerCount: acc.followerCount ?? null,
+              followerDelta: acc.followerDelta ?? 0,
+              ratingScore: acc.ratingScore ?? null,
+              snapshotAt: new Date(),
             },
             update: {
               displayName: acc.displayName ?? acc.handle,
+              profileUrl: acc.profileUrl ?? null,
+              followerCount: acc.followerCount ?? null,
+              followerDelta: acc.followerDelta ?? 0,
+              ratingScore: acc.ratingScore ?? null,
+              snapshotAt: new Date(),
             },
           })
         }

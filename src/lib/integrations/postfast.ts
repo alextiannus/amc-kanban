@@ -65,6 +65,9 @@ export interface PostFastAccount {
   displayName?: string
   profileUrl?: string
   connected?: boolean
+  followerCount?: number
+  followerDelta?: number
+  ratingScore?: number
 }
 
 export interface PostFastPost {
@@ -131,6 +134,9 @@ export async function postfastFetchAccounts(apiKey: string): Promise<{
       displayName: a.displayName,
       profileUrl: a.profileUrl,
       connected: a.isConnected !== false,
+      followerCount: a.followerCount != null ? parseInt(a.followerCount) : undefined,
+      followerDelta: a.followerDelta != null ? parseInt(a.followerDelta) : undefined,
+      ratingScore: a.ratingScore != null ? parseFloat(a.ratingScore) : undefined,
     }
   })
   return { success: true, accounts }
