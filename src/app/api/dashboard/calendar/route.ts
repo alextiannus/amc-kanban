@@ -2,6 +2,35 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+const TASK_PLATFORM_HINTS: Array<{ platform: string; keywords: string[] }> = [
+  { platform: 'IG', keywords: ['instagram', 'ig'] },
+  { platform: '小红书', keywords: ['xiaohongshu', 'xhs', 'rednote', '小红书'] },
+  { platform: 'TikTok', keywords: ['tiktok', 'tt'] },
+  { platform: 'Google', keywords: ['google', 'gmb', 'maps'] },
+  { platform: 'Facebook', keywords: ['facebook', 'fb'] },
+  { platform: 'YouTube', keywords: ['youtube', 'yt'] },
+  { platform: 'X', keywords: ['twitter', 'x.com', ' x '] },
+  { platform: 'Yelp', keywords: ['yelp'] },
+  { platform: 'LinkedIn', keywords: ['linkedin'] },
+  { platform: 'Pinterest', keywords: ['pinterest'] },
+  { platform: '微博', keywords: ['weibo', '微博'] },
+  { platform: '微信公众号', keywords: ['wechat', 'weixin', '公众号', '微信'] },
+  { platform: 'Snapchat', keywords: ['snapchat'] },
+  { platform: 'TripAdvisor', keywords: ['tripadvisor'] },
+]
+
+function inferTaskPlatform(task: { title: string; description: string | null; materials: string | null; tags: string[] }) {
+  const text = [task.title, task.description ?? '', task.materials ?? '', ...(task.tags ?? [])]
+    .join(' ')
+    .toLowerCase()
+
+  for (const hint of TASK_PLATFORM_HINTS) {
+    if (hint.keywords.some(keyword => text.includes(keyword.toLowerCase()))) return hint.platform
+  }
+
+  return '任务'
+}
+
 async function getAccessibleBrandIds(userId: string, userType: string, role: string) {
   if (userType === 'AI_AGENT') {
     const links = await prisma.brandAgent.findMany({
@@ -95,6 +124,9 @@ export async function GET(request: Request) {
         select: {
           id: true,
           title: true,
+          description: true,
+          materials: true,
+          tags: true,
           status: true,
           deadline: true,
           createdAt: true,
@@ -154,7 +186,7 @@ export async function GET(request: Request) {
         id: `task_${task.id}`,
         brandId: requestedBrandId ?? '',
         brandName: requestedBrandId ? (brandNameMap.get(requestedBrandId) ?? '当前品牌') : '任务',
-        platform: '任务',
+        platform: inferTaskPlatform(task),
         title,
         status,
         time: eventTime.toISOString(),

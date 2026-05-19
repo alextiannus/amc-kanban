@@ -11,8 +11,53 @@ const PLATFORM_COLORS: Record<string, string> = {
   '小红书': 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50',
   'TikTok': 'bg-slate-900 text-white border-slate-700',
   'Google': 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50',
+  'Facebook': 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/50',
+  'YouTube': 'bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/50',
+  'X': 'bg-slate-800 dark:bg-slate-700 text-white border-slate-700',
+  'Yelp': 'bg-rose-100 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/50',
+  'LinkedIn': 'bg-sky-100 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800/50',
+  'Pinterest': 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50',
+  '微博': 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800/50',
+  '微信公众号': 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50',
+  'Snapchat': 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800/50',
+  'TripAdvisor': 'bg-teal-100 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-800/50',
   '任务': 'bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800/50',
   '全平台': 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50',
+}
+
+function normalizePlatformLabel(platform: string) {
+  const key = platform.trim().toLowerCase()
+  const aliasMap: Record<string, string> = {
+    instagram: 'IG',
+    ig: 'IG',
+    xiaohongshu: '小红书',
+    rednote: '小红书',
+    xhs: '小红书',
+    tiktok: 'TikTok',
+    google: 'Google',
+    facebook: 'Facebook',
+    fb: 'Facebook',
+    youtube: 'YouTube',
+    yt: 'YouTube',
+    x: 'X',
+    twitter: 'X',
+    yelp: 'Yelp',
+    linkedin: 'LinkedIn',
+    pinterest: 'Pinterest',
+    weibo: '微博',
+    微博: '微博',
+    wechat: '微信公众号',
+    weixin: '微信公众号',
+    微信公众号: '微信公众号',
+    snapchat: 'Snapchat',
+    tripadvisor: 'TripAdvisor',
+    task: '任务',
+    任务: '任务',
+    all: '全平台',
+    '全平台': '全平台',
+  }
+
+  return aliasMap[key] ?? platform
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -167,8 +212,8 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     {/* Event pills */}
                     <div className="space-y-1">
                       {dayEvents.slice(0, 2).map((ev, i) => (
-                        <div key={ev.id} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border truncate ${PLATFORM_COLORS[ev.platform] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                          {ev.platform} · {ev.title.length > 8 ? ev.title.slice(0, 8) + '…' : ev.title}
+                        <div key={ev.id} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border truncate ${PLATFORM_COLORS[normalizePlatformLabel(ev.platform)] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                          {normalizePlatformLabel(ev.platform)} · {ev.title.length > 8 ? ev.title.slice(0, 8) + '…' : ev.title}
                         </div>
                       ))}
                     </div>
@@ -201,8 +246,8 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
             <div className="divide-y divide-slate-50 dark:divide-slate-800">
               {selectedEvents.map((ev, i) => (
                 <div key={ev.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                  <div className={`text-[10px] font-black px-2.5 py-1.5 rounded-xl border ${PLATFORM_COLORS[ev.platform] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                    {ev.platform}
+                  <div className={`text-[10px] font-black px-2.5 py-1.5 rounded-xl border ${PLATFORM_COLORS[normalizePlatformLabel(ev.platform)] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                    {normalizePlatformLabel(ev.platform)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">{ev.title}</p>
