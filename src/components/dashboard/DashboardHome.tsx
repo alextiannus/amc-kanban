@@ -683,19 +683,43 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 leading-tight">{activeBrand.name}</h2>
+                {brandList.length > 1 && (
+                  <div className="relative group">
+                    <button
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                      title="切换品牌"
+                    >
+                      <ChevronDown size={14} />
+                    </button>
+                    <div className="absolute left-0 mt-1 w-52 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden hidden group-hover:block z-50">
+                      <div className="px-3 pt-2.5 pb-1">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">切换品牌</p>
+                      </div>
+                      {brandList.map(b => (
+                        <button
+                          key={b.id}
+                          onClick={() => {
+                            setActiveBrand(b)
+                            onActiveBrandIdChange?.(b.id)
+                          }}
+                          className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${
+                            activeBrand.id === b.id ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''
+                          }`}
+                        >
+                          <Store size={13} className={`flex-shrink-0 ${activeBrand.id === b.id ? 'text-blue-500' : 'text-slate-400'}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-bold truncate ${activeBrand.id === b.id ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-200'}`}>{b.name}</p>
+                            {b.location && <p className="text-[10px] text-slate-400 truncate">{b.location}</p>}
+                          </div>
+                          {activeBrand.id === b.id && <Check size={12} className="flex-shrink-0 text-blue-500" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {activeBrand.location && (
                   <span className="text-sm text-slate-400 font-medium hidden sm:inline">· {activeBrand.location}</span>
                 )}
-              </div>
-              <div className="mt-2">
-                <BrandSwitcher
-                  brands={brandList}
-                  activeBrand={activeBrand}
-                  onChange={(b) => {
-                    setActiveBrand(b)
-                    onActiveBrandIdChange?.(b.id)
-                  }}
-                />
               </div>
             </div>
           </div>
