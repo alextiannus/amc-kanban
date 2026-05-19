@@ -687,18 +687,20 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
                   <span className="text-sm text-slate-400 font-medium hidden sm:inline">· {activeBrand.location}</span>
                 )}
               </div>
+              <div className="mt-2">
+                <BrandSwitcher
+                  brands={brandList}
+                  activeBrand={activeBrand}
+                  onChange={(b) => {
+                    setActiveBrand(b)
+                    onActiveBrandIdChange?.(b.id)
+                  }}
+                />
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
-            <BrandSwitcher
-              brands={brandList}
-              activeBrand={activeBrand}
-              onChange={(b) => {
-                setActiveBrand(b)
-                onActiveBrandIdChange?.(b.id)
-              }}
-            />
             <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 px-2.5 py-1.5 rounded-xl">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">AI 在线</span>
