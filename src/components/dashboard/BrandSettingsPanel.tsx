@@ -35,6 +35,25 @@ interface Props {
   initialSettings?: Record<string, any>
 }
 
+function isMaskedValue(value: unknown) {
+  return typeof value === 'string' && value.startsWith('••••••')
+}
+
+function buildInitialForm(initialSettings?: Record<string, any>) {
+  if (!initialSettings) return {}
+
+  return {
+    postfastApiKey: initialSettings.postfastApiKey ?? '',
+    googlePlaceId: initialSettings.googlePlaceId ?? '',
+    googleApiKey: initialSettings.googleApiKey ?? '',
+    larkAppId: initialSettings.larkAppId ?? '',
+    larkAppSecret: initialSettings.larkAppSecret ?? '',
+    larkParentFolderToken: initialSettings.larkParentFolderToken ?? '',
+    larkBotWebhook: initialSettings.larkBotWebhook ?? '',
+    larkOwnerId: initialSettings.larkOwnerId ?? '',
+  }
+}
+
 export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: Props) {
   const [form, setForm] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
@@ -43,14 +62,19 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
   const [postfastSync, setPostfastSync] = useState<{ synced: number; accounts: string[] } | null>(null)
 
   useEffect(() => {
+    if (!open) return
+
     if (initialSettings) {
+      setForm(buildInitialForm(initialSettings))
       setStatus({
         postfast: !!initialSettings.postfastConfigured,
         google: !!initialSettings.googleConfigured,
         lark: !!initialSettings.larkConfigured,
       })
+    } else {
+      setForm({})
     }
-  }, [initialSettings])
+  }, [initialSettings, open])
 
   useEffect(() => {
     if (open) fetchStatus()
@@ -70,10 +94,13 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
     setSaving(true)
     setPostfastSync(null)
     try {
+      const payload = Object.fromEntries(
+        Object.entries(form).filter(([, value]) => value !== '' && !isMaskedValue(value))
+      )
       const res = await fetch(`/api/brands/${brandId}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       })
       if (res.ok) {
         const data = await res.json()
