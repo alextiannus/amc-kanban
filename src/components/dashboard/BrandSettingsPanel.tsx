@@ -39,18 +39,33 @@ function isMaskedValue(value: unknown) {
   return typeof value === 'string' && value.startsWith('••••••')
 }
 
-function buildInitialForm(initialSettings?: Record<string, any>) {
-  if (!initialSettings) return {}
+function asText(value: unknown) {
+  return typeof value === 'string' ? value : ''
+}
+
+function buildInitialForm(initialSettings?: Record<string, any>): Record<string, string> {
+  if (!initialSettings) {
+    return {
+      postfastApiKey: '',
+      googlePlaceId: '',
+      googleApiKey: '',
+      larkAppId: '',
+      larkAppSecret: '',
+      larkParentFolderToken: '',
+      larkBotWebhook: '',
+      larkOwnerId: '',
+    }
+  }
 
   return {
-    postfastApiKey: initialSettings.postfastApiKey ?? '',
-    googlePlaceId: initialSettings.googlePlaceId ?? '',
-    googleApiKey: initialSettings.googleApiKey ?? '',
-    larkAppId: initialSettings.larkAppId ?? '',
-    larkAppSecret: initialSettings.larkAppSecret ?? '',
-    larkParentFolderToken: initialSettings.larkParentFolderToken ?? '',
-    larkBotWebhook: initialSettings.larkBotWebhook ?? '',
-    larkOwnerId: initialSettings.larkOwnerId ?? '',
+    postfastApiKey: asText(initialSettings.postfastApiKey),
+    googlePlaceId: asText(initialSettings.googlePlaceId),
+    googleApiKey: asText(initialSettings.googleApiKey),
+    larkAppId: asText(initialSettings.larkAppId),
+    larkAppSecret: asText(initialSettings.larkAppSecret),
+    larkParentFolderToken: asText(initialSettings.larkParentFolderToken),
+    larkBotWebhook: asText(initialSettings.larkBotWebhook),
+    larkOwnerId: asText(initialSettings.larkOwnerId),
   }
 }
 
