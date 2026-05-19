@@ -29,21 +29,30 @@ async function getAccessibleBrandIds(userId: string, userType: string, role: str
   return [...ownerBrandIds, ...legacyBrands.map(brand => brand.id)]
 }
 
-// GET /api/dashboard/assets
-export async function GET() {
+// GET /api/dashboard/assets?brandId=<id>
+export async function GET(request: Request) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const url = new URL(request.url)
+  const requestedBrandId = url.searchParams.get('brandId')
 
   const brandIds = await getAccessibleBrandIds(session.user.id, session.user.type ?? 'HUMAN', session.user.role)
   if (brandIds.length === 0) return NextResponse.json({ assets: [] })
 
+  const scopedBrandIds = requestedBrandId
+    ? (brandIds.includes(requestedBrandId) ? [requestedBrandId] : [])
+    : brandIds
+
+  if (scopedBrandIds.length === 0) return NextResponse.json({ assets: [] })
+
   const [brands, assets] = await Promise.all([
     prisma.brand.findMany({
-      where: { id: { in: brandIds } },
+      where: { id: { in: scopedBrandIds } },
       select: { id: true, name: true },
     }),
     prisma.mediaAsset.findMany({
-      where: { brandId: { in: brandIds } },
+      where: { brandId: { in: scopedBrandIds } },
       include: {
         brand: { select: { id: true, name: true } },
       },

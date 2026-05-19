@@ -472,6 +472,8 @@ interface Brand { id: string; name: string; location?: string }
 
 interface DashboardHomeProps {
   brand?: Brand
+  activeBrandId?: string
+  onActiveBrandIdChange?: (id: string) => void
 }
 
 // Map API ActionItem → local display shape
@@ -486,7 +488,7 @@ function fmtFollower(n: number | null): string {
   return String(n)
 }
 
-export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) {
+export default function DashboardHome({ brand: propBrand, activeBrandId, onActiveBrandIdChange }: DashboardHomeProps) {
   // ── Brand list from API ──────────────────────────────────────────────────
   const [brandList, setBrandList] = useState<Brand[]>([])
   const [activeBrand, setActiveBrand] = useState<Brand | null>(propBrand ?? null)
@@ -498,13 +500,33 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
       .then((list: any[]) => {
         const mapped = list.map(b => ({ id: b.id, name: b.name, location: b.location }))
         setBrandList(mapped)
-        if (!activeBrand && mapped.length > 0) setActiveBrand(mapped[0])
+        if (mapped.length === 0) return
+        if (activeBrandId) {
+          const target = mapped.find(b => b.id === activeBrandId)
+          if (target) {
+            setActiveBrand(target)
+            return
+          }
+        }
+        if (!activeBrand) {
+          setActiveBrand(mapped[0])
+        }
       })
       .catch(console.error)
       .finally(() => setBrandLoading(false))
   }, [])
 
   useEffect(() => { if (propBrand) setActiveBrand(propBrand) }, [propBrand?.id])
+
+  useEffect(() => {
+    if (!activeBrandId || brandList.length === 0) return
+    const target = brandList.find(b => b.id === activeBrandId)
+    if (target && target.id !== activeBrand?.id) setActiveBrand(target)
+  }, [activeBrandId, brandList, activeBrand?.id])
+
+  useEffect(() => {
+    if (activeBrand?.id) onActiveBrandIdChange?.(activeBrand.id)
+  }, [activeBrand?.id, onActiveBrandIdChange])
 
   // ── Brand detail (accounts, action items) ───────────────────────────────
   const [brandDetail, setBrandDetail] = useState<any>(null)
@@ -645,7 +667,7 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto pb-36 space-y-6">
+    <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto pb-44 space-y-6">
 
       {/* ── Brand Header Card ───────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
@@ -669,7 +691,14 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
           </div>
 
           <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap">
-            <BrandSwitcher brands={brandList} activeBrand={activeBrand} onChange={setActiveBrand} />
+            <BrandSwitcher
+              brands={brandList}
+              activeBrand={activeBrand}
+              onChange={(b) => {
+                setActiveBrand(b)
+                onActiveBrandIdChange?.(b.id)
+              }}
+            />
             <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 px-2.5 py-1.5 rounded-xl">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">AI 在线</span>
@@ -934,6 +963,12 @@ export default function DashboardHome({ brand: propBrand }: DashboardHomeProps) 
           />
         </div>
       </section>
+
+      <div className="pt-2 pb-4 text-center">
+        <p className="text-[11px] font-semibold tracking-wide text-slate-400 dark:text-slate-500">
+          Powered by Immedi.AI
+        </p>
+      </div>
 
       {/* ── Add Account Modal ──────────────────────────────────────────── */}
       {showAddAccount && activeBrand?.id && (

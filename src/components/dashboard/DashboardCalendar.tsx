@@ -31,7 +31,11 @@ interface CalendarEvent {
   scheduledAt: string
 }
 
-export default function DashboardCalendar() {
+interface DashboardCalendarProps {
+  brandId?: string
+}
+
+export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
@@ -48,7 +52,9 @@ export default function DashboardCalendar() {
       setError(null)
       try {
         const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
-        const res = await fetch(`/api/dashboard/calendar?month=${month}`)
+        const query = new URLSearchParams({ month })
+        if (brandId) query.set('brandId', brandId)
+        const res = await fetch(`/api/dashboard/calendar?${query.toString()}`)
         if (!res.ok) throw new Error('load failed')
         const data = await res.json()
         if (!cancelled) setEvents(data.events || [])
@@ -61,7 +67,7 @@ export default function DashboardCalendar() {
 
     load()
     return () => { cancelled = true }
-  }, [viewYear, viewMonth])
+  }, [viewYear, viewMonth, brandId])
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }

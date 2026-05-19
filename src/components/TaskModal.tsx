@@ -101,8 +101,14 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
     : []
 
   return (
-    <div className="fixed inset-0 bg-slate-900/20 dark:bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 transition-all duration-300">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col max-h-[90vh] overflow-hidden transform transition-all">
+    <div
+      className="fixed inset-0 bg-slate-900/20 dark:bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-50 transition-all duration-300"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col max-h-[90vh] overflow-hidden transform transition-all"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-start bg-white dark:bg-slate-900">
           <div>
             <div className="flex items-center gap-2 mb-2">

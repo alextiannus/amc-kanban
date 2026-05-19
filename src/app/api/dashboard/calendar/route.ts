@@ -36,6 +36,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const month = url.searchParams.get('month')
+  const requestedBrandId = url.searchParams.get('brandId')
   const monthDate = month ? new Date(`${month}-01T00:00:00.000Z`) : new Date()
   const year = monthDate.getUTCFullYear()
   const monthIndex = monthDate.getUTCMonth()
@@ -45,9 +46,15 @@ export async function GET(request: Request) {
   const brandIds = await getAccessibleBrandIds(session.user.id, session.user.type ?? 'HUMAN', session.user.role)
   if (brandIds.length === 0) return NextResponse.json({ events: [] })
 
+  const scopedBrandIds = requestedBrandId
+    ? (brandIds.includes(requestedBrandId) ? [requestedBrandId] : [])
+    : brandIds
+
+  if (scopedBrandIds.length === 0) return NextResponse.json({ events: [] })
+
   const drafts = await prisma.contentDraft.findMany({
     where: {
-      brandId: { in: brandIds },
+      brandId: { in: scopedBrandIds },
       scheduledAt: { gte: rangeStart, lt: rangeEnd },
     },
     include: {

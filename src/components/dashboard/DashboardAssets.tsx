@@ -59,7 +59,11 @@ function relativeDate(value: string) {
   return `${date.getMonth() + 1}/${date.getDate()}`
 }
 
-export default function DashboardAssets() {
+interface DashboardAssetsProps {
+  brandId?: string
+}
+
+export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [activeCategory, setActiveCategory] = useState('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string[]>([])
@@ -75,7 +79,10 @@ export default function DashboardAssets() {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch('/api/dashboard/assets')
+        const query = new URLSearchParams()
+        if (brandId) query.set('brandId', brandId)
+        const url = query.toString() ? `/api/dashboard/assets?${query.toString()}` : '/api/dashboard/assets'
+        const res = await fetch(url)
         if (!res.ok) throw new Error('load failed')
         const data = await res.json()
         if (!cancelled) setAssets(data.assets || [])
@@ -88,7 +95,7 @@ export default function DashboardAssets() {
 
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [brandId])
 
   const toggleSelect = (id: string) => {
     setSelected(p => p.includes(id) ? p.filter(s => s !== id) : [...p, id])
