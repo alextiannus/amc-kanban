@@ -11,6 +11,7 @@ const PLATFORM_COLORS: Record<string, string> = {
   '小红书': 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50',
   'TikTok': 'bg-slate-900 text-white border-slate-700',
   'Google': 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50',
+  '任务': 'bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800/50',
   '全平台': 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50',
 }
 
@@ -194,7 +195,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
             <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-sm">
               <Clock className="w-8 h-8 mx-auto mb-3 opacity-30" />
               <p className="font-medium">当天无排期内容</p>
-              <p className="text-xs mt-1">从内容草稿中安排发布时间后，这里会自动显示</p>
+              <p className="text-xs mt-1">设置任务截止时间或内容发布时间后，这里会自动显示</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-50 dark:divide-slate-800">
@@ -236,7 +237,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       )}
 
       {!loading && !error && events.length === 0 && (
-        <div className="px-1 text-xs text-slate-400 font-medium">本月还没有排期内容，先在内容草稿里设置发布时间。</div>
+        <div className="px-1 text-xs text-slate-400 font-medium">本月还没有排期内容，先设置任务截止时间或内容发布时间。</div>
       )}
 
     </div>
