@@ -27,15 +27,36 @@ export async function GET(request: Request) {
         brand: {
           select: {
             id: true, name: true, description: true, location: true, timezone: true,
-            autoPilot: true, postfastApiKey: true, googlePlaceId: true, googleApiKey: true,
-            larkAppId: true, larkAppSecret: true, larkDriveToken: true, larkDriveFolderId: true,
-            larkBotWebhook: true, larkOwnerId: true,
+            autoPilot: true,
+            googlePlaceId: true,
+            larkDriveToken: true, larkDriveFolderId: true,
+            larkOwnerId: true,
+            postfastApiKey: true, googleApiKey: true,
+            larkAppId: true, larkAppSecret: true, larkBotWebhook: true,
             accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
           },
         },
       },
     })
-    return NextResponse.json(links.map(l => l.brand))
+    const safeBrands = links.map((l) => {
+      const {
+        postfastApiKey,
+        googleApiKey,
+        larkAppId,
+        larkAppSecret,
+        larkBotWebhook,
+        ...publicBrand
+      } = l.brand as any
+
+      return {
+        ...publicBrand,
+        postfastConfigured: !!postfastApiKey,
+        googleConfigured: !!publicBrand.googlePlaceId && !!googleApiKey,
+        larkConfigured: !!larkAppId && !!larkAppSecret,
+        larkNotifyConfigured: !!publicBrand.larkOwnerId || !!larkBotWebhook,
+      }
+    })
+    return NextResponse.json(safeBrands)
   }
 
   const brand = await prisma.brand.findUnique({
@@ -44,15 +65,33 @@ export async function GET(request: Request) {
       id: true, name: true, description: true, logoUrl: true,
       website: true, phone: true, address: true, location: true,
       timezone: true, autoPilot: true,
-      postfastApiKey: true, googlePlaceId: true, googleApiKey: true,
-      larkAppId: true, larkAppSecret: true, larkDriveToken: true,
-      larkDriveFolderId: true, larkBotWebhook: true, larkOwnerId: true,
+      googlePlaceId: true,
+      larkDriveToken: true,
+      larkDriveFolderId: true, larkOwnerId: true,
+      postfastApiKey: true, googleApiKey: true,
+      larkAppId: true, larkAppSecret: true, larkBotWebhook: true,
       accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
     },
   })
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-  return NextResponse.json(brand)
+
+  const {
+    postfastApiKey,
+    googleApiKey,
+    larkAppId,
+    larkAppSecret,
+    larkBotWebhook,
+    ...publicBrand
+  } = brand as any
+
+  return NextResponse.json({
+    ...publicBrand,
+    postfastConfigured: !!postfastApiKey,
+    googleConfigured: !!publicBrand.googlePlaceId && !!googleApiKey,
+    larkConfigured: !!larkAppId && !!larkAppSecret,
+    larkNotifyConfigured: !!publicBrand.larkOwnerId || !!larkBotWebhook,
+  })
 }
 
 // POST /api/agent/brand-config

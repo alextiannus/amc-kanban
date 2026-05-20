@@ -488,6 +488,24 @@ function fmtFollower(n: number | null): string {
   return String(n)
 }
 
+function normalizeDashboardPlatformId(platformId: string): string {
+  const p = String(platformId ?? '').toLowerCase().trim()
+  if (
+    p === 'google' ||
+    p === 'gbp' ||
+    p === 'gmb' ||
+    p === 'google_maps' ||
+    p === 'googlemaps' ||
+    p === 'google_business_profile' ||
+    p === 'googlebusinessprofile' ||
+    p === 'google_my_business' ||
+    p === 'googlemybusiness'
+  ) {
+    return 'google'
+  }
+  return p
+}
+
 export default function DashboardHome({ brand: propBrand, activeBrandId, onActiveBrandIdChange }: DashboardHomeProps) {
   // ── Brand list from API ──────────────────────────────────────────────────
   const [brandList, setBrandList] = useState<Brand[]>([])
@@ -577,6 +595,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   const weekConversions: any[] = brandDetail?.weekConversions ?? []
   const recentDrafts: any[] = brandDetail?.recentDrafts ?? []
   const pendingReviewCount: number = brandDetail?._count?.contents ?? 0
+  const postfastSync: { ok: boolean; error?: string } | undefined = brandDetail?.postfastSync
 
   // ── Local UI state ───────────────────────────────────────────────────────
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
@@ -593,7 +612,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   // Convert API accounts → ConnectedAccount shape
   const connectedAccounts: ConnectedAccount[] = apiAccounts.map(a => ({
     uid: a.id,
-    platformId: a.platformId,
+    platformId: normalizeDashboardPlatformId(a.platformId),
     handle: a.handle,
     profileUrl: a.profileUrl ?? undefined,
     value: a.ratingScore ? `${a.ratingScore}★` : fmtFollower(a.followerCount),
@@ -769,6 +788,12 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
                 <Store className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
               </div>
               <div>
+
+              {postfastSync && !postfastSync.ok && (
+                <div className="mx-6 mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-300">
+                  PostFast 账号同步失败，可能导致 Google Business 未显示。请在集成配置中更新 PostFast API Key 后重试。
+                </div>
+              )}
                 <p className="text-xs font-bold text-slate-500 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">添加品牌介绍</p>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">品牌故事、特色、定位等信息</p>
               </div>

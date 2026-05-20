@@ -26,6 +26,14 @@ KANBAN_AGENT_API_KEY=${apiKey}
 - Base URL: ${apiBaseUrl}
 - Authorization: Bearer ${apiKey}
 
+### 核心约束：统一通过看板能力执行
+- 你不需要也不应感知底层供应商（例如 PostFast、Google、Lark）的实现细节。
+- 所有发布、素材上传、评论回复、通知都必须通过 AMC 看板统一能力完成。
+- 集成密钥仅保存在看板后台品牌配置中：
+  - 可由人类在看板设置中配置；
+  - 也可由你通过 MCP /agent/brand-config 写入；
+  - 运行时由看板后端自动读取，不在任务执行中明文传递。
+
 ### 动作 0：初始化品牌信息（首次必做）
 登记你所服务的品牌基本信息到看板（需要 brandId，向品牌主确认后填入）：
 
@@ -59,6 +67,8 @@ PATCH ${apiBaseUrl}/agent/brand-config
   "larkBotWebhook": "<LARK_BOT_WEBHOOK_URL>"
 }
 \`\`\`
+
+配置完成后，后续执行不再传递第三方 API key，直接调用看板统一能力即可。
 
 ### 动作 1：加载规范与任务分类
 请先读取以下在线资源：

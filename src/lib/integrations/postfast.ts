@@ -25,6 +25,21 @@ const PLATFORM_MAP: Record<string, string> = {
   TELEGRAM:       'telegram',
   GOOGLE:         'google',
   GBP:            'google',
+  GMB:            'google',
+  GOOGLE_BUSINESS_PROFILE: 'google',
+  GOOGLE_MY_BUSINESS: 'google',
+  GOOGLEBUSINESSPROFILE: 'google',
+  GOOGLEMYBUSINESS: 'google',
+  GOOGLE_MAPS: 'google',
+  GOOGLEMAPS: 'google',
+}
+
+function normalizePlatform(rawPlatform: unknown): string {
+  const raw = String(rawPlatform ?? '')
+  const upper = raw.toUpperCase().trim()
+  const compact = upper.replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  const noUnderscore = compact.replace(/_/g, '')
+  return PLATFORM_MAP[upper] ?? PLATFORM_MAP[compact] ?? PLATFORM_MAP[noUnderscore] ?? compact.toLowerCase()
 }
 
 // ── Shared fetch helper ────────────────────────────────────────────────────
@@ -125,11 +140,11 @@ export async function postfastFetchAccounts(apiKey: string): Promise<{
 
   const raw: any[] = Array.isArray(r.data) ? r.data : []
   const accounts: PostFastAccount[] = raw.map(a => {
-    const pfPlatform = (a.platform ?? '').toUpperCase()
+    const pfPlatform = String(a.platform ?? '').toUpperCase().trim()
     return {
       id: a.id,
       platform: pfPlatform,
-      platformId: PLATFORM_MAP[pfPlatform] ?? pfPlatform.toLowerCase(),
+      platformId: normalizePlatform(a.platform),
       handle: a.platformUsername || a.displayName || a.id,
       displayName: a.displayName,
       profileUrl: a.profileUrl,

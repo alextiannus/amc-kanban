@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canHumanAccessBrandProject, canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -19,6 +20,61 @@ export async function GET(_req: Request, { params }: Params) {
     session.user.role
   )
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Keep dashboard accounts fresh: sync PostFast-bound accounts into SocialAccount
+  // before returning brand detail. Non-fatal if PostFast is temporarily unavailable.
+  const syncBrand = await prisma.brand.findUnique({
+    where: { id },
+    select: { id: true, postfastApiKey: true },
+  })
+  if (!syncBrand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  let postfastSync: { ok: boolean; error?: string } | undefined
+
+  if (syncBrand.postfastApiKey) {
+    try {
+      const pfResult = await postfastFetchAccounts(syncBrand.postfastApiKey)
+      if (pfResult.success) {
+        postfastSync = { ok: true }
+        for (const acc of pfResult.accounts) {
+          if (!acc.platformId || !acc.handle) continue
+          await prisma.socialAccount.upsert({
+            where: {
+              brandId_platformId_handle: {
+                brandId: id,
+                platformId: acc.platformId,
+                handle: acc.handle,
+              },
+            },
+            create: {
+              brandId: id,
+              platformId: acc.platformId,
+              handle: acc.handle,
+              displayName: acc.displayName ?? acc.handle,
+              profileUrl: acc.profileUrl ?? null,
+              followerCount: acc.followerCount ?? null,
+              followerDelta: acc.followerDelta ?? 0,
+              ratingScore: acc.ratingScore ?? null,
+              snapshotAt: new Date(),
+            },
+            update: {
+              displayName: acc.displayName ?? acc.handle,
+              profileUrl: acc.profileUrl ?? null,
+              followerCount: acc.followerCount ?? null,
+              followerDelta: acc.followerDelta ?? 0,
+              ratingScore: acc.ratingScore ?? null,
+              snapshotAt: new Date(),
+            },
+          })
+        }
+      } else {
+        postfastSync = { ok: false, error: pfResult.error }
+      }
+    } catch (e) {
+      console.warn('[GET /api/brands/:id] PostFast account sync failed (non-fatal):', e)
+      postfastSync = { ok: false, error: 'PostFast sync failed' }
+    }
+  }
 
   const brand = await prisma.brand.findFirst({
     where: { id },
@@ -71,7 +127,7 @@ export async function GET(_req: Request, { params }: Params) {
     },
   })
 
-  return NextResponse.json({ ...brand, weekConversions: conversions, recentDrafts })
+  return NextResponse.json({ ...brand, weekConversions: conversions, recentDrafts, postfastSync })
 }
 
 // PATCH /api/brands/[id] — update name, location, autoPilot
