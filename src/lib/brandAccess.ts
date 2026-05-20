@@ -36,6 +36,29 @@ export async function canOwnBrand(brandId: string, userId: string): Promise<bool
 }
 
 /**
+ * Returns true if a HUMAN user can access a brand through delegated AI permissions:
+ * human -> AgentPermission -> AI agent -> BrandAgent(active) -> brand.
+ */
+export async function canAccessBrandViaAgentPermission(
+  brandId: string,
+  humanUserId: string
+): Promise<boolean> {
+  const link = await prisma.brandAgent.findFirst({
+    where: {
+      brandId,
+      active: true,
+      agent: {
+        assignedToHumans: {
+          some: { humanId: humanUserId },
+        },
+      },
+    },
+    select: { id: true },
+  })
+  return !!link
+}
+
+/**
  * Returns true if the given agentId is actively linked to the brand
  * via the BrandAgent join table.
  */
@@ -45,6 +68,39 @@ export async function canAgentAccessBrand(brandId: string, agentId: string): Pro
     select: { active: true },
   })
   return !!link?.active
+}
+
+/**
+ * HUMAN project access check for brand view/edit operations.
+ * Access is granted if user is admin, explicit owner, legacy owner, or delegated through AgentPermission.
+ */
+export async function canHumanAccessBrandProject(
+  brandId: string,
+  userId: string,
+  userRole?: string
+): Promise<boolean> {
+  if (userRole === 'ADMIN') return true
+
+  if (await canOwnBrand(brandId, userId)) return true
+
+  return canAccessBrandViaAgentPermission(brandId, userId)
+}
+
+/**
+ * Session-aware brand read check:
+ * - AI_AGENT users: linked BrandAgent(active)
+ * - HUMAN users: canHumanAccessBrandProject()
+ */
+export async function canSessionAccessBrandProject(
+  brandId: string,
+  userId: string,
+  userType: string,
+  userRole?: string
+): Promise<boolean> {
+  if (userType === 'AI_AGENT') {
+    return canAgentAccessBrand(brandId, userId)
+  }
+  return canHumanAccessBrandProject(brandId, userId, userRole)
 }
 
 /**

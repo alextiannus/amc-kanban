@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
+import { canAgentAccessBrand, canHumanAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -15,13 +16,12 @@ export async function GET(_req: Request, { params }: Params) {
 
   const { id } = await params
 
-  // Access check: admin sees all; owner OR linked agent for others
-  const isAdmin = session.user.role === 'ADMIN'
-  const isOwner = isAdmin || !!(await prisma.brand.findFirst({ where: { id, ownerId: session.user.id } }))
-  const isLinkedAgent = !isOwner && session.user.type === 'AI_AGENT'
-    && !!(await prisma.brandAgent.findFirst({ where: { brandId: id, agentId: session.user.id, active: true } }))
+  const isHumanAllowed = session.user.type !== 'AI_AGENT'
+    && (await canHumanAccessBrandProject(id, session.user.id, session.user.role))
+  const isLinkedAgent = session.user.type === 'AI_AGENT'
+    && (await canAgentAccessBrand(id, session.user.id))
 
-  if (!isOwner && !isLinkedAgent) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!isHumanAllowed && !isLinkedAgent) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const brandAgents = await prisma.brandAgent.findMany({
     where: { brandId: id },
@@ -55,8 +55,12 @@ export async function POST(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const brand = await prisma.brand.findFirst({ where: { id, ownerId: session.user.id } })
-  if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (session.user.type === 'AI_AGENT') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   const body = await request.json()
   const { agentId, role = 'worker' } = body
@@ -83,8 +87,12 @@ export async function DELETE(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const brand = await prisma.brand.findFirst({ where: { id, ownerId: session.user.id } })
-  if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (session.user.type === 'AI_AGENT') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   const url = new URL(request.url)
   const agentId = url.searchParams.get('agentId')

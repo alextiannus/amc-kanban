@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { eventEmitter } from '@/lib/events'
+import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -12,9 +13,10 @@ export async function GET(_req: Request, { params }: Params) {
 
   const { id } = await params
 
-  // Verify ownership
-  const brand = await prisma.brand.findFirst({ where: { id, ownerId: session.user.id } })
-  if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   const url = new URL(_req.url)
   const statusFilter = url.searchParams.get('status') || 'pending'

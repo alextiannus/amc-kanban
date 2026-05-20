@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canOwnBrand, canAgentAccessBrand } from '@/lib/brandAccess'
+import { canHumanAccessBrandProject, canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
-
-/** Returns true if the session user may read this brand */
-async function canReadBrand(brandId: string, userId: string, userType: string): Promise<boolean> {
-  if (userType === 'AI_AGENT') return canAgentAccessBrand(brandId, userId)
-  return canOwnBrand(brandId, userId)
-}
 
 // GET /api/brands/[id] — brand detail with accounts, pending counts, conversion summary, recent drafts
 export async function GET(_req: Request, { params }: Params) {
@@ -18,7 +12,12 @@ export async function GET(_req: Request, { params }: Params) {
 
   const { id } = await params
 
-  const ok = await canReadBrand(id, session.user.id, session.user.type ?? 'HUMAN')
+  const ok = await canSessionAccessBrandProject(
+    id,
+    session.user.id,
+    session.user.type ?? 'HUMAN',
+    session.user.role
+  )
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const brand = await prisma.brand.findFirst({
@@ -81,8 +80,11 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  // PATCH is owner-only — AI Agents may not modify brand metadata
-  if (!(await canOwnBrand(id, session.user.id))) {
+  // PATCH allows HUMAN users with delegated AI permission access.
+  if (session.user.type === 'AI_AGENT') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

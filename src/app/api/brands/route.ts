@@ -48,25 +48,55 @@ export async function GET() {
     }
 
     // Regular human user — brands via BrandOwner join table
-    const ownerLinks = await prisma.brandOwner.findMany({
-      where: { userId: session.user.id },
-      include: {
-        brand: { include: { accounts: accountsSelect, _count: countsSelect } },
-      },
-      orderBy: { createdAt: 'asc' },
-    })
+    const [ownerLinks, legacyOwnedBrands, delegatedAgentPermissions] = await Promise.all([
+      prisma.brandOwner.findMany({
+        where: { userId: session.user.id },
+        include: {
+          brand: { include: { accounts: accountsSelect, _count: countsSelect } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.brand.findMany({
+        where: { ownerId: session.user.id },
+        include: { accounts: accountsSelect, _count: countsSelect },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.agentPermission.findMany({
+        where: { humanId: session.user.id },
+        select: { agentId: true },
+      }),
+    ])
 
-    // Fallback: also include legacy ownerId brands not yet in BrandOwner
-    const linkedBrandIds = new Set(ownerLinks.map(l => l.brandId))
-    const legacyBrands = await prisma.brand.findMany({
-      where: { ownerId: session.user.id, id: { notIn: [...linkedBrandIds] } },
-      include: { accounts: accountsSelect, _count: countsSelect },
-      orderBy: { createdAt: 'asc' },
-    })
+    const ownedBrandIds = new Set([
+      ...ownerLinks.map((link) => link.brandId),
+      ...legacyOwnedBrands.map((brand) => brand.id),
+    ])
+
+    const permittedAgentIds = delegatedAgentPermissions.map((perm) => perm.agentId)
+    const delegatedBrandLinks = permittedAgentIds.length
+      ? await prisma.brandAgent.findMany({
+          where: {
+            agentId: { in: permittedAgentIds },
+            active: true,
+            brandId: { notIn: [...ownedBrandIds] },
+          },
+          select: { brandId: true },
+        })
+      : []
+
+    const delegatedBrandIds = Array.from(new Set(delegatedBrandLinks.map((link) => link.brandId)))
+    const delegatedBrands = delegatedBrandIds.length
+      ? await prisma.brand.findMany({
+          where: { id: { in: delegatedBrandIds } },
+          include: { accounts: accountsSelect, _count: countsSelect },
+          orderBy: { createdAt: 'asc' },
+        })
+      : []
 
     return NextResponse.json([
-      ...ownerLinks.map(l => l.brand),
-      ...legacyBrands,
+      ...ownerLinks.map((link) => link.brand),
+      ...legacyOwnedBrands,
+      ...delegatedBrands,
     ])
   } catch (e: any) {
     console.error('[GET /api/brands]', e)

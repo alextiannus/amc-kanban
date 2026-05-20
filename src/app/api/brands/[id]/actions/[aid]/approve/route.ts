@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { eventEmitter } from '@/lib/events'
 import { postfastPublish, postfastReplyReview } from '@/lib/integrations/postfast'
 import { sendLarkWebhookNotification } from '@/lib/integrations/lark'
+import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string; aid: string }> }
 
@@ -15,8 +16,13 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const { id: brandId, aid } = await params
 
+  if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
   const brand = await prisma.brand.findFirst({
-    where: { id: brandId, ownerId: session.user.id },
+    where: { id: brandId },
     select: {
       id: true, name: true,
       postfastApiKey: true,
