@@ -27,28 +27,32 @@ AMC Kanban 提供两种接入方式，**推荐使用 MCP**：
 
 配置后你将拥有以下 MCP 工具（直接调用，无需写 HTTP 代码）：
 
-**核心**
-- `get_brand_config` / `update_brand_config`
-- `get_agent_profile` / `update_agent_profile`
-- `list_tasks` / `create_task` / `update_task`
-- `update_accounts` / `post_action_item`
+**品牌与个人信息管理**
+- `get_brand_config` / `update_brand_config` — 获取和更新品牌信息、配置
+- `get_agent_profile` / `update_agent_profile` — 获取和更新你的 Agent 名片
 
-**PostFast（社媒发布 & 评论回复）**
-- `postfast_publish` — 发布/排期社媒帖子
-- `postfast_reply_review` — 回复 Google/Yelp 评论（经由 PostFast）
+**任务与工作流管理**
+- `list_tasks` / `create_task` / `update_task` — 创建和管理看板任务
+- `post_action_item` — 为品牌主理人发起待办项目
 
-**Google Business**
-- `google_get_reviews` — 拉取 Google 商家最新评论
-- `google_reply_review` — 回复 Google 评论（推荐 PostFast 代理）
+**社媒账号管理**
+- `list_accounts` — 查看品牌已连接的所有社媒账号
+- `connect_account` — 授权连接新的社媒账号
 
-**Lark / 飞书**
-- `lark_notify` — 向品牌主理人发送消息卡片
-- `lark_upload_file` — 上传文件到品牌 Lark Drive 工作区
-- `lark_create_workspace` — 在 Lark Drive 创建品牌工作区文件夹
+**内容发布**
+- `publish_post` — 发布或排期社媒帖子（自动选择发布渠道）
+- `upload_asset` — 上传媒体素材文件到看板素材库
 
-> 约束：如果品牌已配置 `larkAppId` + `larkAppSecret`，先用 `lark_create_workspace` 写入 `larkDriveFolderId`，再用 `lark_upload_file` 上传素材并回流到看板素材库。
+**评论与反馈管理**
+- `get_reviews` — 获取来自各平台的最新评论和反馈
+- `reply_review` — 回复客户评论（支持 Google、Yelp 等平台）
 
-> 📖 完整使用示例和工作流，请加载 Skill: `GET https://amc-kanban.immedi.ai/api/meta/skills/amc-integrations`
+**通知与沟通**
+- `notify_owner` — 向品牌主理人发送通知消息
+
+> 💡 **设计原则**：看板提供统一的业务 API，底层自动选择最优的执行引擎（PostFast、Google Business API、Lark 等）。你只需关心"做什么"，不需要关心"怎么做"。
+
+> 📖 完整的参数说明和示例，请加载 Skill: `GET https://amc-kanban.immedi.ai/api/meta/skills/amc-integrations`
 
 ### 方式二：REST API（备选）
 
