@@ -120,6 +120,51 @@ Skill 至少包含：
 
 ---
 
+### 【内容发布工作流】Lark 文档 + 看板工作卡片 + 发布回调
+
+#### 工作流程
+1. **草稿准备**（Lark 文档）：在 Lark 中准备内容草稿（文案、素材、排版、预览）
+2. **提交工作卡片**（POST 到看板）：将草稿 URL 和内容信息提交到看板
+3. **两种模式分流**（由品牌 autoPilot 标志决定）：
+   - **自动驾驶**：看板自动调用发布后端发布内容，记录 post 链接到工作卡片，标记为 done
+   - **人工审批**：看板将工作卡片设置为 pending，并在 requiredInput 中记录需要人工审核的信息；人工在看板上审核草稿链接、批准后发布
+4. **发布结果回调**（可选）：如果是外部发布（如 Agent 在 Lark 或其他系统中发布），发布后向看板回调，提交 post URL
+
+#### 提交工作卡片：POST /api/agent/action-items
+\`\`\`json
+{
+  "brandId": "<BRAND_ID>",
+  "accountId": "<SOCIAL_ACCOUNT_ID>",
+  "type": "content_approval",
+  "priority": "high",
+  "title": "[{品牌}] {平台} - {日期} {内容概述}",
+  "description": "内容摘要、核心信息、目标受众等",
+  "draftUrl": "https://lark.com/document/xyz..."
+}
+\`\`\`
+
+**说明**：
+- \`draftUrl\`：Lark 文档链接（Agent 在 Lark 中准备的内容草稿）
+- \`accountId\`：目标社交账号 ID（如微博、抖音账号）；可选但推荐提供以便自动发布
+- \`priority\`：任务优先级（low/normal/high/urgent）
+
+#### 发布结果回调：PATCH /api/agent/action-items（可选）
+在人工审批模式下，或 Agent 在外部系统发布后，调用此端点回调看板：
+
+\`\`\`json
+{
+  "actionItemId": "<ACTION_ITEM_ID>",
+  "postUrl": "https://weibo.com/status/..."
+}
+\`\`\`
+
+**说明**：
+- \`actionItemId\`：POST 时返回的 action item ID
+- \`postUrl\`：最终发布的 post 链接（如微博链接、抖音视频链接等）
+- 看板会自动更新对应的工作卡片，标记为 done，并记录 post 链接
+
+---
+
 ### 【条件执行】如果任务类型是"内容发布"，遵循以下规范
 
 **任务拆分粒度**
