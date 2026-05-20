@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canHumanAccessBrandProject, canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { postfastFetchAccounts } from '@/lib/integrations/postfast'
+import { postfastFetchAccounts, postfastListPosts } from '@/lib/integrations/postfast'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -38,6 +38,29 @@ export async function GET(_req: Request, { params }: Params) {
         postfastSync = { ok: true }
         for (const acc of pfResult.accounts) {
           if (!acc.platformId || !acc.handle) continue
+
+          // For Google Business Profile, a brand typically has one location.
+          // Dedup by platformId alone to prevent handle-mismatch duplicates.
+          if (acc.platformId === 'google') {
+            const existing = await prisma.socialAccount.findFirst({
+              where: { brandId: id, platformId: 'google' },
+              select: { id: true },
+            })
+            if (existing) {
+              await prisma.socialAccount.update({
+                where: { id: existing.id },
+                data: {
+                  handle: acc.handle,
+                  displayName: acc.displayName ?? acc.handle,
+                  profileUrl: acc.profileUrl ?? null,
+                  ratingScore: acc.ratingScore ?? null,
+                  snapshotAt: new Date(),
+                },
+              })
+              continue
+            }
+          }
+
           await prisma.socialAccount.upsert({
             where: {
               brandId_platformId_handle: {
@@ -127,7 +150,104 @@ export async function GET(_req: Request, { params }: Params) {
     },
   })
 
-  return NextResponse.json({ ...brand, weekConversions: conversions, recentDrafts, postfastSync })
+  let operationsReport:
+    | {
+        windowDays: number
+        publishedCount: number
+        engagement: {
+          likes: number
+          comments: number
+          shares: number
+          impressions: number
+          reach: number
+          interactions: number
+          interactionRate: number
+        }
+        topPosts: Array<{
+          id: string
+          platform: string
+          caption: string
+          postUrl: string | null
+          publishedAt: string | null
+          interactions: number
+          impressions: number
+        }>
+      }
+    | undefined
+
+  if (syncBrand.postfastApiKey) {
+    try {
+      const pfPosts = await postfastListPosts(syncBrand.postfastApiKey, {
+        status: 'published',
+        limit: 100,
+      })
+      if (pfPosts.success) {
+        const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        const recent = pfPosts.posts.filter((post) => {
+          const publishedAt = post.publishedAt ? new Date(post.publishedAt) : null
+          return publishedAt ? publishedAt >= since : false
+        })
+
+        const engagement = recent.reduce(
+          (acc, post) => {
+            const likes = post.engagementStats?.likes ?? 0
+            const comments = post.engagementStats?.comments ?? 0
+            const shares = post.engagementStats?.shares ?? 0
+            const impressions = post.engagementStats?.impressions ?? 0
+            const reach = post.engagementStats?.reach ?? 0
+            acc.likes += likes
+            acc.comments += comments
+            acc.shares += shares
+            acc.impressions += impressions
+            acc.reach += reach
+            acc.interactions += likes + comments + shares
+            return acc
+          },
+          {
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            impressions: 0,
+            reach: 0,
+            interactions: 0,
+          }
+        )
+
+        operationsReport = {
+          windowDays: 7,
+          publishedCount: recent.length,
+          engagement: {
+            ...engagement,
+            interactionRate: engagement.impressions > 0
+              ? Number(((engagement.interactions / engagement.impressions) * 100).toFixed(2))
+              : 0,
+          },
+          topPosts: recent
+            .map((post) => {
+              const likes = post.engagementStats?.likes ?? 0
+              const comments = post.engagementStats?.comments ?? 0
+              const shares = post.engagementStats?.shares ?? 0
+              const impressions = post.engagementStats?.impressions ?? 0
+              return {
+                id: post.id,
+                platform: post.platformId || post.platform,
+                caption: post.caption,
+                postUrl: post.postUrl ?? null,
+                publishedAt: post.publishedAt ?? null,
+                interactions: likes + comments + shares,
+                impressions,
+              }
+            })
+            .sort((a, b) => b.interactions - a.interactions)
+            .slice(0, 5),
+        }
+      }
+    } catch (e) {
+      console.warn('[GET /api/brands/:id] PostFast analytics sync failed (non-fatal):', e)
+    }
+  }
+
+  return NextResponse.json({ ...brand, weekConversions: conversions, recentDrafts, postfastSync, operationsReport })
 }
 
 // PATCH /api/brands/[id] — update name, location, autoPilot

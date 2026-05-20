@@ -594,6 +594,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   const apiAutoPilot: boolean = brandDetail?.autoPilot ?? false
   const weekConversions: any[] = brandDetail?.weekConversions ?? []
   const recentDrafts: any[] = brandDetail?.recentDrafts ?? []
+  const operationsReport: any = brandDetail?.operationsReport
   const pendingReviewCount: number = brandDetail?._count?.contents ?? 0
   const postfastSync: { ok: boolean; error?: string } | undefined = brandDetail?.postfastSync
 
@@ -609,18 +610,36 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   // Visible action items = pending and not locally dismissed
   const pendingItems = apiActionItems.filter(i => !dismissedIds.has(i.id))
 
-  // Convert API accounts → ConnectedAccount shape
-  const connectedAccounts: ConnectedAccount[] = apiAccounts.map(a => ({
-    uid: a.id,
-    platformId: normalizeDashboardPlatformId(a.platformId),
-    handle: a.handle,
-    profileUrl: a.profileUrl ?? undefined,
-    value: a.ratingScore ? `${a.ratingScore}★` : fmtFollower(a.followerCount),
-    delta: a.followerDelta != null
-      ? `${a.followerDelta >= 0 ? '+' : ''}${a.followerDelta}`
-      : '—',
-    deltaPositive: (a.followerDelta ?? 0) >= 0 && !(a.ratingScore && a.followerDelta < 0),
-  }))
+  // Convert API accounts → ConnectedAccount shape, dedup google by platformId
+  const seenPlatforms = new Set<string>()
+  const connectedAccounts: ConnectedAccount[] = apiAccounts
+    .sort((a: any, b: any) => {
+      // For google: prefer the one with ratingScore to surface first
+      if (a.platformId === 'google' && b.platformId === 'google') {
+        return (b.ratingScore ?? 0) - (a.ratingScore ?? 0)
+      }
+      return 0
+    })
+    .filter((a: any) => {
+      const pid = normalizeDashboardPlatformId(a.platformId)
+      // For google, only show the first (highest-rated) entry
+      if (pid === 'google') {
+        if (seenPlatforms.has('google')) return false
+        seenPlatforms.add('google')
+      }
+      return true
+    })
+    .map((a: any) => ({
+      uid: a.id,
+      platformId: normalizeDashboardPlatformId(a.platformId),
+      handle: a.handle,
+      profileUrl: a.profileUrl ?? undefined,
+      value: a.ratingScore ? `${a.ratingScore}★` : fmtFollower(a.followerCount),
+      delta: a.followerDelta != null
+        ? `${a.followerDelta >= 0 ? '+' : ''}${a.followerDelta}`
+        : '—',
+      deltaPositive: (a.followerDelta ?? 0) >= 0 && !(a.ratingScore && a.followerDelta < 0),
+    }))
 
   // ── Approve / Reject ─────────────────────────────────────────────────────
   const approve = async (id: string) => {
@@ -686,7 +705,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   }
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto pb-44 space-y-6">
+    <div className="p-4 md:p-8 pb-44 space-y-6">
 
       {/* ── Brand Header Card ───────────────────────────────────────────── */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
@@ -1013,6 +1032,90 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
             color="bg-indigo-400"
           />
         </div>
+      </section>
+
+      {/* ── Brand Operations Report (PostFast) ───────────────────────── */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-indigo-500" /> 品牌运营报告（优先）
+          </h3>
+          <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-full">PostFast · 近7天</span>
+        </div>
+
+        {!operationsReport ? (
+          <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 text-xs text-slate-500 dark:text-slate-400">
+            暂无可用运营报告数据。请先确认 PostFast 已连接并有已发布内容。
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <ConversionCard
+                label="已发布内容"
+                value={String(operationsReport.publishedCount ?? 0)}
+                sub="近7天"
+                progress={100}
+                color="bg-indigo-400"
+              />
+              <ConversionCard
+                label="总互动"
+                value={String(operationsReport.engagement?.interactions ?? 0)}
+                sub="点赞+评论+分享"
+                progress={100}
+                color="bg-blue-400"
+              />
+              <ConversionCard
+                label="总曝光"
+                value={String(operationsReport.engagement?.impressions ?? 0)}
+                sub="impressions"
+                progress={100}
+                color="bg-violet-400"
+              />
+              <ConversionCard
+                label="互动率"
+                value={`${operationsReport.engagement?.interactionRate ?? 0}%`}
+                sub="互动 / 曝光"
+                progress={100}
+                color="bg-emerald-400"
+              />
+            </div>
+
+            <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                Top 内容表现
+              </div>
+              {(operationsReport.topPosts ?? []).length === 0 ? (
+                <div className="p-4 text-xs text-slate-500 dark:text-slate-400">暂无已发布内容可分析。</div>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {(operationsReport.topPosts ?? []).map((post: any) => (
+                    <div key={post.id} className="px-4 py-3 flex items-start gap-3">
+                      <div className="mt-0.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/50 px-2 py-0.5 rounded-full">
+                        {post.platform}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 line-clamp-2">{post.caption || '无文案'}</p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          互动 {post.interactions ?? 0} · 曝光 {post.impressions ?? 0}
+                        </p>
+                      </div>
+                      {post.postUrl && (
+                        <a
+                          href={post.postUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline whitespace-nowrap"
+                        >
+                          查看帖子
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="pt-2 pb-4 text-center">
