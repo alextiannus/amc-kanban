@@ -13,15 +13,49 @@ export async function GET() {
     let whereClause: any = { type: 'AI_AGENT' }
 
     if (session.user.role !== 'ADMIN') {
-      const permissions = await prisma.agentPermission.findMany({
-        where: { humanId: session.user.id }
-      })
-      const permittedAgentIds = permissions.map(p => p.agentId)
+      const [permissions, ownedRows, legacyOwnedBrands] = await Promise.all([
+        prisma.agentPermission.findMany({
+          where: { humanId: session.user.id },
+          select: { agentId: true },
+        }),
+        prisma.brandOwner.findMany({
+          where: { userId: session.user.id },
+          select: { brandId: true },
+        }),
+        prisma.brand.findMany({
+          where: { ownerId: session.user.id },
+          select: { id: true },
+        }),
+      ])
 
-      if (permittedAgentIds.length > 0) {
+      const ownedBrandIds = Array.from(
+        new Set([
+          ...ownedRows.map((row) => row.brandId),
+          ...legacyOwnedBrands.map((brand) => brand.id),
+        ])
+      )
+
+      const brandBoundAgentLinks = ownedBrandIds.length
+        ? await prisma.brandAgent.findMany({
+            where: {
+              brandId: { in: ownedBrandIds },
+              active: true,
+            },
+            select: { agentId: true },
+          })
+        : []
+
+      const visibleAgentIds = Array.from(
+        new Set([
+          ...permissions.map((p) => p.agentId),
+          ...brandBoundAgentLinks.map((link) => link.agentId),
+        ])
+      )
+
+      if (visibleAgentIds.length > 0) {
         whereClause = {
           ...whereClause,
-          id: { in: permittedAgentIds }
+          id: { in: visibleAgentIds }
         }
       } else {
         return NextResponse.json([])
