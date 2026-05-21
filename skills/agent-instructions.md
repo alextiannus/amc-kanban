@@ -303,7 +303,8 @@ Authorization: Bearer <agentApiKey>
 
 为保证所有任务可排期，创建任务时必须提供 `deadline`，并遵循：
 
-- 默认时区使用品牌 `timezone`（如 `Asia/Singapore`）
+- 默认时区固定为 `Asia/Singapore`（新加坡时间，项目统一标准）
+- 若品牌配置中的 `timezone` 非 `Asia/Singapore`，仍以新加坡时间生成与解释 deadline，除非主理人明确要求切换
 - 紧急任务：`当前时间 + 4 小时`
 - 当日任务：当天 `23:00` 前
 - 常规任务：`当前时间 + 24~72 小时`，按复杂度估算
