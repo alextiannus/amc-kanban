@@ -293,6 +293,12 @@ Authorization: Bearer <agentApiKey>
 
 若失败，优先给可排查信息，不要给内部实现细节。
 
+若发布任务未能完成且未更新到 `done`，必须用红色 font color 描述问题，格式示例：
+
+```md
+<font color="red">发布失败：Instagram API token 已过期，任务暂无法置为 done，已转为 pending 并等待主理人更新凭证。</font>
+```
+
 ## 6. 截止时间策略（deadline 生成与维护）
 
 为保证所有任务可排期，创建任务时必须提供 `deadline`，并遵循：
@@ -353,6 +359,13 @@ Authorization: Bearer <agentApiKey>
 - Deliverables: 已发布 3 条内容，回复 5 条评论
 - Outcome: 本周期互动率较上周期提升 12%
 - Follow-up: 建议下周期增加短视频占比至 60%
+```
+
+若发布任务失败且未置为 done，可追加：
+
+```md
+### Publish Blocker
+<font color="red">发布未完成：TikTok Business API 返回 401（token invalid），任务状态保持 pending，待主理人更新凭证后重试。</font>
 ```
 
 ## 10. 20:00 Comment & DM Batch Reply 执行规则
