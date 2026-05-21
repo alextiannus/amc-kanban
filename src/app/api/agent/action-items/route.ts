@@ -3,6 +3,15 @@ import { prisma } from '@/lib/prisma'
 import { eventEmitter } from '@/lib/events'
 import { postfastPublish } from '@/lib/integrations/postfast'
 
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 // Authenticate by Agent apiKey in Authorization header
 async function getAgent(request: Request) {
   const auth = request.headers.get('authorization') || ''
@@ -34,6 +43,9 @@ export async function POST(request: Request) {
   // Otherwise, if draftData is provided, create an internal ContentDraft and WorkUnit.
   if (type === 'content_approval' && !incomingDraftUrl && !draftData) {
     return NextResponse.json({ error: 'draftUrl or draftData is required for content_approval' }, { status: 400 })
+  }
+  if (incomingDraftUrl && !isValidHttpUrl(incomingDraftUrl)) {
+    return NextResponse.json({ error: 'draftUrl must be a valid http/https URL' }, { status: 400 })
   }
 
   let draftId: string | undefined
@@ -73,11 +85,12 @@ export async function POST(request: Request) {
 
   // Create WorkUnit to track this content work (with draft URL and eventual post URL)
   if (type === 'content_approval' && draftUrl) {
+    const draftMaterial = `草稿链接: ${draftUrl}`
     const workTask = await prisma.workUnit.create({
       data: {
         title: `[${brand.autoPilot ? '自动驾驶' : '人工审批'}] ${title}`,
         description,
-        materials: draftUrl,
+        materials: draftMaterial,
         assigneeId: agent.id,
         status: brand.autoPilot ? 'in_progress' : 'pending',
         requiredInput: brand.autoPilot
@@ -107,6 +120,16 @@ export async function POST(request: Request) {
       resolvedBy: brand.autoPilot ? 'auto_pilot' : null,
     },
   })
+
+  // Link the work card to this action item for deterministic callback updates.
+  if (workTaskId) {
+    await prisma.workUnit.update({
+      where: { id: workTaskId },
+      data: {
+        tags: { push: `action_item:${item.id}` },
+      },
+    })
+  }
 
   // If brand is in autoPilot and this is content_approval with draft — attempt immediate publish
   if (brand.autoPilot && type === 'content_approval' && workTaskId) {
@@ -157,7 +180,7 @@ export async function POST(request: Request) {
         })
       }
 
-      const materialParts = [draftUrl]
+      const materialParts = [`草稿链接: ${draftUrl}`]
       if (publishedUrl) materialParts.push(`发布链接: ${publishedUrl}`)
 
       await prisma.workUnit.update({
@@ -175,12 +198,12 @@ export async function POST(request: Request) {
             },
       })
     } else {
-      // Agent provided draftUrl directly (e.g., Lark doc); in autoPilot, mark as in_progress → done
-      // (assuming the draft was already prepared externally; we just track it)
+      // Agent provided draftUrl directly (e.g., Lark doc). Keep it in_progress
+      // until the final published URL is callback-ed to the board.
       await prisma.workUnit.update({
         where: { id: workTaskId },
         data: {
-          status: 'done',
+          status: 'in_progress',
           requiredInput: null,
         },
       })
@@ -206,6 +229,9 @@ export async function PATCH(request: Request) {
   if (!actionItemId || !postUrl) {
     return NextResponse.json({ error: 'actionItemId and postUrl required' }, { status: 400 })
   }
+  if (!isValidHttpUrl(postUrl)) {
+    return NextResponse.json({ error: 'postUrl must be a valid http/https URL' }, { status: 400 })
+  }
 
   // Find the action item and associated work unit
   const actionItem = await prisma.actionItem.findUnique({
@@ -221,19 +247,30 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Not authorized to update this action item' }, { status: 403 })
   }
 
-  // Find the associated WorkUnit (created from this action item)
-  // We'll match by agentId and status of pending/in_progress from the action-items creation
+  // Find the associated WorkUnit by deterministic tag.
   const workUnits = await prisma.workUnit.findMany({
     where: {
       assigneeId: agent.id,
-      status: { in: ['pending', 'in_progress'] },
+      tags: { has: `action_item:${actionItemId}` },
     },
     orderBy: { createdAt: 'desc' },
     take: 1,
   })
 
   if (workUnits.length === 0) {
-    return NextResponse.json({ error: 'No pending work unit found for this agent' }, { status: 404 })
+    // Backward-compatible fallback for old tasks created before action_item tag rollout.
+    const fallback = await prisma.workUnit.findMany({
+      where: {
+        assigneeId: agent.id,
+        status: { in: ['pending', 'in_progress'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+    })
+    if (fallback.length === 0) {
+      return NextResponse.json({ error: 'No pending work unit found for this action item' }, { status: 404 })
+    }
+    workUnits.push(fallback[0])
   }
 
   const workUnit = workUnits[0]

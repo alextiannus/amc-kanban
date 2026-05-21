@@ -24,6 +24,21 @@ function renderTextWithLinks(text: string | null) {
   });
 }
 
+function extractWorkLinks(materials: string | null) {
+  if (!materials) return { draftUrl: null as string | null, postUrl: null as string | null }
+
+  const lines = materials.split('\n').map((line) => line.trim()).filter(Boolean)
+  const draftLine = lines.find((line) => line.startsWith('草稿链接:'))
+  const postLine = lines.find((line) => line.startsWith('发布链接:'))
+
+  const draftUrl = draftLine
+    ? draftLine.replace(/^草稿链接:\s*/, '')
+    : (lines.find((line) => /^https?:\/\//i.test(line)) ?? null)
+  const postUrl = postLine ? postLine.replace(/^发布链接:\s*/, '') : null
+
+  return { draftUrl, postUrl }
+}
+
 export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilter }: {
   task: any,
   onClose: () => void,
@@ -86,6 +101,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
   }
 
   const taskTags: string[] = currentTask.tags || []
+  const { draftUrl, postUrl } = extractWorkLinks(currentTask.materials)
   const relatedTasks = allTasks
     ? allTasks
         .filter(t => t.id !== currentTask.id && t.status !== 'void')
@@ -217,6 +233,32 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
           {currentTask.materials && (
             <div>
               <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Research Materials</h3>
+              {(draftUrl || postUrl) && (
+                <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {draftUrl && (
+                    <a
+                      href={draftUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-xl border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 text-xs text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                    >
+                      <p className="font-bold mb-0.5">草稿链接</p>
+                      <p className="truncate">{draftUrl}</p>
+                    </a>
+                  )}
+                  {postUrl && (
+                    <a
+                      href={postUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                    >
+                      <p className="font-bold mb-0.5">发布链接</p>
+                      <p className="truncate">{postUrl}</p>
+                    </a>
+                  )}
+                </div>
+              )}
               <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 text-sm text-slate-700 dark:text-slate-300 leading-relaxed break-words prose prose-sm dark:prose-invert max-w-none prose-a:text-blue-500 prose-headings:font-bold">
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                   {currentTask.materials}
