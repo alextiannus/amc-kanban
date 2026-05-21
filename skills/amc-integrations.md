@@ -149,6 +149,9 @@
 
 ### Google Business — 评论管理
 
+> ⚠️ 能力边界说明：当前通过 PostFast/AMC 暴露的评论能力主要是 Google Business（及部分 Yelp 场景）。
+> Instagram / Facebook / TikTok 的 Comment/DM 自动拉取与自动回复不属于当前默认能力，需要额外接入各平台官方 API 与 webhook 监听。
+
 #### `google_get_reviews`
 拉取品牌最新 Google 评论（最多 20 条）。
 
@@ -172,6 +175,17 @@
 ```
 
 **返回**: `{ ok, reviewId, via: "postfast" }`
+
+---
+
+### 未接通平台的降级策略（必读）
+
+当批处理窗口涉及 Instagram / Facebook / TikTok，且未配置官方评论/私信 API 凭证时：
+
+1. 不执行伪成功回复，不臆造已处理结果
+2. 创建待办并标记 `pending`，写明缺失凭证与受影响平台
+3. 通知品牌主理人补齐 API 凭证与 webhook 配置
+4. 在下一个批处理窗口前仅做发布链路，不做评论/私信自动回复
 
 ---
 

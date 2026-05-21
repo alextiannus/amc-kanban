@@ -64,13 +64,15 @@ AMC Kanban 提供两种接入方式，**推荐使用 MCP**：
 - `upload_asset` — 上传媒体素材文件到看板素材库
 
 **评论与反馈管理**
-- `get_reviews` — 获取来自各平台的最新评论和反馈
-- `reply_review` — 回复客户评论（支持 Google、Yelp 等平台）
+- `get_reviews` — 获取评论（当前以 Google Business / Yelp 为主）
+- `reply_review` — 回复客户评论（当前支持 Google、Yelp 等平台）
 
 **通知与沟通**
 - `notify_owner` — 向品牌主理人发送通知消息
 
 > 💡 **设计原则**：看板提供统一的业务 API，底层自动选择最优的执行引擎（PostFast、Google Business API、Lark 等）。你只需关心"做什么"，不需要关心"怎么做"。
+
+> ⚠️ **能力边界（重要）**：当前 AMC + PostFast 主要覆盖内容发布与 Google/Yelp 评论链路。Instagram / Facebook / TikTok 的 Comment/DM 自动拉取与自动回复，仍需平台官方 API 凭证与监听配置，不可默认已启用。
 
 > 📖 完整的参数说明和示例，请加载 Skill: `GET https://amc-kanban.immedi.ai/api/meta/skills/amc-integrations`
 
@@ -352,3 +354,25 @@ Authorization: Bearer <agentApiKey>
 - Outcome: 本周期互动率较上周期提升 12%
 - Follow-up: 建议下周期增加短视频占比至 60%
 ```
+
+## 10. 20:00 Comment & DM Batch Reply 执行规则
+
+当执行 20:00 评论/私信批处理窗口时，必须先按平台能力分流：
+
+- Google Business Profile：可使用 `get_reviews` / `reply_review` 自动处理
+- Yelp：可使用 `reply_review`（若品牌已完成对应授权）
+- Instagram / Facebook / TikTok：当前默认不走自动回复链路，除非品牌已配置官方评论/私信 API 凭证
+
+若发现平台不支持自动拉取或回复，必须执行以下降级动作：
+
+1. 创建待办（`post_action_item`），类型建议 `material_request` 或 `workflow_blocker`，标题包含平台名与"Comment/DM 凭证缺失"
+2. 在 `description` 记录：执行窗口、受影响平台、失败原因、所需凭证清单
+3. 通过 `notify_owner` 通知主理人补充 API 凭证（不要要求提供明文密码）
+4. 将相关任务状态改为 `pending`，并在 `requiredInput` 中明确缺失项
+
+推荐在待办中使用如下缺失项模板：
+
+- Instagram Graph API: `appId` `appSecret` `businessAccountId` `longLivedToken`
+- Facebook Page API: `pageId` `pageAccessToken`
+- TikTok Business API: `advertiserId/openId` `accessToken` `refreshToken`
+- Webhook/监听回调: `callbackUrl` `verifyToken`（由运维侧配置）
