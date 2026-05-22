@@ -12,6 +12,7 @@ import MainLayout from './layout/MainLayout'
 import SystemLogModal from './layout/SystemLogModal'
 import NewAgentKeyModal from './layout/NewAgentKeyModal'
 import AgentsWorkflowView from './dashboard/AgentsWorkflowView'
+import GameSettingsDashboard from './dashboard/GameSettingsDashboard'
 
 interface Brand {
   id: string
@@ -19,7 +20,7 @@ interface Brand {
   location?: string
 }
 
-export default function KanbanBoard() {
+export default function KanbanBoard({ initialView = 'dashboard' }: { initialView?: 'agents' | 'archive' | 'dashboard' | 'analytics' | 'calendar' | 'game' }) {
   const [tasks, setTasks] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState('pending')
   const [selectedTask, setSelectedTask] = useState<any | null>(null)
@@ -35,7 +36,7 @@ export default function KanbanBoard() {
   const [showSettings, setShowSettings] = useState(false)
   
   // Navigation State
-  const [currentView, setCurrentView] = useState<'agents' | 'archive' | 'dashboard' | 'analytics' | 'calendar'>('dashboard')
+  const [currentView, setCurrentView] = useState<'agents' | 'archive' | 'dashboard' | 'analytics' | 'calendar' | 'game'>(initialView)
   const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
 
   // Brand State — loaded from API
@@ -172,6 +173,14 @@ export default function KanbanBoard() {
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
           {activeBrand ? (
             <BrandAnalyticsDashboard key={activeBrand.id} brandId={activeBrand.id} brandName={activeBrand.name} />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-400 text-sm">请先选择品牌</div>
+          )}
+        </div>
+      ) : currentView === 'game' ? (
+        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto p-4 md:p-8">
+          {activeBrand ? (
+            <GameSettingsDashboard key={activeBrand.id} brandId={activeBrand.id} brandName={activeBrand.name} />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 text-sm">请先选择品牌</div>
           )}

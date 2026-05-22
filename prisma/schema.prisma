@@ -153,6 +153,8 @@ model Brand {
   actionItems ActionItem[]
   conversions ConversionEvent[]
   brandAgents BrandAgent[]
+  gameConfig  GameConfig?
+  gameSessions GameSession[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -298,3 +300,104 @@ model ConversionEvent {
   @@index([brandId, occurredAt])
   @@index([brandId, type, source])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Game Wheel Marketing Models
+// ─────────────────────────────────────────────────────────────────────────────
+
+model GameConfig {
+  id                 String      @id @default(cuid())
+  brandId            String      @unique
+  brand              Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  
+  title              String      @default("Lucky Spin Wheel")
+  description        String?     
+  themeColor         String      @default("#3b82f6") 
+  
+  taskPhotoEnabled   Boolean     @default(true)
+  taskReviewEnabled  Boolean     @default(true)
+  clerkPin           String      @default("123456")
+  maxSpinsPerUserDay Int         @default(3)
+  
+  prizes             GamePrize[]
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+}
+
+model GamePrize {
+  id                 String      @id @default(cuid())
+  gameConfigId       String
+  gameConfig         GameConfig  @relation(fields: [gameConfigId], references: [id], onDelete: Cascade)
+  
+  name               String      
+  type               String      // COUPON | PHYSICAL | POINTS | THANKS
+  probability        Float       
+  totalInventory     Int?        // Null represents infinite inventory
+  claimedCount       Int         @default(0)
+  imageUrl           String?
+  
+  spinLogs           GameSpinLog[]
+  
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+}
+
+model GameSession {
+  id                 String                   @id @default(cuid())
+  brandId            String
+  brand              Brand                    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  
+  sessionId          String                   
+  pointsBalance      Int                      @default(0)
+  
+  tasks              CustomerTaskSubmission[]
+  spinLogs           GameSpinLog[]
+
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@unique([brandId, sessionId])
+  @@index([brandId, sessionId])
+}
+
+model CustomerTaskSubmission {
+  id                 String           @id @default(cuid())
+  sessionId          String
+  session            GameSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  brandId            String
+  
+  taskType           String           
+  status             String           @default("PENDING") 
+  pointsAwarded      Int              @default(0)
+  
+  images             String[]         
+  imageMd5s          String[]         
+  copyrightAgreed    Boolean          @default(true)
+  
+  reviewPlatform     String?          
+  reviewTimeRaw      String?          
+  aiReason           String?
+  
+  isManualOverride   Boolean          @default(false) 
+  reviewedAt         DateTime?
+  
+  createdAt          DateTime         @default(now())
+}
+
+model GameSpinLog {
+  id                 String           @id @default(cuid())
+  sessionId          String
+  session            GameSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  prizeId            String
+  prize              GamePrize        @relation(fields: [prizeId], references: [id])
+  
+  pointsDeducted     Int              @default(5)
+  redemptionCode     String           @unique 
+  status             String           @default("UNCLAIMED") // UNCLAIMED | CLAIMED | EXPIRED
+  
+  claimedAt          DateTime?
+  expiresAt          DateTime?
+  
+  createdAt          DateTime         @default(now())
+}
+

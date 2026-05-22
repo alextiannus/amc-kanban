@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
-import { Store, Calendar, BarChart2, Sun, Moon } from 'lucide-react'
+import { Store, Calendar, BarChart2, Sun, Moon, Gift } from 'lucide-react'
 import BrandSwitcher, { Brand } from './BrandSwitcher'
 import UserMenu from './UserMenu'
 
 interface MainLayoutProps {
   children: React.ReactNode
-  currentView: 'dashboard' | 'calendar' | 'analytics' | 'agents' | 'archive'
-  setCurrentView: (view: 'dashboard' | 'calendar' | 'analytics' | 'agents' | 'archive') => void
+  currentView: 'dashboard' | 'calendar' | 'analytics' | 'agents' | 'archive' | 'game'
+  setCurrentView: (view: 'dashboard' | 'calendar' | 'analytics' | 'agents' | 'archive' | 'game') => void
   brands: Brand[]
   activeBrand: Brand | null
   setActiveBrand: (brand: Brand) => void
@@ -86,6 +86,17 @@ export default function MainLayout({
             id="nav-brand-analytics"
           >
             <BarChart2 size={16} /> 品牌分析
+          </button>
+          <button
+            onClick={() => setCurrentView('game')}
+            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
+              currentView === 'game'
+                ? 'bg-white dark:bg-slate-700 text-pink-650 dark:text-pink-400 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+            }`}
+            id="nav-game-settings"
+          >
+            <Gift size={16} /> 店内活动
           </button>
         </div>
 

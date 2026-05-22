@@ -8,7 +8,7 @@ import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
 interface UserMenuProps {
   user: { id: string; email: string; role: string; nickname?: string | null; avatar?: string | null } | null
   currentView: string
-  setCurrentView: (view: 'dashboard' | 'calendar' | 'analytics' | 'agents' | 'archive') => void
+  setCurrentView: (view: 'dashboard' | 'calendar' | 'analytics' | 'agents' | 'archive' | 'game') => void
   onShowSettings: () => void
   onShowSystemLog: () => void
   onNewAgentKeyGenerated: (key: string) => void

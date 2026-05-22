@@ -1,0 +1,59 @@
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export async function GET(request: Request) {
+  const url = new URL(request.url)
+  const brandId = url.searchParams.get('brandId')
+  const sessionId = url.searchParams.get('sessionId')
+
+  if (!brandId || !sessionId) {
+    return NextResponse.json({ error: 'brandId and sessionId required' }, { status: 400 })
+  }
+
+  try {
+    // 1. Find or create the GameSession
+    let session = await prisma.gameSession.findUnique({
+      where: {
+        brandId_sessionId: { brandId, sessionId },
+      },
+    })
+
+    if (!session) {
+      session = await prisma.gameSession.create({
+        data: {
+          brandId,
+          sessionId,
+          pointsBalance: 0,
+        },
+      })
+    }
+
+    // 2. Query any unclaimed spin logs for crash resilience
+    const unclaimedSpins = await prisma.gameSpinLog.findMany({
+      where: {
+        sessionId: session.id,
+        status: 'UNCLAIMED',
+      },
+      include: {
+        prize: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
+
+    return NextResponse.json({
+      pointsBalance: session.pointsBalance,
+      unclaimedPrizes: unclaimedSpins.map(log => ({
+        logId: log.id,
+        prizeName: log.prize.name,
+        prizeType: log.prize.type,
+        redemptionCode: log.redemptionCode,
+        createdAt: log.createdAt,
+      })),
+    })
+  } catch (e: any) {
+    console.error('[GET /api/game/status]', e)
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}
