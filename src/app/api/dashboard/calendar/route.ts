@@ -116,7 +116,7 @@ export async function GET(request: Request) {
             // Planned work: tasks scheduled by deadline in the viewed month.
             { deadline: { gte: rangeStart, lt: rangeEnd } },
             // Past happened: completed/cancelled in the viewed month.
-            { status: { in: ['done', 'void'] }, updatedAt: { gte: rangeStart, lt: rangeEnd } },
+            { status: 'done', updatedAt: { gte: rangeStart, lt: rangeEnd } },
             // Planned without deadline: newly created active tasks in the viewed month.
             { status: { in: ['todo', 'in_progress', 'pending'] }, deadline: null, createdAt: { gte: rangeStart, lt: rangeEnd } },
           ],
@@ -164,23 +164,15 @@ export async function GET(request: Request) {
   })
 
   const taskEvents = tasks
-    .filter(task => Boolean(task.deadline))
+    .filter(task => task.status !== 'void' && Boolean(task.deadline))
     .map(task => {
-      const eventTime = task.status === 'done' || task.status === 'void'
-        ? task.updatedAt
-        : (task.deadline ?? task.createdAt)
+      const eventTime = task.status === 'done' ? task.updatedAt : (task.deadline ?? task.createdAt)
       const status = task.status === 'done'
         ? 'done'
-        : task.status === 'void'
-          ? 'done'
         : task.status === 'pending'
           ? 'pending'
           : 'scheduled'
-      const title = task.status === 'void'
-        ? `[已取消] ${task.title}`
-        : task.status === 'done'
-          ? `[已完成] ${task.title}`
-          : task.title
+      const title = task.status === 'done' ? `[已完成] ${task.title}` : task.title
 
       return {
         id: `task_${task.id}`,
