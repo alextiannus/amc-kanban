@@ -200,6 +200,7 @@ export default function KanbanBoard() {
   const searchLower = searchQuery.toLowerCase().trim()
 
   const activeTasks = tasks
+    .filter(t => t.status !== 'void')          // always hide cancelled tasks
     .filter(t => t.status === activeTab)
     .filter(t => priorityFilter === 'all' || (t.priority || 'medium') === priorityFilter)
     .filter(t => agentFilter === 'all' || t.assigneeId === agentFilter)
@@ -491,7 +492,7 @@ export default function KanbanBoard() {
           {/* ── 全局任务看板（原首页内容）── */}
           <div className="w-full bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-              {COLUMNS.map(col => {
+              {COLUMNS.filter(col => col.id !== 'void').map(col => {
                 const count = tasks.filter(t => t.status === col.id).length;
                 const isActive = activeTab === col.id;
                 return (
