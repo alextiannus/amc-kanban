@@ -934,15 +934,15 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
             </p>
           </div>
 
-          {/* Marketing Poster customizer & printing */}
+          {/* Marketing Sticker customizer & printing */}
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-5">
             <h3 className="text-sm font-black text-slate-850 dark:text-slate-100">
-              宣传海报生成与下载
+              宣传贴纸生成与打印
             </h3>
             
             <div className="space-y-3">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">海报主标题</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">贴纸主标题</label>
                 <input
                   type="text"
                   value={posterTitle}
@@ -952,7 +952,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">海报引导语</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">贴纸引导语</label>
                 <textarea
                   rows={2}
                   value={posterDesc}
@@ -962,36 +962,38 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
               </div>
             </div>
 
-            {/* Poster mini-preview */}
-            <div className="border border-slate-200/60 dark:border-slate-800 p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 flex flex-col items-center text-center gap-3 relative overflow-hidden">
-              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-500 via-pink-500 to-indigo-500" />
-              
-              <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 tracking-widest select-none">
-                {brandName}
-              </span>
+            {/* Sticker mini-preview */}
+            <div className="w-full flex justify-center">
+              <div className="border border-slate-200/60 dark:border-slate-800 p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-between text-center aspect-square w-full max-w-[220px] relative overflow-hidden shadow-sm">
+                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-500 via-pink-500 to-indigo-500" />
+                
+                <span className="text-[7.5px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 tracking-wider select-none mt-1">
+                  {brandName}
+                </span>
 
-              <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight">
-                {posterTitle}
-              </h4>
-              
-              <p className="text-[10px] text-slate-500 dark:text-slate-450 max-w-[200px] leading-relaxed">
-                {posterDesc}
-              </p>
+                <h4 className="text-xs font-black text-slate-900 dark:text-white leading-tight mt-1 uppercase truncate w-full px-2">
+                  {posterTitle}
+                </h4>
+                
+                <p className="text-[8.5px] text-slate-500 dark:text-slate-450 max-w-[180px] leading-tight mt-0.5 truncate w-full px-1">
+                  {posterDesc}
+                </p>
 
-              {/* QR Image */}
-              {qrCodeUrl ? (
-                <div className="p-2 bg-white rounded-xl shadow-md border border-slate-100">
-                  <img src={qrCodeUrl} alt="Store Game QR Code" className="w-28 h-28 object-contain" />
-                </div>
-              ) : (
-                <div className="w-28 h-28 bg-white border border-slate-200/50 rounded-xl flex items-center justify-center text-xs text-slate-400">
-                  正在生成...
-                </div>
-              )}
+                {/* QR Image */}
+                {qrCodeUrl ? (
+                  <div className="p-1 bg-white rounded-lg shadow border border-slate-100 my-1">
+                    <img src={qrCodeUrl} alt="Store Game QR Code" className="w-18 h-18 object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-18 h-18 bg-white border border-slate-200/50 rounded-lg flex items-center justify-center text-[9px] text-slate-450 my-1">
+                    正在生成...
+                  </div>
+                )}
 
-              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                Scan QR with your phone to start
-              </p>
+                <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+                  Scan to Spin & Claim Rewards
+                </p>
+              </div>
             </div>
 
             <button
@@ -1000,7 +1002,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-750 text-white text-xs font-bold transition shadow shadow-indigo-600/10 active:scale-[0.98] disabled:opacity-50"
             >
               <Printer size={13} />
-              打印/下载 A4 宣传海报
+              打印桌贴/包装贴纸 (80mm x 80mm)
             </button>
           </div>
 

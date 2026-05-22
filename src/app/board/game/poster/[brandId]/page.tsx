@@ -1,17 +1,17 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import QRCode from 'qrcode'
 import { Printer, ArrowLeft } from 'lucide-react'
 
-export default function PosterPrintPage() {
+export default function StickerPrintPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   
   const brandId = params.brandId as string
-  const posterTitle = searchParams.get('title') || 'Scan & Win!'
-  const posterDesc = searchParams.get('desc') || 'Leave a review or share store photos to get free drinks and rewards!'
+  const stickerTitle = searchParams.get('title') || 'Scan & Win!'
+  const stickerDesc = searchParams.get('desc') || 'Leave a review to spin and win rewards instantly!'
 
   const [brandName, setBrandName] = useState('AMC Store')
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
@@ -35,7 +35,7 @@ export default function PosterPrintPage() {
         // Generate QR code for customer game H5
         const gameUrl = `${window.location.origin}/game/${brandId}`
         const qrDataUrl = await QRCode.toDataURL(gameUrl, {
-          width: 600,
+          width: 400,
           margin: 1,
           color: {
             dark: '#000000',
@@ -66,88 +66,94 @@ export default function PosterPrintPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-start p-4 md:p-8 print:bg-white print:p-0">
+    <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-start p-4 md:p-8 print:bg-white print:p-0 print:min-h-0">
       
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          html, body {
+            width: 80mm;
+            height: 80mm;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden;
+            background: white;
+          }
+          @page {
+            size: 80mm 80mm;
+            margin: 0;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .sticker-container {
+            width: 80mm !important;
+            height: 80mm !important;
+            min-height: 80mm !important;
+            margin: 0 !important;
+            padding: 4mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            position: relative !important;
+            top: 0 !important;
+            left: 0 !important;
+            border-radius: 0 !important;
+          }
+        }
+      `}} />
+
       {/* Floating Control Banner (hidden during print) */}
-      <div className="w-full max-w-xl bg-white border border-slate-200 p-4 rounded-2xl shadow-md mb-8 flex justify-between items-center print:hidden">
+      <div className="w-full max-w-[80mm] bg-white border border-slate-200 p-3 rounded-2xl shadow-md mb-8 flex justify-between items-center print:hidden no-print">
         <button 
           onClick={() => window.close()}
-          className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 font-bold transition"
+          className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-900 font-bold transition"
         >
-          <ArrowLeft size={14} /> Close Window
+          <ArrowLeft size={13} /> Close
         </button>
         <button 
           onClick={() => window.print()}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-850 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 active:scale-95 text-white text-[11px] font-bold rounded-lg shadow transition"
         >
-          <Printer size={14} /> Print Poster
+          <Printer size={13} /> Print
         </button>
       </div>
 
-      {/* A4 Poster Area */}
-      <div className="w-[210mm] min-h-[297mm] bg-white border border-slate-350 p-16 flex flex-col items-center justify-between text-center text-slate-900 shadow-2xl relative overflow-hidden print:w-full print:min-h-screen print:border-none print:shadow-none print:p-12">
+      {/* Sticker Area (80mm x 80mm square) */}
+      <div className="sticker-container w-[80mm] h-[80mm] bg-white border border-slate-350 p-4 flex flex-col items-center justify-between text-center text-slate-900 shadow-2xl relative overflow-hidden rounded-2xl">
         
         {/* Modern Border Accent */}
-        <div className="absolute inset-6 border-[3px] border-slate-900/10 pointer-events-none rounded-xl" />
-        <div className="absolute inset-8 border border-slate-900 pointer-events-none rounded-lg" />
+        <div className="absolute inset-1.5 border-2 border-slate-900/10 pointer-events-none rounded-lg" />
+        <div className="absolute inset-2 border border-slate-900 pointer-events-none rounded-md" />
 
         {/* Top Header */}
-        <div className="mt-8 flex flex-col items-center gap-3">
-          <span className="px-4 py-1 rounded-full bg-slate-900 text-white text-sm font-extrabold uppercase tracking-[0.25em] leading-none">
+        <div className="mt-1 flex flex-col items-center gap-1">
+          <span className="px-2 py-0.5 rounded bg-slate-900 text-white text-[8px] font-black uppercase tracking-[0.15em] leading-none">
             {brandName}
           </span>
-          <h1 className="text-5xl font-black tracking-tight text-slate-950 mt-4 leading-tight uppercase">
-            {posterTitle}
+          <h1 className="text-lg font-black tracking-tight text-slate-950 mt-1 leading-tight uppercase">
+            {stickerTitle}
           </h1>
-          <p className="text-xl text-slate-650 max-w-xl leading-relaxed mt-3 font-medium">
-            {posterDesc}
+          <p className="text-[9px] text-slate-500 max-w-[68mm] leading-tight font-medium mt-0.5">
+            {stickerDesc}
           </p>
         </div>
 
         {/* Middle QR Code */}
-        <div className="my-10 flex flex-col items-center">
+        <div className="my-1.5 flex flex-col items-center">
           {qrCodeDataUrl ? (
-            <div className="p-4 bg-white border-[6px] border-slate-900 rounded-3xl shadow-xl">
-              <img src={qrCodeDataUrl} alt="Scan QR Code" className="w-[110mm] h-[110mm] object-contain" />
+            <div className="p-1.5 bg-white border-2 border-slate-900 rounded-xl shadow-sm">
+              <img src={qrCodeDataUrl} alt="Scan QR Code" className="w-[32mm] h-[32mm] object-contain" />
             </div>
           ) : (
-            <div className="w-[110mm] h-[110mm] border border-dashed border-slate-300 rounded-3xl flex items-center justify-center text-slate-400 text-sm">
-              Failed to generate QR Code
+            <div className="w-[32mm] h-[32mm] border border-dashed border-slate-300 rounded-xl flex items-center justify-center text-slate-400 text-[10px]">
+              No QR Code
             </div>
           )}
         </div>
 
-        {/* Instructions / Footer */}
-        <div className="mb-8 flex flex-col items-center gap-6">
-          <div className="flex justify-center items-center gap-8 text-left">
-            <div className="flex items-start gap-3">
-              <span className="w-8 h-8 rounded-full border-[2.5px] border-slate-900 flex items-center justify-center text-sm font-black flex-shrink-0">1</span>
-              <div>
-                <p className="font-extrabold text-sm uppercase tracking-wider text-slate-900">Scan QR Code</p>
-                <p className="text-[11px] text-slate-500 font-bold mt-0.5">Use your mobile camera</p>
-              </div>
-            </div>
-            <div className="h-6 w-px bg-slate-300" />
-            <div className="flex items-start gap-3">
-              <span className="w-8 h-8 rounded-full border-[2.5px] border-slate-900 flex items-center justify-center text-sm font-black flex-shrink-0">2</span>
-              <div>
-                <p className="font-extrabold text-sm uppercase tracking-wider text-slate-900">Share review/photo</p>
-                <p className="text-[11px] text-slate-500 font-bold mt-0.5">AI instantly checks</p>
-              </div>
-            </div>
-            <div className="h-6 w-px bg-slate-300" />
-            <div className="flex items-start gap-3">
-              <span className="w-8 h-8 rounded-full border-[2.5px] border-slate-900 flex items-center justify-center text-sm font-black flex-shrink-0">3</span>
-              <div>
-                <p className="font-extrabold text-sm uppercase tracking-wider text-slate-900">Spin the Wheel!</p>
-                <p className="text-[11px] text-slate-500 font-bold mt-0.5">Claim rewards instantly</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="h-px w-20 bg-slate-300 mt-2" />
-          <p className="text-xs font-bold text-slate-450 uppercase tracking-[0.15em]">
-            Powered by AMC AI Marketing Assistant
+        {/* Footer */}
+        <div className="mb-1 flex flex-col items-center">
+          <p className="text-[7.5px] font-bold text-slate-450 uppercase tracking-[0.1em]">
+            Scan to Spin & Claim Rewards
           </p>
         </div>
 
