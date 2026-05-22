@@ -475,7 +475,8 @@ export default function GameH5Page() {
         window.open(googleAccount.profileUrl, '_blank')
       } else {
         const placeId = config?.brand?.googlePlaceId
-        if (placeId) {
+        const isValidPlaceId = placeId && placeId !== 'postfast-managed' && placeId.startsWith('ChI')
+        if (isValidPlaceId) {
           window.open(`https://search.google.com/local/writereview?placeid=${placeId}`, '_blank')
         } else if (config?.brand?.name) {
           const query = encodeURIComponent(config.brand.name + (config.brand.location ? ' ' + config.brand.location : ''))
