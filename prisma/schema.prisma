@@ -318,6 +318,7 @@ model GameConfig {
   taskReviewEnabled  Boolean     @default(true)
   clerkPin           String      @default("123456")
   maxSpinsPerUserDay Int         @default(3)
+  templateType       String      @default("WHEEL")
   
   prizes             GamePrize[]
   createdAt          DateTime    @default(now())

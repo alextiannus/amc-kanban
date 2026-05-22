@@ -20,6 +20,7 @@ interface GameConfig {
   taskPhotoEnabled: boolean
   taskReviewEnabled: boolean
   maxSpinsPerUserDay: number
+  templateType: 'WHEEL' | 'GRID'
   brand?: {
     name: string
     location: string | null
@@ -40,6 +41,85 @@ interface UnclaimedPrize {
   createdAt: string
 }
 
+function allocateGridSlots(prizesList: Prize[]): Prize[] {
+  const activePrizes = prizesList.filter(p => p.probability > 0 || p.name);
+  if (activePrizes.length === 0) return [];
+  
+  const slots: Prize[] = new Array(8).fill(null);
+  
+  if (activePrizes.length <= 8) {
+    // 1. Give each active prize at least 1 slot
+    const allocatedCounts = activePrizes.map(() => 1);
+    let remainingSlots = 8 - activePrizes.length;
+    
+    // 2. Distribute remaining slots dynamically
+    while (remainingSlots > 0) {
+      let bestIndex = -1;
+      let maxDeficit = -Infinity;
+      
+      for (let i = 0; i < activePrizes.length; i++) {
+        const targetFraction = 8 * activePrizes[i].probability;
+        const deficit = targetFraction - allocatedCounts[i];
+        if (deficit > maxDeficit) {
+          maxDeficit = deficit;
+          bestIndex = i;
+        }
+      }
+      
+      if (bestIndex !== -1) {
+        allocatedCounts[bestIndex]++;
+        remainingSlots--;
+      } else {
+        break;
+      }
+    }
+    
+    // Construct flat array of allocated items
+    const rawSlots: Prize[] = [];
+    activePrizes.forEach((prize, idx) => {
+      const count = allocatedCounts[idx];
+      for (let c = 0; c < count; c++) {
+        rawSlots.push(prize);
+      }
+    });
+    
+    // Interleave the rawSlots to avoid placing duplicates adjacent
+    const counts: { [key: string]: number } = {};
+    rawSlots.forEach(item => {
+      const key = item.id || item.name;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    
+    const uniquePrizes = [...activePrizes].sort((a, b) => {
+      const keyA = a.id || a.name;
+      const keyB = b.id || b.name;
+      return counts[keyB] - counts[keyA];
+    });
+    
+    const orderedSlots: Prize[] = new Array(8).fill(null);
+    const order = [0, 2, 4, 6, 1, 3, 5, 7];
+    
+    const sortedSlots: Prize[] = [];
+    uniquePrizes.forEach(prize => {
+      const key = prize.id || prize.name;
+      const count = counts[key] || 0;
+      for (let i = 0; i < count; i++) {
+        sortedSlots.push(prize);
+      }
+    });
+    
+    for (let i = 0; i < 8; i++) {
+      orderedSlots[order[i]] = sortedSlots[i];
+    }
+    
+    return orderedSlots;
+  } else {
+    // If more than 8 active prizes, take the top 8 by probability descending
+    const sorted = [...activePrizes].sort((a, b) => b.probability - a.probability);
+    return sorted.slice(0, 8);
+  }
+}
+
 export default function GameH5Page() {
   const params = useParams()
   const brandId = params.brandId as string
@@ -58,6 +138,7 @@ export default function GameH5Page() {
   const [isSpinning, setIsSpinning] = useState<boolean>(false)
   const [winningPrize, setWinningPrize] = useState<{ name: string; code: string } | null>(null)
   const [wheelRotation, setWheelRotation] = useState<number>(0)
+  const [activeGridSlot, setActiveGridSlot] = useState<number | null>(null)
 
   // Unclaimed Prize for Crash Resilience
   const [unclaimedPrize, setUnclaimedPrize] = useState<UnclaimedPrize | null>(null)
@@ -400,29 +481,83 @@ export default function GameH5Page() {
         navigator.vibrate([100, 50, 100])
       }
 
-      // Find index of winning prize
-      const prizeIndex = prizes.findIndex(p => p.id === data.prize.id)
-      const segmentsCount = prizes.length
-      const anglePerSegment = 360 / segmentsCount
-
-      // Spin at least 5 complete rounds, then stop on the exact winning segment
-      const targetAngle = 360 - (prizeIndex * anglePerSegment) - (anglePerSegment / 2)
-      const finalRotation = wheelRotation + (360 * 5) + targetAngle - (wheelRotation % 360)
-
-      setWheelRotation(finalRotation)
-
-      setTimeout(() => {
-        setIsSpinning(false)
-        setWinningPrize({ name: data.prize.name, code: data.redemptionCode })
-        setPoints(data.pointsBalance)
-        // Celebrate! Trigger confetti
-        startConfetti()
-        
-        // Winning vibration
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate([300, 100, 300])
+      if (config?.templateType === 'GRID') {
+        const slots = allocateGridSlots(prizes);
+        if (slots.length === 0) {
+          setIsSpinning(false);
+          return;
         }
-      }, 5000) // 5 seconds spin animation
+
+        // Find all matching slots for the winning prize
+        const matchingIndices: number[] = [];
+        slots.forEach((item, index) => {
+          if (item && item.id === data.prize.id) {
+            matchingIndices.push(index);
+          }
+        });
+
+        const targetSlot = matchingIndices.length > 0 
+          ? matchingIndices[Math.floor(Math.random() * matchingIndices.length)] 
+          : 0;
+
+        const startSlot = activeGridSlot !== null ? activeGridSlot : 0;
+        const rounds = 3;
+        const totalSteps = rounds * 8 + ((targetSlot - startSlot + 8) % 8);
+
+        let step = 0;
+        const runAnim = () => {
+          const nextSlot = (startSlot + step) % 8;
+          setActiveGridSlot(nextSlot);
+          
+          if (typeof navigator !== 'undefined' && navigator.vibrate && step % 2 === 0) {
+            navigator.vibrate(10); // subtle haptic ticks during rotation
+          }
+
+          if (step < totalSteps) {
+            step++;
+            const stepsLeft = totalSteps - step;
+            let delay = 60;
+            if (stepsLeft <= 12) {
+              delay = 60 + (12 - stepsLeft) * 35;
+            }
+            setTimeout(runAnim, delay);
+          } else {
+            setIsSpinning(false);
+            setWinningPrize({ name: data.prize.name, code: data.redemptionCode });
+            setPoints(data.pointsBalance);
+            startConfetti();
+            
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              navigator.vibrate([300, 100, 300]);
+            }
+          }
+        };
+        runAnim();
+      } else {
+        // Find index of winning prize
+        const prizeIndex = prizes.findIndex(p => p.id === data.prize.id)
+        const segmentsCount = prizes.length
+        const anglePerSegment = 360 / segmentsCount
+
+        // Spin at least 5 complete rounds, then stop on the exact winning segment
+        const targetAngle = 360 - (prizeIndex * anglePerSegment) - (anglePerSegment / 2)
+        const finalRotation = wheelRotation + (360 * 5) + targetAngle - (wheelRotation % 360)
+
+        setWheelRotation(finalRotation)
+
+        setTimeout(() => {
+          setIsSpinning(false)
+          setWinningPrize({ name: data.prize.name, code: data.redemptionCode })
+          setPoints(data.pointsBalance)
+          // Celebrate! Trigger confetti
+          startConfetti()
+          
+          // Winning vibration
+          if (typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate([300, 100, 300])
+          }
+        }, 5000) // 5 seconds spin animation
+      }
     } catch (err: any) {
       setIsSpinning(false)
       alert(err.message)
@@ -661,204 +796,322 @@ export default function GameH5Page() {
           </div>
         )}
 
-        {/* Lucky Spin Wheel (SVG Circular rendering) */}
-        <div className="relative w-72 h-72 my-2 flex items-center justify-center">
-          <style dangerouslySetInnerHTML={{ __html: `
-            @keyframes led-blink-odd {
-              0%, 100% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #3b82f6); }
-              50% { fill: #fbbf24; filter: drop-shadow(0 0 2px #fbbf24) drop-shadow(0 0 4px #d97706); }
-            }
-            @keyframes led-blink-even {
-              0%, 100% { fill: #fbbf24; filter: drop-shadow(0 0 2px #fbbf24) drop-shadow(0 0 4px #d97706); }
-              50% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #3b82f6); }
-            }
-            .led-blink-odd {
-              animation: led-blink-odd 1.2s infinite;
-            }
-            .led-blink-even {
-              animation: led-blink-even 1.2s infinite;
-            }
-          `}} />
+        {/* Lucky Spin Wheel or Nine-Grid container */}
+        {config?.templateType === 'GRID' ? (
+          /* Nine-Grid (九宫格 Circular-like grid layout) */
+          <div className="relative w-72 h-72 my-2 p-3 bg-slate-950/80 rounded-3xl border-4 border-slate-900 shadow-[0_0_40px_rgba(59,130,246,0.25)] flex flex-col justify-between">
+            {/* Blinking LEDs outer border */}
+            <style dangerouslySetInnerHTML={{ __html: `
+              @keyframes led-glow-odd {
+                0%, 100% { background-color: #ffffff; box-shadow: 0 0 4px #fff, 0 0 8px #3b82f6; }
+                50% { background-color: #fbbf24; box-shadow: 0 0 4px #fbbf24, 0 0 10px #d97706; }
+              }
+              @keyframes led-glow-even {
+                0%, 100% { background-color: #fbbf24; box-shadow: 0 0 4px #fbbf24, 0 0 10px #d97706; }
+                50% { background-color: #ffffff; box-shadow: 0 0 4px #fff, 0 0 8px #3b82f6; }
+              }
+              .grid-led-glow-odd {
+                animation: led-glow-odd 1.2s infinite;
+              }
+              .grid-led-glow-even {
+                animation: led-glow-even 1.2s infinite;
+              }
+            `}} />
 
-          {/* Neon outer ring decoration */}
-          <div className="absolute inset-[-12px] rounded-full border-4 border-slate-900/60 shadow-[0_0_50px_rgba(59,130,246,0.3)] pointer-events-none" />
-          <div className="absolute inset-[-6px] rounded-full border border-blue-500/30 pointer-events-none animate-pulse" />
+            {/* LED Dots */}
+            <div className="absolute top-1.5 left-6 right-6 flex justify-between">
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-odd" />
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-even" />
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-odd" />
+            </div>
+            <div className="absolute bottom-1.5 left-6 right-6 flex justify-between">
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-even" />
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-odd" />
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-even" />
+            </div>
+            <div className="absolute left-1.5 top-6 bottom-6 flex flex-col justify-between">
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-odd" />
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-even" />
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-odd" />
+            </div>
+            <div className="absolute right-1.5 top-6 bottom-6 flex flex-col justify-between">
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-even" />
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-odd" />
+              <span className="w-1.5 h-1.5 rounded-full grid-led-glow-even" />
+            </div>
 
-          {/* Indicator needle at the top */}
-          <div className="absolute top-[-15px] z-30 w-8 h-8 flex items-center justify-center filter drop-shadow-[0_4px_10px_rgba(244,63,94,0.5)]">
-            <svg width="24" height="28" viewBox="0 0 24 28" fill="none">
-              <path d="M12 28L0 6C0 6 6 0 12 0C18 0 24 6 24 6L12 28Z" fill="#f43f5e" />
-              <circle cx="12" cy="8" r="4" fill="#ffffff" />
-            </svg>
-          </div>
-
-          {/* The Spinning Wheel */}
-          <div 
-            className="w-full h-full rounded-full overflow-hidden shadow-2xl relative border-4 border-slate-950 transition-transform duration-[5000ms] cubic-bezier(0.1, 0.8, 0.1, 1)"
-            style={{ 
-              transform: `rotate(${wheelRotation}deg)`,
-              transformOrigin: '50% 50%'
-            }}
-          >
-            {prizes.length > 0 ? (
-              <svg viewBox="0 0 100 100" className="w-full h-full">
-                <defs>
-                  {/* Neon slice gradients */}
-                  <linearGradient id="slice-grad-0" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#ff4b72" />
-                    <stop offset="100%" stopColor="#d946ef" />
-                  </linearGradient>
-                  <linearGradient id="slice-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#3b82f6" />
-                    <stop offset="100%" stopColor="#06b6d4" />
-                  </linearGradient>
-                  <linearGradient id="slice-grad-2" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#10b981" />
-                    <stop offset="100%" stopColor="#14b8a6" />
-                  </linearGradient>
-                  <linearGradient id="slice-grad-3" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#f59e0b" />
-                    <stop offset="100%" stopColor="#ff006e" />
-                  </linearGradient>
-                  <linearGradient id="slice-grad-4" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#8338ec" />
-                    <stop offset="100%" stopColor="#3a86ff" />
-                  </linearGradient>
-                  <linearGradient id="slice-grad-5" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#06d6a0" />
-                    <stop offset="100%" stopColor="#10b981" />
-                  </linearGradient>
-                  <linearGradient id="slice-grad-6" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#ffbe0b" />
-                    <stop offset="100%" stopColor="#fb923c" />
-                  </linearGradient>
-                  <linearGradient id="slice-grad-7" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#f43f5e" />
-                    <stop offset="100%" stopColor="#8b5cf6" />
-                  </linearGradient>
-                </defs>
-
-                {prizes.map((prize, idx) => {
-                  const segments = prizes.length
-                  const angle = 360 / segments
-                  const startAngle = idx * angle
-                  const endAngle = startAngle + angle
-
-                  // Polar coordinates helper
-                  const polarToCartesian = (cx: number, cy: number, r: number, angleInDegrees: number) => {
-                    const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0
-                    return {
-                      x: cx + r * Math.cos(angleInRadians),
-                      y: cy + r * Math.sin(angleInRadians)
-                    }
+            <div className="grid grid-cols-3 gap-2 h-full w-full">
+              {(() => {
+                const slots = allocateGridSlots(prizes);
+                const gridIndices = [0, 1, 2, 5, 8, 7, 6, 3];
+                return Array.from({ length: 9 }).map((_, gIdx) => {
+                  if (gIdx === 4) {
+                    // Central SPIN Button
+                    return (
+                      <button
+                        key={gIdx}
+                        disabled={isSpinning}
+                        onClick={triggerSpin}
+                        style={{
+                          background: isSpinning 
+                            ? '#1e293b' 
+                            : `radial-gradient(circle, ${config?.themeColor || '#3b82f6'} 0%, #1e3a8a 100%)`,
+                        }}
+                        className={`relative rounded-2xl flex flex-col items-center justify-center border-2 border-slate-800 shadow-2xl active:scale-95 transition-all duration-205 ${
+                          isSpinning 
+                            ? 'text-slate-500 cursor-not-allowed' 
+                            : 'text-white hover:brightness-110 shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:scale-[1.02]'
+                        }`}
+                      >
+                        {!isSpinning && (
+                          <span className="absolute inset-0 rounded-2xl border border-blue-400/50 animate-ping opacity-60 pointer-events-none" />
+                        )}
+                        <span className="text-xs font-black tracking-widest drop-shadow-md">
+                          {isSpinning ? '...' : (lang === 'zh' ? '抽奖' : 'SPIN')}
+                        </span>
+                        {!isSpinning && (
+                          <span className="text-[7.5px] text-blue-250 mt-1 uppercase font-black tracking-wider opacity-85">
+                            {lang === 'zh' ? '5积分' : '5 PTS'}
+                          </span>
+                        )}
+                      </button>
+                    );
                   }
 
-                  const start = polarToCartesian(50, 50, 50, startAngle)
-                  const end = polarToCartesian(50, 50, 50, endAngle)
-                  const largeArcFlag = angle <= 180 ? '0' : '1'
-                  const fillColor = `url(#slice-grad-${idx % 8})`
+                  const slotIdx = gridIndices.indexOf(gIdx);
+                  const prize = slots[slotIdx];
+                  const isActive = activeGridSlot === slotIdx;
 
-                  // Compute text placement rotation & translation
-                  const textAngle = startAngle + (angle / 2)
-                  const textPos = polarToCartesian(50, 50, 28, textAngle)
-
-                  // Auto flip text orientation to keep it right-side up
-                  const normAngle = textAngle % 360
-                  const isUpsideDown = normAngle > 90 && normAngle < 270
-                  const displayRotation = isUpsideDown ? textAngle + 180 : textAngle
+                  if (!prize) {
+                    return (
+                      <div 
+                        key={gIdx} 
+                        className="bg-slate-900/60 rounded-2xl border border-slate-800/80 flex items-center justify-center text-xs text-slate-700 font-semibold"
+                      >
+                        {lang === 'zh' ? '无奖品' : 'Empty'}
+                      </div>
+                    );
+                  }
 
                   return (
-                    <g key={prize.id}>
-                      {/* Segment wedge path */}
-                      <path
-                        d={`M 50 50 L ${start.x} ${start.y} A 50 50 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`}
-                        fill={fillColor}
-                        stroke="#090514"
-                        strokeWidth="0.8"
-                      />
-                      {/* Segment Text Label */}
-                      <text
-                        x={textPos.x}
-                        y={textPos.y}
-                        fill="#ffffff"
-                        fontSize="3"
-                        fontWeight="black"
-                        textAnchor="middle"
-                        alignmentBaseline="middle"
-                        paintOrder="stroke"
-                        stroke="#000000"
-                        strokeWidth="0.6"
-                        transform={`rotate(${displayRotation}, ${textPos.x}, ${textPos.y})`}
-                      >
-                        <tspan x={textPos.x} dy="-0.5em">
-                          {prize.name.length > 10 ? prize.name.substring(0, 8) + '...' : prize.name}
-                        </tspan>
-                        <tspan x={textPos.x} dy="1.1em" fontSize="2.2" fill="#ffeb3b" fontWeight="bold">
-                          {Number((prize.probability * 100).toFixed(1))}%
-                        </tspan>
-                      </text>
-                    </g>
+                    <div
+                      key={gIdx}
+                      style={{
+                        borderColor: isActive ? (config?.themeColor || '#3b82f6') : 'rgba(255, 255, 255, 0.08)',
+                        backgroundColor: isActive ? `${config?.themeColor || '#3b82f6'}22` : 'rgba(255, 255, 255, 0.04)',
+                        boxShadow: isActive 
+                          ? `0 0 15px ${config?.themeColor || '#3b82f6'}, inset 0 0 8px ${config?.themeColor || '#3b82f6'}33` 
+                          : 'inset 0 1px 1px rgba(255, 255, 255, 0.05)',
+                      }}
+                      className={`rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center p-1 text-center relative overflow-hidden backdrop-blur-sm`}
+                    >
+                      {isActive && (
+                        <div 
+                          style={{ backgroundColor: config?.themeColor || '#3b82f6' }}
+                          className="absolute inset-0 opacity-5 blur-xl pointer-events-none" 
+                        />
+                      )}
+                      
+                      <span className="text-xl mb-1 filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
+                        {prize.type === 'COUPON' ? '🎫' : prize.type === 'POINTS' ? '🪙' : prize.type === 'PHYSICAL' ? '🎁' : '🌸'}
+                      </span>
+                      
+                      <span className="text-[10px] font-bold text-slate-100 truncate w-full px-1 tracking-wide leading-tight">
+                        {prize.name}
+                      </span>
+
+                      <span className="text-[7.5px] font-black text-amber-400 mt-1 uppercase tracking-wider bg-amber-500/10 px-1.5 py-0.5 rounded-full border border-amber-500/15 leading-none">
+                        {(prize.probability * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        ) : (
+          /* Lucky Spin Wheel (SVG Circular rendering) */
+          <div className="relative w-72 h-72 my-2 flex items-center justify-center">
+            {/* Neon outer ring decoration */}
+            <div className="absolute inset-[-12px] rounded-full border-4 border-slate-900/60 shadow-[0_0_50px_rgba(59,130,246,0.3)] pointer-events-none" />
+            <div className="absolute inset-[-6px] rounded-full border border-blue-500/30 pointer-events-none animate-pulse" />
+
+            {/* Indicator needle at the top */}
+            <div className="absolute top-[-15px] z-30 w-8 h-8 flex items-center justify-center filter drop-shadow-[0_4px_10px_rgba(244,63,94,0.5)]">
+              <svg width="24" height="28" viewBox="0 0 24 28" fill="none">
+                <path d="M12 28L0 6C0 6 6 0 12 0C18 0 24 6 24 6L12 28Z" fill="#f43f5e" />
+                <circle cx="12" cy="8" r="4" fill="#ffffff" />
+              </svg>
+            </div>
+
+            {/* The Spinning Wheel */}
+            <div 
+              className="w-full h-full rounded-full overflow-hidden shadow-2xl relative border-4 border-slate-950 transition-transform duration-[5000ms] cubic-bezier(0.1, 0.8, 0.1, 1)"
+              style={{ 
+                transform: `rotate(${wheelRotation}deg)`,
+                transformOrigin: '50% 50%'
+              }}
+            >
+              {prizes.length > 0 ? (
+                <svg viewBox="0 0 100 100" className="w-full h-full">
+                  <defs>
+                    {/* Neon slice gradients */}
+                    <linearGradient id="slice-grad-0" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#ff4b72" />
+                      <stop offset="100%" stopColor="#d946ef" />
+                    </linearGradient>
+                    <linearGradient id="slice-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#3b82f6" />
+                      <stop offset="100%" stopColor="#06b6d4" />
+                    </linearGradient>
+                    <linearGradient id="slice-grad-2" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#10b981" />
+                      <stop offset="100%" stopColor="#14b8a6" />
+                    </linearGradient>
+                    <linearGradient id="slice-grad-3" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#f59e0b" />
+                      <stop offset="100%" stopColor="#ff006e" />
+                    </linearGradient>
+                    <linearGradient id="slice-grad-4" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#8338ec" />
+                      <stop offset="100%" stopColor="#3a86ff" />
+                    </linearGradient>
+                    <linearGradient id="slice-grad-5" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#06d6a0" />
+                      <stop offset="100%" stopColor="#10b981" />
+                    </linearGradient>
+                    <linearGradient id="slice-grad-6" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#ffbe0b" />
+                      <stop offset="100%" stopColor="#fb923c" />
+                    </linearGradient>
+                    <linearGradient id="slice-grad-7" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#f43f5e" />
+                      <stop offset="100%" stopColor="#8b5cf6" />
+                    </linearGradient>
+                  </defs>
+
+                  {prizes.map((prize, idx) => {
+                    const segments = prizes.length
+                    const angle = 360 / segments
+                    const startAngle = idx * angle
+                    const endAngle = startAngle + angle
+
+                    // Polar coordinates helper
+                    const polarToCartesian = (cx: number, cy: number, r: number, angleInDegrees: number) => {
+                      const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0
+                      return {
+                        x: cx + r * Math.cos(angleInRadians),
+                        y: cy + r * Math.sin(angleInRadians)
+                      }
+                    }
+
+                    const start = polarToCartesian(50, 50, 50, startAngle)
+                    const end = polarToCartesian(50, 50, 50, endAngle)
+                    const largeArcFlag = angle <= 180 ? '0' : '1'
+                    const fillColor = `url(#slice-grad-${idx % 8})`
+
+                    // Compute text placement rotation & translation
+                    const textAngle = startAngle + (angle / 2)
+                    const textPos = polarToCartesian(50, 50, 28, textAngle)
+
+                    // Auto flip text orientation to keep it right-side up
+                    const normAngle = textAngle % 360
+                    const isUpsideDown = normAngle > 90 && normAngle < 270
+                    const displayRotation = isUpsideDown ? textAngle + 180 : textAngle
+
+                    return (
+                      <g key={prize.id}>
+                        {/* Segment wedge path */}
+                        <path
+                          d={`M 50 50 L ${start.x} ${start.y} A 50 50 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`}
+                          fill={fillColor}
+                          stroke="#090514"
+                          strokeWidth="0.8"
+                        />
+                        {/* Segment Text Label */}
+                        <text
+                          x={textPos.x}
+                          y={textPos.y}
+                          fill="#ffffff"
+                          fontSize="3"
+                          fontWeight="black"
+                          textAnchor="middle"
+                          alignmentBaseline="middle"
+                          paintOrder="stroke"
+                          stroke="#000000"
+                          strokeWidth="0.6"
+                          transform={`rotate(${displayRotation}, ${textPos.x}, ${textPos.y})`}
+                        >
+                          <tspan x={textPos.x} dy="-0.5em">
+                            {prize.name.length > 10 ? prize.name.substring(0, 8) + '...' : prize.name}
+                          </tspan>
+                          <tspan x={textPos.x} dy="1.1em" fontSize="2.2" fill="#ffeb3b" fontWeight="bold">
+                            {Number((prize.probability * 100).toFixed(1))}%
+                          </tspan>
+                        </text>
+                      </g>
+                    )
+                  })}
+                </svg>
+              ) : (
+                <div className="w-full h-full bg-slate-900 flex items-center justify-center text-xs text-slate-500">
+                  {lang === 'zh' ? '暂无奖品' : 'No Prizes'}
+                </div>
+              )}
+            </div>
+
+            {/* Static Outer Rim with Blinking LED Lights */}
+            <div className="absolute inset-0 pointer-events-none z-10 w-full h-full">
+              <svg viewBox="0 0 100 100" className="w-full h-full">
+                {/* Outer border / rim */}
+                <circle cx="50" cy="50" r="48" fill="none" stroke="#1e1b4b" strokeWidth="4" />
+                <circle cx="50" cy="50" r="46.5" fill="none" stroke="#3b82f6" strokeWidth="0.5" strokeDasharray="1 1" className="opacity-40" />
+                {/* 24 Blinking LEDs */}
+                {Array.from({ length: 24 }).map((_, i) => {
+                  const dotAngle = (i * 360) / 24
+                  const dotAngleRad = (dotAngle * Math.PI) / 180
+                  const r = 48
+                  const cx = 50 + r * Math.cos(dotAngleRad)
+                  const cy = 50 + r * Math.sin(dotAngleRad)
+                  const isOdd = i % 2 === 0
+                  return (
+                    <circle 
+                      key={i}
+                      cx={cx}
+                      cy={cy}
+                      r="1.2"
+                      className={isOdd ? 'led-blink-odd' : 'led-blink-even'}
+                    />
                   )
                 })}
               </svg>
-            ) : (
-              <div className="w-full h-full bg-slate-900 flex items-center justify-center text-xs text-slate-500">
-                {lang === 'zh' ? '暂无奖品' : 'No Prizes'}
-              </div>
-            )}
-          </div>
+            </div>
 
-          {/* Static Outer Rim with Blinking LED Lights */}
-          <div className="absolute inset-0 pointer-events-none z-10 w-full h-full">
-            <svg viewBox="0 0 100 100" className="w-full h-full">
-              {/* Outer border / rim */}
-              <circle cx="50" cy="50" r="48" fill="none" stroke="#1e1b4b" strokeWidth="4" />
-              <circle cx="50" cy="50" r="46.5" fill="none" stroke="#3b82f6" strokeWidth="0.5" strokeDasharray="1 1" className="opacity-40" />
-              {/* 24 Blinking LEDs */}
-              {Array.from({ length: 24 }).map((_, i) => {
-                const dotAngle = (i * 360) / 24
-                const dotAngleRad = (dotAngle * Math.PI) / 180
-                const r = 48
-                const cx = 50 + r * Math.cos(dotAngleRad)
-                const cy = 50 + r * Math.sin(dotAngleRad)
-                const isOdd = i % 2 === 0
-                return (
-                  <circle 
-                    key={i}
-                    cx={cx}
-                    cy={cy}
-                    r="1.2"
-                    className={isOdd ? 'led-blink-odd' : 'led-blink-even'}
-                  />
-                )
-              })}
-            </svg>
-          </div>
-
-          {/* Central Spin Trigger Button */}
-          <button 
-            disabled={isSpinning}
-            onClick={triggerSpin}
-            className={`absolute z-20 w-16 h-16 rounded-full border-4 border-slate-950 flex flex-col items-center justify-center font-black shadow-2xl active:scale-95 transition-all text-center leading-none ${
-              isSpinning 
-                ? 'bg-slate-800 text-slate-500 border-slate-900 cursor-not-allowed'
-                : 'bg-gradient-to-tr from-pink-500 via-rose-500 to-violet-600 text-white hover:brightness-110 shadow-pink-500/30 hover:scale-105 active:scale-95'
-            }`}
-          >
-            {/* Pulsing ring when active */}
-            {!isSpinning && (
-              <span className="absolute inset-0 rounded-full border border-pink-400/80 animate-ping opacity-70 pointer-events-none" />
-            )}
-            <span className="text-[12px] uppercase font-black tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
-              {isSpinning ? '...' : (lang === 'zh' ? '抽奖' : 'SPIN')}
-            </span>
-            {!isSpinning && (
-              <span className="text-[7px] text-pink-200 mt-0.5 tracking-wider uppercase font-bold">
-                {lang === 'zh' ? '5积分' : '5 PTS'}
+            {/* Central Spin Trigger Button */}
+            <button 
+              disabled={isSpinning}
+              onClick={triggerSpin}
+              className={`absolute z-20 w-16 h-16 rounded-full border-4 border-slate-950 flex flex-col items-center justify-center font-black shadow-2xl active:scale-95 transition-all text-center leading-none ${
+                isSpinning 
+                  ? 'bg-slate-800 text-slate-500 border-slate-900 cursor-not-allowed'
+                  : 'bg-gradient-to-tr from-pink-500 via-rose-500 to-violet-600 text-white hover:brightness-110 shadow-pink-500/30 hover:scale-105 active:scale-95'
+              }`}
+            >
+              {/* Pulsing ring when active */}
+              {!isSpinning && (
+                <span className="absolute inset-0 rounded-full border border-pink-400/80 animate-ping opacity-70 pointer-events-none" />
+              )}
+              <span className="text-[12px] uppercase font-black tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+                {isSpinning ? '...' : (lang === 'zh' ? '抽奖' : 'SPIN')}
               </span>
-            )}
-          </button>
-        </div>
+              {!isSpinning && (
+                <span className="text-[7px] text-pink-200 mt-0.5 tracking-wider uppercase font-bold">
+                  {lang === 'zh' ? '5积分' : '5 PTS'}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
 
 
 

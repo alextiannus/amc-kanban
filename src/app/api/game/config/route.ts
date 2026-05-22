@@ -60,6 +60,7 @@ export async function GET(request: Request) {
           taskReviewEnabled: true,
           clerkPin: '123456',
           maxSpinsPerUserDay: 3,
+          templateType: 'WHEEL',
           prizes: {
             create: [
               { name: '九折优惠券', type: 'COUPON', probability: 0.3, totalInventory: null },
@@ -133,6 +134,7 @@ export async function POST(request: Request) {
       taskReviewEnabled,
       clerkPin,
       maxSpinsPerUserDay,
+      templateType,
       prizes = [],
     } = body
 
@@ -150,6 +152,7 @@ export async function POST(request: Request) {
           taskReviewEnabled: true,
           clerkPin: clerkPin ?? '123456',
           maxSpinsPerUserDay: maxSpinsPerUserDay ?? 3,
+          templateType: templateType ?? 'WHEEL',
         },
         update: {
           title: title ?? '幸运大轮盘',
@@ -159,6 +162,7 @@ export async function POST(request: Request) {
           taskReviewEnabled: true,
           clerkPin: clerkPin ?? '123456',
           maxSpinsPerUserDay: maxSpinsPerUserDay ?? 3,
+          templateType: templateType ?? 'WHEEL',
         },
       })
 
