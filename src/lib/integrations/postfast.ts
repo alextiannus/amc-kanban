@@ -62,7 +62,16 @@ async function pfFetch(
     let data: any = {}
     try { data = await res.json() } catch { /* plain-text response */ }
     if (!res.ok) {
-      return { ok: false, status: res.status, data, error: data?.message ?? data?.error ?? `HTTP ${res.status}` }
+      // PostFast may return errors as an array e.g. ["Maximum 15 posts...", "posts must be an array"]
+      let errMsg: string
+      if (Array.isArray(data)) {
+        errMsg = data.join(', ')
+      } else if (Array.isArray(data?.errors)) {
+        errMsg = data.errors.join(', ')
+      } else {
+        errMsg = data?.message ?? data?.error ?? `HTTP ${res.status}`
+      }
+      return { ok: false, status: res.status, data, error: errMsg }
     }
     return { ok: true, status: res.status, data }
   } catch (e: any) {
@@ -368,10 +377,19 @@ export async function postfastUploadFile(
  * PostFast expects: { posts: [{ platform, caption, ... }] }
  */
 export async function postfastPublish(input: PostFastPublishInput): Promise<PostFastPublishResult> {
+  // Guard: caption must be a non-empty string
+  if (!input.caption || typeof input.caption !== 'string' || input.caption.trim() === '') {
+    return { success: false, error: '发布失败：caption（正文）不能为空' }
+  }
+  // Guard: platform must be resolvable
+  if (!input.platform || typeof input.platform !== 'string') {
+    return { success: false, error: '发布失败：platform 未指定' }
+  }
+
   const post: Record<string, unknown> = {
     platform: input.platform.toUpperCase(),
-    caption: input.caption,
-    hashtags: input.hashtags ?? [],
+    caption: input.caption.trim(),
+    hashtags: Array.isArray(input.hashtags) ? input.hashtags : [],
     scheduled_at: input.scheduledAt ?? null,
   }
 
@@ -383,10 +401,12 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     post.media_urls = input.mediaUrls
   }
 
-  // PostFast requires the post(s) wrapped in a "posts" array
+  // PostFast requires the post(s) wrapped in a "posts" array (max 15 per request)
+  const body = JSON.stringify({ posts: [post] })
+
   const r = await pfFetch(input.apiKey, '/social-posts', {
     method: 'POST',
-    body: JSON.stringify({ posts: [post] }),
+    body,
   })
   if (!r.ok) return { success: false, error: r.error }
 
