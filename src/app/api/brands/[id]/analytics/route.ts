@@ -8,13 +8,14 @@ type Params = { params: Promise<{ id: string }> }
 
 export interface AnalyticsPost {
   id: string
+  source: 'postfast' | 'internal' | string  // which channel/platform provided this
   platform: string
   handle: string
   caption: string
   postUrl: string | null
-  publishedAt: string       // best available date for sorting/display
-  contentType: string       // SHORT | IMAGE | VIDEO | LONG | STORY
-  status: string            // draft | pending_review | published | done
+  publishedAt: string       // best available date
+  contentType: string
+  status: string
   hashtags: string[]
   mediaUrls: string[]
   scheduledAt: string | null
@@ -24,6 +25,113 @@ export interface AnalyticsPost {
   impressions: number
   reach: number
   engRate: number
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Channel Adapters — extensible for future platforms
+// Each adapter returns a list of AnalyticsPost from its own API.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function fetchPostfastPosts(apiKey: string, from: Date, to: Date): Promise<AnalyticsPost[]> {
+  try {
+    // Fetch both published and scheduled posts
+    const [publishedResult, scheduledResult] = await Promise.all([
+      postfastListPosts(apiKey, { status: 'published', limit: 500 }),
+      postfastListPosts(apiKey, { status: 'scheduled', limit: 200 }),
+    ])
+
+    const allPosts = [
+      ...(publishedResult.success ? publishedResult.posts : []),
+      ...(scheduledResult.success ? scheduledResult.posts : []),
+    ]
+
+    return allPosts
+      .filter(p => {
+        const date = new Date(p.publishedAt ?? p.scheduledAt ?? 0)
+        return date >= from && date <= to
+      })
+      .map(p => {
+        const interactions = (p.engagementStats?.likes ?? 0) + (p.engagementStats?.comments ?? 0) + (p.engagementStats?.shares ?? 0)
+        const impressions = p.engagementStats?.impressions ?? 0
+        const bestDate = (p.publishedAt ?? p.scheduledAt ?? new Date().toISOString())
+        return {
+          id: `pf_${p.id}`,
+          source: 'postfast',
+          platform: p.platformId ?? p.platform?.toLowerCase() ?? 'unknown',
+          handle: p.platform ?? '',
+          caption: p.caption ?? '',
+          postUrl: p.postUrl ?? null,
+          publishedAt: bestDate,
+          contentType: detectContentType(p.caption ?? '', p.mediaUrls ?? [], p.hashtags ?? []),
+          status: p.status,
+          hashtags: p.hashtags ?? [],
+          mediaUrls: p.mediaUrls ?? [],
+          scheduledAt: p.scheduledAt ?? null,
+          likes: p.engagementStats?.likes ?? 0,
+          comments: p.engagementStats?.comments ?? 0,
+          shares: p.engagementStats?.shares ?? 0,
+          impressions,
+          reach: p.engagementStats?.reach ?? 0,
+          engRate: impressions > 0 ? Number(((interactions / impressions) * 100).toFixed(2)) : 0,
+        }
+      })
+  } catch {
+    return []
+  }
+}
+
+// Future adapter pattern:
+// async function fetchInstagramPosts(token: string, from: Date, to: Date): Promise<AnalyticsPost[]> { ... }
+// async function fetchGoogleBusinessPosts(apiKey: string, from: Date, to: Date): Promise<AnalyticsPost[]> { ... }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal ContentDraft posts (scheduled / pending review — not yet published)
+// These supplement the channel data with drafts that haven't been posted yet.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function fetchInternalDrafts(brandId: string, from: Date, to: Date, platformFilter: string): Promise<AnalyticsPost[]> {
+  const drafts = await prisma.contentDraft.findMany({
+    where: {
+      brandId,
+      // Only include drafts not published externally (no platformPostId)
+      platformPostId: null,
+      status: { in: ['draft', 'pending_review', 'scheduled'] },
+      OR: [
+        { createdAt: { gte: from, lte: to } },
+        { scheduledAt: { gte: from, lte: to } },
+      ],
+      ...(platformFilter !== 'all'
+        ? { account: { platformId: { equals: platformFilter, mode: 'insensitive' } } }
+        : {}),
+    },
+    include: { account: { select: { platformId: true, handle: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+  })
+
+  return drafts.map(d => {
+    const bestDate = (d.scheduledAt ?? d.createdAt).toISOString()
+    return {
+      id: d.id,
+      source: 'internal',
+      platform: d.account?.platformId ?? 'unknown',
+      handle: d.account?.handle ?? '',
+      caption: d.caption,
+      postUrl: null,
+      publishedAt: bestDate,
+      contentType: detectContentType(d.caption, d.mediaUrls ?? [], d.hashtags ?? []),
+      status: d.status,
+      hashtags: d.hashtags ?? [],
+      mediaUrls: d.mediaUrls ?? [],
+      scheduledAt: d.scheduledAt?.toISOString() ?? null,
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      impressions: 0,
+      reach: 0,
+      engRate: 0,
+    }
+  })
 }
 
 // GET /api/brands/[id]/analytics?from=ISO&to=ISO&platform=all
@@ -53,77 +161,27 @@ export async function GET(req: Request, { params }: Params) {
   })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // ── 1. All ContentDrafts in date range (any status) ───────────────────────
-  const allDrafts = await prisma.contentDraft.findMany({
-    where: {
-      brandId: id,
-      OR: [
-        { createdAt: { gte: from, lte: to } },
-        { publishedAt: { gte: from, lte: to } },
-        { scheduledAt: { gte: from, lte: to } },
-      ],
-      ...(platformFilter !== 'all'
-        ? { account: { platformId: { equals: platformFilter, mode: 'insensitive' } } }
-        : {}),
-    },
-    include: { account: { select: { platformId: true, handle: true } } },
-    orderBy: { createdAt: 'desc' },
-    take: 300,
-  })
+  // ── Fetch from all configured channels in parallel ────────────────────────
+  const [postfastPosts, internalDrafts] = await Promise.all([
+    brand.postfastApiKey
+      ? fetchPostfastPosts(brand.postfastApiKey, from, to)
+      : Promise.resolve([] as AnalyticsPost[]),
+    fetchInternalDrafts(id, from, to, platformFilter),
+    // Future: add more channel adapters here
+  ])
 
-  // ── 2. Build PostFast engagement overlay (keyed by platformPostId) ────────
-  const pfEngMap = new Map<string, { likes: number; comments: number; shares: number; impressions: number; reach: number; postUrl: string | null }>()
-  let hasPostfastData = false
+  // Platform filter for PostFast posts (applied client-side since PF API doesn't filter)
+  const filteredPostfastPosts = platformFilter === 'all'
+    ? postfastPosts
+    : postfastPosts.filter(p => p.platform.toLowerCase() === platformFilter.toLowerCase())
 
-  if (brand.postfastApiKey) {
-    try {
-      const pfResult = await postfastListPosts(brand.postfastApiKey, { status: 'published', limit: 500 })
-      if (pfResult.success && pfResult.posts.length > 0) {
-        hasPostfastData = true
-        for (const p of pfResult.posts) {
-          const key = p.id
-          if (!key) continue
-          pfEngMap.set(key, {
-            likes: p.engagementStats?.likes ?? 0,
-            comments: p.engagementStats?.comments ?? 0,
-            shares: p.engagementStats?.shares ?? 0,
-            impressions: p.engagementStats?.impressions ?? 0,
-            reach: p.engagementStats?.reach ?? 0,
-            postUrl: p.postUrl ?? null,
-          })
-        }
-      }
-    } catch { /* non-fatal */ }
-  }
+  // Merge: PostFast posts take priority (real engagement data)
+  // Internal drafts fill in scheduled/pending content not yet on PostFast
+  const posts: AnalyticsPost[] = [...filteredPostfastPosts, ...internalDrafts]
 
-  // ── 3. Merge drafts + PostFast engagement ────────────────────────────────
-  const posts: AnalyticsPost[] = allDrafts.map(d => {
-    const pfKey = d.platformPostId ?? ''
-    const eng = pfEngMap.get(pfKey) ?? { likes: 0, comments: 0, shares: 0, impressions: 0, reach: 0, postUrl: null }
-    const interactions = eng.likes + eng.comments + eng.shares
-    const bestDate = (d.publishedAt ?? d.scheduledAt ?? d.createdAt).toISOString()
-    return {
-      id: d.id,
-      platform: d.account?.platformId ?? 'unknown',
-      handle: d.account?.handle ?? '',
-      caption: d.caption,
-      postUrl: eng.postUrl,
-      publishedAt: bestDate,
-      contentType: detectContentType(d.caption, d.mediaUrls ?? [], d.hashtags ?? []),
-      status: d.status,
-      hashtags: d.hashtags ?? [],
-      mediaUrls: d.mediaUrls ?? [],
-      scheduledAt: d.scheduledAt?.toISOString() ?? null,
-      likes: eng.likes,
-      comments: eng.comments,
-      shares: eng.shares,
-      impressions: eng.impressions,
-      reach: eng.reach,
-      engRate: eng.impressions > 0 ? Number(((interactions / eng.impressions) * 100).toFixed(2)) : 0,
-    }
-  })
+  const hasPostfastData = postfastPosts.length > 0
 
-  // ── 4. KPI aggregates ─────────────────────────────────────────────────────
+  // ── KPI aggregates ─────────────────────────────────────────────────────────
   const totalPosts = posts.length
   const publishedCount = posts.filter(p => p.status === 'published' || p.status === 'done').length
   const pendingCount = posts.filter(p => p.status === 'pending_review').length
@@ -138,7 +196,7 @@ export async function GET(req: Request, { params }: Params) {
     ? Number(((totalEngagement / totalImpressions) * 100).toFixed(2))
     : 0
 
-  // ── 5. Daily time-series (postCount + engagement metrics) ─────────────────
+  // ── Daily time-series ──────────────────────────────────────────────────────
   const dayMap = new Map<string, {
     date: string; postCount: number
     engagement: number; impressions: number; reach: number; likes: number; engRate: number
@@ -155,7 +213,7 @@ export async function GET(req: Request, { params }: Params) {
     }
   }
 
-  // Fill gaps in date range
+  // Fill date range gaps
   const cursor = new Date(from); cursor.setHours(0, 0, 0, 0)
   const endDay = new Date(to); endDay.setHours(23, 59, 59, 999)
   while (cursor <= endDay) {
@@ -168,12 +226,12 @@ export async function GET(req: Request, { params }: Params) {
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(d => ({ ...d, engRate: d.impressions > 0 ? Number(((d.engagement / d.impressions) * 100).toFixed(2)) : 0 }))
 
-  // ── 6. Top posts (all posts, sorted by interaction) ───────────────────────
+  // ── Top posts (PostFast posts with real engagement, sorted by interactions) ─
   const topPosts = [...posts]
     .sort((a, b) => (b.likes + b.comments + b.shares) - (a.likes + a.comments + a.shares) || new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
     .slice(0, 20)
 
-  // ── 7. Content type breakdown ─────────────────────────────────────────────
+  // ── Content type breakdown ─────────────────────────────────────────────────
   const ctMap: Record<string, { count: number; engagement: number; impressions: number }> = {}
   for (const p of posts) {
     if (!ctMap[p.contentType]) ctMap[p.contentType] = { count: 0, engagement: 0, impressions: 0 }
@@ -186,12 +244,21 @@ export async function GET(req: Request, { params }: Params) {
     avgEngRate: s.impressions > 0 ? Number(((s.engagement / s.impressions) * 100).toFixed(2)) : 0,
   })).sort((a, b) => b.count - a.count)
 
-  // ── 8. Platform breakdown ─────────────────────────────────────────────────
-  const platMap: Record<string, number> = {}
-  for (const p of posts) platMap[p.platform] = (platMap[p.platform] ?? 0) + 1
-  const platformBreakdown = Object.entries(platMap).map(([platform, count]) => ({ platform, count }))
+  // ── Platform breakdown ─────────────────────────────────────────────────────
+  const platMap: Record<string, { count: number; engagement: number }> = {}
+  for (const p of posts) {
+    if (!platMap[p.platform]) platMap[p.platform] = { count: 0, engagement: 0 }
+    platMap[p.platform].count++
+    platMap[p.platform].engagement += p.likes + p.comments + p.shares
+  }
+  const platformBreakdown = Object.entries(platMap).map(([platform, s]) => ({ platform, count: s.count, engagement: s.engagement }))
 
-  // ── 9. Status breakdown ───────────────────────────────────────────────────
+  // ── Source breakdown (which channels contributed data) ────────────────────
+  const sourceBreakdown = {
+    postfast: postfastPosts.length,
+    internal: internalDrafts.length,
+  }
+
   const statusBreakdown = { totalPosts, publishedCount, pendingCount, draftCount }
 
   return NextResponse.json({
@@ -199,21 +266,22 @@ export async function GET(req: Request, { params }: Params) {
     kpis: { totalPosts, totalEngagement, totalImpressions, avgReach, totalLikes, avgEngRate },
     statusBreakdown,
     timeSeries,
-    topPosts,       // full post list (up to 20)
-    allPosts: posts, // all posts for client-side filtering
+    topPosts,
+    allPosts: posts,
     contentTypeBreakdown,
     platformBreakdown,
+    sourceBreakdown,
     hasPostfastData,
   })
 }
 
 function detectContentType(caption: string, mediaUrls: string[], hashtags: string[]): string {
-  const cap = caption.toLowerCase()
-  const tags = hashtags.map(h => h.toLowerCase())
+  const cap = (caption ?? '').toLowerCase()
+  const tags = (hashtags ?? []).map(h => h.toLowerCase())
   if (tags.some(t => t.includes('reel') || t.includes('short') || t.includes('tiktok')) || cap.includes('#reels')) return 'SHORT'
   if (tags.some(t => t.includes('story') || t.includes('stories'))) return 'STORY'
-  if (mediaUrls.some(u => u.match(/\.(mp4|mov|avi|webm)/i))) return 'VIDEO'
-  if (mediaUrls.length > 0) return 'IMAGE'
-  if (caption.length > 400) return 'LONG'
+  if ((mediaUrls ?? []).some(u => u.match(/\.(mp4|mov|avi|webm)/i))) return 'VIDEO'
+  if ((mediaUrls ?? []).length > 0) return 'IMAGE'
+  if (cap.length > 400) return 'LONG'
   return 'SHORT'
 }
