@@ -108,6 +108,19 @@ export default function KanbanBoard() {
     }
   }, [])
 
+  // Close brand menu when clicking outside
+  useEffect(() => {
+    if (!showBrandMenu) return
+    const handler = (e: MouseEvent) => {
+      const btn = document.getElementById('brand-switcher-btn')
+      if (btn && !btn.closest('.relative')?.contains(e.target as Node)) {
+        setShowBrandMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showBrandMenu])
+
   const fetchUser = async () => {
     const res = await fetch('/api/auth/me')
     if (res.ok) {
@@ -224,6 +237,60 @@ export default function KanbanBoard() {
             alt="AMC logo"
             className="h-16 md:h-20 w-auto"
           />
+
+          {/* Brand Switcher Pill */}
+          {brands.length > 0 && (
+            <div className="relative">
+              <button
+                id="brand-switcher-btn"
+                onClick={() => setShowBrandMenu(v => !v)}
+                className="flex items-center gap-2 pl-3 pr-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:shadow-sm transition-all duration-200 max-w-[200px]"
+              >
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+                  <span className="text-[10px] font-black text-white">{(activeBrand?.name ?? '?').charAt(0).toUpperCase()}</span>
+                </div>
+                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">
+                  {activeBrand?.name ?? '选择品牌'}
+                </span>
+                <ChevronDown
+                  size={14}
+                  className={`text-slate-400 shrink-0 transition-transform duration-200 ${showBrandMenu ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {showBrandMenu && (
+                <div className="absolute left-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-3 py-2 border-b border-slate-50 dark:border-slate-800">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">切换品牌</p>
+                  </div>
+                  <div className="p-1.5 space-y-0.5">
+                    {brands.map(b => (
+                      <button
+                        key={b.id}
+                        onClick={() => { setActiveBrand(b); setShowBrandMenu(false) }}
+                        className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left transition-colors ${
+                          activeBrand?.id === b.id
+                            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+                          <span className="text-[11px] font-black text-white">{b.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold truncate">{b.name}</p>
+                          {b.location && <p className="text-[10px] text-slate-400 truncate">{b.location}</p>}
+                        </div>
+                        {activeBrand?.id === b.id && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Top Navigation Menu */}
@@ -481,12 +548,12 @@ export default function KanbanBoard() {
         </div>
       ) : currentView === 'calendar' ? (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
-          <DashboardCalendar brandId={activeBrand?.id} />
+          <DashboardCalendar key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} />
         </div>
       ) : currentView === 'analytics' ? (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
           {activeBrand ? (
-            <BrandAnalyticsDashboard brandId={activeBrand.id} brandName={activeBrand.name} />
+            <BrandAnalyticsDashboard key={activeBrand.id} brandId={activeBrand.id} brandName={activeBrand.name} />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 text-sm">请先选择品牌</div>
           )}
