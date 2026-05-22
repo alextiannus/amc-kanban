@@ -89,7 +89,7 @@ export interface PostFastPost {
   id: string
   platform: string
   platformId: string
-  caption: string
+  caption: string    // mapped from API field 'content'
   status: 'scheduled' | 'published' | 'failed' | 'draft'
   scheduledAt?: string
   publishedAt?: string
@@ -102,7 +102,27 @@ export interface PostFastPost {
     shares?: number
     impressions?: number
     reach?: number
+    clicks?: number
   }
+}
+
+// Analytics-specific type returned by GET /social-posts/analytics
+export interface PostFastAnalyticsPost {
+  id: string                 // PostFast post UUID
+  content: string            // Post text content
+  socialMediaId: string      // Account UUID
+  platformPostId: string     // Native platform post ID
+  publishedAt: string        // ISO datetime
+  latestMetric: {
+    likes: string            // All metrics returned as strings (bigint)
+    comments: string
+    shares: string
+    impressions: string
+    clicks: string
+    reach: string
+    extras: Record<string, string>
+    fetchedAt: string
+  } | null
 }
 
 export interface PostFastPublishInput {
@@ -193,11 +213,42 @@ export async function postfastGetGBPLocations(apiKey: string, accountId: string)
   return { success: true, locations: locs }
 }
 
-// ── Post Management ────────────────────────────────────────────────────────
+/**
+ * GET /social-posts/analytics
+ * Fetch published posts with their latest performance metrics.
+ * Only returns posts that have been successfully published (with a platformPostId).
+ * Metrics are returned as strings (bigint) — parse to numbers before use.
+ * No pagination — returns all matching posts in the date range.
+ */
+export async function postfastGetAnalytics(apiKey: string, options?: {
+  startDate?: string   // ISO 8601, e.g. 2026-01-01T00:00:00.000Z
+  endDate?: string     // ISO 8601, e.g. 2026-01-31T23:59:59.999Z
+  socialMediaIds?: string[]  // Filter by specific account UUIDs
+}): Promise<{ success: boolean; posts: PostFastAnalyticsPost[]; error?: string }> {
+  const params = new URLSearchParams()
+  if (options?.startDate) params.set('startDate', options.startDate)
+  if (options?.endDate) params.set('endDate', options.endDate)
+  if (options?.socialMediaIds?.length) params.set('socialMediaIds', options.socialMediaIds.join(','))
+
+  const r = await pfFetch(apiKey, `/social-posts/analytics?${params}`)
+  if (!r.ok) return { success: false, posts: [], error: r.error }
+
+  const raw: any[] = Array.isArray(r.data) ? r.data : (r.data?.data ?? [])
+  const posts: PostFastAnalyticsPost[] = raw.map(p => ({
+    id: p.id,
+    content: p.content ?? '',
+    socialMediaId: p.socialMediaId ?? '',
+    platformPostId: p.platformPostId ?? '',
+    publishedAt: p.publishedAt ?? new Date().toISOString(),
+    latestMetric: p.latestMetric ?? null,
+  }))
+  return { success: true, posts }
+}
 
 /**
  * GET /social-posts
  * List scheduled / published posts with optional filters.
+ * Note: does NOT include engagement metrics — use postfastGetAnalytics() for that.
  */
 export async function postfastListPosts(apiKey: string, options?: {
   status?: 'scheduled' | 'published' | 'failed' | 'draft'
@@ -206,32 +257,32 @@ export async function postfastListPosts(apiKey: string, options?: {
   page?: number
 }): Promise<{ success: boolean; posts: PostFastPost[]; total?: number; error?: string }> {
   const params = new URLSearchParams()
-  if (options?.status) params.set('status', options.status)
-  if (options?.platform) params.set('platform', options.platform.toUpperCase())
-  if (options?.limit) params.set('limit', String(options.limit))
-  if (options?.page) params.set('page', String(options.page))
+  if (options?.status) params.set('statuses', options.status.toUpperCase())  // API expects uppercase
+  if (options?.platform) params.set('platforms', options.platform.toUpperCase())
+  if (options?.limit) params.set('limit', String(Math.min(options.limit, 50)))  // max 50 per request
+  if (options?.page != null) params.set('page', String(options.page))
 
   const r = await pfFetch(apiKey, `/social-posts?${params}`)
   if (!r.ok) return { success: false, posts: [], error: r.error }
 
-  const rawPosts: any[] = Array.isArray(r.data) ? r.data : (r.data?.posts ?? r.data?.data ?? [])
+  const rawPosts: any[] = Array.isArray(r.data) ? r.data : (r.data?.data ?? r.data?.posts ?? [])
   const posts: PostFastPost[] = rawPosts.map(p => {
     const pfPlatform = (p.platform ?? '').toUpperCase()
     return {
       id: p.id,
       platform: pfPlatform,
       platformId: PLATFORM_MAP[pfPlatform] ?? pfPlatform.toLowerCase(),
-      caption: p.caption ?? p.content ?? '',
+      caption: p.content ?? p.caption ?? '',   // API returns 'content', not 'caption'
       status: p.status?.toLowerCase() ?? 'draft',
       scheduledAt: p.scheduledAt ?? p.scheduled_at,
       publishedAt: p.publishedAt ?? p.published_at,
       postUrl: p.url ?? p.postUrl,
-      mediaUrls: p.mediaUrls ?? p.media_urls ?? [],
+      mediaUrls: (p.mediaItems ?? []).map((m: any) => m.url).filter(Boolean),
       hashtags: p.hashtags ?? [],
-      engagementStats: p.analytics ?? p.engagement ?? undefined,
+      // No engagement stats from this endpoint — use postfastGetAnalytics()
     }
   })
-  return { success: true, posts, total: r.data?.total ?? rawPosts.length }
+  return { success: true, posts, total: r.data?.totalCount ?? rawPosts.length }
 }
 
 /**

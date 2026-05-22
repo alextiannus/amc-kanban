@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { postfastListPosts } from '@/lib/integrations/postfast'
+import { postfastGetAnalytics, postfastFetchAccounts } from '@/lib/integrations/postfast'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -34,52 +34,64 @@ export interface AnalyticsPost {
 
 async function fetchPostfastPosts(apiKey: string, from: Date, to: Date): Promise<{ posts: AnalyticsPost[]; error?: string }> {
   try {
-    // Only fetch published posts — PostFast doesn't reliably support 'scheduled' as a status filter.
-    // Fetch all (no server-side date filter; PostFast API doesn't support it) then filter locally.
-    const result = await postfastListPosts(apiKey, { status: 'published', limit: 500 })
+    // Use the dedicated analytics endpoint — the only correct way to get engagement metrics.
+    // Metrics are returned as strings (bigint) and must be parseInt'd.
+    // Supports server-side date filtering via startDate/endDate.
+    const [analyticsResult, accountsResult] = await Promise.all([
+      postfastGetAnalytics(apiKey, {
+        startDate: from.toISOString(),
+        endDate: to.toISOString(),
+      }),
+      postfastFetchAccounts(apiKey),
+    ])
 
-    if (!result.success) {
-      console.error('[Analytics] PostFast listPosts failed:', result.error)
-      return { posts: [], error: result.error }
+    if (!analyticsResult.success) {
+      console.error('[Analytics] PostFast /social-posts/analytics failed:', analyticsResult.error)
+      return { posts: [], error: analyticsResult.error }
     }
 
-    console.log(`[Analytics] PostFast returned ${result.posts.length} published posts`)
+    console.log(`[Analytics] PostFast analytics returned ${analyticsResult.posts.length} published posts`)
 
-    const filtered = result.posts.filter(p => {
-      // Include posts that have any date within range, or if no dates available, include all
-      const dateStr = p.publishedAt ?? p.scheduledAt
-      if (!dateStr) return true  // include undated posts
-      const date = new Date(dateStr)
-      return date >= from && date <= to
-    })
+    // Build a map of socialMediaId → platformId for label enrichment
+    const accountMap = new Map(
+      (accountsResult.accounts ?? []).map(a => [a.id, a])
+    )
 
-    console.log(`[Analytics] After date filter (${from.toISOString().slice(0,10)} → ${to.toISOString().slice(0,10)}): ${filtered.length} posts`)
+    const posts: AnalyticsPost[] = analyticsResult.posts.map(p => {
+      const m = p.latestMetric
+      const likes       = m ? parseInt(m.likes ?? '0', 10) : 0
+      const comments    = m ? parseInt(m.comments ?? '0', 10) : 0
+      const shares      = m ? parseInt(m.shares ?? '0', 10) : 0
+      const impressions = m ? parseInt(m.impressions ?? '0', 10) : 0
+      const reach       = m ? parseInt(m.reach ?? '0', 10) : 0
+      const interactions = likes + comments + shares
 
-    const posts = filtered.map(p => {
-      const interactions = (p.engagementStats?.likes ?? 0) + (p.engagementStats?.comments ?? 0) + (p.engagementStats?.shares ?? 0)
-      const impressions = p.engagementStats?.impressions ?? 0
-      const bestDate = (p.publishedAt ?? p.scheduledAt ?? new Date().toISOString())
+      const account = accountMap.get(p.socialMediaId)
+      const platform = account?.platformId ?? 'unknown'
+      const handle   = account?.handle ?? account?.displayName ?? ''
+
       return {
         id: `pf_${p.id}`,
         source: 'postfast',
-        platform: p.platformId ?? p.platform?.toLowerCase() ?? 'unknown',
-        handle: p.platform ?? '',
-        caption: p.caption ?? '',
-        postUrl: p.postUrl ?? null,
-        publishedAt: bestDate,
-        contentType: detectContentType(p.caption ?? '', p.mediaUrls ?? [], p.hashtags ?? []),
-        status: p.status,
-        hashtags: p.hashtags ?? [],
-        mediaUrls: p.mediaUrls ?? [],
-        scheduledAt: p.scheduledAt ?? null,
-        likes: p.engagementStats?.likes ?? 0,
-        comments: p.engagementStats?.comments ?? 0,
-        shares: p.engagementStats?.shares ?? 0,
+        platform,
+        handle,
+        caption: p.content,
+        postUrl: null,
+        publishedAt: p.publishedAt,
+        contentType: detectContentType(p.content, [], []),
+        status: 'published',
+        hashtags: [],
+        mediaUrls: [],
+        scheduledAt: null,
+        likes,
+        comments,
+        shares,
         impressions,
-        reach: p.engagementStats?.reach ?? 0,
+        reach,
         engRate: impressions > 0 ? Number(((interactions / impressions) * 100).toFixed(2)) : 0,
       }
     })
+
     return { posts }
   } catch (e: any) {
     console.error('[Analytics] PostFast fetch exception:', e?.message)
