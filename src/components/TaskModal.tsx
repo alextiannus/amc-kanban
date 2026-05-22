@@ -205,7 +205,37 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
               </h3>
               <p className="text-amber-700 dark:text-amber-400 text-sm whitespace-pre-wrap leading-relaxed mb-5">{renderTextWithLinks(currentTask.requiredInput)}</p>
               
-              <div className="flex justify-end pt-3 border-t border-amber-200/50 dark:border-amber-800/50">
+              <div className="flex flex-wrap justify-end gap-3 pt-3 border-t border-amber-200/50 dark:border-amber-800/50">
+                {/* Retry publish button — shown when requiredInput indicates a publish failure */}
+                {currentTask.requiredInput.includes('自动发布失败') || currentTask.requiredInput.includes('重试发布失败') ? (
+                  <button
+                    onClick={async () => {
+                      setUpdating(true)
+                      try {
+                        const res = await fetch(`/api/tasks/${currentTask.id}/retry-publish`, { method: 'POST' })
+                        const data = await res.json()
+                        if (data.success) {
+                          onUpdate()
+                        } else {
+                          setCurrentTask((prev: any) => ({ ...prev, requiredInput: data.error ?? '重试失败，请稍后再试' }))
+                        }
+                      } catch (e) {
+                        console.error(e)
+                      } finally {
+                        setUpdating(false)
+                      }
+                    }}
+                    disabled={updating}
+                    className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold disabled:opacity-50 shadow-sm hover:shadow hover:-translate-y-0.5 transition-all duration-300"
+                  >
+                    {updating ? (
+                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    )}
+                    重新尝试发布
+                  </button>
+                ) : null}
                 <button
                   onClick={handleProvideInput}
                   disabled={updating}
@@ -216,6 +246,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
               </div>
             </div>
           )}
+
 
           <div>
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Description / Logs</h3>
