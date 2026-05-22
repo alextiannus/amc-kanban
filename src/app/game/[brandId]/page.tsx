@@ -20,6 +20,16 @@ interface GameConfig {
   taskPhotoEnabled: boolean
   taskReviewEnabled: boolean
   maxSpinsPerUserDay: number
+  brand?: {
+    name: string
+    location: string | null
+    googlePlaceId: string | null
+    accounts: Array<{
+      platformId: string
+      profileUrl: string | null
+      handle: string
+    }>
+  }
 }
 
 interface UnclaimedPrize {
@@ -70,7 +80,6 @@ export default function GameH5Page() {
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const animationFrameId = useRef<number | null>(null)
 
-  // Translations Dictionary
   const t = {
     zh: {
       points: '当前积分',
@@ -80,13 +89,14 @@ export default function GameH5Page() {
       uploadPhotos: '📷 店内环境/菜品美图分享',
       uploadPhotosSub: '成功上传 3 张店内照片即可获得 5 个积分',
       submitReview: '⭐ 社媒平台发表好评',
-      submitReviewSub: '在 Google Maps/Yelp 发布好评并上传截图获得 5 个积分',
+      submitReviewSub: '在 Google Maps/小红书/Instagram 发布好评或标记并上传截图获得 5 个积分',
       photoSlot: '照片',
       copyright: '我同意授权照片使用权与版权归商家所有',
       submitTask: '提交任务',
       submitting: '正在提交并进行 AI 审核...',
-      googleMaps: 'Google Maps 好评直达',
-      yelp: 'Yelp 好评直达',
+      googleMaps: 'Google Maps 直达',
+      xiaohongshu: '小红书直达',
+      instagram: 'Instagram 直达',
       copyText: '一键复制好评文案',
       copied: '文案已复制到剪贴板！',
       uploadScreenshot: '上传好评截图',
@@ -104,7 +114,7 @@ export default function GameH5Page() {
       unclaimedTitle: '🎁 您有一个未领取的奖品！',
       unclaimedClaim: '立即查看',
       combinedTask: '⭐ 发布好评并上传店内美图',
-      combinedTaskSub: '在 Google Maps/Yelp 发表好评，上传截图及店内美图即可获得 5 个积分',
+      combinedTaskSub: '在 Google Maps/小红书/Instagram 发表好评或标记，上传截图及店内美图即可获得 5 个积分',
       screenshotFirstHint: '（提示：第 1 张请上传好评截图，其余为店内美图）',
       addMore: '添加照片',
       uploadPlaceholder: '上传截图与店内美图 (可多选)',
@@ -117,13 +127,14 @@ export default function GameH5Page() {
       uploadPhotos: '📷 Share Store & Food Photos',
       uploadPhotosSub: 'Upload 3 store photos to earn 5 points',
       submitReview: '⭐ Leave a Social Review',
-      submitReviewSub: 'Post a review on Google Maps/Yelp and upload screenshot to get 5 points',
+      submitReviewSub: 'Post on Google Maps/Xiaohongshu/Instagram and upload screenshot to get 5 points',
       photoSlot: 'Photo',
       copyright: 'I agree to authorize photos use and copyright to the merchant',
       submitTask: 'Submit Task',
       submitting: 'Submitting and verifying with AI...',
-      googleMaps: 'Direct Google Maps Review',
-      yelp: 'Direct Yelp Review',
+      googleMaps: 'Direct Google Maps',
+      xiaohongshu: 'Direct Xiaohongshu',
+      instagram: 'Direct Instagram',
       copyText: 'Copy Review Text',
       copied: 'Copied to clipboard!',
       uploadScreenshot: 'Upload Screenshot',
@@ -141,7 +152,7 @@ export default function GameH5Page() {
       unclaimedTitle: '🎁 You have an unclaimed prize!',
       unclaimedClaim: 'Claim Now',
       combinedTask: '⭐ Post Review & Share Photos',
-      combinedTaskSub: 'Post a review on Google/Yelp, upload screenshot & store photos to earn 5 points',
+      combinedTaskSub: 'Post on Google Maps/Xiaohongshu/Instagram, upload screenshot & store photos to earn 5 points',
       screenshotFirstHint: '(Note: 1st image must be the review screenshot)',
       addMore: 'Add Photo',
       uploadPlaceholder: 'Upload screenshot & store photos (multi-select)',
@@ -452,12 +463,40 @@ export default function GameH5Page() {
     draw()
   }
 
-  // 10. Direct link trigger Google Maps review page
+  // 10. Direct link trigger social review page
   const openSocialReviewLink = () => {
     if (reviewPlatform === 'GOOGLE') {
-      window.open('https://search.google.com/local/writereview?placeid=ChIJoVvX258Z2jERj83V1_JvW2M', '_blank') // Default demo place ID
-    } else {
-      window.open('https://www.yelp.com', '_blank')
+      const placeId = config?.brand?.googlePlaceId
+      if (placeId) {
+        window.open(`https://search.google.com/local/writereview?placeid=${placeId}`, '_blank')
+      } else if (config?.brand?.name) {
+        const query = encodeURIComponent(config.brand.name + (config.brand.location ? ' ' + config.brand.location : ''))
+        window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank')
+      } else {
+        window.open('https://search.google.com/local/writereview?placeid=ChIJoVvX258Z2jERj83V1_JvW2M', '_blank') // Default demo place ID
+      }
+    } else if (reviewPlatform === 'XIAOHONGSHU') {
+      const account = config?.brand?.accounts?.find(
+        acc => acc.platformId.toLowerCase() === 'xiaohongshu'
+      )
+      if (account?.profileUrl) {
+        window.open(account.profileUrl, '_blank')
+      } else if (account?.handle) {
+        window.open(`https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(account.handle)}`, '_blank')
+      } else {
+        window.open('https://www.xiaohongshu.com', '_blank')
+      }
+    } else if (reviewPlatform === 'INSTAGRAM') {
+      const account = config?.brand?.accounts?.find(
+        acc => acc.platformId.toLowerCase() === 'instagram'
+      )
+      if (account?.profileUrl) {
+        window.open(account.profileUrl, '_blank')
+      } else if (account?.handle) {
+        window.open(`https://www.instagram.com/${account.handle}/`, '_blank')
+      } else {
+        window.open('https://www.instagram.com', '_blank')
+      }
     }
   }
 
@@ -785,14 +824,24 @@ export default function GameH5Page() {
                     Google Maps
                   </button>
                   <button 
-                    onClick={() => setReviewPlatform('YELP')}
+                    onClick={() => setReviewPlatform('XIAOHONGSHU')}
                     className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${
-                      reviewPlatform === 'YELP' 
+                      reviewPlatform === 'XIAOHONGSHU' 
                         ? 'border-blue-500 bg-blue-500/20 text-white' 
                         : 'border-slate-800 bg-slate-900/60 text-slate-400'
                     }`}
                   >
-                    Yelp
+                    {lang === 'zh' ? '小红书' : 'Xiaohongshu'}
+                  </button>
+                  <button 
+                    onClick={() => setReviewPlatform('INSTAGRAM')}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${
+                      reviewPlatform === 'INSTAGRAM' 
+                        ? 'border-blue-500 bg-blue-500/20 text-white' 
+                        : 'border-slate-800 bg-slate-900/60 text-slate-400'
+                    }`}
+                  >
+                    Instagram
                   </button>
                 </div>
 
@@ -803,7 +852,11 @@ export default function GameH5Page() {
                     className="w-full py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white flex items-center justify-center gap-1 active:scale-95 transition"
                   >
                     <span>🚀</span>
-                    {reviewPlatform === 'GOOGLE' ? t.googleMaps : t.yelp}
+                    {reviewPlatform === 'GOOGLE' 
+                      ? t.googleMaps 
+                      : reviewPlatform === 'XIAOHONGSHU' 
+                      ? t.xiaohongshu 
+                      : t.instagram}
                   </button>
 
                   <button 

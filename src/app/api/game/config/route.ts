@@ -27,7 +27,23 @@ export async function GET(request: Request) {
   try {
     let config = await prisma.gameConfig.findUnique({
       where: { brandId },
-      include: { prizes: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        prizes: { orderBy: { createdAt: 'asc' } },
+        brand: {
+          select: {
+            name: true,
+            location: true,
+            googlePlaceId: true,
+            accounts: {
+              select: {
+                platformId: true,
+                profileUrl: true,
+                handle: true,
+              },
+            },
+          },
+        },
+      },
     })
 
     // If config doesn't exist and it's a private request, initialize default settings
@@ -51,7 +67,23 @@ export async function GET(request: Request) {
             ],
           },
         },
-        include: { prizes: { orderBy: { createdAt: 'asc' } } },
+        include: {
+          prizes: { orderBy: { createdAt: 'asc' } },
+          brand: {
+            select: {
+              name: true,
+              location: true,
+              googlePlaceId: true,
+              accounts: {
+                select: {
+                  platformId: true,
+                  profileUrl: true,
+                  handle: true,
+                },
+              },
+            },
+          },
+        },
       })
     }
 
