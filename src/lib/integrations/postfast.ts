@@ -259,27 +259,28 @@ export interface PostFastUploadSlot {
 /**
  * POST /file/get-signed-upload-urls
  * Get signed S3 upload URLs. Upload files there, then pass storageKey to publish.
+ * PostFast expects: { count: N, contentType: "image/jpeg" }
  */
 export async function postfastGetSignedUploadUrls(apiKey: string, files: Array<{
   filename: string
   mimeType: string
   sizeBytes: number
 }>): Promise<{ success: boolean; slots: PostFastUploadSlot[]; error?: string }> {
+  // PostFast API accepts one contentType per batch — use the first file's mime type
+  const firstMime = files[0]?.mimeType ?? 'image/jpeg'
   const r = await pfFetch(apiKey, '/file/get-signed-upload-urls', {
     method: 'POST',
     body: JSON.stringify({
-      files: files.map(f => ({
-        file_name: f.filename,
-        content_type: f.mimeType,
-        file_size: f.sizeBytes,
-      })),
+      count: files.length,
+      contentType: firstMime,
     }),
   })
   if (!r.ok) return { success: false, slots: [], error: r.error }
 
-  const raw: any[] = Array.isArray(r.data) ? r.data : (r.data?.urls ?? r.data?.files ?? [])
+  // Response may be array directly or nested under urls/files/data key
+  const raw: any[] = Array.isArray(r.data) ? r.data : (r.data?.urls ?? r.data?.files ?? r.data?.data ?? [])
   const slots: PostFastUploadSlot[] = raw.map(s => ({
-    uploadUrl: s.uploadUrl ?? s.upload_url ?? s.signedUrl ?? s.signed_url,
+    uploadUrl: s.uploadUrl ?? s.upload_url ?? s.signedUrl ?? s.signed_url ?? s.url,
     storageKey: s.storageKey ?? s.storage_key ?? s.key ?? s.fileToken ?? s.file_token,
     fileToken: s.fileToken ?? s.file_token ?? s.storageKey ?? s.storage_key,
     expiresAt: s.expiresAt ?? s.expires_at,
@@ -310,37 +311,40 @@ export async function postfastUploadFile(
   }
 }
 
-// ── Publish ────────────────────────────────────────────────────────────────
-
 /**
  * POST /social-posts
- * Publish or schedule a post. Prefers mediaStorageKeys from signed upload over mediaUrls.
+ * Publish or schedule a post.
+ * PostFast expects: { posts: [{ platform, caption, ... }] }
  */
 export async function postfastPublish(input: PostFastPublishInput): Promise<PostFastPublishResult> {
-  const body: Record<string, unknown> = {
+  const post: Record<string, unknown> = {
     platform: input.platform.toUpperCase(),
     caption: input.caption,
     hashtags: input.hashtags ?? [],
     scheduled_at: input.scheduledAt ?? null,
   }
 
-  if (input.accountId) body.account_id = input.accountId
+  if (input.accountId) post.account_id = input.accountId
 
   if (input.mediaStorageKeys && input.mediaStorageKeys.length > 0) {
-    body.media_storage_keys = input.mediaStorageKeys
+    post.media_storage_keys = input.mediaStorageKeys
   } else if (input.mediaUrls && input.mediaUrls.length > 0) {
-    body.media_urls = input.mediaUrls
+    post.media_urls = input.mediaUrls
   }
 
+  // PostFast requires the post(s) wrapped in a "posts" array
   const r = await pfFetch(input.apiKey, '/social-posts', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ posts: [post] }),
   })
   if (!r.ok) return { success: false, error: r.error }
+
+  // Response may be array of created posts or a single object
+  const created = Array.isArray(r.data) ? r.data[0] : (r.data?.posts?.[0] ?? r.data)
   return {
     success: true,
-    postId: r.data?.post_id ?? r.data?.id,
-    url: r.data?.url ?? r.data?.postUrl,
+    postId: created?.post_id ?? created?.id,
+    url: created?.url ?? created?.postUrl,
     scheduledAt: input.scheduledAt,
   }
 }
