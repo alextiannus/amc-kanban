@@ -465,37 +465,76 @@ export default function GameH5Page() {
 
   // 10. Direct link trigger social review page
   const openSocialReviewLink = () => {
+    const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+
     if (reviewPlatform === 'GOOGLE') {
-      const placeId = config?.brand?.googlePlaceId
-      if (placeId) {
-        window.open(`https://search.google.com/local/writereview?placeid=${placeId}`, '_blank')
-      } else if (config?.brand?.name) {
-        const query = encodeURIComponent(config.brand.name + (config.brand.location ? ' ' + config.brand.location : ''))
-        window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank')
+      const googleAccount = config?.brand?.accounts?.find(
+        acc => acc.platformId.toLowerCase() === 'google' || acc.platformId.toLowerCase() === 'google_maps'
+      )
+      if (googleAccount?.profileUrl) {
+        window.open(googleAccount.profileUrl, '_blank')
       } else {
-        window.open('https://search.google.com/local/writereview?placeid=ChIJoVvX258Z2jERj83V1_JvW2M', '_blank') // Default demo place ID
+        const placeId = config?.brand?.googlePlaceId
+        if (placeId) {
+          window.open(`https://search.google.com/local/writereview?placeid=${placeId}`, '_blank')
+        } else if (config?.brand?.name) {
+          const query = encodeURIComponent(config.brand.name + (config.brand.location ? ' ' + config.brand.location : ''))
+          window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank')
+        } else {
+          window.open('https://search.google.com/local/writereview?placeid=ChIJj61dQgK6j4AR4GeTYWZsKWw', '_blank') // Default demo place ID (Googleplex)
+        }
       }
     } else if (reviewPlatform === 'XIAOHONGSHU') {
       const account = config?.brand?.accounts?.find(
         acc => acc.platformId.toLowerCase() === 'xiaohongshu'
       )
-      if (account?.profileUrl) {
-        window.open(account.profileUrl, '_blank')
-      } else if (account?.handle) {
-        window.open(`https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(account.handle)}`, '_blank')
+      if (isMobile) {
+        // Attempt to launch Xiaohongshu app direct to create note page
+        window.location.href = 'xhsdiscover://post_note'
+        // Fallback in case app not installed
+        setTimeout(() => {
+          if (account?.profileUrl) {
+            window.open(account.profileUrl, '_blank')
+          } else if (account?.handle) {
+            window.open(`https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(account.handle)}`, '_blank')
+          } else {
+            window.open('https://www.xiaohongshu.com', '_blank')
+          }
+        }, 2000)
       } else {
-        window.open('https://www.xiaohongshu.com', '_blank')
+        if (account?.profileUrl) {
+          window.open(account.profileUrl, '_blank')
+        } else if (account?.handle) {
+          window.open(`https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(account.handle)}`, '_blank')
+        } else {
+          window.open('https://www.xiaohongshu.com', '_blank')
+        }
       }
     } else if (reviewPlatform === 'INSTAGRAM') {
       const account = config?.brand?.accounts?.find(
         acc => acc.platformId.toLowerCase() === 'instagram'
       )
-      if (account?.profileUrl) {
-        window.open(account.profileUrl, '_blank')
-      } else if (account?.handle) {
-        window.open(`https://www.instagram.com/${account.handle}/`, '_blank')
+      if (isMobile) {
+        // Attempt to launch Instagram camera
+        window.location.href = 'instagram://camera'
+        // Fallback in case app not installed
+        setTimeout(() => {
+          if (account?.profileUrl) {
+            window.open(account.profileUrl, '_blank')
+          } else if (account?.handle) {
+            window.open(`https://www.instagram.com/${account.handle}/`, '_blank')
+          } else {
+            window.open('https://www.instagram.com', '_blank')
+          }
+        }, 2000)
       } else {
-        window.open('https://www.instagram.com', '_blank')
+        if (account?.profileUrl) {
+          window.open(account.profileUrl, '_blank')
+        } else if (account?.handle) {
+          window.open(`https://www.instagram.com/${account.handle}/`, '_blank')
+        } else {
+          window.open('https://www.instagram.com', '_blank')
+        }
       }
     }
   }
