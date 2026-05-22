@@ -29,7 +29,10 @@ export async function POST(request: Request) {
   if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { brandId, accountId, type, priority, title, description, payload, draftUrl: incomingDraftUrl, draftData } = body
+  const { brandId, accountId: explicitAccountId, type, priority, title, description, payload, draftUrl: incomingDraftUrl, draftData } = body
+
+  // platform can be passed at top-level OR inside draftData — AI just needs to know the name (e.g. "instagram")
+  const platformHint: string | undefined = body.platform || draftData?.platform
 
   if (!brandId || !type || !title || !description) {
     return NextResponse.json({ error: 'brandId, type, title, description required' }, { status: 400 })
@@ -51,6 +54,15 @@ export async function POST(request: Request) {
   let draftId: string | undefined
   let draftUrl: string = incomingDraftUrl || ''
   let workTaskId: string | undefined
+  // Resolve accountId: explicit > auto-lookup by platform
+  let accountId: string | undefined = explicitAccountId || undefined
+  if (!accountId && platformHint) {
+    const found = await prisma.socialAccount.findFirst({
+      where: { brandId, platformId: { equals: platformHint, mode: 'insensitive' } },
+      select: { id: true },
+    })
+    if (found) accountId = found.id
+  }
 
   const taskPriorityMap: Record<string, 'low' | 'medium' | 'high' | 'urgent'> = {
     low: 'low',
@@ -151,14 +163,18 @@ export async function POST(request: Request) {
       let publishError: string | null = null
       let publishedUrl: string | null = null
 
+      // Resolve the platform name: from linked account or from draftData hint
+      const platformName: string | undefined =
+        account?.platformId ?? platformHint ?? draftData?.platform
+
       if (!brand.postfastApiKey) {
-        publishError = '自动发布失败：品牌未配置发布后端密钥'
-      } else if (!account?.platformId) {
-        publishError = '自动发布失败：缺少发布账号或平台信息'
+        publishError = '自动发布失败：品牌未配置发布后端密钥（postfastApiKey）'
+      } else if (!platformName) {
+        publishError = '自动发布失败：未指定发布平台，请在 draftData.platform 传入平台名（如 instagram）'
       } else {
         const publish = await postfastPublish({
           apiKey: brand.postfastApiKey,
-          platform: account.platformId,
+          platform: platformName,
           caption: draft.caption,
           mediaUrls: draft.mediaUrls,
           hashtags: draft.hashtags,
