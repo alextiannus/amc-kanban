@@ -2,12 +2,15 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getSession()
     if (!session || !session.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const { searchParams } = new URL(request.url)
+    const brandId = searchParams.get('brandId')
 
     let permittedAgentIds: string[] = []
 
@@ -21,16 +24,25 @@ export async function GET() {
         where: { humanId: session.user.id }
       })
       permittedAgentIds = permissions.map(p => p.agentId)
+    }
 
-      if (permittedAgentIds.length === 0) {
-        return NextResponse.json({
-          collaborativeAgentsCount: 0,
-          runningAgentsCount: 0,
-          notRunningAgentsCount: 0,
-          pendingTasksCount: 0,
-          completedTasksCount: 0
-        })
-      }
+    if (brandId) {
+      const brandLinks = await prisma.brandAgent.findMany({
+        where: { brandId, active: true },
+        select: { agentId: true },
+      })
+      const brandAgentIds = brandLinks.map(l => l.agentId)
+      permittedAgentIds = permittedAgentIds.filter(id => brandAgentIds.includes(id))
+    }
+
+    if (permittedAgentIds.length === 0) {
+      return NextResponse.json({
+        collaborativeAgentsCount: 0,
+        runningAgentsCount: 0,
+        notRunningAgentsCount: 0,
+        pendingTasksCount: 0,
+        completedTasksCount: 0
+      })
     }
 
     // Calculate Online / Offline agents

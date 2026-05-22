@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Inbox } from 'lucide-react'
 import TaskCard from './TaskCard'
 import TaskModal from './TaskModal'
-import { COLUMNS } from './KanbanBoard'
+import { COLUMNS } from './dashboard/AgentsWorkflowView'
 
 /**
  * A brand-scoped Kanban swim-lane.
@@ -35,6 +35,7 @@ export default function BrandKanbanLane({ brandId }: { brandId: string }) {
   const searchLower = searchQuery.toLowerCase().trim()
 
   const activeTasks = tasks
+    .filter(t => t.status !== 'void') // always hide cancelled tasks
     .filter(t => t.status === activeTab)
     .filter(t => {
       if (!searchLower) return true
@@ -65,7 +66,7 @@ export default function BrandKanbanLane({ brandId }: { brandId: string }) {
         <div className="px-6 pt-6 pb-0">
           {/* Tab bar */}
           <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-hide">
-            {COLUMNS.map(col => {
+            {COLUMNS.filter(col => col.id !== 'void').map((col: { id: string; title: string }) => {
               const count = tasks.filter(t => t.status === col.id).length
               const isActive = activeTab === col.id
               return (
@@ -134,7 +135,7 @@ export default function BrandKanbanLane({ brandId }: { brandId: string }) {
               <p className="text-sm font-bold">
                 {searchQuery
                   ? '没有找到匹配的任务'
-                  : `${COLUMNS.find(c => c.id === activeTab)?.title} 暂无任务`}
+                  : `${COLUMNS.find((c: { id: string }) => c.id === activeTab)?.title} 暂无任务`}
               </p>
               {searchQuery && (
                 <button

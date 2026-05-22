@@ -1,164 +1,37 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import TaskCard from './TaskCard'
+import { useState, useEffect, useRef } from 'react'
 import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
-import AgentSequenceView from './AgentSequenceView'
 import ArchiveView from './ArchiveView'
-import { LogOut, Activity, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, Bot, Trash2, ChevronDown, Store, Link2, BarChart2, Calendar, Key } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { useTheme } from 'next-themes'
-import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
 import MobileLayout from './dashboard/MobileLayout'
 import DashboardHome from './dashboard/DashboardHome'
 import BrandAnalyticsDashboard from './dashboard/BrandAnalyticsDashboard'
 import DashboardCalendar from './dashboard/DashboardCalendar'
+import MainLayout from './layout/MainLayout'
+import SystemLogModal from './layout/SystemLogModal'
+import NewAgentKeyModal from './layout/NewAgentKeyModal'
+import AgentsWorkflowView from './dashboard/AgentsWorkflowView'
 
-// ── System Log Modal (Admin only) ─────────────────────────────────────────────
-function SystemLogModal({ onClose }: { onClose: () => void }) {
-  const [logs, setLogs] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState('all')
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      try {
-        const params = new URLSearchParams({ limit: '200' })
-        if (filter !== 'all') params.set('resourceType', filter)
-        const res = await fetch(`/api/admin/logs?${params}`)
-        if (res.ok) {
-          const data = await res.json()
-          setLogs(data.logs || [])
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [filter])
-
-  const ACTION_COLORS: Record<string, string> = {
-    PUBLISH_SUCCESS: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-    PUBLISH_FAILED:  'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-    RETRY_PUBLISH:   'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-    STATUS_CHANGE:   'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
-  }
-
-  return (
-    <div className="fixed inset-0 bg-slate-900/30 dark:bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-              <svg className="w-5 h-5 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-white">系统日志</h2>
-              <p className="text-xs text-slate-400">{logs.length} 条记录</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <select
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-              className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-none outline-none"
-            >
-              <option value="all">全部类型</option>
-              <option value="WorkUnit">任务</option>
-              <option value="Brand">品牌</option>
-              <option value="ContentDraft">草稿</option>
-            </select>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-full transition-colors">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Log List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {loading ? (
-            <div className="flex items-center justify-center h-40">
-              <div className="w-6 h-6 border-2 border-slate-200 border-t-slate-600 rounded-full animate-spin" />
-            </div>
-          ) : logs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-              <svg className="w-10 h-10 mb-2 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2" /></svg>
-              <p className="text-sm">暂无日志记录</p>
-            </div>
-          ) : (
-            logs.map(log => (
-              <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${ACTION_COLORS[log.action] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
-                      {log.action}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                      {log.resourceType}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400 truncate max-w-[120px]">#{log.resourceId?.substring(0, 10)}</span>
-                  </div>
-                  {log.reason && (
-                    <p className="text-xs text-slate-600 dark:text-slate-300 truncate">{log.reason}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[10px] text-slate-400">
-                      {log.actorName ?? log.actorType ?? 'SYSTEM'}
-                    </span>
-                    <span className="text-[10px] text-slate-300 dark:text-slate-600">·</span>
-                    <span className="text-[10px] text-slate-400">
-                      {new Date(log.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Brand types ─────────────────────────────────────────────────────────────
 interface Brand {
   id: string
   name: string
   location?: string
 }
 
-export const COLUMNS = [
-
-  { id: 'todo', title: 'To Do' },
-  { id: 'in_progress', title: 'In Progress' },
-  { id: 'pending', title: 'Require Input', highlight: true },
-  { id: 'done', title: 'Done' },
-  { id: 'void', title: 'Void' },
-]
-
 export default function KanbanBoard() {
-  const SHOW_LANE_FILTERS = false
   const [tasks, setTasks] = useState<any[]>([])
-  const [doneTasks, setDoneTasks] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState('pending')
   const [selectedTask, setSelectedTask] = useState<any | null>(null)
-  const [priorityFilter, setPriorityFilter] = useState('all')
-  const [agentFilter, setAgentFilter] = useState('all')
-  const [sortBy, setSortBy] = useState('updatedAt')
-  const [showOverdueOnly, setShowOverdueOnly] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [summary, setSummary] = useState<{
-    collaborativeAgentsCount: number;
-    runningAgentsCount: number;
-    notRunningAgentsCount: number;
-    pendingTasksCount: number;
-    completedTasksCount: number;
+    collaborativeAgentsCount: number
+    runningAgentsCount: number
+    notRunningAgentsCount: number
+    pendingTasksCount: number
+    completedTasksCount: number
   } | null>(null)
-  const [user, setUser] = useState<{ id: string, email: string, role: string, nickname?: string | null, avatar?: string | null } | null>(null)
-  const [showProfile, setShowProfile] = useState(false)
+  const [user, setUser] = useState<{ id: string; email: string; role: string; nickname?: string | null; avatar?: string | null } | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   
   // Navigation State
@@ -168,7 +41,15 @@ export default function KanbanBoard() {
   // Brand State — loaded from API
   const [brands, setBrands] = useState<Brand[]>([])
   const [activeBrand, setActiveBrand] = useState<Brand | null>(null)
-  const [showBrandMenu, setShowBrandMenu] = useState(false)
+
+  const [newApiKey, setNewApiKey] = useState<string | null>(null)
+  const [showSystemLog, setShowSystemLog] = useState(false)
+
+  const activeBrandIdRef = useRef<string | undefined>(undefined)
+
+  useEffect(() => {
+    activeBrandIdRef.current = activeBrand?.id
+  }, [activeBrand?.id])
 
   const fetchBrands = async () => {
     try {
@@ -179,29 +60,61 @@ export default function KanbanBoard() {
         if (list.length > 0) setActiveBrand(prev => prev ?? list[0])
       }
     } catch (e) {
-      console.error('[KanbanBoard] fetchBrands', e)
+      console.error('[KanbanBoard] fetchBrands error', e)
     }
   }
-  
-  const [copied, setCopied] = useState(false)
-  const [keyCopied, setKeyCopied] = useState(false)
-  const [newApiKey, setNewApiKey] = useState<string | null>(null)
-  const [generatingKey, setGeneratingKey] = useState(false)
-  const [showSystemLog, setShowSystemLog] = useState(false)
-  const router = useRouter()
 
-  const openAgentsWithFilter = (filter: 'all' | 'online' | 'offline') => {
-    setAgentsFilter(filter)
-    setCurrentView('agents')
+  const fetchUser = async () => {
+    try {
+      const res = await fetch('/api/auth/me')
+      if (res.ok) {
+        setUser(await res.json())
+      }
+    } catch (e) {
+      console.error('[KanbanBoard] fetchUser error', e)
+    }
   }
-  
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
+
+  const fetchTasks = async (brandId?: string) => {
+    try {
+      const queryBrandId = brandId !== undefined ? brandId : activeBrandIdRef.current
+      const url = queryBrandId ? `/api/tasks?active=true&brandId=${queryBrandId}` : '/api/tasks?active=true'
+      const res = await fetch(url)
+      if (res.ok) {
+        const data = await res.json()
+        setTasks(data)
+      }
+    } catch (e) {
+      console.error('[KanbanBoard] fetchTasks error', e)
+    }
+  }
+
+  const fetchSummary = async (brandId?: string) => {
+    try {
+      const queryBrandId = brandId !== undefined ? brandId : activeBrandIdRef.current
+      const url = queryBrandId ? `/api/dashboard/summary?brandId=${queryBrandId}` : '/api/dashboard/summary'
+      const res = await fetch(url)
+      if (res.ok) {
+        const data = await res.json()
+        setSummary(data)
+      }
+    } catch (e) {
+      console.error('[KanbanBoard] fetchSummary error', e)
+    }
+  }
+
+  // Fetch tasks and summary when active brand changes
+  useEffect(() => {
+    if (activeBrand?.id) {
+      fetchTasks(activeBrand.id)
+      fetchSummary(activeBrand.id)
+    } else {
+      fetchTasks()
+      fetchSummary()
+    }
+  }, [activeBrand?.id])
 
   useEffect(() => {
-    setMounted(true)
-    fetchTasks()
-    fetchSummary()
     fetchUser()
     fetchBrands()
 
@@ -218,453 +131,35 @@ export default function KanbanBoard() {
     }
   }, [])
 
-  // Close brand menu when clicking outside
-  useEffect(() => {
-    if (!showBrandMenu) return
-    const handler = (e: MouseEvent) => {
-      const btn = document.getElementById('brand-switcher-btn')
-      if (btn && !btn.closest('.relative')?.contains(e.target as Node)) {
-        setShowBrandMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showBrandMenu])
-
-  const fetchUser = async () => {
-    const res = await fetch('/api/auth/me')
-    if (res.ok) {
-      setUser(await res.json())
-    }
-  }
-
-  const fetchTasks = async () => {
-    try {
-      const res = await fetch('/api/tasks?active=true')
-      if (res.ok) {
-        const data = await res.json()
-        setTasks(data)
-      }
-      
-      const doneRes = await fetch('/api/tasks?status=done&limit=10')
-      if (doneRes.ok) {
-        const data = await doneRes.json()
-        // API returns { tasks, pagination } if limit is used
-        setDoneTasks(data.tasks || data)
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  const fetchSummary = async () => {
-    const res = await fetch('/api/dashboard/summary')
-    if (res.ok) {
-      const data = await res.json()
-      setSummary(data)
-    }
-  }
-
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    router.push('/')
-    router.refresh()
-  }
-
-  const getCopyCommand = (apiKey: string | null = null) => {
-    const hostFromEnv = process.env.NEXT_PUBLIC_KANBAN_HOST
-    const hostFromWindow = typeof window !== 'undefined' ? window.location.origin : null
-    const baseHost = hostFromEnv || hostFromWindow || 'https://amc-kanban.immedi.ai'
-    return buildAgentInitPrompt({ apiKey, apiBaseUrl: `${baseHost}/api` })
-  }
-
-  const generateAgentKey = async () => {
-    setGeneratingKey(true)
-    try {
-      const res = await fetch('/api/agents/keys', { method: 'POST' })
-      const data = await res.json()
-      if (res.ok) {
-        setNewApiKey(data.apiKey)
-        fetchSummary()
-        fetchTasks()
-      } else {
-        alert(data.error || 'Failed to generate key')
-      }
-    } catch (e) {
-      alert('Error generating key')
-    } finally {
-      setGeneratingKey(false)
-    }
-  }
-
-  const handleCopy = (key: string | null = null) => {
-    navigator.clipboard.writeText(getCopyCommand(key))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const agentOptions = Array.from(
-    new Map(tasks.filter(t => t.assignee).map(t => [t.assignee.id, t.assignee])).values()
-  )
-
-  const searchLower = searchQuery.toLowerCase().trim()
-
-  const activeTasks = tasks
-    .filter(t => t.status !== 'void')          // always hide cancelled tasks
-    .filter(t => t.status === activeTab)
-    .filter(t => priorityFilter === 'all' || (t.priority || 'medium') === priorityFilter)
-    .filter(t => agentFilter === 'all' || t.assigneeId === agentFilter)
-    .filter(t => !showOverdueOnly || (t.deadline && new Date(t.deadline).getTime() < Date.now() && t.status !== 'done'))
-    .filter(t => {
-      if (!searchLower) return true
-      const assigneeName = t.assignee ? (t.assignee.nickname || t.assignee.email || '').toLowerCase() : ''
-      const tagMatch = (t.tags || []).some((tag: string) => tag.toLowerCase().includes(searchLower))
-      return (
-        t.id.toLowerCase().includes(searchLower) ||
-        (t.title || '').toLowerCase().includes(searchLower) ||
-        (t.description || '').toLowerCase().includes(searchLower) ||
-        (t.materials || '').toLowerCase().includes(searchLower) ||
-        assigneeName.includes(searchLower) ||
-        tagMatch
-      )
-    })
-    .sort((a, b) => {
-      if (sortBy === 'priority') {
-        const rank: Record<string, number> = { high: 0, medium: 1, low: 2 }
-        return (rank[a.priority || 'medium'] ?? 1) - (rank[b.priority || 'medium'] ?? 1)
-      }
-      if (sortBy === 'deadline') {
-        return new Date(a.deadline || '9999-12-31').getTime() - new Date(b.deadline || '9999-12-31').getTime()
-      }
-      return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
-    })
-
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex flex-col font-sans transition-colors duration-300">
-      <div className="relative flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-3 shrink-0">
-          <img
-            src="/logo.svg"
-            alt="AMC logo"
-            className="h-16 md:h-20 w-auto"
-          />
-        </div>
-
-        {/* Top Navigation Menu */}
-        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mx-auto">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${currentView === 'dashboard' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
-          >
-            <Store size={16} /> 品牌主看板
-          </button>
-          <button
-            onClick={() => setCurrentView('calendar')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${currentView === 'calendar' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
-            id="nav-calendar"
-          >
-            <Calendar size={16} /> 发布日历
-          </button>
-          <button
-            onClick={() => setCurrentView('analytics')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${currentView === 'analytics' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
-            id="nav-brand-analytics"
-          >
-            <BarChart2 size={16} /> 品牌分析
-          </button>
-        </div>
-        
-
-        <div className="flex-1 flex justify-end w-full lg:w-auto items-center gap-2">
-
-          {/* Brand Switcher — right toolbar */}
-          {brands.length > 0 && (
-            <div className="relative">
-              <button
-                id="brand-switcher-btn"
-                onClick={() => setShowBrandMenu(v => !v)}
-                className={`flex items-center gap-2 pl-3 pr-2.5 py-2 rounded-xl border transition-all duration-200 ${
-                  showBrandMenu
-                    ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700 shadow-sm'
-                    : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
-                }`}
-              >
-                <div className="w-5 h-5 rounded-md bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
-                  <span className="text-[9px] font-black text-white">{(activeBrand?.name ?? '?').charAt(0).toUpperCase()}</span>
-                </div>
-                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 max-w-[120px] truncate">
-                  {activeBrand?.name ?? '选择品牌'}
-                </span>
-                <ChevronDown
-                  size={13}
-                  className={`text-slate-400 shrink-0 transition-transform duration-200 ${showBrandMenu ? 'rotate-180 text-blue-500' : ''}`}
-                />
-              </button>
-
-              {showBrandMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="px-3 py-2 border-b border-slate-50 dark:border-slate-800">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">切换品牌</p>
-                  </div>
-                  <div className="p-1.5 space-y-0.5">
-                    {brands.map(b => (
-                      <button
-                        key={b.id}
-                        onClick={() => { setActiveBrand(b); setShowBrandMenu(false) }}
-                        className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left transition-colors ${
-                          activeBrand?.id === b.id
-                            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                            : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-                        }`}
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
-                          <span className="text-[11px] font-black text-white">{b.name.charAt(0).toUpperCase()}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold truncate">{b.name}</p>
-                          {b.location && <p className="text-[10px] text-slate-400 truncate">{b.location}</p>}
-                        </div>
-                        {activeBrand?.id === b.id && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-        </div>
-
-        <div className="absolute right-4 top-8 z-40 flex items-center gap-2 lg:static lg:right-auto lg:top-auto">
-          {mounted && (
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
-            >
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-          )}
-
-          <div className="relative">
-            <button
-              onClick={() => setShowProfile(!showProfile)}
-              className="flex items-center justify-center w-11 h-11 md:w-10 md:h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:shadow-md hover:scale-105 transition-all duration-300 border border-slate-200 dark:border-slate-700 overflow-hidden"
-            >
-              {user?.avatar ? (
-                <img src={user.avatar} alt="User avatar" className="w-full h-full object-cover" />
-              ) : user ? (
-                (user.nickname || user.email).charAt(0).toUpperCase()
-              ) : <UserIcon size={18} />}
-            </button>
-
-            {showProfile && (
-              <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] max-w-64 sm:w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all z-50 max-h-[70vh] overflow-y-auto">
-                <div className="p-4 border-b border-slate-100/50 dark:border-slate-800">
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{user?.nickname || user?.email}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{user?.email}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{user?.role}</p>
-                </div>
-                <div className="p-2 space-y-1">
-                  {/* Admin & boss users both get user management */}
-                  {(user?.role === 'ADMIN' || user?.role === 'USER') && (
-                    <>
-                      {user?.role === 'ADMIN' && (
-                        <button
-                          onClick={() => { setShowProfile(false); router.push('/admin') }}
-                          className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                        >
-                          <Users size={16} /> 用户管理
-                        </button>
-                      )}
-                      <button
-                        onClick={async () => {
-                          setShowProfile(false);
-                          if (confirm('确定要清理所有无主任务吗？这些通常是已被遣散龙虾遗留的测试任务，清理操作不可逆。')) {
-                            try {
-                              const res = await fetch('/api/tasks/unassigned', { method: 'DELETE' });
-                              if (res.ok) {
-                                const data = await res.json();
-                                alert(`清理成功：删除了 ${data.deletedCount} 个无主任务`);
-                                fetchTasks();
-                                fetchSummary();
-                              } else {
-                                alert('清理失败，请确保您是管理员');
-                              }
-                            } catch (error) {
-                              alert('网络错误，请重试');
-                            }
-                          }
-                        }}
-                        className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-xl transition-colors"
-                      >
-                        <Trash2 size={16} /> 清理无主任务
-                      </button>
-                      <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
-                      <button
-                        onClick={async () => { setShowProfile(false); await generateAgentKey() }}
-                        disabled={generatingKey}
-                        className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors disabled:opacity-50"
-                      >
-                        <Key size={16} /> {generatingKey ? '生成中...' : '生成新 Agent 密钥'}
-                      </button>
-                      {user?.role === 'ADMIN' && (
-                        <button
-                          onClick={() => { setShowProfile(false); setShowSystemLog(true) }}
-                          className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> 系统日志
-                        </button>
-                      )}
-                      <button
-                        onClick={() => { setShowProfile(false); handleCopy() }}
-                        className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors"
-                      >
-                        {copied ? <Check size={16} /> : <Copy size={16} />} 复制初始化 Skill
-                      </button>
-                    </>
-                  )}
-                  <button 
-                    onClick={() => { setShowProfile(false); setShowSettings(true) }}
-                    className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                  >
-                    <Settings size={16} /> 个人设置
-                  </button>
-                  <button 
-                    onClick={() => { setShowProfile(false); router.push('/profile') }}
-                    className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                  >
-                    <Link2 size={16} /> 平台链接配置
-                  </button>
-                  <button
-                    onClick={() => { setShowProfile(false); setCurrentView('agents') }}
-                    className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
-                      currentView === 'agents'
-                        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <Bot size={16} /> AI 序列
-                  </button>
-                  <button
-                    onClick={() => { setShowProfile(false); setCurrentView('archive') }}
-                    className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
-                      currentView === 'archive'
-                        ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-bold'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <Inbox size={16} /> 归档
-                  </button>
-                  <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
-                  <button 
-                    onClick={handleLogout} 
-                    className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
-                  >
-                    <LogOut size={16} /> 退出登录
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {currentView === 'agents' && (
-        <div className="mb-6 bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
-            <span className="text-emerald-500">⭐</span> 监控大盘
-          </h2>
-          {summary ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              <div onClick={() => openAgentsWithFilter('all')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800/50">
-                <Users size={20} className="text-indigo-500 mb-2 group-hover:scale-110 transition-transform" />
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">协作Agent</p>
-                <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.collaborativeAgentsCount}</p>
-              </div>
-              <div onClick={() => openAgentsWithFilter('online')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border border-transparent hover:border-emerald-100 dark:hover:border-emerald-800/50">
-                <Activity size={20} className="text-emerald-500 mb-2 group-hover:scale-110 transition-transform" />
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">活跃 Agent</p>
-                <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.runningAgentsCount}</p>
-              </div>
-              <div onClick={() => setActiveTab('pending')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors border border-transparent hover:border-amber-100 dark:hover:border-amber-800/50">
-                <AlertCircle size={20} className="text-amber-500 mb-2 group-hover:scale-110 transition-transform" />
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">待输入任务</p>
-                <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.pendingTasksCount}</p>
-              </div>
-              <div onClick={() => setActiveTab('done')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border border-transparent hover:border-blue-100 dark:hover:border-blue-800/50">
-                <CheckCircle2 size={20} className="text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
-                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">今日完成</p>
-                <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.completedTasksCount}</p>
-              </div>
-            </div>
-          ) : (
-            <div className="animate-pulse"><div className="w-full h-32 bg-slate-100 dark:bg-slate-800 rounded-2xl"></div></div>
-          )}
-        </div>
-      )}
-
+    <MainLayout
+      currentView={currentView}
+      setCurrentView={setCurrentView}
+      brands={brands}
+      activeBrand={activeBrand}
+      setActiveBrand={setActiveBrand}
+      user={user}
+      onShowSettings={() => setShowSettings(true)}
+      onShowSystemLog={() => setShowSystemLog(true)}
+      onNewAgentKeyGenerated={(key) => setNewApiKey(key)}
+      onTasksCleared={() => {
+        fetchTasks()
+        fetchSummary()
+      }}
+    >
       {currentView === 'agents' ? (
-        <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          {/* ── 全局任务看板（原首页内容）── */}
-          <div className="w-full bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-              {COLUMNS.filter(col => col.id !== 'void').map(col => {
-                const count = tasks.filter(t => t.status === col.id).length;
-                const isActive = activeTab === col.id;
-                return (
-                  <button
-                    key={col.id}
-                    onClick={() => setActiveTab(col.id)}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-300 whitespace-nowrap ${isActive ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20' : 'bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-700'}`}
-                  >
-                    {col.title}
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'}`}>{count}</span>
-                  </button>
-                )
-              })}
-            </div>
-            <div className="mb-6 relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M16.65 16.65A7.5 7.5 0 1116.65 2a7.5 7.5 0 010 14.65z" />
-              </svg>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search tasks by title, description, tags, assignee, or task ID…"
-                className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder:text-slate-400 placeholder:font-normal outline-none focus:ring-2 focus:ring-emerald-400/50"
-              />
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
-              {activeTasks.length === 0 ? (
-                <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-400">
-                  <div className="w-20 h-20 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center mb-4">
-                    <Activity size={32} className="opacity-50" />
-                  </div>
-                  <p className="font-medium text-slate-500">
-                    {searchQuery ? 'No tasks match the current search' : 'No tasks in this lane'}
-                  </p>
-                  {searchQuery && (
-                    <button onClick={() => setSearchQuery('')} className="mt-3 text-xs font-bold text-emerald-500 hover:text-emerald-600 underline">Clear search</button>
-                  )}
-                </div>
-              ) : (
-                activeTasks.map(task => (
-                  <TaskCard key={task.id} task={task} onClick={() => setSelectedTask(task)} onTagClick={(tag) => setSearchQuery(tag)} />
-                ))
-              )}
-            </div>
-          </div>
-          {/* ── AI 序列 + 活动战报 ── */}
-          <AgentSequenceView initialFilter={agentsFilter} brandId={activeBrand?.id} />
-        </div>
+        <AgentsWorkflowView
+          tasks={tasks}
+          summary={summary}
+          activeBrand={activeBrand}
+          onTaskClick={setSelectedTask}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          agentsFilter={agentsFilter}
+          setAgentsFilter={setAgentsFilter}
+        />
       ) : currentView === 'archive' ? (
         <div className="flex-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
           <ArchiveView onTaskClick={setSelectedTask} />
@@ -706,79 +201,17 @@ export default function KanbanBoard() {
         />
       )}
 
-      {showSettings && user && <UserSettingsModal user={user} onClose={() => setShowSettings(false)} onUpdated={fetchUser} />}
-      
-      {newApiKey && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 p-8 relative animate-in fade-in zoom-in duration-300">
-            <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">🎉 新龙虾已孵化</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">我们已在系统中为您预注册了一只新的 AI 员工，并为其分配了专属的身份密钥。</p>
-            
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-6">
-              <p className="text-xs font-bold text-amber-800 dark:text-amber-400 mb-2">⚠️ 唯一显示机会</p>
-              <p className="text-xs text-amber-700 dark:text-amber-500">
-                系统已为您预注册了新的 AI 身份。你有两种接入方式：<br/>
-                <b>方式一：</b> 单独复制 Key 填入底层 MCP 配置（推荐，最稳定）。<br/>
-                <b>方式二：</b> 一键复制包含 Key 的完整指令发给 AI，让它动态携带。
-              </p>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">🔑 独立 API Key</label>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  readOnly 
-                  value={newApiKey} 
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pr-12 text-slate-800 dark:text-slate-100 font-mono text-sm shadow-inner" 
-                />
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(newApiKey);
-                    setKeyCopied(true);
-                    setTimeout(() => setKeyCopied(false), 2000);
-                  }}
-                  className="absolute right-2 top-2 p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-500 transition-colors"
-                  title="Copy API Key"
-                >
-                  {keyCopied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
-                </button>
-              </div>
-            </div>
-
-            <div className="mb-8">
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">📜 包含 Key 的完整初始化指令</label>
-              <div className="relative">
-                <textarea 
-                  readOnly 
-                  value={getCopyCommand(newApiKey)} 
-                  className="w-full h-40 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pr-12 text-slate-800 dark:text-slate-100 font-mono text-xs shadow-inner resize-none focus:outline-none" 
-                />
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(getCopyCommand(newApiKey));
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }}
-                  className="absolute right-2 top-2 p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-500 transition-colors"
-                  title="Copy Full Command"
-                >
-                  {copied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
-                </button>
-              </div>
-            </div>
-
-            <button 
-              onClick={() => setNewApiKey(null)} 
-              className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-3.5 rounded-xl hover:bg-slate-800 dark:hover:bg-slate-100 transition-all shadow-md hover:shadow-lg"
-            >
-              我已经复制完毕，确认关闭
-            </button>
-          </div>
-        </div>
+      {showSettings && user && (
+        <UserSettingsModal user={user} onClose={() => setShowSettings(false)} onUpdated={fetchUser} />
       )}
-      {showSystemLog && <SystemLogModal onClose={() => setShowSystemLog(false)} />}
-    </div>
 
+      {newApiKey && (
+        <NewAgentKeyModal newApiKey={newApiKey} onClose={() => setNewApiKey(null)} />
+      )}
+
+      {showSystemLog && (
+        <SystemLogModal onClose={() => setShowSystemLog(false)} />
+      )}
+    </MainLayout>
   )
 }
