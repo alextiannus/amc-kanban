@@ -27,24 +27,31 @@ function fmtDate(iso: string) {
 }
 
 // ── KPI Metric Card ──────────────────────────────────────────────────────────
-function MetricCard({ label, value, delta, highlight = false, onClick, active = false }: {
-  label: string; value: string; delta: string; highlight?: boolean; onClick?: () => void; active?: boolean
+function MetricCard({ label, value, delta, highlight = false, onClick, active = false, accentColor }: {
+  label: string; value: string; delta: string; highlight?: boolean; onClick?: () => void; active?: boolean; accentColor?: string
 }) {
   return (
     <div
       onClick={onClick}
-      className={`rounded-2xl p-5 border transition-all ${
+      className={`rounded-2xl p-5 border transition-all duration-200 ${
         onClick ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98]' : ''
       } ${
-        active ? 'ring-2 ring-blue-400 dark:ring-blue-500' : ''
-      } ${
-        highlight
-          ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10 shadow-md shadow-amber-100 dark:shadow-amber-900/20'
-          : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md'
+        active
+          ? 'ring-2 shadow-md'
+          : highlight
+            ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/10 shadow-md shadow-amber-100 dark:shadow-amber-900/20'
+            : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-md'
       }`}
+      style={active && accentColor ? {
+        borderColor: accentColor,
+        backgroundColor: `${accentColor}10`,
+        boxShadow: `0 0 0 2px ${accentColor}60`,
+      } : {}}
     >
       <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-      <p className={`text-3xl font-black leading-none mb-1.5 ${highlight ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100'}`}>{value}</p>
+      <p className={`text-3xl font-black leading-none mb-1.5 ${
+        active && accentColor ? '' : highlight ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-slate-100'
+      }`} style={active && accentColor ? { color: accentColor } : {}}>{value}</p>
       <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-500">
         <TrendingUp className="w-3 h-3" />
         <span>{delta}</span>
@@ -260,6 +267,7 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
   const [activeType, setActiveType] = useState<string | null>(null)
   const [selectedPost, setSelectedPost] = useState<any | null>(null)
   const postsRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<HTMLDivElement>(null)
   const presetRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async (d: number) => {
@@ -309,7 +317,12 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
 
   const clearFilters = () => { setActiveDate(null); setActiveType(null) }
   const scrollToPosts = () => postsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  const handleKpiClick = () => { clearFilters(); setTimeout(scrollToPosts, 50) }
+  const scrollToChart = () => chartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const handleKpiClick = (metric: MetricKey) => {
+    setActiveMetric(metric)
+    clearFilters()
+    setTimeout(scrollToChart, 50)
+  }
 
   return (
     <div className="p-4 md:p-8 pb-44 space-y-6 min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -379,20 +392,40 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
         <>
           {/* ── KPI Cards ────────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <MetricCard label="Total Posts" value={String(kpis.totalPosts ?? 0)} delta={`共 ${kpis.totalPosts ?? 0} 篇`} onClick={handleKpiClick} />
-            <MetricCard label="Total Engagement" value={fmtNum(kpis.totalEngagement ?? 0)} delta="+100%" onClick={handleKpiClick} />
-            <MetricCard label="Total Impressions" value={fmtNum(kpis.totalImpressions ?? 0)} delta="+100%" onClick={handleKpiClick} />
-            <MetricCard label="Average Reach" value={fmtNum(kpis.avgReach ?? 0)} delta="+100%" onClick={handleKpiClick} />
-            <MetricCard label="Total Likes" value={fmtNum(kpis.totalLikes ?? 0)} delta="+100%" onClick={handleKpiClick} />
-            <MetricCard label="Avg. Eng. Rate" value={`${kpis.avgEngRate ?? 0}%`} delta="+100%" highlight onClick={handleKpiClick} />
+            {([
+              { label: 'Total Posts',       value: String(kpis.totalPosts ?? 0),           delta: `共 ${kpis.totalPosts ?? 0} 篇`,  metric: 'postCount'   as MetricKey },
+              { label: 'Total Engagement',  value: fmtNum(kpis.totalEngagement ?? 0),      delta: '+100%',                          metric: 'engagement'  as MetricKey },
+              { label: 'Total Impressions', value: fmtNum(kpis.totalImpressions ?? 0),     delta: '+100%',                          metric: 'impressions' as MetricKey },
+              { label: 'Average Reach',     value: fmtNum(kpis.avgReach ?? 0),             delta: '+100%',                          metric: 'reach'       as MetricKey },
+              { label: 'Total Likes',       value: fmtNum(kpis.totalLikes ?? 0),           delta: '+100%',                          metric: 'likes'       as MetricKey },
+              { label: 'Avg. Eng. Rate',    value: `${kpis.avgEngRate ?? 0}%`,             delta: '+100%',                          metric: 'engRate'     as MetricKey, highlight: true },
+            ] as { label: string; value: string; delta: string; metric: MetricKey; highlight?: boolean }[]).map(({ label, value, delta, metric, highlight }) => {
+              const metricDef = METRIC_OPTIONS.find(m => m.key === metric)
+              return (
+                <MetricCard
+                  key={metric}
+                  label={label}
+                  value={value}
+                  delta={delta}
+                  highlight={highlight}
+                  active={activeMetric === metric}
+                  accentColor={metricDef?.color}
+                  onClick={() => handleKpiClick(metric)}
+                />
+              )
+            })}
           </div>
 
           {/* ── Performance Over Time ─────────────────────────────────── */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
+          <div ref={chartRef} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-6">
             <div className="flex flex-col sm:flex-row sm:items-start gap-4 mb-6">
               <div className="flex-1">
                 <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">Performance Over Time</h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">View trends and patterns in your social media metrics</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Currently showing: <span className="font-bold" style={{ color: METRIC_OPTIONS.find(m => m.key === activeMetric)?.color }}>
+                    {METRIC_OPTIONS.find(m => m.key === activeMetric)?.label}
+                  </span> · Click a summary card above to switch
+                </p>
               </div>
               <div className="flex items-center gap-1 flex-wrap">
                 {METRIC_OPTIONS.map(m => (
