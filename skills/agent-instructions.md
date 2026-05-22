@@ -355,6 +355,73 @@ Authorization: Bearer <agentApiKey>
 
 若信息不足，先创建任务并标记 `pending`，通过 `requiredInput` 向人类索取缺失信息，不得臆造。
 
+## 8a. 内容自动发布协议（auto_pilot 发布链路 — 必读）
+
+> ⚠️ **常见错误**：调用 `post_action_item` 后看到 `auto_resolved` 就以为发布成功 — **这是错误的**。`auto_resolved` 仅表示"主理人审批环节被自动跳过"，不等于"内容已发到社媒平台"。
+
+### ✅ 正确的发布调用方式
+
+```
+POST /api/agent/action-items
+Authorization: Bearer <AGENT_API_KEY>
+Content-Type: application/json
+
+{
+  "brandId": "<brandId>",
+  "type": "content_approval",
+  "title": "招牌香辣烤鱼 - Instagram 发布",
+  "description": "AI 员工自动生成，品牌 auto_pilot 开启，自动提交发布",
+  "draftData": {
+    "platform": "instagram",          ← 必填：平台名（小写），替代 accountId
+    "caption": "完整文案内容...",
+    "mediaUrls": ["https://...实际可访问的图片 URL"],
+    "hashtags": ["#singaporefood", "#grilled"],
+    "scheduledAt": "2026-05-22T08:00:00Z"   ← 可选：排期时间（ISO 8601 UTC）
+  }
+}
+```
+
+### 关键规则
+
+| 字段 | 要求 |
+|---|---|
+| `type` | 必须是 `content_approval`，否则不触发发布 |
+| `draftData` | **必须传**，不传则系统无法创建草稿，不会调用 PostFast |
+| `draftData.platform` | **必须传**，填平台名如 `instagram` `tiktok` `facebook` `xiaohongshu` `google` |
+| `accountId` | ❌ 不需要，系统会自动按 brandId + platform 查库匹配 |
+| `draftData.mediaUrls` | 必须是**公网可访问的 HTTPS URL**，不能是本地路径或临时链接 |
+
+### 每个平台单独调用
+
+多平台发布时，**每个平台发一次独立请求**，不要合并：
+
+```
+# 第 1 次请求
+{ "draftData": { "platform": "instagram", "caption": "..." } }
+
+# 第 2 次请求
+{ "draftData": { "platform": "tiktok", "caption": "..." } }
+
+# 第 3 次请求
+{ "draftData": { "platform": "facebook", "caption": "..." } }
+```
+
+### 如何判断发布是否真正成功
+
+响应体中 `WorkUnit.status` = `done` 且 `materials` 字段包含 `发布链接:` 前缀的 URL，才表示 PostFast 已成功发布。
+
+若 `WorkUnit.status` = `pending` 且 `requiredInput` 非空，说明 PostFast 返回错误，需读取错误信息处理后重试。
+
+### 发布失败时的处理
+
+若 WorkUnit 进入 `pending` 状态，按以下步骤处理：
+
+1. 读取 `requiredInput` 获取具体错误（API Key 缺失 / 平台名错误 / mediaUrls 不可访问等）
+2. 修正后重新发起 `POST /api/agent/action-items`（带新的 `draftData`）
+3. 向主理人汇报：失败平台 + 错误原因 + 已重试状态
+
+
+
 ## 9. description 日志模板（建议直接复用）
 
 执行中更新 description 可参考：
