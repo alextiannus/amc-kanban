@@ -730,66 +730,56 @@ export default function GameH5Page() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#12072b] via-[#090314] to-[#04010a] text-slate-100 flex flex-col items-center p-4 relative overflow-x-hidden font-sans selection:bg-pink-500 selection:text-white">
+    <div className="min-h-screen bg-gradient-to-br from-[#12072b] via-[#090314] to-[#04010a] text-slate-100 flex flex-col items-center px-2.5 py-4 min-[375px]:px-3.5 min-[410px]:px-4 relative overflow-x-hidden font-sans selection:bg-pink-500 selection:text-white">
       
       {/* Confetti overlay */}
       <canvas ref={confettiCanvasRef} className="fixed inset-0 pointer-events-none z-50 w-full h-full" />
 
       {/* Top Bar / Headers */}
-      <header className="w-full max-w-md flex justify-between items-center mb-6 z-10 pt-2">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/40">
-            <span className="font-bold text-sm text-slate-950">AMC</span>
+      <header className="w-full max-w-md flex justify-between items-center mb-4 z-10 pt-2 px-1">
+        <div className="flex items-center gap-1.5">
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-pink-500 flex items-center justify-center shadow-md shadow-pink-500/20">
+            <span className="font-bold text-xs text-white">AMC</span>
           </div>
-          <span className="font-bold text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-pink-400">
+          <span className="font-extrabold text-base tracking-wide text-white">
             {config?.title || '幸运大轮盘'}
           </span>
         </div>
         
-        {/* Language selector toggle */}
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1.5">
+          {/* Compact Points Pill in Header */}
+          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-full py-1 px-2.5 backdrop-blur-md">
+            <span className="text-xs">🪙</span>
+            <span className="text-xs font-black text-amber-400 tracking-tight">{points}</span>
+            <span className="text-[8px] text-slate-400 font-extrabold uppercase tracking-tighter">pts</span>
+          </div>
+
+          {/* Language selector toggle */}
           <button 
             onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-            className="px-3 py-1 text-xs font-semibold rounded-full border border-slate-700/50 bg-slate-900/80 hover:bg-slate-800 transition active:scale-95"
+            className="px-2.5 py-1 text-[10px] font-semibold rounded-full border border-slate-700/50 bg-slate-900/80 hover:bg-slate-800 transition active:scale-95"
           >
-            {lang === 'zh' ? '🇬🇧 English' : '🇨🇳 中文'}
+            {lang === 'zh' ? 'EN' : '中文'}
           </button>
         </div>
       </header>
 
       {/* Main Game Container */}
-      <main className="w-full max-w-md flex flex-col items-center gap-6 z-10 pb-16">
-        
-        {/* Points Display Card */}
-        <div className="w-full rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl p-4 flex justify-between items-center shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-          
-          <div>
-            <p className="text-slate-400 text-xs tracking-wider uppercase font-semibold">{t.points}</p>
-            <h2 className="text-4xl font-extrabold text-white mt-1 flex items-baseline gap-1">
-              {points}
-              <span className="text-xs text-blue-400 font-semibold uppercase">pts</span>
-            </h2>
-          </div>
+      <main className="w-full max-w-md flex flex-col items-center gap-3 z-10 pb-10">
 
-          <div className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500/20 to-pink-500/20 border border-blue-500/20">
-            <span className="text-xs font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-pink-400 uppercase tracking-widest">
-              {lang === 'zh' ? '好礼等您来' : 'Ready to Win'}
-            </span>
-          </div>
-        </div>
-
-        {/* Unclaimed Prize Banner (Crash Resilience) */}
+        {/* Unclaimed Prize Banner (Crash Resilience) - Super Slimmed Down */}
         {unclaimedPrize && (
-          <div className="w-full rounded-2xl bg-gradient-to-r from-pink-600/30 to-purple-600/30 border border-pink-500/40 p-4 flex justify-between items-center shadow-lg animate-pulse">
-            <div>
-              <h4 className="text-sm font-bold text-pink-300">{t.unclaimedTitle}</h4>
-              <p className="text-xs text-slate-300 mt-1 font-semibold">{unclaimedPrize.prizeName}</p>
+          <div className="w-full rounded-xl bg-gradient-to-r from-pink-900/30 to-purple-900/30 border border-pink-500/25 py-1.5 px-3 flex justify-between items-center shadow-sm animate-pulse gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm">🎁</span>
+              <div className="flex items-center gap-1.5 text-xs text-slate-200 min-w-0">
+                <span className="font-bold text-pink-300 flex-shrink-0">{lang === 'zh' ? '未领奖品:' : 'Unclaimed:'}</span>
+                <span className="truncate max-w-[160px] font-medium">{unclaimedPrize.prizeName}</span>
+              </div>
             </div>
             <button 
               onClick={() => setWinningPrize({ name: unclaimedPrize.prizeName, code: unclaimedPrize.redemptionCode })}
-              className="px-4 py-1.5 text-xs font-bold bg-pink-500 text-white rounded-xl shadow-md shadow-pink-500/30 active:scale-95 transition"
+              className="px-2.5 py-1 text-[10px] font-bold bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-lg shadow-md active:scale-95 transition flex-shrink-0"
             >
               {t.unclaimedClaim}
             </button>
@@ -799,16 +789,16 @@ export default function GameH5Page() {
         {/* Lucky Spin Wheel or Nine-Grid container */}
         {config?.templateType === 'GRID' ? (
           /* Nine-Grid (九宫格 Circular-like grid layout) */
-          <div className="relative w-72 h-72 my-2 p-3 bg-slate-950/80 rounded-3xl border-4 border-slate-900 shadow-[0_0_40px_rgba(59,130,246,0.25)] flex flex-col justify-between">
+          <div className="relative w-[336px] h-[336px] min-[375px]:w-[358px] min-[375px]:h-[358px] min-[410px]:w-[388px] min-[410px]:h-[388px] my-2.5 p-3 bg-gradient-to-b from-[#180d30]/90 to-[#0a0515]/95 rounded-3xl border-4 border-[#cca43b]/70 shadow-[0_0_50px_rgba(204,164,59,0.2)] flex flex-col justify-between">
             {/* Blinking LEDs outer border */}
             <style dangerouslySetInnerHTML={{ __html: `
               @keyframes led-glow-odd {
-                0%, 100% { background-color: #ffffff; box-shadow: 0 0 4px #fff, 0 0 8px #3b82f6; }
-                50% { background-color: #fbbf24; box-shadow: 0 0 4px #fbbf24, 0 0 10px #d97706; }
+                0%, 100% { background-color: #f3e7c4; box-shadow: 0 0 4px #f3e7c4, 0 0 8px #cca43b; }
+                50% { background-color: #1e0d3d; box-shadow: none; }
               }
               @keyframes led-glow-even {
-                0%, 100% { background-color: #fbbf24; box-shadow: 0 0 4px #fbbf24, 0 0 10px #d97706; }
-                50% { background-color: #ffffff; box-shadow: 0 0 4px #fff, 0 0 8px #3b82f6; }
+                0%, 100% { background-color: #1e0d3d; box-shadow: none; }
+                50% { background-color: #f3e7c4; box-shadow: 0 0 4px #f3e7c4, 0 0 8px #cca43b; }
               }
               .grid-led-glow-odd {
                 animation: led-glow-odd 1.2s infinite;
@@ -854,23 +844,23 @@ export default function GameH5Page() {
                         onClick={triggerSpin}
                         style={{
                           background: isSpinning 
-                            ? '#1e293b' 
-                            : `radial-gradient(circle, ${config?.themeColor || '#3b82f6'} 0%, #1e3a8a 100%)`,
+                            ? '#1a1329' 
+                            : `radial-gradient(circle, #f3e7c4 0%, #cca43b 70%, #795a16 100%)`,
                         }}
-                        className={`relative rounded-2xl flex flex-col items-center justify-center border-2 border-slate-800 shadow-2xl active:scale-95 transition-all duration-205 ${
+                        className={`relative rounded-2xl flex flex-col items-center justify-center border-2 border-[#544012] shadow-2xl active:scale-95 transition-all duration-205 ${
                           isSpinning 
                             ? 'text-slate-500 cursor-not-allowed' 
-                            : 'text-white hover:brightness-110 shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:scale-[1.02]'
+                            : 'text-slate-950 hover:brightness-110 shadow-[0_0_20px_rgba(220,174,66,0.35)] hover:scale-[1.02]'
                         }`}
                       >
                         {!isSpinning && (
-                          <span className="absolute inset-0 rounded-2xl border border-blue-400/50 animate-ping opacity-60 pointer-events-none" />
+                          <span className="absolute inset-0 rounded-2xl border border-[#f3e7c4]/50 animate-ping opacity-60 pointer-events-none" />
                         )}
                         <span className="text-xs font-black tracking-widest drop-shadow-md">
                           {isSpinning ? '...' : (lang === 'zh' ? '抽奖' : 'SPIN')}
                         </span>
                         {!isSpinning && (
-                          <span className="text-[7.5px] text-blue-250 mt-1 uppercase font-black tracking-wider opacity-85">
+                          <span className="text-[7.5px] text-slate-800 mt-1 uppercase font-black tracking-wider opacity-85">
                             {lang === 'zh' ? '5积分' : '5 PTS'}
                           </span>
                         )}
@@ -931,16 +921,42 @@ export default function GameH5Page() {
           </div>
         ) : (
           /* Lucky Spin Wheel (SVG Circular rendering) */
-          <div className="relative w-72 h-72 my-2 flex items-center justify-center">
+          <div className="relative w-[336px] h-[336px] min-[375px]:w-[358px] min-[375px]:h-[358px] min-[410px]:w-[388px] min-[410px]:h-[388px] my-2.5 flex items-center justify-center">
+            {/* Blinking LEDs keyframes & styles */}
+            <style dangerouslySetInnerHTML={{ __html: `
+              @keyframes led-blink-odd {
+                0%, 100% { fill: #ffffff; filter: drop-shadow(0 0 3px #ffffff) drop-shadow(0 0 6px #ffd700); }
+                50% { fill: #cca43b; filter: drop-shadow(0 0 1px #cca43b); }
+              }
+              @keyframes led-blink-even {
+                0%, 100% { fill: #cca43b; filter: drop-shadow(0 0 1px #cca43b); }
+                50% { fill: #ffffff; filter: drop-shadow(0 0 3px #ffffff) drop-shadow(0 0 6px #ffd700); }
+              }
+              .led-blink-odd {
+                animation: led-blink-odd 1.2s infinite;
+              }
+              .led-blink-even {
+                animation: led-blink-even 1.2s infinite;
+              }
+            `}} />
+
             {/* Neon outer ring decoration */}
-            <div className="absolute inset-[-12px] rounded-full border-4 border-slate-900/60 shadow-[0_0_50px_rgba(59,130,246,0.3)] pointer-events-none" />
-            <div className="absolute inset-[-6px] rounded-full border border-blue-500/30 pointer-events-none animate-pulse" />
+            <div className="absolute inset-[-14px] rounded-full border-4 border-slate-900/60 shadow-[0_0_60px_rgba(204,164,59,0.25)] pointer-events-none" />
+            <div className="absolute inset-[-8px] rounded-full border border-yellow-500/25 pointer-events-none animate-pulse" />
 
             {/* Indicator needle at the top */}
-            <div className="absolute top-[-15px] z-30 w-8 h-8 flex items-center justify-center filter drop-shadow-[0_4px_10px_rgba(244,63,94,0.5)]">
-              <svg width="24" height="28" viewBox="0 0 24 28" fill="none">
-                <path d="M12 28L0 6C0 6 6 0 12 0C18 0 24 6 24 6L12 28Z" fill="#f43f5e" />
-                <circle cx="12" cy="8" r="4" fill="#ffffff" />
+            <div className="absolute top-[-16px] z-30 w-8 h-8 flex items-center justify-center filter drop-shadow-[0_4px_10px_rgba(204,164,59,0.6)]">
+              <svg width="26" height="30" viewBox="0 0 24 28" fill="none">
+                <defs>
+                  <linearGradient id="needle-gold" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#fff3d1" />
+                    <stop offset="50%" stopColor="#cca43b" />
+                    <stop offset="100%" stopColor="#8d691e" />
+                  </linearGradient>
+                </defs>
+                <path d="M12 28L0 4C0 4 6 0 12 0C18 0 24 4 24 4L12 28Z" fill="url(#needle-gold)" stroke="#12072b" strokeWidth="0.8" />
+                <circle cx="12" cy="8" r="3.5" fill="#12072b" />
+                <circle cx="12" cy="8" r="1.5" fill="#ffffff" />
               </svg>
             </div>
 
@@ -955,41 +971,42 @@ export default function GameH5Page() {
               {prizes.length > 0 ? (
                 <svg viewBox="0 0 100 100" className="w-full h-full">
                   <defs>
-                    {/* Neon slice gradients */}
+                    {/* Classy dark-jewel gradients */}
                     <linearGradient id="slice-grad-0" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#ff4b72" />
-                      <stop offset="100%" stopColor="#d946ef" />
+                      <stop offset="0%" stopColor="#0f121d" />
+                      <stop offset="100%" stopColor="#1c2135" />
                     </linearGradient>
                     <linearGradient id="slice-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#3b82f6" />
-                      <stop offset="100%" stopColor="#06b6d4" />
+                      <stop offset="0%" stopColor="#1a0f2b" />
+                      <stop offset="100%" stopColor="#2a1945" />
                     </linearGradient>
                     <linearGradient id="slice-grad-2" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#10b981" />
-                      <stop offset="100%" stopColor="#14b8a6" />
+                      <stop offset="0%" stopColor="#0b1a18" />
+                      <stop offset="100%" stopColor="#15302d" />
                     </linearGradient>
                     <linearGradient id="slice-grad-3" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#f59e0b" />
-                      <stop offset="100%" stopColor="#ff006e" />
+                      <stop offset="0%" stopColor="#220911" />
+                      <stop offset="100%" stopColor="#3d1120" />
                     </linearGradient>
                     <linearGradient id="slice-grad-4" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#8338ec" />
-                      <stop offset="100%" stopColor="#3a86ff" />
+                      <stop offset="0%" stopColor="#0e1823" />
+                      <stop offset="100%" stopColor="#182c40" />
                     </linearGradient>
                     <linearGradient id="slice-grad-5" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#06d6a0" />
-                      <stop offset="100%" stopColor="#10b981" />
+                      <stop offset="0%" stopColor="#1a0f2b" />
+                      <stop offset="100%" stopColor="#2a1945" />
                     </linearGradient>
                     <linearGradient id="slice-grad-6" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#ffbe0b" />
-                      <stop offset="100%" stopColor="#fb923c" />
+                      <stop offset="0%" stopColor="#0b1a18" />
+                      <stop offset="100%" stopColor="#15302d" />
                     </linearGradient>
                     <linearGradient id="slice-grad-7" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#f43f5e" />
-                      <stop offset="100%" stopColor="#8b5cf6" />
+                      <stop offset="0%" stopColor="#220911" />
+                      <stop offset="100%" stopColor="#3d1120" />
                     </linearGradient>
                   </defs>
 
+                  {/* Layer 1: Wedges paths */}
                   {prizes.map((prize, idx) => {
                     const segments = prizes.length
                     const angle = 360 / segments
@@ -1010,6 +1027,39 @@ export default function GameH5Page() {
                     const largeArcFlag = angle <= 180 ? '0' : '1'
                     const fillColor = `url(#slice-grad-${idx % 8})`
 
+                    return (
+                      <path
+                        key={`wedge-${prize.id || idx}`}
+                        d={`M 50 50 L ${start.x} ${start.y} A 50 50 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`}
+                        fill={fillColor}
+                        stroke="#cca43b"
+                        strokeWidth="0.3"
+                      />
+                    )
+                  })}
+
+                  {/* Layer 2: Concentric watch-dial ticks / details */}
+                  <circle cx="50" cy="50" r="45" fill="none" stroke="#cca43b" strokeWidth="0.12" strokeDasharray="0.5 1.5" className="opacity-35" />
+                  <circle cx="50" cy="50" r="39" fill="none" stroke="#cca43b" strokeWidth="0.12" strokeDasharray="1 1" className="opacity-45" />
+                  <circle cx="50" cy="50" r="30" fill="none" stroke="#cca43b" strokeWidth="0.12" strokeDasharray="0.3 0.8" className="opacity-30" />
+                  <circle cx="50" cy="50" r="18" fill="none" stroke="#cca43b" strokeWidth="0.15" strokeDasharray="1.5 1.5" className="opacity-40" />
+                  <circle cx="50" cy="50" r="49.7" fill="none" stroke="#cca43b" strokeWidth="0.25" className="opacity-60" />
+
+                  {/* Layer 3: Text Labels */}
+                  {prizes.map((prize, idx) => {
+                    const segments = prizes.length
+                    const angle = 360 / segments
+                    const startAngle = idx * angle
+
+                    // Polar coordinates helper
+                    const polarToCartesian = (cx: number, cy: number, r: number, angleInDegrees: number) => {
+                      const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0
+                      return {
+                        x: cx + r * Math.cos(angleInRadians),
+                        y: cy + r * Math.sin(angleInRadians)
+                      }
+                    }
+
                     // Compute text placement rotation & translation
                     const textAngle = startAngle + (angle / 2)
                     const textPos = polarToCartesian(50, 50, 28, textAngle)
@@ -1020,36 +1070,27 @@ export default function GameH5Page() {
                     const displayRotation = isUpsideDown ? textAngle + 180 : textAngle
 
                     return (
-                      <g key={prize.id}>
-                        {/* Segment wedge path */}
-                        <path
-                          d={`M 50 50 L ${start.x} ${start.y} A 50 50 0 ${largeArcFlag} 1 ${end.x} ${end.y} Z`}
-                          fill={fillColor}
-                          stroke="#090514"
-                          strokeWidth="0.8"
-                        />
-                        {/* Segment Text Label */}
-                        <text
-                          x={textPos.x}
-                          y={textPos.y}
-                          fill="#ffffff"
-                          fontSize="3"
-                          fontWeight="black"
-                          textAnchor="middle"
-                          alignmentBaseline="middle"
-                          paintOrder="stroke"
-                          stroke="#000000"
-                          strokeWidth="0.6"
-                          transform={`rotate(${displayRotation}, ${textPos.x}, ${textPos.y})`}
-                        >
-                          <tspan x={textPos.x} dy="-0.5em">
-                            {prize.name.length > 10 ? prize.name.substring(0, 8) + '...' : prize.name}
-                          </tspan>
-                          <tspan x={textPos.x} dy="1.1em" fontSize="2.2" fill="#ffeb3b" fontWeight="bold">
-                            {Number((prize.probability * 100).toFixed(1))}%
-                          </tspan>
-                        </text>
-                      </g>
+                      <text
+                        key={`text-${prize.id || idx}`}
+                        x={textPos.x}
+                        y={textPos.y}
+                        fill="#ffffff"
+                        fontSize="3"
+                        fontWeight="black"
+                        textAnchor="middle"
+                        alignmentBaseline="middle"
+                        paintOrder="stroke"
+                        stroke="#05020c"
+                        strokeWidth="0.55"
+                        transform={`rotate(${displayRotation}, ${textPos.x}, ${textPos.y})`}
+                      >
+                        <tspan x={textPos.x} dy="-0.5em">
+                          {prize.name.length > 10 ? prize.name.substring(0, 8) + '...' : prize.name}
+                        </tspan>
+                        <tspan x={textPos.x} dy="1.15em" fontSize="2.1" fill="#f3e7c4" fontWeight="bold">
+                          {Number((prize.probability * 100).toFixed(1))}%
+                        </tspan>
+                      </text>
                     )
                   })}
                 </svg>
@@ -1063,9 +1104,21 @@ export default function GameH5Page() {
             {/* Static Outer Rim with Blinking LED Lights */}
             <div className="absolute inset-0 pointer-events-none z-10 w-full h-full">
               <svg viewBox="0 0 100 100" className="w-full h-full">
+                <defs>
+                  {/* Luxury Gold Bezel Gradient */}
+                  <linearGradient id="gold-bezel" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#fff2cc" />
+                    <stop offset="25%" stopColor="#cca43b" />
+                    <stop offset="50%" stopColor="#8d691e" />
+                    <stop offset="75%" stopColor="#cca43b" />
+                    <stop offset="100%" stopColor="#544012" />
+                  </linearGradient>
+                </defs>
                 {/* Outer border / rim */}
-                <circle cx="50" cy="50" r="48" fill="none" stroke="#1e1b4b" strokeWidth="4" />
-                <circle cx="50" cy="50" r="46.5" fill="none" stroke="#3b82f6" strokeWidth="0.5" strokeDasharray="1 1" className="opacity-40" />
+                <circle cx="50" cy="50" r="48" fill="none" stroke="url(#gold-bezel)" strokeWidth="4.2" />
+                <circle cx="50" cy="50" r="46" fill="none" stroke="#12072b" strokeWidth="0.8" />
+                <circle cx="50" cy="50" r="45.5" fill="none" stroke="#cca43b" strokeWidth="0.2" strokeDasharray="1 1" className="opacity-60" />
+                
                 {/* 24 Blinking LEDs */}
                 {Array.from({ length: 24 }).map((_, i) => {
                   const dotAngle = (i * 360) / 24
@@ -1091,21 +1144,21 @@ export default function GameH5Page() {
             <button 
               disabled={isSpinning}
               onClick={triggerSpin}
-              className={`absolute z-20 w-16 h-16 rounded-full border-4 border-slate-950 flex flex-col items-center justify-center font-black shadow-2xl active:scale-95 transition-all text-center leading-none ${
+              className={`absolute z-20 w-[78px] h-[78px] rounded-full border-4 border-slate-950 flex flex-col items-center justify-center font-black shadow-2xl active:scale-95 transition-all text-center leading-none ${
                 isSpinning 
-                  ? 'bg-slate-800 text-slate-500 border-slate-900 cursor-not-allowed'
-                  : 'bg-gradient-to-tr from-pink-500 via-rose-500 to-violet-600 text-white hover:brightness-110 shadow-pink-500/30 hover:scale-105 active:scale-95'
+                  ? 'bg-slate-900 text-slate-600 border-slate-950 cursor-not-allowed'
+                  : 'bg-gradient-to-b from-[#ffeebb] via-[#dcae42] to-[#997321] border-2 border-[#fffaeb] text-slate-950 hover:brightness-110 shadow-[0_0_25px_rgba(220,174,66,0.55),_inset_0_2px_4px_rgba(255,255,255,0.6)] hover:scale-105 active:scale-95'
               }`}
             >
               {/* Pulsing ring when active */}
               {!isSpinning && (
-                <span className="absolute inset-0 rounded-full border border-pink-400/80 animate-ping opacity-70 pointer-events-none" />
+                <span className="absolute -inset-1.5 rounded-full border border-[#dcae42]/70 animate-ping opacity-75 pointer-events-none" />
               )}
-              <span className="text-[12px] uppercase font-black tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+              <span className="text-[13px] uppercase font-extrabold tracking-widest text-slate-950 drop-shadow-[0_1px_1px_rgba(255,255,255,0.45)]">
                 {isSpinning ? '...' : (lang === 'zh' ? '抽奖' : 'SPIN')}
               </span>
               {!isSpinning && (
-                <span className="text-[7px] text-pink-200 mt-0.5 tracking-wider uppercase font-bold">
+                <span className="text-[8px] text-[#544012] mt-0.5 tracking-wider uppercase font-black">
                   {lang === 'zh' ? '5积分' : '5 PTS'}
                 </span>
               )}
