@@ -105,7 +105,7 @@ export default function GameH5Page() {
       submitReview: '⭐ 社媒平台发表好评',
       submitReviewSub: '在 Google Maps/小红书/Instagram 发布好评或标记并上传截图获得 5 个积分',
       photoSlot: '照片',
-      copyright: '我同意数据使用协议：商家有权下载和使用本次发布所用的图片（包括截图与店内美图）',
+      copyright: '我同意数据使用协议：商家有权下载和使用本次发布所用的图片',
       submitTask: '提交任务',
       submitting: '正在提交并进行 AI 审核...',
       googleMaps: 'Google Maps 直达',
@@ -143,7 +143,7 @@ export default function GameH5Page() {
       submitReview: '⭐ Leave a Social Review',
       submitReviewSub: 'Post on Google Maps/Xiaohongshu/Instagram and upload screenshot to get 5 points',
       photoSlot: 'Photo',
-      copyright: 'I agree to the Data Use Agreement: The merchant has the right to download and use the photos and screenshots uploaded for this post.',
+      copyright: 'I agree to the Data Use Agreement: The merchant has the right to download and use the photos/screenshots uploaded for this post.',
       submitTask: 'Submit Task',
       submitting: 'Submitting and verifying with AI...',
       googleMaps: 'Direct Google Maps',
@@ -282,8 +282,9 @@ export default function GameH5Page() {
   const handleFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || [])
     if (selectedFiles.length > 0) {
-      setUploadedFiles(prev => [...prev, ...selectedFiles])
-      setFilePreviews(prev => [...prev, ...selectedFiles.map(file => URL.createObjectURL(file))])
+      const file = selectedFiles[0]
+      setUploadedFiles([file])
+      setFilePreviews([URL.createObjectURL(file)])
     }
   }
 
@@ -300,8 +301,7 @@ export default function GameH5Page() {
     setIsSubmittingTask(true)
     setVerificationError(null)
 
-    const isReview = config?.taskReviewEnabled ?? false
-    const taskType = isReview ? 'REVIEW_SUBMIT' : 'PHOTO_UPLOAD'
+    const taskType = 'REVIEW_SUBMIT'
 
     try {
       const formData = new FormData()
@@ -309,7 +309,7 @@ export default function GameH5Page() {
       formData.append('sessionId', sessionId)
       formData.append('taskType', taskType)
       formData.append('copyrightAgreed', copyrightAgreed ? 'true' : 'false')
-      if (isReview && reviewPlatform) {
+      if (reviewPlatform) {
         formData.append('reviewPlatform', reviewPlatform)
       }
 
@@ -870,163 +870,149 @@ export default function GameH5Page() {
         </div>
 
         {/* Unified Task Card */}
-        {(config?.taskPhotoEnabled || config?.taskReviewEnabled) && (
+        {config && (
           <div className="w-full rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl p-4 flex flex-col gap-4 shadow-xl">
             <div>
               <h4 className="font-bold text-sm text-white flex items-center gap-2">
-                {config?.taskReviewEnabled && config?.taskPhotoEnabled
-                  ? t.combinedTask
-                  : config?.taskReviewEnabled
-                  ? t.submitReview
-                  : t.uploadPhotos}
+                {t.submitReview}
               </h4>
               <p className="text-xs text-slate-400 mt-1">
-                {config?.taskReviewEnabled && config?.taskPhotoEnabled
-                  ? t.combinedTaskSub
-                  : config?.taskReviewEnabled
-                  ? t.submitReviewSub
-                  : t.uploadPhotosSub}
+                {t.submitReviewSub}
               </p>
             </div>
 
             {/* Social review shortcuts */}
-            {config?.taskReviewEnabled && (
-              <div className="flex flex-col gap-3.5 my-1">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                    {lang === 'zh' ? '一键直达平台发表好评（自动复制文案）' : 'Direct Link to Post (Auto-copy review text)'}
-                  </label>
-                  
-                  {/* AI Copywriting Option */}
-                  <label className="flex items-center gap-1.5 cursor-pointer text-[10.5px] font-bold text-blue-300 select-none bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-lg hover:bg-blue-500/20 transition flex-shrink-0">
-                    <input 
-                      type="checkbox" 
-                      checked={useAiText} 
-                      onChange={(e) => setUseAiText(e.target.checked)}
-                      className="rounded border-blue-900 bg-slate-950 text-blue-500 focus:ring-blue-500/20 w-3 h-3 cursor-pointer"
-                    />
-                    <span className="flex items-center gap-0.5">
-                      <span>🤖</span>
-                      {lang === 'zh' ? 'AI协助生成文案' : 'AI Copywriter'}
-                    </span>
-                  </label>
-                </div>
+            <div className="flex flex-col gap-3.5 my-1">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                  {lang === 'zh' ? '一键直达平台发表好评（自动复制文案）' : 'Direct Link to Post (Auto-copy review text)'}
+                </label>
                 
-                <div className="grid grid-cols-1 gap-3">
-                  {/* Google Maps Button */}
-                  <button
-                    onClick={() => openSocialReviewLink('GOOGLE')}
-                    className={`w-full py-4 px-5 rounded-2xl font-extrabold text-sm flex items-center justify-between transition-all duration-300 border shadow-md hover:scale-[1.01] active:scale-[0.99] ${
-                      reviewPlatform === 'GOOGLE' 
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-650 border-blue-400 text-white shadow-lg shadow-blue-500/30 scale-[1.02]' 
-                        : 'bg-blue-950/20 hover:bg-blue-950/30 border-blue-900/40 text-blue-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl animate-pulse">🗺️</span>
-                      <div className="text-left">
-                        <p className={reviewPlatform === 'GOOGLE' ? 'text-white' : 'text-slate-100 font-bold'}>{t.googleMaps}</p>
-                        <p className={`text-[10px] font-normal mt-0.5 ${reviewPlatform === 'GOOGLE' ? 'text-blue-200' : 'text-blue-400/80'}`}>
-                          {lang === 'zh' ? '一键复制文案并直达写评价' : 'Copy text & write review'}
-                        </p>
-                      </div>
-                    </div>
-                    {reviewPlatform === 'GOOGLE' ? (
-                      <span className="text-[10px] bg-white/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white font-black">
-                        {lang === 'zh' ? '已选' : 'Active'}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-blue-400 font-extrabold">→</span>
-                    )}
-                  </button>
-
-                  {/* Xiaohongshu Button */}
-                  <button
-                    onClick={() => openSocialReviewLink('XIAOHONGSHU')}
-                    className={`w-full py-4 px-5 rounded-2xl font-extrabold text-sm flex items-center justify-between transition-all duration-300 border shadow-md hover:scale-[1.01] active:scale-[0.99] ${
-                      reviewPlatform === 'XIAOHONGSHU' 
-                        ? 'bg-gradient-to-r from-rose-500 to-red-650 border-rose-450 text-white shadow-lg shadow-rose-500/30 scale-[1.02]' 
-                        : 'bg-rose-950/20 hover:bg-rose-950/30 border-rose-900/40 text-rose-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl animate-pulse">📕</span>
-                      <div className="text-left">
-                        <p className={reviewPlatform === 'XIAOHONGSHU' ? 'text-white' : 'text-slate-100 font-bold'}>{t.xiaohongshu}</p>
-                        <p className={`text-[10px] font-normal mt-0.5 ${reviewPlatform === 'XIAOHONGSHU' ? 'text-rose-200' : 'text-rose-400/80'}`}>
-                          {lang === 'zh' ? '一键复制文案并拉起小红书' : 'Copy text & open app'}
-                        </p>
-                      </div>
-                    </div>
-                    {reviewPlatform === 'XIAOHONGSHU' ? (
-                      <span className="text-[10px] bg-white/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white font-black">
-                        {lang === 'zh' ? '已选' : 'Active'}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-rose-400 font-extrabold">→</span>
-                    )}
-                  </button>
-
-                  {/* Instagram Button */}
-                  <button
-                    onClick={() => openSocialReviewLink('INSTAGRAM')}
-                    className={`w-full py-4 px-5 rounded-2xl font-extrabold text-sm flex items-center justify-between transition-all duration-300 border shadow-md hover:scale-[1.01] active:scale-[0.99] ${
-                      reviewPlatform === 'INSTAGRAM' 
-                        ? 'bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 border-pink-400 text-white shadow-lg shadow-pink-500/30 scale-[1.02]' 
-                        : 'bg-pink-950/20 hover:bg-pink-950/30 border-pink-900/40 text-pink-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl animate-pulse">📸</span>
-                      <div className="text-left">
-                        <p className={reviewPlatform === 'INSTAGRAM' ? 'text-white' : 'text-slate-100 font-bold'}>{t.instagram}</p>
-                        <p className={`text-[10px] font-normal mt-0.5 ${reviewPlatform === 'INSTAGRAM' ? 'text-pink-200' : 'text-pink-400/80'}`}>
-                          {lang === 'zh' ? '一键复制文案并直达相机' : 'Copy text & open camera'}
-                        </p>
-                      </div>
-                    </div>
-                    {reviewPlatform === 'INSTAGRAM' ? (
-                      <span className="text-[10px] bg-white/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider text-white font-black">
-                        {lang === 'zh' ? '已选' : 'Active'}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-pink-400 font-extrabold">→</span>
-                    )}
-                  </button>
-                </div>
-
-                {/* Data Use Agreement (Review specific placement) */}
-                <label className="flex items-start gap-2.5 cursor-pointer mt-1 bg-slate-900/30 border border-slate-800/50 p-3 rounded-xl hover:border-slate-700 transition">
+                {/* AI Copywriting Option */}
+                <label className="flex items-center gap-1.5 cursor-pointer text-[10.5px] font-bold text-blue-300 select-none bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-lg hover:bg-blue-500/20 transition flex-shrink-0">
                   <input 
                     type="checkbox" 
-                    checked={copyrightAgreed} 
-                    onChange={(e) => setCopyrightAgreed(e.target.checked)}
-                    className="mt-0.5 rounded border-slate-750 bg-slate-950 text-blue-500 focus:ring-blue-500/20 w-4 h-4 cursor-pointer"
+                    checked={useAiText} 
+                    onChange={(e) => setUseAiText(e.target.checked)}
+                    className="rounded border-blue-900 bg-slate-950 text-blue-500 focus:ring-blue-500/20 w-3 h-3 cursor-pointer"
                   />
-                  <span className="text-[10.5px] text-slate-350 leading-tight">
-                    {t.copyright}
+                  <span className="flex items-center gap-0.5">
+                    <span>🤖</span>
+                    {lang === 'zh' ? 'AI协助生成文案' : 'AI Copywriter'}
                   </span>
                 </label>
-
-                {/* Secondary copy option */}
+              </div>
+              
+              <div className="grid grid-cols-1 gap-3">
+                {/* Google Maps Button */}
                 <button
-                  onClick={copyReviewText}
-                  className="w-full py-2 rounded-xl bg-slate-900/40 border border-slate-800/80 text-[10px] font-bold text-slate-450 hover:text-slate-300 flex items-center justify-center gap-1 active:scale-95 transition mt-1"
+                  onClick={() => openSocialReviewLink('GOOGLE')}
+                  className={`w-full py-5 px-6 rounded-2xl font-extrabold text-base flex items-center justify-between transition-all duration-300 border shadow-md hover:scale-[1.02] active:scale-[0.98] ${
+                    reviewPlatform === 'GOOGLE' 
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-400 text-white shadow-lg shadow-blue-500/40 scale-[1.02]' 
+                      : 'bg-blue-950/30 hover:bg-blue-950/50 border-blue-800/40 text-blue-300'
+                  }`}
                 >
-                  <span>📋</span>
-                  {t.copyText}
+                  <div className="flex items-center gap-3.5">
+                    <span className="text-3xl animate-bounce">🗺️</span>
+                    <div className="text-left">
+                      <p className={reviewPlatform === 'GOOGLE' ? 'text-white' : 'text-slate-100 font-bold'}>{t.googleMaps}</p>
+                      <p className={`text-[11px] font-normal mt-0.5 ${reviewPlatform === 'GOOGLE' ? 'text-blue-200' : 'text-blue-400/80'}`}>
+                        {lang === 'zh' ? '一键复制文案并直达写评价' : 'Copy text & write review'}
+                      </p>
+                    </div>
+                  </div>
+                  {reviewPlatform === 'GOOGLE' ? (
+                    <span className="text-[11px] bg-white/20 px-3 py-1 rounded-full uppercase tracking-wider text-white font-black">
+                      {lang === 'zh' ? '已选' : 'Active'}
+                    </span>
+                  ) : (
+                    <span className="text-base text-blue-400 font-extrabold">→</span>
+                  )}
+                </button>
+
+                {/* Xiaohongshu Button */}
+                <button
+                  onClick={() => openSocialReviewLink('XIAOHONGSHU')}
+                  className={`w-full py-5 px-6 rounded-2xl font-extrabold text-base flex items-center justify-between transition-all duration-300 border shadow-md hover:scale-[1.02] active:scale-[0.98] ${
+                    reviewPlatform === 'XIAOHONGSHU' 
+                      ? 'bg-gradient-to-r from-rose-500 to-red-600 border-rose-400 text-white shadow-lg shadow-rose-500/40 scale-[1.02]' 
+                      : 'bg-rose-950/30 hover:bg-rose-950/50 border-rose-800/40 text-rose-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5">
+                    <span className="text-3xl animate-bounce">📕</span>
+                    <div className="text-left">
+                      <p className={reviewPlatform === 'XIAOHONGSHU' ? 'text-white' : 'text-slate-100 font-bold'}>{t.xiaohongshu}</p>
+                      <p className={`text-[11px] font-normal mt-0.5 ${reviewPlatform === 'XIAOHONGSHU' ? 'text-rose-200' : 'text-rose-400/80'}`}>
+                        {lang === 'zh' ? '一键复制文案并拉起小红书' : 'Copy text & open app'}
+                      </p>
+                    </div>
+                  </div>
+                  {reviewPlatform === 'XIAOHONGSHU' ? (
+                    <span className="text-[11px] bg-white/20 px-3 py-1 rounded-full uppercase tracking-wider text-white font-black">
+                      {lang === 'zh' ? '已选' : 'Active'}
+                    </span>
+                  ) : (
+                    <span className="text-base text-rose-400 font-extrabold">→</span>
+                  )}
+                </button>
+
+                {/* Instagram Button */}
+                <button
+                  onClick={() => openSocialReviewLink('INSTAGRAM')}
+                  className={`w-full py-5 px-6 rounded-2xl font-extrabold text-base flex items-center justify-between transition-all duration-300 border shadow-md hover:scale-[1.02] active:scale-[0.98] ${
+                    reviewPlatform === 'INSTAGRAM' 
+                      ? 'bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 border-pink-400 text-white shadow-lg shadow-pink-500/40 scale-[1.02]' 
+                      : 'bg-pink-950/30 hover:bg-pink-950/50 border-pink-850/40 text-pink-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5">
+                    <span className="text-3xl animate-bounce">📸</span>
+                    <div className="text-left">
+                      <p className={reviewPlatform === 'INSTAGRAM' ? 'text-white' : 'text-slate-100 font-bold'}>{t.instagram}</p>
+                      <p className={`text-[11px] font-normal mt-0.5 ${reviewPlatform === 'INSTAGRAM' ? 'text-pink-200' : 'text-pink-400/80'}`}>
+                        {lang === 'zh' ? '一键复制文案并直达相机' : 'Copy text & open camera'}
+                      </p>
+                    </div>
+                  </div>
+                  {reviewPlatform === 'INSTAGRAM' ? (
+                    <span className="text-[11px] bg-white/20 px-3 py-1 rounded-full uppercase tracking-wider text-white font-black">
+                      {lang === 'zh' ? '已选' : 'Active'}
+                    </span>
+                  ) : (
+                    <span className="text-base text-pink-400 font-extrabold">→</span>
+                  )}
                 </button>
               </div>
-            )}
+
+              {/* Data Use Agreement */}
+              <label className="flex items-start gap-2.5 cursor-pointer mt-1 bg-slate-900/30 border border-slate-800/50 p-3 rounded-xl hover:border-slate-700 transition">
+                <input 
+                  type="checkbox" 
+                  checked={copyrightAgreed} 
+                  onChange={(e) => setCopyrightAgreed(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-750 bg-slate-950 text-blue-500 focus:ring-blue-500/20 w-4 h-4 cursor-pointer"
+                />
+                <span className="text-[10.5px] text-slate-350 leading-tight">
+                  {t.copyright}
+                </span>
+              </label>
+
+              {/* Secondary copy option */}
+              <button
+                onClick={copyReviewText}
+                className="w-full py-2 rounded-xl bg-slate-900/40 border border-slate-800/80 text-[10px] font-bold text-slate-450 hover:text-slate-300 flex items-center justify-center gap-1 active:scale-95 transition mt-1"
+              >
+                <span>📋</span>
+                {t.copyText}
+              </button>
+            </div>
 
             {/* Photo upload / screenshot selector */}
             <div className="flex flex-col gap-2">
               <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                {config?.taskReviewEnabled && config?.taskPhotoEnabled
-                  ? t.uploadPlaceholder + ' ' + t.screenshotFirstHint
-                  : config?.taskReviewEnabled
-                  ? t.uploadScreenshot
-                  : t.uploadPhotos}
+                {t.uploadScreenshot}
               </label>
 
               {/* Thumbnails list/grid */}
@@ -1034,11 +1020,6 @@ export default function GameH5Page() {
                 {filePreviews.map((preview, idx) => (
                   <div key={idx} className="relative aspect-square rounded-xl border border-slate-700 bg-slate-900/50 flex items-center justify-center overflow-hidden">
                     <img src={preview} alt={`preview_${idx}`} className="w-full h-full object-cover" />
-                    {config?.taskReviewEnabled && config?.taskPhotoEnabled && idx === 0 && (
-                      <span className="absolute bottom-1 left-1 bg-blue-600/90 text-white text-[8px] px-1 rounded font-bold uppercase tracking-wider">
-                        {lang === 'zh' ? '截图' : 'Review'}
-                      </span>
-                    )}
                     <button 
                       type="button"
                       onClick={() => removeFile(idx)}
@@ -1050,17 +1031,14 @@ export default function GameH5Page() {
                 ))}
 
                 {/* Plus button to add more */}
-                {filePreviews.length < (config?.taskReviewEnabled && config?.taskPhotoEnabled ? 4 : config?.taskReviewEnabled ? 1 : 4) && (
+                {filePreviews.length === 0 && (
                   <label className="aspect-square rounded-xl border-2 border-dashed border-slate-700 hover:border-blue-500 transition bg-slate-900/50 flex flex-col items-center justify-center cursor-pointer text-center">
                     <span className="text-2xl text-slate-500">+</span>
                     <span className="text-[10px] text-slate-400 mt-1 font-semibold">
-                      {filePreviews.length === 0 
-                        ? (config?.taskReviewEnabled ? t.uploadScreenshot : t.photoSlot)
-                        : t.addMore}
+                      {t.uploadScreenshot}
                     </span>
                     <input 
                       type="file" 
-                      multiple={!(config?.taskReviewEnabled && !config?.taskPhotoEnabled)}
                       accept="image/*"
                       onChange={handleFilesChange}
                       className="hidden" 
@@ -1069,21 +1047,6 @@ export default function GameH5Page() {
                 )}
               </div>
             </div>
-
-            {/* Copyright agreed fallback if review task is not enabled but photo upload is enabled */}
-            {!config?.taskReviewEnabled && config?.taskPhotoEnabled && (
-              <label className="flex items-start gap-2.5 cursor-pointer mt-1 bg-slate-900/30 border border-slate-800/50 p-3 rounded-xl hover:border-slate-700 transition">
-                <input 
-                  type="checkbox" 
-                  checked={copyrightAgreed} 
-                  onChange={(e) => setCopyrightAgreed(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-750 bg-slate-950 text-blue-500 focus:ring-blue-500/20 w-4 h-4 cursor-pointer"
-                />
-                <span className="text-[10.5px] text-slate-355 leading-tight">
-                  {t.copyright}
-                </span>
-              </label>
-            )}
 
             {verificationError && (
               <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
@@ -1095,14 +1058,12 @@ export default function GameH5Page() {
             <button
               disabled={
                 uploadedFiles.length === 0 ||
-                (config?.taskPhotoEnabled && !config?.taskReviewEnabled && uploadedFiles.length < 3) ||
                 !copyrightAgreed ||
                 isSubmittingTask
               }
               onClick={submitTask}
               className={`w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest shadow-lg transition active:scale-[0.98] ${
                 uploadedFiles.length === 0 ||
-                (config?.taskPhotoEnabled && !config?.taskReviewEnabled && uploadedFiles.length < 3) ||
                 !copyrightAgreed ||
                 isSubmittingTask
                   ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/30'

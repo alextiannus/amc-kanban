@@ -101,7 +101,11 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       const res = await fetch(`/api/game/config?brandId=${brandId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify({
+          ...config,
+          taskPhotoEnabled: false,
+          taskReviewEnabled: true,
+        }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -316,39 +320,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
               </div>
             </div>
 
-            <div className="h-px bg-slate-100 dark:bg-slate-800 my-4" />
 
-            {/* Task Switches */}
-            <div className="space-y-3">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">开放哪些途径供顾客获取积分</label>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <label className="flex-1 flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-850 cursor-pointer transition">
-                  <input
-                    type="checkbox"
-                    checked={config.taskPhotoEnabled}
-                    onChange={(e) => setConfig({ ...config, taskPhotoEnabled: e.target.checked })}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500/20"
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">📷 上传店内实地美照</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">成功上传 3 张照片即可获得 5 个积分</span>
-                  </div>
-                </label>
-
-                <label className="flex-1 flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-850 cursor-pointer transition">
-                  <input
-                    type="checkbox"
-                    checked={config.taskReviewEnabled}
-                    onChange={(e) => setConfig({ ...config, taskReviewEnabled: e.target.checked })}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500/20"
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">⭐ 社媒平台撰写好评</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 block">留下好评并上传截图获 5 积分，AI 自动核实</span>
-                  </div>
-                </label>
-              </div>
-            </div>
 
           </div>
 

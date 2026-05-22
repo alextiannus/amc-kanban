@@ -108,10 +108,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No files uploaded' }, { status: 400 })
     }
 
-    if (taskType === 'PHOTO_UPLOAD' && files.length < 3) {
-      return NextResponse.json({ error: 'You must upload exactly 3 photos for this task.' }, { status: 400 })
-    }
-
     // 2. Fetch Brand config & integrations status
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
@@ -126,7 +122,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
     }
 
-    // 3. Process buffers and perform MD5 deduplication check against latest 30 submissions
+    // 3. Process buffers and MD5 hashes
     const fileData: { buffer: Buffer; name: string; type: string; md5: string }[] = []
     const newMd5s: string[] = []
 
@@ -136,23 +132,6 @@ export async function POST(request: Request) {
       const md5 = computeMD5(buffer)
       fileData.push({ buffer, name: file.name, type: file.type, md5 })
       newMd5s.push(md5)
-    }
-
-    // Check against latest 30 submissions MD5 list
-    const recentSubmissions = await prisma.customerTaskSubmission.findMany({
-      where: { brandId },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-      select: { imageMd5s: true },
-    })
-
-    const recentMd5Set = new Set(recentSubmissions.flatMap(s => s.imageMd5s))
-    for (const md5 of newMd5s) {
-      if (recentMd5Set.has(md5)) {
-        return NextResponse.json({
-          error: 'This photo has already been submitted recently. Please upload a new, unique photo.',
-        }, { status: 400 })
-      }
     }
 
     // 4. Find or initialize the customer's transient GameSession
