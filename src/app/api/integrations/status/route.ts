@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getLarkTenantToken } from '@/lib/integrations/lark'
 import { getPlaceRating } from '@/lib/integrations/google'
 import { postfastTestConnection } from '@/lib/integrations/postfast'
+import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 
 /**
  * GET /api/integrations/status?brandId=<id>
@@ -18,8 +19,12 @@ export async function GET(request: Request) {
   const brandId = url.searchParams.get('brandId')
   if (!brandId) return NextResponse.json({ error: 'brandId required' }, { status: 400 })
 
-  const brand = await prisma.brand.findFirst({
-    where: { id: brandId, ownerId: session.user.id },
+  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
     select: {
       postfastApiKey: true,
       googlePlaceId: true, googleApiKey: true,

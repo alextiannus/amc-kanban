@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { uploadToLarkDrive } from '@/lib/integrations/lark'
+import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -15,8 +16,12 @@ export async function POST(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const brandId = (await params).id
-  const brand = await prisma.brand.findFirst({
-    where: { id: brandId, ownerId: session.user.id },
+  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
     select: { larkAppId: true, larkAppSecret: true, larkDriveFolderId: true },
   })
 

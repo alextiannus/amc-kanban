@@ -204,16 +204,18 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
 
           {/* Lark */}
           <Section label="飞书（素材存储 + 通知）" badge={<StatusBadge ok={status.lark} />}>
-            {initialSettings?.larkDriveFolderId && (
+            {initialSettings?.larkFolderUrl && (
               <a
-                href={`https://12eat-ai.sg.larksuite.com/drive/folder/${initialSettings.larkDriveFolderId}`}
+                href={initialSettings.larkFolderUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors"
               >
                 <span>📁</span>
                 <span className="flex-1 truncate">品牌 Workspace 文件夹（自动创建）</span>
-                <span className="text-[10px] font-mono opacity-60 flex-shrink-0">{initialSettings.larkDriveFolderId.slice(0, 8)}…</span>
+                {initialSettings.larkDriveFolderId && (
+                  <span className="text-[10px] font-mono opacity-60 flex-shrink-0">{initialSettings.larkDriveFolderId.slice(0, 8)}…</span>
+                )}
               </a>
             )}
             {LARK_FIELDS.filter(f => f.key !== 'larkDriveFolderId').map(f => <Field key={f.key} f={f} />)}

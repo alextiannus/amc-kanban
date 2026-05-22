@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
-import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER } from '@/lib/integrations/lark'
+import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER, LARK_APP_DOMAIN } from '@/lib/integrations/lark'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 
 type Params = { params: Promise<{ id: string }> }
@@ -54,6 +54,7 @@ export async function GET(_req: Request, { params }: Params) {
     larkAppSecret: maskKey(brand.larkAppSecret),
     larkParentFolderToken: brand.larkParentFolderToken ?? DEFAULT_LARK_PARENT_FOLDER,
     larkDriveFolderId: brand.larkDriveFolderId,
+    larkFolderUrl: brand.larkDriveFolderId ? `${LARK_APP_DOMAIN}/drive/folder/${brand.larkDriveFolderId}` : null,
     larkBotWebhook: brand.larkBotWebhook,
     larkOwnerId: brand.larkOwnerId,
     larkConfigured: !!(brand.larkAppId && brand.larkAppSecret),
@@ -112,7 +113,6 @@ export async function PATCH(request: Request, { params }: Params) {
 
   // Auto-create brand workspace folder when Lark is first configured
   // Trigger: Lark credentials now set but workspace folder not yet created
-  let larkFolderUrl: string | undefined
   if (updated.larkAppId && updated.larkAppSecret && !updated.larkDriveFolderId) {
     try {
       const workspace = await createBrandWorkspace({
@@ -127,7 +127,6 @@ export async function PATCH(request: Request, { params }: Params) {
           data: { larkDriveFolderId: workspace.folderToken },
         })
         updated.larkDriveFolderId = workspace.folderToken
-        larkFolderUrl = workspace.folderUrl
         console.log(`[Settings] Created Lark workspace for "${updated.name}": ${workspace.folderUrl}`)
       } else {
         console.warn(`[Settings] Lark workspace not created: ${workspace.error}`)
@@ -136,6 +135,10 @@ export async function PATCH(request: Request, { params }: Params) {
       console.warn('[Settings] Lark workspace creation failed (non-fatal):', e)
     }
   }
+
+  const larkFolderUrl = updated.larkDriveFolderId
+    ? `${LARK_APP_DOMAIN}/drive/folder/${updated.larkDriveFolderId}`
+    : null
 
   // Auto-sync PostFast accounts when API key is present
   // Trigger: a postfastApiKey was just set, or the brand already has one

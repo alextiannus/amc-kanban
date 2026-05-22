@@ -7,7 +7,9 @@
  * AMC auto-refreshes the tenant_access_token using app credentials.
  */
 
-const LARK_BASE = 'https://open.feishu.cn/open-apis'
+export const LARK_BASE = process.env.LARK_API_BASE || 'https://open.feishu.cn/open-apis'
+export const LARK_APP_DOMAIN = process.env.LARK_APP_DOMAIN || 'https://12eat-ai.sg.larksuite.com'
+
 
 // ── Default parent folder (AI Workspaces root) ────────────────────────────
 // https://12eat-ai.sg.larksuite.com/drive/folder/PbugfutjllCDM0dqMiIlN0orgZd
@@ -68,7 +70,7 @@ export async function createBrandWorkspace(input: {
     return {
       success: true,
       folderToken,
-      folderUrl: `https://12eat-ai.sg.larksuite.com/drive/folder/${folderToken}`,
+      folderUrl: `${LARK_APP_DOMAIN}/drive/folder/${folderToken}`,
     }
   } catch (e: any) {
     return { success: false, error: e.message }
