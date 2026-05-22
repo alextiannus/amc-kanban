@@ -32,51 +32,58 @@ export interface AnalyticsPost {
 // Each adapter returns a list of AnalyticsPost from its own API.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchPostfastPosts(apiKey: string, from: Date, to: Date): Promise<AnalyticsPost[]> {
+async function fetchPostfastPosts(apiKey: string, from: Date, to: Date): Promise<{ posts: AnalyticsPost[]; error?: string }> {
   try {
-    // Fetch both published and scheduled posts
-    const [publishedResult, scheduledResult] = await Promise.all([
-      postfastListPosts(apiKey, { status: 'published', limit: 500 }),
-      postfastListPosts(apiKey, { status: 'scheduled', limit: 200 }),
-    ])
+    // Only fetch published posts — PostFast doesn't reliably support 'scheduled' as a status filter.
+    // Fetch all (no server-side date filter; PostFast API doesn't support it) then filter locally.
+    const result = await postfastListPosts(apiKey, { status: 'published', limit: 500 })
 
-    const allPosts = [
-      ...(publishedResult.success ? publishedResult.posts : []),
-      ...(scheduledResult.success ? scheduledResult.posts : []),
-    ]
+    if (!result.success) {
+      console.error('[Analytics] PostFast listPosts failed:', result.error)
+      return { posts: [], error: result.error }
+    }
 
-    return allPosts
-      .filter(p => {
-        const date = new Date(p.publishedAt ?? p.scheduledAt ?? 0)
-        return date >= from && date <= to
-      })
-      .map(p => {
-        const interactions = (p.engagementStats?.likes ?? 0) + (p.engagementStats?.comments ?? 0) + (p.engagementStats?.shares ?? 0)
-        const impressions = p.engagementStats?.impressions ?? 0
-        const bestDate = (p.publishedAt ?? p.scheduledAt ?? new Date().toISOString())
-        return {
-          id: `pf_${p.id}`,
-          source: 'postfast',
-          platform: p.platformId ?? p.platform?.toLowerCase() ?? 'unknown',
-          handle: p.platform ?? '',
-          caption: p.caption ?? '',
-          postUrl: p.postUrl ?? null,
-          publishedAt: bestDate,
-          contentType: detectContentType(p.caption ?? '', p.mediaUrls ?? [], p.hashtags ?? []),
-          status: p.status,
-          hashtags: p.hashtags ?? [],
-          mediaUrls: p.mediaUrls ?? [],
-          scheduledAt: p.scheduledAt ?? null,
-          likes: p.engagementStats?.likes ?? 0,
-          comments: p.engagementStats?.comments ?? 0,
-          shares: p.engagementStats?.shares ?? 0,
-          impressions,
-          reach: p.engagementStats?.reach ?? 0,
-          engRate: impressions > 0 ? Number(((interactions / impressions) * 100).toFixed(2)) : 0,
-        }
-      })
-  } catch {
-    return []
+    console.log(`[Analytics] PostFast returned ${result.posts.length} published posts`)
+
+    const filtered = result.posts.filter(p => {
+      // Include posts that have any date within range, or if no dates available, include all
+      const dateStr = p.publishedAt ?? p.scheduledAt
+      if (!dateStr) return true  // include undated posts
+      const date = new Date(dateStr)
+      return date >= from && date <= to
+    })
+
+    console.log(`[Analytics] After date filter (${from.toISOString().slice(0,10)} → ${to.toISOString().slice(0,10)}): ${filtered.length} posts`)
+
+    const posts = filtered.map(p => {
+      const interactions = (p.engagementStats?.likes ?? 0) + (p.engagementStats?.comments ?? 0) + (p.engagementStats?.shares ?? 0)
+      const impressions = p.engagementStats?.impressions ?? 0
+      const bestDate = (p.publishedAt ?? p.scheduledAt ?? new Date().toISOString())
+      return {
+        id: `pf_${p.id}`,
+        source: 'postfast',
+        platform: p.platformId ?? p.platform?.toLowerCase() ?? 'unknown',
+        handle: p.platform ?? '',
+        caption: p.caption ?? '',
+        postUrl: p.postUrl ?? null,
+        publishedAt: bestDate,
+        contentType: detectContentType(p.caption ?? '', p.mediaUrls ?? [], p.hashtags ?? []),
+        status: p.status,
+        hashtags: p.hashtags ?? [],
+        mediaUrls: p.mediaUrls ?? [],
+        scheduledAt: p.scheduledAt ?? null,
+        likes: p.engagementStats?.likes ?? 0,
+        comments: p.engagementStats?.comments ?? 0,
+        shares: p.engagementStats?.shares ?? 0,
+        impressions,
+        reach: p.engagementStats?.reach ?? 0,
+        engRate: impressions > 0 ? Number(((interactions / impressions) * 100).toFixed(2)) : 0,
+      }
+    })
+    return { posts }
+  } catch (e: any) {
+    console.error('[Analytics] PostFast fetch exception:', e?.message)
+    return { posts: [], error: e?.message }
   }
 }
 
@@ -162,13 +169,16 @@ export async function GET(req: Request, { params }: Params) {
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // ── Fetch from all configured channels in parallel ────────────────────────
-  const [postfastPosts, internalDrafts] = await Promise.all([
+  const [pfResult, internalDrafts] = await Promise.all([
     brand.postfastApiKey
       ? fetchPostfastPosts(brand.postfastApiKey, from, to)
-      : Promise.resolve([] as AnalyticsPost[]),
+      : Promise.resolve({ posts: [] as AnalyticsPost[], error: 'no API key configured' }),
     fetchInternalDrafts(id, from, to, platformFilter),
     // Future: add more channel adapters here
   ])
+
+  const postfastError = pfResult.error
+  const postfastPosts = pfResult.posts
 
   // Platform filter for PostFast posts (applied client-side since PF API doesn't filter)
   const filteredPostfastPosts = platformFilter === 'all'
@@ -180,6 +190,7 @@ export async function GET(req: Request, { params }: Params) {
   const posts: AnalyticsPost[] = [...filteredPostfastPosts, ...internalDrafts]
 
   const hasPostfastData = postfastPosts.length > 0
+
 
   // ── KPI aggregates ─────────────────────────────────────────────────────────
   const totalPosts = posts.length
@@ -272,6 +283,7 @@ export async function GET(req: Request, { params }: Params) {
     platformBreakdown,
     sourceBreakdown,
     hasPostfastData,
+    postfastError: postfastError ?? null,
   })
 }
 
