@@ -6,12 +6,14 @@ import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
 import AgentSequenceView from './AgentSequenceView'
 import ArchiveView from './ArchiveView'
-import { LogOut, Activity, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, Bot, Trash2, ChevronDown, Store, Link2 } from 'lucide-react'
+import { LogOut, Activity, AlertCircle, CheckCircle2, User as UserIcon, Copy, Check, Sun, Moon, Inbox, Settings, Users, Bot, Trash2, ChevronDown, Store, Link2, BarChart2, Calendar } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
 import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
 import MobileLayout from './dashboard/MobileLayout'
 import DashboardHome from './dashboard/DashboardHome'
+import BrandAnalyticsDashboard from './dashboard/BrandAnalyticsDashboard'
+import DashboardCalendar from './dashboard/DashboardCalendar'
 
 // ── Brand types ─────────────────────────────────────────────────────────────
 interface Brand {
@@ -51,7 +53,7 @@ export default function KanbanBoard() {
   const [showSettings, setShowSettings] = useState(false)
   
   // Navigation State
-  const [currentView, setCurrentView] = useState<'agents' | 'archive' | 'dashboard'>('dashboard')
+  const [currentView, setCurrentView] = useState<'agents' | 'archive' | 'dashboard' | 'analytics' | 'calendar'>('dashboard')
   const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
 
   // Brand State — loaded from API
@@ -233,16 +235,18 @@ export default function KanbanBoard() {
             <Store size={16} /> 品牌主看板
           </button>
           <button
-            onClick={() => setCurrentView('agents')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${currentView === 'agents' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
+            onClick={() => setCurrentView('calendar')}
+            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${currentView === 'calendar' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
+            id="nav-calendar"
           >
-            <Bot size={16} /> AI 序列
+            <Calendar size={16} /> 发布日历
           </button>
           <button
-            onClick={() => setCurrentView('archive')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${currentView === 'archive' ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
+            onClick={() => setCurrentView('analytics')}
+            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${currentView === 'analytics' ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'}`}
+            id="nav-brand-analytics"
           >
-            <Inbox size={16} /> 归档
+            <BarChart2 size={16} /> 品牌分析
           </button>
         </div>
         
@@ -342,6 +346,26 @@ export default function KanbanBoard() {
                     className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
                   >
                     <Link2 size={16} /> 平台链接配置
+                  </button>
+                  <button
+                    onClick={() => { setShowProfile(false); setCurrentView('agents') }}
+                    className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
+                      currentView === 'agents'
+                        ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Bot size={16} /> AI 序列
+                  </button>
+                  <button
+                    onClick={() => { setShowProfile(false); setCurrentView('archive') }}
+                    className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
+                      currentView === 'archive'
+                        ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-bold'
+                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Inbox size={16} /> 归档
                   </button>
                   <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
                   <button 
@@ -454,6 +478,18 @@ export default function KanbanBoard() {
       ) : currentView === 'archive' ? (
         <div className="flex-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
           <ArchiveView onTaskClick={setSelectedTask} />
+        </div>
+      ) : currentView === 'calendar' ? (
+        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+          <DashboardCalendar brandId={activeBrand?.id} />
+        </div>
+      ) : currentView === 'analytics' ? (
+        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+          {activeBrand ? (
+            <BrandAnalyticsDashboard brandId={activeBrand.id} brandName={activeBrand.name} />
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-400 text-sm">请先选择品牌</div>
+          )}
         </div>
       ) : (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
