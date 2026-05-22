@@ -507,46 +507,14 @@ function normalizeDashboardPlatformId(platformId: string): string {
 }
 
 export default function DashboardHome({ brand: propBrand, activeBrandId, onActiveBrandIdChange }: DashboardHomeProps) {
-  // ── Brand list from API ──────────────────────────────────────────────────
-  const [brandList, setBrandList] = useState<Brand[]>([])
-  const [activeBrand, setActiveBrand] = useState<Brand | null>(propBrand ?? null)
-  const [brandLoading, setBrandLoading] = useState(true)
-
-  useEffect(() => {
-    fetch('/api/brands')
-      .then(r => r.ok ? r.json() : [])
-      .then((list: any[]) => {
-        const mapped = list.map(b => ({ id: b.id, name: b.name, location: b.location }))
-        setBrandList(mapped)
-        if (mapped.length === 0) return
-        if (activeBrandId) {
-          const target = mapped.find(b => b.id === activeBrandId)
-          if (target) {
-            setActiveBrand(target)
-            return
-          }
-        }
-        if (!activeBrand) {
-          setActiveBrand(mapped[0])
-          onActiveBrandIdChange?.(mapped[0].id)
-        }
-      })
-      .catch(console.error)
-      .finally(() => setBrandLoading(false))
-  }, [])
-
-  useEffect(() => {
-    // If parent passes a default brand, only apply it when no persisted/selected brand is active.
-    if (propBrand && !activeBrandId) setActiveBrand(propBrand)
-  }, [propBrand?.id, activeBrandId])
-
-  useEffect(() => {
-    if (!activeBrandId || brandList.length === 0) return
-    const target = brandList.find(b => b.id === activeBrandId)
-    if (target && target.id !== activeBrand?.id) setActiveBrand(target)
-  }, [activeBrandId, brandList, activeBrand?.id])
+  // ── Brand: driven entirely by the parent (KanbanBoard top-bar switcher) ──
+  // No internal brand state — propBrand IS the activeBrand.
+  // KanbanBoard remounts this component (via key prop) whenever the brand changes.
+  const activeBrand = propBrand ?? null
+  const brandLoading = false
 
   // ── Brand detail (accounts, action items) ───────────────────────────────
+
   const [brandDetail, setBrandDetail] = useState<any>(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
