@@ -134,7 +134,7 @@ model Brand {
   name           String
   location       String?
   timezone       String   @default("America/New_York")
-  autoPilot      Boolean  @default(false)
+  autoPilot      Boolean  @default(true)
 
   // Brand profile (Agent can populate these)
   description    String?  // Brand tagline / about text
@@ -186,7 +186,7 @@ model SocialAccount {
   accessToken    String?
   refreshToken   String?
   expiresAt      DateTime?
-  autoPilot      Boolean   @default(false)
+  autoPilot      Boolean   @default(true)
 
   // Login credentials (loginPassword: admin-visible only in API responses)
   profileUrl     String?   // public profile URL e.g. https://instagram.com/handle
