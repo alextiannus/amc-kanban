@@ -681,6 +681,156 @@ export function createAmcMcpServer(agentApiKey: string) {
     }
   )
 
+  // ── execute_brand_action ─────────────────────────────────────────────────
+  server.tool(
+    'execute_brand_action',
+    'Execute a unified marketing or customer care action for a brand (replies, posts, notifications).',
+    {
+      brandId: z.string().describe('Brand ID to execute this action for'),
+      actionType: z.enum(['reply_review', 'domestic_reply_review', 'lark_notify', 'publish_post'])
+        .describe('Type of action to execute'),
+      platform: z.string().optional().describe('Platform name e.g., "google", "yelp", "dianping", "meituan"'),
+      reviewId: z.string().optional().describe('Review ID (required for replies)'),
+      replyText: z.string().optional().describe('Reply comment (required for replies)'),
+      title: z.string().optional().describe('Title of Lark message / post'),
+      content: z.string().optional().describe('Markdown text for Lark notification'),
+      actionUrl: z.string().optional().describe('Lark notification action button link'),
+      urgent: z.boolean().optional().describe('Make Lark notification styling urgent'),
+      caption: z.string().optional().describe('Social post caption'),
+      mediaUrls: z.array(z.string()).optional().describe('Social post media URLs'),
+      hashtags: z.array(z.string()).optional().describe('Social post hashtags without #'),
+    },
+    async ({ brandId, actionType, platform, reviewId, replyText, title, content, actionUrl, urgent, caption, mediaUrls, hashtags }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: {
+          postfastApiKey: true,
+          googleRefreshToken: true,
+          googleAccountId: true,
+          googleLocationId: true,
+          googlePreferOAuth: true,
+          larkBotWebhook: true,
+          larkAppId: true,
+          larkAppSecret: true,
+          larkOwnerId: true,
+        },
+      })
+      if (!brand) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
+
+      if (actionType === 'reply_review') {
+        if (!platform || !reviewId || !replyText) {
+          return { content: [{ type: 'text' as const, text: 'Error: platform, reviewId, and replyText are required for reply_review' }], isError: true }
+        }
+
+        const normalizedPlatform = platform.toLowerCase().trim()
+        if (normalizedPlatform === 'google') {
+          // Direct Google GBP OAuth reply if configured
+          if (brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId) {
+            try {
+              const { getGoogleAccessToken, replyGoogleGBPReview } = await import('@/lib/integrations/google')
+              const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
+              const result = await replyGoogleGBPReview({
+                accountId: brand.googleAccountId || 'primary',
+                locationId: brand.googleLocationId,
+                reviewId,
+                replyText,
+                accessToken,
+              })
+              if (!result.success) return { content: [{ type: 'text' as const, text: `Error (GBP API): ${result.error}` }], isError: true }
+              return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, via: 'direct_oauth' }) }] }
+            } catch (e: any) {
+              console.error('[execute_brand_action] GBP OAuth reply failed, falling back...', e)
+            }
+          }
+
+          // Fallback to PostFast
+          if (brand.postfastApiKey) {
+            const { postfastReplyReview } = await import('@/lib/integrations/postfast')
+            const result = await postfastReplyReview({ apiKey: brand.postfastApiKey, platform: 'google', reviewId, replyText })
+            if (!result.success) return { content: [{ type: 'text' as const, text: `Error (PostFast API): ${result.error}` }], isError: true }
+            return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, via: 'postfast' }) }] }
+          }
+          return { content: [{ type: 'text' as const, text: 'Error: No credentials configured for Google reply.' }], isError: true }
+        } else if (normalizedPlatform === 'yelp') {
+          if (!brand.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: PostFast API key required for Yelp replies' }], isError: true }
+          const { postfastReplyReview } = await import('@/lib/integrations/postfast')
+          const result = await postfastReplyReview({ apiKey: brand.postfastApiKey, platform: 'yelp', reviewId, replyText })
+          if (!result.success) return { content: [{ type: 'text' as const, text: `Error (PostFast API): ${result.error}` }], isError: true }
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, via: 'postfast' }) }] }
+        } else {
+          return { content: [{ type: 'text' as const, text: `Error: Platform "${platform}" not supported for standard reply_review. Use domestic_reply_review.` }], isError: true }
+        }
+      }
+
+      if (actionType === 'domestic_reply_review') {
+        if (!platform || !reviewId || !replyText) {
+          return { content: [{ type: 'text' as const, text: 'Error: platform, reviewId, and replyText are required for domestic_reply_review' }], isError: true }
+        }
+        try {
+          const { sendExtensionCommand } = await import('@/lib/integrations/extensionBridge')
+          const result = await sendExtensionCommand(brandId, 'domestic_reply_review', {
+            platform,
+            reviewId,
+            replyText,
+          })
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, result }) }] }
+        } catch (e: any) {
+          return { content: [{ type: 'text' as const, text: `Error (Extension Bridge): ${e.message || String(e)}` }], isError: true }
+        }
+      }
+
+      if (actionType === 'lark_notify') {
+        if (!title || !content) {
+          return { content: [{ type: 'text' as const, text: 'Error: title and content are required for lark_notify' }], isError: true }
+        }
+        if (!brand.larkBotWebhook && !brand.larkOwnerId) {
+          return { content: [{ type: 'text' as const, text: 'Error: Lark notifications not configured' }], isError: true }
+        }
+        const { sendLarkWebhookNotification, sendLarkDirectMessage } = await import('@/lib/integrations/lark')
+        let result: { success: boolean; error?: string }
+        if (brand.larkBotWebhook) {
+          result = await sendLarkWebhookNotification({ webhookUrl: brand.larkBotWebhook, title, content, actionUrl, urgent })
+        } else {
+          result = await sendLarkDirectMessage({
+            appId: brand.larkAppId!,
+            appSecret: brand.larkAppSecret!,
+            ownerId: brand.larkOwnerId!,
+            title, content, actionUrl, urgent,
+          })
+        }
+        if (!result.success) return { content: [{ type: 'text' as const, text: `Error (Lark): ${result.error}` }], isError: true }
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, channel: brand.larkBotWebhook ? 'webhook' : 'direct_message' }) }] }
+      }
+
+      if (actionType === 'publish_post') {
+        if (!platform || !caption) {
+          return { content: [{ type: 'text' as const, text: 'Error: platform and caption are required for publish_post' }], isError: true }
+        }
+        if (!brand.postfastApiKey) {
+          return { content: [{ type: 'text' as const, text: 'Error: PostFast API key required for publish_post' }], isError: true }
+        }
+        const { postfastPublish } = await import('@/lib/integrations/postfast')
+        const result = await postfastPublish({
+          apiKey: brand.postfastApiKey,
+          platform,
+          caption,
+          mediaUrls,
+          hashtags,
+        })
+        if (!result.success) return { content: [{ type: 'text' as const, text: `Error (PostFast): ${result.error}` }], isError: true }
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform }) }] }
+      }
+
+      return { content: [{ type: 'text' as const, text: 'Error: Unsupported action type' }], isError: true }
+    }
+  )
+
   // ── lark_notify ─────────────────────────────────────────────────────────
   server.tool(
     'lark_notify',

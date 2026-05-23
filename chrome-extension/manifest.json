@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "AMC Kanban Assistant",
+  "version": "1.0.0",
+  "description": "Chrome Extension Bridge for AMC Kanban to automate domestic local-life review platforms.",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://localhost/*",
+    "*://127.0.0.1/*",
+    "*://*.dianping.com/*",
+    "*://*.meituan.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://localhost/*",
+        "*://127.0.0.1/*",
+        "*://*.render.com/*"
+      ],
+      "js": ["content_amc.js"],
+      "run_at": "document_end"
+    }
+  ]
+}

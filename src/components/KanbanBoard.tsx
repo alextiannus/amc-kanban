@@ -50,6 +50,11 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
 
   useEffect(() => {
     activeBrandIdRef.current = activeBrand?.id
+    if (activeBrand?.id) {
+      document.body.setAttribute('data-active-brand-id', activeBrand.id)
+    } else {
+      document.body.removeAttribute('data-active-brand-id')
+    }
   }, [activeBrand?.id])
 
   const fetchBrands = async () => {

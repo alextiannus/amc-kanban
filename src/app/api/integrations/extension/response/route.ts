@@ -1,0 +1,53 @@
+import { NextResponse } from 'next/server'
+import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
+import { bridgeState } from '@/lib/integrations/extensionBridge'
+
+export async function POST(request: Request) {
+  // 1. Authenticate caller (session or api key)
+  const session = await getSession()
+  let authenticated = !!session?.user
+
+  if (!authenticated) {
+    const apiKey = extractApiKey(request)
+    if (apiKey) {
+      const agent = await getAgentFromApiKey(apiKey)
+      authenticated = !!agent
+    }
+  }
+
+  if (!authenticated) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // 2. Parse response body
+  let body: any
+  try {
+    body = await request.json()
+  } catch (e) {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const { requestId, success, data, error } = body
+
+  if (!requestId) {
+    return NextResponse.json({ error: 'requestId required' }, { status: 400 })
+  }
+
+  // 3. Resolve/Reject the pending promise
+  const pending = bridgeState.pendingRequests.get(requestId)
+  if (!pending) {
+    return NextResponse.json({ error: 'Request not found or already timed out' }, { status: 404 })
+  }
+
+  // Clear timeout and remove from registry
+  clearTimeout(pending.timeout)
+  bridgeState.pendingRequests.delete(requestId)
+
+  if (success) {
+    pending.resolve(data || { success: true })
+  } else {
+    pending.reject(new Error(error || 'Extension execution failed.'))
+  }
+
+  return NextResponse.json({ ok: true })
+}
