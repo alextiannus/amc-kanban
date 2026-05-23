@@ -2,12 +2,12 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER } from '@/lib/integrations/lark'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
+import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 
 async function getAgent(request: Request) {
-  const auth = request.headers.get('authorization') || ''
-  const key = auth.replace('Bearer ', '').trim()
-  if (!key) return null
-  return prisma.user.findFirst({ where: { apiKey: key, type: 'AI_AGENT' } })
+  const apiKey = extractApiKey(request)
+  if (!apiKey) return null
+  return getAgentFromApiKey(apiKey)
 }
 
 // GET /api/agent/brand-config?brandId=<id>
@@ -191,7 +191,66 @@ export async function PATCH(request: Request) {
   const body = await request.json()
   const { brandId, ...fields } = body
 
-  if (!brandId) return NextResponse.json({ error: 'brandId required' }, { status: 400 })
+  if (!brandId) {
+    if (fields.name) {
+      const permissions = await prisma.agentPermission.findMany({
+        where: { agentId: agent.id },
+        include: { human: { select: { id: true, email: true, role: true } } },
+      })
+      let linkedHumans = permissions.map(p => p.human)
+
+      if (linkedHumans.length === 0) {
+        const admin = await prisma.user.findFirst({
+          where: { role: 'ADMIN' },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, email: true, role: true },
+        })
+        if (!admin) {
+          return NextResponse.json(
+            { error: 'No admin user found. Please complete system bootstrap first.' },
+            { status: 503 }
+          )
+        }
+        linkedHumans = [admin]
+      }
+
+      const primaryOwnerId = linkedHumans[0].id
+
+      const brand = await prisma.brand.create({
+        data: {
+          ownerId: primaryOwnerId,
+          name: fields.name.trim(),
+          location: fields.location?.trim() || null,
+          timezone: fields.timezone || 'Asia/Singapore',
+          description: fields.description || null,
+        },
+      })
+
+      await prisma.brandOwner.createMany({
+        data: linkedHumans.map(h => ({ brandId: brand.id, userId: h.id })),
+        skipDuplicates: true,
+      })
+
+      await prisma.brandAgent.upsert({
+        where: { brandId_agentId: { brandId: brand.id, agentId: agent.id } },
+        create: { brandId: brand.id, agentId: agent.id, role: 'worker', active: true },
+        update: { active: true },
+      })
+
+      return NextResponse.json({
+        ok: true,
+        created: true,
+        brandId: brand.id,
+        brand: {
+          id: brand.id,
+          name: brand.name,
+          location: brand.location,
+          timezone: brand.timezone,
+        },
+      })
+    }
+    return NextResponse.json({ error: 'brandId required' }, { status: 400 })
+  }
 
   const brand = await prisma.brand.findUnique({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })

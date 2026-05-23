@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
 import { readFile } from 'fs/promises'
 import path from 'path'
+import yaml from 'js-yaml'
 
 export async function GET() {
   try {
     const filePath = path.join(process.cwd(), 'skills', 'kanban-openapi.yaml')
     const content = await readFile(filePath, 'utf-8')
-    return new NextResponse(content, {
+    const jsonContent = yaml.load(content)
+    return NextResponse.json(jsonContent, {
       headers: {
-        'Content-Type': 'text/yaml; charset=utf-8',
         'Access-Control-Allow-Origin': '*',
       },
     })

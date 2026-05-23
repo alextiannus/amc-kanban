@@ -119,7 +119,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { title, description, materials, assigneeId, priority, estimatedHours, deadline, tags, weight } = body
+    const { title, description, materials, assigneeId, priority, estimatedHours, deadline, tags, weight, status } = body
 
     if (weight !== undefined) {
       return NextResponse.json({ error: 'Forbidden: task weight is immutable after creation' }, { status: 400 })
@@ -159,6 +159,7 @@ export async function PATCH(
     if (description !== undefined) data.description = description
     if (materials !== undefined) data.materials = materials
     if (assigneeId !== undefined) data.assigneeId = assigneeId
+    if (status !== undefined) data.status = status
     if (priority !== undefined) data.priority = priority || 'medium'
     if (estimatedHours !== undefined) data.estimatedHours = estimatedHours !== null && estimatedHours !== '' ? Number(estimatedHours) : null
     if (deadline !== undefined) data.deadline = deadline ? new Date(deadline) : null

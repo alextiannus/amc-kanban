@@ -38,7 +38,7 @@ if (!API_KEY) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const auth = { Authorization: `Bearer ${API_KEY}` }
-const json = { ...auth, 'Content-Type': 'application/json' }
+const json = { ...auth, 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' }
 
 async function rest(method: string, path: string, body?: unknown) {
   const res = await fetch(`${BASE}${path}`, {

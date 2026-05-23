@@ -158,8 +158,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
     }
 
-    // If authenticated as Agent via API key, auto-set assigneeId to self
+    // If authenticated as Agent via API key, check if assigneeId is set and matches
     if (authenticatedAgent) {
+      if (assigneeId !== undefined && assigneeId !== authenticatedAgent.id) {
+        return NextResponse.json({ error: 'Forbidden: Agents can only assign tasks to themselves' }, { status: 403 })
+      }
       assigneeId = authenticatedAgent.id
     } else if (!assigneeId) {
       return NextResponse.json({ error: 'assigneeId is required' }, { status: 400 })
