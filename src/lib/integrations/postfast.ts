@@ -376,6 +376,57 @@ export async function postfastUploadFile(
  * Publish or schedule a post.
  * PostFast expects: { posts: [{ platform, caption, ... }] }
  */
+function detectMediaType(keyOrUrl: string): 'IMAGE' | 'VIDEO' {
+  const ext = keyOrUrl.split('?')[0].split('.').pop()?.toLowerCase() || ''
+  if (['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp'].includes(ext)) {
+    return 'VIDEO'
+  }
+  return 'IMAGE'
+}
+
+async function uploadPublicUrlToPostfast(apiKey: string, url: string): Promise<string> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+  const arrayBuffer = await res.arrayBuffer()
+  const fileBuffer = Buffer.from(arrayBuffer)
+
+  let mimeType = res.headers.get('content-type') || 'image/jpeg'
+  mimeType = mimeType.split(';')[0].trim()
+
+  const urlParts = url.split('/')
+  let filename = urlParts[urlParts.length - 1].split('?')[0] || 'file'
+  if (!filename.includes('.')) {
+    if (mimeType.startsWith('image/png')) filename += '.png'
+    else if (mimeType.startsWith('image/gif')) filename += '.gif'
+    else if (mimeType.startsWith('video/mp4')) filename += '.mp4'
+    else filename += '.jpg'
+  }
+
+  const signedResult = await postfastGetSignedUploadUrls(apiKey, [{
+    filename,
+    mimeType,
+    sizeBytes: fileBuffer.length
+  }])
+
+  if (!signedResult.success || signedResult.slots.length === 0) {
+    throw new Error(signedResult.error || 'Failed to get upload URL')
+  }
+
+  const slot = signedResult.slots[0]
+  const uploadResult = await postfastUploadFile(slot.uploadUrl, fileBuffer, mimeType)
+  if (!uploadResult.success) {
+    throw new Error(uploadResult.error || 'Upload failed')
+  }
+
+  return slot.storageKey
+}
+
+/**
+ * POST /social-posts
+ * Publish or schedule a post.
+ * PostFast expects: { posts: [{ socialMediaId, content, mediaItems: [...] }] }
+ */
 export async function postfastPublish(input: PostFastPublishInput): Promise<PostFastPublishResult> {
   // Guard: caption must be a non-empty string
   if (!input.caption || typeof input.caption !== 'string' || input.caption.trim() === '') {
@@ -386,19 +437,94 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     return { success: false, error: '发布失败：platform 未指定' }
   }
 
-  const post: Record<string, unknown> = {
-    platform: input.platform.toUpperCase(),
-    caption: input.caption.trim(),
-    hashtags: Array.isArray(input.hashtags) ? input.hashtags : [],
-    scheduled_at: input.scheduledAt ?? null,
+  // 1. Fetch connected accounts from PostFast to resolve the PostFast account ID (socialMediaId)
+  const { success: fetchSuccess, accounts, error: fetchError } = await postfastFetchAccounts(input.apiKey)
+  if (!fetchSuccess) {
+    return { success: false, error: `无法获取 PostFast 账号列表: ${fetchError}` }
   }
 
-  if (input.accountId) post.account_id = input.accountId
+  let matchedAccount: PostFastAccount | undefined
+
+  if (input.accountId) {
+    // Try matching PostFast account ID directly
+    matchedAccount = accounts.find(a => a.id === input.accountId)
+
+    // If not found, look up internal SocialAccount CUID in DB
+    if (!matchedAccount) {
+      try {
+        const { prisma } = await import('@/lib/prisma')
+        const dbAccount = await prisma.socialAccount.findUnique({
+          where: { id: input.accountId }
+        })
+        if (dbAccount) {
+          const targetPlatformId = dbAccount.platformId.toLowerCase()
+          const targetHandle = dbAccount.handle.toLowerCase()
+          matchedAccount = accounts.find(a =>
+            a.platformId.toLowerCase() === targetPlatformId &&
+            a.handle.toLowerCase() === targetHandle
+          )
+        }
+      } catch (e: any) {
+        console.error('Failed to look up social account in database:', e)
+      }
+    }
+  }
+
+  // Fallback: match by platform name
+  if (!matchedAccount) {
+    const targetPlatformId = normalizePlatform(input.platform)
+    matchedAccount = accounts.find(a => a.platformId.toLowerCase() === targetPlatformId.toLowerCase())
+  }
+
+  if (!matchedAccount) {
+    return {
+      success: false,
+      error: `发布失败：未在 PostFast 中找到匹配 ${input.platform} 的社交账号，请先连接账号。`,
+    }
+  }
+
+  const socialMediaId = matchedAccount.id
+
+  // 2. Resolve media keys (download & upload public URLs to S3 in the background)
+  const mediaKeys: string[] = []
 
   if (input.mediaStorageKeys && input.mediaStorageKeys.length > 0) {
-    post.media_storage_keys = input.mediaStorageKeys
-  } else if (input.mediaUrls && input.mediaUrls.length > 0) {
-    post.media_urls = input.mediaUrls
+    mediaKeys.push(...input.mediaStorageKeys)
+  }
+
+  if (input.mediaUrls && input.mediaUrls.length > 0) {
+    for (const url of input.mediaUrls) {
+      try {
+        const storageKey = await uploadPublicUrlToPostfast(input.apiKey, url)
+        mediaKeys.push(storageKey)
+      } catch (e: any) {
+        return { success: false, error: `媒体文件上传失败 (${url}): ${e.message}` }
+      }
+    }
+  }
+
+  // 3. Construct post body for PostFast
+  let content = input.caption.trim()
+  if (input.hashtags && input.hashtags.length > 0) {
+    const hashtagStr = input.hashtags.map(h => h.startsWith('#') ? h : `#${h}`).join(' ')
+    content = `${content}\n\n${hashtagStr}`
+  }
+
+  const post: Record<string, unknown> = {
+    socialMediaId,
+    content,
+  }
+
+  if (input.scheduledAt) {
+    post.scheduledAt = input.scheduledAt
+  }
+
+  if (mediaKeys.length > 0) {
+    post.mediaItems = mediaKeys.map((key, index) => ({
+      key,
+      type: detectMediaType(key),
+      sortOrder: index,
+    }))
   }
 
   // PostFast requires the post(s) wrapped in a "posts" array (max 15 per request)

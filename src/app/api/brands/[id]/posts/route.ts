@@ -17,7 +17,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastPublish } from '@/lib/integrations/postfast'
-import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -38,10 +38,8 @@ export async function POST(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: brandId } = await params
-  if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
+  const ok = await canSessionAccessBrandProject(brandId, session.user.id, session.user.type ?? 'HUMAN', session.user.role)
+  if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // Get brand and verify it exists and user has access
   const brand = await prisma.brand.findFirst({ 
@@ -149,10 +147,8 @@ export async function GET(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: brandId } = await params
-  if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
+  const ok = await canSessionAccessBrandProject(brandId, session.user.id, session.user.type ?? 'HUMAN', session.user.role)
+  if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // TODO: Implement list posts endpoint
   // - Query PostFast for scheduled/published posts
