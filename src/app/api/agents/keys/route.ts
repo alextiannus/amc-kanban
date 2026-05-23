@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSession } from '@/lib/auth'
+import { getSession, encrypt } from '@/lib/auth'
 import crypto from 'crypto'
-
-function generateApiKey(): string {
-  return `amc-agent-${crypto.randomBytes(16).toString('hex')}`
-}
 
 export async function POST(request: Request) {
   try {
@@ -14,23 +10,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // 1. Generate unique key
-    const plaintextApiKey = generateApiKey()
     const agentUuid = crypto.randomUUID()
     const tempEmail = `pending-${agentUuid}@agent.amc.local`
+    const placeholderApiKey = `placeholder-${agentUuid}`
 
-    // 2. Create the placeholder agent record
+    // 1. Create the placeholder agent record
     const newAgent = await prisma.user.create({
       data: {
         email: tempEmail,
         password: crypto.randomBytes(16).toString('hex'), // random unguessable password
         type: 'AI_AGENT',
         nickname: '🤖 未初始化龙虾',
-        apiKey: plaintextApiKey
+        apiKey: placeholderApiKey
       }
     })
 
-    // 3. Bind the agent strictly to the human user who generated it
+    // 2. Generate long-lived signed JWT key (starts with eyJ...)
+    const plaintextApiKey = await encrypt({ agentId: newAgent.id, type: 'AI_AGENT' }, '36500d')
+
+    // 3. Update the agent record with the final JWT apiKey
+    await prisma.user.update({
+      where: { id: newAgent.id },
+      data: { apiKey: plaintextApiKey }
+    })
+
+    // 4. Bind the agent strictly to the human user who generated it
     await prisma.agentPermission.create({
       data: {
         humanId: session.user.id,

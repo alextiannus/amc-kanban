@@ -11,13 +11,15 @@ function getJwtKey() {
 }
 const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim()
 
-export async function encrypt(payload: any) {
+export async function encrypt(payload: any, expiresIn: string = '7d') {
   const key = getJwtKey()
-  return await new SignJWT(payload)
+  const builder = new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('7d')
-    .sign(key)
+  if (expiresIn) {
+    builder.setExpirationTime(expiresIn)
+  }
+  return await builder.sign(key)
 }
 
 export async function decrypt(input: string): Promise<any> {
@@ -87,6 +89,21 @@ export async function getAgentFromApiKey(apiKey: string) {
         where: { apiKey: hashedApiKey },
         select: { id: true, email: true, type: true }
       })
+    }
+
+    // 3. Fallback: decrypt as JWT if it starts with eyJ
+    if (!agent && apiKey.startsWith('eyJ')) {
+      try {
+        const payload = await decrypt(apiKey)
+        if (payload && payload.agentId) {
+          agent = await prisma.user.findUnique({
+            where: { id: payload.agentId },
+            select: { id: true, email: true, type: true }
+          })
+        }
+      } catch {
+        // Failed to decrypt or verify
+      }
     }
 
     return agent;

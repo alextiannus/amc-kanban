@@ -2,11 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
-import { getSession } from '@/lib/auth'
-
-function generateAgentApiKey(): string {
-  return `amc-agent-${crypto.randomBytes(16).toString('hex')}`
-}
+import { getSession, encrypt } from '@/lib/auth'
 
 function normalizeAgentId(raw: string): string {
   return raw.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-')
@@ -68,7 +64,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'agentId already exists' }, { status: 409 })
     }
 
-    const plaintextApiKey = generateAgentApiKey()
+    const placeholderApiKey = `placeholder-${crypto.randomUUID()}`
     const randomPassword = crypto.randomBytes(24).toString('hex')
     const hashedPassword = await bcrypt.hash(randomPassword, 12)
 
@@ -86,7 +82,7 @@ export async function POST(request: Request) {
         insights: typeof insights === 'string' ? insights : null,
         chatLink: typeof chatLink === 'string' ? chatLink : null,
         driveFolder: typeof driveFolder === 'string' ? driveFolder : null,
-        apiKey: plaintextApiKey,
+        apiKey: placeholderApiKey,
       },
       select: {
         id: true,
@@ -95,6 +91,13 @@ export async function POST(request: Request) {
         type: true,
         createdAt: true,
       }
+    })
+
+    const plaintextApiKey = await encrypt({ agentId: newAgent.id, type: 'AI_AGENT' }, '36500d')
+
+    await prisma.user.update({
+      where: { id: newAgent.id },
+      data: { apiKey: plaintextApiKey }
     })
 
     return NextResponse.json({
