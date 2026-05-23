@@ -8,6 +8,34 @@
 
 ---
 
+## 📈 实施进度与最新成果 (截至 2026年5月23日)
+
+### ✅ 已完成的阶段性里程碑
+* **浏览器插件桥接器（Chrome Extension Bridge）**：
+  * 基于 Server-Sent Events (SSE) 的长连接通道（`/api/integrations/extension/events`）和接收响应接口（`/api/integrations/extension/response`）。
+  * 实现 Mock 商家平台模拟器（`/mock-merchant`）用于模拟美团、大众点评的自动化操作。
+  * 插件端背景脚本（`background.js`）和内容脚本（`content_amc.js`）完成，通过 `chrome.scripting` 安全注入人机模拟输入脚本。
+* **Agent 权限审计与安全性校验**：
+  * 对 API-key 认证的 Agent 进行了严格的任务创建及编辑范围限制，防止越权指派（`/api/tasks`）。
+  * 扩展了 `PATCH /api/tasks/[id]` 接口，完整支持任务状态 `status` 更新。
+  * 精准化管理系统日志（`/api/admin/logs`），增加“浏览器插件桥（ExtensionBridge）”日志过滤，重点动作（`EXTENSION_CMD_SEND`, `EXTENSION_CMD_RECV`, `EXTENSION_CMD_ERR`）实现颜色高亮。
+* **接口规范兼容性**：
+  * 利用 `js-yaml` 将 OpenAPI 规范接口化（`/api/meta/openapi`），对外直接返回标准的 JSON 格式，满足各类外部套件解析断言。
+  * 调整了 MCP 协议兼容性（Accept 头部支持 `application/json, text/event-stream`）。
+
+### 🚧 研发中与下阶段核心工作
+我们对 Phase 2 的核心内容进行了重新排期和优化，明确了以**“多 Agent 协同编排与上下文沟通”**为中心的 P0 级别产品突破：
+
+| 优先级 | 特性 | 详细描述 | 实施状态 |
+| :--- | :--- | :--- | :--- |
+| **P0** | **任务依赖与 DAG 编排** | 支持 `dependencies` 自关联依赖，限制被阻塞的任务由 Agent 执行，看板卡片显式标注 Blockers 关系。 | 🟥 待启动 (Next Sprint) |
+| **P0** | **人机上下文评论系统** | 任务详情支持 Markdown 评论和 `@` 提及（包括 Human 与 Agent 的交互，AI 可在评论区贴详细日志或备选方案）。 | 🟥 待启动 (Next Sprint) |
+| **P1** | **LLM 模型热切换与自动降级** | Agent 控制面板中允许配置默认模型、备用模型，根据任务权重 (1/3/5) 及 Token 费用动态热切。 | 🟥 待启动 |
+| **P1** | **Agent 绩效与效能看板** | 基于 `AuditLog` 自动统计 Agent 首次任务通过率、响应时长及 Pending 等待占比，绘制效能曲线。 | 🟥 待启动 |
+| **P2** | **外部生态 Trigger 适配器** | 对接飞书、Slack、Notion Webhook，支持外部群聊或文档中通过机器人直接创建看板任务。 | 🟥 待启动 |
+
+---
+
 ## 执行摘要
 
 AMC Kanban 在**Human-AI协同**这一独特赛道上具有竞争优势。本路线图通过三个阶段的演进，将其从"任务看板+权限管理"升级至"完整的Multi-Agent协作大脑"——对标EDICT的制度化架构和Plane的功能完整性，同时保持Dify的工作流处理中心地位。
@@ -899,21 +927,21 @@ Workflow Execution     →  WorkUnit
 
 ## 下一步行动
 
-### 即刻启动（本周）
-- [ ] 组建Phase 1核心团队（2-3人）
-- [ ] 详细设计文档：核心功能+API specs
-- [ ] 建立项目管理系统（GitHub Projects/Linear）
-- [ ] 基础设施准备（Redis/增强WebSocket）
+### Phase 1 已完成交付项
+- [x] 开发环境搭建与集成配置（PostFast/Prisma/NextJS 路由）
+- [x] 权限与安全系统重构（彻底防护 Agent 越权指派）
+- [x] 完整审计日志实现（引入 `AuditLog` 库以及看板与 API 动作追踪）
+- [x] OpenAPI YAML-to-JSON 自动转换兼容（满足 API 校验套件）
+- [x] 浏览器插件长连接桥（SSE 通道、Pending/Resolve 响应闭环）
+- [x] Mock Dianping/Meituan 商家平台模拟器（`/mock-merchant`）
+- [x] 看板侧配置抽屉与插件桥在线状态实时检测
+- [x] 管理员日志高亮及插件桥动作专用过滤（`/admin`）
 
-### 第一周
-- [ ] 开发环境搭建
-- [ ] 权限系统重构设计
-- [ ] 审计日志实现
-
-### 第二周
-- [ ] 看板UI增强（视图系统）
-- [ ] Agent档案完善
-- [ ] 基础测试框架
+### Phase 2 下一步行动（Sprint 1 启动中）
+- [ ] **【P0】任务关联与 DAG 阻塞编排**：设计 `dependencies` 表结构与阻断拦截路由
+- [ ] **【P0】人机评论留言系统**：完成 `Comment` 基础架构与前端富文本渲染
+- [ ] **【P1】模型动态路由管理**：与 Dify 平台热切换机制接口对接
+- [ ] **【P1】效能看板数据统计**：基于审计日志跑通首次通过率与平均时长指标
 
 ---
 
