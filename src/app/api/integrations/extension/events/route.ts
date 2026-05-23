@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { registerExtension, unregisterExtension } from '@/lib/integrations/extensionBridge'
+import { actorFromContext, writeAuditLog } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
@@ -51,6 +52,15 @@ export async function GET(request: Request) {
       // Register the active controller
       registerExtension(brandId, controller)
 
+      // Audit Log connection success
+      writeAuditLog({
+        actor: session?.user ? actorFromContext(session.user) : { id: userId, type: userType, name: userId },
+        action: 'EXTENSION_REGISTER',
+        resourceId: brandId,
+        resourceType: 'ExtensionBridge',
+        reason: '浏览器插件与 AMC 看板后台成功建立 SSE 长连接。',
+      }).catch(console.error)
+
       // Keep connection alive with 30s heartbeats
       const heartbeat = setInterval(() => {
         try {
@@ -63,6 +73,13 @@ export async function GET(request: Request) {
       request.signal.addEventListener('abort', () => {
         clearInterval(heartbeat)
         unregisterExtension(brandId)
+        writeAuditLog({
+          actor: session?.user ? actorFromContext(session.user) : { id: userId, type: userType, name: userId },
+          action: 'EXTENSION_UNREGISTER',
+          resourceId: brandId,
+          resourceType: 'ExtensionBridge',
+          reason: '浏览器插件已断开与 AMC 看板后台的连接。',
+        }).catch(console.error)
         try {
           controller.close()
         } catch (e) {

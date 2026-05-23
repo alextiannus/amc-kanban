@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { sendExtensionCommand } from '@/lib/integrations/extensionBridge'
+import { actorFromContext, writeAuditLog } from '@/lib/audit'
 
 /**
  * POST /api/integrations/extension/test-trigger
@@ -35,6 +36,13 @@ export async function POST(request: Request) {
 
   try {
     console.log(`[Extension Test Trigger] Relay command to brand ${brandId}: platform=${platform}, reviewId=${reviewId}`)
+    writeAuditLog({
+      actor: actorFromContext(session.user),
+      action: 'EXTENSION_CMD_SEND',
+      resourceId: brandId,
+      resourceType: 'ExtensionBridge',
+      reason: `手动测试触发自动回复 (平台: ${platform}, 评论 ID: ${reviewId})。`,
+    }).catch(console.error)
     const result = await sendExtensionCommand(brandId, 'domestic_reply_review', {
       platform,
       reviewId,

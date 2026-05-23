@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { bridgeState } from '@/lib/integrations/extensionBridge'
+import { actorFromContext, writeAuditLog } from '@/lib/audit'
 
 export async function POST(request: Request) {
   // 1. Authenticate caller (session or api key)
@@ -44,8 +45,22 @@ export async function POST(request: Request) {
   bridgeState.pendingRequests.delete(requestId)
 
   if (success) {
+    writeAuditLog({
+      actor: session?.user ? actorFromContext(session.user) : { type: 'SYSTEM', name: 'extension' },
+      action: 'EXTENSION_CMD_RECV',
+      resourceId: requestId,
+      resourceType: 'ExtensionBridge',
+      reason: `浏览器插件执行动作成功。数据: ${JSON.stringify(data || {})}`,
+    }).catch(console.error)
     pending.resolve(data || { success: true })
   } else {
+    writeAuditLog({
+      actor: session?.user ? actorFromContext(session.user) : { type: 'SYSTEM', name: 'extension' },
+      action: 'EXTENSION_CMD_ERR',
+      resourceId: requestId,
+      resourceType: 'ExtensionBridge',
+      reason: `浏览器插件执行动作失败。错误: ${error || '未知错误'}`,
+    }).catch(console.error)
     pending.reject(new Error(error || 'Extension execution failed.'))
   }
 

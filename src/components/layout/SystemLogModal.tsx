@@ -36,6 +36,9 @@ export default function SystemLogModal({ onClose }: SystemLogModalProps) {
     PUBLISH_FAILED:  'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
     RETRY_PUBLISH:   'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
     STATUS_CHANGE:   'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+    EXTENSION_CMD_SEND: 'bg-indigo-100 text-indigo-705 dark:bg-indigo-900/30 dark:text-indigo-400',
+    EXTENSION_CMD_RECV: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    EXTENSION_CMD_ERR: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
   }
 
   return (
@@ -62,6 +65,7 @@ export default function SystemLogModal({ onClose }: SystemLogModalProps) {
               <option value="WorkUnit">任务</option>
               <option value="Brand">品牌</option>
               <option value="ContentDraft">草稿</option>
+              <option value="ExtensionBridge">浏览器插件桥</option>
             </select>
             <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 p-2 rounded-full transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>

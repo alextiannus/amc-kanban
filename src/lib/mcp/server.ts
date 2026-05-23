@@ -12,6 +12,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
+import { writeAuditLog, actorFromContext } from '@/lib/audit'
 
 // ── Auth helper ────────────────────────────────────────────────────────────
 export async function getAgentFromKey(apiKey: string) {
@@ -774,6 +775,16 @@ export function createAmcMcpServer(agentApiKey: string) {
         }
         try {
           const { sendExtensionCommand } = await import('@/lib/integrations/extensionBridge')
+          
+          // Log send command
+          writeAuditLog({
+            actor: actorFromContext(null, agent),
+            action: 'EXTENSION_CMD_SEND',
+            resourceId: brandId,
+            resourceType: 'ExtensionBridge',
+            reason: `AI 代理触发国内平台自动回复 (平台: ${platform}, 评论 ID: ${reviewId})。`,
+          }).catch(console.error)
+
           const result = await sendExtensionCommand(brandId, 'domestic_reply_review', {
             platform,
             reviewId,
@@ -781,6 +792,14 @@ export function createAmcMcpServer(agentApiKey: string) {
           })
           return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, result }) }] }
         } catch (e: any) {
+          // Log send command error
+          writeAuditLog({
+            actor: actorFromContext(null, agent),
+            action: 'EXTENSION_CMD_ERR',
+            resourceId: brandId,
+            resourceType: 'ExtensionBridge',
+            reason: `AI 代理触发国内平台自动回复失败 (评论 ID: ${reviewId})。错误: ${e.message || String(e)}`,
+          }).catch(console.error)
           return { content: [{ type: 'text' as const, text: `Error (Extension Bridge): ${e.message || String(e)}` }], isError: true }
         }
       }
