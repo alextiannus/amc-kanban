@@ -28,6 +28,8 @@ import {
   Award,
   Zap,
   BookOpen,
+  MapPin,
+  UtensilsCrossed,
   MousePointerClick
 } from 'lucide-react'
 
@@ -36,15 +38,16 @@ interface Slide {
   id: number
   title: string
   subtitle: string
+  tag: string
 }
 
 const slides: Slide[] = [
-  { id: 0, title: '出海愿景', subtitle: '出海中餐品牌人机协同自媒体与口碑系统 (Global Dining OS)' },
-  { id: 1, title: '海外四大痛点', subtitle: '中餐品牌跨国运营的痛处与阻碍' },
-  { id: 2, title: '核心技术柱石', subtitle: 'AMC Kanban 针对出海的五大硬核创新' },
-  { id: 3, title: 'O2O餐饮闭环', subtitle: '海外到店口碑与自然客流拉新方案' },
-  { id: 4, title: '竞品对比矩阵', subtitle: '为什么 AMC 是出海品牌的最佳搭档' },
-  { id: 5, title: '定价与ROI估算', subtitle: '替代高昂海外代运营的投资回报率' }
+  { id: 0, title: '人机协同 · 出海破局', subtitle: 'Global Dining Brand Social Media & Reputation OS', tag: 'PRODUCT VISION' },
+  { id: 1, title: '跨国运营四大痛点', subtitle: '中餐品牌走向全球化的深水阻碍', tag: 'MARKET PAIN POINTS' },
+  { id: 2, title: '五大硬核技术柱石', subtitle: '如何用物理隔离与网关拦截保障安全', tag: 'TECHNICAL ARCHITECTURE' },
+  { id: 3, title: 'O2O 口碑客流闭环', subtitle: '海外到店口碑拦截与本地 SEO 自然流量爆破', tag: 'SCENARIO EMPOWERMENT' },
+  { id: 4, title: '竞品对比星级矩阵', subtitle: 'AMC 对标传统 RPA 与海外代运营代沟', tag: 'COMPETITIVE MATRIX' },
+  { id: 5, title: 'SaaS 定价与动态 ROI', subtitle: '以技术红利替代昂贵海外代运营成本', tag: 'INVESTMENT & ROI' }
 ]
 
 // FAQ data types
@@ -93,7 +96,7 @@ const faqData: FaqItem[] = [
 ]
 
 export default function PitchDeckPage() {
-  const [activeTab, setActiveTab] = useState<'deck' | 'faq'>('faq')
+  const [activeTab, setActiveTab] = useState<'deck' | 'faq'>('deck')
   const [currentSlide, setCurrentSlide] = useState(0)
   
   // Slide 2: Core Tech Hub State
@@ -102,9 +105,9 @@ export default function PitchDeckPage() {
   // Slide 3: Scenario State
   const [selectedScenario, setSelectedScenario] = useState(0)
 
-  // Slide 5: ROI Calculator Input State - Pivoted for USD overseas operational wages
+  // Slide 5: ROI Calculator Input State
   const [storeCount, setStoreCount] = useState(10)
-  const [avgWage, setAvgWage] = useState(4500) // Default $4500/month for US local social media managers
+  const [avgWage, setAvgWage] = useState(4500) // Default $4500/month for US local SMM
 
   // FAQ Search & Category Filter State
   const [searchQuery, setSearchQuery] = useState('')
@@ -125,13 +128,13 @@ export default function PitchDeckPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [activeTab])
 
-  // ROI Calculations in USD ($) - Pivoted to local US labor costs
-  const manualLaborCost = storeCount * (avgWage * 0.4) * 12 // Assume 40% of local SMM employee wage spent on posting, translation, Yelp responding
-  const amcTotalCost = (storeCount <= 3 ? 99 : 499) * 12 + (storeCount * 30 * 12) // SaaS Subscription + small manual auditing buffer
+  // ROI Calculations in USD ($)
+  const manualLaborCost = storeCount * (avgWage * 0.4) * 12
+  const amcTotalCost = (storeCount <= 3 ? 99 : 499) * 12 + (storeCount * 30 * 12)
   const savedCost = Math.round(manualLaborCost - amcTotalCost)
-  const expectedTrafficIncreasePercent = 22 // Average Google Maps Local Search SEO optimization boost
-  const additionalVisits = storeCount * 180 * 12 // Average additional guest views from maps rank boost per year
-  const conversionValue = Math.round(additionalVisits * 0.05 * 45) // 5% conversion rate to guest, average transaction value $45 USD
+  const expectedTrafficIncreasePercent = 22
+  const additionalVisits = storeCount * 180 * 12
+  const conversionValue = Math.round(additionalVisits * 0.05 * 45)
 
   // Filtered FAQ Items
   const filteredFaqs = faqData.filter(faq => {
@@ -142,43 +145,53 @@ export default function PitchDeckPage() {
   })
 
   return (
-    <div className="min-h-screen bg-[#070913] text-slate-100 font-sans antialiased overflow-x-hidden selection:bg-indigo-500 selection:text-white">
-      {/* Dynamic Futuristic Background Gradients */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none -z-10" />
-      <div className="absolute bottom-10 right-1/4 w-[600px] h-[600px] bg-emerald-500/5 rounded-full blur-[140px] pointer-events-none -z-10" />
-      <div className="absolute top-1/3 right-10 w-[300px] h-[300px] bg-purple-500/5 rounded-full blur-[100px] pointer-events-none -z-10" />
+    <div className="min-h-screen bg-[#03050d] text-slate-100 font-sans antialiased overflow-x-hidden relative selection:bg-indigo-500 selection:text-white">
+      {/* star dotted grid background */}
+      <div 
+        className="absolute inset-0 opacity-[0.03] pointer-events-none -z-10"
+        style={{
+          backgroundImage: `radial-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px)`,
+          backgroundSize: '24px 24px'
+        }}
+      />
 
-      {/* Header Section */}
-      <header className="sticky top-0 z-50 backdrop-blur-lg bg-[#070913]/70 border-b border-slate-800/60 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      {/* Cyber Mesh Nebulas */}
+      <div className="absolute top-0 left-10 w-[700px] h-[700px] bg-indigo-500/10 rounded-full blur-[140px] pointer-events-none -z-10 animate-pulse" style={{ animationDuration: '8s' }} />
+      <div className="absolute bottom-20 right-10 w-[800px] h-[800px] bg-purple-500/5 rounded-full blur-[160px] pointer-events-none -z-10 animate-pulse" style={{ animationDuration: '12s' }} />
+      <div className="absolute top-1/3 left-1/3 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none -z-10" />
+
+      {/* Premium Header */}
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#03050d]/80 border-b border-slate-900/80 transition-all shadow-lg shadow-black/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Bot className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <Bot className="w-5.5 h-5.5 text-white" />
             </div>
             <div>
-              <span className="font-black text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-indigo-400">AMC Dashboard</span>
-              <span className="ml-2 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-emerald-400 bg-emerald-500/10 rounded uppercase">FAQ & Deck</span>
+              <span className="font-black text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-indigo-300">AMC KANBAN</span>
+              <span className="ml-2.5 px-2 py-0.5 text-[8px] font-black tracking-widest text-indigo-400 bg-indigo-500/10 rounded-full border border-indigo-500/20 uppercase">GLOBAL DINING</span>
             </div>
           </div>
 
-          {/* Mode Switcher */}
-          <div className="flex bg-[#0f132a] border border-slate-800 rounded-full p-1 shadow-inner">
+          {/* Mode Toggle Switcher */}
+          <div className="flex bg-slate-950 border border-slate-800/80 rounded-full p-1 shadow-inner relative z-10">
             <button
               onClick={() => setActiveTab('deck')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-black transition-all ${
                 activeTab === 'deck'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/10'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               <Award className="w-3.5 h-3.5" />
-              产品演示
+              产品展示 (PITCH DECK)
             </button>
             <button
               onClick={() => setActiveTab('faq')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-5 py-2 rounded-full text-xs font-black transition-all ${
                 activeTab === 'faq'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/10'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -190,121 +203,155 @@ export default function PitchDeckPage() {
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-grow">
         <AnimatePresence mode="wait">
           {activeTab === 'deck' ? (
             <motion.div
               key="deck-mode"
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.3 }}
-              className="flex flex-col lg:flex-row gap-8 items-stretch min-h-[calc(100vh-180px)]"
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              className="flex flex-col lg:flex-row gap-10 items-stretch min-h-[calc(100vh-220px)]"
             >
-              {/* Sidebar Navigation */}
-              <div className="lg:w-64 flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 border-b lg:border-b-0 lg:border-r border-slate-800/80 pr-0 lg:pr-6 shrink-0 hide-scrollbar">
-                <div className="hidden lg:block mb-4">
-                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-3">演示章节</h4>
+              {/* Grand Navigation Sidebar */}
+              <div className="lg:w-72 flex flex-row lg:flex-col gap-3 overflow-x-auto lg:overflow-x-visible pb-4 lg:pb-0 border-b lg:border-b-0 lg:border-r border-slate-900 pr-0 lg:pr-8 shrink-0 hide-scrollbar justify-start">
+                <div className="hidden lg:block mb-5">
+                  <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-4">DECK CHAPTERS</h4>
                 </div>
                 {slides.map((slide, idx) => (
                   <button
                     key={slide.id}
                     onClick={() => setCurrentSlide(idx)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all shrink-0 ${
+                    className={`flex items-center gap-4 px-5 py-4 rounded-2xl text-left transition-all shrink-0 border relative overflow-hidden ${
                       currentSlide === idx
-                        ? 'bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 shadow-md shadow-indigo-950/20'
-                        : 'border border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                        ? 'bg-gradient-to-br from-indigo-950/40 to-slate-950 border-indigo-500/40 text-indigo-300 shadow-xl shadow-indigo-950/40'
+                        : 'bg-transparent border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
                     }`}
                   >
-                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                      currentSlide === idx ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-800 text-slate-500'
+                    {currentSlide === idx && (
+                      <motion.div 
+                        layoutId="active-bar" 
+                        className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" 
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                      />
+                    )}
+                    <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-md ${
+                      currentSlide === idx ? 'bg-indigo-500/20 text-indigo-300' : 'bg-slate-900 text-slate-600'
                     }`}>
                       {String(slide.id + 1).padStart(2, '0')}
                     </span>
-                    <span className="text-xs font-bold hidden sm:inline">{slide.title}</span>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold">{slide.title}</span>
+                      <span className="text-[9px] text-slate-500 mt-0.5 hidden lg:inline truncate max-w-[170px]">{slide.subtitle}</span>
+                    </div>
                   </button>
                 ))}
               </div>
 
-              {/* Deck Presentation Window */}
-              <div className="flex-1 flex flex-col justify-between bg-slate-950/40 border border-slate-800/80 rounded-2xl p-6 md:p-8 backdrop-blur-md relative overflow-hidden shadow-2xl">
-                {/* Header within slide */}
-                <div className="flex items-center justify-between border-b border-slate-800/50 pb-4 mb-6">
-                  <div>
-                    <span className="text-[10px] font-bold text-indigo-400 tracking-wider uppercase">AMC PITCH DECK · SECTION {currentSlide + 1}</span>
-                    <h2 className="text-xl md:text-2xl font-black text-white mt-1">{slides[currentSlide].title}</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">{slides[currentSlide].subtitle}</p>
-                  </div>
-                  <div className="text-xs font-mono font-bold text-slate-600 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-md">
-                    {currentSlide + 1} / {slides.length}
-                  </div>
+              {/* Main Deck Canvas */}
+              <div className="flex-1 flex flex-col justify-between bg-slate-950/60 border border-slate-900 rounded-3xl p-8 md:p-12 backdrop-blur-2xl relative overflow-hidden shadow-2xl shadow-indigo-950/20">
+                {/* Dotted corner decoration */}
+                <div className="absolute top-4 right-4 text-slate-800 font-mono text-[9px] select-none pointer-events-none">
+                  AMC_OS_PITCH_DECK_V2.1 // CONFIDENTIAL
                 </div>
 
-                {/* Dynamic Slide Content */}
+                {/* Slide Title Panel */}
+                <div className="flex flex-col border-b border-slate-900 pb-6 mb-8">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[9px] font-black text-indigo-400 tracking-wider uppercase">
+                      {slides[currentSlide].tag}
+                    </span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  </div>
+                  <h2 className="text-2xl md:text-4xl font-black text-white mt-2 tracking-tight">
+                    {slides[currentSlide].title}
+                  </h2>
+                  <p className="text-sm text-slate-400 mt-1 font-medium">{slides[currentSlide].subtitle}</p>
+                </div>
+
+                {/* Slide Content Canvas */}
                 <div className="flex-grow flex flex-col justify-center py-4">
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={currentSlide}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      transition={{ duration: 0.25 }}
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -15 }}
+                      transition={{ duration: 0.3, ease: 'easeOut' }}
                       className="w-full"
                     >
-                      {/* Slide 0: Product Vision */}
+                      {/* Slide 0: Product Vision (Full-Scale Grand Design) */}
                       {currentSlide === 0 && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center py-4">
-                          <div className="space-y-6">
-                            <div className="inline-flex items-center gap-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-full text-xs font-bold">
-                              <Sparkles className="w-3.5 h-3.5" />
-                              出海中餐品牌自媒体与口碑合规系统
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+                          <div className="lg:col-span-7 space-y-6">
+                            <div className="inline-flex items-center gap-2 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-3.5 py-1.5 rounded-full text-xs font-black">
+                              <Sparkles className="w-4 h-4 text-indigo-400" />
+                              人机协作的全球大航海时代
                             </div>
-                            <h1 className="text-3xl md:text-5xl font-black leading-tight tracking-tight text-white text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-indigo-300">
-                              国内总部把控，海外安全执行，中英文双线运营
+                            <h1 className="text-4xl md:text-6xl font-black leading-tight tracking-tight text-white">
+                              让海外自媒体与口碑运营<br />
+                              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-emerald-400">告别跨国风控与昂贵人工</span>
                             </h1>
-                            <p className="text-sm md:text-base text-slate-400 leading-relaxed">
-                              打破出海餐饮自媒体运营痛点，AMC Kanban 将 AI 智能体设为“一等协作公民”。AI 跨语境生成本土文案，总部在线审核阻断，再通过海外门店本地 IP 安全通道分流发布，让中餐品牌在国际市场高效拓客。
+                            <p className="text-base text-slate-300 leading-relaxed font-medium">
+                              出海中餐品牌走向全球时，常因为“不懂本地英文文案”、“雇不起海外代运营（ Agency ）”或“跨国发布频繁遭遇风控封号”而错失大好市场。AMC 将 AI 智能体打造成您店里的虚拟员工，在安全合规的前提下，替您接管中英文双自媒体运营和海外口碑治理。
                             </p>
-                            <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                            <div className="flex flex-col sm:flex-row gap-4 pt-4">
                               <button
                                 onClick={() => setCurrentSlide(1)}
-                                className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-sm font-bold px-6 py-3 rounded-xl shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all group"
+                                className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white text-sm font-black px-8 py-4 rounded-2xl shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/35 transition-all group cursor-pointer"
                               >
-                                了解出海四大痛点
-                                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                                剖析海外运营四大痛点
+                                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                               </button>
                               <button
                                 onClick={() => setActiveTab('faq')}
-                                className="flex items-center justify-center gap-2 border border-slate-800 hover:border-slate-700 hover:bg-slate-900/60 text-slate-300 text-sm font-bold px-6 py-3 rounded-xl transition-all"
+                                className="flex items-center justify-center gap-2 border border-slate-800 hover:border-slate-700 hover:bg-slate-900/60 text-slate-300 text-sm font-black px-8 py-4 rounded-2xl transition-all cursor-pointer"
                               >
-                                进入常见问题
+                                常见问题 FAQ
                               </button>
                             </div>
                           </div>
 
-                          {/* Interactive Glowing Tech Hub Art */}
-                          <div className="flex items-center justify-center relative">
-                            <div className="w-64 h-64 md:w-80 md:h-80 rounded-full border border-indigo-500/15 flex items-center justify-center relative animate-pulse">
-                              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/5 to-purple-500/5 rounded-full blur-xl" />
-                              
-                              {/* Inner ring */}
-                              <div className="w-44 h-44 md:w-56 md:h-56 rounded-full border border-purple-500/20 flex items-center justify-center relative">
-                                <div className="w-24 h-24 md:w-32 md:h-32 rounded-xl bg-gradient-to-br from-indigo-950/80 to-slate-900 border border-indigo-500/40 flex flex-col items-center justify-center shadow-2xl relative z-10">
-                                  <Building2 className="w-8 h-8 text-indigo-400 mb-1" />
-                                  <span className="text-[10px] font-bold text-indigo-300 tracking-wider">GLOBAL DINING</span>
+                          {/* Atmospheric Visualizer Art */}
+                          <div className="lg:col-span-5 flex items-center justify-center relative">
+                            {/* Radial Ambient Glow */}
+                            <div className="absolute w-72 h-72 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none" />
+                            
+                            {/* Visual Grid canvas */}
+                            <div className="w-80 h-80 rounded-3xl bg-gradient-to-br from-slate-950 to-slate-900 border border-slate-800/80 p-6 flex flex-col justify-between shadow-2xl relative">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-mono text-slate-500">SYSTEM STATUS: ONLINE</span>
+                                <div className="flex gap-1.5">
+                                  <div className="w-2 h-2 rounded-full bg-red-400" />
+                                  <div className="w-2 h-2 rounded-full bg-yellow-400" />
+                                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
                                 </div>
                               </div>
 
-                              {/* Orbiting Satellite 1 (China HQ) */}
-                              <div className="absolute top-2 left-8 md:left-12 bg-slate-900/90 border border-slate-700/80 px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 z-20">
-                                <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                                <span className="text-[10px] font-bold text-slate-300">国内总部 (管控审核)</span>
+                              {/* Central Visual */}
+                              <div className="flex-grow flex flex-col items-center justify-center py-6 relative">
+                                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl shadow-indigo-500/20 relative z-10 animate-bounce" style={{ animationDuration: '3s' }}>
+                                  <UtensilsCrossed className="w-10 h-10 text-white" />
+                                </div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="w-44 h-44 border border-indigo-500/10 rounded-full animate-ping" style={{ animationDuration: '4s' }} />
+                                </div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <div className="w-32 h-32 border border-purple-500/20 rounded-full animate-pulse" />
+                                </div>
                               </div>
 
-                              {/* Orbiting Satellite 2 (US Store Plugin) */}
-                              <div className="absolute bottom-6 right-8 md:right-12 bg-slate-900/90 border border-slate-700/80 px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 z-20">
-                                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                                <span className="text-[10px] font-bold text-slate-300">海外分店 (本地IP执行)</span>
+                              {/* Interactive badges */}
+                              <div className="flex justify-between gap-2">
+                                <div className="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-center flex-1">
+                                  <div className="text-[8px] text-slate-500 font-bold">国内总部 (HQ)</div>
+                                  <div className="text-[10px] font-black text-indigo-400 mt-0.5">控制与审核</div>
+                                </div>
+                                <div className="bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-center flex-1">
+                                  <div className="text-[8px] text-slate-500 font-bold">海外店面 (Plugin)</div>
+                                  <div className="text-[10px] font-black text-emerald-400 mt-0.5">本地发布</div>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -314,165 +361,155 @@ export default function PitchDeckPage() {
                       {/* Slide 1: Market Pain Points */}
                       {currentSlide === 1 && (
                         <div className="space-y-8 py-2">
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             {/* Card 1 */}
-                            <div className="bg-[#0c0e20]/60 border border-slate-800 hover:border-indigo-500/40 rounded-2xl p-5 transition-all group relative overflow-hidden">
-                              <div className="absolute -top-10 -right-10 w-24 h-24 bg-red-500/5 rounded-full blur-xl group-hover:bg-red-500/10 transition-all" />
-                              <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-400 mb-3 font-bold font-mono text-sm">
-                                01
+                            <div className="bg-slate-950/40 border border-slate-900 hover:border-indigo-500/35 rounded-3xl p-6 transition-all group relative overflow-hidden shadow-lg hover:shadow-indigo-950/10 flex flex-col justify-between min-h-[220px]">
+                              <div className="absolute -top-12 -right-12 w-28 h-28 bg-red-500/5 rounded-full blur-xl group-hover:bg-red-500/10 transition-all" />
+                              <div>
+                                <span className="text-xs font-mono font-black text-red-500 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md">PAIN 01</span>
+                                <h3 className="text-base font-black text-white mt-4">本地文案与文化断层</h3>
                               </div>
-                              <h3 className="text-sm font-black text-white mb-1.5 flex items-center gap-1.5">
-                                本地文案与文化断层
-                              </h3>
-                              <p className="text-[11px] text-slate-400 leading-relaxed">
-                                国内团队缺乏海外本土语境，机翻感的英文很难触达老外。AMC 提供海外本土化创作智能体，自动生成本土潮流文案与 Hashtags。
+                              <p className="text-xs text-slate-400 leading-relaxed font-medium mt-2">
+                                国内团队写出的英文英文干瘪生硬，不懂海外俚语和网络爆梗。AMC 自研本地化 Agent，自动生成生动地道的海外本地文案，配以精准标签。
                               </p>
                             </div>
 
                             {/* Card 2 */}
-                            <div className="bg-[#0c0e20]/60 border border-slate-800 hover:border-indigo-500/40 rounded-2xl p-5 transition-all group relative overflow-hidden">
-                              <div className="absolute -top-10 -right-10 w-24 h-24 bg-yellow-500/5 rounded-full blur-xl group-hover:bg-yellow-500/10 transition-all" />
-                              <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 text-yellow-400 mb-3 font-bold font-mono text-sm">
-                                02
+                            <div className="bg-slate-950/40 border border-slate-900 hover:border-indigo-500/35 rounded-3xl p-6 transition-all group relative overflow-hidden shadow-lg hover:shadow-indigo-950/10 flex flex-col justify-between min-h-[220px]">
+                              <div className="absolute -top-12 -right-12 w-28 h-28 bg-yellow-500/5 rounded-full blur-xl group-hover:bg-yellow-500/10 transition-all" />
+                              <div>
+                                <span className="text-xs font-mono font-black text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-md">PAIN 02</span>
+                                <h3 className="text-base font-black text-white mt-4">本土代运营价格高昂</h3>
                               </div>
-                              <h3 className="text-sm font-black text-white mb-1.5 flex items-center gap-1.5">
-                                本土代运营价格高昂
-                              </h3>
-                              <p className="text-[11px] text-slate-400 leading-relaxed">
-                                聘请欧美本土自媒体代运营，单店月收高达 $3k-$5k，成本侵蚀严重。AI 自动操作能够替代 90% 基础工作，大幅削减支出。
+                              <p className="text-xs text-slate-400 leading-relaxed font-medium mt-2">
+                                聘请欧美本土自媒体代运营，单店月收高达 $3k-$5k。AI 自动发帖和回复可以替代 90% 繁杂的人工操作，削减大笔代运营费用。
                               </p>
                             </div>
 
                             {/* Card 3 */}
-                            <div className="bg-[#0c0e20]/60 border border-slate-800 hover:border-indigo-500/40 rounded-2xl p-5 transition-all group relative overflow-hidden">
-                              <div className="absolute -top-10 -right-10 w-24 h-24 bg-orange-500/5 rounded-full blur-xl group-hover:bg-orange-500/10 transition-all" />
-                              <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center border border-orange-500/20 text-orange-400 mb-3 font-bold font-mono text-sm">
-                                03
+                            <div className="bg-slate-950/40 border border-slate-900 hover:border-indigo-500/35 rounded-3xl p-6 transition-all group relative overflow-hidden shadow-lg hover:shadow-indigo-950/10 flex flex-col justify-between min-h-[220px]">
+                              <div className="absolute -top-12 -right-12 w-28 h-28 bg-orange-500/5 rounded-full blur-xl group-hover:bg-orange-500/10 transition-all" />
+                              <div>
+                                <span className="text-xs font-mono font-black text-orange-500 bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-md">PAIN 03</span>
+                                <h3 className="text-base font-black text-white mt-4">跨国登录引发的风控封号</h3>
                               </div>
-                              <h3 className="text-sm font-black text-white mb-1.5 flex items-center gap-1.5">
-                                异地跨国登录风控封号
-                              </h3>
-                              <p className="text-[11px] text-slate-400 leading-relaxed">
-                                频繁更换代理或通过国内 IP 跨国登录 Yelp / Meta 极其危险。插件桥在海外门店店员电脑执行，使用的是完全正规的当地 IP 绿色通道。
+                              <p className="text-xs text-slate-400 leading-relaxed font-medium mt-2">
+                                从中国翻墙登录海外 Meta 或 Google 商家后台风险极高。AMC 插件直接运行在海外店面的本地网络电脑上，走 100% 当地绿色 IP。
                               </p>
                             </div>
 
                             {/* Card 4 */}
-                            <div className="bg-[#0c0e20]/60 border border-slate-800 hover:border-indigo-500/40 rounded-2xl p-5 transition-all group relative overflow-hidden">
-                              <div className="absolute -top-10 -right-10 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl group-hover:bg-indigo-500/10 transition-all" />
-                              <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-400 mb-3 font-bold font-mono text-sm">
-                                04
+                            <div className="bg-slate-950/40 border border-slate-900 hover:border-indigo-500/35 rounded-3xl p-6 transition-all group relative overflow-hidden shadow-lg hover:shadow-indigo-950/10 flex flex-col justify-between min-h-[220px]">
+                              <div className="absolute -top-12 -right-12 w-28 h-28 bg-indigo-500/5 rounded-full blur-xl group-hover:bg-indigo-500/10 transition-all" />
+                              <div>
+                                <span className="text-xs font-mono font-black text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded-md">PAIN 04</span>
+                                <h3 className="text-base font-black text-white mt-4">中英文自媒体并行割裂</h3>
                               </div>
-                              <h3 className="text-sm font-black text-white mb-1.5 flex items-center gap-1.5">
-                                中英文自媒体割裂
-                              </h3>
-                              <p className="text-[11px] text-slate-400 leading-relaxed">
-                                既要服务当地老外群体（IG/Yelp），又要服务华人同胞（小红书/微信）。双语 Agent 看板并轨，将国内和海外运营合并在同一体系下。
+                              <p className="text-xs text-slate-400 leading-relaxed font-medium mt-2">
+                                既要服务当地西人群体（IG/Yelp），又要维护华人受众（小红书/微信）。双语 Agent 在一张看板上协作，中英渠道无缝并轨。
                               </p>
                             </div>
-                          </div>
-                          
-                          <div className="bg-indigo-950/30 border border-indigo-900/40 rounded-xl p-4 flex items-center gap-3">
-                            <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0" />
-                            <span className="text-xs text-indigo-300">
-                              <strong>针对海外市场的破局方案</strong>：无需收集密码，用“国内总部集中管控 + 海外门店本地执行 + AI 双语 Agent 协同”打通闭环。
-                            </span>
                           </div>
                         </div>
                       )}
 
-                      {/* Slide 2: Core Technical Pillars */}
+                      {/* Slide 2: Core Technical Pillars (Animated Diagram / Interactive Canvas) */}
                       {currentSlide === 2 && (
-                        <div className="flex flex-col md:flex-row gap-6 py-2">
-                          {/* Left Navigation Buttons */}
-                          <div className="md:w-60 flex flex-col gap-2">
+                        <div className="flex flex-col lg:flex-row gap-8 py-2 items-stretch">
+                          {/* Sidebar selector */}
+                          <div className="lg:w-72 flex flex-col gap-2 shrink-0">
                             {[
-                              { id: 1, label: '🤖 中英文双语 Agent 体系' },
-                              { id: 2, label: '🔌 跨国防封“本地插件桥”' },
-                              { id: 3, label: '🔒 总部管控 DAG 审批拦截' },
-                              { id: 4, label: '💬 评论日志挂起与 Resume' },
-                              { id: 5, label: '🪵 集中网关负载审计记录' }
+                              { id: 1, label: '🤖 中英文双语 Agent 体系', icon: Bot },
+                              { id: 2, label: '🔌 跨国安全“本地插件桥”', icon: Globe },
+                              { id: 3, label: '🔒 总部管控 DAG 审批流', icon: Lock },
+                              { id: 4, label: '💬 错误挂起与断点 Resume', icon: MessageSquare },
+                              { id: 5, label: '🪵 集中式网关负载审计记录', icon: Sliders }
                             ].map(hub => (
                               <button
                                 key={hub.id}
                                 onClick={() => setSelectedTechHub(hub.id)}
-                                className={`text-xs font-bold px-4 py-3 rounded-xl text-left border transition-all ${
+                                className={`text-xs font-black px-5 py-3.5 rounded-xl text-left border flex items-center gap-3 transition-all cursor-pointer ${
                                   selectedTechHub === hub.id
-                                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-900 border-indigo-500 text-white shadow-md'
-                                    : 'bg-slate-900/40 border-slate-800/80 text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
+                                    ? 'bg-gradient-to-r from-indigo-600 via-indigo-900 to-indigo-950 border-indigo-500/60 text-white shadow-xl shadow-indigo-950/20'
+                                    : 'bg-slate-900/40 border-slate-900 text-slate-400 hover:bg-slate-800/40 hover:text-slate-200'
                                 }`}
                               >
+                                <hub.icon className={`w-4 h-4 ${selectedTechHub === hub.id ? 'text-indigo-300' : 'text-slate-500'}`} />
                                 {hub.label}
                               </button>
                             ))}
                           </div>
 
-                          {/* Right Content Pane */}
-                          <div className="flex-1 bg-[#0c0e20]/80 border border-slate-800 rounded-2xl p-6 min-h-[300px] flex flex-col justify-between">
-                            <div className="space-y-4">
+                          {/* Dynamic Architecture Display */}
+                          <div className="flex-grow bg-[#050814] border border-slate-850 rounded-3xl p-6 md:p-8 flex flex-col justify-between shadow-2xl relative">
+                            {/* Background mesh glow inside panel */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/0 rounded-3xl pointer-events-none" />
+
+                            <div className="space-y-4 relative z-10">
                               {selectedTechHub === 1 && (
                                 <>
-                                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
-                                    <Bot className="w-4 h-4" /> AI 智能体专属 Profile 与多角色分配
+                                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-wider">
+                                    <Bot className="w-4 h-4" /> Multi-Agent 双系统并轨
                                   </div>
-                                  <h3 className="text-lg font-black text-white">中英文自媒体并行作战，各司其职</h3>
-                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                                    系统为每项任务定义清晰的 assignee。您可以将小红书发帖分配给“中文华人运营智能体”，将 Instagram 和 Yelp 分配给“英文本地化智能体”，API Key 和底层提示词物理隔离。
+                                  <h3 className="text-xl font-black text-white">中英文 Agent 联合作战</h3>
+                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">
+                                    多 Agent 模型下，系统可自动为不同任务派发对应的语种智能体（如“小红书引流 Agent”及“Instagram 本地化 Agent”）。每一个 Agent 在系统都有独立的 API Key、心跳活跃检测与模型参数设定。
                                   </p>
-                                  <div className="bg-slate-950/80 border border-slate-850 rounded-xl p-4 font-mono text-[10px] text-indigo-300">
-                                    <span className="text-slate-500">// 多 Agent 独立鉴权隔离</span><br />
-                                    POST /api/tasks/create (assignee: RED_chinese_agent_key)<br />
-                                    POST /api/tasks/create (assignee: IG_english_agent_key)
+                                  <div className="bg-slate-950/90 border border-slate-900 rounded-xl p-4 font-mono text-[10px] text-indigo-300/90 shadow-inner">
+                                    <span className="text-slate-500">// API Key 级别鉴权，总部看板并行管理</span><br />
+                                    POST /api/tasks/create (assignee: <span className="text-emerald-400">RED_Chinese_Agent</span>)<br />
+                                    POST /api/tasks/create (assignee: <span className="text-purple-400">IG_English_Agent</span>)
                                   </div>
                                 </>
                               )}
 
                               {selectedTechHub === 2 && (
                                 <>
-                                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
-                                    <Globe className="w-4 h-4" /> 网页指令穿透·防平台异地检测
+                                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-wider">
+                                    <Globe className="w-4 h-4" /> SSE (Server-Sent Events) 长连接网页穿透
                                   </div>
-                                  <h3 className="text-lg font-black text-white">店面本地活跃 Session 注入执行，100% 防风控</h3>
-                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                                    抛弃传统高风险的云端代理 IP 翻墙登录。AMC 仅向下游推送操作逻辑指令，发帖直接在纽约、伦敦、新加坡门店现成的活跃浏览器中模拟点击发布，确保绿通道执行。
+                                  <h3 className="text-xl font-black text-white">店面本地 Session 模拟执行，绕过所有跨国风控</h3>
+                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">
+                                    AMC 仅下发具体的逻辑指令，发帖和 Yelp 回复都在纽约/伦敦/巴黎店内的电脑端执行。插件在前台活跃标签页中模拟人的打字和点击，走的是海外店面真实本地 IP，杜绝翻墙被封。
                                   </p>
-                                  <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-2 rounded-lg text-[10px]">
-                                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                                    <span>总部不接触明文密码，店面直接从当地 PC 执行发帖与 Yelp/Google 回复。</span>
+                                  <div className="bg-slate-950/90 border border-slate-900 p-4 rounded-xl flex items-center justify-between text-[10px] font-mono">
+                                    <span className="text-slate-500">SSE Bridge Command:</span>
+                                    <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px]">ACTION: PUBLISH_IG</span>
+                                    <span className="text-slate-500">IP: NY_MEMBER_SHOP</span>
                                   </div>
                                 </>
                               )}
 
                               {selectedTechHub === 3 && (
                                 <>
-                                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
-                                    <Lock className="w-4 h-4" /> DAG 跨国协作栅栏
+                                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-wider">
+                                    <Lock className="w-4 h-4" /> DAG (有向无环图) 接口拦截
                                   </div>
-                                  <h3 className="text-lg font-black text-white">中国总部掌握终审权，防止 AI 越权抢跑</h3>
-                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                                    配置“国内中文大纲审核 Done”作为海外 AI 发帖的前置 Blocker。在前置条件被国内主编解锁前，网关级拦截任何外部发帖 Agent 的 API Key 触发请求，锁死安全边界。
+                                  <h3 className="text-xl font-black text-white">国内总部掌握终审权，拦截 AI 幻觉发布</h3>
+                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">
+                                    任务之间支持 blockers 自依赖。当“国内总部审核”前置步骤处于非 Done 状态时，即使 AI 尝试发布，网关也会在 API 层面直接物理拒绝发帖 Agent 的 API Key 更新请求，保障信息合规。
                                   </p>
-                                  <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-2 rounded-lg text-[10px]">
-                                    <XCircle className="w-3.5 h-3.5 shrink-0" />
-                                    <span>网关拦截报错：`400 Bad Request: Blocker "HQ_content_approval" is not done`。</span>
+                                  <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-2.5 rounded-xl text-[10px] font-bold">
+                                    <XCircle className="w-4 h-4 shrink-0" />
+                                    <span>API GATEWAY: [400 Blocked] HQ approval is required before publishing.</span>
                                   </div>
                                 </>
                               )}
 
                               {selectedTechHub === 4 && (
                                 <>
-                                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
-                                    <MessageSquare className="w-4 h-4" /> 评论自愈与断点 Resume
+                                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-wider">
+                                    <MessageSquare className="w-4 h-4" /> Markdown Context Preserved Thread
                                   </div>
-                                  <h3 className="text-lg font-black text-white">AI 挂起 pending，人类在评论区一键回复指导</h3>
-                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                                    英文 Agent 遇到敏感词汇或当地文化梗歧义时，会自动将任务置为 pending。国内团队可在 Markdown 评论区进行文字修正，点击 Resume 即可在原发布处继续，避免从头重跑。
+                                  <h3 className="text-xl font-black text-white">AI 挂起 pending，人类评论区 Resume 自愈</h3>
+                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">
+                                    AI 在文案中检测到敏感词或发生错误时会自动挂起任务为 pending。人类主编可以直接在同一任务卡片的 Markdown 评论区内进行内容修正，一键 Resume 即可在原断点处自愈重跑。
                                   </p>
-                                  <div className="border border-slate-800 rounded-xl p-3 bg-slate-900/60 flex items-start gap-3">
-                                    <div className="w-7 h-7 rounded bg-indigo-500/15 flex items-center justify-center text-[10px] font-bold text-indigo-400">HQ</div>
+                                  <div className="border border-slate-900 rounded-xl p-3 bg-slate-950/80 flex items-start gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-[10px] font-mono font-black text-emerald-400 shrink-0">AI</div>
                                     <div className="flex-1 space-y-1">
-                                      <div className="text-[10px] text-slate-400 font-bold">国内总部主编 14:05</div>
-                                      <p className="text-[10px] text-slate-200">修改俚语“awesome spicy”为“absolutely authentic tongue-numbing Sichuan heat”，批准 Resume。</p>
+                                      <div className="text-[10px] text-slate-500 font-bold">Yelp Responder Agent 15:40</div>
+                                      <p className="text-[10px] text-slate-200 leading-relaxed font-normal">❌ 错误：客人提到的拼写细节“hot pot flavor”可能存在文化梗歧义，已挂起 pending，请修改文案。</p>
                                     </div>
                                   </div>
                                 </>
@@ -480,46 +517,45 @@ export default function PitchDeckPage() {
 
                               {selectedTechHub === 5 && (
                                 <>
-                                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
-                                    <Sliders className="w-4 h-4" /> 集中式 API 审计记录
+                                  <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-wider">
+                                    <Sliders className="w-4 h-4" /> Transparent Gateway Log
                                   </div>
-                                  <h3 className="text-lg font-black text-white">Agent 行为透明记录，方便大客户多店合规审计</h3>
-                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                                    看板网关拦截并保存所有下发到海外店面插件的参数和接收到的返回值。当发生平台接口改动或偶发延迟时，Admin 可在系统日志中一键过滤，极大地方便了跨境调试。
+                                  <h3 className="text-xl font-black text-white">对 Agent 完全透明的 API 网关与日志高亮</h3>
+                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">
+                                    AMC 集中式透明网关记录所有的请求 payload，并在发生异常（如网络抖动）时拦截并返回极其精准的报错回传，协助 Agent 自动修正行为，提供无死角的审计保障。
                                   </p>
-                                  <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-lg flex items-center gap-2 justify-between text-[10px]">
-                                    <span className="text-slate-400">店面插件审计：</span>
-                                    <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono text-[9px]">EXTENSION_CMD_RECV</span>
-                                    <span className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-mono text-[9px]">EXTENSION_REGISTER</span>
+                                  <div className="flex justify-between items-center bg-slate-950/90 border border-slate-900 p-3.5 rounded-xl text-[9px] font-mono">
+                                    <span className="text-slate-500">审计分类: 浏览器插件桥</span>
+                                    <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">EXTENSION_CMD_RECV</span>
+                                    <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">EXTENSION_CMD_ERR</span>
                                   </div>
                                 </>
                               )}
                             </div>
 
-                            <div className="text-[10px] text-slate-500 text-right mt-4 pt-2 border-t border-slate-800/40">
-                              点击左侧按钮切换查看更多技术特性
+                            <div className="text-[10px] text-slate-500 text-right mt-6 pt-3 border-t border-slate-900/60">
+                              点击左侧架构柱石，切换查看跨境技术实现细节
                             </div>
                           </div>
                         </div>
                       )}
 
-                      {/* Slide 3: O2O Living Services Closed Loop */}
+                      {/* Slide 3: O2O Living Services Closed Loop (Grand Visual Layout) */}
                       {currentSlide === 3 && (
                         <div className="space-y-6 py-2">
-                          {/* Interactive Tabs */}
-                          <div className="flex bg-[#0f132a] border border-slate-800 rounded-xl p-1 w-full overflow-x-auto hide-scrollbar">
+                          <div className="flex bg-slate-950 border border-slate-900 rounded-2xl p-1 w-full overflow-x-auto hide-scrollbar">
                             {[
                               { id: 0, label: '🛑 差评内部私下拦截' },
-                              { id: 1, label: '🚀 Yelp/Google Maps 本地 SEO 爆破' },
+                              { id: 1, label: '🚀 Yelp/Google Maps SEO 爆破' },
                               { id: 2, label: '👥 熟人聚餐拉新核销' },
                               { id: 3, label: '⏳ 闲时动态卡券调控' }
                             ].map((tab, idx) => (
                               <button
                                 key={tab.id}
                                 onClick={() => setSelectedScenario(idx)}
-                                className={`text-[11px] font-bold px-3 py-2 rounded-lg text-center flex-1 shrink-0 transition-all ${
+                                className={`text-[11px] font-black px-4 py-2.5 rounded-xl text-center flex-1 shrink-0 transition-all cursor-pointer ${
                                   selectedScenario === idx
-                                    ? 'bg-indigo-600 text-white shadow'
+                                    ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
                                     : 'text-slate-400 hover:text-slate-200'
                                 }`}
                               >
@@ -528,122 +564,130 @@ export default function PitchDeckPage() {
                             ))}
                           </div>
 
-                          {/* Dynamic Content Pane for Scenario */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center bg-[#0c0e20]/40 border border-slate-850 rounded-2xl p-6">
-                            <div className="space-y-4">
+                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-[#050814]/40 border border-slate-900 rounded-3xl p-8">
+                            <div className="lg:col-span-7 space-y-4">
                               {selectedScenario === 0 && (
                                 <>
-                                  <h3 className="text-lg font-black text-white">吐槽通道私下平息，保障 Yelp / Google Maps 评分</h3>
-                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                                    海外食客扫桌贴吐槽直接向系统反馈意见。系统自动拦截，飞书/Lark 警报海外店长现场介入，并派发“致歉无门槛券”，将差评拦截在 Yelp 等公网平台之前。
+                                  <h3 className="text-xl font-black text-white">吐槽直通老板，将一星差评扼杀在公网前</h3>
+                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">
+                                    顾客对菜品（如不够辣、牛肉太柴）产生负面情绪时，引导其通过桌贴二维码或内部小程序直通通道向商家投诉。系统获取吐槽后立即通知海外店长，并向该桌顾客派发致歉代金券平息情绪。
                                   </p>
-                                  <ul className="text-xs text-slate-400 space-y-2 list-disc pl-4">
-                                    <li>扫码直通吐槽建议 H5，避免差评暴露给公网当地客群</li>
-                                    <li>海外店长 Lark 5分钟报警机制，以便在结账前现场平息负面情绪</li>
-                                    <li>自动发放致歉补偿券，大幅度降低一星差评的流出</li>
-                                  </ul>
+                                  <div className="bg-slate-950 border border-slate-900 p-4 rounded-xl flex items-start gap-3">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping mt-1 shrink-0" />
+                                    <span className="text-xs text-slate-400">
+                                      <strong>和解率统计</strong>：在到店阶段进行私下内部调和补偿，能有效拦截 85% 以上流向 Yelp/Google Maps 的一星公开差评，捍卫品牌声誉。
+                                    </span>
+                                  </div>
                                 </>
                               )}
 
                               {selectedScenario === 1 && (
                                 <>
-                                  <h3 className="text-lg font-black text-white">Yelp/Google 回复响应时效 24/7 提升本地排名</h3>
-                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                                    评价回复时效在 Yelp 和 Google SEO 算法中占有极高权重。5星好评2分钟内秒回以向平台示好；低星差评5分钟内快速安抚并附带补偿发券链接。
+                                  <h3 className="text-xl font-black text-white">评价 2 分钟极速秒回，获取 Google Maps SEO 溢价流量</h3>
+                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">
+                                    Google 算法偏爱活跃商家。AI 24小时值守秒回 5 星好评，低星差评5分钟内安抚引导。通过不断刷新商户响应时间，使得商家的 Google Local 搜索排名提升 2-3 位。
                                   </p>
-                                  <ul className="text-xs text-slate-400 space-y-2 list-disc pl-4">
-                                    <li>秒级回复好评直接拉高 Maps 榜单自然排名（如 Hotpot near me 检索）</li>
-                                    <li>差评智能模板匹配本土礼貌用语，展示优良品牌口碑形象</li>
-                                    <li>全自动托管，无需店员耗费精力跨时区人工值守</li>
-                                  </ul>
+                                  <div className="bg-slate-950 border border-slate-900 p-4 rounded-xl flex items-start gap-3">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse mt-1 shrink-0" />
+                                    <span className="text-xs text-slate-400">
+                                      <strong>流量爆破</strong>：在海外本地“Hotpot near me”或“Bobatea”检索中，Google 3-Pack（前三位商户榜单）所带来的自然客流价值单店年均可达数万美元。
+                                    </span>
+                                  </div>
                                 </>
                               )}
 
                               {selectedScenario === 2 && (
                                 <>
-                                  <h3 className="text-lg font-black text-white">熟人社交聚餐解锁，以新带新实现裂变</h3>
-                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                                    扫码检测本桌同扫人数，达到设定阈值（如3人同扫）自动解锁全桌赠送招牌中餐菜品，用户抽中后派发“必须带好友共同核销”的联合副券。
+                                  <h3 className="text-xl font-black text-white">海外聚餐熟人裂变拉新，大额副券二次同行核销</h3>
+                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">
+                                    扫码器配置同桌多人（如3人以上）同扫门槛解锁福利，新客抽中奖品后生成联合副券，该卡券必须“双人同行”或“分享第二人核销”方能生效，以此引流海外主流客群。
                                   </p>
-                                  <ul className="text-xs text-slate-400 space-y-2 list-disc pl-4">
-                                    <li>多人同行大额福利，促使海外主流客群在朋友圈社交裂变</li>
-                                    <li>裂变带人副券模式强效锁客，实现二次同行客单价提升</li>
-                                    <li>系统大盘自动汇总统计裂变卡券激发的新客转化数据</li>
-                                  </ul>
+                                  <div className="bg-slate-950 border border-slate-900 p-4 rounded-xl flex items-start gap-3">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse mt-1 shrink-0" />
+                                    <span className="text-xs text-slate-400">
+                                      <strong>裂变杠杆</strong>：依靠聚餐熟人社交链发券，让您的每一位海外老顾客都成为品牌自发的拉新销售员，实现客单价与新客比例倍增。
+                                    </span>
+                                  </div>
                                 </>
                               )}
 
                               {selectedScenario === 3 && (
                                 <>
-                                  <h3 className="text-lg font-black text-white">工作日低谷闲时调价，防止周末利润稀释</h3>
-                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                                    周一至周四下午波谷时段（14:00-17:30）动态派发定向闲时消费券，提高非繁忙时段桌效，黄金周末高峰期则自动锁定折扣。
+                                  <h3 className="text-xl font-black text-white">波谷时段动态调价卡券，保护周末黄金利润率</h3>
+                                  <p className="text-xs md:text-sm text-slate-300 leading-relaxed font-medium">
+                                    系统依据历史运营大盘，对周一至周四下午低峰段进行闲时折扣卡券派发，消化后厨和堂食冗余运力。周末高峰期折扣卡券自动锁定，不稀释任何核心利润。
                                   </p>
-                                  <ul className="text-xs text-slate-400 space-y-2 list-disc pl-4">
-                                    <li>精准消耗闲时餐厅后厨和堂食运力，平滑客流曲线</li>
-                                    <li>锁定黄金时段卡券核销，保护主力营业额与毛利率</li>
-                                    <li>AI 根据大盘数据自动分析周内波谷段，动态调整投放面额</li>
-                                  </ul>
+                                  <div className="bg-slate-950 border border-slate-900 p-4 rounded-xl flex items-start gap-3">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse mt-1 shrink-0" />
+                                    <span className="text-xs text-slate-400">
+                                      <strong>桌效平衡</strong>：将客流合理分流到周内，既满足了价格敏感型客户的需求，又释放了餐厅的综合桌效，防范周末排队导致的客人流失。
+                                    </span>
+                                  </div>
                                 </>
                               )}
                             </div>
 
                             {/* visual mockup screen */}
-                            <div className="border border-slate-800 rounded-2xl bg-slate-950 p-4 max-w-sm mx-auto shadow-inner relative">
-                              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-20 h-4 bg-slate-800 rounded-full flex items-center justify-center">
-                                <div className="w-1.5 h-1.5 rounded-full bg-slate-900" />
+                            <div className="lg:col-span-5 border border-slate-800 rounded-3xl bg-slate-950 p-5 max-w-sm w-full mx-auto shadow-2xl relative">
+                              <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-24 h-4 bg-slate-800 rounded-full flex items-center justify-center">
+                                <div className="w-2 h-2 rounded-full bg-slate-900" />
                               </div>
                               
-                              <div className="bg-[#0f132a] rounded-xl p-4 mt-4 min-h-[180px] flex flex-col justify-between border border-slate-850">
-                                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                                  <span className="text-[10px] font-bold text-slate-400">口碑营销闭环引擎</span>
-                                  <span className="text-[8px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">Live</span>
+                              <div className="bg-[#0b0d1a] rounded-2xl p-5 mt-5 min-h-[220px] flex flex-col justify-between border border-slate-900">
+                                <div className="flex items-center justify-between border-b border-slate-850 pb-2">
+                                  <span className="text-[10px] font-black text-slate-400">O2O 口碑闭环引擎</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                    <span className="text-[8px] rounded bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 font-mono">Live</span>
+                                  </div>
                                 </div>
 
                                 {/* Mock Interactive Render */}
-                                <div className="py-3 text-center space-y-2">
+                                <div className="py-4 text-center space-y-3">
                                   {selectedScenario === 0 && (
                                     <>
-                                      <div className="text-xs font-bold text-slate-200">Yelp Blocker Active</div>
-                                      <div className="text-[10px] text-red-400 italic">"The soup base wasn't spicy enough!"</div>
-                                      <div className="text-[9px] bg-emerald-500/15 text-emerald-400 py-1.5 px-3 rounded-lg border border-emerald-500/20 inline-block">
-                                        Private Voucher Issued: $15 OFF
+                                      <div className="text-xs font-black text-slate-200">差评直通车拦截中</div>
+                                      <div className="text-[10px] text-red-400 bg-red-500/5 py-1.5 px-3 border border-red-500/10 rounded-lg italic">
+                                        "The customer complained that the beef brisket was too tough!"
+                                      </div>
+                                      <div className="text-[9px] bg-emerald-500/15 text-emerald-400 py-1.5 px-3 rounded-xl border border-emerald-500/20 inline-block font-bold">
+                                        Voucher Send: $15 OFF致歉券
                                       </div>
                                     </>
                                   )}
                                   {selectedScenario === 1 && (
                                     <>
-                                      <div className="text-xs font-bold text-slate-200">Google Local SEO Boost</div>
+                                      <div className="text-xs font-black text-slate-200">Google Local Maps SEO</div>
                                       <div className="text-[9px] text-slate-400">Rating: ⭐⭐⭐⭐⭐ (5 Stars)</div>
-                                      <div className="text-[9px] bg-slate-900 border border-slate-800 p-2 rounded text-left text-slate-300 max-h-16 overflow-y-auto">
-                                        AI: "Thanks for loving our hotpot! Your response was replied in 2 mins."
+                                      <div className="text-[9px] bg-slate-950 border border-slate-850 p-2.5 rounded-lg text-left text-slate-300 max-h-16 overflow-y-auto leading-relaxed">
+                                        AI Auto-Response: "Thank you for loving our hotpot! We look forward to serving you again."
                                       </div>
                                     </>
                                   )}
                                   {selectedScenario === 2 && (
                                     <>
-                                      <div className="text-xs font-bold text-slate-200">Group Dining Progress</div>
-                                      <div className="flex justify-center gap-2 py-1">
-                                        <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-[9px]">UserA</div>
-                                        <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-[9px]">UserB</div>
-                                        <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-[9px]">UserC</div>
+                                      <div className="text-xs font-black text-slate-200">三人同行拉新解锁</div>
+                                      <div className="flex justify-center gap-2.5 py-1">
+                                        <div className="w-7 h-7 rounded-full bg-indigo-600 border border-indigo-500/30 flex items-center justify-center text-[10px] font-bold">U1</div>
+                                        <div className="w-7 h-7 rounded-full bg-indigo-600 border border-indigo-500/30 flex items-center justify-center text-[10px] font-bold">U2</div>
+                                        <div className="w-7 h-7 rounded-full bg-indigo-600 border border-indigo-500/30 flex items-center justify-center text-[10px] font-bold">U3</div>
                                       </div>
-                                      <div className="text-[9px] text-emerald-400">🎉 3 scans detected! Free Appetizer Unlocked.</div>
+                                      <div className="text-[9px] text-emerald-400 font-bold">🎉 3 scans detected! Joint Voucher Issued.</div>
                                     </>
                                   )}
                                   {selectedScenario === 3 && (
                                     <>
-                                      <div className="text-xs font-bold text-slate-200">Off-Peak Yield Management</div>
-                                      <div className="text-[9px] text-slate-400">Hours: Mon-Thu 2:00-5:30 PM</div>
+                                      <div className="text-xs font-black text-slate-200">波谷闲时流量优化</div>
+                                      <div className="text-[9px] text-slate-400">Active hours: Mon-Thu 2:00-5:30 PM</div>
                                       <div className="text-[10px] font-bold text-indigo-400 animate-pulse">
-                                        ⏳ Active: 15% OFF Off-Peak slots only
+                                        ⏳ Off-Peak Coupon: 15% OFF Dining
                                       </div>
                                     </>
                                   )}
                                 </div>
 
-                                <div className="text-[8px] text-slate-500 text-center border-t border-slate-800/80 pt-2">
-                                  模拟商家小程序/平台终端展示
+                                <div className="text-[8px] text-slate-500 text-center border-t border-slate-850 pt-2 font-medium">
+                                  海外店面手机终端模拟展示
                                 </div>
                               </div>
                             </div>
@@ -656,107 +700,117 @@ export default function PitchDeckPage() {
                         <div className="overflow-x-auto py-2">
                           <table className="w-full text-xs text-left text-slate-300 border-collapse">
                             <thead>
-                              <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-widest text-[9px]">
-                                <th className="py-3 px-4">比较维度</th>
-                                <th className="py-3 px-4 text-indigo-400 bg-indigo-950/20 font-bold border-x border-slate-800/50">AMC Kanban (出海版)</th>
-                                <th className="py-3 px-4">传统 RPA (如 UiPath)</th>
-                                <th className="py-3 px-4">海外本土代运营 (Agency)</th>
-                                <th className="py-3 px-4">通用看板 (Jira/Linear)</th>
+                              <tr className="border-b border-slate-850 text-slate-400 uppercase tracking-widest text-[9px]">
+                                <th className="py-4 px-5">比较维度</th>
+                                <th className="py-4 px-5 text-indigo-400 bg-indigo-950/20 font-black border-x border-slate-900/50 rounded-t-xl">AMC Kanban (出海版)</th>
+                                <th className="py-4 px-5">传统 RPA (如 UiPath)</th>
+                                <th className="py-4 px-5">海外本土代运营 (Agency)</th>
+                                <th className="py-4 px-5">通用看板 (Jira/Linear)</th>
                               </tr>
                             </thead>
                             <tbody>
-                              <tr className="border-b border-slate-850 hover:bg-slate-900/20 transition-colors">
-                                <td className="py-3.5 px-4 font-bold text-slate-100">运营资金成本</td>
-                                <td className="py-3.5 px-4 text-emerald-400 bg-indigo-950/10 font-bold border-x border-slate-800/50">✅ 极低 (仅SaaS订阅与流量)</td>
-                                <td className="py-3.5 px-4 text-yellow-500">⚠️ 中等 (需要脚本维护开销)</td>
-                                <td className="py-3.5 px-4 text-red-500">❌ 极高 (单店月均 $3000-$5000)</td>
-                                <td className="py-3.5 px-4 text-emerald-400">✅ 极低</td>
+                              <tr className="border-b border-slate-900 hover:bg-slate-900/10 transition-colors">
+                                <td className="py-4.5 px-5 font-black text-slate-100">跨国网络及风控防护</td>
+                                <td className="py-4.5 px-5 text-emerald-400 bg-indigo-950/10 font-bold border-x border-slate-900/50">⭐⭐⭐⭐⭐ (100% 门店本地IP)</td>
+                                <td className="py-4.5 px-5 text-red-500">⭐ (VPN/代理极易遭封禁)</td>
+                                <td className="py-4.5 px-5 text-emerald-400">⭐⭐⭐⭐⭐ (当地人操作)</td>
+                                <td className="py-4.5 px-5 text-slate-500">❌ 不涉及</td>
                               </tr>
-                              <tr className="border-b border-slate-850 hover:bg-slate-900/20 transition-colors">
-                                <td className="py-3.5 px-4 font-bold text-slate-100">跨国风控防护</td>
-                                <td className="py-3.5 px-4 text-emerald-400 bg-indigo-950/10 font-bold border-x border-slate-800/50">✅ 极佳 (海外门店本地 IP 通道)</td>
-                                <td className="py-3.5 px-4 text-red-500">❌ 极差 (代理 IP 登录极易封号)</td>
-                                <td className="py-3.5 px-4 text-emerald-400">✅ 优秀 (本地人操作)</td>
-                                <td className="py-3.5 px-4 text-slate-400">不涉及自动化</td>
+                              <tr className="border-b border-slate-900 hover:bg-slate-900/10 transition-colors">
+                                <td className="py-4.5 px-5 font-black text-slate-100">运营资金成本</td>
+                                <td className="py-4.5 px-5 text-emerald-400 bg-indigo-950/10 font-bold border-x border-slate-900/50">⭐⭐⭐⭐⭐ (极低，单店$99起)</td>
+                                <td className="py-4.5 px-5 text-yellow-500">⭐⭐⭐ (脚本维护开销大)</td>
+                                <td className="py-4.5 px-5 text-red-500">⭐ (昂贵，月均 $3k-$5k)</td>
+                                <td className="py-4.5 px-5 text-emerald-400">⭐⭐⭐⭐⭐ (低)</td>
                               </tr>
-                              <tr className="border-b border-slate-850 hover:bg-slate-900/20 transition-colors">
-                                <td className="py-3.5 px-4 font-bold text-slate-100">双语多平台兼顾</td>
-                                <td className="py-3.5 px-4 text-emerald-400 bg-indigo-950/10 font-bold border-x border-slate-800/50">✅ 完美 (中英文 Agent 联合作战)</td>
-                                <td className="py-3.5 px-4 text-red-500">❌ 困难 (中外接口割裂需多次配置)</td>
-                                <td className="py-3.5 px-4 text-red-500">❌ 极差 (海外老外不懂小红书/微信)</td>
-                                <td className="py-3.5 px-4 text-slate-400">需完全人工处理</td>
+                              <tr className="border-b border-slate-900 hover:bg-slate-900/10 transition-colors">
+                                <td className="py-4.5 px-5 font-black text-slate-100">中英文自媒体兼顾</td>
+                                <td className="py-4.5 px-5 text-emerald-400 bg-indigo-950/10 font-bold border-x border-slate-900/50">⭐⭐⭐⭐⭐ (中英 Agent 双语并轨)</td>
+                                <td className="py-4.5 px-5 text-red-500">⭐ (中外接口极难融合编写)</td>
+                                <td className="py-4.5 px-5 text-red-500">⭐ (老外不懂小红书/微信)</td>
+                                <td className="py-4.5 px-5 text-slate-500">❌ 需人工处理</td>
                               </tr>
-                              <tr className="border-b border-slate-850 hover:bg-slate-900/20 transition-colors">
-                                <td className="py-3.5 px-4 font-bold text-slate-100">总部管控与合规</td>
-                                <td className="py-3.5 px-4 text-emerald-400 bg-indigo-950/10 font-bold border-x border-slate-800/50">✅ DAG 物理拦截 (总部审核解锁)</td>
-                                <td className="py-3.5 px-4 text-red-500">❌ 无中途审批，AI 易跑飞</td>
-                                <td className="py-3.5 px-4 text-yellow-500">⚠️ 跨时区沟通慢，反馈周期长</td>
-                                <td className="py-3.5 px-4 text-red-500">❌ 依靠人类自觉对齐</td>
+                              <tr className="border-b border-slate-900 hover:bg-slate-900/10 transition-colors">
+                                <td className="py-4.5 px-5 font-black text-slate-100">总部管控防跑飞</td>
+                                <td className="py-4.5 px-5 text-emerald-400 bg-indigo-950/10 font-bold border-x border-slate-900/50">⭐⭐⭐⭐⭐ (网关 DAG 严格物理拦截)</td>
+                                <td className="py-4.5 px-5 text-red-500">⭐ (无拦截，AI 幻觉即发)</td>
+                                <td className="py-4.5 px-5 text-yellow-500">⭐⭐⭐ (跨时区确认慢)</td>
+                                <td className="py-4.5 px-5 text-slate-500">❌ 依靠人类自觉对齐</td>
                               </tr>
-                              <tr className="border-b border-slate-850 hover:bg-slate-900/20 transition-colors">
-                                <td className="py-3.5 px-4 font-bold text-slate-100">架构灵活性</td>
-                                <td className="py-3.5 px-4 text-emerald-400 bg-indigo-950/10 font-bold border-x border-slate-800/50">✅ Dify-First (热换模型/调优文案)</td>
-                                <td className="py-3.5 px-4 text-red-500">❌ 极低 (修改流程需重写代码)</td>
-                                <td className="py-3.5 px-4 text-slate-400">无底层技术柔性</td>
-                                <td className="py-3.5 px-4 text-slate-400">无 AI 编排</td>
+                              <tr className="border-b border-slate-900 hover:bg-slate-900/10 transition-colors">
+                                <td className="py-4.5 px-5 font-black text-slate-100">架构及业务规则柔性</td>
+                                <td className="py-4.5 px-5 text-emerald-400 bg-indigo-950/10 font-bold border-x border-slate-900/50">⭐⭐⭐⭐⭐ (Dify-First, 模块热切换)</td>
+                                <td className="py-4.5 px-5 text-red-500">⭐ (改流程需重写底层代码)</td>
+                                <td className="py-4.5 px-5 text-slate-500">❌ 无技术底座</td>
+                                <td className="py-4.5 px-5 text-slate-500">❌ 无 AI 编排</td>
                               </tr>
                             </tbody>
                           </table>
                         </div>
                       )}
 
-                      {/* Slide 5: ROI Calculator & SaaS Pricing */}
+                      {/* Slide 5: ROI Calculator & SaaS Pricing (Grand Layout) */}
                       {currentSlide === 5 && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch py-2">
+                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-stretch py-2">
                           {/* Left: SaaS Tier cards in USD */}
-                          <div className="space-y-4 flex flex-col justify-center">
-                            <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest">SaaS 订阅与流量套餐 (USD)</h4>
+                          <div className="xl:col-span-5 space-y-4 flex flex-col justify-center">
+                            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">SaaS 订阅与流量套餐 (USD)</h4>
                             
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4">
                               {/* Tier 1 */}
-                              <div className="bg-slate-900/60 border border-slate-800 hover:border-indigo-500/40 rounded-xl p-4 flex flex-col justify-between transition-all">
+                              <div className="bg-slate-950/60 border border-slate-900 hover:border-indigo-500/30 rounded-2xl p-5 flex flex-col justify-between transition-all relative overflow-hidden group shadow-lg">
+                                <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/5 to-purple-500/0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                                 <div>
-                                  <div className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded inline-block">出海先锋版</div>
-                                  <div className="text-lg font-black text-white mt-2">$99<span className="text-xs font-normal text-slate-400">/月/店</span></div>
-                                  <ul className="text-[10px] text-slate-400 mt-2 space-y-1">
-                                    <li>• 基础看板，中英文双 Agent 席位</li>
-                                    <li>• 零密码插件桥海外本地授权</li>
-                                    <li>• 历史操作审计日志保留 7 天</li>
+                                  <div className="flex justify-between items-center">
+                                    <div className="text-[10px] font-black text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-full border border-indigo-500/20">出海先锋版</div>
+                                    <span className="text-[9px] text-slate-500 font-mono">SINGLE STORE</span>
+                                  </div>
+                                  <div className="text-2xl font-black text-white mt-3">$99<span className="text-xs font-normal text-slate-400"> / 月 / 门店</span></div>
+                                  <ul className="text-xs text-slate-400 mt-3 space-y-1.5 leading-relaxed">
+                                    <li>• 支持中英文双 Agent 席位及看板协同</li>
+                                    <li>• 零密码插件桥海外本地 IP 通道授权</li>
+                                    <li>• 基础审计日志数据（保留7天）</li>
                                   </ul>
                                 </div>
-                                <button className="w-full mt-4 py-1.5 bg-slate-800 hover:bg-indigo-600 text-white rounded-lg text-[10px] font-bold transition-all">选择先锋版</button>
+                                <button className="w-full mt-5 py-2 bg-slate-900 border border-slate-800 hover:border-indigo-500/40 text-white hover:text-indigo-300 rounded-xl text-xs font-black transition-all cursor-pointer">选择该方案</button>
                               </div>
 
                               {/* Tier 2 */}
-                              <div className="bg-gradient-to-b from-[#11132f] to-[#0c0e20] border border-indigo-500/30 rounded-xl p-4 flex flex-col justify-between relative shadow-lg">
-                                <div className="absolute top-2 right-2 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider">PRO</div>
+                              <div className="bg-gradient-to-b from-[#0c0d1e] to-[#04050d] border border-indigo-500/40 rounded-2xl p-5 flex flex-col justify-between relative shadow-xl shadow-indigo-950/20 group">
+                                <div className="absolute top-3 right-3 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider">RECOMMENDED</div>
                                 <div>
-                                  <div className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded inline-block">多店旗舰版</div>
-                                  <div className="text-lg font-black text-white mt-2">$499<span className="text-xs font-normal text-slate-400">/月/连锁</span></div>
-                                  <ul className="text-[10px] text-slate-400 mt-2 space-y-1">
-                                    <li>• 无限制门店大盘与双语 Agent 席位</li>
-                                    <li>• 总部-海外门店两级 DAG 审批拦截流</li>
-                                    <li>• 跨国操作日志高级审计导出</li>
+                                  <div className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 inline-block">多店旗舰版</div>
+                                  <div className="text-2xl font-black text-white mt-3">$499<span className="text-xs font-normal text-slate-400"> / 月 / 连锁</span></div>
+                                  <ul className="text-xs text-slate-400 mt-3 space-y-1.5 leading-relaxed">
+                                    <li>• 无限制海外门店与双语 Agent 席位绑定</li>
+                                    <li>• 国内总部-店面两级 DAG 审核流物理拦截</li>
+                                    <li>• 集中网关审计数据无限制高级报表导出</li>
                                   </ul>
                                 </div>
-                                <button className="w-full mt-4 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-lg text-[10px] font-bold shadow transition-all">选择旗舰版</button>
+                                <button className="w-full mt-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-500/20 transition-all cursor-pointer">选择该方案</button>
                               </div>
                             </div>
                           </div>
 
-                          {/* Right: Interactive ROI Calculator in USD */}
-                          <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between">
-                            <div className="space-y-4">
-                              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                                <Calculator className="w-4 h-4 text-emerald-500" />
-                                出海连锁门店 ROI 动态测算器 (USD)
-                              </h4>
+                          {/* Right: Dynamic ROI Calculator Dashboard (Grand/大气 Layout) */}
+                          <div className="xl:col-span-7 bg-[#050814]/80 border border-slate-900 rounded-3xl p-8 flex flex-col justify-between shadow-2xl relative">
+                            {/* Decorative background grid inside dashboard */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/0 rounded-3xl pointer-events-none" />
+
+                            <div className="space-y-6 relative z-10">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                  <Calculator className="w-4 h-4 text-indigo-400" />
+                                  出海连锁门店 ROI 动态测算器 (USD)
+                                </h4>
+                                <span className="text-[9px] font-bold text-slate-500 bg-slate-950 px-2 py-0.5 rounded border border-slate-900">US MARKET DATA</span>
+                              </div>
 
                               {/* Slider 1: Store Count */}
-                              <div className="space-y-1">
+                              <div className="space-y-2">
                                 <div className="flex justify-between text-xs font-bold">
-                                  <span className="text-slate-400">海外门店数量</span>
-                                  <span className="text-indigo-400">{storeCount} 家</span>
+                                  <span className="text-slate-400">海外门店数量 (分店)</span>
+                                  <span className="text-indigo-400 text-sm">{storeCount} 家门店</span>
                                 </div>
                                 <input
                                   type="range"
@@ -764,15 +818,15 @@ export default function PitchDeckPage() {
                                   max="50"
                                   value={storeCount}
                                   onChange={(e) => setStoreCount(Number(e.target.value))}
-                                  className="w-full accent-indigo-500"
+                                  className="w-full accent-indigo-500 h-1.5 bg-slate-900 rounded-lg cursor-pointer"
                                 />
                               </div>
 
-                              {/* Slider 2: Average Social Media Manager Wage in Local Market */}
-                              <div className="space-y-1">
+                              {/* Slider 2: Average Social Media Manager Wage */}
+                              <div className="space-y-2">
                                 <div className="flex justify-between text-xs font-bold">
-                                  <span className="text-slate-400">海外当地社交媒体经理月薪 (美欧水平)</span>
-                                  <span className="text-indigo-400">${avgWage} USD</span>
+                                  <span className="text-slate-400">海外当地社交媒体经理月薪 (欧美薪酬)</span>
+                                  <span className="text-indigo-400 text-sm">${avgWage} USD</span>
                                 </div>
                                 <input
                                   type="range"
@@ -781,34 +835,34 @@ export default function PitchDeckPage() {
                                   step="500"
                                   value={avgWage}
                                   onChange={(e) => setAvgWage(Number(e.target.value))}
-                                  className="w-full accent-indigo-500"
+                                  className="w-full accent-indigo-500 h-1.5 bg-slate-900 rounded-lg cursor-pointer"
                                 />
                               </div>
 
                               {/* Calculations Output */}
-                              <div className="grid grid-cols-2 gap-3 pt-2">
-                                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850">
-                                  <div className="text-[9px] text-slate-400 font-bold">传统海外代运营年费</div>
-                                  <div className="text-sm font-black text-red-400 mt-0.5">${manualLaborCost.toLocaleString()}</div>
+                              <div className="grid grid-cols-2 gap-4 pt-2">
+                                <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-900 shadow-inner flex flex-col justify-between">
+                                  <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">传统海外代运营年费</div>
+                                  <div className="text-xl md:text-2xl font-black text-red-400 mt-1">${manualLaborCost.toLocaleString()}</div>
                                 </div>
-                                <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-850">
-                                  <div className="text-[9px] text-slate-400 font-bold">AMC 协同运营年成本</div>
-                                  <div className="text-sm font-black text-emerald-400 mt-0.5">${amcTotalCost.toLocaleString()}</div>
+                                <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-900 shadow-inner flex flex-col justify-between">
+                                  <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">AMC 协同运营年成本</div>
+                                  <div className="text-xl md:text-2xl font-black text-emerald-400 mt-1">${amcTotalCost.toLocaleString()}</div>
                                 </div>
                               </div>
                             </div>
 
                             {/* Annual Saved Total */}
-                            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
+                            <div className="mt-8 pt-5 border-t border-slate-900 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 relative z-10">
                               <div>
-                                <span className="text-[9px] text-slate-500 font-bold">每年预计净节省运营开支</span>
-                                <h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-400">
+                                <span className="text-[10px] text-slate-500 font-black uppercase tracking-wider">每年预计净节省运营开支</span>
+                                <h3 className="text-2xl md:text-4.5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-indigo-400 to-purple-400 mt-1 leading-none">
                                   ${savedCost.toLocaleString()} USD/年
                                 </h3>
                               </div>
-                              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg px-2.5 py-1 text-center shrink-0">
-                                <div className="text-[8px] font-bold">本地 Maps 搜索提升</div>
-                                <div className="text-xs font-black">+{expectedTrafficIncreasePercent}%</div>
+                              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl p-3 text-center shrink-0 flex flex-col justify-center min-w-[130px]">
+                                <div className="text-[9px] font-black uppercase tracking-wider">本地 Maps 搜索提升</div>
+                                <div className="text-lg font-black mt-0.5">+{expectedTrafficIncreasePercent}%</div>
                               </div>
                             </div>
                           </div>
@@ -819,24 +873,24 @@ export default function PitchDeckPage() {
                 </div>
 
                 {/* Footer Slider controls */}
-                <div className="border-t border-slate-800/50 pt-4 mt-6 flex items-center justify-between">
+                <div className="border-t border-slate-900 pt-6 mt-8 flex items-center justify-between">
                   <button
                     disabled={currentSlide === 0}
                     onClick={() => setCurrentSlide(prev => prev - 1)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs font-bold text-slate-300 disabled:opacity-30 disabled:hover:border-slate-800 transition-all"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-900 hover:border-slate-800 text-xs font-black text-slate-300 disabled:opacity-30 disabled:hover:border-slate-950 transition-all cursor-pointer"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
-                    上一页
+                    上一章节
                   </button>
                   
                   {/* Pips */}
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-2">
                     {slides.map((_, idx) => (
                       <button
                         key={idx}
                         onClick={() => setCurrentSlide(idx)}
                         className={`w-2 h-2 rounded-full transition-all ${
-                          currentSlide === idx ? 'bg-indigo-500 w-6' : 'bg-slate-800 hover:bg-slate-700'
+                          currentSlide === idx ? 'bg-indigo-500 w-8' : 'bg-slate-900 hover:bg-slate-800'
                         }`}
                       />
                     ))}
@@ -845,45 +899,51 @@ export default function PitchDeckPage() {
                   <button
                     disabled={currentSlide === slides.length - 1}
                     onClick={() => setCurrentSlide(prev => prev + 1)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-xs font-bold text-white rounded-lg disabled:opacity-30 transition-all"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-xs font-black text-white rounded-xl disabled:opacity-30 transition-all cursor-pointer"
                   >
-                    下一页
+                    下一章节
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
             </motion.div>
           ) : (
-            // FAQ Database Mode
+            // FAQ Database Mode (Grand Accordion list)
             <motion.div
               key="faq-mode"
-              initial={{ opacity: 0, y: 15 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.3 }}
-              className="space-y-6 max-w-4xl mx-auto min-h-[calc(100vh-180px)]"
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              className="space-y-8 max-w-4xl mx-auto min-h-[calc(100vh-220px)]"
             >
               {/* Search & Category Header */}
-              <div className="space-y-4">
-                <div className="text-center space-y-2">
-                  <h1 className="text-2xl md:text-3xl font-black text-white">常见问题与出海解决方案 (FAQ)</h1>
-                  <p className="text-xs md:text-sm text-slate-400">查询关于跨国网络风控防封、本地凭证托管、多语言协作和 Dify 对接的疑问</p>
+              <div className="space-y-6">
+                <div className="text-center space-y-3">
+                  <div className="inline-flex items-center gap-2 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-3 py-1 rounded-full text-xs font-black">
+                    <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
+                    SUPPORT & FAQS
+                  </div>
+                  <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight">常见问题与出海解决方案 (FAQ)</h1>
+                  <p className="text-sm text-slate-400 font-medium max-w-2xl mx-auto leading-relaxed">
+                    查询关于跨国发布如何免遭安全风控、多语言 AI Agent 双语如何协同、API 网关日志追溯以及 Dify 工作流对接的硬核技术疑问
+                  </p>
                 </div>
 
                 {/* Search Bar */}
-                <div className="relative max-w-md mx-auto">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <div className="relative max-w-lg mx-auto">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-500" />
                   <input
                     type="text"
-                    placeholder="输入关键词搜索安全性、插件桥等问题..."
+                    placeholder="输入关键词，例如“风控”、“小红书”、“Dify”或“Yelp”..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 focus:border-indigo-500 focus:outline-none rounded-xl text-xs text-slate-200 placeholder-slate-500 transition-all shadow-inner"
+                    className="w-full pl-12 pr-4 py-3 bg-slate-950 border border-slate-900 focus:border-indigo-500 focus:outline-none rounded-2xl text-xs text-slate-200 placeholder-slate-500 transition-all shadow-inner"
                   />
                 </div>
 
                 {/* Category Buttons */}
-                <div className="flex justify-center gap-1.5 flex-wrap">
+                <div className="flex justify-center gap-2 flex-wrap">
                   {[
                     { id: 'all', label: '全部问题' },
                     { id: 'security', label: '🔒 安全与跨国风控' },
@@ -894,10 +954,10 @@ export default function PitchDeckPage() {
                     <button
                       key={cat.id}
                       onClick={() => setSelectedFaqCategory(cat.id as any)}
-                      className={`text-[11px] font-bold px-3 py-1.5 rounded-full border transition-all ${
+                      className={`text-[11px] font-black px-4 py-2 rounded-full border transition-all cursor-pointer ${
                         selectedFaqCategory === cat.id
-                          ? 'bg-indigo-600 border-indigo-500 text-white shadow'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                          ? 'bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-500/10'
+                          : 'bg-slate-950 border-slate-900 text-slate-400 hover:text-slate-200'
                       }`}
                     >
                       {cat.label}
@@ -907,7 +967,7 @@ export default function PitchDeckPage() {
               </div>
 
               {/* FAQ Accordion List */}
-              <div className="space-y-3 pt-2">
+              <div className="space-y-4 pt-2">
                 <AnimatePresence>
                   {filteredFaqs.length > 0 ? (
                     filteredFaqs.map((faq, idx) => {
@@ -915,21 +975,21 @@ export default function PitchDeckPage() {
                       return (
                         <motion.div
                           key={faq.question}
-                          initial={{ opacity: 0, y: 10 }}
+                          initial={{ opacity: 0, y: 15 }}
                           animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -10 }}
-                          transition={{ duration: 0.2 }}
-                          className="bg-slate-950/40 border border-slate-850 hover:border-slate-800 rounded-2xl overflow-hidden transition-all shadow-md"
+                          exit={{ opacity: 0, y: -15 }}
+                          transition={{ duration: 0.25 }}
+                          className="bg-slate-950/40 border border-slate-900 hover:border-slate-800 rounded-3xl overflow-hidden transition-all shadow-lg"
                         >
                           <button
                             onClick={() => setExpandedFaqIndex(isExpanded ? null : idx)}
-                            className="w-full flex items-center justify-between p-4 text-left font-bold text-xs md:text-sm text-slate-200 hover:text-white"
+                            className="w-full flex items-center justify-between p-5 text-left font-black text-xs md:text-sm text-slate-200 hover:text-white cursor-pointer"
                           >
-                            <span className="flex items-center gap-2">
-                              {faq.category === 'security' && <Lock className="w-3.5 h-3.5 text-indigo-400" />}
-                              {faq.category === 'automation' && <Zap className="w-3.5 h-3.5 text-emerald-400" />}
-                              {faq.category === 'integrations' && <BookOpen className="w-3.5 h-3.5 text-purple-400" />}
-                              {faq.category === 'pricing' && <Calculator className="w-3.5 h-3.5 text-indigo-400" />}
+                            <span className="flex items-center gap-3">
+                              {faq.category === 'security' && <Lock className="w-4 h-4 text-indigo-400" />}
+                              {faq.category === 'automation' && <Zap className="w-4 h-4 text-emerald-400" />}
+                              {faq.category === 'integrations' && <BookOpen className="w-4 h-4 text-purple-400" />}
+                              {faq.category === 'pricing' && <Calculator className="w-4 h-4 text-indigo-400" />}
                               {faq.question}
                             </span>
                             {isExpanded ? (
@@ -941,9 +1001,9 @@ export default function PitchDeckPage() {
                           
                           {/* Expanded Answer */}
                           <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                            isExpanded ? 'max-h-[300px] border-t border-slate-850/60 p-4 bg-slate-950/30' : 'max-h-0'
+                            isExpanded ? 'max-h-[300px] border-t border-slate-900 p-5 bg-slate-950/50' : 'max-h-0'
                           }`}>
-                            <p className="text-xs md:text-sm text-slate-400 leading-relaxed font-normal">
+                            <p className="text-xs md:text-sm text-slate-400 leading-relaxed font-medium">
                               {faq.answer}
                             </p>
                           </div>
@@ -951,8 +1011,8 @@ export default function PitchDeckPage() {
                       )
                     })
                   ) : (
-                    <div className="text-center py-12 text-slate-500 text-xs">
-                      没有找到匹配该关键词的常见问题。
+                    <div className="text-center py-16 text-slate-500 text-xs font-medium">
+                      没有找到包含该关键词的常见问题解答。
                     </div>
                   )}
                 </AnimatePresence>
@@ -963,13 +1023,13 @@ export default function PitchDeckPage() {
       </main>
 
       {/* Footer Section */}
-      <footer className="border-t border-slate-900 bg-slate-950/50 py-8 text-center text-[10px] text-slate-600">
-        <div className="max-w-7xl mx-auto px-4 space-y-2">
-          <p>© 2026 AMC Command Center. All rights reserved. 人机协同任务操作系统版权所有.</p>
-          <div className="flex justify-center gap-4 text-slate-555">
-            <button onClick={() => { setActiveTab('deck'); setCurrentSlide(0) }} className="hover:text-slate-300">产品演示</button>
+      <footer className="border-t border-slate-900 bg-slate-950/60 py-10 text-center text-[10px] text-slate-600 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 space-y-3">
+          <p>© 2026 AMC Command Center. All rights reserved. 出海中餐人机协同任务操作系统版权所有.</p>
+          <div className="flex justify-center gap-4 text-slate-500 font-bold">
+            <button onClick={() => { setActiveTab('deck'); setCurrentSlide(0) }} className="hover:text-slate-300 cursor-pointer">产品演示</button>
             <span>·</span>
-            <button onClick={() => { setActiveTab('faq'); setSelectedFaqCategory('all') }} className="hover:text-slate-300">常见问题</button>
+            <button onClick={() => { setActiveTab('faq'); setSelectedFaqCategory('all') }} className="hover:text-slate-300 cursor-pointer">常见问题</button>
             <span>·</span>
             <a href="/board" className="hover:text-slate-300">返回协作看板</a>
           </div>
