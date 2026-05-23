@@ -138,6 +138,11 @@ model Brand {
   postfastApiKey         String?
   googlePlaceId          String?
   googleApiKey           String?
+  googleRefreshToken     String?
+  googleAccountId        String?
+  googleLocationId       String?
+  googleLocationName     String?
+  googlePreferOAuth      Boolean  @default(true)
   larkAppId              String?
   larkAppSecret          String?
   larkDriveToken         String?

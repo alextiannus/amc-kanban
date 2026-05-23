@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
 import BrandKanbanLane from '../BrandKanbanLane'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 // ── AgentAvatar: img with graceful initials fallback (no "加载失败" box) ─────
 function AgentAvatar({ src, initials, themeColor }: { src: string; initials: string; themeColor?: string | null }) {
@@ -571,6 +572,17 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   const [autoPilot, setAutoPilot] = useState(false)
   const [showAddAccount, setShowAddAccount] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (searchParams && searchParams.get('google_success') === 'true') {
+      setShowSettings(true)
+      const newUrl = window.location.pathname
+      window.history.replaceState({}, '', newUrl)
+    }
+  }, [searchParams])
 
   // Sync autoPilot from DB
   useEffect(() => { setAutoPilot(apiAutoPilot) }, [apiAutoPilot])

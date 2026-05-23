@@ -28,6 +28,9 @@ export async function GET(request: Request) {
     select: {
       postfastApiKey: true,
       googlePlaceId: true, googleApiKey: true,
+      googleRefreshToken: true, googleAccountId: true,
+      googleLocationId: true, googleLocationName: true,
+      googlePreferOAuth: true,
       larkAppId: true, larkAppSecret: true,
       larkDriveFolderId: true, larkBotWebhook: true,
     },
@@ -51,16 +54,39 @@ export async function GET(request: Request) {
       }
     })(),
 
-    // Google: try fetching place rating
+    // Google: try checking oauth refresh token or fetching place rating
     (async () => {
+      // Prioritize Direct Google Business Profile OAuth2 Flow
+      if (brand.googlePreferOAuth && brand.googleRefreshToken) {
+        try {
+          const { getGoogleAccessToken } = await import('@/lib/integrations/google')
+          const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
+          const ok = !!accessToken && !!brand.googleLocationId && !!brand.googleAccountId
+          return {
+            name: 'google',
+            ok,
+            message: ok
+              ? `已连接 Google 账号 (店铺: ${brand.googleLocationName || '未命名店铺'})`
+              : !accessToken
+              ? '连接失败，授权已失效'
+              : '连接异常，未绑定有效的商家店铺位置',
+            via: 'oauth',
+            locationName: brand.googleLocationName
+          }
+        } catch (e: any) {
+          return { name: 'google', ok: false, message: `授权连接失败: ${e.message}`, via: 'oauth' }
+        }
+      }
+
       if (!brand.googlePlaceId || !brand.googleApiKey) {
-        return { name: 'google', ok: false, message: '未配置 Place ID 或 API Key' }
+        return { name: 'google', ok: false, message: '未配置 Place ID 或 API Key，或未连接 Google 账号' }
       }
       const { rating } = await getPlaceRating(brand.googlePlaceId, brand.googleApiKey)
       return {
         name: 'google',
         ok: rating !== null,
         message: rating !== null ? `连通正常 (评分: ${rating}★)` : '连接失败，请检查 API Key',
+        via: 'apikey',
       }
     })(),
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
 import ArchiveView from './ArchiveView'
@@ -188,7 +188,16 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       ) : (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
           <MobileLayout>
-            <DashboardHome key={activeBrand?.id ?? 'no-brand'} brand={activeBrand ?? undefined} />
+            <Suspense fallback={
+              <div className="p-8 flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin" />
+                  <p className="text-xs text-slate-400 font-medium">加载中...</p>
+                </div>
+              </div>
+            }>
+              <DashboardHome key={activeBrand?.id ?? 'no-brand'} brand={activeBrand ?? undefined} />
+            </Suspense>
           </MobileLayout>
         </div>
       )}

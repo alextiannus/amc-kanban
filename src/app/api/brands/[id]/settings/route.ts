@@ -47,7 +47,11 @@ export async function GET(_req: Request, { params }: Params) {
     // Google Business
     googlePlaceId: brand.googlePlaceId,
     googleApiKey: maskKey(brand.googleApiKey),
-    googleConfigured: !!(brand.googlePlaceId && brand.googleApiKey),
+    googleRefreshTokenConfigured: !!brand.googleRefreshToken,
+    googleLocationName: brand.googleLocationName,
+    googleLocationId: brand.googleLocationId,
+    googlePreferOAuth: brand.googlePreferOAuth,
+    googleConfigured: !!(brand.googleRefreshToken || (brand.googlePlaceId && brand.googleApiKey)),
 
     // Lark — credentials + workspace folder info
     larkAppId: brand.larkAppId,
@@ -102,6 +106,7 @@ export async function PATCH(request: Request, { params }: Params) {
       // Google Business
       ...(body.googlePlaceId !== undefined && { googlePlaceId: opt(body.googlePlaceId) }),
       ...(body.googleApiKey !== undefined && { googleApiKey: opt(body.googleApiKey) }),
+      ...(body.googlePreferOAuth !== undefined && { googlePreferOAuth: body.googlePreferOAuth }),
       // Lark
       ...(body.larkAppId !== undefined && { larkAppId: opt(body.larkAppId) }),
       ...(body.larkAppSecret !== undefined && { larkAppSecret: opt(body.larkAppSecret) }),
@@ -210,7 +215,8 @@ export async function PATCH(request: Request, { params }: Params) {
     larkFolderUrl,
     postfastConfigured: !!updated.postfastApiKey,
     postfastSync,
-    googleConfigured: !!(updated.googlePlaceId && updated.googleApiKey),
+    googleConfigured: !!(updated.googleRefreshToken || (updated.googlePlaceId && updated.googleApiKey)),
+    googlePreferOAuth: updated.googlePreferOAuth,
     larkConfigured: !!(updated.larkAppId && updated.larkAppSecret),
     larkDriveConfigured: !!updated.larkDriveFolderId,
     larkNotifyConfigured: !!(updated.larkBotWebhook || updated.larkOwnerId),

@@ -569,7 +569,7 @@ export function createAmcMcpServer(agentApiKey: string) {
     'google_get_reviews',
     'Fetch the latest Google Business reviews for a brand. Returns reviewer, rating, comment, and existing reply.',
     {
-      brandId: z.string().describe('Brand ID — googlePlaceId and googleApiKey are auto-loaded from brand config.'),
+      brandId: z.string().describe('Brand ID — googlePlaceId/googleApiKey (Places API) or googleRefreshToken (GBP OAuth2) are loaded from config.'),
       limit: z.number().int().min(1).max(20).optional().default(10),
     },
     async ({ brandId, limit }) => {
@@ -579,24 +579,51 @@ export function createAmcMcpServer(agentApiKey: string) {
       const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
-      const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { googlePlaceId: true, googleApiKey: true } })
-      if (!brand?.googlePlaceId || !brand?.googleApiKey) {
-        return { content: [{ type: 'text' as const, text: 'Error: googlePlaceId and googleApiKey not configured for this brand. Run update_brand_config first.' }], isError: true }
+      const brand = await prisma.brand.findUnique({ 
+        where: { id: brandId }, 
+        select: { 
+          googlePlaceId: true, 
+          googleApiKey: true,
+          googleRefreshToken: true,
+          googleAccountId: true,
+          googleLocationId: true,
+          googlePreferOAuth: true,
+        } 
+      })
+
+      if (!brand) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
+
+      const { fetchGoogleGBPReviews, fetchGoogleReviews, getGoogleAccessToken } = await import('@/lib/integrations/google')
+
+      // Prioritize Direct Google Business Profile OAuth2 Flow
+      if (brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId) {
+        try {
+          const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
+          const result = await fetchGoogleGBPReviews(brand.googleAccountId || 'primary', brand.googleLocationId, accessToken)
+          if (result.error) return { content: [{ type: 'text' as const, text: `Error (GBP API): ${result.error}` }], isError: true }
+          const reviews = result.reviews.slice(0, limit ?? 10)
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: reviews.length, reviews, source: 'google_business_profile_oauth' }, null, 2) }] }
+        } catch (e: any) {
+          console.error('[MCP Get Reviews] GBP OAuth flow failed, trying fallback...', e)
+        }
       }
 
-      const { fetchGoogleReviews } = await import('@/lib/integrations/google')
-      const result = await fetchGoogleReviews(brand.googlePlaceId, brand.googleApiKey)
+      // Fallback: Places API Key Flow
+      if (brand.googlePlaceId && brand.googleApiKey) {
+        const result = await fetchGoogleReviews(brand.googlePlaceId, brand.googleApiKey)
+        if (result.error) return { content: [{ type: 'text' as const, text: `Error (Places API): ${result.error}` }], isError: true }
+        const reviews = result.reviews.slice(0, limit ?? 10)
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: reviews.length, reviews, source: 'google_places_api_key' }, null, 2) }] }
+      }
 
-      if (result.error) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
-      const reviews = result.reviews.slice(0, limit ?? 10)
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: reviews.length, reviews }, null, 2) }] }
+      return { content: [{ type: 'text' as const, text: 'Error: Google Business Profile (OAuth) or Google API Key + Place ID is not configured for this brand.' }], isError: true }
     }
   )
 
   // ── google_reply_review ─────────────────────────────────────────────────
   server.tool(
     'google_reply_review',
-    'Post a reply to a Google Business review. Uses PostFast if configured (recommended), otherwise direct Google API.',
+    'Post a reply to a Google Business review. Uses direct Google API if OAuth is configured, otherwise PostFast.',
     {
       brandId: z.string(),
       reviewId: z.string().describe('Review ID from google_get_reviews'),
@@ -611,18 +638,46 @@ export function createAmcMcpServer(agentApiKey: string) {
 
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
-        select: { postfastApiKey: true, googlePlaceId: true },
+        select: { 
+          postfastApiKey: true, 
+          googleRefreshToken: true,
+          googleAccountId: true,
+          googleLocationId: true,
+          googlePreferOAuth: true,
+        },
       })
 
-      // Prefer PostFast route (handles OAuth for us)
-      if (brand?.postfastApiKey) {
+      if (!brand) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
+
+      // Prioritize Direct Google Business Profile OAuth2 Flow
+      if (brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId) {
+        try {
+          const { getGoogleAccessToken, replyGoogleGBPReview } = await import('@/lib/integrations/google')
+          const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
+          const result = await replyGoogleGBPReview({
+            accountId: brand.googleAccountId || 'primary',
+            locationId: brand.googleLocationId,
+            reviewId,
+            replyText,
+            accessToken,
+          })
+          if (!result.success) return { content: [{ type: 'text' as const, text: `Error (GBP API): ${result.error}` }], isError: true }
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, via: 'direct_oauth' }) }] }
+        } catch (e: any) {
+          console.error('[MCP Reply Review] GBP OAuth flow failed...', e)
+          return { content: [{ type: 'text' as const, text: `Error (GBP OAuth): ${e.message}` }], isError: true }
+        }
+      }
+
+      // Fallback: PostFast Route (handles OAuth for us)
+      if (brand.postfastApiKey) {
         const { postfastReplyReview } = await import('@/lib/integrations/postfast')
         const result = await postfastReplyReview({ apiKey: brand.postfastApiKey, platform: 'google', reviewId, replyText })
-        if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+        if (!result.success) return { content: [{ type: 'text' as const, text: `Error (PostFast API): ${result.error}` }], isError: true }
         return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, via: 'postfast' }) }] }
       }
 
-      return { content: [{ type: 'text' as const, text: 'Error: PostFast API key required for Google review replies. Configure it in update_brand_config.' }], isError: true }
+      return { content: [{ type: 'text' as const, text: 'Error: Google OAuth or PostFast API key required for Google review replies. Configure it in settings.' }], isError: true }
     }
   )
 

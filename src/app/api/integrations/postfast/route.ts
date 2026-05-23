@@ -30,6 +30,7 @@ import {
 
 async function resolveAccess(request: Request): Promise<{
   userId?: string
+  userRole?: string
   agentId?: string
   error?: string
 }> {
@@ -39,23 +40,30 @@ async function resolveAccess(request: Request): Promise<{
     if (agent) return { agentId: agent.id }
   }
   const session = await getSession()
-  if (session?.user?.id) return { userId: session.user.id }
+  if (session?.user?.id) return { userId: session.user.id, userRole: session.user.role }
   return { error: 'Unauthorized' }
 }
 
-async function getBrandApiKey(brandId: string, access: { userId?: string; agentId?: string }): Promise<string | null> {
+async function getBrandApiKey(
+  brandId: string,
+  access: { userId?: string; userRole?: string; agentId?: string }
+): Promise<string | null> {
   if (access.userId) {
-    const brand = await prisma.brand.findFirst({
-      where: { id: brandId, ownerId: access.userId },
+    const { canHumanAccessBrandProject } = await import('@/lib/brandAccess')
+    const hasAccess = await canHumanAccessBrandProject(brandId, access.userId, access.userRole)
+    if (!hasAccess) return null
+
+    const brand = await prisma.brand.findUnique({
+      where: { id: brandId },
       select: { postfastApiKey: true },
     })
     return brand?.postfastApiKey ?? null
   }
   if (access.agentId) {
-    const link = await prisma.brandAgent.findFirst({
-      where: { brandId, agentId: access.agentId, active: true },
-    })
-    if (!link) return null
+    const { canAgentAccessBrand } = await import('@/lib/brandAccess')
+    const hasAccess = await canAgentAccessBrand(brandId, access.agentId)
+    if (!hasAccess) return null
+
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
       select: { postfastApiKey: true },

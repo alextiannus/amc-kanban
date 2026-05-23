@@ -75,12 +75,14 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
   const [saved, setSaved] = useState(false)
   const [status, setStatus] = useState<Record<string, boolean>>({})
   const [postfastSync, setPostfastSync] = useState<{ synced: number; accounts: string[] } | null>(null)
+  const [preferOAuth, setPreferOAuth] = useState(true)
 
   useEffect(() => {
     if (!open) return
 
     if (initialSettings) {
       setForm(buildInitialForm(initialSettings))
+      setPreferOAuth(initialSettings.googlePreferOAuth ?? true)
       setStatus({
         postfast: !!initialSettings.postfastConfigured,
         google: !!initialSettings.googleConfigured,
@@ -105,13 +107,41 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
     }
   }
 
+  const [disconnecting, setDisconnecting] = useState(false)
+  const handleGoogleDisconnect = async () => {
+    if (!confirm('确定要断开 Google 商家账号的连接吗？这会停止直接拉取评论和回复。')) return
+    setDisconnecting(true)
+    try {
+      const res = await fetch('/api/integrations/google/oauth/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId }),
+      })
+      if (res.ok) {
+        alert('已成功断开 Google 商家账号连接')
+        onClose()
+        window.location.reload()
+      } else {
+        alert('断开连接失败，请重试')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('网络连接错误')
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     setPostfastSync(null)
     try {
-      const payload = Object.fromEntries(
-        Object.entries(form).filter(([, value]) => value !== '' && !isMaskedValue(value))
-      )
+      const payload = {
+        ...Object.fromEntries(
+          Object.entries(form).filter(([, value]) => value !== '' && !isMaskedValue(value))
+        ),
+        googlePreferOAuth: preferOAuth,
+      }
       const res = await fetch(`/api/brands/${brandId}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -120,6 +150,9 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
       if (res.ok) {
         const data = await res.json()
         setStatus({ postfast: data.postfastConfigured, google: data.googleConfigured, lark: data.larkConfigured })
+        if (data.googlePreferOAuth !== undefined) {
+          setPreferOAuth(data.googlePreferOAuth)
+        }
         if (data.postfastSync) setPostfastSync(data.postfastSync)
         setSaved(true)
         setTimeout(() => setSaved(false), 3000)
@@ -198,7 +231,62 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
 
           {/* Google Business */}
           <Section label="Google Business（评论监控）" badge={<StatusBadge ok={status.google} />}>
-            {GOOGLE_FIELDS.map(f => <Field key={f.key} f={f} />)}
+            {initialSettings?.googleRefreshTokenConfigured ? (
+              <div className="space-y-3">
+                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-800/30 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-black text-emerald-800 dark:text-emerald-400">已授权直连 Google 商家</p>
+                    <p className="text-[10px] text-emerald-600 dark:text-emerald-500 font-medium">
+                      关联店铺：<span className="font-bold">{initialSettings.googleLocationName || '未命名位置'}</span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGoogleDisconnect}
+                    disabled={disconnecting}
+                    className="px-2.5 py-1 text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30 rounded-lg hover:bg-rose-100 transition active:scale-95 disabled:opacity-60"
+                  >
+                    {disconnecting ? '断开中...' : '断开连接'}
+                  </button>
+                </div>
+                <div className="flex items-center gap-2.5 px-1 py-0.5">
+                  <input
+                    type="checkbox"
+                    id="googlePreferOAuth"
+                    checked={preferOAuth}
+                    onChange={(e) => setPreferOAuth(e.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500/40 border-slate-350 dark:border-slate-600 w-4 h-4 cursor-pointer"
+                  />
+                  <label htmlFor="googlePreferOAuth" className="text-xs font-bold text-slate-650 dark:text-slate-400 cursor-pointer select-none">
+                    优先使用直连 Google 商家账号功能 (推荐)
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = `/api/integrations/google/oauth?brandId=${brandId}`
+                }}
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm shadow-blue-500/20 hover:scale-[1.01] active:scale-[0.99]"
+              >
+                <span>⚡</span>
+                连接 Google 商家账号 (直接授权)
+              </button>
+            )}
+
+            {/* Manual fallback fields for developers / place ID custom debugging */}
+            <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-3">
+              <details className="group">
+                <summary className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest cursor-pointer hover:text-slate-650 flex items-center justify-between select-none list-none">
+                  <span>🛠️ 高级手动配置 (可选，调试用)</span>
+                  <span className="transition-transform group-open:rotate-180 text-[7px] text-slate-350">▼</span>
+                </summary>
+                <div className="mt-3 space-y-3">
+                  {GOOGLE_FIELDS.map(f => <Field key={f.key} f={f} />)}
+                </div>
+              </details>
+            </div>
           </Section>
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
