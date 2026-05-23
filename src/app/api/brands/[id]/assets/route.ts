@@ -13,7 +13,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastGetSignedUploadUrls, postfastUploadFile } from '@/lib/integrations/postfast'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
@@ -40,10 +40,33 @@ interface UploadAssetResponse {
 // Upload a file to the brand's asset library
 export async function POST(request: Request, { params }: Params) {
   const session = await getSession()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const apiKey = extractApiKey(request)
+  const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
+
+  if (!session?.user && !apiKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (apiKey && !authenticatedAgent) {
+    return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+  }
+
+  let user = session?.user
+  if (apiKey && authenticatedAgent) {
+    user = {
+      id: authenticatedAgent.id,
+      email: authenticatedAgent.email,
+      type: authenticatedAgent.type,
+      role: 'USER',
+    }
+  }
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const { id: brandId } = await params
-  const ok = await canSessionAccessBrandProject(brandId, session.user.id, session.user.type ?? 'HUMAN', session.user.role)
+  const ok = await canSessionAccessBrandProject(brandId, user.id, user.type ?? 'HUMAN', user.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const brand = await prisma.brand.findFirst({
@@ -156,10 +179,33 @@ export async function POST(request: Request, { params }: Params) {
 // List all assets in the brand's asset library (future endpoint)
 export async function GET(request: Request, { params }: Params) {
   const session = await getSession()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const apiKey = extractApiKey(request)
+  const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
+
+  if (!session?.user && !apiKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (apiKey && !authenticatedAgent) {
+    return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+  }
+
+  let user = session?.user
+  if (apiKey && authenticatedAgent) {
+    user = {
+      id: authenticatedAgent.id,
+      email: authenticatedAgent.email,
+      type: authenticatedAgent.type,
+      role: 'USER',
+    }
+  }
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
   const { id: brandId } = await params
-  const ok = await canSessionAccessBrandProject(brandId, session.user.id, session.user.type ?? 'HUMAN', session.user.role)
+  const ok = await canSessionAccessBrandProject(brandId, user.id, user.type ?? 'HUMAN', user.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // TODO: Implement list assets endpoint

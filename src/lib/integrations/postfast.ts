@@ -5,7 +5,7 @@
  * Auth: pf-api-key header
  */
 
-const POSTFAST_BASE = 'https://api.postfa.st'
+const POSTFAST_BASE = process.env.POSTFAST_BASE_URL || 'https://api.postfa.st'
 
 // ── Platform name normalisation ────────────────────────────────────────────
 
