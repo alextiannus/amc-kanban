@@ -5,6 +5,7 @@ import { getLarkTenantToken } from '@/lib/integrations/lark'
 import { getPlaceRating } from '@/lib/integrations/google'
 import { postfastTestConnection } from '@/lib/integrations/postfast'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { bridgeState } from '@/lib/integrations/extensionBridge'
 
 /**
  * GET /api/integrations/status?brandId=<id>
@@ -102,6 +103,16 @@ export async function GET(request: Request) {
         message: token ? '连通正常' : '连接失败，请检查 App ID / Secret',
         driveReady: !!brand.larkDriveFolderId,
         notifyReady: !!brand.larkBotWebhook,
+      }
+    })(),
+
+    // Extension: check if the extension bridge is active for this brand
+    (async () => {
+      const ok = bridgeState.activeExtensions.has(brandId)
+      return {
+        name: 'extension',
+        ok,
+        message: ok ? '浏览器插件已连接' : '未连接插件（请确保看板页面处于开启状态且安装了插件）',
       }
     })(),
   ])

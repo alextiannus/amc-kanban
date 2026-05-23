@@ -87,6 +87,7 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
         postfast: !!initialSettings.postfastConfigured,
         google: !!initialSettings.googleConfigured,
         lark: !!initialSettings.larkConfigured,
+        extension: false,
       })
     } else {
       setForm({})
@@ -307,6 +308,31 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
               </a>
             )}
             {LARK_FIELDS.filter(f => f.key !== 'larkDriveFolderId').map(f => <Field key={f.key} f={f} />)}
+          </Section>
+          <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+          {/* Chrome Extension */}
+          <Section label="Chrome 浏览器插件 (美团/点评自动化)" badge={<StatusBadge ok={status.extension} />}>
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-3">
+              <p className="text-xs text-slate-650 dark:text-slate-350 leading-relaxed font-medium">
+                由于美团、大众点评等国内本地生活平台无开放接口，且存在严格的安全风控，系统使用 <strong>浏览器插件桥接技术</strong>。
+              </p>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <p className="font-extrabold text-slate-600 dark:text-slate-300">使用说明：</p>
+                <p>1. 请在 Chrome 浏览器中加载项目根目录下的 <code className="font-mono text-blue-600 dark:text-blue-400">chrome-extension</code> 文件夹（打开开发者模式 ➜ 加载已解压的扩展程序）。</p>
+                <p>2. 安装完成后，只要您打开此 AMC 看板页面，插件就会自动与后台建立安全连接。</p>
+                <p>3. 同时，在同一浏览器窗口中打开美团或点评的商家后台页面并保持登录，AI 即可通过插件执行自动回复。</p>
+                <p className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 font-bold text-indigo-600 dark:text-indigo-400">测试工具：</p>
+                <a
+                  href="/mock-merchant"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-450 hover:underline font-bold"
+                >
+                  打开大众点评/美团模拟商家中心 ➜
+                </a>
+              </div>
+            </div>
           </Section>
         </div>
 
