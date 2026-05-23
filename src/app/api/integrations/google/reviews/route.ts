@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendLarkWebhookNotification } from '@/lib/integrations/lark'
 import { eventEmitter } from '@/lib/events'
+import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import {
+  fetchGoogleGBPReviews,
+  fetchGoogleReviews,
+  getGoogleAccessToken,
+  replyGoogleGBPReview,
+} from '@/lib/integrations/google'
 
 // Gemini reply generator helper
 async function generateReviewReply(
@@ -67,24 +74,156 @@ ${
 }
 
 /**
+ * Helper to authenticate caller (session or api key) and check brand access.
+ */
+async function authenticateAndAuthorize(request: Request, brandId: string) {
+  const session = await getSession()
+  let userId: string
+  let userType: string
+  let userRole: string | undefined
+
+  if (session?.user) {
+    userId = session.user.id
+    userType = session.user.type
+    userRole = session.user.role
+  } else {
+    const apiKey = extractApiKey(request)
+    if (!apiKey) {
+      return { authorized: false, errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+    }
+    const agent = await getAgentFromApiKey(apiKey)
+    if (!agent) {
+      return { authorized: false, errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+    }
+    userId = agent.id
+    userType = agent.type
+    userRole = 'USER'
+  }
+
+  const hasAccess = await canSessionAccessBrandProject(brandId, userId, userType, userRole)
+  if (!hasAccess) {
+    return { authorized: false, errorResponse: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+  }
+
+  return { authorized: true, userId, userType, userRole }
+}
+
+/**
+ * Helper to dynamically fetch and persist real Google account ID to database
+ * to avoid failure when primary alias path is used.
+ */
+async function resolveAndSaveRealAccountId(brandId: string, accessToken: string, currentAccountId?: string | null): Promise<string> {
+  if (currentAccountId && currentAccountId !== 'primary' && currentAccountId !== 'accounts/primary' && !currentAccountId.startsWith('mock_')) {
+    return currentAccountId
+  }
+  if (accessToken.startsWith('mock_')) {
+    return 'mock_account_123'
+  }
+  try {
+    const accRes = await fetch('https://mybusiness.googleapis.com/v1/accounts', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    })
+    if (accRes.ok) {
+      const accData = await accRes.json()
+      const accounts = accData.accounts ?? []
+      if (accounts.length > 0) {
+        const realAccountId = accounts[0].name // e.g. "accounts/123456"
+        await prisma.brand.update({
+          where: { id: brandId },
+          data: { googleAccountId: realAccountId }
+        })
+        console.log(`[Google OAuth] Resolved and persisted real account ID for brand ${brandId}: ${realAccountId}`)
+        return realAccountId
+      }
+    }
+  } catch (e) {
+    console.error(`[Google OAuth] Failed to dynamically resolve real account ID for brand ${brandId}`, e)
+  }
+  return currentAccountId || 'primary'
+}
+
+/**
  * GET /api/integrations/google/reviews?brandId=<id>
- * Fetches latest Google Business reviews, auto-replies, and creates ActionItems for bad ones.
+ * READ-ONLY: Fetches latest Google Business reviews.
+ * Side-effect free, idempotent.
  */
 export async function GET(request: Request) {
-  const session = await getSession()
-  const authHeader = request.headers.get('authorization') ?? ''
-  const agentKey = authHeader.replace('Bearer ', '').trim()
   const url = new URL(request.url)
   const brandId = url.searchParams.get('brandId')
   if (!brandId) return NextResponse.json({ error: 'brandId required' }, { status: 400 })
 
-  if (!session?.user && !agentKey) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const auth = await authenticateAndAuthorize(request, brandId)
+  if (!auth.authorized) return auth.errorResponse!
+
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
+    select: {
+      id: true,
+      googlePlaceId: true, googleApiKey: true,
+      googleRefreshToken: true, googleAccountId: true,
+      googleLocationId: true, googlePreferOAuth: true,
+    },
+  })
+
+  if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+
+  let reviews: any[] = []
+  let error: string | undefined
+  let source = 'none'
+
+  // Fetch reviews using a single Access Token retrieve
+  if (brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId) {
+    try {
+      const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
+      const realAccountId = await resolveAndSaveRealAccountId(brand.id, accessToken, brand.googleAccountId)
+      const res = await fetchGoogleGBPReviews(realAccountId, brand.googleLocationId, accessToken)
+      if (res.error) {
+        error = res.error
+      } else {
+        reviews = res.reviews
+        source = 'google_business_profile_oauth'
+      }
+    } catch (e: any) {
+      console.error('[Google Reviews API] Direct OAuth fetch failed, trying API Key fallback...', e)
+      error = e.message
+    }
   }
-  if (!session?.user && agentKey) {
-    const agent = await prisma.user.findFirst({ where: { apiKey: agentKey, type: 'AI_AGENT' } })
-    if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Fallback to Google Places API Key
+  if (reviews.length === 0 && brand.googlePlaceId && brand.googleApiKey) {
+    const res = await fetchGoogleReviews(brand.googlePlaceId, brand.googleApiKey)
+    if (res.error) {
+      error = res.error
+    } else {
+      reviews = res.reviews
+      source = 'google_places_api'
+    }
   }
+
+  if (reviews.length === 0 && error) {
+    return NextResponse.json({ error }, { status: 502 })
+  }
+
+  return NextResponse.json({
+    ok: true,
+    source,
+    reviewsCount: reviews.length,
+    reviews,
+  })
+}
+
+/**
+ * POST /api/integrations/google/reviews?brandId=<id>
+ * WRITE OPERATION: Fetches reviews, executes AI auto-replies (OAuth/PostFast),
+ * creates Kanban ActionItems for bad reviews, and sends Lark Alerts.
+ */
+export async function POST(request: Request) {
+  const url = new URL(request.url)
+  const brandId = url.searchParams.get('brandId')
+  if (!brandId) return NextResponse.json({ error: 'brandId required' }, { status: 400 })
+
+  const auth = await authenticateAndAuthorize(request, brandId)
+  if (!auth.authorized) return auth.errorResponse!
 
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
@@ -100,17 +239,17 @@ export async function GET(request: Request) {
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
 
-  // Select source and fetch reviews
   let reviews: any[] = []
   let error: string | undefined
   let source = 'none'
+  let googleAccessToken: string | null = null
 
-  const { fetchGoogleGBPReviews, fetchGoogleReviews, getGoogleAccessToken, replyGoogleGBPReview } = await import('@/lib/integrations/google')
-
+  // Fetch reviews (Retrieving Google OAuth access token ONCE for the entire request)
   if (brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId) {
     try {
-      const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
-      const res = await fetchGoogleGBPReviews(brand.googleAccountId || 'primary', brand.googleLocationId, accessToken)
+      googleAccessToken = await getGoogleAccessToken(brand.googleRefreshToken)
+      const realAccountId = await resolveAndSaveRealAccountId(brand.id, googleAccessToken, brand.googleAccountId)
+      const res = await fetchGoogleGBPReviews(realAccountId, brand.googleLocationId, googleAccessToken)
       if (res.error) {
         error = res.error
       } else {
@@ -145,6 +284,12 @@ export async function GET(request: Request) {
   const newAlerts: string[] = []
   const autoRepliesSent: string[] = []
 
+  // Resolve real account ID once if we have oauth access token
+  let resolvedAccountId = brand.googleAccountId || 'primary'
+  if (googleAccessToken) {
+    resolvedAccountId = await resolveAndSaveRealAccountId(brand.id, googleAccessToken, brand.googleAccountId)
+  }
+
   // Process auto-replies and alerts
   for (const review of reviews) {
     // 1. Check if the review has already been replied to
@@ -159,16 +304,15 @@ export async function GET(request: Request) {
       let replied = false
       let engine = 'none'
 
-      // Attempt Direct OAuth Reply
-      if (brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId) {
+      // Attempt Direct OAuth Reply (reusing the already fetched googleAccessToken)
+      if (googleAccessToken && brand.googleLocationId) {
         try {
-          const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
           const result = await replyGoogleGBPReview({
-            accountId: brand.googleAccountId || 'primary',
+            accountId: resolvedAccountId,
             locationId: brand.googleLocationId,
             reviewId: review.reviewId,
             replyText,
-            accessToken,
+            accessToken: googleAccessToken,
           })
           if (result.success) {
             replied = true
