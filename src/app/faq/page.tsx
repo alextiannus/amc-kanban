@@ -68,7 +68,7 @@ const faqData: FaqItem[] = [
   {
     category: 'automation',
     question: '如果 AI 执行过程中产生了“幻觉”或者报错，系统如何处理？',
-    answer: 'AMC 拥有“人机 Markdown 沟通通道”和“DAG 任务依赖拦截”机制。当 AI 遇到无法确定的内容或执行失败时，不会无限循环重试或盲目乱试，而是将任务卡片置为 `pending` 状态，并在详情卡中通过专属的隔离评论区，贴出高可读性的错误日志及备选方案。人类经理可以直接在评论区修改配置或进行文字修正，点击 `Resume AI` 即可将上下文无缝传回，AI 会在断点处自愈重跑，无需从头开始。'
+    answer: 'AMC 拥有“人机 Markdown 沟通通道”和“DAG 任务依赖拦截”机制。当 AI 遇到无法确定的内容或执行失败时，不会无限循环重试或盲目乱试，而是将任务卡片置为 `pending` 状态，并在详情卡中通过专属的隔离评论区，贴出高可读性错误日志及备选方案。人类经理可以直接在评论区修改配置或进行文字修正，点击 `Resume AI` 即可将上下文无缝传回，AI 会在断点处自愈重跑，无需从头开始。'
   },
   {
     category: 'integrations',
@@ -93,7 +93,8 @@ const faqData: FaqItem[] = [
 ]
 
 export default function PitchDeckPage() {
-  const [activeTab, setActiveTab] = useState<'deck' | 'faq'>('deck')
+  // Production URL is amc-kanban.immedi.ai/faq, so default the active tab to 'faq'
+  const [activeTab, setActiveTab] = useState<'deck' | 'faq'>('faq')
   const [currentSlide, setCurrentSlide] = useState(0)
   
   // Slide 2: Core Tech Hub State
@@ -157,7 +158,7 @@ export default function PitchDeckPage() {
             </div>
             <div>
               <span className="font-black text-lg tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-indigo-400">AMC Dashboard</span>
-              <span className="ml-2 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-emerald-400 bg-emerald-500/10 rounded uppercase">Pitch Deck</span>
+              <span className="ml-2 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-emerald-400 bg-emerald-500/10 rounded uppercase">FAQ & Deck</span>
             </div>
           </div>
 
@@ -277,7 +278,7 @@ export default function PitchDeckPage() {
                                 onClick={() => setActiveTab('faq')}
                                 className="flex items-center justify-center gap-2 border border-slate-800 hover:border-slate-700 hover:bg-slate-900/60 text-slate-300 text-sm font-bold px-6 py-3 rounded-xl transition-all"
                               >
-                                查看 FAQ 详情
+                                返回常见问题
                               </button>
                             </div>
                           </div>
@@ -436,7 +437,7 @@ export default function PitchDeckPage() {
                                   </div>
                                   <h3 className="text-lg font-black text-white">构建 AI Agent 的硬核行车护栏</h3>
                                   <p className="text-xs md:text-sm text-slate-300 leading-relaxed">
-                                    任务之间支持构建 blockers 关联。当某项 AI 执行任务存在未 Done 的依赖时，集中式网关在 API 级别强制拦截 AI 领取或操作状态更新的请求，杜绝 AI 乱跑越过审核。
+                                    任务之间支持配置前置 Blockers（任务依赖）。例如，任务B（AI 自动排版并发布小红书）依赖于任务A（人类审核内容大纲）。当任务A处于非 Done/Void 状态时，即使 AI 拿着自己的 API Key 尝试通过 PATCH 接口更新任务B的状态，集中式网关也会强制抛出 400 错误并拦截执行。
                                   </p>
                                   <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-2 rounded-lg text-[10px]">
                                     <XCircle className="w-3.5 h-3.5 shrink-0" />
@@ -852,7 +853,7 @@ export default function PitchDeckPage() {
               {/* Search & Category Header */}
               <div className="space-y-4">
                 <div className="text-center space-y-2">
-                  <h1 className="text-2xl md:text-3xl font-black text-white">常见问题与深度解答 (FAQ)</h1>
+                  <h1 className="text-2xl md:text-3xl font-black text-white">常见问题与产品优势 (FAQ)</h1>
                   <p className="text-xs md:text-sm text-slate-400">查询关于系统安全、密码托管、网页自动化和 Dify 接入的疑问</p>
                 </div>
 
