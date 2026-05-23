@@ -277,5 +277,12 @@ export async function PATCH(request: Request, { params }: Params) {
     },
   })
 
+  if (autoPilot !== undefined) {
+    await prisma.socialAccount.updateMany({
+      where: { brandId: id },
+      data: { autoPilot },
+    })
+  }
+
   return NextResponse.json(updated)
 }
