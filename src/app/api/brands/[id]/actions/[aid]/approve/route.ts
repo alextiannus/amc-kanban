@@ -89,7 +89,7 @@ export async function PATCH(request: Request, { params }: Params) {
   await updateLinkedWorkUnit({ status: 'in_progress', requiredInput: null })
 
   // ── Content Approval → PostFast Publish ──────────────────────────────────
-  if (item.type === 'content_approval' && item.draft) {
+  if ((item.type === 'content_approval' || item.type === 'content_draft') && item.draft) {
     const draft = item.draft
     await prisma.contentDraft.update({ where: { id: draft.id }, data: { status: 'publishing' } })
 

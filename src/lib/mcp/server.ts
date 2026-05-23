@@ -345,7 +345,7 @@ export function createAmcMcpServer(agentApiKey: string) {
     'Submit an action item (alert or content pending review) to the brand dashboard.',
     {
       brandId: z.string(),
-      type: z.enum(['sentiment_alert', 'content_draft', 'competitor_alert', 'performance_update']),
+      type: z.enum(['sentiment_alert', 'content_draft', 'content_approval', 'competitor_alert', 'performance_update']),
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
       title: z.string(),
       description: z.string().describe('Full content or action details'),

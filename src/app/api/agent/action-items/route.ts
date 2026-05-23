@@ -42,10 +42,12 @@ export async function POST(request: Request) {
   const brand = await prisma.brand.findUnique({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
 
+  const isContentApproval = type === 'content_approval' || type === 'content_draft'
+
   // For content flow: if draftUrl is provided by Agent (e.g., Lark doc), use it directly.
   // Otherwise, if draftData is provided, create an internal ContentDraft and WorkUnit.
-  if (type === 'content_approval' && !incomingDraftUrl && !draftData) {
-    return NextResponse.json({ error: 'draftUrl or draftData is required for content_approval' }, { status: 400 })
+  if (isContentApproval && !incomingDraftUrl && !draftData) {
+    return NextResponse.json({ error: 'draftUrl or draftData is required for content approval action items' }, { status: 400 })
   }
   if (incomingDraftUrl && !isValidHttpUrl(incomingDraftUrl)) {
     return NextResponse.json({ error: 'draftUrl must be a valid http/https URL' }, { status: 400 })
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
   }
 
   // If agent includes draft content (draftData), create the draft first
-  if (draftData && type === 'content_approval') {
+  if (draftData && isContentApproval) {
     const draft = await prisma.contentDraft.create({
       data: {
         brandId,
@@ -96,7 +98,7 @@ export async function POST(request: Request) {
   }
 
   // Create WorkUnit to track this content work (with draft URL and eventual post URL)
-  if (type === 'content_approval' && draftUrl) {
+  if (isContentApproval && draftUrl) {
     const draftMaterial = `草稿链接: ${draftUrl}`
     const workTask = await prisma.workUnit.create({
       data: {
@@ -115,6 +117,13 @@ export async function POST(request: Request) {
     workTaskId = workTask.id
   }
 
+  // If brand is in autoPilot and it is a content approval item with draftData,
+  // we create the action item as 'pending' initially and only mark it as 'auto_resolved'
+  // after successful PostFast publishing. For non-content approval alerts (like competitor_alert),
+  // we can resolve immediately if autoPilot is enabled.
+  const shouldAutoResolveImmediately = brand.autoPilot && !isContentApproval
+  const initialStatus = shouldAutoResolveImmediately ? 'auto_resolved' : 'pending'
+
   const item = await prisma.actionItem.create({
     data: {
       brandId,
@@ -126,10 +135,9 @@ export async function POST(request: Request) {
       payload: payload || null,
       agentId: agent.id,
       draftId: draftId || null,
-      // autoPilot: if brand has autoPilot ON, immediately auto-approve
-      status: brand.autoPilot ? 'auto_resolved' : 'pending',
-      resolvedAt: brand.autoPilot ? new Date() : null,
-      resolvedBy: brand.autoPilot ? 'auto_pilot' : null,
+      status: initialStatus,
+      resolvedAt: shouldAutoResolveImmediately ? new Date() : null,
+      resolvedBy: shouldAutoResolveImmediately ? 'auto_pilot' : null,
     },
   })
 
@@ -143,8 +151,8 @@ export async function POST(request: Request) {
     })
   }
 
-  // If brand is in autoPilot and this is content_approval with draft — attempt immediate publish
-  if (brand.autoPilot && type === 'content_approval' && workTaskId) {
+  // If brand is in autoPilot and this is content approval with draft — attempt immediate publish
+  if (brand.autoPilot && isContentApproval && workTaskId) {
     // If we have draftId, we created an internal draft; attempt to publish it
     if (draftId) {
       const [draft, account] = await Promise.all([
@@ -188,12 +196,36 @@ export async function POST(request: Request) {
           publishedUrl = publish.url ?? null
         }
 
-        await prisma.contentDraft.update({
-          where: { id: draft.id },
-          data: publish.success
-            ? { status: 'published', publishedAt: new Date(), platformPostId: publish.postId ?? null }
-            : { status: 'draft', agentNote: publishError },
-        })
+        if (publish.success) {
+          await Promise.all([
+            prisma.contentDraft.update({
+              where: { id: draft.id },
+              data: { status: 'published', publishedAt: new Date(), platformPostId: publish.postId ?? null },
+            }),
+            prisma.actionItem.update({
+              where: { id: item.id },
+              data: {
+                status: 'auto_resolved',
+                resolvedAt: new Date(),
+                resolvedBy: 'auto_pilot',
+              },
+            }),
+          ])
+        } else {
+          await Promise.all([
+            prisma.contentDraft.update({
+              where: { id: draft.id },
+              data: { status: 'draft', agentNote: publishError },
+            }),
+            prisma.actionItem.update({
+              where: { id: item.id },
+              data: {
+                status: 'pending',
+                resolvedNote: publishError,
+              },
+            }),
+          ])
+        }
       }
 
       const materialParts = [`草稿链接: ${draftUrl}`]
