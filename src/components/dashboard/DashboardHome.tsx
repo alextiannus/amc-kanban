@@ -561,7 +561,6 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   const apiActionItems: any[] = brandDetail?.actionItems ?? []
   const apiAccounts: any[] = brandDetail?.accounts ?? []
   const apiAutoPilot: boolean = brandDetail?.autoPilot ?? false
-  const weekConversions: any[] = brandDetail?.weekConversions ?? []
   const recentDrafts: any[] = brandDetail?.recentDrafts ?? []
   const pendingReviewCount: number = brandDetail?._count?.contents ?? 0
   const postfastSync: { ok: boolean; error?: string } | undefined = brandDetail?.postfastSync
@@ -649,14 +648,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   // ── Add account ───────────────────────────────────────────────────────────
   const onAccountAdded = () => { if (activeBrand?.id) loadDetail(activeBrand.id) }
 
-  // ── Conversion stats ─────────────────────────────────────────────────────
-  const countConv = (type: string) => weekConversions
-    .filter(c => c.type === type)
-    .reduce((s, c) => s + (c._count?.id ?? 0), 0)
-  const navClicks = countConv('nav_click')
-  const bookingClicks = countConv('booking_click')
-  const couponRedemptions = countConv('coupon_redemption')
-  const maxConv = Math.max(navClicks, bookingClicks, couponRedemptions, 1)
+
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (brandLoading) {
@@ -947,38 +939,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
         )}
       </section>
 
-      {/* ── ROI / Conversion tracking ───────────────────────────────── */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-500" /> 本周转化跟踪
-          </h3>
-          <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-full">by AI Agent · 7d</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <ConversionCard
-            label="导航点击"
-            value={String(navClicks)}
-            sub="来自 IG / TikTok 帖子"
-            progress={Math.round((navClicks / Math.max(maxConv, 1)) * 100)}
-            color="bg-pink-400"
-          />
-          <ConversionCard
-            label="预订链接点击"
-            value={String(bookingClicks)}
-            sub="来自小红书、Google"
-            progress={Math.round((bookingClicks / Math.max(maxConv, 1)) * 100)}
-            color="bg-emerald-400"
-          />
-          <ConversionCard
-            label="折扣码核销"
-            value={String(couponRedemptions)}
-            sub="整体折扣码使用"
-            progress={Math.round((couponRedemptions / Math.max(maxConv, 1)) * 100)}
-            color="bg-indigo-400"
-          />
-        </div>
-      </section>
+      {/* ROI / Conversion tracking removed as requested */}
 
 
 
