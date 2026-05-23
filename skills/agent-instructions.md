@@ -422,6 +422,47 @@ Content-Type: application/json
 
 
 
+## 8b. 看板任务排期发布与异常挂起规范（针对已存在的 WorkUnit 任务）
+
+### ⚠️ 核心警告：更新看板状态不等于触发发布
+
+**在数据库或看板界面中仅将任务状态更改为 `in_progress`、`scheduled` 或 `publishing`，后端不会自动向 PostFast 发起任何发布或排期动作。**
+
+任务状态更新仅仅是看板上的状态记录。要完成实际的发布/排期，你必须**显式调用 MCP 工具 `board_publish_content`（或 `postfast_publish`）**。
+
+---
+
+### ✅ 正常的排期与发布执行流
+
+当你领取或推进一个内容发布类的 WorkUnit 任务（例如当前状态为 `todo` 或已被人类设为 `in_progress`）时：
+
+1. **读取文案和素材**：解析该任务的 `description`、`materials` 或关联的草稿内容，获取 `caption`（文案）、`mediaUrls`（配图）、`platform`（平台名，如 `instagram` / `tiktok` 等）及 `scheduledAt`（排期时间，可选）。
+2. **显式调用发布工具**：
+   - 必须调用 `board_publish_content`（或 `postfast_publish`），并将解析到的字段作为参数传入。
+   - 如果 `scheduledAt` 为未来某个时间，PostFast 会自动将其排期（Scheduled）。
+   - 如果没有 `scheduledAt` 或时间已过，PostFast 会立即发布（Published）。
+3. **更新任务状态为完成/排期中**：
+   - 如果 PostFast 返回成功（并且是立即发布），调用 `update_task` 将该任务状态修改为 `done`，并将返回的发布链接追加到 `materials` 中。
+   - 如果是排期到未来的任务，在 PostFast 返回成功后，将任务状态更新为 `in_progress`，并在 `description` 记录具体的排期时间及 PostFast 返回的任务 ID。
+
+---
+
+### ❌ 资料缺失或异常时的“Required Input”挂起规范
+
+如果任务被设为了 `in_progress`（或者你在尝试执行时），你发现**缺少关键发布资料**（例如：完全没有文案 caption、缺少必要的图片素材 mediaUrls、缺少目标平台 platform 平台名、或者平台账号尚未授权/连接）：
+
+1. **禁止挂空挡**：绝对不能让任务保持在 `in_progress` 或其他进行中/排期中状态且不做任何实际发布/排期！这会导致发布延误且人类无法感知阻塞原因。
+2. **立即将状态设为 pending**：调用 `update_task`，将该任务的 `status` 修改为 `pending`。
+3. **写入 requiredInput 阻塞原因**：在 `requiredInput` 字段中详细、明确地写明所缺少的资料。例如：
+   - `"缺少发布文案 caption，请在任务描述中补充文案内容。"`
+   - `"缺少配图链接 mediaUrls，此平台发布必须包含至少一张图片。"`
+   - `"未指定发布平台 platform，无法进行排期，请在 tags/title/materials 中指定发布平台名称。"`
+4. **向主理人汇报**：在 description 或消息中说明该任务已因资料缺失转入 "Require Input" 状态，等待主理人补充。
+
+只要你遇到无法发布的情况，必须将其置为 `pending` 并提供 `requiredInput`，禁止无作为地停留在 `in_progress`。
+
+
+
 ## 9. description 日志模板（建议直接复用）
 
 执行中更新 description 可参考：

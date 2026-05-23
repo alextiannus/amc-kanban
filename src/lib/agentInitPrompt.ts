@@ -167,6 +167,10 @@ Skill 至少包含：
 
 ### 【条件执行】如果任务类型是"内容发布"，遵循以下规范
 
+**发布与排期核心规则（切记）**
+- **更新看板状态不等于触发发布**：仅修改任务状态（如设为 \`in_progress\`、\`scheduled\` 或 \`publishing\`）**不会**自动向 PostFast 发起发布或排期动作。你必须**显式调用 MCP 工具 \`board_publish_content\`（或 \`postfast_publish\`）**来完成发布/排期。
+- **资料缺失时立即挂起**：若任务进入 \`in_progress\`，但你发现缺少关键发布资料（如缺少发布文案 \`caption\`、缺少图片 \`mediaUrls\`、未指定发布平台等），**禁止将其闲置在 \`in_progress\` 状态！** 你必须立即调用 \`update_task\` 将状态修改为 \`pending\`，并在 \`requiredInput\` 字段中写明具体所缺少的资料以呈现为 "Require Input" 状态。
+
 **任务拆分粒度**
 - 每个 **品牌** + **平台账号** + **发布次** 的完整闭环（规划 → 创意 → 审核 → 发布） = 1 个独立 Task
 - 不合并多个平台、品牌或发布时段到同一任务
@@ -186,9 +190,9 @@ Skill 至少包含：
 3. 执行记录：审核反馈、优化过程、实际发布时间
 
 **此类任务的状态流转参考**
-todo → in_progress → pending（待审核）→ in_progress → done
+todo → in_progress → pending（待审核/缺失资料）→ in_progress → done
 
-**遇到平台限流、账号限制或审核驳回**：状态置 pending，requiredInput 清晰描述问题。
+**遇到平台限流、账号限制、审核驳回或缺少资料**：状态置 pending，requiredInput 清晰描述问题。
 
 ---
 
