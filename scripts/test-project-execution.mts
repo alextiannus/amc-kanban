@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildWeeklyMetrics, getNaturalWeekWindow } from '../src/lib/projectExecution'
+import { buildWeeklyMetrics, getNaturalWeekWindow } from '../src/lib/projectExecution.ts'
 
 function testNaturalWeekWindow() {
   const base = new Date('2026-05-13T12:00:00Z')
