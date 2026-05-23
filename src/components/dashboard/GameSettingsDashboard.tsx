@@ -20,10 +20,16 @@ interface GameConfig {
   themeColor: string
   taskPhotoEnabled: boolean
   taskReviewEnabled: boolean
+  taskGoogleMapsEnabled: boolean
+  taskXiaohongshuEnabled: boolean
+  taskInstagramEnabled: boolean
   clerkPin: string
   maxSpinsPerUserDay: number
   templateType: 'WHEEL' | 'GRID'
   prizes: Prize[]
+  posterTitle?: string
+  posterDesc?: string
+  posterTheme?: 'black' | 'blue' | 'green' | 'purple' | 'gold'
 }
 
 interface Props {
@@ -124,6 +130,8 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   // Poster customizations
   const [posterTitle, setPosterTitle] = useState('Scan & Win!')
   const [posterDesc, setPosterDesc] = useState('Leave a review or share store photos to get free drinks and rewards!')
+  const [stickerTheme, setStickerTheme] = useState<'black' | 'blue' | 'green' | 'purple' | 'gold'>('black')
+  const [googlePlaceId, setGooglePlaceId] = useState('')
 
   // Wheel preview state
   const [wheelRotation, setWheelRotation] = useState(0)
@@ -144,6 +152,12 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       }
       const data = await res.json()
       setConfig(data)
+      
+      // Initialize states from persistent config values
+      if (data.posterTitle) setPosterTitle(data.posterTitle)
+      if (data.posterDesc) setPosterDesc(data.posterDesc)
+      if (data.posterTheme) setStickerTheme(data.posterTheme)
+      if (data.brand?.googlePlaceId) setGooglePlaceId(data.brand.googlePlaceId)
 
       // Generate QR Code
       const gameUrl = `${window.location.origin}/game/${brandId}`
@@ -169,6 +183,13 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
     setSaving(true)
     setError(null)
 
+    // Validate platform selection
+    if (!config.taskGoogleMapsEnabled && !config.taskXiaohongshuEnabled && !config.taskInstagramEnabled) {
+      alert("请至少选择一个社交媒体平台作为推广渠道！")
+      setSaving(false)
+      return
+    }
+
     // Convert probability sum check
     const probSum = config.prizes.reduce((sum, p) => sum + p.probability, 0)
     if (Math.abs(probSum - 1.0) > 0.001) {
@@ -179,6 +200,20 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
     }
 
     try {
+      // 1. Save Brand Settings (Google Place ID)
+      const brandSettingsRes = await fetch(`/api/brands/${brandId}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          googlePlaceId: googlePlaceId.trim()
+        }),
+      })
+      if (!brandSettingsRes.ok) {
+        const data = await brandSettingsRes.json()
+        throw new Error(data.error || 'Failed to save Google Place ID')
+      }
+
+      // 2. Save Game Config
       const res = await fetch(`/api/game/config?brandId=${brandId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -186,6 +221,9 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
           ...config,
           taskPhotoEnabled: false,
           taskReviewEnabled: true,
+          posterTitle,
+          posterDesc,
+          posterTheme: stickerTheme,
         }),
       })
       if (!res.ok) {
@@ -240,7 +278,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   }
 
   const openPosterPrint = () => {
-    const printUrl = `/board/game/poster/${brandId}?title=${encodeURIComponent(posterTitle)}&desc=${encodeURIComponent(posterDesc)}`
+    const printUrl = `/board/game/poster/${brandId}?title=${encodeURIComponent(posterTitle)}&desc=${encodeURIComponent(posterDesc)}&theme=${stickerTheme}`
     window.open(printUrl, '_blank')
   }
 
@@ -300,7 +338,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
 
   if (!config) {
     return (
-      <div className="p-8 text-center text-slate-500 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
+      <div className="p-8 text-center text-slate-500 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
         数据载入失败，请重试。
       </div>
     )
@@ -313,37 +351,31 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   return (
     <div className="flex-1 w-full max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-300">
       
-      {/* Top Welcome Title Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-3xl p-6 md:p-8 shadow-lg shadow-blue-500/10">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-black flex items-center gap-2">
-              <Sparkles className="text-pink-300 fill-pink-300" size={24} />
-              互动大转盘营销模块
-            </h2>
-            <p className="text-sm text-blue-100/90 mt-1.5">
-              扫码抽奖游戏，吸引店内顾客提交谷歌地图/Yelp好评或分享门店美照，快速沉淀AI生产所需的UGC素材。
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={copyGameLink}
-              className="flex items-center gap-2 px-4 py-2 bg-white/15 hover:bg-white/25 active:scale-95 text-white text-xs font-bold rounded-xl transition"
-            >
-              {copiedLink ? <Check size={14} className="text-emerald-300" /> : <Copy size={14} />}
-              {copiedLink ? '链接已复制' : '复制顾客游戏页链接'}
-            </button>
-            <a
-              href={`/game/${brandId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2 bg-white text-blue-700 hover:bg-blue-50 active:scale-95 text-xs font-bold rounded-xl shadow-md transition"
-            >
-              <Eye size={14} />
-              预览顾客端 H5
-            </a>
-          </div>
+      {/* Header bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">店内活动设置</h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            配置扫码抽奖游戏，吸引店内顾客提交谷歌地图/小红书/Instagram评价或分享，快速沉淀UGC素材。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={copyGameLink}
+            className="flex items-center gap-2 px-3 py-2 border rounded-xl transition bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-350 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 text-xs font-bold shadow-sm"
+          >
+            {copiedLink ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+            {copiedLink ? '链接已复制' : '复制顾客游戏页链接'}
+          </button>
+          <a
+            href={`/game/${brandId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-sm transition"
+          >
+            <Eye size={14} />
+            预览顾客端 H5
+          </a>
         </div>
       </div>
 
@@ -353,9 +385,9 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
         <div className="lg:col-span-8 space-y-8">
           
           {/* Section 1: Basic Game Rules Config */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-6">
-            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 border-l-4 border-blue-500 pl-3">
-              1. 游戏主体配置
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-6">
+            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
+              游戏主体配置
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -476,18 +508,101 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                   className="w-full px-4 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition font-bold"
                 />
               </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">可做任务社交媒体平台 (至少保留一个)</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Google Maps toggle */}
+                  <label className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer select-none transition-all duration-300 ${
+                    config.taskGoogleMapsEnabled
+                      ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 ring-2 ring-blue-500/10'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={config.taskGoogleMapsEnabled}
+                      onChange={(e) => setConfig({ ...config, taskGoogleMapsEnabled: e.target.checked })}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black">Google Maps</span>
+                      <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">谷歌地图评价推广</span>
+                    </div>
+                  </label>
+
+                  {/* Xiaohongshu toggle */}
+                  <label className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer select-none transition-all duration-300 ${
+                    config.taskXiaohongshuEnabled
+                      ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 ring-2 ring-blue-500/10'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={config.taskXiaohongshuEnabled}
+                      onChange={(e) => setConfig({ ...config, taskXiaohongshuEnabled: e.target.checked })}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black">小红书 (Xiaohongshu)</span>
+                      <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">小红书图文分享推广</span>
+                    </div>
+                  </label>
+
+                  {/* Instagram toggle */}
+                  <label className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer select-none transition-all duration-300 ${
+                    config.taskInstagramEnabled
+                      ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 ring-2 ring-blue-500/10'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-700'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={config.taskInstagramEnabled}
+                      onChange={(e) => setConfig({ ...config, taskInstagramEnabled: e.target.checked })}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black">Instagram</span>
+                      <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">Instagram 帖子分享推广</span>
+                    </div>
+                  </label>
+                </div>
+
+                {config.taskGoogleMapsEnabled && (
+                  <div className="mt-4 p-4 rounded-2xl border border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Place ID (谷歌商家 ID)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="例如: ChIJ4ab_0xmX2jER0mYbefR79PI"
+                        value={googlePlaceId}
+                        onChange={(e) => setGooglePlaceId(e.target.value)}
+                        className="flex-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition font-mono"
+                      />
+                      <a 
+                        href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-805 dark:hover:bg-slate-750 dark:text-slate-300 rounded-xl text-[10px] font-bold flex items-center transition"
+                      >
+                        查找 ID
+                      </a>
+                    </div>
+                    <p className="text-[9.5px] text-slate-400 dark:text-slate-500 leading-normal">
+                      用于在顾客发表评价时，一键跳转到您店铺的 Google Maps 评价页面。建议先点击“查找 ID”获取您店铺的标准 ID（如 <code>ChI...</code> 格式），也可填入 <code>fid/cid</code> 形式的完整链接。
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-
-
 
           </div>
 
           {/* Section 2: Prizes and Probabilities Config */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-6">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 border-l-4 border-blue-500 pl-3">
-                  2. 奖品池与中奖概率设置
+                <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
+                  奖品池与中奖概率设置
                 </h3>
                 <p className="text-[11px] text-slate-400 mt-1">设置转盘奖品名称、中奖概率（百分比）以及库存数量限制。</p>
               </div>
@@ -508,7 +623,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                 >
                   {/* Prize Name Input */}
                   <div className="flex-1 w-full space-y-1">
-                    <label className="text-[9px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest">奖品名称</label>
+                    <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">奖品名称</label>
                     <input
                       type="text"
                       value={prize.name}
@@ -520,7 +635,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
 
                   {/* Prize Type */}
                   <div className="w-full md:w-32 space-y-1">
-                    <label className="text-[9px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest">奖品类型</label>
+                    <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">奖品类型</label>
                     <select
                       value={prize.type}
                       onChange={(e) => handleUpdatePrize(idx, { type: e.target.value as any })}
@@ -535,7 +650,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
 
                   {/* Probability */}
                   <div className="w-24 space-y-1">
-                    <label className="text-[9px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest">中奖率 (%)</label>
+                    <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">中奖率 (%)</label>
                     <div className="relative flex items-center">
                       <input
                         type="number"
@@ -555,7 +670,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
 
                   {/* Inventory */}
                   <div className="w-28 space-y-1">
-                    <label className="text-[9px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest flex justify-between">
+                    <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex justify-between">
                       <span>总库存</span>
                       {prize.claimedCount !== undefined && prize.claimedCount > 0 && (
                         <span className="text-blue-500 font-semibold lowercase">已兑:{prize.claimedCount}</span>
@@ -592,8 +707,8 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
             {/* Validation bar */}
             <div className={`p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border text-xs font-bold ${
               isProbValid
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-450'
-                : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900/50 dark:text-amber-450'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-400'
+                : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900/50 dark:text-amber-400'
             }`}>
               <div className="flex items-center gap-2">
                 <span className="text-base">{isProbValid ? '✅' : '⚠️'}</span>
@@ -608,20 +723,20 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
           </div>
 
           {/* Submit/Save Controls */}
-          {error && <div className="p-4 bg-red-55/90 dark:bg-red-950/25 border border-red-200 text-xs font-bold text-red-500 rounded-2xl">{error}</div>}
+          {error && <div className="p-4 bg-red-50/90 dark:bg-red-950/25 border border-red-200 text-xs font-bold text-red-500 rounded-2xl">{error}</div>}
 
           <div className="flex justify-end gap-2">
             <button
               onClick={fetchConfig}
               disabled={saving}
-              className="px-5 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-sm font-bold transition hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-sm font-bold transition hover:bg-slate-50 dark:hover:bg-slate-800"
             >
               放弃更改
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition shadow-md shadow-blue-500/25 disabled:opacity-60"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition shadow-md shadow-blue-500/20 disabled:opacity-60"
             >
               {saving ? (
                 <><Loader2 size={16} className="animate-spin" /> 保存中...</>
@@ -639,9 +754,9 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
         <div className="lg:col-span-4 space-y-8">
           
           {/* Wheel Real-time preview */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm flex flex-col items-center gap-4 text-center">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm flex flex-col items-center gap-4 text-center">
             <div className="w-full flex items-center justify-between">
-              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100">
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
                 {config.templateType === 'GRID' ? '九宫格实机效果预览' : '转盘实机效果预览'}
               </h3>
               <button 
@@ -655,16 +770,16 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
             </div>
 
             {config.templateType === 'GRID' ? (
-              <div className="relative w-60 h-60 my-3 p-3 bg-slate-950 rounded-2xl border-4 border-slate-900/60 shadow-[0_0_25px_rgba(59,130,246,0.2)]">
+              <div className="relative w-60 h-60 my-3 p-3 bg-slate-950 rounded-2xl border-4 border-slate-900/60 shadow-[0_0_25px_rgba(219,39,119,0.2)]">
                 {/* Blinking outer lights/border */}
                 <style dangerouslySetInnerHTML={{ __html: `
                   @keyframes grid-led-blink-odd {
-                    0%, 100% { background-color: #ffffff; box-shadow: 0 0 2px #fff, 0 0 4px #3b82f6; }
+                    0%, 100% { background-color: #ffffff; box-shadow: 0 0 2px #fff, 0 0 4px #db2777; }
                     50% { background-color: #fbbf24; box-shadow: 0 0 2px #fbbf24, 0 0 6px #d97706; }
                   }
                   @keyframes grid-led-blink-even {
                     0%, 100% { background-color: #fbbf24; box-shadow: 0 0 2px #fbbf24, 0 0 6px #d97706; }
-                    50% { background-color: #ffffff; box-shadow: 0 0 2px #fff, 0 0 4px #3b82f6; }
+                    50% { background-color: #ffffff; box-shadow: 0 0 2px #fff, 0 0 4px #db2777; }
                   }
                   .grid-led-odd {
                     animation: grid-led-blink-odd 1.2s infinite;
@@ -709,7 +824,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                             onClick={triggerPreviewSpin}
                             disabled={isPreviewSpinning || config.prizes.length === 0}
                             style={{
-                              background: `radial-gradient(circle, ${config.themeColor || '#3b82f6'} 0%, #1e3a8a 100%)`,
+                              background: `radial-gradient(circle, ${config.themeColor || '#db2777'} 0%, #4c0519 100%)`,
                             }}
                             className="rounded-xl flex flex-col items-center justify-center text-white active:scale-95 transition shadow-lg border border-slate-700/50"
                           >
@@ -735,9 +850,9 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                         <div
                           key={gIdx}
                           style={{
-                            borderColor: isActive ? (config.themeColor || '#3b82f6') : 'rgba(30, 41, 59, 0.8)',
-                            backgroundColor: isActive ? `${config.themeColor || '#3b82f6'}1a` : 'rgba(15, 23, 42, 0.6)',
-                            boxShadow: isActive ? `0 0 12px ${config.themeColor || '#3b82f6'}` : 'none',
+                            borderColor: isActive ? (config.themeColor || '#db2777') : 'rgba(30, 41, 59, 0.8)',
+                            backgroundColor: isActive ? `${config.themeColor || '#db2777'}1a` : 'rgba(15, 23, 42, 0.6)',
+                            boxShadow: isActive ? `0 0 12px ${config.themeColor || '#db2777'}` : 'none',
                           }}
                           className={`rounded-xl border transition-all duration-150 flex flex-col items-center justify-center p-1 text-center overflow-hidden`}
                         >
@@ -761,12 +876,12 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
               <div className="relative w-56 h-56 flex items-center justify-center my-3">
                 <style dangerouslySetInnerHTML={{ __html: `
                   @keyframes preview-led-blink-odd {
-                    0%, 100% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #3b82f6); }
+                    0%, 100% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #db2777); }
                     50% { fill: #fbbf24; filter: drop-shadow(0 0 1px #fbbf24) drop-shadow(0 0 3px #d97706); }
                   }
                   @keyframes preview-led-blink-even {
                     0%, 100% { fill: #fbbf24; filter: drop-shadow(0 0 1px #fbbf24) drop-shadow(0 0 3px #d97706); }
-                    50% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #3b82f6); }
+                    50% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #db2777); }
                   }
                   .preview-led-blink-odd {
                     animation: preview-led-blink-odd 1.2s infinite;
@@ -776,7 +891,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                   }
                 `}} />
 
-                <div className="absolute inset-[-8px] rounded-full border-4 border-slate-900/60 shadow-[0_0_25px_rgba(59,130,246,0.2)] pointer-events-none" />
+                <div className="absolute inset-[-8px] rounded-full border-4 border-slate-900/60 shadow-[0_0_25px_rgba(219,39,119,0.2)] pointer-events-none" />
                 
                 {/* Top pointer */}
                 <div className="absolute top-[-8px] z-30 w-6 h-6 flex items-center justify-center filter drop-shadow-[0_2px_4px_rgba(244,63,94,0.4)]">
@@ -905,7 +1020,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                   <svg viewBox="0 0 100 100" className="w-full h-full">
                     {/* Outer border / rim */}
                     <circle cx="50" cy="50" r="48" fill="none" stroke="#1e1b4b" strokeWidth="4" />
-                    <circle cx="50" cy="50" r="46.5" fill="none" stroke="#3b82f6" strokeWidth="0.5" strokeDasharray="1 1" className="opacity-40" />
+                    <circle cx="50" cy="50" r="46.5" fill="none" stroke="#db2777" strokeWidth="0.5" strokeDasharray="1 1" className="opacity-40" />
                     {/* 24 Blinking LEDs */}
                     {Array.from({ length: 24 }).map((_, i) => {
                       const dotAngle = (i * 360) / 24
@@ -935,8 +1050,8 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
           </div>
 
           {/* Marketing Sticker customizer & printing */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-5">
-            <h3 className="text-sm font-black text-slate-850 dark:text-slate-100">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-5">
+            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
               宣传贴纸生成与打印
             </h3>
             
@@ -947,7 +1062,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                   type="text"
                   value={posterTitle}
                   onChange={(e) => setPosterTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-850 dark:text-slate-200"
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
                 />
               </div>
 
@@ -957,55 +1072,132 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                   rows={2}
                   value={posterDesc}
                   onChange={(e) => setPosterDesc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-850 dark:text-slate-200 resize-none"
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 resize-none"
                 />
+              </div>
+
+              {/* Color Scheme Picker */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">贴纸配色方案</label>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {(['black', 'blue', 'green', 'purple', 'gold'] as const).map((t) => {
+                    const labelMap = {
+                      black: '曜石黑',
+                      blue: '极光蓝',
+                      green: '森林绿',
+                      purple: '紫罗兰',
+                      gold: '琥珀金',
+                    }
+                    const dotMap = {
+                      black: 'bg-slate-900 dark:bg-slate-100',
+                      blue: 'bg-blue-600',
+                      green: 'bg-emerald-600',
+                      purple: 'bg-purple-600',
+                      gold: 'bg-amber-500',
+                    }
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setStickerTheme(t)}
+                        className={`flex flex-col items-center justify-center py-2 rounded-xl border text-[9px] font-bold transition-all ${
+                          stickerTheme === t
+                            ? 'border-blue-500 bg-blue-50/40 text-blue-600 dark:text-blue-450 ring-1 ring-blue-500/25 shadow-sm'
+                            : 'border-slate-250/60 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-700'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full mb-1 ${dotMap[t]}`} />
+                        <span>{labelMap[t]}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
             {/* Sticker mini-preview */}
             <div className="w-full flex justify-center">
-              <div className="border border-slate-200/60 dark:border-slate-800 p-3 rounded-2xl bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-between text-center aspect-square w-full max-w-[220px] relative overflow-hidden shadow-sm">
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-blue-500 via-pink-500 to-indigo-500" />
-                
-                <span className="text-[7.5px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 tracking-wider select-none mt-1">
-                  {brandName}
-                </span>
+              {(() => {
+                const colorThemes = {
+                  black: {
+                    badge: 'bg-slate-900 text-white dark:bg-slate-800 dark:text-slate-150',
+                    title: 'text-slate-950 dark:text-white',
+                    borderAccent: 'border-slate-900/10 dark:border-slate-100/10',
+                    borderDouble: 'border-slate-900 dark:border-slate-300',
+                  },
+                  blue: {
+                    badge: 'bg-blue-600 text-white',
+                    title: 'text-blue-600 dark:text-blue-400',
+                    borderAccent: 'border-blue-600/10',
+                    borderDouble: 'border-blue-600',
+                  },
+                  green: {
+                    badge: 'bg-emerald-600 text-white',
+                    title: 'text-emerald-700 dark:text-emerald-450',
+                    borderAccent: 'border-emerald-600/10',
+                    borderDouble: 'border-emerald-600',
+                  },
+                  purple: {
+                    badge: 'bg-purple-600 text-white',
+                    title: 'text-purple-600 dark:text-purple-400',
+                    borderAccent: 'border-purple-600/10',
+                    borderDouble: 'border-purple-600',
+                  },
+                  gold: {
+                    badge: 'bg-amber-500 text-white',
+                    title: 'text-amber-600 dark:text-amber-450',
+                    borderAccent: 'border-amber-500/10',
+                    borderDouble: 'border-amber-500',
+                  },
+                }
+                const currentTheme = colorThemes[stickerTheme]
 
-                <h4 className="text-xs font-black text-slate-900 dark:text-white leading-tight mt-1 uppercase truncate w-full px-2">
-                  {posterTitle}
-                </h4>
-                
-                <p className="text-[8.5px] text-slate-500 dark:text-slate-450 max-w-[180px] leading-tight mt-0.5 truncate w-full px-1">
-                  {posterDesc}
-                </p>
+                return (
+                  <div className="border border-slate-200/60 dark:border-slate-800 p-3.5 rounded-2xl bg-white dark:bg-slate-950 flex flex-col items-center justify-between text-center aspect-square w-full max-w-[220px] relative overflow-hidden shadow-sm">
+                    {/* Modern Border Accent */}
+                    <div className={`absolute inset-1.5 border-2 ${currentTheme.borderAccent} pointer-events-none rounded-lg`} />
+                    <div className={`absolute inset-2 border ${currentTheme.borderDouble} pointer-events-none rounded-md`} />
+                    
+                    <span className={`text-[7.5px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider select-none mt-1 ${currentTheme.badge}`}>
+                      {brandName}
+                    </span>
 
-                {/* QR Image */}
-                {qrCodeUrl ? (
-                  <div className="p-1 bg-white rounded-lg shadow border border-slate-100 my-1">
-                    <img src={qrCodeUrl} alt="Store Game QR Code" className="w-18 h-18 object-contain" />
+                    <h4 className={`text-xs font-black leading-tight mt-1 uppercase truncate w-full px-2 ${currentTheme.title}`}>
+                      {posterTitle}
+                    </h4>
+                    
+                    <p className="text-[8.5px] text-slate-500 dark:text-slate-400 max-w-[180px] leading-tight mt-0.5 truncate w-full px-1 z-10">
+                      {posterDesc}
+                    </p>
+
+                    {/* QR Image */}
+                    {qrCodeUrl ? (
+                      <div className={`p-1 bg-white rounded-lg shadow border z-10 my-1`}>
+                        <img src={qrCodeUrl} alt="Store Game QR Code" className="w-18 h-18 object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-18 h-18 bg-white border border-slate-200/50 rounded-lg flex items-center justify-center text-[9px] text-slate-400 my-1 z-10">
+                        正在生成...
+                      </div>
+                    )}
+
+                    <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 z-10">
+                      Scan to Spin & Claim Rewards
+                    </p>
                   </div>
-                ) : (
-                  <div className="w-18 h-18 bg-white border border-slate-200/50 rounded-lg flex items-center justify-center text-[9px] text-slate-450 my-1">
-                    正在生成...
-                  </div>
-                )}
-
-                <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
-                  Scan to Spin & Claim Rewards
-                </p>
-              </div>
+                )
+              })()}
             </div>
 
             <button
               onClick={openPosterPrint}
               disabled={!qrCodeUrl}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-750 text-white text-xs font-bold transition shadow shadow-indigo-600/10 active:scale-[0.98] disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow shadow-blue-600/10 active:scale-[0.98] disabled:opacity-50"
             >
               <Printer size={13} />
               打印桌贴/包装贴纸 (80mm x 80mm)
             </button>
           </div>
-
         </div>
 
       </div>

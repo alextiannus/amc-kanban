@@ -10,12 +10,57 @@ export default function StickerPrintPage() {
   const searchParams = useSearchParams()
   
   const brandId = params.brandId as string
-  const stickerTitle = searchParams.get('title') || 'Scan & Win!'
-  const stickerDesc = searchParams.get('desc') || 'Leave a review to spin and win rewards instantly!'
+  const [stickerTitle, setStickerTitle] = useState(searchParams.get('title') || 'Scan & Win!')
+  const [stickerDesc, setStickerDesc] = useState(searchParams.get('desc') || 'Leave a review to spin and win rewards instantly!')
+  const [theme, setTheme] = useState<'black' | 'blue' | 'green' | 'purple' | 'gold'>((searchParams.get('theme') as any) || 'black')
 
   const [brandName, setBrandName] = useState('AMC Store')
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
   const [loading, setLoading] = useState(true)
+
+  const themeColors = (({
+    black: {
+      badge: 'bg-slate-900 text-white',
+      title: 'text-slate-950',
+      borderAccent: 'border-slate-900/10',
+      borderDouble: 'border-slate-900',
+      qrBorder: 'border-slate-900',
+    },
+    blue: {
+      badge: 'bg-blue-600 text-white',
+      title: 'text-blue-600',
+      borderAccent: 'border-blue-600/10',
+      borderDouble: 'border-blue-600',
+      qrBorder: 'border-blue-600',
+    },
+    green: {
+      badge: 'bg-emerald-600 text-white',
+      title: 'text-emerald-700',
+      borderAccent: 'border-emerald-600/10',
+      borderDouble: 'border-emerald-600',
+      qrBorder: 'border-emerald-600',
+    },
+    purple: {
+      badge: 'bg-purple-600 text-white',
+      title: 'text-purple-600',
+      borderAccent: 'border-purple-600/10',
+      borderDouble: 'border-purple-600',
+      qrBorder: 'border-purple-600',
+    },
+    gold: {
+      badge: 'bg-amber-500 text-white',
+      title: 'text-amber-600',
+      borderAccent: 'border-amber-500/10',
+      borderDouble: 'border-amber-500',
+      qrBorder: 'border-amber-500',
+    },
+  } as Record<string, { badge: string; title: string; borderAccent: string; borderDouble: string; qrBorder: string }>)[theme] || {
+    badge: 'bg-slate-900 text-white',
+    title: 'text-slate-950',
+    borderAccent: 'border-slate-900/10',
+    borderDouble: 'border-slate-900',
+    qrBorder: 'border-slate-900',
+  })
 
   useEffect(() => {
     if (!brandId) return
@@ -31,6 +76,11 @@ export default function StickerPrintPage() {
           const brandObj = list.find((b: any) => b.id === brandId)
           if (brandObj) setBrandName(brandObj.name)
         }
+
+        // Initialize values from config
+        if (data.posterTitle) setStickerTitle(data.posterTitle)
+        if (data.posterDesc) setStickerDesc(data.posterDesc)
+        if (data.posterTheme) setTheme(data.posterTheme as any)
 
         // Generate QR code for customer game H5
         const gameUrl = `${window.location.origin}/game/${brandId}`
@@ -70,6 +120,10 @@ export default function StickerPrintPage() {
       
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           html, body {
             width: 80mm;
             height: 80mm;
@@ -102,34 +156,73 @@ export default function StickerPrintPage() {
       `}} />
 
       {/* Floating Control Banner (hidden during print) */}
-      <div className="w-full max-w-[80mm] bg-white border border-slate-200 p-3 rounded-2xl shadow-md mb-8 flex justify-between items-center print:hidden no-print">
-        <button 
-          onClick={() => window.close()}
-          className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-900 font-bold transition"
-        >
-          <ArrowLeft size={13} /> Close
-        </button>
-        <button 
-          onClick={() => window.print()}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 active:scale-95 text-white text-[11px] font-bold rounded-lg shadow transition"
-        >
-          <Printer size={13} /> Print
-        </button>
+      <div className="w-full max-w-[80mm] bg-white border border-slate-200 p-3 rounded-2xl shadow-md mb-8 flex flex-col gap-3.5 items-center print:hidden no-print">
+        <div className="w-full flex justify-between items-center">
+          <button 
+            onClick={() => window.close()}
+            className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-900 font-bold transition"
+          >
+            <ArrowLeft size={13} /> Close
+          </button>
+          <button 
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 active:scale-95 text-white text-[11px] font-bold rounded-lg shadow transition"
+          >
+            <Printer size={13} /> Print
+          </button>
+        </div>
+
+        {/* Color presets inside floating banner */}
+        <div className="w-full border-t border-slate-100 dark:border-slate-800 pt-2 flex items-center justify-between">
+          <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">配色:</span>
+          <div className="flex gap-1.5">
+            {(['black', 'blue', 'green', 'purple', 'gold'] as const).map((t) => {
+              const dotColor = {
+                black: 'bg-slate-900',
+                blue: 'bg-blue-600',
+                green: 'bg-emerald-600',
+                purple: 'bg-purple-600',
+                gold: 'bg-amber-500',
+              }
+              const titleMap = {
+                black: '曜石黑',
+                blue: '极光蓝',
+                green: '森林绿',
+                purple: '紫罗兰',
+                gold: '琥珀金',
+              }
+              return (
+                <button
+                  key={t}
+                  title={titleMap[t]}
+                  onClick={() => setTheme(t)}
+                  className={`w-4.5 h-4.5 rounded-full flex items-center justify-center border transition-all ${
+                    theme === t 
+                      ? 'border-blue-500 scale-110 ring-2 ring-blue-500/20' 
+                      : 'border-slate-200 hover:scale-105'
+                  }`}
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full ${dotColor[t]}`} />
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Sticker Area (80mm x 80mm square) */}
       <div className="sticker-container w-[80mm] h-[80mm] bg-white border border-slate-350 p-4 flex flex-col items-center justify-between text-center text-slate-900 shadow-2xl relative overflow-hidden rounded-2xl">
         
         {/* Modern Border Accent */}
-        <div className="absolute inset-1.5 border-2 border-slate-900/10 pointer-events-none rounded-lg" />
-        <div className="absolute inset-2 border border-slate-900 pointer-events-none rounded-md" />
+        <div className={`absolute inset-1.5 border-2 ${themeColors.borderAccent} pointer-events-none rounded-lg`} />
+        <div className={`absolute inset-2 border ${themeColors.borderDouble} pointer-events-none rounded-md`} />
 
         {/* Top Header */}
         <div className="mt-1 flex flex-col items-center gap-1">
-          <span className="px-2 py-0.5 rounded bg-slate-900 text-white text-[8px] font-black uppercase tracking-[0.15em] leading-none">
+          <span className={`sticker-badge px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-[0.15em] leading-none ${themeColors.badge}`}>
             {brandName}
           </span>
-          <h1 className="text-lg font-black tracking-tight text-slate-950 mt-1 leading-tight uppercase">
+          <h1 className={`text-lg font-black tracking-tight mt-1 leading-tight uppercase ${themeColors.title}`}>
             {stickerTitle}
           </h1>
           <p className="text-[9px] text-slate-500 max-w-[68mm] leading-tight font-medium mt-0.5">
@@ -140,7 +233,7 @@ export default function StickerPrintPage() {
         {/* Middle QR Code */}
         <div className="my-1.5 flex flex-col items-center">
           {qrCodeDataUrl ? (
-            <div className="p-1.5 bg-white border-2 border-slate-900 rounded-xl shadow-sm">
+            <div className={`p-1.5 bg-white border-2 ${themeColors.qrBorder} rounded-xl shadow-sm`}>
               <img src={qrCodeDataUrl} alt="Scan QR Code" className="w-[32mm] h-[32mm] object-contain" />
             </div>
           ) : (

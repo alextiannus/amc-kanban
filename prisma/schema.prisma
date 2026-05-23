@@ -316,9 +316,16 @@ model GameConfig {
   
   taskPhotoEnabled   Boolean     @default(true)
   taskReviewEnabled  Boolean     @default(true)
+  taskGoogleMapsEnabled  Boolean     @default(true)
+  taskXiaohongshuEnabled Boolean     @default(true)
+  taskInstagramEnabled   Boolean     @default(true)
   clerkPin           String      @default("123456")
   maxSpinsPerUserDay Int         @default(3)
   templateType       String      @default("WHEEL")
+  
+  posterTitle        String      @default("Scan & Win!")
+  posterDesc         String      @default("Leave a review to spin and win rewards instantly!")
+  posterTheme        String      @default("black")
   
   prizes             GamePrize[]
   createdAt          DateTime    @default(now())

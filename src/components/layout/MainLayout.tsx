@@ -91,7 +91,7 @@ export default function MainLayout({
             onClick={() => setCurrentView('game')}
             className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
               currentView === 'game'
-                ? 'bg-white dark:bg-slate-700 text-pink-650 dark:text-pink-400 shadow-sm'
+                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
                 : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
             }`}
             id="nav-game-settings"
