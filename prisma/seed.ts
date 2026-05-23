@@ -65,7 +65,7 @@ async function main() {
       name: '御膳房',
       location: 'New York',
       timezone: 'America/New_York',
-      autoPilot: false,
+      autoPilot: true,
     },
   })
 
@@ -75,7 +75,7 @@ async function main() {
       name: 'Golden Dragon',
       location: 'Los Angeles',
       timezone: 'America/Los_Angeles',
-      autoPilot: false,
+      autoPilot: true,
     },
   })
 
@@ -92,7 +92,7 @@ async function main() {
         followerCount: 1240,
         followerDelta: 12,
         snapshotAt: new Date(),
-        autoPilot: false,
+        autoPilot: true,
       },
     }),
     prisma.socialAccount.create({
@@ -104,7 +104,7 @@ async function main() {
         followerCount: 840,
         followerDelta: 5,
         snapshotAt: new Date(),
-        autoPilot: false,
+        autoPilot: true,
       },
     }),
     prisma.socialAccount.create({
@@ -115,7 +115,7 @@ async function main() {
         displayName: 'Google Business',
         ratingScore: 4.8,
         snapshotAt: new Date(),
-        autoPilot: false,
+        autoPilot: true,
       },
     }),
     prisma.socialAccount.create({
@@ -127,7 +127,7 @@ async function main() {
         followerCount: 320,
         followerDelta: 28,
         snapshotAt: new Date(),
-        autoPilot: false,
+        autoPilot: true,
       },
     }),
   ])
