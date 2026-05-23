@@ -235,6 +235,66 @@ describe('REST: Tasks', () => {
     assert.equal(status, 200, `Update task returned ${status}: ${JSON.stringify(data)}`)
     assert.equal((data as any).status, 'done', 'Task status should be done')
   })
+
+  test('Task Dependency & Agent Blocking & Comments Flow', async () => {
+    // 1. Create task A (blocker)
+    const resA = await rest('POST', '/api/tasks', {
+      title: `[TEST] Blocker Task A ${Date.now()}`,
+      description: 'Blocker task.',
+      status: 'todo',
+      priority: 'medium',
+      weight: 3,
+    })
+    assert.equal(resA.status, 200)
+    const taskAId = (resA.data as any).id
+    assert.ok(taskAId)
+
+    // 2. Create task B (blocked) with dependency on task A
+    const resB = await rest('POST', '/api/tasks', {
+      title: `[TEST] Blocked Task B ${Date.now()}`,
+      description: 'Blocked task.',
+      status: 'todo',
+      priority: 'high',
+      weight: 3,
+      blockerTaskIds: [taskAId]
+    })
+    assert.equal(resB.status, 200)
+    const taskBId = (resB.data as any).id
+    assert.ok(taskBId)
+
+    // Verify task B has dependency on task A in retrieved task details
+    const resBDetails = await rest('GET', `/api/tasks/${taskBId}`)
+    assert.equal(resBDetails.status, 200)
+    const dependencies = (resBDetails.data as any).dependencies || []
+    assert.ok(dependencies.some((d: any) => d.blockerTaskId === taskAId), 'Task B should list Task A as dependency')
+
+    // 3. Attempt to move task B to in_progress using Agent API key (since rest() uses auth headers with TEST_AGENT_API_KEY)
+    // Verify it fails with 400 Bad Request
+    const resTransitionFail = await rest('PATCH', `/api/tasks/${taskBId}/status`, { status: 'in_progress' })
+    assert.equal(resTransitionFail.status, 400, 'Should reject moving blocked task to in_progress for Agent')
+    assert.ok(typeof resTransitionFail.data === 'object' && resTransitionFail.data !== null && 'error' in resTransitionFail.data)
+
+    // 4. Move task A to done
+    const resADone = await rest('PATCH', `/api/tasks/${taskAId}/status`, { status: 'done' })
+    assert.equal(resADone.status, 200)
+
+    // 5. Move task B to in_progress
+    // Verify it succeeds now
+    const resTransitionSuccess = await rest('PATCH', `/api/tasks/${taskBId}/status`, { status: 'in_progress' })
+    assert.equal(resTransitionSuccess.status, 200, 'Should allow moving to in_progress now that blocker is done')
+
+    // 6. Post a comment on task B
+    const commentContent = `Hello this is a comment with **Markdown** from test suite at ${Date.now()}`
+    const resCommentPost = await rest('POST', `/api/tasks/${taskBId}/comments`, { content: commentContent })
+    assert.equal(resCommentPost.status, 200)
+    assert.equal((resCommentPost.data as any).content, commentContent)
+
+    // 7. Get comments on task B and verify they match
+    const resCommentsGet = await rest('GET', `/api/tasks/${taskBId}/comments`)
+    assert.equal(resCommentsGet.status, 200)
+    assert.ok(Array.isArray(resCommentsGet.data))
+    assert.ok((resCommentsGet.data as any[]).some((c: any) => c.content === commentContent), 'Comments should contain the posted comment')
+  })
 })
 
 // ════════════════════════════════════════════════════════════════════════════

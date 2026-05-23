@@ -103,6 +103,17 @@ export async function GET(request: Request) {
             themeColor: true,
             ...avatarSelect,
           }
+        },
+        dependencies: {
+          include: {
+            blockerTask: {
+              select: {
+                id: true,
+                title: true,
+                status: true
+              }
+            }
+          }
         }
       }
     }
@@ -152,7 +163,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    let { title, description, materials, status, assigneeId, priority, estimatedHours, deadline, tags, weight } = body
+    let { title, description, materials, status, assigneeId, priority, estimatedHours, deadline, tags, weight, blockerTaskIds } = body
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })
@@ -188,6 +199,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid assigneeId: must be an AI_AGENT' }, { status: 400 })
     }
 
+    const validBlockerTaskIds = Array.isArray(blockerTaskIds)
+      ? blockerTaskIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')
+      : []
+
     const newTask = await prisma.workUnit.create({
       data: {
         title,
@@ -199,7 +214,25 @@ export async function POST(request: Request) {
         priority: priority || 'medium',
         estimatedHours: estimatedHours !== undefined && estimatedHours !== null && estimatedHours !== '' ? Number(estimatedHours) : null,
         deadline: deadline ? new Date(deadline) : null,
-        tags: Array.isArray(tags) ? tags : typeof tags === 'string' ? tags.split(',').map((tag: string) => tag.trim()).filter(Boolean) : []
+        tags: Array.isArray(tags) ? tags : typeof tags === 'string' ? tags.split(',').map((tag: string) => tag.trim()).filter(Boolean) : [],
+        dependencies: validBlockerTaskIds.length > 0 ? {
+          create: validBlockerTaskIds.map((blockerId: string) => ({
+            blockerTaskId: blockerId
+          }))
+        } : undefined
+      },
+      include: {
+        dependencies: {
+          include: {
+            blockerTask: {
+              select: {
+                id: true,
+                title: true,
+                status: true
+              }
+            }
+          }
+        }
       }
     })
 

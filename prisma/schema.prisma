@@ -35,6 +35,7 @@ model User {
   permittedAgents  AgentPermission[] @relation("HumanUser")
   assignedToHumans AgentPermission[] @relation("AiAgent")
   brandMemberships BrandAgent[]      @relation("BrandAgents")
+  comments         Comment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -54,6 +55,14 @@ model WorkUnit {
   tags           String[]  @default([])
   assigneeId     String?
   assignee       User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  
+  // Relations for task dependencies (self-relation join table)
+  dependencies   TaskDependency[] @relation("BlockedTask") // Blocker tasks that block this task
+  blockingTasks  TaskDependency[] @relation("BlockerTask") // Tasks that are blocked by this task
+  
+  // Comments thread
+  comments       Comment[]
+
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
@@ -414,3 +423,29 @@ model GameSpinLog {
   createdAt          DateTime         @default(now())
 }
 
+model TaskDependency {
+  id            String   @id @default(cuid())
+  blockedTaskId String
+  blockerTaskId String
+  blockedTask   WorkUnit @relation("BlockedTask", fields: [blockedTaskId], references: [id], onDelete: Cascade)
+  blockerTask   WorkUnit @relation("BlockerTask", fields: [blockerTaskId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  @@unique([blockedTaskId, blockerTaskId])
+  @@index([blockedTaskId])
+  @@index([blockerTaskId])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       WorkUnit @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+  content    String   // Markdown string
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([authorId])
+}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { X, AlertCircle, Check, Copy, ChevronLeft, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -49,6 +49,114 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
   const [currentTask, setCurrentTask] = useState(task)
   const [updating, setUpdating] = useState(false)
   const [idCopied, setIdCopied] = useState(false)
+  const [newComment, setNewComment] = useState('')
+  const [submittingComment, setSubmittingComment] = useState(false)
+
+  // Fetch full details of the task (with comments & dependencies) when mounted/changed
+  useEffect(() => {
+    let active = true
+    const fetchTaskDetails = async () => {
+      try {
+        const res = await fetch(`/api/tasks/${currentTask.id}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (active) {
+          setCurrentTask(data)
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    fetchTaskDetails()
+    return () => {
+      active = false
+    }
+  }, [currentTask.id])
+
+  // If task prop changes from parent, reset
+  useEffect(() => {
+    setCurrentTask(task)
+  }, [task])
+
+  const eligibleBlockers = useMemo(() => {
+    if (!allTasks) return []
+    return allTasks.filter(t => t.id !== currentTask.id && t.status !== 'void' && !(currentTask.dependencies || []).some((d: any) => d.blockerTaskId === t.id))
+  }, [allTasks, currentTask.id, currentTask.dependencies])
+
+  const handleAddBlocker = async (blockerId: string) => {
+    if (!blockerId) return
+    const currentBlockerIds = (currentTask.dependencies || []).map((d: any) => d.blockerTaskId)
+    const newBlockerIds = [...currentBlockerIds, blockerId]
+    setUpdating(true)
+    try {
+      const res = await fetch(`/api/tasks/${currentTask.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blockerTaskIds: newBlockerIds })
+      })
+      if (res.ok) {
+        const detailRes = await fetch(`/api/tasks/${currentTask.id}`)
+        if (detailRes.ok) {
+          setCurrentTask(await detailRes.json())
+        }
+        onUpdate()
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  const handleRemoveBlocker = async (blockerId: string) => {
+    const currentBlockerIds = (currentTask.dependencies || []).map((d: any) => d.blockerTaskId)
+    const newBlockerIds = currentBlockerIds.filter((id: string) => id !== blockerId)
+    setUpdating(true)
+    try {
+      const res = await fetch(`/api/tasks/${currentTask.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blockerTaskIds: newBlockerIds })
+      })
+      if (res.ok) {
+        const detailRes = await fetch(`/api/tasks/${currentTask.id}`)
+        if (detailRes.ok) {
+          setCurrentTask(await detailRes.json())
+        }
+        onUpdate()
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
+  const handlePostComment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newComment.trim()) return
+
+    setSubmittingComment(true)
+    try {
+      const res = await fetch(`/api/tasks/${currentTask.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newComment.trim() })
+      })
+      if (res.ok) {
+        setNewComment('')
+        const detailRes = await fetch(`/api/tasks/${currentTask.id}`)
+        if (detailRes.ok) {
+          setCurrentTask(await detailRes.json())
+        }
+        onUpdate()
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSubmittingComment(false)
+    }
+  }
 
   // sorted non-void tasks for prev/next navigation
   const sortedTasks = useMemo(() => {
@@ -247,6 +355,69 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
             </div>
           )}
 
+          {/* Blocker Editor Section */}
+          <div>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Blocker Tasks (Dependencies)</h3>
+            <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 space-y-3">
+              {(currentTask.dependencies || []).length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {(currentTask.dependencies || []).map((dep: any) => {
+                    const bt = dep.blockerTask
+                    if (!bt) return null
+                    const isFinished = ['done', 'void'].includes(bt.status)
+                    return (
+                      <div key={dep.id} className="flex items-center justify-between gap-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60 rounded-xl px-3.5 py-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isFinished ? (
+                            <span className="text-emerald-500 flex-shrink-0" title="Resolved">
+                              <Check size={14} />
+                            </span>
+                          ) : (
+                            <span className="text-rose-500 flex-shrink-0" title="Active Blocker">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                              </svg>
+                            </span>
+                          )}
+                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{bt.title}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isFinished ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400' : 'bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-400'}`}>
+                            {bt.status.toUpperCase()}
+                          </span>
+                        </div>
+                        <button
+                          disabled={updating}
+                          onClick={() => handleRemoveBlocker(dep.blockerTaskId)}
+                          className="text-xs font-semibold text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 font-medium">No blocker dependencies set for this task.</p>
+              )}
+
+              {eligibleBlockers.length > 0 && (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center gap-2">
+                  <span className="text-xs text-slate-500 font-semibold">Add Blocker:</span>
+                  <select
+                    disabled={updating}
+                    value=""
+                    onChange={(e) => handleAddBlocker(e.target.value)}
+                    className="flex-1 max-w-xs text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-200 outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="" disabled>Select a task to block this one...</option>
+                    {eligibleBlockers.map((t: any) => (
+                      <option key={t.id} value={t.id}>{t.title} ({t.status})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+
 
           <div>
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Description / Logs</h3>
@@ -351,6 +522,95 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
               </div>
             </div>
           )}
+
+          {/* Comments Section */}
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-4">Discussion & Comments</h3>
+            
+            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1 mb-4">
+              {(currentTask.comments || []).length > 0 ? (
+                (currentTask.comments || []).map((comment: any) => {
+                  const author = comment.author || {}
+                  const isAgent = author.type === 'AI_AGENT'
+                  const authorColor = author.themeColor || (isAgent ? '#8b5cf6' : '#64748b')
+                  
+                  return (
+                    <div key={comment.id} className="flex gap-3 text-sm">
+                      <div 
+                        style={{ backgroundColor: `${authorColor}15`, color: authorColor, borderColor: authorColor }}
+                        className="w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center font-bold text-xs border overflow-hidden"
+                      >
+                        {author.avatar ? (
+                          <img src={author.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          (author.nickname || author.email || '?').substring(0, 2).toUpperCase()
+                        )}
+                      </div>
+                      
+                      <div className="flex-1 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 relative">
+                        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-800 dark:text-slate-200">
+                              {author.nickname || author.email?.split('@')[0] || 'Unknown User'}
+                            </span>
+                            {isAgent ? (
+                              <span 
+                                style={{ backgroundColor: `${authorColor}15`, color: authorColor }}
+                                className="text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider"
+                              >
+                                AI Agent
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 uppercase tracking-wider">
+                                Human
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-semibold text-slate-400">
+                            {new Date(comment.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="prose prose-sm dark:prose-invert max-w-none text-slate-600 dark:text-slate-300 leading-relaxed font-medium break-words prose-a:text-blue-500">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                            {comment.content}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <p className="text-xs text-slate-400 font-medium italic">No comments yet. Start the conversation below!</p>
+              )}
+            </div>
+
+            <form onSubmit={handlePostComment} className="flex gap-3 items-start">
+              <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex-shrink-0 flex items-center justify-center text-slate-400">
+                💬
+              </div>
+              <div className="flex-1 flex flex-col gap-2">
+                <textarea
+                  disabled={submittingComment}
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Add a comment... (Supports Markdown)"
+                  rows={2}
+                  className="w-full bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl p-3 text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-all font-medium"
+                />
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-semibold text-slate-400">Markdown is supported</span>
+                  <button
+                    type="submit"
+                    disabled={submittingComment || !newComment.trim()}
+                    className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-sm"
+                  >
+                    {submittingComment && <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                    Comment
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>

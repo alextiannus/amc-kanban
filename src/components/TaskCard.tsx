@@ -12,6 +12,11 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
   const [idCopied, setIdCopied] = useState(false)
   const assigneeThemeColor = task.assignee?.themeColor
 
+  const activeBlockers = (task.dependencies || []).filter(
+    (dep: any) => dep.blockerTask && !['done', 'void'].includes(dep.blockerTask.status)
+  )
+  const isBlocked = activeBlockers.length > 0
+
   const handleCopyId = (e: React.MouseEvent) => {
     e.stopPropagation()
     navigator.clipboard.writeText(task.id)
@@ -46,12 +51,22 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
         <div className="flex-1 min-w-0">
           <div className="flex justify-between items-start gap-2">
             <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 leading-snug truncate">{task.title}</h3>
-            {task.status === 'pending' && task.requiredInput && (
-              <span className="flex-shrink-0 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Require Input</span>
-            )}
-            {task.status === 'done' && (
-              <span className="flex-shrink-0 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">精选</span>
-            )}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {isBlocked && (
+                <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  Blocked
+                </span>
+              )}
+              {task.status === 'pending' && task.requiredInput && (
+                <span className="bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Require Input</span>
+              )}
+              {task.status === 'done' && (
+                <span className="bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">精选</span>
+              )}
+            </div>
           </div>
           <p className="text-xs font-medium text-slate-400 truncate mt-1">
             {task.assignee ? (task.assignee.nickname || task.assignee.email.split('@')[0]) : 'Unassigned'}

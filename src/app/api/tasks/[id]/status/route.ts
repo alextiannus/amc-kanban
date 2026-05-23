@@ -46,6 +46,23 @@ export async function PATCH(
       return NextResponse.json({ error: 'Forbidden: Only task assignee or admin can update status' }, { status: 403 })
     }
 
+    if (status === 'in_progress' && apiKey) {
+      const blockers = await prisma.taskDependency.findMany({
+        where: { blockedTaskId: id },
+        include: {
+          blockerTask: {
+            select: {
+              status: true
+            }
+          }
+        }
+      })
+      const activeBlockers = blockers.filter(dep => !['done', 'void'].includes(dep.blockerTask.status))
+      if (activeBlockers.length > 0) {
+        return NextResponse.json({ error: 'Forbidden: Task is blocked by unfinished blocker tasks.' }, { status: 400 })
+      }
+    }
+
     const data: any = { status }
     
     // Specifically handle requiredInput, allowing null to clear it
@@ -55,7 +72,20 @@ export async function PATCH(
 
     const updatedTask = await prisma.workUnit.update({
       where: { id },
-      data
+      data,
+      include: {
+        dependencies: {
+          include: {
+            blockerTask: {
+              select: {
+                id: true,
+                title: true,
+                status: true
+              }
+            }
+          }
+        }
+      }
     })
 
     await writeAuditLog({

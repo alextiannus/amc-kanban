@@ -51,6 +51,31 @@ export async function GET(
             themeColor: true,
             ...avatarSelect,
           }
+        },
+        dependencies: {
+          include: {
+            blockerTask: {
+              select: {
+                id: true,
+                title: true,
+                status: true
+              }
+            }
+          }
+        },
+        comments: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            author: {
+              select: {
+                id: true,
+                nickname: true,
+                type: true,
+                themeColor: true,
+                ...avatarSelect,
+              }
+            }
+          }
         }
       }
     })
@@ -75,7 +100,11 @@ export async function GET(
 
     const taskWithAvatar = {
       ...task,
-      assignee: (task as any).assignee ? withResolvedAvatar((task as any).assignee) : null
+      assignee: (task as any).assignee ? withResolvedAvatar((task as any).assignee) : null,
+      comments: (task as any).comments?.map((comment: any) => ({
+        ...comment,
+        author: comment.author ? withResolvedAvatar(comment.author) : null
+      }))
     }
     return NextResponse.json(taskWithAvatar)
   } catch (error) {
@@ -119,7 +148,7 @@ export async function PATCH(
     }
 
     const body = await request.json()
-    const { title, description, materials, assigneeId, priority, estimatedHours, deadline, tags, weight, status } = body
+    const { title, description, materials, assigneeId, priority, estimatedHours, deadline, tags, weight, status, blockerTaskIds } = body
 
     if (weight !== undefined) {
       return NextResponse.json({ error: 'Forbidden: task weight is immutable after creation' }, { status: 400 })
@@ -154,6 +183,41 @@ export async function PATCH(
       }
     }
 
+    if (status === 'in_progress' && apiKey) {
+      const blockers = await prisma.taskDependency.findMany({
+        where: { blockedTaskId: id },
+        include: {
+          blockerTask: {
+            select: {
+              status: true
+            }
+          }
+        }
+      })
+      const activeBlockers = blockers.filter(dep => !['done', 'void'].includes(dep.blockerTask.status))
+      if (activeBlockers.length > 0) {
+        return NextResponse.json({ error: 'Forbidden: Task is blocked by unfinished blocker tasks.' }, { status: 400 })
+      }
+    }
+
+    if (blockerTaskIds !== undefined && Array.isArray(blockerTaskIds)) {
+      const validBlockerTaskIds = blockerTaskIds.filter((bid): bid is string => typeof bid === 'string' && bid.trim() !== '' && bid !== id)
+
+      await prisma.$transaction([
+        prisma.taskDependency.deleteMany({
+          where: { blockedTaskId: id }
+        }),
+        ...(validBlockerTaskIds.length > 0 ? [
+          prisma.taskDependency.createMany({
+            data: validBlockerTaskIds.map(bid => ({
+              blockedTaskId: id,
+              blockerTaskId: bid
+            }))
+          })
+        ] : [])
+      ])
+    }
+
     const data: any = {}
     if (title !== undefined) data.title = title
     if (description !== undefined) data.description = description
@@ -167,7 +231,20 @@ export async function PATCH(
 
     const updatedTask = await prisma.workUnit.update({
       where: { id },
-      data
+      data,
+      include: {
+        dependencies: {
+          include: {
+            blockerTask: {
+              select: {
+                id: true,
+                title: true,
+                status: true
+              }
+            }
+          }
+        }
+      }
     })
 
     await writeAuditLog({
