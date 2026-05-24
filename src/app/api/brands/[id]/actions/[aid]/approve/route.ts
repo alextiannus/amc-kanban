@@ -27,6 +27,10 @@ export async function PATCH(request: Request, { params }: Params) {
       id: true, name: true,
       postfastApiKey: true,
       googleApiKey: true, googlePlaceId: true,
+      googlePreferOAuth: true,
+      googleRefreshToken: true,
+      googleAccountId: true,
+      googleLocationId: true,
       larkBotWebhook: true,
     },
   })
@@ -88,22 +92,58 @@ export async function PATCH(request: Request, { params }: Params) {
 
   await updateLinkedWorkUnit({ status: 'in_progress', requiredInput: null })
 
-  // ── Content Approval → PostFast Publish ──────────────────────────────────
+  // ── Content Approval → Publish ──────────────────────────────────
   if ((item.type === 'content_approval' || item.type === 'content_draft') && item.draft) {
     const draft = item.draft
     await prisma.contentDraft.update({ where: { id: draft.id }, data: { status: 'publishing' } })
 
-    if (brand.postfastApiKey && item.account?.platformId) {
-      // Fire-and-forget PostFast publish
+    const platformName = item.account?.platformId
+    const isDirectGoogle = platformName === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
+
+    if ((brand.postfastApiKey && platformName) || isDirectGoogle) {
+      // Fire-and-forget publish
       ;(async () => {
-        const result = await postfastPublish({
-          apiKey: brand.postfastApiKey!,
-          platform: item.account!.platformId,
-          caption: draft.caption,
-          mediaUrls: draft.mediaUrls,
-          hashtags: draft.hashtags,
-          scheduledAt: draft.scheduledAt?.toISOString(),
-        })
+        let result: { success: boolean; postId?: string; url?: string; error?: string }
+
+        if (isDirectGoogle) {
+          try {
+            const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
+            const accessToken = await getGoogleAccessToken(brand.googleRefreshToken!)
+            
+            let googleAccountId = brand.googleAccountId || 'primary'
+            let googleLocationId = brand.googleLocationId!
+            
+            if (item.account && item.account.platformId === 'google') {
+              const handle = item.account.handle
+              const match = handle.match(/accounts\/([^\/]+)\/locations\/([^\/]+)/)
+              if (match) {
+                googleAccountId = `accounts/${match[1]}`
+                googleLocationId = match[2]
+              } else {
+                googleLocationId = handle
+              }
+            }
+
+            result = await createGoogleGBPLocalPost({
+              accountId: googleAccountId,
+              locationId: googleLocationId,
+              caption: draft.caption,
+              mediaUrls: draft.mediaUrls,
+              accessToken,
+            })
+          } catch (e: any) {
+            result = { success: false, error: e.message || 'Direct Google GBP publish failed' }
+          }
+        } else {
+          result = await postfastPublish({
+            apiKey: brand.postfastApiKey!,
+            platform: platformName!,
+            caption: draft.caption,
+            mediaUrls: draft.mediaUrls,
+            hashtags: draft.hashtags,
+            scheduledAt: draft.scheduledAt?.toISOString(),
+          })
+        }
 
         await prisma.contentDraft.update({
           where: { id: draft.id },
@@ -112,10 +152,11 @@ export async function PATCH(request: Request, { params }: Params) {
             : { status: 'draft', agentNote: `发布失败: ${result.error}` },
         })
 
+        const isScheduledFuture = !isDirectGoogle && draft.scheduledAt && new Date(draft.scheduledAt) > new Date()
         await updateLinkedWorkUnit(
           result.success
-            ? { status: 'done', requiredInput: null, publishedUrl: result.url ?? null }
-            : { status: 'pending', requiredInput: `自动发布失败：${result.error ?? 'unknown error'}。请人工复核并重试。` }
+            ? { status: isScheduledFuture ? 'in_progress' : 'done', requiredInput: null, publishedUrl: result.url ?? null }
+            : { status: 'pending', requiredInput: `自动发布失败：${result.error ?? 'unknown error'}。请协助排查原因。` }
         )
 
         // Lark notify on completion
@@ -124,7 +165,7 @@ export async function PATCH(request: Request, { params }: Params) {
             webhookUrl: brand.larkBotWebhook,
             title: result.success ? `✅ 内容已发布 — ${brand.name}` : `❌ 发布失败 — ${brand.name}`,
             content: result.success
-              ? `帖子已成功发布到 ${item.account!.platformId}。`
+              ? `帖子已成功发布到 ${platformName}。`
               : `发布失败：${result.error}`,
             actionUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/dashboard`,
           }).catch(console.error)
@@ -133,12 +174,13 @@ export async function PATCH(request: Request, { params }: Params) {
         eventEmitter.emit('board_update')
       })()
     } else {
-      // No PostFast key configured — mark as published (manual workflow)
+      // No PostFast key or direct Google configured — mark as published (manual workflow)
       await prisma.contentDraft.update({
         where: { id: draft.id },
         data: { status: 'published', publishedAt: new Date() },
       })
-      await updateLinkedWorkUnit({ status: 'done', requiredInput: null })
+      const isScheduledFuture = draft.scheduledAt && new Date(draft.scheduledAt) > new Date()
+      await updateLinkedWorkUnit({ status: isScheduledFuture ? 'in_progress' : 'done', requiredInput: null })
     }
   }
 

@@ -323,11 +323,22 @@ Content-Type: application/json
 
 ```
 Every 30 min:
-  1. POST /api/agent/action-items  ← push content drafts for review
-  2. GET  /api/agent/pending-approvals ← check for approved content
-  3. If approved drafts found:
-       → Call PostFast MCP to publish
-       → POST /api/agent/pending-approvals (report result)
+  1. Create or claim content tasks, put planned tasks to To Do (status: todo).
+  2. Check/prepare materials. If short of materials, set status to Require Input (status: pending, set requiredInput).
+     If materials complete, create draft via Lark doc (sharing permission set to "anyone with link can edit"), put URL in task.
+  3. If Brand.autoPilot = true:
+       → Directly call MCP tool `publish` to publish/schedule.
+       → If schedule succeeded, set task status to In Progress (status: in_progress).
+       → If schedule failed, set task status to Require Input (status: pending, set requiredInput).
+  4. If Brand.autoPilot = false:
+       → Generate task with status Require Input (status: pending, set requiredInput).
+       → Wait for approved status, then call MCP tool `publish` to publish/schedule.
+       → If schedule succeeded, set task status to In Progress (status: in_progress).
+       → If schedule failed, set task status to Require Input (status: pending, set requiredInput).
+  5. Once confirmed that the post is actually published successfully:
+       → Update the live post URL to task result, and update task status to Done (status: done).
+  6. If cancelled/voided midway:
+       → Update task status to Void (status: void).
 
 Every 6 hours:
   4. Monitor platform APIs for new reviews/ratings

@@ -170,37 +170,74 @@ export async function POST(request: Request) {
 
       let publishError: string | null = null
       let publishedUrl: string | null = null
+      let platformPostId: string | null = null
 
       // Resolve the platform name: from linked account or from draftData hint
       const platformName: string | undefined =
         account?.platformId ?? platformHint ?? draftData?.platform
 
-      if (!brand.postfastApiKey) {
+      const isDirectGoogle = platformName === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
+
+      if (!isDirectGoogle && !brand.postfastApiKey) {
         publishError = '自动发布失败：品牌未配置发布后端密钥（postfastApiKey）'
       } else if (!platformName) {
         publishError = '自动发布失败：未指定发布平台，请在 draftData.platform 传入平台名（如 instagram）'
       } else {
-        const publish = await postfastPublish({
-          apiKey: brand.postfastApiKey,
-          platform: platformName,
-          caption: draft.caption,
-          mediaUrls: draft.mediaUrls,
-          hashtags: draft.hashtags,
-          scheduledAt: draft.scheduledAt?.toISOString(),
-          accountId: accountId ?? undefined,
-        })
+        let publish: { success: boolean; postId?: string; url?: string; error?: string }
+
+        if (isDirectGoogle) {
+          try {
+            const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
+            const accessToken = await getGoogleAccessToken(brand.googleRefreshToken!)
+            
+            let googleAccountId = brand.googleAccountId || 'primary'
+            let googleLocationId = brand.googleLocationId!
+            
+            if (account && account.platformId === 'google') {
+              const handle = account.handle
+              const match = handle.match(/accounts\/([^\/]+)\/locations\/([^\/]+)/)
+              if (match) {
+                googleAccountId = `accounts/${match[1]}`
+                googleLocationId = match[2]
+              } else {
+                googleLocationId = handle
+              }
+            }
+
+            publish = await createGoogleGBPLocalPost({
+              accountId: googleAccountId,
+              locationId: googleLocationId,
+              caption: draft.caption,
+              mediaUrls: draft.mediaUrls,
+              accessToken,
+            })
+          } catch (e: any) {
+            publish = { success: false, error: e.message || 'Direct Google GBP publish failed' }
+          }
+        } else {
+          publish = await postfastPublish({
+            apiKey: brand.postfastApiKey!,
+            platform: platformName,
+            caption: draft.caption,
+            mediaUrls: draft.mediaUrls,
+            hashtags: draft.hashtags,
+            scheduledAt: draft.scheduledAt?.toISOString(),
+            accountId: accountId ?? undefined,
+          })
+        }
 
         if (!publish.success) {
           publishError = `自动发布失败：${publish.error ?? 'unknown error'}`
         } else {
           publishedUrl = publish.url ?? null
+          platformPostId = publish.postId ?? null
         }
 
         if (publish.success) {
           await Promise.all([
             prisma.contentDraft.update({
               where: { id: draft.id },
-              data: { status: 'published', publishedAt: new Date(), platformPostId: publish.postId ?? null },
+              data: { status: 'published', publishedAt: new Date(), platformPostId },
             }),
             prisma.actionItem.update({
               where: { id: item.id },
@@ -231,6 +268,8 @@ export async function POST(request: Request) {
       const materialParts = [`草稿链接: ${draftUrl}`]
       if (publishedUrl) materialParts.push(`发布链接: ${publishedUrl}`)
 
+      const isScheduledFuture = !isDirectGoogle && draft.scheduledAt && new Date(draft.scheduledAt) > new Date()
+
       await prisma.workUnit.update({
         where: { id: workTaskId },
         data: publishError
@@ -240,7 +279,7 @@ export async function POST(request: Request) {
               materials: materialParts.filter(Boolean).join('\n'),
             }
           : {
-              status: 'done',
+              status: isScheduledFuture ? 'in_progress' : 'done',
               requiredInput: null,
               materials: materialParts.filter(Boolean).join('\n'),
             },

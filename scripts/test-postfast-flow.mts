@@ -8,8 +8,46 @@
 
 import { createServer, IncomingMessage, ServerResponse } from 'node:http'
 import { spawn, ChildProcess } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { PrismaClient } from '@prisma/client'
 import assert from 'node:assert/strict'
+import { SignJWT } from 'jose'
+
+// Manually load .env files to ensure environment variables are present in standalone execution
+function loadEnv() {
+  const envFiles = ['.env.local', '.env']
+  for (const file of envFiles) {
+    try {
+      const content = readFileSync(file, 'utf8')
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed || trimmed.startsWith('#')) continue
+        const idx = trimmed.indexOf('=')
+        if (idx > 0) {
+          const key = trimmed.slice(0, idx).trim()
+          const val = trimmed.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '')
+          if (!process.env[key]) {
+            process.env[key] = val
+          }
+        }
+      }
+    } catch {
+      // Ignore missing files
+    }
+  }
+}
+loadEnv()
+
+async function generateSessionToken(user: any): Promise<string> {
+  const secretKey = process.env.JWT_SECRET
+  if (!secretKey) throw new Error('JWT_SECRET environment variable is missing!')
+  const key = new TextEncoder().encode(secretKey)
+  return await new SignJWT({ user })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(key)
+}
 
 const prisma = new PrismaClient()
 
@@ -129,7 +167,7 @@ async function startMockPostFastServer(): Promise<void> {
 async function startDevServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     console.log('[Dev Server] Starting next dev in background...')
-    devProcess = spawn('npx', ['next', 'dev', '-p', String(DEV_PORT)], {
+    devProcess = spawn('npx', ['next', 'dev', '--webpack', '-p', String(DEV_PORT)], {
       env: {
         ...process.env,
         DATABASE_URL: 'postgresql://alextian@localhost:5432/amc_dev',
@@ -359,6 +397,235 @@ async function runTests() {
   const mcpAliasTextResult = JSON.parse(mcpAliasData.result.content[0].text)
   assert.equal(mcpAliasTextResult.ok, true)
   assert.equal(mcpAliasTextResult.postId, 'pf_post_test_999')
+
+  // 6. Test Direct Google GBP publishing path, custom accountId lookup, and correct scheduledAt response
+  console.log('\n--- 6. Testing Direct Google GBP publish, accountId override & response ---')
+  
+  // Set direct Google configurations on the brand
+  await prisma.brand.update({
+    where: { id: brand.id },
+    data: {
+      googlePreferOAuth: true,
+      googleRefreshToken: 'mock_refresh_token_test',
+      googleAccountId: 'mock_account_123',
+      googleLocationId: 'mock_loc_ziwei',
+    }
+  })
+
+  // Create a mock Google SocialAccount in DB to verify accountId lookup
+  const googleAccount = await prisma.socialAccount.upsert({
+    where: { brandId_platformId_handle: { brandId: brand.id, platformId: 'google', handle: 'accounts/mock_act_custom/locations/mock_loc_custom' } },
+    create: { brandId: brand.id, platformId: 'google', handle: 'accounts/mock_act_custom/locations/mock_loc_custom', displayName: 'Custom Google Location' },
+    update: {}
+  })
+
+  // REST API Google Direct Publish
+  const restGooglePublishRes = await fetch(`${BASE_URL}/api/brands/${brand.id}/posts/publish`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      platform: 'google',
+      caption: 'Direct Google GBP Post via REST API',
+      mediaUrls: [`http://localhost:${MOCK_PORT}/google.jpg`],
+      accountId: googleAccount.id // Override default location
+    })
+  })
+
+  console.log('REST Google Publish Status:', restGooglePublishRes.status)
+  const restGooglePublishData = await restGooglePublishRes.json()
+  console.log('REST Google Publish Data:', JSON.stringify(restGooglePublishData, null, 2))
+  assert.equal(restGooglePublishRes.status, 200)
+  assert.equal(restGooglePublishData.ok, true)
+  assert.equal(restGooglePublishData.engine, 'google_direct')
+  assert.equal(restGooglePublishData.scheduledAt, 'immediate')
+  assert.ok(restGooglePublishData.postId.startsWith('mock_post_'))
+
+  // MCP Google Direct Publish
+  const mcpGooglePublishRes = await fetch(`${BASE_URL}/api/mcp`, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'Accept': 'application/json, text/event-stream'
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 3,
+      method: 'tools/call',
+      params: {
+        name: 'publish',
+        arguments: {
+          brandId: brand.id,
+          platform: 'google',
+          caption: 'Direct Google GBP Post via MCP',
+          accountId: googleAccount.id
+        }
+      }
+    })
+  })
+
+  console.log('MCP Google Publish Status:', mcpGooglePublishRes.status)
+  const mcpGooglePublishText = await mcpGooglePublishRes.text()
+  const mcpGooglePublishMatch = mcpGooglePublishText.match(/\{[\s\S]*\}/)
+  assert.ok(mcpGooglePublishMatch)
+  const mcpGooglePublishData = JSON.parse(mcpGooglePublishMatch[0])
+  console.log('MCP Google Publish Data:', JSON.stringify(mcpGooglePublishData, null, 2))
+  assert.equal(mcpGooglePublishRes.status, 200)
+  assert.ok(!mcpGooglePublishData.error)
+  const mcpGoogleResultText = JSON.parse(mcpGooglePublishData.result.content[0].text)
+  assert.equal(mcpGoogleResultText.ok, true)
+  assert.equal(mcpGoogleResultText.scheduledAt, 'immediate')
+  assert.ok(mcpGoogleResultText.postId.startsWith('mock_post_'))
+
+  // 7. Test WorkUnit Status Transitions (High Severity: immediate -> done, scheduled -> in_progress)
+  console.log('\n--- 7. Testing WorkUnit Status Transitions ---')
+
+  // A. Auto-Pilot Immediate Publish (should go to done)
+  // Ensure autopilot is enabled on brand
+  await prisma.brand.update({
+    where: { id: brand.id },
+    data: { autoPilot: true }
+  })
+
+  console.log('Testing Auto-Pilot Immediate Publish transition...')
+  const autoPilotImmediateRes = await fetch(`${BASE_URL}/api/agent/action-items`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      brandId: brand.id,
+      accountId: googleAccount.id,
+      type: 'content_approval',
+      priority: 'normal',
+      title: 'Auto-pilot Immediate test post',
+      description: 'Auto-pilot immediate post should transition task to done',
+      draftData: {
+        caption: 'Immediate post',
+        platform: 'google',
+        scheduledAt: null // Omitted/Null = immediate
+      }
+    })
+  })
+
+  console.log('Auto-Pilot Immediate Response Status:', autoPilotImmediateRes.status)
+  const autoPilotImmediateData = await autoPilotImmediateRes.json()
+  assert.equal(autoPilotImmediateRes.status, 201)
+  
+  // Query the created WorkUnit for this action item
+  const workUnitImmediate = await prisma.workUnit.findFirst({
+    where: { tags: { has: `action_item:${autoPilotImmediateData.id}` } }
+  })
+  assert.ok(workUnitImmediate, 'WorkUnit should be linked to the action item')
+  console.log('WorkUnit status for immediate publish:', workUnitImmediate.status)
+  assert.equal(workUnitImmediate.status, 'done', 'Immediate auto-published post must transition WorkUnit to done')
+
+  // B. Auto-Pilot Future Scheduled Publish (should go to in_progress)
+  console.log('Testing Auto-Pilot Future Scheduled Publish transition...')
+  const tiktokAccount = await prisma.socialAccount.findFirst({
+    where: { brandId: brand.id, platformId: 'tiktok' }
+  })
+  assert.ok(tiktokAccount)
+
+  const futureDate = new Date(Date.now() + 3600000 * 24).toISOString() // 24 hours in future
+  const autoPilotScheduledRes = await fetch(`${BASE_URL}/api/agent/action-items`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      brandId: brand.id,
+      accountId: tiktokAccount.id,
+      type: 'content_approval',
+      priority: 'normal',
+      title: 'Auto-pilot Scheduled test post',
+      description: 'Auto-pilot scheduled post should transition task to in_progress',
+      draftData: {
+        caption: 'Scheduled post',
+        platform: 'tiktok',
+        scheduledAt: futureDate
+      }
+    })
+  })
+
+  console.log('Auto-Pilot Scheduled Response Status:', autoPilotScheduledRes.status)
+  const autoPilotScheduledData = await autoPilotScheduledRes.json()
+  assert.equal(autoPilotScheduledRes.status, 201)
+
+  const workUnitScheduled = await prisma.workUnit.findFirst({
+    where: { tags: { has: `action_item:${autoPilotScheduledData.id}` } }
+  })
+  assert.ok(workUnitScheduled)
+  console.log('WorkUnit status for scheduled publish:', workUnitScheduled.status)
+  assert.equal(workUnitScheduled.status, 'in_progress', 'Future scheduled post must transition WorkUnit to in_progress')
+
+  // C. Manual Approve Flow (Immediate vs Scheduled)
+  console.log('Testing Manual Approve Flow status transitions...')
+  // Turn off autopilot so action item remains pending
+  await prisma.brand.update({
+    where: { id: brand.id },
+    data: { autoPilot: false }
+  })
+
+  // Create pending content approval item (Immediate)
+  const manualImmediateRes = await fetch(`${BASE_URL}/api/agent/action-items`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      brandId: brand.id,
+      accountId: googleAccount.id,
+      type: 'content_approval',
+      priority: 'normal',
+      title: 'Manual Immediate test post',
+      description: 'Manual immediate post approve transition to done',
+      draftData: {
+        caption: 'Manual Immediate post',
+        platform: 'google',
+        scheduledAt: null
+      }
+    })
+  })
+  assert.equal(manualImmediateRes.status, 201)
+  const manualImmediateData = await manualImmediateRes.json()
+
+  // Generate valid session token for human admin
+  const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' } })
+  assert.ok(adminUser)
+  const sessionToken = await generateSessionToken({
+    id: adminUser.id,
+    email: adminUser.email,
+    type: 'HUMAN',
+    role: 'ADMIN'
+  })
+
+  // Approve it!
+  const approveImmediateRes = await fetch(`${BASE_URL}/api/brands/${brand.id}/actions/${manualImmediateData.id}/approve`, {
+    method: 'PATCH',
+    headers: {
+      'Cookie': `session=${sessionToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ note: 'Looks good!' })
+  })
+  console.log('Approve Immediate Status:', approveImmediateRes.status)
+  assert.equal(approveImmediateRes.status, 200)
+
+  // Sleep 500ms to allow asynchronous publish IIFE to complete
+  await new Promise(r => setTimeout(r, 500))
+
+  const workUnitManualImmediate = await prisma.workUnit.findFirst({
+    where: { tags: { has: `action_item:${manualImmediateData.id}` } }
+  })
+  assert.ok(workUnitManualImmediate)
+  console.log('WorkUnit status after manual approve (immediate):', workUnitManualImmediate.status)
+  assert.equal(workUnitManualImmediate.status, 'done', 'Approved immediate post must transition WorkUnit to done')
+
+  // Clean up and restore brand configurations
+  await prisma.brand.update({
+    where: { id: brand.id },
+    data: {
+      googlePreferOAuth: false,
+      googleRefreshToken: null,
+      googleAccountId: null,
+      googleLocationId: null,
+      autoPilot: false,
+    }
+  })
 
   console.log('\n🎉 ALL POSTFAST INTEGRATION TESTS PASSED SUCCESSFULLY!')
 }

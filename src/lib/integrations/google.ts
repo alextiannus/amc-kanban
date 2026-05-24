@@ -286,3 +286,68 @@ export async function replyGoogleGBPReview(input: {
     return { success: false, error: e.message };
   }
 }
+
+/**
+ * Create a Local Post on Google Business Profile directly.
+ * Simulates in mock mode.
+ */
+export async function createGoogleGBPLocalPost(input: {
+  accountId: string
+  locationId: string
+  caption: string
+  mediaUrls?: string[]
+  accessToken: string
+}): Promise<{ success: boolean; postId?: string; url?: string; error?: string }> {
+  if (input.accessToken.startsWith('mock_')) {
+    console.log(`[Google Maps Mock OAuth] Created local post for location ${input.locationId} with: "${input.caption}"`);
+    return {
+      success: true,
+      postId: 'mock_post_' + Date.now(),
+      url: `https://maps.google.com/localposts/mock_${Date.now()}`
+    };
+  }
+
+  try {
+    const accId = input.accountId.startsWith('accounts/') ? input.accountId : `accounts/${input.accountId}`;
+    const locId = input.locationId.startsWith('locations/') ? input.locationId : `locations/${input.locationId}`;
+    const url = `https://mybusiness.googleapis.com/v1/${accId}/${locId}/localPosts`;
+
+    const media = input.mediaUrls && input.mediaUrls.length > 0
+      ? input.mediaUrls.map(u => ({
+          mediaFormat: 'PHOTO',
+          sourceUrl: u
+        }))
+      : undefined;
+
+    const postBody: Record<string, any> = {
+      summary: input.caption,
+      languageCode: 'zh-CN',
+    };
+    if (media) {
+      postBody.media = media;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${input.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(postBody),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      return { success: false, error: err.error?.message ?? `HTTP ${res.status}` };
+    }
+    const data = await res.json();
+    return {
+      success: true,
+      postId: data.name,
+      url: data.searchUrl || undefined
+    };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+

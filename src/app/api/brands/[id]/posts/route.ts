@@ -71,6 +71,10 @@ export async function POST(request: Request, { params }: Params) {
       postfastApiKey: true,
       googleApiKey: true,
       googlePlaceId: true,
+      googlePreferOAuth: true,
+      googleRefreshToken: true,
+      googleAccountId: true,
+      googleLocationId: true,
     }
   })
 
@@ -98,8 +102,67 @@ export async function POST(request: Request, { params }: Params) {
     // - TikTok Shop API
     // - Custom publishing workflows
     //
-    // For now, route all through PostFast if available
     // ═══════════════════════════════════════════════════════════════════════════
+
+    const isDirectGoogle = platform === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
+
+    if (isDirectGoogle) {
+      try {
+        const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
+        const accessToken = await getGoogleAccessToken(brand.googleRefreshToken!)
+        
+        let googleAccountId = brand.googleAccountId || 'primary'
+        let googleLocationId = brand.googleLocationId!
+        
+        if (accountId) {
+          const targetAccount = await prisma.socialAccount.findFirst({
+            where: { id: accountId, brandId },
+            select: { platformId: true, handle: true },
+          })
+          if (targetAccount && targetAccount.platformId === 'google') {
+            const handle = targetAccount.handle
+            const match = handle.match(/accounts\/([^\/]+)\/locations\/([^\/]+)/)
+            if (match) {
+              googleAccountId = `accounts/${match[1]}`
+              googleLocationId = match[2]
+            } else {
+              googleLocationId = handle
+            }
+          }
+        }
+
+        const result = await createGoogleGBPLocalPost({
+          accountId: googleAccountId,
+          locationId: googleLocationId,
+          caption,
+          mediaUrls,
+          accessToken,
+        })
+
+        if (!result.success) {
+          console.error(`[Posts] Direct Google publish failed for brand ${brandId}:`, result.error)
+          return NextResponse.json(
+            { error: result.error || 'Failed to publish to Google' },
+            { status: 400 }
+          )
+        }
+
+        return NextResponse.json({
+          ok: true,
+          postId: result.postId,
+          platform: platform,
+          url: result.url,
+          scheduledAt: 'immediate',
+          engine: 'google_direct',
+        })
+      } catch (e: any) {
+        console.error(`[Posts] Direct Google publish error for brand ${brandId}:`, e)
+        return NextResponse.json(
+          { error: e.message || 'Direct Google GBP publish failed' },
+          { status: 500 }
+        )
+      }
+    }
 
     if (brand.postfastApiKey) {
       // Route to PostFast (supports 15+ platforms)

@@ -13,6 +13,39 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { writeAuditLog, actorFromContext } from '@/lib/audit'
+import { statSync } from 'node:fs'
+import { join } from 'node:path'
+
+let lastCheckedTime = Date.now()
+
+function getSkillUpdateNotice(): string | null {
+  try {
+    const path1 = join(process.cwd(), 'skills/agent-instructions.md')
+    const path2 = join(process.cwd(), 'src/lib/agentInitPrompt.ts')
+    
+    let mtime1 = 0
+    try { mtime1 = statSync(path1).mtimeMs } catch {}
+    
+    let mtime2 = 0
+    try { mtime2 = statSync(path2).mtimeMs } catch {}
+    
+    const latestMtime = Math.max(mtime1, mtime2)
+    
+    if (latestMtime > lastCheckedTime) {
+      lastCheckedTime = Date.now()
+      return `[SYSTEM NOTICE] Your content creation & publishing skill instructions have been updated! Please ensure you align with the new standard workflows:
+1. All planned/not-started work must go to 'To Do' (status: 'todo').
+2. If materials are missing, set status to 'Require Input' (status: 'pending') and fill 'requiredInput'.
+3. If materials are complete, create a Lark doc draft with sharing settings 'anyone with link can edit', and save its URL to task.
+4. Auto-pilot mode: set task status to 'In Progress' (status: 'in_progress') on successful schedule/publish.
+5. Set status to 'Done' (status: 'done') once you verify the post is live (and record post URL).
+6. Set status to 'Void' (status: 'void') for cancelled/obsolete tasks.`
+    }
+  } catch (e) {
+    console.error('Failed to check skill mtime:', e)
+  }
+  return null
+}
 
 // ── Auth helper ────────────────────────────────────────────────────────────
 export async function getAgentFromKey(apiKey: string) {
@@ -236,7 +269,7 @@ export function createAmcMcpServer(agentApiKey: string) {
     'List Kanban work units. Filter by brandId, status, or tasks assigned to this agent.',
     {
       brandId: z.string().optional(),
-      status: z.enum(['todo', 'in_progress', 'pending', 'done', 'archived']).optional(),
+      status: z.enum(['todo', 'in_progress', 'pending', 'done', 'archived', 'void']).optional(),
       assignedToMe: z.boolean().optional(),
       limit: z.number().int().min(1).max(100).optional().default(20),
     },
@@ -266,7 +299,7 @@ export function createAmcMcpServer(agentApiKey: string) {
     {
       title: z.string().describe('Concise, action-oriented task title'),
       description: z.string().optional().describe('Details, context, or content draft. Markdown supported.'),
-      status: z.enum(['todo', 'in_progress', 'pending']).optional().default('todo'),
+      status: z.enum(['todo', 'in_progress', 'pending', 'void']).optional().default('todo'),
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
       weight: z.number().int().optional().describe('1 = light, 3 = normal, 5 = heavy'),
     },
@@ -296,7 +329,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       taskId: z.string(),
       title: z.string().optional(),
       description: z.string().optional(),
-      status: z.enum(['todo', 'in_progress', 'pending', 'done', 'archived']).optional(),
+      status: z.enum(['todo', 'in_progress', 'pending', 'done', 'archived', 'void']).optional(),
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
     },
     async ({ taskId, ...fields }) => {
@@ -526,18 +559,77 @@ export function createAmcMcpServer(agentApiKey: string) {
     const link = await requireBrandAgentLink(brandId, agent.id)
     if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
-    const { key } = await getBrandPostfastKey(brandId)
-    if (!key) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured for this brand. Run update_brand_config first.' }], isError: true }
+    const brand = await prisma.brand.findUnique({
+      where: { id: brandId },
+      select: {
+        postfastApiKey: true,
+        googlePreferOAuth: true,
+        googleRefreshToken: true,
+        googleAccountId: true,
+        googleLocationId: true,
+      }
+    })
+    if (!brand) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
 
-    const { postfastPublish } = await import('@/lib/integrations/postfast')
-    const result = await postfastPublish({ apiKey: key, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId })
+    const isDirectGoogle = platform === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
+
+    let result: { success: boolean; postId?: string; url?: string; error?: string }
+
+    if (isDirectGoogle) {
+      try {
+        const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
+        const accessToken = await getGoogleAccessToken(brand.googleRefreshToken!)
+        
+        let googleAccountId = brand.googleAccountId || 'primary'
+        let googleLocationId = brand.googleLocationId!
+        
+        if (accountId) {
+          const targetAccount = await prisma.socialAccount.findFirst({
+            where: { id: accountId, brandId },
+            select: { platformId: true, handle: true },
+          })
+          if (targetAccount && targetAccount.platformId === 'google') {
+            const handle = targetAccount.handle
+            const match = handle.match(/accounts\/([^\/]+)\/locations\/([^\/]+)/)
+            if (match) {
+              googleAccountId = `accounts/${match[1]}`
+              googleLocationId = match[2]
+            } else {
+              googleLocationId = handle
+            }
+          }
+        }
+
+        result = await createGoogleGBPLocalPost({
+          accountId: googleAccountId,
+          locationId: googleLocationId,
+          caption,
+          mediaUrls,
+          accessToken,
+        })
+      } catch (e: any) {
+        result = { success: false, error: e.message || 'Direct Google GBP publish failed' }
+      }
+    } else {
+      if (!brand.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured for this brand. Run update_brand_config first.' }], isError: true }
+      const { postfastPublish } = await import('@/lib/integrations/postfast')
+      result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId })
+    }
 
     if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
-    return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform, scheduledAt: scheduledAt ?? 'immediate' }) }] }
+    const responseContent: Array<{ type: 'text'; text: string }> = [
+      { type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform, scheduledAt: isDirectGoogle ? 'immediate' : (scheduledAt ?? 'immediate') }) }
+    ]
+    const notice = getSkillUpdateNotice()
+    if (notice) {
+      responseContent.push({ type: 'text' as const, text: notice })
+    }
+    return { content: responseContent }
   }
 
+  server.tool('publish', 'Publish or schedule content through board backend using stored brand config.', publishContentSchema, publishContentHandler)
   server.tool('board_publish_content', 'Publish or schedule content through board backend using stored brand config.', publishContentSchema, publishContentHandler)
-  server.tool('postfast_publish', '[Deprecated alias] Use board_publish_content.', publishContentSchema, publishContentHandler)
+  server.tool('postfast_publish', '[Deprecated alias] Use publish.', publishContentSchema, publishContentHandler)
 
   const replyReviewSchema = {
     brandId: z.string(),
@@ -831,18 +923,39 @@ export function createAmcMcpServer(agentApiKey: string) {
         if (!platform || !caption) {
           return { content: [{ type: 'text' as const, text: 'Error: platform and caption are required for publish_post' }], isError: true }
         }
-        if (!brand.postfastApiKey) {
-          return { content: [{ type: 'text' as const, text: 'Error: PostFast API key required for publish_post' }], isError: true }
+
+        const isDirectGoogle = platform === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
+        let result: { success: boolean; postId?: string; url?: string; error?: string }
+
+        if (isDirectGoogle) {
+          try {
+            const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
+            const accessToken = await getGoogleAccessToken(brand.googleRefreshToken!)
+            result = await createGoogleGBPLocalPost({
+              accountId: brand.googleAccountId || 'primary',
+              locationId: brand.googleLocationId!,
+              caption,
+              mediaUrls,
+              accessToken,
+            })
+          } catch (e: any) {
+            result = { success: false, error: e.message || 'Direct Google GBP publish failed' }
+          }
+        } else {
+          if (!brand.postfastApiKey) {
+            return { content: [{ type: 'text' as const, text: 'Error: PostFast API key required for publish_post' }], isError: true }
+          }
+          const { postfastPublish } = await import('@/lib/integrations/postfast')
+          result = await postfastPublish({
+            apiKey: brand.postfastApiKey,
+            platform,
+            caption,
+            mediaUrls,
+            hashtags,
+          })
         }
-        const { postfastPublish } = await import('@/lib/integrations/postfast')
-        const result = await postfastPublish({
-          apiKey: brand.postfastApiKey,
-          platform,
-          caption,
-          mediaUrls,
-          hashtags,
-        })
-        if (!result.success) return { content: [{ type: 'text' as const, text: `Error (PostFast): ${result.error}` }], isError: true }
+
+        if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
         return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform }) }] }
       }
 

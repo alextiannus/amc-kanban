@@ -120,83 +120,42 @@ Skill 至少包含：
 
 ---
 
-### 【内容发布工作流】Lark 文档 + 看板工作卡片 + 发布回调
+### 【内容创作与发布工作流】
 
-#### 工作流程
-1. **草稿准备**（Lark 文档）：在 Lark 中准备内容草稿（文案、素材、排版、预览）
-2. **提交工作卡片**（POST 到看板）：将草稿 URL 和内容信息提交到看板
-3. **两种模式分流**（由品牌 autoPilot 标志决定）：
-   - **自动驾驶**：看板自动调用发布后端发布内容，记录 post 链接到工作卡片，标记为 done
-   - **人工审批**：看板将工作卡片设置为 pending，并在 requiredInput 中记录需要人工审核的信息；人工在看板上审核草稿链接、批准后发布
-4. **发布结果回调**（可选）：如果是外部发布（如 Agent 在 Lark 或其他系统中发布），发布后向看板回调，提交 post URL
+请遵循以下修正后的内容创作与发布标准流程：
 
-#### 提交工作卡片：POST /api/agent/action-items
-\`\`\`json
-{
-  "brandId": "<BRAND_ID>",
-  "accountId": "<SOCIAL_ACCOUNT_ID>",
-  "type": "content_approval",
-  "priority": "high",
-  "title": "[{品牌}] {平台} - {日期} {内容概述}",
-  "description": "内容摘要、核心信息、目标受众等",
-  "draftUrl": "https://lark.com/document/xyz..."
-}
-\`\`\`
-
-**说明**：
-- \`draftUrl\`：Lark 文档链接（Agent 在 Lark 中准备的内容草稿）
-- \`accountId\`：目标社交账号 ID（如微博、抖音账号）；可选但推荐提供以便自动发布
-- \`priority\`：任务优先级（low/normal/high/urgent）
-
-#### 发布结果回调：PATCH /api/agent/action-items（可选）
-在人工审批模式下，或 Agent 在外部系统发布后，调用此端点回调看板：
-
-\`\`\`json
-{
-  "actionItemId": "<ACTION_ITEM_ID>",
-  "postUrl": "https://weibo.com/status/..."
-}
-\`\`\`
-
-**说明**：
-- \`actionItemId\`：POST 时返回的 action item ID
-- \`postUrl\`：最终发布的 post 链接（如微博链接、抖音视频链接等）
-- 看板会自动更新对应的工作卡片，标记为 done，并记录 post 链接
+1. **计划上板 (To Do)**：所有计划要做但尚未开始的工作，必须第一时间放入 **To Do** 状态（\`status: "todo"\`）。To Do 中的任务可能由其他 Agent 领取并完成。
+2. **草稿准备与素材检查**：
+   - **缺少素材**：在准备帖子内容时，如果缺少关键素材（如图片、视频、参考链接等），立即将任务状态设置为 **Require Input**（调用 \`update_task\` 将 \`status\` 设为 \`pending\`），并在 \`requiredInput\` 中写明具体所缺少的素材，要求品牌主理人提供。
+   - **素材完整**：如果素材完整，必须使用 **Lark doc**（飞书/Lark文档）创作内容草稿，并将 **Lark doc 共享链接 (sharing url)** 放入任务详情中（必须将共享链接权限设置为**“点击链接者都可以编辑”**）。
+3. **自动驾驶模式 (auto-pilot = true)**：
+   - **发布/排期成功 (schedule succeeded)**：将任务状态设置为 **In Progress**（\`status: "in_progress"\`），并将发布结果（如平台 Post ID、计划发布时间）更新到任务详情。
+   - **发布/排期失败 (schedule failed)**：将任务状态设置为 **Require Input**（\`status: "pending"\`），并根据接口返回的错误信息，在 \`requiredInput\` 中写清楚需要请求的协助。
+4. **人工审批模式 (auto-pilot = false)**：
+   - 生成任务并设置初始状态为 **Require Input**（\`status: "pending"\`），在 \`requiredInput\` 中写明“等待主理人审核草稿链接”。
+   - 在收到主理人审核通过（approval）的结果后，**才调用 \`publish\` 接口**发布或排期帖子，并根据结果更新状态：
+     - **发布/排期成功 (schedule succeeded)**：将任务状态设置为 **In Progress**（\`status: "in_progress"\`），并将排期结果更新到任务详情。
+     - **发布/排期失败 (schedule failed)**：将任务状态设置为 **Require Input**（\`status: "pending"\`），并根据返回的错误信息，在 \`requiredInput\` 中写清楚需要请求的协助。
+5. **确认真实发布成功 (Done)**：
+   - 持续跟进或等确认帖子已经真实发布成功后（例如排期时间已到且在平台查到），将真实发布的帖子链接 (post url) 更新到任务结果（materials 或 description）中，并将任务状态更新为 **Done**（\`status: "done"\`）。
+6. **取消与异常 (Void)**：
+   - 中途有任何取消或废弃的情况，必须将任务状态更新为 **Void**（\`status: "void"\`）。
 
 ---
 
-### 【条件执行】如果任务类型是"内容发布"，遵循以下规范
+### 【条件执行】内容发布规范与接口调用
 
-**发布与排期核心规则（切记）**
-- **更新看板状态不等于触发发布**：仅修改任务状态（如设为 \`in_progress\`、\`scheduled\` 或 \`publishing\`）**不会**自动向 PostFast 发起发布或排期动作。你必须**显式调用 MCP 工具 \`board_publish_content\`（或 \`postfast_publish\`）**来完成发布/排期。
-- **资料缺失时立即挂起**：若任务进入 \`in_progress\`，但你发现缺少关键发布资料（如缺少发布文案 \`caption\`、缺少图片 \`mediaUrls\`、未指定发布平台等），**禁止将其闲置在 \`in_progress\` 状态！** 你必须立即调用 \`update_task\` 将状态修改为 \`pending\`，并在 \`requiredInput\` 字段中写明具体所缺少的资料以呈现为 "Require Input" 状态。
-
-**任务拆分粒度**
-- 每个 **品牌** + **平台账号** + **发布次** 的完整闭环（规划 → 创意 → 审核 → 发布） = 1 个独立 Task
-- 不合并多个平台、品牌或发布时段到同一任务
-- 例外：同一平台的多素材批量发布可合并为 1 个任务
-
-**任务标题格式**
-建议采用：\`[{品牌}] {平台} - {日期} {内容概述}\`
-
-例如：
-- \`[Nike] 微博官号 - 2026-05-15 跑步装备新品发布\`
-- \`[Apple] 抖音 - 2026-05-14 MacBook Air M4 产品介绍视频\`
-- \`[Tesla] 小红书 - 2026-05-13 春季保养指南\`
-
-**完成时必须包含的交付物**（在 description 或 materials 中）
-1. 发布链接或失败原因记录（必填）
-2. 内容摘要：文案核心点、核心素材、目标受众
-3. 执行记录：审核反馈、优化过程、实际发布时间
-
-**此类任务的状态流转参考**
-todo → in_progress → pending（待审核/缺失资料）→ in_progress → done
-
-**遇到平台限流、账号限制、审核驳回或缺少资料**：状态置 pending，requiredInput 清晰描述问题。
+**发布与排期核心规则**
+- **显式调用发布接口**：仅修改看板任务状态（如设为 \`in_progress\`、\`publishing\` 等）**不会**自动触发实际的社媒平台发布动作。你必须**显式调用 MCP 工具 \`publish\`（或 \`board_publish_content\`）**来执行发布。
+- **作为 amc-kanban 的 MCP 核心能力，\`publish\`（以及 \`board_publish_content\`）接口会根据品牌配置，直接调用底层的平台接口（如 PostFast、Google Business Profile API 等）执行发布，并返回准确的发布结果。**
+- **任务拆分粒度**：每个 品牌 + 平台账号 + 发布次 = 1 个独立 Task。
+- **任务标题格式**：\`[{品牌}] {平台} - {日期} {内容概述}\`
 
 ---
 
-其他任务类型，按"动作 3"通用规则执行。
+### 其他任务类型
+
+其他任务类型，按常规任务的 todo → in_progress → pending (Require Input) → done 闭环流转，或更新状态为 void。
 
 ### 【冲突解决】
 若收到本 Skill 的更新版本，在任务 description 中记录版本变更，询问是否需要按新规范重新处理已完成任务。

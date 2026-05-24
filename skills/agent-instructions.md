@@ -65,7 +65,7 @@ AMC Kanban 提供两种接入方式，**推荐使用 MCP**：
 - `connect_account` — 授权连接新的社媒账号
 
 **内容发布**
-- `publish_post` — 发布或排期社媒帖子（自动选择发布渠道）
+- `publish` — 发布或排期社媒帖子（自动选择 PostFast、Google Business API 等平台接口）
 - `upload_asset` — 上传媒体素材文件到看板素材库
 
 **评论与反馈管理**
@@ -345,7 +345,7 @@ Authorization: Bearer <agentApiKey>
 
 ## 8. 内容发布与评论处理质量门槛
 
-在调用 `publish_post` 或 `reply_review` 前，必须做最小质量检查：
+在调用 `publish` 或 `reply_review` 前，必须做最小质量检查：
 
 - 语气与品牌调性一致（不使用与品牌定位冲突的表达）
 - 无事实性错误、无夸大承诺
@@ -355,113 +355,55 @@ Authorization: Bearer <agentApiKey>
 
 若信息不足，先创建任务并标记 `pending`，通过 `requiredInput` 向人类索取缺失信息，不得臆造。
 
-## 8a. 内容自动发布协议（auto_pilot 发布链路 — 必读）
+## 8a. 内容创作与发布规范工作流（必读）
 
-> ⚠️ **常见错误**：调用 `post_action_item` 后看到 `auto_resolved` 就以为发布成功 — **这是错误的**。`auto_resolved` 仅表示"主理人审批环节被自动跳过"，不等于"内容已发到社媒平台"。
+你必须严格遵守以下 6 点内容创作与发布的工作流程规范：
 
-### ✅ 正确的发布调用方式
+1. **计划上板 (To Do)**：
+   - 凡是计划要做但尚未开始的帖子创作或发布任务，必须第一时间写入看板的 **To Do** 状态（`status: "todo"`）。
+   - 写入时确保任务标题为：`[{品牌}] {平台} - {日期} {内容概述}`，并在任务中指明预期的发布时间等信息。
+   - **注意**：To Do 中的任务是公开的，可能由其他 Agent 领取并协作完成。
+2. **草稿创作与素材检查**：
+   - **缺少素材**：在准备帖子内容时，如发现缺少关键发布素材（如文案、配图、视频等），必须立即将该任务的状态修改为 **Require Input**（即 `status: "pending"`），并在 `requiredInput` 字段中详细、明确地写明所缺少的资料以向品牌主理人索取。
+   - **素材完整**：如果素材完整，必须使用 **Lark doc**（飞书/Lark文档）创作内容草稿，并将 **Lark doc 共享链接 (sharing url)** 放入任务详情中（必须将共享链接权限设置为**“点击链接者都可以编辑”**）。
+3. **自动驾驶模式下的发布 (auto-pilot = true)**：
+   - 如果品牌的 `autoPilot` 标志为 `true`，直接调用 `publish` 接口（MCP 工具 `publish`，或兼容工具 `board_publish_content`）发布或排期帖子。
+   - **排期/提交成功 (schedule succeeded)**：将任务状态设置为 **In Progress**（`status: "in_progress"`），并更新此发布结果（如平台 Post ID、排期发布时间）到任务详情中。
+   - **排期/提交失败 (schedule failed)**：将任务状态设置为 **Require Input**（即 `status: "pending"`），并根据接口返回的错误信息，在 `requiredInput` 字段中写清楚需要请求的协助。
+4. **人工审批模式下的发布 (auto-pilot = false)**：
+   - 如果品牌的 `autoPilot` 标志为 `false`，生成任务后，先将任务状态设置为 **Require Input**（即 `status: "pending"`），并在 `requiredInput` 中写明“等待品牌主理人审核草稿链接”。
+   - 在收到审核通过（approval）的结果后，**才允许调用 `publish` 接口**发布或排期帖子，并根据结果更新状态：
+     - **排期/提交成功 (schedule succeeded)**：将任务状态设置为 **In Progress**（`status: "in_progress"`），并将排期结果更新到任务详情中。
+     - **排期/提交失败 (schedule failed)**：将任务状态设置为 **Require Input**（即 `status: "pending"`），并根据返回的错误信息，在 `requiredInput` 字段中写清楚需要请求的协助。
+5. **确认真实发布成功后置为 Done**：
+   - 提交成功/排期成功仅代表排期操作成功，**并不等于真正发布成功**。你必须持续跟进，直到确认帖子在目标社媒平台已**真实发布成功**（例如排期时间已到，且平台成功渲染出该帖子）。
+   - 确认真实发布成功后，更新真实发布的帖子链接 (post url) 到任务结果（materials 或 description）中，并将任务状态更新为 **Done**（`status: "done"`）。
+6. **取消与异常 (Void)**：
+   - 中途如有任何取消（例如主理人取消、项目废弃等）或无法继续的情况，必须调用 `update_task` 将该任务状态更新为 **Void**（`status: "void"`）。
 
-```
-POST /api/agent/action-items
-Authorization: Bearer <AGENT_API_KEY>
-Content-Type: application/json
+---
 
-{
-  "brandId": "<brandId>",
-  "type": "content_approval",
-  "title": "招牌香辣烤鱼 - Instagram 发布",
-  "description": "AI 员工自动生成，品牌 auto_pilot 开启，自动提交发布",
-  "draftData": {
-    "platform": "instagram",          ← 必填：平台名（小写），替代 accountId
-    "caption": "完整文案内容...",
-    "mediaUrls": ["https://...实际可访问的图片 URL"],
-    "hashtags": ["#singaporefood", "#grilled"],
-    "scheduledAt": "2026-05-22T08:00:00Z"   ← 可选：排期时间（ISO 8601 UTC）
-  }
-}
-```
-
-### 关键规则
-
-| 字段 | 要求 |
-|---|---|
-| `type` | 必须是 `content_approval`，否则不触发发布 |
-| `draftData` | **必须传**，不传则系统无法创建草稿，不会调用 PostFast |
-| `draftData.platform` | **必须传**，填平台名如 `instagram` `tiktok` `facebook` `xiaohongshu` `google` |
-| `accountId` | ❌ 不需要，系统会自动按 brandId + platform 查库匹配 |
-| `draftData.mediaUrls` | 必须是**公网可访问的 HTTPS URL**，不能是本地路径或临时链接 |
-
-### 每个平台单独调用
-
-多平台发布时，**每个平台发一次独立请求**，不要合并：
-
-```
-# 第 1 次请求
-{ "draftData": { "platform": "instagram", "caption": "..." } }
-
-# 第 2 次请求
-{ "draftData": { "platform": "tiktok", "caption": "..." } }
-
-# 第 3 次请求
-{ "draftData": { "platform": "facebook", "caption": "..." } }
-```
-
-### 如何判断发布是否真正成功
-
-响应体中 `WorkUnit.status` = `done` 且 `materials` 字段包含 `发布链接:` 前缀的 URL，才表示 PostFast 已成功发布。
-
-若 `WorkUnit.status` = `pending` 且 `requiredInput` 非空，说明 PostFast 返回错误，需读取错误信息处理后重试。
-
-### 发布失败时的处理
-
-若 WorkUnit 进入 `pending` 状态，按以下步骤处理：
-
-1. 读取 `requiredInput` 获取具体错误（API Key 缺失 / 平台名错误 / mediaUrls 不可访问等）
-2. 修正后重新发起 `POST /api/agent/action-items`（带新的 `draftData`）
-3. 向主理人汇报：失败平台 + 错误原因 + 已重试状态
-
-
-
-## 8b. 看板任务排期发布与异常挂起规范（针对已存在的 WorkUnit 任务）
+## 8b. 看板任务发布接口与异常挂起规范
 
 ### ⚠️ 核心警告：更新看板状态不等于触发发布
 
-**在数据库或看板界面中仅将任务状态更改为 `in_progress`、`scheduled` 或 `publishing`，后端不会自动向 PostFast 发起任何发布或排期动作。**
+**在数据库或看板界面中仅将任务状态更改为 `in_progress`、`scheduled` 或 `publishing`，后端不会自动向任何社交平台发起发布动作。** 
+任务状态更新仅仅是看板上的状态记录。要完成实际的发布/排期，你必须显式调用 MCP 工具 `publish`。
 
-任务状态更新仅仅是看板上的状态记录。要完成实际的发布/排期，你必须**显式调用 MCP 工具 `board_publish_content`（或 `postfast_publish`）**。
+### 📡 看板统一发布能力 `publish`
 
----
-
-### ✅ 正常的排期与发布执行流
-
-当你领取或推进一个内容发布类的 WorkUnit 任务（例如当前状态为 `todo` 或已被人类设为 `in_progress`）时：
-
-1. **读取文案和素材**：解析该任务的 `description`、`materials` 或关联的草稿内容，获取 `caption`（文案）、`mediaUrls`（配图）、`platform`（平台名，如 `instagram` / `tiktok` 等）及 `scheduledAt`（排期时间，可选）。
-2. **显式调用发布工具**：
-   - 必须调用 `board_publish_content`（或 `postfast_publish`），并将解析到的字段作为参数传入。
-   - 如果 `scheduledAt` 为未来某个时间，PostFast 会自动将其排期（Scheduled）。
-   - 如果没有 `scheduledAt` 或时间已过，PostFast 会立即发布（Published）。
-3. **更新任务状态为完成/排期中**：
-   - 如果 PostFast 返回成功（并且是立即发布），调用 `update_task` 将该任务状态修改为 `done`，并将返回的发布链接追加到 `materials` 中。
-   - 如果是排期到未来的任务，在 PostFast 返回成功后，将任务状态更新为 `in_progress`，并在 `description` 记录具体的排期时间及 PostFast 返回的任务 ID。
+作为 `amc-kanban` 的 MCP 核心能力，发布工具 `publish`（或别名 `board_publish_content`）封装了所有的底层实现。它会根据品牌配置，直接调用对应的平台接口（如 **PostFast**、**Google Business Profile (GBP) API** 等）执行实际发布，并返回准确的发布结果。
+- **发布工具**: MCP 中的 `publish`。
+- **调用参数**:
+  - `brandId` (品牌ID)
+  - `platform` (目标平台，如 `instagram`, `google` 等)
+  - `caption` (帖子文案)
+  - `mediaUrls` (素材链接) / `mediaStorageKeys` (已上传的素材 token)
+  - `hashtags` (话题，不带#)
+  - `scheduledAt` (排期时间，可选，不传为立即发布)
+  - `accountId` (特定账号，可选)
 
 ---
-
-### ❌ 资料缺失或异常时的“Required Input”挂起规范
-
-如果任务被设为了 `in_progress`（或者你在尝试执行时），你发现**缺少关键发布资料**（例如：完全没有文案 caption、缺少必要的图片素材 mediaUrls、缺少目标平台 platform 平台名、或者平台账号尚未授权/连接）：
-
-1. **禁止挂空挡**：绝对不能让任务保持在 `in_progress` 或其他进行中/排期中状态且不做任何实际发布/排期！这会导致发布延误且人类无法感知阻塞原因。
-2. **立即将状态设为 pending**：调用 `update_task`，将该任务的 `status` 修改为 `pending`。
-3. **写入 requiredInput 阻塞原因**：在 `requiredInput` 字段中详细、明确地写明所缺少的资料。例如：
-   - `"缺少发布文案 caption，请在任务描述中补充文案内容。"`
-   - `"缺少配图链接 mediaUrls，此平台发布必须包含至少一张图片。"`
-   - `"未指定发布平台 platform，无法进行排期，请在 tags/title/materials 中指定发布平台名称。"`
-4. **向主理人汇报**：在 description 或消息中说明该任务已因资料缺失转入 "Require Input" 状态，等待主理人补充。
-
-只要你遇到无法发布的情况，必须将其置为 `pending` 并提供 `requiredInput`，禁止无作为地停留在 `in_progress`。
-
-
 
 ## 9. description 日志模板（建议直接复用）
 
