@@ -482,7 +482,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                 <path d="M21 2H3v16h5v4l4-4h4l5-5V2zm-10 9V7m0 4v.01" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             )}
-            {apifySyncing ? 'Apify 采集中...' : 'Apify 采集'}
+            {apifySyncing ? '更新数据中...' : '更新数据'}
           </button>
         </div>
       </div>
