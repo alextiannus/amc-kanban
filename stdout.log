@@ -1,0 +1,7 @@
+[DEBUG-next-dev] nextDev called! options: {"port":3000,"disableSourceMaps":false,"webpack":true} directory: undefined
+[DEBUG-next-dev] isTurbopack: false
+[DEBUG-next-dev] dir resolved: /Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban
+[DEBUG-next-dev] fileExists check completed!
+[DEBUG-next-dev] startServer function called! startServerPath: /Users/alextian/Documents/Claude/Projects/AI Staff/amc-kanban/node_modules/next/dist/server/lib/start-server.js
+[DEBUG-next-dev] about to fork start-server.js. execArgv: []
+[DEBUG-next-dev] child forked. PID: 9788
