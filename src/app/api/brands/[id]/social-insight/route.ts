@@ -315,7 +315,8 @@ export async function GET(req: Request, { params }: Params) {
     to = p
   }
 
-  const rangeMs = Math.abs(to.getTime() - from.getTime())
+  const rangeMs = to.getTime() - from.getTime()
+  if (rangeMs < 0) return NextResponse.json({ error: 'from date must be before to date' }, { status: 400 })
   const rangeDays = Math.ceil(rangeMs / 86400000)
   if (rangeDays > 180) return NextResponse.json({ error: 'Date range cannot exceed 180 days' }, { status: 400 })
 
@@ -332,8 +333,10 @@ export async function GET(req: Request, { params }: Params) {
 
   const dateRangeLabel = `${from.toISOString().slice(0, 10)} → ${to.toISOString().slice(0, 10)}`
 
-  // Previous period window (same length, immediately before current period)
-  const previousTo   = new Date(from)
+  // Previous period window: same length, immediately before current period.
+  // Subtract 1 ms from previousTo so the boundary instant (from) belongs
+  // exclusively to the current period and is never double-counted.
+  const previousTo   = new Date(from.getTime() - 1)
   const previousFrom = new Date(from.getTime() - rangeMs)
 
   // ── Parallel data fetch ──────────────────────────────────────────────────
