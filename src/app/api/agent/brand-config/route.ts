@@ -29,6 +29,7 @@ export async function GET(request: Request) {
             id: true, name: true, description: true, location: true, timezone: true,
             autoPilot: true,
             googlePlaceId: true,
+            googleAccountId: true, googleLocationId: true, googleLocationName: true,
             larkDriveToken: true, larkDriveFolderId: true,
             larkOwnerId: true,
             postfastApiKey: true, googleApiKey: true,
@@ -66,6 +67,7 @@ export async function GET(request: Request) {
       website: true, phone: true, address: true, location: true,
       timezone: true, autoPilot: true,
       googlePlaceId: true,
+      googleAccountId: true, googleLocationId: true, googleLocationName: true,
       larkDriveToken: true,
       larkDriveFolderId: true, larkOwnerId: true,
       postfastApiKey: true, googleApiKey: true,
@@ -257,7 +259,7 @@ export async function PATCH(request: Request) {
 
   // Whitelist: which fields an Agent is allowed to write
   const AGENT_WRITABLE_PROFILE = ['name', 'description', 'logoUrl', 'website', 'phone', 'address', 'location', 'timezone'] as const
-  const AGENT_WRITABLE_CREDENTIALS = ['postfastApiKey', 'googlePlaceId', 'googleApiKey', 'larkAppId', 'larkAppSecret', 'larkParentFolderToken', 'larkDriveFolderId', 'larkBotWebhook', 'larkOwnerId'] as const
+  const AGENT_WRITABLE_CREDENTIALS = ['postfastApiKey', 'googlePlaceId', 'googleApiKey', 'larkAppId', 'larkAppSecret', 'larkParentFolderToken', 'larkDriveFolderId', 'larkBotWebhook', 'larkOwnerId', 'googleAccountId', 'googleLocationId', 'googleLocationName'] as const
   const ALL_WRITABLE = [...AGENT_WRITABLE_PROFILE, ...AGENT_WRITABLE_CREDENTIALS]
 
   const updateData: Record<string, unknown> = {}
@@ -280,6 +282,7 @@ export async function PATCH(request: Request) {
       website: true, phone: true, address: true, location: true,
       postfastApiKey: true, googlePlaceId: true, googleApiKey: true,
       larkAppId: true, larkAppSecret: true, larkParentFolderToken: true, larkDriveFolderId: true,
+      googleAccountId: true, googleLocationId: true, googleLocationName: true,
     },
   })
 

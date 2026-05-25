@@ -7,6 +7,7 @@ import ArchiveView from './ArchiveView'
 import MobileLayout from './dashboard/MobileLayout'
 import DashboardHome from './dashboard/DashboardHome'
 import BrandAnalyticsDashboard from './dashboard/BrandAnalyticsDashboard'
+import SocialInsightDashboard from './dashboard/SocialInsightDashboard'
 import DashboardCalendar from './dashboard/DashboardCalendar'
 import MainLayout from './layout/MainLayout'
 import SystemLogModal from './layout/SystemLogModal'
@@ -20,7 +21,7 @@ interface Brand {
   location?: string
 }
 
-export default function KanbanBoard({ initialView = 'dashboard' }: { initialView?: 'agents' | 'archive' | 'dashboard' | 'analytics' | 'calendar' | 'game' }) {
+export default function KanbanBoard({ initialView = 'dashboard' }: { initialView?: 'agents' | 'archive' | 'dashboard' | 'analytics' | 'calendar' | 'game' | 'socialInsight' }) {
   const [tasks, setTasks] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState('pending')
   const [selectedTask, setSelectedTask] = useState<any | null>(null)
@@ -36,7 +37,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   const [showSettings, setShowSettings] = useState(false)
   
   // Navigation State
-  const [currentView, setCurrentView] = useState<'agents' | 'archive' | 'dashboard' | 'analytics' | 'calendar' | 'game'>(initialView)
+  const [currentView, setCurrentView] = useState<'agents' | 'archive' | 'dashboard' | 'analytics' | 'calendar' | 'game' | 'socialInsight'>(initialView)
   const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
 
   // Brand State — loaded from API
@@ -180,6 +181,16 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
             <BrandAnalyticsDashboard key={activeBrand.id} brandId={activeBrand.id} brandName={activeBrand.name} />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 text-sm">请先选择品牌</div>
+          )}
+        </div>
+      ) : currentView === 'socialInsight' ? (
+        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+          {user?.role === 'ADMIN' && activeBrand ? (
+            <SocialInsightDashboard key={activeBrand.id} brandId={activeBrand.id} brandName={activeBrand.name} />
+          ) : !activeBrand ? (
+            <div className="flex items-center justify-center h-full text-slate-400 text-sm">请先选择品牌</div>
+          ) : (
+            <div className="flex items-center justify-center h-full text-red-500 text-sm font-bold">无权查看该模块</div>
           )}
         </div>
       ) : currentView === 'game' ? (
