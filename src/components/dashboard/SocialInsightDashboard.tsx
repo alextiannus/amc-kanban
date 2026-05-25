@@ -353,8 +353,23 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
   const contentTypeBreakdown = data?.contentTypeBreakdown ?? []
   const accounts = data?.accounts ?? []
   const conversions = data?.conversions ?? { total: 0, nav_click: 0, booking_click: 0, coupon_redemption: 0, timeSeries: [] }
-  const sentiment = data?.sentiment ?? { averageRating: 4.8, positivePct: 80, neutralPct: 12, negativePct: 8, keywords: [], reviews: [] }
+  const sentiment = data?.sentiment ?? { averageRating: null, positivePct: 0, neutralPct: 0, negativePct: 0, keywords: [], reviews: [] }
   const competitors = data?.competitors ?? []
+  const brandStats = data?.brandStats ?? { postsPerWeek: null, avgEngRate: null, followersInstagram: null }
+  const kpiTrends = data?.kpiTrends ?? {}
+  const prevConversions = data?.previousConversions ?? { total: null, nav_click: null, booking_click: null, coupon_redemption: null }
+
+  // Delta helpers
+  function formatTrend(trendPct: number | null | undefined): string {
+    if (trendPct === null || trendPct === undefined) return data ? '暂无趋势' : '—'
+    return `${trendPct >= 0 ? '+' : ''}${trendPct.toFixed(1)}% 趋势`
+  }
+  function computeDelta(current: number, previous: number | null | undefined): string {
+    if (previous === null || previous === undefined) return data ? '暂无对比' : '—'
+    if (previous === 0) return current > 0 ? '新增数据' : '—'
+    const pct = ((current - previous) / previous) * 100
+    return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% 环比`
+  }
 
   // Dynamic calculations for ROI
   const totalConversions = conversions.total
@@ -470,11 +485,11 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 {[
                   { label: '总内容发布', value: String(kpis.totalPosts ?? 0), delta: `共 ${kpis.totalPosts ?? 0} 篇`, key: 'postCount' as MetricKey },
-                  { label: '总互动数', value: fmtNum(kpis.totalEngagement ?? 0), delta: '+15.2%', key: 'engagement' as MetricKey },
-                  { label: '曝光总量', value: fmtNum(kpis.totalImpressions ?? 0), delta: '+22.4%', key: 'impressions' as MetricKey },
-                  { label: '平均触达', value: fmtNum(kpis.avgReach ?? 0), delta: '+8.7%', key: 'reach' as MetricKey },
-                  { label: '获得点赞', value: fmtNum(kpis.totalLikes ?? 0), delta: '+12.9%', key: 'likes' as MetricKey },
-                  { label: '平均互动率', value: `${kpis.avgEngRate ?? 0}%`, delta: '+1.5%', key: 'engRate' as MetricKey, highlight: true },
+                  { label: '总互动数', value: fmtNum(kpis.totalEngagement ?? 0), delta: formatTrend(kpiTrends.engagement), key: 'engagement' as MetricKey },
+                  { label: '曝光总量', value: fmtNum(kpis.totalImpressions ?? 0), delta: formatTrend(kpiTrends.impressions), key: 'impressions' as MetricKey },
+                  { label: '平均触达', value: fmtNum(kpis.avgReach ?? 0), delta: formatTrend(kpiTrends.reach), key: 'reach' as MetricKey },
+                  { label: '获得点赞', value: fmtNum(kpis.totalLikes ?? 0), delta: formatTrend(kpiTrends.likes), key: 'likes' as MetricKey },
+                  { label: '平均互动率', value: `${kpis.avgEngRate ?? 0}%`, delta: formatTrend(kpiTrends.engRate), key: 'engRate' as MetricKey, highlight: true },
                 ].map(c => (
                   <MetricCard
                     key={c.key}
@@ -683,16 +698,16 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                       <circle cx="72" cy="72" r="60" stroke="#f1f5f9" strokeWidth="12" fill="transparent" className="dark:stroke-slate-800" />
                       <circle cx="72" cy="72" r="60" stroke="#fbbf24" strokeWidth="12" fill="transparent" 
                         strokeDasharray={2 * Math.PI * 60}
-                        strokeDashoffset={2 * Math.PI * 60 * (1 - sentiment.averageRating / 5)}
+                        strokeDashoffset={2 * Math.PI * 60 * (1 - (sentiment.averageRating ?? 0) / 5)}
                         strokeLinecap="round"
                         className="transition-all duration-1000"
                       />
                     </svg>
                     <div className="absolute flex flex-col items-center justify-center">
-                      <span className="text-4xl font-black text-slate-800 dark:text-slate-100">{sentiment.averageRating.toFixed(1)}</span>
+                      <span className="text-4xl font-black text-slate-800 dark:text-slate-100">{sentiment.averageRating !== null ? sentiment.averageRating.toFixed(1) : '—'}</span>
                       <div className="flex gap-0.5 text-amber-400 mt-1">
                         {[1, 2, 3, 4, 5].map(star => (
-                          <Star key={star} className={`w-3.5 h-3.5 ${star <= Math.round(sentiment.averageRating) ? 'fill-current' : ''}`} />
+                          <Star key={star} className={`w-3.5 h-3.5 ${star <= Math.round(sentiment.averageRating ?? 0) ? 'fill-current' : ''}`} />
                         ))}
                       </div>
                     </div>
@@ -853,25 +868,25 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                 <MetricCard 
                   label="总转化事件 (Conversions)" 
                   value={String(totalConversions)} 
-                  delta="+18.4% 环比" 
+                  delta={computeDelta(totalConversions, prevConversions.total)} 
                   icon={<Percent className="w-4 h-4 text-emerald-500" />} 
                 />
                 <MetricCard 
                   label="地址导航点击 (Nav Clicks)" 
                   value={String(conversions.nav_click)} 
-                  delta="+12.5% 环比" 
+                  delta={computeDelta(conversions.nav_click, prevConversions.nav_click)} 
                   icon={<Users className="w-4 h-4 text-blue-500" />} 
                 />
                 <MetricCard 
                   label="桌位预订点击 (Booking Clicks)" 
                   value={String(conversions.booking_click)} 
-                  delta="+8.4% 环比" 
+                  delta={computeDelta(conversions.booking_click, prevConversions.booking_click)} 
                   icon={<Activity className="w-4 h-4 text-emerald-500" />} 
                 />
                 <MetricCard 
                   label="优惠券核销 (Coupons Redeemed)" 
                   value={String(conversions.coupon_redemption)} 
-                  delta="+32.0% 环比" 
+                  delta={computeDelta(conversions.coupon_redemption, prevConversions.coupon_redemption)} 
                   icon={<Heart className="w-4 h-4 text-pink-500" />} 
                 />
               </div>
@@ -938,118 +953,90 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
 
           {/* ── TAB: COMPETITORS ─────────────────────────────────────────────── */}
           {activeTab === 'competitors' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Left description card */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+            <div className="space-y-6">
+
+              {/* Our Brand Real Performance */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm text-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">本周期发帖频率</p>
+                  <p className="text-4xl font-black text-emerald-500 leading-none">
+                    {brandStats.postsPerWeek !== null ? brandStats.postsPerWeek.toFixed(1) : '—'}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-2">篇 / 周（真实发布量）</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm text-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">平均互动率</p>
+                  <p className="text-4xl font-black text-blue-500 leading-none">
+                    {brandStats.avgEngRate !== null && brandStats.avgEngRate > 0
+                      ? `${brandStats.avgEngRate}%`
+                      : '—'}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-2">基于 PostFast 数据</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm text-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Instagram 粉丝总量</p>
+                  <p className="text-4xl font-black text-pink-500 leading-none">
+                    {brandStats.followersInstagram !== null ? fmtNum(brandStats.followersInstagram) : '—'}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-2">真实粉丝量</p>
+                </div>
+              </div>
+
+              {/* All Channel Followers Bar Chart */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
+                <div className="border-b border-slate-100 dark:border-slate-800 pb-3 mb-5">
+                  <h3 className="text-sm font-black text-slate-800 dark:text-slate-150">各渠道粉丝总览</h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">各平台账户的真实粉丝基数对比</p>
+                </div>
+                {accounts.length === 0 ? (
+                  <div className="py-10 text-center text-slate-400 text-xs">暂无已绑定的社交账号</div>
+                ) : (
+                  <div className="space-y-5">
+                    {accounts.map((acc: any) => {
+                      const maxFollowers = Math.max(1, ...accounts.map((a: any) => a.followerCount ?? 0))
+                      const pct = maxFollowers > 0 ? ((acc.followerCount ?? 0) / maxFollowers) * 100 : 0
+                      const colorMap: Record<string, string> = {
+                        instagram: '#E4405F', tiktok: '#010101', xiaohongshu: '#FF2442',
+                        facebook: '#1877F2', youtube: '#FF0000', google: '#4285F4',
+                        twitter: '#1DA1F2', linkedin: '#0A66C2',
+                      }
+                      const color = colorMap[acc.platformId.toLowerCase()] ?? '#6366f1'
+                      return (
+                        <div key={acc.id} className="space-y-1.5">
+                          <div className="flex justify-between items-center text-[11px] font-bold">
+                            <span className="capitalize text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                              {acc.platformId}{acc.handle ? ` · @${acc.handle}` : ''}
+                            </span>
+                            <span className="font-black text-slate-800 dark:text-slate-200">
+                              {acc.followerCount ? fmtNum(acc.followerCount) : '未记录'}
+                            </span>
+                          </div>
+                          <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{ width: `${pct}%`, backgroundColor: color }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Competitor data not available notice */}
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-3xl p-6 flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0">
+                  <BarChart2 className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-800 dark:text-slate-150">本地同业竞品分析</h3>
-                  <p className="text-xs text-slate-400 mt-2 leading-relaxed font-medium">
-                    基于您填写的地理位置及品类，AI Agent 收集了同区域三家头部竞品的社交媒体粉丝数和发布频度。
-                  </p>
-                  <p className="text-xs text-slate-400 mt-2 leading-relaxed font-medium">
-                    通过与这些同行业对手的对标，能够精准识别自己品牌的劣势以及优化方向。
+                  <h4 className="text-sm font-black text-amber-800 dark:text-amber-300">竞品对标数据暂未接入</h4>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5 leading-relaxed">
+                    自动竞品抓取需要配置竞品的 Google Place ID 并授权数据采集。
+                    当前页面展示的均为本品牌真实数据。如需竞品对标，请在品牌设置中添加竞品 Place ID。
                   </p>
                 </div>
-                
-                <div className="mt-8 pt-4 border-t border-slate-50 dark:border-slate-800/60 text-[11px] text-slate-400 space-y-2 font-bold">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded bg-emerald-500" />
-                    <span>本商户 ({brandName})</span>
-                  </div>
-                  {competitors.map((c: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: i === 0 ? '#60a5fa' : i === 1 ? '#a855f7' : '#ec4899' }} />
-                      <span>竞品 {i + 1}: {c.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Follower comparison bar chart */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col">
-                <div className="border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
-                  <h3 className="text-sm font-black text-slate-800 dark:text-slate-150">Instagram 粉丝量对标 (Followers)</h3>
-                  <p className="text-[10px] text-slate-400 mt-0.5">比较在 Instagram 平台上的受众基数</p>
-                </div>
-                
-                {/* Custom SVG Bar Chart */}
-                <div className="flex-1 flex flex-col justify-center gap-5 py-4">
-                  {/* Our Brand bar */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
-                      <span>本商户 ({brandName})</span>
-                      <span className="font-black text-emerald-500">{(accounts.find((a: any) => a.platformId === 'instagram')?.followerCount) ?? 1240}</span>
-                    </div>
-                    <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden flex">
-                      <div className="h-full bg-emerald-500 rounded-lg transition-all duration-700" 
-                        style={{ width: `${(((accounts.find((a: any) => a.platformId === 'instagram')?.followerCount) ?? 1240) / Math.max(1, ...competitors.map((c: any) => c.platforms.instagram.followers), (accounts.find((a: any) => a.platformId === 'instagram')?.followerCount) ?? 1240)) * 100}%` }} 
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Competitor bars */}
-                  {competitors.map((c: any, i: number) => {
-                    const colors = ['#60a5fa', '#a855f7', '#ec4899']
-                    const folVal = c.platforms.instagram.followers
-                    const maxVal = Math.max(1, ...competitors.map((c: any) => c.platforms.instagram.followers), (accounts.find((a: any) => a.platformId === 'instagram')?.followerCount) ?? 1240)
-                    return (
-                      <div key={i} className="space-y-1.5">
-                        <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
-                          <span>{c.name}</span>
-                          <span className="font-black text-slate-800 dark:text-slate-200">{folVal}</span>
-                        </div>
-                        <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden">
-                          <div className="h-full rounded-lg transition-all duration-700" 
-                            style={{ 
-                              width: `${(folVal / maxVal) * 100}%`,
-                              backgroundColor: colors[i] 
-                            }} 
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Weekly posting frequency and engagement index */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
-                <div className="border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
-                  <h3 className="text-sm font-black text-slate-800 dark:text-slate-150">发帖频率与互动比对</h3>
-                  <p className="text-[10px] text-slate-400 mt-0.5">比较平均每周的发帖数和受众互动热度</p>
-                </div>
-
-                <div className="space-y-4">
-                  {/* Our Brand stats */}
-                  <div className="flex items-center justify-between text-xs py-2 border-b border-slate-50 dark:border-slate-800/40">
-                    <span className="font-bold text-emerald-500 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded bg-emerald-500" />
-                      本商户 ({brandName})
-                    </span>
-                    <span className="font-black">约 3.0 篇/周 · 4.8% 互动率</span>
-                  </div>
-                  
-                  {/* Competitor stats */}
-                  {competitors.map((c: any, i: number) => {
-                    const colors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500']
-                    return (
-                      <div key={i} className="flex items-center justify-between text-xs py-2 border-b border-slate-50 dark:border-slate-800/40 last:border-0">
-                        <span className="font-bold text-slate-550 dark:text-slate-350 flex items-center gap-1.5">
-                          <span className={`w-2 h-2 rounded ${colors[i]}`} />
-                          {c.name}
-                        </span>
-                        <span className="font-black text-slate-700 dark:text-slate-300">
-                          约 {c.avgPostsPerWeek.toFixed(1)} 篇/周 · {c.platforms.instagram.engRate}% 互动率
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <p className="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-800/60 rounded-xl p-3 mt-6">
-                  💡 <b>运营改进建议</b>：数据表明竞品 3（{competitors[2]?.name}）的发帖频次（每周 5.0 篇）和互动率（8.2%）最高。建议 AI Agent 增加短视频（Shorts）发布比重以获取更大曝光。
-                </p>
               </div>
             </div>
           )}
