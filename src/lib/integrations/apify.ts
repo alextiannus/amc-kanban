@@ -1,0 +1,443 @@
+/**
+ * Apify Integration
+ * Runs cloud scraping actors to collect social media and review data for brands.
+ *
+ * Actors used:
+ *  - compass/google-maps-reviews-scraper   → Google Maps reviews
+ *  - apify/instagram-scraper               → Instagram posts + profile stats
+ *  - clockworks/free-tiktok-scraper        → TikTok posts + profile stats
+ *  - junglee/free-xiaohongshu-scraper      → Xiaohongshu / RED posts
+ */
+
+const APIFY_BASE = 'https://api.apify.com/v2'
+
+function getToken(): string {
+  const t = process.env.APIFY_API_TOKEN
+  if (!t) throw new Error('APIFY_API_TOKEN is not set')
+  return t
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Core API helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Start an actor run and return the run ID + default dataset ID */
+export async function startActorRun(
+  actorId: string,
+  input: Record<string, unknown>,
+  options: { timeoutSecs?: number; memoryMbytes?: number } = {}
+): Promise<{ runId: string; datasetId: string; status: string }> {
+  const token = getToken()
+  const params = new URLSearchParams({ token })
+  if (options.timeoutSecs) params.set('timeout', String(options.timeoutSecs))
+  if (options.memoryMbytes) params.set('memory', String(options.memoryMbytes))
+
+  const res = await fetch(`${APIFY_BASE}/acts/${actorId}/runs?${params}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Apify startRun failed (${res.status}): ${body.slice(0, 300)}`)
+  }
+
+  const json = await res.json()
+  const run = json.data
+  return { runId: run.id, datasetId: run.defaultDatasetId, status: run.status }
+}
+
+/** Get the current status of an actor run */
+export async function getRunStatus(runId: string): Promise<{
+  status: 'READY' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'TIMING-OUT' | 'TIMED-OUT' | 'ABORTING' | 'ABORTED'
+  datasetId: string
+  itemCount: number
+  finishedAt: string | null
+}> {
+  const token = getToken()
+  const res = await fetch(`${APIFY_BASE}/actor-runs/${runId}?token=${token}`)
+  if (!res.ok) throw new Error(`Apify getRunStatus failed (${res.status})`)
+  const json = await res.json()
+  const run = json.data
+  return {
+    status: run.status,
+    datasetId: run.defaultDatasetId,
+    itemCount: run.stats?.itemCount ?? 0,
+    finishedAt: run.finishedAt ?? null,
+  }
+}
+
+/** Fetch items from an Apify dataset */
+export async function getDatasetItems<T = unknown>(
+  datasetId: string,
+  options: { limit?: number; offset?: number } = {}
+): Promise<T[]> {
+  const token = getToken()
+  const params = new URLSearchParams({ token, clean: 'true', format: 'json' })
+  if (options.limit) params.set('limit', String(options.limit))
+  if (options.offset) params.set('offset', String(options.offset))
+
+  const res = await fetch(`${APIFY_BASE}/datasets/${datasetId}/items?${params}`)
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Apify getDatasetItems failed (${res.status}): ${body.slice(0, 300)}`)
+  }
+  return res.json()
+}
+
+/**
+ * Start a run and poll until finished or timeout.
+ * Returns dataset items on success.
+ */
+export async function runActorAndWait<T = unknown>(
+  actorId: string,
+  input: Record<string, unknown>,
+  options: {
+    timeoutSecs?: number
+    memoryMbytes?: number
+    pollIntervalMs?: number
+    maxItems?: number
+  } = {}
+): Promise<{ items: T[]; runId: string; durationMs: number; error?: string }> {
+  const t0 = Date.now()
+  const pollInterval = options.pollIntervalMs ?? 4000
+  const maxWaitMs = (options.timeoutSecs ?? 90) * 1000
+
+  let runId: string
+  let datasetId: string
+
+  try {
+    const run = await startActorRun(actorId, input, {
+      timeoutSecs: options.timeoutSecs ?? 90,
+      memoryMbytes: options.memoryMbytes ?? 256,
+    })
+    runId = run.runId
+    datasetId = run.datasetId
+  } catch (e: any) {
+    return { items: [], runId: '', durationMs: Date.now() - t0, error: e.message }
+  }
+
+  // Poll for completion
+  while (Date.now() - t0 < maxWaitMs) {
+    await new Promise(r => setTimeout(r, pollInterval))
+    try {
+      const status = await getRunStatus(runId)
+      if (status.status === 'SUCCEEDED') {
+        const items = await getDatasetItems<T>(datasetId, { limit: options.maxItems ?? 100 })
+        return { items, runId, durationMs: Date.now() - t0 }
+      }
+      if (['FAILED', 'TIMED-OUT', 'ABORTED'].includes(status.status)) {
+        return { items: [], runId, durationMs: Date.now() - t0, error: `Run ${status.status}` }
+      }
+    } catch (e: any) {
+      // transient poll error — keep trying
+    }
+  }
+
+  return { items: [], runId, durationMs: Date.now() - t0, error: 'Client-side timeout waiting for Apify run' }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Normalised data types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ApifyReview {
+  source: 'google_maps' | 'yelp'
+  reviewerName: string
+  rating: number        // 1–5
+  text: string
+  publishedAt: string   // ISO
+  replyText?: string
+  url?: string
+}
+
+export interface ApifyPost {
+  source: 'instagram' | 'tiktok' | 'xiaohongshu'
+  platform: string
+  handle: string
+  postId: string
+  caption: string
+  url: string
+  publishedAt: string
+  likes: number
+  comments: number
+  shares: number
+  views: number
+  imageUrl?: string
+}
+
+export interface ApifyProfile {
+  platform: string
+  handle: string
+  displayName?: string
+  followerCount: number
+  followingCount?: number
+  postCount?: number
+  bio?: string
+  profilePicUrl?: string
+  verifiedAccount?: boolean
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Google Maps Reviews  (compass/google-maps-reviews-scraper)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function scrapeGoogleMapsReviews(input: {
+  placeId?: string
+  searchQuery?: string
+  maxReviews?: number
+  language?: string
+}): Promise<{ reviews: ApifyReview[]; runId: string; durationMs: number; error?: string }> {
+  if (!input.placeId && !input.searchQuery) {
+    return { reviews: [], runId: '', durationMs: 0, error: 'Requires placeId or searchQuery' }
+  }
+
+  const actorInput: Record<string, unknown> = {
+    maxReviews: input.maxReviews ?? 50,
+    reviewsSort: 'newest',
+    language: input.language ?? 'en',
+    personalData: true,
+  }
+
+  if (input.placeId) {
+    // Construct a Google Maps URL from a place_id
+    actorInput.startUrls = [{
+      url: `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${input.placeId}`,
+    }]
+  } else {
+    actorInput.searchStringsArray = [input.searchQuery]
+    actorInput.maxReviews = input.maxReviews ?? 30
+  }
+
+  const result = await runActorAndWait<any>(
+    'compass~google-maps-reviews-scraper',
+    actorInput,
+    { timeoutSecs: 120, memoryMbytes: 512, maxItems: input.maxReviews ?? 50 }
+  )
+
+  const reviews: ApifyReview[] = (result.items ?? []).map((r: any) => ({
+    source: 'google_maps' as const,
+    reviewerName: r.reviewer?.displayName ?? r.name ?? '匿名顾客',
+    rating: typeof r.stars === 'number' ? r.stars : (typeof r.rating === 'number' ? r.rating : 3),
+    text: r.text ?? r.snippet ?? '',
+    publishedAt: r.publishedAtDate ?? r.time ?? new Date().toISOString(),
+    replyText: r.responseFromOwnerText ?? undefined,
+    url: r.reviewUrl ?? undefined,
+  })).filter((r: ApifyReview) => r.text.length > 0)
+
+  return { reviews, runId: result.runId, durationMs: result.durationMs, error: result.error }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Instagram  (apify/instagram-scraper)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function scrapeInstagram(input: {
+  handles: string[]
+  maxPosts?: number
+}): Promise<{
+  posts: ApifyPost[]
+  profiles: ApifyProfile[]
+  runId: string
+  durationMs: number
+  error?: string
+}> {
+  if (input.handles.length === 0) {
+    return { posts: [], profiles: [], runId: '', durationMs: 0, error: 'No handles provided' }
+  }
+
+  const result = await runActorAndWait<any>(
+    'apify~instagram-scraper',
+    {
+      directUrls: input.handles.map(h => `https://www.instagram.com/${h}/`),
+      resultsType: 'posts',
+      resultsLimit: input.maxPosts ?? 30,
+      addParentData: true,
+    },
+    { timeoutSecs: 120, memoryMbytes: 512, maxItems: (input.maxPosts ?? 30) * input.handles.length }
+  )
+
+  const posts: ApifyPost[] = []
+  const profileMap = new Map<string, ApifyProfile>()
+
+  for (const item of result.items ?? []) {
+    const handle = item.ownerUsername ?? item.username ?? ''
+
+    // Build profile from post owner data
+    if (handle && !profileMap.has(handle)) {
+      profileMap.set(handle, {
+        platform: 'instagram',
+        handle,
+        displayName: item.ownerFullName ?? handle,
+        followerCount: item.followersCount ?? item.ownerFollowersCount ?? 0,
+        followingCount: item.followingCount ?? undefined,
+        postCount: item.postsCount ?? undefined,
+        bio: item.biography ?? undefined,
+        profilePicUrl: item.profilePicUrl ?? undefined,
+        verifiedAccount: item.verified ?? false,
+      })
+    }
+
+    if (item.type !== 'profile') {
+      posts.push({
+        source: 'instagram',
+        platform: 'instagram',
+        handle,
+        postId: item.id ?? item.shortCode ?? '',
+        caption: item.caption ?? item.alt ?? '',
+        url: item.url ?? `https://www.instagram.com/p/${item.shortCode}/`,
+        publishedAt: item.timestamp ?? item.taken_at_timestamp
+          ? new Date((item.taken_at_timestamp ?? 0) * 1000).toISOString()
+          : new Date().toISOString(),
+        likes: item.likesCount ?? item.likes_count ?? 0,
+        comments: item.commentsCount ?? item.comments_count ?? 0,
+        shares: 0,
+        views: item.videoViewCount ?? item.playCount ?? 0,
+        imageUrl: item.displayUrl ?? item.thumbnailUrl ?? undefined,
+      })
+    }
+  }
+
+  return {
+    posts,
+    profiles: Array.from(profileMap.values()),
+    runId: result.runId,
+    durationMs: result.durationMs,
+    error: result.error,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TikTok  (clockworks/free-tiktok-scraper)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function scrapeTikTok(input: {
+  handles: string[]
+  maxPosts?: number
+}): Promise<{
+  posts: ApifyPost[]
+  profiles: ApifyProfile[]
+  runId: string
+  durationMs: number
+  error?: string
+}> {
+  if (input.handles.length === 0) {
+    return { posts: [], profiles: [], runId: '', durationMs: 0, error: 'No handles provided' }
+  }
+
+  const result = await runActorAndWait<any>(
+    'clockworks~free-tiktok-scraper',
+    {
+      profiles: input.handles,
+      resultsPerPage: input.maxPosts ?? 30,
+      shouldDownloadVideos: false,
+      shouldDownloadCovers: false,
+    },
+    { timeoutSecs: 120, memoryMbytes: 512, maxItems: (input.maxPosts ?? 30) * input.handles.length }
+  )
+
+  const posts: ApifyPost[] = []
+  const profileMap = new Map<string, ApifyProfile>()
+
+  for (const item of result.items ?? []) {
+    const handle = item.authorMeta?.name ?? item.author?.uniqueId ?? ''
+
+    if (handle && !profileMap.has(handle)) {
+      profileMap.set(handle, {
+        platform: 'tiktok',
+        handle,
+        displayName: item.authorMeta?.nickName ?? item.author?.nickname ?? handle,
+        followerCount: item.authorMeta?.fans ?? item.author?.fans ?? 0,
+        followingCount: item.authorMeta?.following ?? undefined,
+        postCount: item.authorMeta?.video ?? undefined,
+        bio: item.authorMeta?.signature ?? undefined,
+        profilePicUrl: item.authorMeta?.avatar ?? undefined,
+        verifiedAccount: item.authorMeta?.verified ?? false,
+      })
+    }
+
+    if (item.id) {
+      posts.push({
+        source: 'tiktok',
+        platform: 'tiktok',
+        handle,
+        postId: item.id,
+        caption: item.text ?? item.desc ?? '',
+        url: item.webVideoUrl ?? `https://www.tiktok.com/@${handle}/video/${item.id}`,
+        publishedAt: item.createTime
+          ? new Date(item.createTime * 1000).toISOString()
+          : new Date().toISOString(),
+        likes: item.diggCount ?? item.stats?.diggCount ?? 0,
+        comments: item.commentCount ?? item.stats?.commentCount ?? 0,
+        shares: item.shareCount ?? item.stats?.shareCount ?? 0,
+        views: item.playCount ?? item.stats?.playCount ?? 0,
+        imageUrl: item.covers?.[0] ?? item.thumbnail ?? undefined,
+      })
+    }
+  }
+
+  return {
+    posts,
+    profiles: Array.from(profileMap.values()),
+    runId: result.runId,
+    durationMs: result.durationMs,
+    error: result.error,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Xiaohongshu / RED  (junglee/xiaohongshu-scraper)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function scrapeXiaohongshu(input: {
+  keywords?: string[]
+  handles?: string[]
+  maxPosts?: number
+}): Promise<{
+  posts: ApifyPost[]
+  profiles: ApifyProfile[]
+  runId: string
+  durationMs: number
+  error?: string
+}> {
+  if ((!input.keywords || input.keywords.length === 0) && (!input.handles || input.handles.length === 0)) {
+    return { posts: [], profiles: [], runId: '', durationMs: 0, error: 'Requires keywords or handles' }
+  }
+
+  const actorInput: Record<string, unknown> = {
+    maxItems: input.maxPosts ?? 20,
+  }
+
+  if (input.keywords && input.keywords.length > 0) {
+    actorInput.searchKeywords = input.keywords
+  }
+  if (input.handles && input.handles.length > 0) {
+    actorInput.profiles = input.handles
+  }
+
+  const result = await runActorAndWait<any>(
+    'junglee~xiaohongshu-scraper',
+    actorInput,
+    { timeoutSecs: 120, memoryMbytes: 256, maxItems: input.maxPosts ?? 20 }
+  )
+
+  const posts: ApifyPost[] = (result.items ?? []).map((item: any) => ({
+    source: 'xiaohongshu' as const,
+    platform: 'xiaohongshu',
+    handle: item.authorName ?? '',
+    postId: item.noteId ?? item.id ?? '',
+    caption: item.title ? `${item.title}\n${item.desc ?? ''}` : (item.desc ?? ''),
+    url: item.noteUrl ?? item.url ?? '',
+    publishedAt: item.publishTime
+      ? new Date(item.publishTime).toISOString()
+      : new Date().toISOString(),
+    likes: item.likeCount ?? item.likes ?? 0,
+    comments: item.commentCount ?? item.comments ?? 0,
+    shares: item.shareCount ?? item.shares ?? 0,
+    views: item.viewCount ?? 0,
+    imageUrl: item.imageList?.[0] ?? item.coverUrl ?? undefined,
+  }))
+
+  return { posts, profiles: [], runId: result.runId, durationMs: result.durationMs, error: result.error }
+}

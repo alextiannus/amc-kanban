@@ -315,6 +315,8 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
   const [showPresets, setShowPresets] = useState(false)
   const [selectedPost, setSelectedPost] = useState<any | null>(null)
   const [reviewFilter, setReviewFilter] = useState<string | null>(null)
+  const [apifySyncing, setApifySyncing] = useState(false)
+  const [apifySyncMsg, setApifySyncMsg] = useState<string | null>(null)
 
   // ROI Calculator inputs
   const [averageCheck, setAverageCheck] = useState<number>(35)
@@ -358,6 +360,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
   const brandStats = data?.brandStats ?? { postsPerWeek: null, avgEngRate: null, followersInstagram: null }
   const kpiTrends = data?.kpiTrends ?? {}
   const prevConversions = data?.previousConversions ?? { total: null, nav_click: null, booking_click: null, coupon_redemption: null }
+  const apifySync = data?.apifySync ?? { hasSyncData: false, syncedAt: null, googleReviewCount: 0, instagramPostCount: 0, tiktokPostCount: 0, xiaohongshuPostCount: 0 }
 
   // Delta helpers
   function formatTrend(trendPct: number | null | undefined): string {
@@ -378,6 +381,24 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
   const estimatedCost = totalPosts * marketingCostPerPost
   const netProfit = estimatedRevenue - estimatedCost
   const roiRatio = estimatedCost > 0 ? (estimatedRevenue / estimatedCost).toFixed(1) : '0'
+
+  const triggerApifySync = async () => {
+    setApifySyncing(true)
+    setApifySyncMsg(null)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/apify-sync`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? '同步失败')
+      const s = json.summary
+      setApifySyncMsg(`✅ 同步完成：${s?.googleReviewCount ?? 0} 条评论, ${s?.instagramPostCount ?? 0} IG 帖子, ${s?.tiktokPostCount ?? 0} TT 帖子`)
+      // Reload data to pick up new Apify results
+      await load(days)
+    } catch (e: any) {
+      setApifySyncMsg(`❌ ${e.message}`)
+    } finally {
+      setApifySyncing(false)
+    }
+  }
 
   // Filter reviews by selected keyword sentiment/type
   const filteredReviews = sentiment.reviews.filter((r: any) => {
@@ -438,8 +459,59 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
           >
             <RefreshCw className="w-4 h-4" />
           </button>
+
+          {/* Apify Sync Button */}
+          <button
+            id="apify-sync-btn"
+            onClick={triggerApifySync}
+            disabled={apifySyncing}
+            title={apifySync.syncedAt ? `上次同步: ${new Date(apifySync.syncedAt).toLocaleString('zh-CN')}` : '点击采集最新社媒数据'}
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black transition-all shadow-sm border ${
+              apifySyncing
+                ? 'bg-violet-100 dark:bg-violet-950/40 border-violet-300 dark:border-violet-700 text-violet-500 cursor-wait'
+                : 'bg-gradient-to-r from-violet-500 to-indigo-500 border-transparent text-white hover:from-violet-600 hover:to-indigo-600 hover:shadow-lg hover:shadow-violet-200 dark:hover:shadow-violet-900/40'
+            }`}
+          >
+            {apifySyncing ? (
+              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 2H3v16h5v4l4-4h4l5-5V2zm-10 9V7m0 4v.01" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+            {apifySyncing ? 'Apify 采集中...' : 'Apify 采集'}
+          </button>
         </div>
       </div>
+
+      {/* Apify sync result banner */}
+      {apifySyncMsg && (
+        <div className={`flex items-center justify-between gap-3 px-4 py-3 rounded-2xl text-xs font-bold ${
+          apifySyncMsg.startsWith('✅')
+            ? 'bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400'
+            : 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-400'
+        }`}>
+          <span>{apifySyncMsg}</span>
+          <button onClick={() => setApifySyncMsg(null)} className="opacity-60 hover:opacity-100 transition-opacity">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Apify data badge */}
+      {apifySync.hasSyncData && apifySync.syncedAt && (
+        <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
+          Apify 数据已采集 · 最后同步: {new Date(apifySync.syncedAt).toLocaleString('zh-CN')} ·
+          {apifySync.googleReviewCount > 0 && ` ${apifySync.googleReviewCount} 条评论`}
+          {apifySync.instagramPostCount > 0 && ` · ${apifySync.instagramPostCount} IG 帖子`}
+          {apifySync.tiktokPostCount > 0 && ` · ${apifySync.tiktokPostCount} TT 帖子`}
+          {apifySync.xiaohongshuPostCount > 0 && ` · ${apifySync.xiaohongshuPostCount} RED 帖子`}
+        </div>
+      )}
 
       {/* ── Sub Navigation Tabs ──────────────────────────────────────────────── */}
       <div className="flex bg-slate-100/80 dark:bg-slate-900/85 p-1 rounded-2xl max-w-full overflow-x-auto gap-1 border border-slate-200/20">

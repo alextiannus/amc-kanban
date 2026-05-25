@@ -348,6 +348,7 @@ export async function GET(req: Request, { params }: Params) {
     sentimentAlerts,
     accounts,
     conversions,
+    latestApifyLog,
   ] = await Promise.all([
     brand.postfastApiKey
       ? fetchPostfastPosts(brand.postfastApiKey, from, to)
@@ -358,10 +359,10 @@ export async function GET(req: Request, { params }: Params) {
       where: { brandId: id, occurredAt: { gte: previousFrom, lte: previousTo } },
     }),
     prisma.actionItem.findMany({
-      where: { brandId: id, type: 'sentiment_alert' },
-      select: { id: true, title: true, description: true, payload: true, createdAt: true, status: true },
+      where: { brandId: id, type: { in: ['sentiment_alert', 'apify_review'] } },
+      select: { id: true, title: true, description: true, payload: true, createdAt: true, status: true, type: true },
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      take: 100,
     }),
     prisma.socialAccount.findMany({
       where: { brandId: id },
@@ -374,6 +375,11 @@ export async function GET(req: Request, { params }: Params) {
     prisma.conversionEvent.findMany({
       where: { brandId: id, occurredAt: { gte: from, lte: to } },
       orderBy: { occurredAt: 'asc' },
+    }),
+    // Latest Apify sync result (cached in AuditLog)
+    prisma.auditLog.findFirst({
+      where: { resourceId: id, resourceType: 'ApifySync' },
+      orderBy: { timestamp: 'desc' },
     }),
   ])
 
@@ -435,8 +441,47 @@ export async function GET(req: Request, { params }: Params) {
     ? pfResult.posts
     : pfResult.posts.filter(p => p.platform.toLowerCase() === platformFilter.toLowerCase())
 
-  const posts: AnalyticsPost[] = [...filteredPostfastPosts, ...internalDrafts]
+  // Merge Apify cached posts (Instagram + TikTok + Xiaohongshu) if available
+  const apifyMeta = (latestApifyLog?.metadata ?? {}) as Record<string, any>
+  const apifySyncedAt: string | null = latestApifyLog?.timestamp?.toISOString() ?? null
+  const apifyPosts: AnalyticsPost[] = [
+    ...(apifyMeta.instagramPosts ?? []),
+    ...(apifyMeta.tiktokPosts ?? []),
+    ...(apifyMeta.xiaohongshuPosts ?? []),
+  ]
+    .filter((p: any) => {
+      if (platformFilter !== 'all' && p.platform?.toLowerCase() !== platformFilter.toLowerCase()) return false
+      // Only include posts within the requested date range
+      if (!p.publishedAt) return true
+      const d = new Date(p.publishedAt).getTime()
+      return d >= from.getTime() && d <= to.getTime()
+    })
+    .map((p: any): AnalyticsPost => ({
+      id: `apify_${p.source}_${p.postId ?? Math.random()}`,
+      source: p.source ?? 'apify',
+      platform: p.platform ?? 'unknown',
+      handle: p.handle ?? '',
+      caption: p.caption ?? '',
+      postUrl: p.url ?? null,
+      publishedAt: p.publishedAt ?? new Date().toISOString(),
+      contentType: detectContentType(p.caption ?? '', [], []),
+      status: 'published',
+      hashtags: [],
+      mediaUrls: p.imageUrl ? [p.imageUrl] : [],
+      scheduledAt: null,
+      likes: p.likes ?? 0,
+      comments: p.comments ?? 0,
+      shares: p.shares ?? 0,
+      impressions: p.views ?? 0,
+      reach: p.views ?? 0,
+      engRate: (p.views ?? 0) > 0
+        ? Number((((p.likes + p.comments + p.shares) / p.views) * 100).toFixed(2))
+        : 0,
+    }))
+
+  const posts: AnalyticsPost[] = [...filteredPostfastPosts, ...internalDrafts, ...apifyPosts]
   const hasPostfastData = pfResult.posts.length > 0
+  const hasApifyData = apifyPosts.length > 0 || (apifyMeta.googleReviews?.length ?? 0) > 0
 
   // ── KPI aggregates ───────────────────────────────────────────────────────
   const totalPosts      = posts.length
@@ -549,14 +594,20 @@ export async function GET(req: Request, { params }: Params) {
   // ── Sentiment — real ratings from DB alerts + Google reviews ─────────────
   const allRatings: number[] = []
 
-  // From DB sentiment alerts
+  // From DB sentiment alerts (includes apify_review type)
   sentimentAlerts.forEach((item: any) => {
     const pl = (item.payload as any) ?? {}
     if (pl.rating && typeof pl.rating === 'number') allRatings.push(pl.rating)
   })
 
-  // From Google reviews
+  // From Google reviews (GBP/Places live fetch)
   googleResult.reviews.forEach(r => { if (r.rating >= 1 && r.rating <= 5) allRatings.push(r.rating) })
+
+  // From Apify cached Google Maps reviews
+  const apifyGoogleReviews: any[] = apifyMeta.googleReviews ?? []
+  apifyGoogleReviews.forEach((r: any) => {
+    if (r.rating >= 1 && r.rating <= 5) allRatings.push(r.rating)
+  })
 
   // Compute sentiment percentages from real data
   let positivePct: number, neutralPct: number, negativePct: number, ratingOutOfFive: number | null
@@ -587,15 +638,18 @@ export async function GET(req: Request, { params }: Params) {
   // ── Real keyword extraction from all review texts ────────────────────────
   const reviewTexts: string[] = []
 
-  // From DB sentiment alerts
+  // From DB sentiment alerts (includes apify_review type)
   sentimentAlerts.forEach((item: any) => {
     const pl = (item.payload as any) ?? {}
     if (pl.reviewText) reviewTexts.push(pl.reviewText)
     else if (item.description) reviewTexts.push(item.description)
   })
 
-  // From Google reviews
+  // From Google reviews (live)
   googleResult.reviews.forEach(r => { if (r.text) reviewTexts.push(r.text) })
+
+  // From Apify cached Google Maps reviews
+  apifyGoogleReviews.forEach((r: any) => { if (r.text) reviewTexts.push(r.text) })
 
   const realKeywords = extractKeywordsFromTexts(reviewTexts)
 
@@ -625,8 +679,20 @@ export async function GET(req: Request, { params }: Params) {
     source: 'google',
   }))
 
-  // Merge, dedup by reviewer+text, most recent first
-  const reviewFeed = [...dbReviews, ...googleReviewFeed].slice(0, 25)
+  // Apify Google Maps cached review feed
+  const apifyReviewFeed = apifyGoogleReviews.map((r: any, idx: number) => ({
+    id: `apify_${idx}`,
+    platform: 'google_maps',
+    reviewerName: r.reviewerName ?? '匿名顾客',
+    rating: r.rating ?? 3,
+    text: r.text ?? '',
+    replyStatus: r.replyText ? 'replied' : 'pending',
+    createdAt: r.publishedAt ?? new Date().toISOString(),
+    source: 'apify',
+  }))
+
+  // Merge all review sources, most recent first, cap at 50
+  const reviewFeed = [...dbReviews, ...googleReviewFeed, ...apifyReviewFeed].slice(0, 50)
 
   return NextResponse.json({
     from: from.toISOString(),
@@ -668,6 +734,14 @@ export async function GET(req: Request, { params }: Params) {
     hasPostfastData,
     postfastError: pfResult.error ?? null,
     hasGoogleData: googleResult.reviews.length > 0,
+    apifySync: {
+      hasSyncData: hasApifyData,
+      syncedAt: apifySyncedAt,
+      googleReviewCount: apifyGoogleReviews.length,
+      instagramPostCount: (apifyMeta.instagramPosts ?? []).length,
+      tiktokPostCount: (apifyMeta.tiktokPosts ?? []).length,
+      xiaohongshuPostCount: (apifyMeta.xiaohongshuPosts ?? []).length,
+    },
   })
 }
 
