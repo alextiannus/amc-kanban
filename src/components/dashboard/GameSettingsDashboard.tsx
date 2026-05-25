@@ -876,12 +876,12 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
               <div className="relative w-56 h-56 flex items-center justify-center my-3">
                 <style dangerouslySetInnerHTML={{ __html: `
                   @keyframes preview-led-blink-odd {
-                    0%, 100% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #db2777); }
-                    50% { fill: #fbbf24; filter: drop-shadow(0 0 1px #fbbf24) drop-shadow(0 0 3px #d97706); }
+                    0%, 100% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #e87b1e); }
+                    50% { fill: #f3e8d0; filter: drop-shadow(0 0 1px #f3e8d0); }
                   }
                   @keyframes preview-led-blink-even {
-                    0%, 100% { fill: #fbbf24; filter: drop-shadow(0 0 1px #fbbf24) drop-shadow(0 0 3px #d97706); }
-                    50% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #db2777); }
+                    0%, 100% { fill: #f3e8d0; filter: drop-shadow(0 0 1px #f3e8d0); }
+                    50% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #e87b1e); }
                   }
                   .preview-led-blink-odd {
                     animation: preview-led-blink-odd 1.2s infinite;
@@ -891,27 +891,30 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                   }
                 `}} />
 
-                <div className="absolute inset-[-8px] rounded-full border-4 border-slate-900/60 shadow-[0_0_25px_rgba(219,39,119,0.2)] pointer-events-none" />
+                <div className="absolute inset-[-10px] rounded-full border-[5px] border-white/90 shadow-[0_4px_16px_rgba(0,0,0,0.3)] pointer-events-none" />
+                <div className="absolute inset-[-4px] rounded-full border border-[#e87b1e]/40 pointer-events-none" />
                 
-                {/* Top pointer */}
-                <div className="absolute top-[-8px] z-30 w-6 h-6 flex items-center justify-center filter drop-shadow-[0_2px_4px_rgba(244,63,94,0.4)]">
-                  <svg width="16" height="18" viewBox="0 0 16 18" fill="none">
-                    <path d="M8 18L0 4C0 4 4 0 8 0C12 0 16 4 16 4L8 18Z" fill="#f43f5e" />
+                {/* Top pointer - dark brown matching reference */}
+                <div className="absolute top-[-12px] z-30 w-6 h-7 flex items-center justify-center filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]">
+                  <svg width="18" height="22" viewBox="0 0 18 22" fill="none">
+                    <path d="M9 22L1 6C1 6 4.5 0 9 0C13.5 0 17 6 17 6L9 22Z" fill="#3d2010" stroke="#ffffff" strokeWidth="1.2" />
+                    <circle cx="9" cy="7" r="3.2" fill="#ffffff" />
+                    <circle cx="9" cy="7" r="1.6" fill="#3d2010" />
                   </svg>
                 </div>
 
-                {/* Central spin trigger */}
+                {/* Central spin trigger - white matching reference */}
                 <button 
                   onClick={triggerPreviewSpin}
                   disabled={isPreviewSpinning || config.prizes.length === 0}
-                  className="absolute z-20 w-12 h-12 rounded-full border-2 border-slate-950 bg-gradient-to-tr from-pink-500 via-rose-500 to-violet-600 text-white flex items-center justify-center font-extrabold text-[9px] shadow-lg active:scale-95 transition"
+                  className="absolute z-20 w-12 h-12 rounded-full border-[3px] border-white bg-white text-[#3d2010] flex items-center justify-center font-extrabold text-[9px] shadow-lg active:scale-95 transition"
                 >
                   SPIN
                 </button>
 
                 {/* Slices container */}
                 <div 
-                  className="w-full h-full rounded-full overflow-hidden border-2 border-slate-950 transition-transform duration-[5000ms] ease-[cubic-bezier(0.1,0.8,0.1,1)]"
+                  className="w-full h-full rounded-full overflow-hidden border-[4px] border-white transition-transform duration-[5000ms] ease-[cubic-bezier(0.1,0.8,0.1,1)]"
                   style={{
                     transform: `rotate(${wheelRotation}deg)`,
                   }}
@@ -919,39 +922,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                   {config.prizes.length > 0 ? (
                     <svg viewBox="0 0 100 100" className="w-full h-full">
                       <defs>
-                        {/* Neon slice gradients */}
-                        <linearGradient id="prev-slice-grad-0" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#ff4b72" />
-                          <stop offset="100%" stopColor="#d946ef" />
-                        </linearGradient>
-                        <linearGradient id="prev-slice-grad-1" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#3b82f6" />
-                          <stop offset="100%" stopColor="#06b6d4" />
-                        </linearGradient>
-                        <linearGradient id="prev-slice-grad-2" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#10b981" />
-                          <stop offset="100%" stopColor="#14b8a6" />
-                        </linearGradient>
-                        <linearGradient id="prev-slice-grad-3" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#f59e0b" />
-                          <stop offset="100%" stopColor="#ff006e" />
-                        </linearGradient>
-                        <linearGradient id="prev-slice-grad-4" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#8338ec" />
-                          <stop offset="100%" stopColor="#3a86ff" />
-                        </linearGradient>
-                        <linearGradient id="prev-slice-grad-5" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#06d6a0" />
-                          <stop offset="100%" stopColor="#10b981" />
-                        </linearGradient>
-                        <linearGradient id="prev-slice-grad-6" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#ffbe0b" />
-                          <stop offset="100%" stopColor="#fb923c" />
-                        </linearGradient>
-                        <linearGradient id="prev-slice-grad-7" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#f43f5e" />
-                          <stop offset="100%" stopColor="#8b5cf6" />
-                        </linearGradient>
+                        {/* Warm earthy palette matching reference */}
                       </defs>
 
                       {config.prizes.map((p, idx) => {
@@ -967,7 +938,8 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                         const p1 = { x: 50 + r * Math.cos(angleInRadians1), y: 50 + r * Math.sin(angleInRadians1) }
                         const p2 = { x: 50 + r * Math.cos(angleInRadians2), y: 50 + r * Math.sin(angleInRadians2) }
 
-                        const fillColor = `url(#prev-slice-grad-${idx % 8})`
+                        const SLICE_COLORS = ['#3d2010', '#e87b1e', '#f3e8d0', '#8da628', '#4a6b1e', '#c0392b', '#e87b1e', '#8da628']
+                        const fillColor = SLICE_COLORS[idx % SLICE_COLORS.length]
 
                         const textAngle = startAngle + (angle / 2)
                         const textAngleInRad = ((textAngle - 90) * Math.PI) / 180.0
@@ -983,26 +955,26 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                             <path 
                               d={`M 50 50 L ${p1.x} ${p1.y} A 50 50 0 ${angle <= 180 ? '0' : '1'} 1 ${p2.x} ${p2.y} Z`}
                               fill={fillColor}
-                              stroke="#000"
+                              stroke="#ffffff"
                               strokeWidth="0.5"
                             />
                             <text
                               x={textPos.x}
                               y={textPos.y}
-                              fill="#fff"
+                              fill={fillColor === '#f3e8d0' ? '#3d2010' : '#ffffff'}
                               fontSize="3"
-                              fontWeight="black"
+                              fontWeight="900"
                               textAnchor="middle"
                               alignmentBaseline="middle"
                               paintOrder="stroke"
-                              stroke="#000000"
-                              strokeWidth="0.6"
+                              stroke={fillColor === '#f3e8d0' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}
+                              strokeWidth="0.4"
                               transform={`rotate(${displayRotation}, ${textPos.x}, ${textPos.y})`}
                             >
                               <tspan x={textPos.x} dy="-0.5em">
                                 {p.name.length > 8 ? p.name.substring(0, 6) + '..' : p.name}
                               </tspan>
-                              <tspan x={textPos.x} dy="1.1em" fontSize="2.2" fill="#ffeb3b" fontWeight="bold">
+                              <tspan x={textPos.x} dy="1.1em" fontSize="2.2" fill={fillColor === '#f3e8d0' ? '#8da628' : '#f3e8d0'} fontWeight="bold">
                                 {Number((p.probability * 100).toFixed(1))}%
                               </tspan>
                             </text>
@@ -1018,9 +990,9 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                 {/* Static Outer Rim with Blinking LED Lights */}
                 <div className="absolute inset-0 pointer-events-none z-10 w-full h-full">
                   <svg viewBox="0 0 100 100" className="w-full h-full">
-                    {/* Outer border / rim */}
-                    <circle cx="50" cy="50" r="48" fill="none" stroke="#1e1b4b" strokeWidth="4" />
-                    <circle cx="50" cy="50" r="46.5" fill="none" stroke="#db2777" strokeWidth="0.5" strokeDasharray="1 1" className="opacity-40" />
+                    {/* Outer border / rim - clean white matching reference */}
+                    <circle cx="50" cy="50" r="49" fill="none" stroke="#ffffff" strokeWidth="2" />
+                    <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="0.4" />
                     {/* 24 Blinking LEDs */}
                     {Array.from({ length: 24 }).map((_, i) => {
                       const dotAngle = (i * 360) / 24
