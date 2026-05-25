@@ -198,16 +198,15 @@ export async function scrapeGoogleMapsReviews(input: {
     reviewsSort: 'newest',
     language: input.language ?? 'en',
     personalData: true,
+    reviewsOrigin: 'all',
   }
 
   if (input.placeId) {
-    // Construct a Google Maps URL from a place_id
-    actorInput.startUrls = [{
-      url: `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${input.placeId}`,
-    }]
-  } else {
+    // compass actor accepts placeIds as a direct array — confirmed via live test
+    actorInput.placeIds = [input.placeId]
+  } else if (input.searchQuery) {
+    // Keyword fallback: actor will search Google Maps for this string
     actorInput.searchStringsArray = [input.searchQuery]
-    actorInput.maxReviews = input.maxReviews ?? 30
   }
 
   const result = await runActorAndWait<any>(
@@ -417,7 +416,9 @@ export async function scrapeXiaohongshu(input: {
   }
 
   const result = await runActorAndWait<any>(
-    'junglee~xiaohongshu-scraper',
+    // easyapi/all-in-one-rednote-xiaohongshu-scraper is a well-maintained
+    // aggregator that handles both profile-based and keyword-based searches
+    'easyapi~all-in-one-rednote-xiaohongshu-scraper',
     actorInput,
     { timeoutSecs: 120, memoryMbytes: 256, maxItems: input.maxPosts ?? 20 }
   )
