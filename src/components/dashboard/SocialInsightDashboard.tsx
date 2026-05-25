@@ -658,7 +658,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                             <td className="py-4 px-4 text-slate-500 font-medium">{acc.handle}</td>
                             <td className="py-4 px-4 font-black">{totalPosts > 0 ? Math.round(totalPosts / accounts.length) : 0} 篇</td>
                             <td className="py-4 px-4 font-black">{acc.followerCount ? fmtNum(acc.followerCount) : '—'}</td>
-                            <td className="py-4 px-4 font-bold text-slate-650 dark:text-slate-350">{acc.platformId === 'google' ? '—' : fmtNum(Math.round(totalEngagement / accounts.length))}</td>
+                            <td className="py-4 px-4 font-bold text-slate-650 dark:text-slate-350">{acc.platformId === 'google' ? '—' : fmtNum(Math.round((kpis.totalEngagement ?? 0) / accounts.length))}</td>
                             <td className="py-4 px-4 text-emerald-500 font-black">+{acc.followerDelta || 0}</td>
                           </tr>
                         )
