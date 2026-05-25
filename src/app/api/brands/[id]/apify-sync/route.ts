@@ -147,24 +147,65 @@ export async function POST(req: Request, { params }: Params) {
 
   const totalDurationMs = Date.now() - t0
 
+  // ── Load previous sync to preserve data for platforms that failed this run ──
+  // If TikTok / Google / etc. scraper is blocked and returns 0 items, we keep
+  // the last successful dataset for that platform rather than wiping it.
+  const previousLog = await prisma.auditLog.findFirst({
+    where: { resourceId: id, resourceType: 'ApifySync' },
+    orderBy: { timestamp: 'desc' },
+  })
+  const prevMeta = (previousLog?.metadata ?? {}) as Record<string, any>
+
   // ── Collect results ───────────────────────────────────────────────────────
   if (googleResult.error) errors.push(`Google Maps: ${googleResult.error}`)
   if (instagramResult.error) errors.push(`Instagram: ${instagramResult.error}`)
   if (tiktokResult.error) errors.push(`TikTok: ${tiktokResult.error}`)
   if (xiaohongshuResult.error) errors.push(`Xiaohongshu: ${xiaohongshuResult.error}`)
 
-  jobResults.googleReviews    = googleResult.reviews
-  jobResults.instagramPosts   = instagramResult.posts
-  jobResults.instagramProfiles = instagramResult.profiles
-  jobResults.tiktokPosts      = tiktokResult.posts
-  jobResults.tiktokProfiles   = tiktokResult.profiles
-  jobResults.xiaohongshuPosts = xiaohongshuResult.posts
+  // Smart merge: use fresh data if we got any, otherwise fall back to previous
+  const googleReviews = googleResult.reviews.length > 0
+    ? googleResult.reviews
+    : (prevMeta.googleReviews ?? [])
+
+  const instagramPosts = instagramResult.posts.length > 0
+    ? instagramResult.posts
+    : (prevMeta.instagramPosts ?? [])
+
+  const instagramProfiles = instagramResult.profiles.length > 0
+    ? instagramResult.profiles
+    : (prevMeta.instagramProfiles ?? [])
+
+  const tiktokPosts = tiktokResult.posts.length > 0
+    ? tiktokResult.posts
+    : (prevMeta.tiktokPosts ?? [])
+
+  const tiktokProfiles = tiktokResult.profiles.length > 0
+    ? tiktokResult.profiles
+    : (prevMeta.tiktokProfiles ?? [])
+
+  const xiaohongshuPosts = (xiaohongshuResult as any).posts?.length > 0
+    ? (xiaohongshuResult as any).posts
+    : (prevMeta.xiaohongshuPosts ?? [])
+
+  jobResults.googleReviews     = googleReviews
+  jobResults.instagramPosts    = instagramPosts
+  jobResults.instagramProfiles = instagramProfiles
+  jobResults.tiktokPosts       = tiktokPosts
+  jobResults.tiktokProfiles    = tiktokProfiles
+  jobResults.xiaohongshuPosts  = xiaohongshuPosts
 
   jobResults.summary = {
-    googleReviewCount:    googleResult.reviews.length,
-    instagramPostCount:   instagramResult.posts.length,
-    tiktokPostCount:      tiktokResult.posts.length,
-    xiaohongshuPostCount: (xiaohongshuResult as any).posts?.length ?? 0,
+    googleReviewCount:    googleReviews.length,
+    instagramPostCount:   instagramPosts.length,
+    tiktokPostCount:      tiktokPosts.length,
+    xiaohongshuPostCount: xiaohongshuPosts.length,
+    // Track which platforms used fresh vs cached data
+    freshSources: {
+      google:      googleResult.reviews.length > 0,
+      instagram:   instagramResult.posts.length > 0,
+      tiktok:      tiktokResult.posts.length > 0,
+      xiaohongshu: (xiaohongshuResult as any).posts?.length > 0,
+    },
     totalDurationMs,
     scrapedAt: new Date().toISOString(),
     brandId: id,
@@ -181,10 +222,11 @@ export async function POST(req: Request, { params }: Params) {
       action: 'APIFY_SYNC',
       resourceId: id,
       resourceType: 'ApifySync',
-      reason: `Sync: ${googleResult.reviews.length} reviews, ${instagramResult.posts.length} IG posts, ${tiktokResult.posts.length} TT posts, ${(xiaohongshuResult as any).posts?.length ?? 0} RED posts`,
+      reason: `Sync: ${googleReviews.length} reviews (${googleResult.reviews.length} fresh), ${instagramPosts.length} IG (${instagramResult.posts.length} fresh), ${tiktokPosts.length} TT (${tiktokResult.posts.length} fresh)`,
       metadata: jobResults,
     },
   })
+
 
   // ── Also persist scraped reviews as ActionItems (feeds sentiment dashboard) ──
   if (googleResult.reviews.length > 0) {

@@ -336,7 +336,9 @@ export async function scrapeTikTok(input: {
   const result = await runActorAndWait<any>(
     'clockworks~free-tiktok-scraper',
     {
-      profiles: input.handles,
+      // clockworks actor expects profiles as a newline-separated STRING, not a JSON array.
+      // Confirmed from live dataset: item.input = "chengduziweigrilledfishh" (plain string).
+      profiles: input.handles.join('\n'),
       resultsPerPage: input.maxPosts ?? 30,
       shouldDownloadVideos: false,
       shouldDownloadCovers: false,
