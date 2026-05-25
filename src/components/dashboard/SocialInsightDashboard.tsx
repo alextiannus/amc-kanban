@@ -979,11 +979,11 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
                       <span>本商户 ({brandName})</span>
-                      <span className="font-black text-emerald-500">{(accounts.find(a => a.platformId === 'instagram')?.followerCount) ?? 1240}</span>
+                      <span className="font-black text-emerald-500">{(accounts.find((a: any) => a.platformId === 'instagram')?.followerCount) ?? 1240}</span>
                     </div>
                     <div className="h-4 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden flex">
                       <div className="h-full bg-emerald-500 rounded-lg transition-all duration-700" 
-                        style={{ width: `${(((accounts.find(a => a.platformId === 'instagram')?.followerCount) ?? 1240) / Math.max(1, ...competitors.map(c => c.platforms.instagram.followers), (accounts.find(a => a.platformId === 'instagram')?.followerCount) ?? 1240)) * 100}%` }} 
+                        style={{ width: `${(((accounts.find((a: any) => a.platformId === 'instagram')?.followerCount) ?? 1240) / Math.max(1, ...competitors.map((c: any) => c.platforms.instagram.followers), (accounts.find((a: any) => a.platformId === 'instagram')?.followerCount) ?? 1240)) * 100}%` }} 
                       />
                     </div>
                   </div>
@@ -992,7 +992,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                   {competitors.map((c: any, i: number) => {
                     const colors = ['#60a5fa', '#a855f7', '#ec4899']
                     const folVal = c.platforms.instagram.followers
-                    const maxVal = Math.max(1, ...competitors.map(c => c.platforms.instagram.followers), (accounts.find(a => a.platformId === 'instagram')?.followerCount) ?? 1240)
+                    const maxVal = Math.max(1, ...competitors.map((c: any) => c.platforms.instagram.followers), (accounts.find((a: any) => a.platformId === 'instagram')?.followerCount) ?? 1240)
                     return (
                       <div key={i} className="space-y-1.5">
                         <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
