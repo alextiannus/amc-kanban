@@ -451,11 +451,18 @@ export async function GET(req: Request, { params }: Params) {
   ]
     .filter((p: any) => {
       if (platformFilter !== 'all' && p.platform?.toLowerCase() !== platformFilter.toLowerCase()) return false
-      // Only include posts within the requested date range
+      // Include post if it has no date (can't determine), or if the date is within range.
+      // Also include posts up to 180 days before `from` to catch content that drives
+      // ongoing engagement even if published earlier (e.g. evergreen IG posts).
       if (!p.publishedAt) return true
       const d = new Date(p.publishedAt).getTime()
-      return d >= from.getTime() && d <= to.getTime()
+      // Exclude obvious sentinel/epoch dates (before 2020)
+      if (d < new Date('2020-01-01').getTime()) return false
+      // Include anything published up to 6 months before the window start, or within the window
+      const sixMonthsBeforeFrom = from.getTime() - 180 * 24 * 60 * 60 * 1000
+      return d >= sixMonthsBeforeFrom && d <= to.getTime()
     })
+
     .map((p: any): AnalyticsPost => ({
       id: `apify_${p.source}_${p.postId ?? Math.random()}`,
       source: p.source ?? 'apify',

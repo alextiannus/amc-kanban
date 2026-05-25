@@ -279,6 +279,16 @@ export async function scrapeInstagram(input: {
     }
 
     if (item.type !== 'profile') {
+      // Fix: item.timestamp is already an ISO string (e.g. '2026-05-15T03:11:16.000Z').
+      // The previous code had an operator-precedence bug: the ternary bound to
+      // (item.timestamp ?? item.taken_at_timestamp) which is always truthy when
+      // timestamp exists, so taken_at_timestamp (undefined → 0) was always used → epoch 1970.
+      const publishedAt = item.timestamp
+        ? item.timestamp                                                       // ISO string — use directly
+        : item.taken_at_timestamp
+          ? new Date(item.taken_at_timestamp * 1000).toISOString()            // unix seconds → ISO
+          : new Date().toISOString()                                            // fallback: now
+
       posts.push({
         source: 'instagram',
         platform: 'instagram',
@@ -286,9 +296,7 @@ export async function scrapeInstagram(input: {
         postId: item.id ?? item.shortCode ?? '',
         caption: item.caption ?? item.alt ?? '',
         url: item.url ?? `https://www.instagram.com/p/${item.shortCode}/`,
-        publishedAt: item.timestamp ?? item.taken_at_timestamp
-          ? new Date((item.taken_at_timestamp ?? 0) * 1000).toISOString()
-          : new Date().toISOString(),
+        publishedAt,
         likes: item.likesCount ?? item.likes_count ?? 0,
         comments: item.commentsCount ?? item.comments_count ?? 0,
         shares: 0,
@@ -357,6 +365,10 @@ export async function scrapeTikTok(input: {
     }
 
     if (item.id) {
+      // createTimeISO is an explicit ISO string from the actor; createTime is unix seconds
+      const publishedAt = item.createTimeISO
+        ?? (item.createTime ? new Date(item.createTime * 1000).toISOString() : new Date().toISOString())
+
       posts.push({
         source: 'tiktok',
         platform: 'tiktok',
@@ -364,9 +376,7 @@ export async function scrapeTikTok(input: {
         postId: item.id,
         caption: item.text ?? item.desc ?? '',
         url: item.webVideoUrl ?? `https://www.tiktok.com/@${handle}/video/${item.id}`,
-        publishedAt: item.createTime
-          ? new Date(item.createTime * 1000).toISOString()
-          : new Date().toISOString(),
+        publishedAt,
         likes: item.diggCount ?? item.stats?.diggCount ?? 0,
         comments: item.commentCount ?? item.stats?.commentCount ?? 0,
         shares: item.shareCount ?? item.stats?.shareCount ?? 0,
