@@ -1,5 +1,5 @@
 /**
- * AMC Kanban — MCP Server definition
+ * AI Marketing Crew — MCP Server definition
  *
  * All agent-facing REST capabilities exposed as MCP tools.
  * Uses WebStandardStreamableHTTPServerTransport (Web Fetch API compatible).
@@ -210,7 +210,7 @@ export function createAmcMcpServer(agentApiKey: string) {
   // ── get_agent_profile ───────────────────────────────────────────────────
   server.tool(
     'get_agent_profile',
-    'Get this agent\'s own profile from AMC Kanban.',
+    'Get this agent\'s own profile from AI Marketing Crew.',
     {},
     async () => {
       const agent = await resolveAgent()

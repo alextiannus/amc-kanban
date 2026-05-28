@@ -18,6 +18,8 @@ const POSTFAST_FIELDS: IntegrationField[] = [
 const GOOGLE_FIELDS: IntegrationField[] = [
   { key: 'googlePlaceId', label: 'Google Place ID', placeholder: 'ChIJ...', type: 'text', helpText: '在 Google Maps 中找到您的 Place ID' },
   { key: 'googleApiKey', label: 'Google API Key', placeholder: '••••••••', type: 'password', helpText: '启用 Places API + My Business API' },
+  { key: 'googleBusinessUrl', label: 'Google 商家主页 URL', placeholder: 'https://maps.google.com/...', type: 'url', helpText: '扫码失败时回退到商家主页（建议配置）' },
+  { key: 'googleReviewUrl', label: 'Google 写评 URL', placeholder: 'https://search.google.com/local/writereview?placeid=...', type: 'url', helpText: '优先跳转链接；未配置时会按 Place ID 自动生成' },
 ]
 
 const LARK_FIELDS: IntegrationField[] = [
@@ -49,6 +51,8 @@ function buildInitialForm(initialSettings?: Record<string, any>): Record<string,
       postfastApiKey: '',
       googlePlaceId: '',
       googleApiKey: '',
+      googleBusinessUrl: '',
+      googleReviewUrl: '',
       larkAppId: '',
       larkAppSecret: '',
       larkParentFolderToken: '',
@@ -61,6 +65,8 @@ function buildInitialForm(initialSettings?: Record<string, any>): Record<string,
     postfastApiKey: asText(initialSettings.postfastApiKey),
     googlePlaceId: asText(initialSettings.googlePlaceId),
     googleApiKey: asText(initialSettings.googleApiKey),
+    googleBusinessUrl: asText(initialSettings.googleBusinessUrl),
+    googleReviewUrl: asText(initialSettings.googleReviewUrl),
     larkAppId: asText(initialSettings.larkAppId),
     larkAppSecret: asText(initialSettings.larkAppSecret),
     larkParentFolderToken: asText(initialSettings.larkParentFolderToken),
@@ -320,7 +326,7 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
               <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
                 <p className="font-extrabold text-slate-600 dark:text-slate-300">使用说明：</p>
                 <p>1. 请在 Chrome 浏览器中加载项目根目录下的 <code className="font-mono text-blue-600 dark:text-blue-400">chrome-extension</code> 文件夹（打开开发者模式 ➜ 加载已解压的扩展程序）。</p>
-                <p>2. 安装完成后，只要您打开此 AMC 看板页面，插件就会自动与后台建立安全连接。</p>
+                <p>2. 安装完成后，只要您打开此 AI Marketing Crew 看板页面，插件就会自动与后台建立安全连接。</p>
                 <p>3. 同时，在同一浏览器窗口中打开美团或点评的商家后台页面并保持登录，AI 即可通过插件执行自动回复。</p>
                 <p className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 font-bold text-indigo-600 dark:text-indigo-400">测试工具：</p>
                 <a

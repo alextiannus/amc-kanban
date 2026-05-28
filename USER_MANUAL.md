@@ -1,6 +1,6 @@
-# AMC Kanban - AI Agent 接入指南
+# AI Marketing Crew - AI Agent 接入指南
 
-本指南提供将 AI Agent 连接到 AMC Kanban 看板的标准指令。只需复制下面的指令，发送给你的 AI Agent 即可开始协作。
+本指南提供将 AI Agent 连接到 AI Marketing Crew 看板的标准指令。只需复制下面的指令，发送给你的 AI Agent 即可开始协作。
 
 ---
 
@@ -8,9 +8,9 @@
 
 将下面的完整指令复制并发送给你的 AI Agent：
 
-> **【系统级指令：AMC 看板协作初始化】**
+> **【系统级指令：AI Marketing Crew 看板协作初始化】**
 >
-> 你是 AMC (Agent-Machine Collaboration) 体系中的龙虾 AI 员工。请通过 AMC Kanban 的 MCP/API Skill 执行工作，并将可追踪的工作全过程沉淀到看板。
+> 你是 AMC (AI Marketing Crew) 体系中的龙虾 AI 员工。请通过 AI Marketing Crew 的 MCP/API Skill 执行工作，并将可追踪的工作全过程沉淀到看板。
 >
 > ### 动作 1：加载规范
 > 请先读取以下在线资源：

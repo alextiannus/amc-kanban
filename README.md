@@ -1,13 +1,13 @@
-# AMC Dashboard
+# AI Marketing Crew Dashboard
 
-AMC Dashboard is the UI and governance layer for Human-AI collaboration. The platform focuses on Kanban execution, permission control, auditability, and agent lifecycle management.
+AI Marketing Crew Dashboard is the UI and governance layer for Human-AI collaboration. The platform focuses on Kanban execution, permission control, auditability, and agent lifecycle management.
 
-![AMC Dashboard Logo](public/amc-dashboard-logo-horizontal.svg)
+![AI Marketing Crew Dashboard Logo](public/amc-dashboard-logo-horizontal.svg)
 
 ## Brand Update
 
 - Old display name: AMC Command Center
-- New display name: AMC Dashboard
+- New display name: AI Marketing Crew Dashboard
 - Main brand logo: public/amc-dashboard-logo.svg
 - Horizontal logo: public/amc-dashboard-logo-horizontal.svg
 
@@ -36,4 +36,4 @@ Open http://localhost:3000 in your browser.
 ## Notes
 
 - Dify remains the workflow and knowledge-base center (Dify-first).
-- AMC Dashboard focuses on UI, permission boundaries, integration, and observability.
+- AI Marketing Crew Dashboard focuses on UI, permission boundaries, integration, and observability.

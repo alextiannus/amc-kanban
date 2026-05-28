@@ -42,7 +42,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
       <div className="max-w-md w-full p-8 space-y-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">AMC Kanban</h2>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">AI Marketing Crew</h2>
           <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
             Sign in to access the collaboration board
           </p>

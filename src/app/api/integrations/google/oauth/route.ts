@@ -5,6 +5,32 @@ import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
 
+function isLocalUrl(url: string) {
+  return /localhost|127\.0\.0\.1/i.test(url)
+}
+
+function normalizeBaseUrl(url: string) {
+  return url.replace(/\/$/, '')
+}
+
+function resolvePublicBaseUrl(request: Request) {
+  const requestUrl = new URL(request.url)
+  const requestOrigin = `${requestUrl.protocol}//${requestUrl.host}`
+  const configuredHost = process.env.NEXT_PUBLIC_KANBAN_HOST?.trim()
+
+  if (!configuredHost) return requestOrigin
+  if (process.env.NODE_ENV === 'production' && isLocalUrl(configuredHost)) return requestOrigin
+  return normalizeBaseUrl(configuredHost)
+}
+
+function resolveGoogleRedirectUri(request: Request) {
+  const configured = process.env.GOOGLE_REDIRECT_URI?.trim()
+  if (configured && !(process.env.NODE_ENV === 'production' && isLocalUrl(configured))) {
+    return configured
+  }
+  return `${resolvePublicBaseUrl(request)}/api/integrations/google/oauth/callback`
+}
+
 export async function GET(request: Request) {
   const session = await getSession()
   if (!session?.user) {
@@ -44,13 +70,15 @@ export async function GET(request: Request) {
   })
 
   const clientId = process.env.GOOGLE_CLIENT_ID
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+  const redirectUri = resolveGoogleRedirectUri(request)
 
-  // If credentials are not configured, redirect to our built-in mock consent flow
-  if (!clientId || !redirectUri) {
-    const mockConsentUrl = new URL('/api/integrations/google/oauth/mock-consent', url.origin)
-    mockConsentUrl.searchParams.set('state', stateNonce)
-    return NextResponse.redirect(mockConsentUrl)
+  // Production and development both require real Google OAuth credentials.
+  if (!clientId || !clientSecret) {
+    return NextResponse.json(
+      { error: 'Google OAuth is not configured: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are required.' },
+      { status: 500 }
+    )
   }
 
   // Construct real Google OAuth 2.0 URL

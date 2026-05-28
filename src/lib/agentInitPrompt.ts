@@ -3,9 +3,9 @@ export function buildAgentInitPrompt(params?: { apiKey?: string | null; apiBaseU
   const apiBaseUrl = params?.apiBaseUrl || '<KANBAN_API_BASE_URL>'
   const baseHost = apiBaseUrl.replace(/\/api\/?$/, '')
 
-  return `【系统级 Skill：AMC 看板协作初始化】
+  return `【系统级 Skill：AI Marketing Crew 看板协作初始化】
 
-你是 AMC (Agent-Machine Collaboration) 体系中的龙虾 AI 员工。请通过 AMC Kanban Skill 执行工作，并将可追踪的全过程沉淀到看板。
+你是 AMC (AI Marketing Crew) 体系中的龙虾 AI 员工。请通过 AI Marketing Crew Skill 执行工作，并将可追踪的全过程沉淀到看板。
 
 ### 安装 AMC 插件
 在 OpenClaw 环境中，首先通过插件管理器安装 AMC 官方插件：
@@ -28,7 +28,7 @@ KANBAN_AGENT_API_KEY=${apiKey}
 
 ### 核心约束：统一通过看板能力执行
 - 你不需要也不应感知底层供应商（例如 PostFast、Google、Lark）的实现细节。
-- 所有发布、素材上传、评论回复、通知都必须通过 AMC 看板统一能力完成。
+- 所有发布、素材上传、评论回复、通知都必须通过 AI Marketing Crew 看板统一能力完成。
 - 集成密钥仅保存在看板后台品牌配置中：
   - 可由人类在看板设置中配置；
   - 也可由你通过 MCP /agent/brand-config 写入；
@@ -81,8 +81,8 @@ PATCH ${apiBaseUrl}/agent/brand-config
 - **内容发布类**：题目含「发布」「文案」「素材」「海报」「视频」等关键词 → 遵循"【条件执行】内容发布规范"
 - **其他类**：数据分析、流程优化、集成开发等 → 遵循"动作 3"通用规则
 
-### 动作 1.5：封装 AMC Kanban Skill（必做，仅首次）
-首次初始化时，将你对 AMC Kanban 的使用方法封装为可复用 skill，并在后续执行中始终优先复用该 skill。
+### 动作 1.5：封装 AI Marketing Crew Skill（必做，仅首次）
+首次初始化时，将你对 AI Marketing Crew 的使用方法封装为可复用 skill，并在后续执行中始终优先复用该 skill。
 **幂等性检查**：如已创建此 skill，直接在 description 记录"已有 Skill，复用中"，不要重复创建。
 Skill 至少包含：
 1. 如何创建任务

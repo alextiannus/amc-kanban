@@ -2,7 +2,7 @@
 
 > **版本**: v2.0 · **适用**: OpenClaw / Claude / 任意支持 MCP 的 AI Agent
 
-本 Skill 描述如何通过 AMC Kanban MCP 服务，让 AI Agent 直接调用 PostFast 完整功能、Google Business 评论管理、Lark Drive 文件管理，**无需在 Agent 侧持有任何第三方密钥**（凭证由主理人配置在品牌设置中，MCP 服务端自动注入）。
+本 Skill 描述如何通过 AI Marketing Crew MCP 服务，让 AI Agent 直接调用 PostFast 完整功能、Google Business 评论管理、Lark Drive 文件管理，**无需在 Agent 侧持有任何第三方密钥**（凭证由主理人配置在品牌设置中，MCP 服务端自动注入）。
 
 ---
 

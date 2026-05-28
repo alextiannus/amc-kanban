@@ -32,13 +32,13 @@
 
 ---
 
-### 🎯 AMC Kanban的独特优势
+### 🎯 AI Marketing Crew的独特优势
 
 #### 优势1：Agent作为一等公民
 **市场现状**: 所有通用看板都把"人"作为主体，Agent是附加功能  
 **AMC的差异**: 
 ```
-传统看板：        AMC Kanban:
+传统看板：        AI Marketing Crew:
 👤 User          🤖 Agent (with API Key)
   ↓ assigns        ↓ receives & executes
 📋 Task          📋 Task
@@ -194,7 +194,7 @@ Phase 2加强：
 ┌────────────────────────────────────────┐
 │ 我的全局Dashboard                     │
 ├──────────────────┬──────────────────┐
-│ 🎯 AMC Kanban    │ 🐱 GitHub Issues│
+│ 🎯 AI Marketing Crew    │ 🐱 GitHub Issues│
 ├──────────────────┼──────────────────┤
 │ 5个pending       │ 3个review等待  │
 │ 2个高优先级      │ 1个bug critical │

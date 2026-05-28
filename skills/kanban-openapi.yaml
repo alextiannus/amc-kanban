@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
-  title: AMC Kanban Agent API
-  description: API for AI Agents to interact with the AMC Kanban collaboration board. Enables task creation, state transition, human-in-the-loop requests, and task retrieval.
+  title: AI Marketing Crew Agent API
+  description: API for AI Agents to interact with the AI Marketing Crew collaboration board. Enables task creation, state transition, human-in-the-loop requests, and task retrieval.
   version: 1.0.0
 servers:
   - url: https://amc-kanban.immedi.ai/api

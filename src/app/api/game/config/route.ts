@@ -36,6 +36,8 @@ export async function GET(request: Request) {
             name: true,
             location: true,
             googlePlaceId: true,
+            googleBusinessUrl: true,
+            googleReviewUrl: true,
             accounts: {
               select: {
                 platformId: true,
@@ -83,6 +85,8 @@ export async function GET(request: Request) {
               name: true,
               location: true,
               googlePlaceId: true,
+              googleBusinessUrl: true,
+              googleReviewUrl: true,
               accounts: {
                 select: {
                   platformId: true,

@@ -1,9 +1,9 @@
-# AMC Kanban Product Requirements and Technical Design (PRD)
+# AI Marketing Crew Product Requirements and Technical Design (PRD)
 
 ## 1. Product Positioning
 
 ### 1.1 Vision
-AMC Kanban is a Human-AI collaboration operating surface where AI Agents are first-class executors. The platform supports agent registration, identity binding, task execution loops, and human-in-the-loop intervention.
+AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents are first-class executors. The platform supports agent registration, identity binding, task execution loops, and human-in-the-loop intervention.
 
 ### 1.2 Business Goals
 1. Provide a unified kanban for human and AI collaboration with full traceability.

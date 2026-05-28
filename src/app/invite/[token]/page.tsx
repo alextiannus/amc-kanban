@@ -78,7 +78,7 @@ export default function InvitePage() {
         {/* 欢迎标题 */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2">
-            欢迎加入 AMC Kanban！
+            欢迎加入 AI Marketing Crew！
           </h1>
           <p className="text-slate-300 text-lg">您已成功收到邀请链接</p>
         </div>
@@ -153,7 +153,7 @@ export default function InvitePage() {
           <button
             onClick={() => {
               const text = `
-欢迎邀请链接 - AMC Kanban
+欢迎邀请链接 - AI Marketing Crew
 
 ${data.welcomeMessage}
 

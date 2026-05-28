@@ -5,6 +5,32 @@ import { getSession } from '@/lib/auth'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { cookies } from 'next/headers'
 
+function isLocalUrl(url: string) {
+  return /localhost|127\.0\.0\.1/i.test(url)
+}
+
+function normalizeBaseUrl(url: string) {
+  return url.replace(/\/$/, '')
+}
+
+function resolvePublicBaseUrl(request: Request) {
+  const requestUrl = new URL(request.url)
+  const requestOrigin = `${requestUrl.protocol}//${requestUrl.host}`
+  const configuredHost = process.env.NEXT_PUBLIC_KANBAN_HOST?.trim()
+
+  if (!configuredHost) return requestOrigin
+  if (process.env.NODE_ENV === 'production' && isLocalUrl(configuredHost)) return requestOrigin
+  return normalizeBaseUrl(configuredHost)
+}
+
+function resolveGoogleRedirectUri(request: Request) {
+  const configured = process.env.GOOGLE_REDIRECT_URI?.trim()
+  if (configured && !(process.env.NODE_ENV === 'production' && isLocalUrl(configured))) {
+    return configured
+  }
+  return `${resolvePublicBaseUrl(request)}/api/integrations/google/oauth/callback`
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const code = url.searchParams.get('code')
@@ -58,30 +84,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
     }
 
-    if (code.startsWith('mock_')) {
-      // Mock OAuth Flow
-      await prisma.brand.update({
-        where: { id: brandId },
-        data: {
-          googleRefreshToken: 'mock_refresh_token_' + Date.now(),
-          googleAccountId: 'mock_account_123',
-          googleLocationId: 'mock_loc_ziwei',
-          googleLocationName: '[滋味烤鱼] Google Maps',
-        },
-      })
-
-      // Redirect back with success flag
-      const redirectUrl = new URL('/board', url.origin)
-      redirectUrl.searchParams.set('google_success', 'true')
-      return NextResponse.redirect(redirectUrl)
-    }
-
     // Real OAuth Flow
     const clientId = process.env.GOOGLE_CLIENT_ID
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI
+    const redirectUri = resolveGoogleRedirectUri(request)
 
-    if (!clientId || !clientSecret || !redirectUri) {
+    if (!clientId || !clientSecret) {
       return NextResponse.json({ error: 'System OAuth environment parameters are not configured.' }, { status: 500 })
     }
 

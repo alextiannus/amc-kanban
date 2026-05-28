@@ -28,6 +28,8 @@ interface GameConfig {
     name: string
     location: string | null
     googlePlaceId: string | null
+    googleBusinessUrl?: string | null
+    googleReviewUrl?: string | null
     accounts: Array<{
       platformId: string
       profileUrl: string | null
@@ -655,6 +657,12 @@ export default function GameH5Page() {
     const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 
     if (platform === 'GOOGLE') {
+      const configuredReviewUrl = config?.brand?.googleReviewUrl
+      if (configuredReviewUrl) {
+        window.open(configuredReviewUrl, '_blank')
+        return
+      }
+
       const googleAccount = config?.brand?.accounts?.find(
         acc => acc.platformId.toLowerCase() === 'google' || acc.platformId.toLowerCase() === 'google_maps'
       )
@@ -665,11 +673,13 @@ export default function GameH5Page() {
         const isValidPlaceId = placeId && placeId !== 'postfast-managed' && placeId.startsWith('ChI')
         if (isValidPlaceId) {
           window.open(`https://search.google.com/local/writereview?placeid=${placeId}`, '_blank')
+        } else if (config?.brand?.googleBusinessUrl) {
+          window.open(config.brand.googleBusinessUrl, '_blank')
         } else if (config?.brand?.name) {
           const query = encodeURIComponent(config.brand.name + (config.brand.location ? ' ' + config.brand.location : ''))
           window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank')
         } else {
-          window.open('https://search.google.com/local/writereview?placeid=ChIJj61dQgK6j4AR4GeTYWZsKWw', '_blank') // Default demo place ID (Googleplex)
+          showToastMessage(lang === 'zh' ? '未配置 Google 商家信息，请联系门店管理员' : 'Google business config is missing, please contact the store admin')
         }
       }
     } else if (platform === 'XIAOHONGSHU') {

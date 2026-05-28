@@ -1,4 +1,4 @@
-# AMC Kanban vs 竞品功能对比分析
+# AI Marketing Crew vs 竞品功能对比分析
 
 ## 1. 功能矩阵对比
 
@@ -207,7 +207,7 @@ AMC v2目标位置: 从中间 → 向右上移动
         │
 2025年  │ AI编程工具爆发（Claude Code, Cursor等）
         │ 多Agent框架成熟（LangChain, CrewAI等）
-        │ **⭐ AMC Kanban黄金窗口开启**
+        │ **⭐ AI Marketing Crew黄金窗口开启**
         │
 2026年  │ AI Native工具成为标配
         │ 垂直领域Agent定制化需求上升
@@ -376,7 +376,7 @@ AMC v2目标位置: 从中间 → 向右上移动
 ├─ 社区beta测试
 └─ 根据反馈迭代
 
-发布: "AMC Kanban v1.5 - 企业就绪版"
+发布: "AI Marketing Crew v1.5 - 企业就绪版"
 定位: "AI Agent的看板操作系统"
 目标用户: 100-500个Beta测试者
 后续: 收集反馈 → 规划Phase 2
@@ -416,5 +416,5 @@ AMC v2目标位置: 从中间 → 向右上移动
 
 ---
 
-**总结**: AMC Kanban有机会成为"AI工程师的首选看板"，但窗口期只有12-18个月。关键是快速验证市场假设 + 建立Dify生态依赖。
+**总结**: AI Marketing Crew有机会成为"AI工程师的首选看板"，但窗口期只有12-18个月。关键是快速验证市场假设 + 建立Dify生态依赖。
 

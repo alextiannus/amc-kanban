@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * AMC Kanban — Integration Test Suite
+ * AI Marketing Crew — Integration Test Suite
  *
  * Tests both REST API endpoints and the MCP server.
  * Uses node:test (built-in, no dependencies needed).

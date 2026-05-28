@@ -1,10 +1,10 @@
-# AMC Kanban Skill
+# AI Marketing Crew Skill
 
-> 本 Skill 面向 AMC Kanban 的任务、品牌配置、Lark 云盘与社媒发布工作流。
+> 本 Skill 面向 AI Marketing Crew 的任务、品牌配置、Lark 云盘与社媒发布工作流。
 
 ## 目标
 
-当 Agent 需要把工作发到看板、配置品牌、上传素材到 Lark 云盘、或者把内容发布到 PostFast 时，必须优先使用 AMC Kanban 的 MCP 工具或 REST API，而不是在本地排队等待人工同步。
+当 Agent 需要把工作发到看板、配置品牌、上传素材到 Lark 云盘、或者把内容发布到 PostFast 时，必须优先使用 AI Marketing Crew 的 MCP 工具或 REST API，而不是在本地排队等待人工同步。
 
 ## 必做流程
 

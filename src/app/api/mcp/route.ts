@@ -1,5 +1,5 @@
 /**
- * AMC Kanban MCP endpoint — Streamable HTTP (Web Fetch API)
+ * AI Marketing Crew MCP endpoint — Streamable HTTP (Web Fetch API)
  *
  * Compatible with MCP SDK v1.x WebStandardStreamableHTTPServerTransport.
  * Works natively in Next.js App Router (no Node.js req/res needed).

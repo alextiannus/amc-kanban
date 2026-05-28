@@ -1,9 +1,9 @@
 ---
-title: AMC Kanban Agent Skill
+title: AI Marketing Crew Agent Skill
 category: operations
 version: 1.1.0
 description: >
-  Allows an OpenClaw AI Agent to fully manage the AMC Kanban board:
+  Allows an OpenClaw AI Agent to fully manage the AI Marketing Crew board:
   initialize brand profiles via MCP interview, configure integration credentials,
   register and update social media accounts (including login credentials),
   submit action items for brand owner review, report monitoring snapshots,
@@ -11,11 +11,11 @@ description: >
   This is the primary interface between the AI agent and the brand owner.
 ---
 
-# AMC Kanban — Agent Skill
+# AI Marketing Crew — Agent Skill
 
 ## Overview
 
-The AMC Kanban is a **brand owner monitoring dashboard**. The AI Agent does the work; the brand owner reviews and approves via the Kanban. This skill enables the agent to:
+The AI Marketing Crew is a **brand owner monitoring dashboard**. The AI Agent does the work; the brand owner reviews and approves via the Kanban. This skill enables the agent to:
 
 1. **Configure brand profile** — fill in brand info via interview (markdown description)
 2. **Configure integrations** — set PostFast, Google Business, Lark credentials per brand

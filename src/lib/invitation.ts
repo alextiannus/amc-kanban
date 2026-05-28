@@ -51,7 +51,7 @@ export function generateInvitationLink(
   username: string = email.split('@')[0],
   baseUrl: string = process.env.NEXT_PUBLIC_KANBAN_HOST || 'http://localhost:3000'
 ): { link: string; token: string } {
-  const welcomeMessage = `欢迎 ${username}！\n\n您已被邀请加入 AMC Kanban 看板系统。\n请使用以下凭证登录：\n\n用户名/邮箱: ${email}\n密码: ${password}`
+  const welcomeMessage = `欢迎 ${username}！\n\n您已被邀请加入 AI Marketing Crew 看板系统。\n请使用以下凭证登录：\n\n用户名/邮箱: ${email}\n密码: ${password}`
   
   const data: InvitationData = {
     email,

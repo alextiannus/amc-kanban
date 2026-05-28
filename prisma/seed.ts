@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('🌱 Seeding AMC Kanban database...')
+  console.log('🌱 Seeding AI Marketing Crew database...')
 
   // ── Clean slate ────────────────────────────────────────────────────────────
   await prisma.conversionEvent.deleteMany()

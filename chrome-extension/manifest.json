@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "AMC Kanban Assistant",
+  "name": "AI Marketing Crew Assistant",
   "version": "1.0.0",
-  "description": "Chrome Extension Bridge for AMC Kanban to automate domestic local-life review platforms.",
+  "description": "Chrome Extension Bridge for AI Marketing Crew to automate domestic local-life review platforms.",
   "permissions": [
     "tabs",
     "scripting",

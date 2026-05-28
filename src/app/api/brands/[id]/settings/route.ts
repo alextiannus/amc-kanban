@@ -50,6 +50,8 @@ export async function GET(_req: Request, { params }: Params) {
     googleRefreshTokenConfigured: !!brand.googleRefreshToken,
     googleLocationName: brand.googleLocationName,
     googleLocationId: brand.googleLocationId,
+    googleBusinessUrl: brand.googleBusinessUrl,
+    googleReviewUrl: brand.googleReviewUrl,
     googlePreferOAuth: brand.googlePreferOAuth,
     googleConfigured: !!(brand.googleRefreshToken || (brand.googlePlaceId && brand.googleApiKey)),
 
@@ -106,6 +108,8 @@ export async function PATCH(request: Request, { params }: Params) {
       // Google Business
       ...(body.googlePlaceId !== undefined && { googlePlaceId: opt(body.googlePlaceId) }),
       ...(body.googleApiKey !== undefined && { googleApiKey: opt(body.googleApiKey) }),
+      ...(body.googleBusinessUrl !== undefined && { googleBusinessUrl: opt(body.googleBusinessUrl) }),
+      ...(body.googleReviewUrl !== undefined && { googleReviewUrl: opt(body.googleReviewUrl) }),
       ...(body.googlePreferOAuth !== undefined && { googlePreferOAuth: body.googlePreferOAuth }),
       // Lark
       ...(body.larkAppId !== undefined && { larkAppId: opt(body.larkAppId) }),

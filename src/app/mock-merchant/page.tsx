@@ -73,7 +73,7 @@ export default function MockMerchantPage() {
         console.error(e)
         setAlertInfo({
           type: 'error',
-          message: '未检测到登录会话。请先在另一标签页中登录 AMC Kanban，然后刷新此页面。',
+          message: '未检测到登录会话。请先在另一标签页中登录 AI Marketing Crew，然后刷新此页面。',
         })
       })
       .finally(() => {
@@ -344,7 +344,7 @@ export default function MockMerchantPage() {
                 <div className="flex gap-2">
                   <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-300 font-extrabold flex items-center justify-center shrink-0">2</span>
                   <p>
-                    打开您的 <a href="/board" target="_blank" className="text-indigo-400 hover:underline font-bold">AMC 品牌主看板</a> 并选择同一个测试品牌，这会触发插件与之建立 SSE 连接。
+                    打开您的 <a href="/board" target="_blank" className="text-indigo-400 hover:underline font-bold">AI Marketing Crew 品牌主看板</a> 并选择同一个测试品牌，这会触发插件与之建立 SSE 连接。
                   </p>
                 </div>
                 <div className="flex gap-2">

@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     
     const authenticatedAgent = await getAgentFromApiKey(apiKey)
     if (!authenticatedAgent) {
-      return NextResponse.json({ error: 'Invalid API key. Please use a valid key generated from the AMC Kanban dashboard.' }, { status: 401 })
+      return NextResponse.json({ error: 'Invalid API key. Please use a valid key generated from the AI Marketing Crew dashboard.' }, { status: 401 })
     }
 
     const body = await request.json()

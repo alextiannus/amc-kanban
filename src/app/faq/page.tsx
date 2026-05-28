@@ -164,7 +164,7 @@ export default function PitchDeckPage() {
               <Bot className="w-5.5 h-5.5 text-white" />
             </div>
             <div>
-              <span className="font-black text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-indigo-300">AMC KANBAN</span>
+              <span className="font-black text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-indigo-300">AI MARKETING CREW</span>
               <span className="ml-2.5 px-2 py-0.5 text-[8px] font-black tracking-widest text-indigo-400 bg-indigo-500/10 rounded-full border border-indigo-500/20 uppercase">LOCAL BUSINESS</span>
             </div>
           </div>
@@ -697,7 +697,7 @@ export default function PitchDeckPage() {
                             <thead>
                               <tr className="border-b border-slate-850 text-slate-400 uppercase tracking-widest text-[9px]">
                                 <th className="py-4 px-5">比较维度</th>
-                                <th className="py-4 px-5 text-indigo-400 bg-indigo-950/20 font-black border-x border-slate-900/50 rounded-t-xl">AMC Kanban (智能版)</th>
+                                <th className="py-4 px-5 text-indigo-400 bg-indigo-950/20 font-black border-x border-slate-900/50 rounded-t-xl">AI Marketing Crew (智能版)</th>
                                 <th className="py-4 px-5">传统自动按键软件 (RPA)</th>
                                 <th className="py-4 px-5">本地代运营 (Agency)</th>
                                 <th className="py-4 px-5">传统任务软件 (Jira/表格)</th>

@@ -70,7 +70,7 @@ const replacements: [string | RegExp, string][] = [
   ['海外店面手机终端模拟展示', '门店手机终端模拟展示'],
 
   // Slides 4 Matrix
-  ['AMC Kanban (出海定制版)', 'AMC Kanban (智能版)'],
+  ['AI Marketing Crew (出海定制版)', 'AI Marketing Crew (智能版)'],
   ['跨国网络与防封号安全性', '本地防风控与 IP 安全性'],
   ['⭐⭐⭐⭐⭐ (利用海外门店本地 IP 发布)', '⭐⭐⭐⭐⭐ (利用门店本地真实 IP 安全发布)'],
   ['⭐ (翻墙代理登录极易被系统封号)', '⭐ (异地代理登录极易被系统限流或风控)'],
@@ -205,9 +205,9 @@ console.log('Reading sales_selling_points.md...')
 let pointsContent = readFileSync(pointsPath, 'utf8')
 
 // Completely rewrite pointsContent to match user request
-const newPoints = `# AMC Kanban — 本地门店自媒体运营与品牌推广人机协同系统白皮书 (主理人通俗版)
+const newPoints = `# AI Marketing Crew — 本地门店自媒体运营与品牌推广人机协同系统白皮书 (主理人通俗版)
 
-AMC Kanban 定位于 **“本地自媒体与口碑智能人机协同操作系统”**。我们不跟老板和主理人讲复杂的 AI 算法，而是用最直观的方式解决本地餐饮与零售店做品牌推广和自媒体运营时的核心痛点：**“运营精力有限、招聘运营专员昂贵、账号密码托付给外包不安全、AI 自动发帖乱说话”**。
+AI Marketing Crew 定位于 **“本地自媒体与口碑智能人机协同操作系统”**。我们不跟老板和主理人讲复杂的 AI 算法，而是用最直观的方式解决本地餐饮与零售店做品牌推广和自媒体运营时的核心痛点：**“运营精力有限、招聘运营专员昂贵、账号密码托付给外包不安全、AI 自动发帖乱说话”**。
 
 通过 **AI 24小时不知疲倦地工作** 配合 **品牌主理人的专业把关**，AMC 为中小商家提供**成本低、完全自动化、评价公平且功能强大**的特色解决方案，以 AI 保证服务质量，降低运营成本，彻底解决中小商家缺乏品牌和自媒体运营的痛点。
 

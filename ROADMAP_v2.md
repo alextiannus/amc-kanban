@@ -1,8 +1,8 @@
-# AMC Kanban 产品路线图 v2.0
+# AI Marketing Crew 产品路线图 v2.0
 ## Human-AI 协同任务操作系统进化方案
 
 **更新时间**: 2026年5月  
-**品牌显示名**: AMC Dashboard（原 AMC Command Center）  
+**品牌显示名**: AI Marketing Crew Dashboard（原 AMC Command Center）  
 **策略指导**: Dify-First 优先级 - 所有工作流/知识库管理由Dify承载，amc-kanban专注看板UI、权限、审计和Agent生命周期  
 **对标项目**: Vibe Kanban (AI agents)、EDICT (多Agent协调)、Plane (功能完整性)、OpenProject (成熟度)
 
@@ -38,7 +38,7 @@
 
 ## 执行摘要
 
-AMC Kanban 在**Human-AI协同**这一独特赛道上具有竞争优势。本路线图通过三个阶段的演进，将其从"任务看板+权限管理"升级至"完整的Multi-Agent协作大脑"——对标EDICT的制度化架构和Plane的功能完整性，同时保持Dify的工作流处理中心地位。
+AI Marketing Crew 在**Human-AI协同**这一独特赛道上具有竞争优势。本路线图通过三个阶段的演进，将其从"任务看板+权限管理"升级至"完整的Multi-Agent协作大脑"——对标EDICT的制度化架构和Plane的功能完整性，同时保持Dify的工作流处理中心地位。
 
 ### 核心竞争力
 - ✅ **Agent作为一等公民** — 不同于通用看板，每个Agent有独立API Key、档案、权限

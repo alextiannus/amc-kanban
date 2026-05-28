@@ -58,7 +58,7 @@ export async function GET(request: Request) {
         action: 'EXTENSION_REGISTER',
         resourceId: brandId,
         resourceType: 'ExtensionBridge',
-        reason: '浏览器插件与 AMC 看板后台成功建立 SSE 长连接。',
+        reason: '浏览器插件与 AI Marketing Crew 看板后台成功建立 SSE 长连接。',
       }).catch(console.error)
 
       // Keep connection alive with 30s heartbeats
@@ -78,7 +78,7 @@ export async function GET(request: Request) {
           action: 'EXTENSION_UNREGISTER',
           resourceId: brandId,
           resourceType: 'ExtensionBridge',
-          reason: '浏览器插件已断开与 AMC 看板后台的连接。',
+          reason: '浏览器插件已断开与 AI Marketing Crew 看板后台的连接。',
         }).catch(console.error)
         try {
           controller.close()

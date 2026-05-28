@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AMC AI Marketing Content",
+  title: "AI Marketing Crew",
   description: "AI Marketing Content · 智能内容营销协作平台",
   icons: {
     icon: [

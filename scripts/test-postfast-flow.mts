@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * AMC Kanban — PostFast Integration Test Suite
+ * AI Marketing Crew — PostFast Integration Test Suite
  * 
  * Sets up a mock PostFast HTTP server locally, boots Next.js dev server,
  * configures a test brand, and executes test requests across REST and MCP layers.
