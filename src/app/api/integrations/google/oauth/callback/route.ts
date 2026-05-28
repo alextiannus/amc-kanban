@@ -31,6 +31,14 @@ function resolveGoogleRedirectUri(request: Request) {
   return `${resolvePublicBaseUrl(request)}/api/integrations/google/oauth/callback`
 }
 
+function resolveGoogleRedirectUriFromBrand(request: Request, brandRedirectUri?: string | null) {
+  const configured = brandRedirectUri?.trim()
+  if (configured && !(process.env.NODE_ENV === 'production' && isLocalUrl(configured))) {
+    return configured
+  }
+  return resolveGoogleRedirectUri(request)
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const code = url.searchParams.get('code')
@@ -84,13 +92,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
     }
 
-    // Real OAuth Flow
-    const clientId = process.env.GOOGLE_CLIENT_ID
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-    const redirectUri = resolveGoogleRedirectUri(request)
+    // Real OAuth Flow (brand-level OAuth credentials)
+    const clientId = brand.googleClientId?.trim()
+    const clientSecret = brand.googleClientSecret?.trim()
+    const redirectUri = resolveGoogleRedirectUriFromBrand(request, brand.googleRedirectUri)
 
     if (!clientId || !clientSecret) {
-      return NextResponse.json({ error: 'System OAuth environment parameters are not configured.' }, { status: 500 })
+      return NextResponse.json({ error: 'Brand OAuth parameters are not configured.' }, { status: 400 })
     }
 
     // Exchange authorization code for tokens

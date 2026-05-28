@@ -31,6 +31,14 @@ function resolveGoogleRedirectUri(request: Request) {
   return `${resolvePublicBaseUrl(request)}/api/integrations/google/oauth/callback`
 }
 
+function resolveGoogleRedirectUriFromBrand(request: Request, brandRedirectUri?: string | null) {
+  const configured = brandRedirectUri?.trim()
+  if (configured && !(process.env.NODE_ENV === 'production' && isLocalUrl(configured))) {
+    return configured
+  }
+  return resolveGoogleRedirectUri(request)
+}
+
 export async function GET(request: Request) {
   const session = await getSession()
   if (!session?.user) {
@@ -69,15 +77,14 @@ export async function GET(request: Request) {
     maxAge: 300, // 5 minutes
   })
 
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-  const redirectUri = resolveGoogleRedirectUri(request)
+  const clientId = brand.googleClientId?.trim()
+  const clientSecret = brand.googleClientSecret?.trim()
+  const redirectUri = resolveGoogleRedirectUriFromBrand(request, brand.googleRedirectUri)
 
-  // Production and development both require real Google OAuth credentials.
   if (!clientId || !clientSecret) {
     return NextResponse.json(
-      { error: 'Google OAuth is not configured: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are required.' },
-      { status: 500 }
+      { error: 'Google OAuth is not configured for this brand: googleClientId / googleClientSecret are required in brand settings.' },
+      { status: 400 }
     )
   }
 

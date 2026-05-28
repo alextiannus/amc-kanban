@@ -16,6 +16,9 @@ const POSTFAST_FIELDS: IntegrationField[] = [
 ]
 
 const GOOGLE_FIELDS: IntegrationField[] = [
+  { key: 'googleClientId', label: 'Google OAuth Client ID', placeholder: 'xxxxxxxx.apps.googleusercontent.com', type: 'text', helpText: '每个商家可独立配置自己的 Google OAuth 客户端 ID' },
+  { key: 'googleClientSecret', label: 'Google OAuth Client Secret', placeholder: '••••••••', type: 'password', helpText: '每个商家可独立配置自己的 Google OAuth 客户端密钥' },
+  { key: 'googleRedirectUri', label: 'Google OAuth Redirect URI', placeholder: 'https://your-domain.com/api/integrations/google/oauth/callback', type: 'url', helpText: '需与 Google Cloud Console 中的授权回调地址完全一致' },
   { key: 'googlePlaceId', label: 'Google Place ID', placeholder: 'ChIJ...', type: 'text', helpText: '在 Google Maps 中找到您的 Place ID' },
   { key: 'googleApiKey', label: 'Google API Key', placeholder: '••••••••', type: 'password', helpText: '启用 Places API + My Business API' },
   { key: 'googleBusinessUrl', label: 'Google 商家主页 URL', placeholder: 'https://maps.google.com/...', type: 'url', helpText: '扫码失败时回退到商家主页（建议配置）' },
@@ -51,6 +54,9 @@ function buildInitialForm(initialSettings?: Record<string, any>): Record<string,
       postfastApiKey: '',
       googlePlaceId: '',
       googleApiKey: '',
+      googleClientId: '',
+      googleClientSecret: '',
+      googleRedirectUri: '',
       googleBusinessUrl: '',
       googleReviewUrl: '',
       larkAppId: '',
@@ -65,6 +71,9 @@ function buildInitialForm(initialSettings?: Record<string, any>): Record<string,
     postfastApiKey: asText(initialSettings.postfastApiKey),
     googlePlaceId: asText(initialSettings.googlePlaceId),
     googleApiKey: asText(initialSettings.googleApiKey),
+    googleClientId: asText(initialSettings.googleClientId),
+    googleClientSecret: asText(initialSettings.googleClientSecret),
+    googleRedirectUri: asText(initialSettings.googleRedirectUri),
     googleBusinessUrl: asText(initialSettings.googleBusinessUrl),
     googleReviewUrl: asText(initialSettings.googleReviewUrl),
     larkAppId: asText(initialSettings.larkAppId),
@@ -238,6 +247,10 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
 
           {/* Google Business */}
           <Section label="Google Business（评论监控）" badge={<StatusBadge ok={status.google} />}>
+            <div className="space-y-3">
+              {GOOGLE_FIELDS.filter(f => ['googleClientId', 'googleClientSecret', 'googleRedirectUri'].includes(f.key)).map(f => <Field key={f.key} f={f} />)}
+            </div>
+
             {initialSettings?.googleRefreshTokenConfigured ? (
               <div className="space-y-3">
                 <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-800/30 flex items-center justify-between">
@@ -290,7 +303,7 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
                   <span className="transition-transform group-open:rotate-180 text-[7px] text-slate-350">▼</span>
                 </summary>
                 <div className="mt-3 space-y-3">
-                  {GOOGLE_FIELDS.map(f => <Field key={f.key} f={f} />)}
+                  {GOOGLE_FIELDS.filter(f => !['googleClientId', 'googleClientSecret', 'googleRedirectUri'].includes(f.key)).map(f => <Field key={f.key} f={f} />)}
                 </div>
               </details>
             </div>

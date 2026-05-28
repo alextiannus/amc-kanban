@@ -47,6 +47,9 @@ export async function GET(_req: Request, { params }: Params) {
     // Google Business
     googlePlaceId: brand.googlePlaceId,
     googleApiKey: maskKey(brand.googleApiKey),
+    googleClientId: brand.googleClientId,
+    googleClientSecret: maskKey(brand.googleClientSecret),
+    googleRedirectUri: brand.googleRedirectUri,
     googleRefreshTokenConfigured: !!brand.googleRefreshToken,
     googleLocationName: brand.googleLocationName,
     googleLocationId: brand.googleLocationId,
@@ -108,6 +111,9 @@ export async function PATCH(request: Request, { params }: Params) {
       // Google Business
       ...(body.googlePlaceId !== undefined && { googlePlaceId: opt(body.googlePlaceId) }),
       ...(body.googleApiKey !== undefined && { googleApiKey: opt(body.googleApiKey) }),
+      ...(body.googleClientId !== undefined && { googleClientId: opt(body.googleClientId) }),
+      ...(body.googleClientSecret !== undefined && { googleClientSecret: opt(body.googleClientSecret) }),
+      ...(body.googleRedirectUri !== undefined && { googleRedirectUri: opt(body.googleRedirectUri) }),
       ...(body.googleBusinessUrl !== undefined && { googleBusinessUrl: opt(body.googleBusinessUrl) }),
       ...(body.googleReviewUrl !== undefined && { googleReviewUrl: opt(body.googleReviewUrl) }),
       ...(body.googlePreferOAuth !== undefined && { googlePreferOAuth: body.googlePreferOAuth }),

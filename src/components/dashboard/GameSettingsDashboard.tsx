@@ -132,6 +132,8 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   const [posterDesc, setPosterDesc] = useState('Leave a review or share store photos to get free drinks and rewards!')
   const [stickerTheme, setStickerTheme] = useState<'black' | 'blue' | 'green' | 'purple' | 'gold'>('black')
   const [googlePlaceId, setGooglePlaceId] = useState('')
+  const [googleReviewUrl, setGoogleReviewUrl] = useState('')
+  const [googleBusinessUrl, setGoogleBusinessUrl] = useState('')
 
   // Wheel preview state
   const [wheelRotation, setWheelRotation] = useState(0)
@@ -158,6 +160,8 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       if (data.posterDesc) setPosterDesc(data.posterDesc)
       if (data.posterTheme) setStickerTheme(data.posterTheme)
       if (data.brand?.googlePlaceId) setGooglePlaceId(data.brand.googlePlaceId)
+      if (data.brand?.googleReviewUrl) setGoogleReviewUrl(data.brand.googleReviewUrl)
+      if (data.brand?.googleBusinessUrl) setGoogleBusinessUrl(data.brand.googleBusinessUrl)
 
       // Generate QR Code
       const gameUrl = `${window.location.origin}/game/${brandId}`
@@ -200,17 +204,19 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
     }
 
     try {
-      // 1. Save Brand Settings (Google Place ID)
+      // 1. Save Brand Settings (Google Maps review entry)
       const brandSettingsRes = await fetch(`/api/brands/${brandId}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          googlePlaceId: googlePlaceId.trim()
+          googlePlaceId: googlePlaceId.trim(),
+          googleReviewUrl: googleReviewUrl.trim(),
+          googleBusinessUrl: googleBusinessUrl.trim(),
         }),
       })
       if (!brandSettingsRes.ok) {
         const data = await brandSettingsRes.json()
-        throw new Error(data.error || 'Failed to save Google Place ID')
+        throw new Error(data.error || 'Failed to save Google Maps settings')
       }
 
       // 2. Save Game Config
@@ -568,7 +574,21 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                 </div>
 
                 {config.taskGoogleMapsEnabled && (
-                  <div className="mt-4 p-4 rounded-2xl border border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="mt-4 p-4 rounded-2xl border border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50 space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Review URL (优先直达评价页)</label>
+                      <input
+                        type="url"
+                        placeholder="https://search.google.com/local/writereview?placeid=..."
+                        value={googleReviewUrl}
+                        onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
+                      />
+                      <p className="text-[9.5px] text-slate-400 dark:text-slate-500 leading-normal">
+                        顾客点击“Google Maps 直达”时会优先打开这里配置的链接。可填写 Google 写评链接；如你拿到能直接拉起手机 Google Maps App 的专属链接，也可以直接填这里。
+                      </p>
+                    </div>
+
                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Place ID (谷歌商家 ID)</label>
                     <div className="flex gap-2">
                       <input
@@ -588,8 +608,22 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                       </a>
                     </div>
                     <p className="text-[9.5px] text-slate-400 dark:text-slate-500 leading-normal">
-                      用于在顾客发表评价时，一键跳转到您店铺的 Google Maps 评价页面。建议先点击“查找 ID”获取您店铺的标准 ID（如 <code>ChI...</code> 格式），也可填入 <code>fid/cid</code> 形式的完整链接。
+                      当上方未填写 Review URL 时，系统会用 Place ID 自动生成评价页链接。建议先点击“查找 ID”获取您店铺的标准 ID（如 <code>ChI...</code> 格式）。
                     </p>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Business URL (商家主页兜底链接)</label>
+                      <input
+                        type="url"
+                        placeholder="https://maps.google.com/..."
+                        value={googleBusinessUrl}
+                        onChange={(e) => setGoogleBusinessUrl(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
+                      />
+                      <p className="text-[9.5px] text-slate-400 dark:text-slate-500 leading-normal">
+                        当 Review URL 和 Place ID 都不可用时，活动页会回退到这个商家主页链接，避免用户点击后无响应。
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>

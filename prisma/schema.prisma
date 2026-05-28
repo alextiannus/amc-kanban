@@ -151,6 +151,9 @@ model Brand {
   googleAccountId        String?
   googleLocationId       String?
   googleLocationName     String?
+  googleClientId         String?
+  googleClientSecret     String?
+  googleRedirectUri      String?
   googleBusinessUrl      String?
   googleReviewUrl        String?
   googlePreferOAuth      Boolean  @default(true)
