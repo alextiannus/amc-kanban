@@ -1,11 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import {
-  appendMessage,
-  getOrCreateConversation,
-  listMessages,
-} from '@/lib/chat/conversationStore'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,6 +72,60 @@ async function resolveWebhookUrl(input: { brandId?: string; webhookUrl?: string 
   return null
 }
 
+async function resolveConversation(input: {
+  conversationId?: string
+  userId: string
+  brandId?: string
+  taskId?: string
+}) {
+  if (input.conversationId) {
+    const existing = await prisma.chatConversation.findFirst({
+      where: { id: input.conversationId, userId: input.userId },
+    })
+    if (existing) {
+      const updateData: Record<string, string | null> = {}
+      if (input.brandId) updateData.brandId = input.brandId
+      if (input.taskId) updateData.taskId = input.taskId
+
+      if (Object.keys(updateData).length > 0) {
+        return prisma.chatConversation.update({
+          where: { id: existing.id },
+          data: updateData,
+        })
+      }
+      return existing
+    }
+  }
+
+  return prisma.chatConversation.create({
+    data: {
+      userId: input.userId,
+      brandId: input.brandId ?? null,
+      taskId: input.taskId ?? null,
+    },
+  })
+}
+
+async function getConversationMessages(conversationId: string) {
+  const items = await prisma.chatMessage.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      role: true,
+      content: true,
+      createdAt: true,
+    },
+  })
+
+  return items.map((item) => ({
+    id: item.id,
+    role: item.role,
+    content: item.content,
+    createdAt: item.createdAt,
+  }))
+}
+
 export async function POST(request: Request) {
   const session = await getSession()
   if (!session?.user) {
@@ -99,19 +148,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Openclaw webhook URL is not configured' }, { status: 400 })
   }
 
-  const conversation = getOrCreateConversation({
+  const conversation = await resolveConversation({
     conversationId,
     brandId,
     taskId,
     userId: session.user.id,
   })
 
-  appendMessage(conversation.id, {
-    role: 'user',
-    content: message,
-    brandId,
-    taskId,
-    userId: session.user.id,
+  await prisma.chatMessage.create({
+    data: {
+      conversationId: conversation.id,
+      role: 'user',
+      content: message,
+      metadata: {
+        brandId: brandId ?? null,
+        taskId: taskId ?? null,
+        userId: session.user.id,
+      },
+    },
   })
 
   const outboundPayload = {
@@ -175,19 +229,27 @@ export async function POST(request: Request) {
 
   const assistantReply = pickAssistantText(webhookBody) || '收到消息，我正在处理中。'
 
-  appendMessage(conversation.id, {
-    role: 'assistant',
-    content: assistantReply,
-    brandId,
-    taskId,
-    userId: session.user.id,
+  await prisma.chatMessage.create({
+    data: {
+      conversationId: conversation.id,
+      role: 'assistant',
+      content: assistantReply,
+      metadata: {
+        brandId: brandId ?? null,
+        taskId: taskId ?? null,
+        userId: session.user.id,
+        webhookStatus,
+      },
+    },
   })
+
+  const messages = await getConversationMessages(conversation.id)
 
   return NextResponse.json({
     ok: true,
     conversationId: conversation.id,
     reply: assistantReply,
     webhookStatus,
-    messages: listMessages(conversation.id),
+    messages,
   })
 }

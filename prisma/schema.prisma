@@ -38,6 +38,7 @@ model User {
   brandMemberships BrandAgent[]      @relation("BrandAgents")
   createdSubscriptions BrandSubscription[]
   comments         Comment[]
+  chatConversations ChatConversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -69,9 +70,40 @@ model WorkUnit {
   
   // Comments thread
   comments       Comment[]
+  chatConversations ChatConversation[]
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+model ChatConversation {
+  id        String    @id @default(cuid())
+  brandId   String?
+  brand     Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  taskId    String?
+  task      WorkUnit? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    String    @default("active")
+  messages  ChatMessage[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, updatedAt])
+  @@index([brandId])
+  @@index([taskId])
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String
+  content        String
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+
+  @@index([conversationId, createdAt])
 }
 
 model AuditLog {
@@ -179,6 +211,7 @@ model Brand {
   actionItems ActionItem[]
   conversions ConversionEvent[]
   brandAgents BrandAgent[]
+  chatConversations ChatConversation[]
   subscriptions BrandSubscription[]
   gameConfig  GameConfig?
   gameSessions GameSession[]

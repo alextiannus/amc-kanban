@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { getConversation, listMessages } from '@/lib/chat/conversationStore'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +14,25 @@ export async function GET(
   }
 
   const { conversationId } = await params
-  const conversation = getConversation(conversationId)
+  const conversation = await prisma.chatConversation.findUnique({
+    where: { id: conversationId },
+    select: {
+      id: true,
+      brandId: true,
+      taskId: true,
+      userId: true,
+      updatedAt: true,
+      messages: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          role: true,
+          content: true,
+          createdAt: true,
+        },
+      },
+    },
+  })
 
   if (!conversation) {
     return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
@@ -29,7 +47,7 @@ export async function GET(
     conversationId,
     brandId: conversation.brandId,
     taskId: conversation.taskId,
-    messages: listMessages(conversationId),
+    messages: conversation.messages,
     updatedAt: conversation.updatedAt,
   })
 }
