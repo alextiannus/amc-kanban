@@ -79,6 +79,8 @@ export async function PATCH(
     const workflow = formData.get('workflow') as string | null
     const insights = formData.get('insights') as string | null
     const themeColor = formData.get('themeColor') as string | null
+    const chatLink = formData.get('chatLink') as string | null
+    const agentProvider = formData.get('agentProvider') as string | null
     
     const updateData: any = {}
     if (nickname !== null) updateData.nickname = nickname
@@ -86,6 +88,14 @@ export async function PATCH(
     if (workflow !== null) updateData.workflow = workflow
     if (insights !== null) updateData.insights = insights
     if (themeColor !== null) updateData.themeColor = themeColor
+    if (chatLink !== null) updateData.chatLink = chatLink.trim() || null
+    if (agentProvider !== null) {
+      const normalizedProvider = agentProvider.trim().toUpperCase()
+      if (!['OPENCLAW', 'ACKCLAW'].includes(normalizedProvider)) {
+        return NextResponse.json({ error: 'Invalid agentProvider' }, { status: 400 })
+      }
+      updateData.agentProvider = normalizedProvider
+    }
 
     const file = formData.get('avatar') as File | null
     let avatarUpdated = false

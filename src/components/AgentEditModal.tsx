@@ -6,6 +6,8 @@ export default function AgentEditModal({ agent, onClose, onUpdate }: { agent: an
   const [introduction, setIntroduction] = useState(agent.introduction || '')
   const [workflow, setWorkflow] = useState(agent.workflow || '')
   const [insights, setInsights] = useState(agent.insights || '')
+  const [chatLink, setChatLink] = useState(agent.chatLink || '')
+  const [agentProvider, setAgentProvider] = useState(agent.agentProvider || 'OPENCLAW')
   const [themeColor, setThemeColor] = useState(agent.themeColor || '#10b981')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(agent.avatar || null)
@@ -34,6 +36,8 @@ export default function AgentEditModal({ agent, onClose, onUpdate }: { agent: an
     formData.append('introduction', introduction)
     formData.append('workflow', workflow)
     formData.append('insights', insights)
+    formData.append('chatLink', chatLink)
+    formData.append('agentProvider', agentProvider)
     formData.append('themeColor', themeColor)
     
     if (avatarFile) {
@@ -174,6 +178,29 @@ export default function AgentEditModal({ agent, onClose, onUpdate }: { agent: an
                 className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 placeholder="例如：负责抓取和分析市场数据"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1.5">Chatbot 直聊链接 (chatLink)</label>
+              <input
+                type="url"
+                value={chatLink}
+                onChange={(e) => setChatLink(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                placeholder="https://your-openclaw-or-ackclaw-chat-url"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1.5">Chatbot Provider</label>
+              <select
+                value={agentProvider}
+                onChange={(e) => setAgentProvider(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              >
+                <option value="OPENCLAW">Openclaw</option>
+                <option value="ACKCLAW">Ackclaw</option>
+              </select>
             </div>
 
             <div>

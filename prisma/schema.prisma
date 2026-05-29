@@ -19,6 +19,7 @@ model User {
   insights     String?
   driveFolder  String?
   chatLink     String?
+  agentProvider AgentProvider @default(OPENCLAW)
   introduction String?
   workflow     String?
   themeColor   String?
@@ -40,6 +41,11 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum AgentProvider {
+  OPENCLAW
+  ACKCLAW
 }
 
 model WorkUnit {

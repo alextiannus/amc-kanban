@@ -70,6 +70,8 @@ export async function GET() {
         id: true,
         nickname: true,
         email: true,
+        chatLink: true,
+        agentProvider: true,
         insights: true,
         introduction: true,
         workflow: true,

@@ -38,8 +38,14 @@ export async function POST(request: Request) {
       avatar,
       insights,
       chatLink,
+      agentProvider,
       driveFolder,
     } = body
+
+    const normalizedProvider =
+      typeof agentProvider === 'string' && ['OPENCLAW', 'ACKCLAW'].includes(agentProvider)
+        ? agentProvider
+        : 'OPENCLAW'
 
     if (!agentId || typeof agentId !== 'string') {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400 })
@@ -81,6 +87,7 @@ export async function POST(request: Request) {
         avatar: typeof avatar === 'string' ? avatar : null,
         insights: typeof insights === 'string' ? insights : null,
         chatLink: typeof chatLink === 'string' ? chatLink : null,
+        agentProvider: normalizedProvider,
         driveFolder: typeof driveFolder === 'string' ? driveFolder : null,
         apiKey: placeholderApiKey,
       },

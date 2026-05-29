@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bot, Search, Trash2 } from 'lucide-react'
+import { Bot, MessageCircle, Search, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AgentEditModal from './AgentEditModal'
@@ -65,6 +65,45 @@ export default function AgentSequenceView({
     } catch {
       alert('删除时发生网络错误')
     }
+  }
+
+  const toSafeHttpUrl = (raw?: string | null) => {
+    if (!raw) return null
+    try {
+      const url = new URL(raw)
+      return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null
+    } catch {
+      return null
+    }
+  }
+
+  const buildAgentChatLink = (agent: any) => {
+    const explicitLink = toSafeHttpUrl(agent.chatLink)
+    if (explicitLink) return explicitLink
+
+    const emailLocal = typeof agent.email === 'string' ? agent.email.split('@')[0] : ''
+    const agentId = encodeURIComponent(emailLocal)
+    const agentEmail = encodeURIComponent(agent.email || '')
+    const provider = typeof agent.agentProvider === 'string' ? agent.agentProvider.toUpperCase() : 'OPENCLAW'
+    const isAckClaw = provider === 'ACKCLAW'
+
+    const openTemplate = process.env.NEXT_PUBLIC_OPENCLAW_CHAT_URL_TEMPLATE
+    const ackTemplate = process.env.NEXT_PUBLIC_ACKCLAW_CHAT_URL_TEMPLATE
+    const selectedTemplate = (isAckClaw ? ackTemplate : openTemplate) || openTemplate || ackTemplate
+    if (!selectedTemplate) return null
+
+    const derived = selectedTemplate
+      .replaceAll('{agentId}', agentId)
+      .replaceAll('{agentEmail}', agentEmail)
+
+    return toSafeHttpUrl(derived)
+  }
+
+  const openAgentChat = (e: React.MouseEvent, chatLink?: string | null) => {
+    e.stopPropagation()
+    const safeUrl = toSafeHttpUrl(chatLink)
+    if (!safeUrl) return
+    window.open(safeUrl, '_blank', 'noopener,noreferrer')
   }
 
   const filteredAgents = agents.filter(agent => {
@@ -135,7 +174,9 @@ export default function AgentSequenceView({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
-            {filteredAgents.map(agent => (
+            {filteredAgents.map(agent => {
+              const resolvedChatLink = buildAgentChatLink(agent)
+              return (
               <div
                 key={agent.id}
                 onClick={() =>
@@ -210,6 +251,22 @@ export default function AgentSequenceView({
                   </div>
                 )}
 
+                <div className="mt-4">
+                  <button
+                    onClick={e => openAgentChat(e, resolvedChatLink)}
+                    disabled={!resolvedChatLink}
+                    className={`w-full px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
+                      resolvedChatLink
+                        ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                    }`}
+                    title={resolvedChatLink ? '打开该 Agent 的 Chatbot 对话' : '该 Agent 暂无 Chatbot 对话链接'}
+                  >
+                    <MessageCircle size={14} />
+                    {resolvedChatLink ? 'Chatbot 对话' : '暂无 Chatbot 链接'}
+                  </button>
+                </div>
+
                 {/* Expanded: credentials + intro + workflow */}
                 {expandedAgentIds.includes(agent.id) && (
                   <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-5 animate-in fade-in slide-in-from-top-2">
@@ -275,7 +332,8 @@ export default function AgentSequenceView({
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
