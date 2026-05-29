@@ -312,6 +312,104 @@ export function createAmcMcpServer(agentApiKey: string) {
     updateAgentProfileHandler
   )
 
+  // ── get_agent_connection_health ────────────────────────────────────────
+  server.tool(
+    'get_agent_connection_health',
+    'Read-only health check for this agent\'s AMC connection setup. Returns readiness, missing fields, and next-step recommendations.',
+    {},
+    async () => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const activeBrandLinks = await prisma.brandAgent.findMany({
+        where: { agentId: agent.id, active: true },
+        select: {
+          brandId: true,
+          role: true,
+          brand: {
+            select: {
+              id: true,
+              name: true,
+              postfastApiKey: true,
+              googlePlaceId: true,
+              googleApiKey: true,
+              larkBotWebhook: true,
+              larkOwnerId: true,
+            },
+          },
+        },
+      })
+
+      const hasChatLink = !!(agent.chatLink && agent.chatLink.trim())
+      const hasNickname = !!(agent.nickname && agent.nickname.trim())
+      const hasWorkflow = !!(agent.workflow && agent.workflow.trim())
+
+      const warnings: string[] = []
+      const recommendations: string[] = []
+
+      if (!hasChatLink) {
+        warnings.push('chatLink is not configured')
+        recommendations.push('Use configure_agent_connection with chatLink and agentProvider to set direct chatbot connection.')
+      }
+
+      if (!hasNickname) {
+        warnings.push('nickname is empty')
+        recommendations.push('Set nickname via configure_agent_connection for clearer board display.')
+      }
+
+      if (!hasWorkflow) {
+        warnings.push('workflow is empty')
+        recommendations.push('Set workflow via configure_agent_connection so collaboration standards are explicit.')
+      }
+
+      if (activeBrandLinks.length === 0) {
+        warnings.push('no active brand linkage')
+        recommendations.push('Link this agent to at least one brand in AMC so task and publish tools can target a brand context.')
+      }
+
+      const brandHealth = activeBrandLinks.map(link => {
+        const hasPostfast = !!link.brand.postfastApiKey
+        const hasGoogle = !!(link.brand.googlePlaceId && link.brand.googleApiKey)
+        const hasNotify = !!(link.brand.larkBotWebhook || link.brand.larkOwnerId)
+
+        return {
+          brandId: link.brand.id,
+          brandName: link.brand.name,
+          role: link.role,
+          integrations: {
+            postfastConfigured: hasPostfast,
+            googleConfigured: hasGoogle,
+            notifyConfigured: hasNotify,
+          },
+        }
+      })
+
+      const ready = warnings.length === 0
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            ok: true,
+            ready,
+            agent: {
+              id: agent.id,
+              email: agent.email,
+              nickname: agent.nickname,
+              agentProvider: agent.agentProvider,
+              hasChatLink,
+              hasWorkflow,
+            },
+            linkedBrandsCount: activeBrandLinks.length,
+            linkedBrands: brandHealth,
+            warnings,
+            recommendations,
+          }, null, 2),
+        }],
+      }
+    }
+  )
+
   // ── list_tasks ──────────────────────────────────────────────────────────
   server.tool(
     'list_tasks',
