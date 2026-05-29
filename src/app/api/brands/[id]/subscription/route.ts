@@ -3,8 +3,9 @@ import { getSession } from '@/lib/auth'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
-import { ALLOWED_DURATIONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS, calculatePricing } from '@/lib/subscription/catalog'
-import { SUBSCRIPTION_TERMS_NOTICE, SUBSCRIPTION_TERMS_SECTIONS, SUBSCRIPTION_TERMS_TITLE } from '@/lib/subscription/terms'
+import { ALLOWED_DURATIONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, PLAN_COMPARISON_ROWS, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS, calculatePricing } from '@/lib/subscription/catalog'
+import { SUBSCRIPTION_TERMS_FULL_TEXT, SUBSCRIPTION_TERMS_NOTICE, SUBSCRIPTION_TERMS_TITLE } from '@/lib/subscription/terms'
+import { buildOfflineInvoiceResponse, type SubscriptionStatus } from '@/lib/subscription/workflow'
 import Stripe from 'stripe'
 
 type Params = { params: Promise<{ id: string }> }
@@ -35,12 +36,13 @@ export async function GET(_req: Request, { params }: Params) {
   return NextResponse.json({
     brand,
     plans: SUBSCRIPTION_PLANS,
+    comparisonRows: PLAN_COMPARISON_ROWS,
     addons: SUBSCRIPTION_ADDONS,
     durations: ALLOWED_DURATIONS,
     termsVersion: DEFAULT_SUBSCRIPTION_TERMS_VERSION,
     termsTitle: SUBSCRIPTION_TERMS_TITLE,
     termsNotice: SUBSCRIPTION_TERMS_NOTICE,
-    termsSections: SUBSCRIPTION_TERMS_SECTIONS,
+    termsFullText: SUBSCRIPTION_TERMS_FULL_TEXT,
     latestSubscription: latest,
     paymentEnabled: Boolean(stripe),
   })
@@ -56,10 +58,6 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  if (!stripe) {
-    return NextResponse.json({ error: 'Online payment is not configured. Missing STRIPE_SECRET_KEY.' }, { status: 503 })
-  }
-
   const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true, name: true } })
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
 
@@ -68,6 +66,7 @@ export async function POST(request: Request, { params }: Params) {
   const durationMonths = Number(body.durationMonths)
   const addonIds: string[] = Array.isArray(body.addonIds) ? body.addonIds.map((v: unknown) => String(v)) : []
   const uniqueAddonIds: string[] = Array.from(new Set(addonIds))
+  const paymentMode = body.paymentMode === 'OFFLINE' ? 'OFFLINE' : 'ONLINE'
   const agreedToTerms = Boolean(body.agreedToTerms)
   const termsVersion = String(body.termsVersion ?? DEFAULT_SUBSCRIPTION_TERMS_VERSION)
 
@@ -101,13 +100,27 @@ export async function POST(request: Request, { params }: Params) {
       oneTimeAddonsUsd: summary.oneTimeAddonsUsd,
       totalDueUsd: summary.totalDueUsd,
       status: 'PENDING',
-      paymentProvider: 'STRIPE',
+      paymentProvider: paymentMode === 'ONLINE' ? 'STRIPE' : 'OFFLINE',
       selectedAddons: selectedAddons as unknown as Prisma.InputJsonValue,
       termsVersion,
       termsAcceptedAt: new Date(),
       createdById: session.user.id,
     },
   })
+
+  if (paymentMode === 'OFFLINE') {
+    return NextResponse.json(
+      buildOfflineInvoiceResponse({
+        subscriptionId: pending.id,
+        status: pending.status as SubscriptionStatus,
+        totalDueUsd: summary.totalDueUsd,
+      })
+    )
+  }
+
+  if (!stripe) {
+    return NextResponse.json({ error: 'Online payment is not configured. Missing STRIPE_SECRET_KEY.' }, { status: 503 })
+  }
 
   const origin = new URL(request.url).origin
   const successUrl = `${origin}/board/subscription/${brandId}?success=1&sid={CHECKOUT_SESSION_ID}&sub=${pending.id}`
@@ -136,8 +149,9 @@ export async function POST(request: Request, { params }: Params) {
       brandId,
       subscriptionId: pending.id,
       planId,
+      paymentMode,
       durationMonths: String(summary.durationMonths),
-      billedMonths: String(summary.billedMonths),
+      discountPercent: String(summary.discountPercent),
     },
   })
 

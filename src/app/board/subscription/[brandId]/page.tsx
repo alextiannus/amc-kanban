@@ -18,17 +18,19 @@ type Addon = {
   pricing: 'monthly' | 'one_time'
   usd: number
   description: string
+  details: string[]
 }
 
 type SubscriptionPayload = {
   brand: { id: string; name: string }
   plans: Plan[]
+  comparisonRows: { key: string; label: string; values: Record<string, string> }[]
   addons: Addon[]
   durations: number[]
   termsVersion: string
   termsTitle: string
   termsNotice: string
-  termsSections: { title: string; content: string }[]
+  termsFullText: string
   latestSubscription?: any
   paymentEnabled: boolean
 }
@@ -49,6 +51,8 @@ export default function BrandSubscriptionPage() {
   const [addonIds, setAddonIds] = useState<string[]>([])
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
+  const [paymentMode, setPaymentMode] = useState<'ONLINE' | 'OFFLINE'>('ONLINE')
+  const [userRole, setUserRole] = useState<string>('USER')
 
   const success = searchParams?.get('success') === '1'
   const canceled = searchParams?.get('canceled') === '1'
@@ -75,6 +79,19 @@ export default function BrandSubscriptionPage() {
   }, [brandId])
 
   useEffect(() => {
+    const fetchMe = async () => {
+      try {
+        const res = await fetch('/api/auth/me')
+        if (res.ok) {
+          const me = await res.json()
+          setUserRole(me.role || 'USER')
+        }
+      } catch {
+        // noop
+      }
+    }
+    fetchMe()
+
     const confirmPayment = async () => {
       if (!success || !checkoutSessionId || !subscriptionId || !brandId) return
       setConfirming(true)
@@ -106,11 +123,14 @@ export default function BrandSubscriptionPage() {
     [data?.addons, addonIds]
   )
 
-  const billedMonths = durationMonths === 12 ? 11 : durationMonths
   const recurringAddons = selectedAddons.filter((a) => a.pricing === 'monthly').reduce((sum, a) => sum + a.usd, 0)
   const oneTimeAddons = selectedAddons.filter((a) => a.pricing === 'one_time').reduce((sum, a) => sum + a.usd, 0)
   const monthlyBase = selectedPlan?.monthlyUsd ?? 0
-  const totalDue = (monthlyBase + recurringAddons) * billedMonths + oneTimeAddons
+  const recurringSubtotal = (monthlyBase + recurringAddons) * durationMonths
+  const discountPercent = durationMonths === 12 ? 10 : 0
+  const recurringAfterDiscount = Math.round(recurringSubtotal * (1 - discountPercent / 100))
+  const discountAmount = recurringSubtotal - recurringAfterDiscount
+  const totalDue = recurringAfterDiscount + oneTimeAddons
 
   const toggleAddon = (id: string) => {
     setAddonIds((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]))
@@ -128,19 +148,48 @@ export default function BrandSubscriptionPage() {
           planId: selectedPlan.id,
           durationMonths,
           addonIds,
+          paymentMode,
           agreedToTerms,
           termsVersion: data.termsVersion,
         }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to create checkout session')
-      if (json.checkoutUrl) {
+
+      if (json.paymentMode === 'OFFLINE') {
+        const fresh = await fetch(`/api/brands/${brandId}/subscription`)
+        const freshJson = await fresh.json()
+        if (fresh.ok) setData(freshJson)
+      } else if (json.checkoutUrl) {
         window.location.href = json.checkoutUrl
       } else {
         throw new Error('Checkout URL is missing')
       }
     } catch (e: any) {
       setError(e.message || 'Failed to create checkout')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const updateSubscriptionStatus = async (status: 'PENDING' | 'ACTIVE' | 'FAILED' | 'CANCELLED') => {
+    if (!data?.latestSubscription?.id) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/subscriptions/${data.latestSubscription.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to update status')
+
+      const fresh = await fetch(`/api/brands/${brandId}/subscription`)
+      const freshJson = await fresh.json()
+      if (fresh.ok) setData(freshJson)
+    } catch (e: any) {
+      setError(e.message || 'Failed to update status')
     } finally {
       setSubmitting(false)
     }
@@ -202,7 +251,7 @@ export default function BrandSubscriptionPage() {
           </div>
         )}
 
-        {!data.paymentEnabled && (
+        {!data.paymentEnabled && paymentMode === 'ONLINE' && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-4 py-3 text-sm">
             当前环境未配置在线支付（缺少 STRIPE_SECRET_KEY）。请先配置后再发起支付。
           </div>
@@ -211,25 +260,43 @@ export default function BrandSubscriptionPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-              <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 mb-4">1) 选择套餐</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {data.plans.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setPlanId(p.id)}
-                    className={`text-left rounded-2xl border p-4 transition ${
-                      planId === p.id
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-black text-slate-900 dark:text-slate-100">{p.name}</p>
-                      <p className="text-sm font-black text-blue-600">USD ${p.monthlyUsd}/mo</p>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">{p.description}</p>
-                  </button>
-                ))}
+              <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 mb-4">1) 选择套餐（竖版对比）</h2>
+              <div className="overflow-auto border border-slate-200 dark:border-slate-700 rounded-xl">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-bold text-slate-700 dark:text-slate-200">对比项</th>
+                      {data.plans.map((p) => (
+                        <th key={p.id} className="px-3 py-2 min-w-[180px]">
+                          <button
+                            onClick={() => setPlanId(p.id)}
+                            className={`w-full rounded-lg border px-3 py-2 text-left transition ${
+                              planId === p.id
+                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+                            }`}
+                          >
+                            <p className="font-black text-slate-900 dark:text-slate-100">{p.name}</p>
+                            <p className="text-xs text-blue-600 font-bold mt-0.5">USD ${p.monthlyUsd}/月</p>
+                            <p className="text-[11px] text-slate-500 mt-1">{p.description}</p>
+                          </button>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.comparisonRows.map((row) => (
+                      <tr key={row.key} className="border-t border-slate-200 dark:border-slate-700 align-top">
+                        <td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">{row.label}</td>
+                        {data.plans.map((p) => (
+                          <td key={`${row.key}-${p.id}`} className="px-3 py-2 text-slate-600 dark:text-slate-300">
+                            {row.values[p.id]}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </section>
 
@@ -246,14 +313,14 @@ export default function BrandSubscriptionPage() {
                         : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300'
                     }`}
                   >
-                    {d} 个月{d === 12 ? '（付11个月）' : ''}
+                    {d} 个月{d === 12 ? '（90%折扣）' : ''}
                   </button>
                 ))}
               </div>
             </section>
 
             <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-              <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 mb-4">3) 选择加购服务</h2>
+              <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 mb-4">3) 增值服务下单</h2>
               <div className="space-y-2">
                 {data.addons.map((a) => (
                   <label key={a.id} className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer">
@@ -266,6 +333,11 @@ export default function BrandSubscriptionPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{a.name}</p>
                       <p className="text-xs text-slate-500">{a.description}</p>
+                      {a.details.length > 0 && (
+                        <ul className="mt-1.5 space-y-0.5 text-xs text-slate-500 list-disc pl-4">
+                          {a.details.map((d) => <li key={d}>{d}</li>)}
+                        </ul>
+                      )}
                     </div>
                     <p className="text-xs font-bold text-blue-600 whitespace-nowrap">
                       {a.pricing === 'monthly' ? `+USD ${a.usd}/mo` : `USD ${a.usd} one-time`}
@@ -276,19 +348,52 @@ export default function BrandSubscriptionPage() {
             </section>
 
             <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-              <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 mb-3">4) 用户协议</h2>
+              <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 mb-3">4) 支付方式</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <button
+                  onClick={() => setPaymentMode('ONLINE')}
+                  className={`rounded-xl border px-4 py-3 text-left ${paymentMode === 'ONLINE' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-700'}`}
+                >
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">在线支付</p>
+                  <p className="text-xs text-slate-500 mt-1">立即跳转支付，支付成功后自动激活订阅。</p>
+                </button>
+                <button
+                  onClick={() => setPaymentMode('OFFLINE')}
+                  className={`rounded-xl border px-4 py-3 text-left ${paymentMode === 'OFFLINE' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-700'}`}
+                >
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">线下账单支付</p>
+                  <p className="text-xs text-slate-500 mt-1">提交后生成线下账单，待 Admin / Admin AI 确认到账并更新状态。</p>
+                </button>
+              </div>
+
+              <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 mb-3">5) 用户协议</h2>
               <p className="text-xs text-slate-500 mb-3">{data.termsNotice}</p>
               <button
                 onClick={() => setShowTerms(true)}
                 className="text-sm font-bold text-blue-600 hover:text-blue-700"
               >
-                查看服务协议摘要
+                查看完整用户协议
               </button>
               <label className="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
                 <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-0.5" />
                 <span>我已阅读并同意 {data.termsTitle}（{data.termsVersion}）</span>
               </label>
             </section>
+
+            {paymentMode === 'OFFLINE' && data.latestSubscription?.paymentProvider === 'OFFLINE' && (
+              <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+                <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 mb-3">线下账单状态</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-300">当前状态：<span className="font-bold">{data.latestSubscription.status}</span></p>
+                {userRole === 'ADMIN' && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button onClick={() => updateSubscriptionStatus('ACTIVE')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white">标记已支付</button>
+                    <button onClick={() => updateSubscriptionStatus('PENDING')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-600 text-white">标记待支付</button>
+                    <button onClick={() => updateSubscriptionStatus('FAILED')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-600 text-white">标记失败</button>
+                    <button onClick={() => updateSubscriptionStatus('CANCELLED')} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-600 text-white">标记取消</button>
+                  </div>
+                )}
+              </section>
+            )}
           </div>
 
           <aside className="space-y-4">
@@ -304,12 +409,24 @@ export default function BrandSubscriptionPage() {
                   <span>USD ${recurringAddons}</span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-slate-500">周期原价</span>
+                  <span>USD ${recurringSubtotal}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">周期折扣</span>
+                  <span>{discountPercent > 0 ? `${discountPercent}%` : '无'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">折扣减免</span>
+                  <span>- USD ${discountAmount}</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-slate-500">按次加购合计</span>
                   <span>USD ${oneTimeAddons}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">计费月数</span>
-                  <span>{billedMonths} / {durationMonths}</span>
+                  <span className="text-slate-500">合同周期</span>
+                  <span>{durationMonths} 个月</span>
                 </div>
                 <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-700 flex justify-between text-base font-black">
                   <span>应付总额</span>
@@ -319,14 +436,14 @@ export default function BrandSubscriptionPage() {
 
               <button
                 onClick={startCheckout}
-                disabled={!data.paymentEnabled || submitting || confirming || !agreedToTerms}
+                disabled={(paymentMode === 'ONLINE' && !data.paymentEnabled) || submitting || confirming || !agreedToTerms}
                 className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                {submitting ? '创建支付中...' : '在线支付并订阅'}
+                {submitting ? '处理中...' : paymentMode === 'ONLINE' ? '在线支付并订阅' : '创建线下账单'}
               </button>
               <p className="text-[11px] text-slate-400 mt-2">
-                按 AMC 服务协议：合同费用一次性预付；12 个月合约按 11 个月计费。
+                按 AMC 服务协议：合同费用一次性预付；12 个月按 90% 折扣计算。
               </p>
             </div>
           </aside>
@@ -341,12 +458,7 @@ export default function BrandSubscriptionPage() {
               <button onClick={() => setShowTerms(false)} className="text-sm text-slate-500 hover:text-slate-700">关闭</button>
             </div>
             <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
-              {data.termsSections.map((s) => (
-                <div key={s.title}>
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{s.title}</p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">{s.content}</p>
-                </div>
-              ))}
+              <pre className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-sans">{data.termsFullText}</pre>
               <p className="text-xs text-slate-500 pt-2 border-t border-slate-200 dark:border-slate-700">{data.termsNotice}</p>
             </div>
           </div>
