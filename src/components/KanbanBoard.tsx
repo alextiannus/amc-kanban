@@ -14,6 +14,7 @@ import SystemLogModal from './layout/SystemLogModal'
 import NewAgentKeyModal from './layout/NewAgentKeyModal'
 import AgentsWorkflowView from './dashboard/AgentsWorkflowView'
 import GameSettingsDashboard from './dashboard/GameSettingsDashboard'
+import KanbanChatWidget from './chat/KanbanChatWidget'
 
 interface Brand {
   id: string
@@ -254,6 +255,13 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       {showSystemLog && (
         <SystemLogModal onClose={() => setShowSystemLog(false)} />
       )}
+
+      <KanbanChatWidget
+        brandId={activeBrand?.id}
+        brandName={activeBrand?.name}
+        taskId={selectedTask?.id}
+        userId={user?.id}
+      />
     </MainLayout>
   )
 }
