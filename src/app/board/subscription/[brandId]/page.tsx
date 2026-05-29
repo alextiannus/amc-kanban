@@ -45,6 +45,7 @@ export default function BrandSubscriptionPage() {
   const [addonIds, setAddonIds] = useState<string[]>([])
 
   const success = searchParams?.get('success') === '1'
+  const canceled = searchParams?.get('canceled') === '1'
   const checkoutSessionId = searchParams?.get('sid') || ''
   const subscriptionId = searchParams?.get('sub') || ''
 
@@ -168,6 +169,12 @@ export default function BrandSubscriptionPage() {
         {confirming && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 px-4 py-3 text-sm font-medium">
             正在确认支付结果，请稍候...
+          </div>
+        )}
+
+        {canceled && (
+          <div className="rounded-2xl border border-slate-200 bg-slate-100 text-slate-700 px-4 py-3 text-sm font-medium">
+            您已取消本次支付，订单保留为待支付状态，可重新发起支付。
           </div>
         )}
 

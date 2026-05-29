@@ -2,18 +2,13 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
+import { activateSubscriptionByPaymentSession } from '@/lib/subscription/service'
 import Stripe from 'stripe'
 
 type Params = { params: Promise<{ id: string }> }
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeKey ? new Stripe(stripeKey) : null
-
-function addMonths(date: Date, months: number) {
-  const next = new Date(date)
-  next.setMonth(next.getMonth() + months)
-  return next
-}
 
 export async function POST(request: Request, { params }: Params) {
   const session = await getSession()
@@ -52,18 +47,10 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: `Payment status is ${checkout.payment_status}` }, { status: 400 })
   }
 
-  const now = new Date()
-  const endDate = addMonths(now, sub.durationMonths)
+  const activated = await activateSubscriptionByPaymentSession(checkoutSessionId)
+  if (!activated.ok) {
+    return NextResponse.json({ error: 'Subscription order not found by payment session' }, { status: 404 })
+  }
 
-  const updated = await prisma.brandSubscription.update({
-    where: { id: sub.id },
-    data: {
-      status: 'ACTIVE',
-      paidAt: now,
-      contractStartDate: now,
-      contractEndDate: endDate,
-    },
-  })
-
-  return NextResponse.json({ ok: true, subscription: updated })
+  return NextResponse.json({ ok: true, subscription: activated.subscription, alreadyActive: activated.alreadyActive })
 }

@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:execution": "node --experimental-strip-types scripts/test-project-execution.mts",
     "test:api": "node --experimental-strip-types scripts/test-api.mts",
+    "test:subscription": "node --experimental-strip-types scripts/test-subscription-pricing.mts",
     "verify:permissions": "node scripts/verify-permissions.mjs",
     "postinstall": "npx prisma generate && npx prisma db push --accept-data-loss"
   },

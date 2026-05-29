@@ -98,7 +98,9 @@ export function calculatePricing(planId: string, durationMonths: number, addonId
     throw new Error('Invalid contract duration')
   }
 
-  const selectedAddons = addonIds
+  const uniqueAddonIds = Array.from(new Set(addonIds))
+
+  const selectedAddons = uniqueAddonIds
     .map((id) => SUBSCRIPTION_ADDONS.find((a) => a.id === id))
     .filter((v): v is AddonItem => Boolean(v))
 

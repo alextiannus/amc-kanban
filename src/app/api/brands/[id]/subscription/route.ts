@@ -61,13 +61,19 @@ export async function POST(request: Request, { params }: Params) {
   const body = await request.json()
   const planId = String(body.planId ?? '')
   const durationMonths = Number(body.durationMonths)
-  const addonIds = Array.isArray(body.addonIds) ? body.addonIds.map((v: unknown) => String(v)) : []
+  const addonIds: string[] = Array.isArray(body.addonIds) ? body.addonIds.map((v: unknown) => String(v)) : []
+  const uniqueAddonIds: string[] = Array.from(new Set(addonIds))
 
   const selectedPlan = SUBSCRIPTION_PLANS.find((p) => p.id === planId)
   if (!selectedPlan) return NextResponse.json({ error: 'Invalid planId' }, { status: 400 })
 
-  const summary = calculatePricing(planId, durationMonths, addonIds)
-  const selectedAddons = SUBSCRIPTION_ADDONS.filter((a) => addonIds.includes(a.id))
+  const invalidAddonIds = uniqueAddonIds.filter((id) => !SUBSCRIPTION_ADDONS.some((a) => a.id === id))
+  if (invalidAddonIds.length > 0) {
+    return NextResponse.json({ error: `Invalid addonIds: ${invalidAddonIds.join(', ')}` }, { status: 400 })
+  }
+
+  const summary = calculatePricing(planId, durationMonths, uniqueAddonIds)
+  const selectedAddons = SUBSCRIPTION_ADDONS.filter((a) => uniqueAddonIds.includes(a.id))
 
   const pending = await prisma.brandSubscription.create({
     data: {
