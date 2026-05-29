@@ -75,6 +75,29 @@ export async function GET(_req: Request, { params }: Params) {
             }
           }
 
+            // Handle rename cases: same platform + same profile URL should be
+            // considered the same account even if handle changed in PostFast.
+            if (acc.profileUrl) {
+              const existingByProfile = await prisma.socialAccount.findFirst({
+                where: { brandId: id, platformId: acc.platformId, profileUrl: acc.profileUrl },
+                select: { id: true },
+              })
+              if (existingByProfile) {
+                await prisma.socialAccount.update({
+                  where: { id: existingByProfile.id },
+                  data: {
+                    handle: acc.handle,
+                    displayName: acc.displayName ?? acc.handle,
+                    followerCount: acc.followerCount ?? null,
+                    followerDelta: acc.followerDelta ?? 0,
+                    ratingScore: acc.ratingScore ?? null,
+                    snapshotAt: new Date(),
+                  },
+                })
+                continue
+              }
+            }
+
           await prisma.socialAccount.upsert({
             where: {
               brandId_platformId_handle: {

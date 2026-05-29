@@ -225,6 +225,29 @@ export async function PATCH(request: Request, { params }: Params) {
                 })
               }
             } else {
+                if (acc.profileUrl) {
+                  const existingByProfile = await prisma.socialAccount.findFirst({
+                    where: { brandId: id, platformId: acc.platformId, profileUrl: acc.profileUrl },
+                    select: { id: true },
+                  })
+                  if (existingByProfile) {
+                    await prisma.socialAccount.update({
+                      where: { id: existingByProfile.id },
+                      data: {
+                        handle: acc.handle,
+                        displayName: acc.displayName ?? acc.handle,
+                        followerCount: acc.followerCount ?? null,
+                        followerDelta: acc.followerDelta ?? 0,
+                        ratingScore: acc.ratingScore ?? null,
+                        snapshotAt: new Date(),
+                      },
+                    })
+                    syncResults.success++
+                    console.log(`[Settings] ✓ Synced ${acc.platformId}:${acc.handle}`)
+                    continue
+                  }
+                }
+
               await prisma.socialAccount.upsert({
                 where: { brandId_platformId_handle: { brandId: id, platformId: acc.platformId, handle: acc.handle } },
                 create: {
