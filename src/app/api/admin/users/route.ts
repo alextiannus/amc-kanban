@@ -42,7 +42,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { email, type } = await request.json()
+    const { email, type, role: body_role } = await request.json()
+    const body = { role: body_role }
   const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim()
     if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 })
     
@@ -53,12 +54,13 @@ export async function POST(request: Request) {
     const hashedPassword = await bcrypt.hash(temporaryPassword, 12)
     const userType = type === 'AI_AGENT' ? 'AI_AGENT' : 'HUMAN'
 
+    const requestedRole = body.role === 'ADMIN' ? 'ADMIN' : 'USER'
     const user = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         type: userType,
-        role: email === bootstrapAdminEmail ? 'ADMIN' : 'USER',
+        role: email === bootstrapAdminEmail ? 'ADMIN' : requestedRole,
       }
     })
 
