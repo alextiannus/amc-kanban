@@ -98,14 +98,27 @@ interface ConnectedAccount {
 // ── KPI Tofu Card (小豆腐块 compact) ───────────────────────────────────
 function PlatformLogo({ icon, iconDark, name, size = 20 }: { icon: string; iconDark?: string; name: string; size?: number }) {
   const [srcIndex, setSrcIndex] = useState(0)
+  const fallbackColorMatch = icon.match(/\/([A-Fa-f0-9]{6})$/)
+  const fallbackBg = fallbackColorMatch ? `#${fallbackColorMatch[1]}` : '#6366f1'
+  const fallbackGlyph = name.trim().slice(0, 1).toUpperCase()
+  const fallbackSvg = React.useMemo(() => {
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+        <rect width="${size}" height="${size}" rx="${Math.max(6, Math.floor(size * 0.3))}" fill="${fallbackBg}" />
+        <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-size="${Math.max(10, Math.floor(size * 0.48))}" font-weight="700" fill="#ffffff">${fallbackGlyph}</text>
+      </svg>
+    `.trim()
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+  }, [fallbackBg, fallbackGlyph, size])
+
   const candidates = React.useMemo(() => {
-    const uniq = Array.from(new Set([icon, iconDark].filter(Boolean) as string[]))
+    const uniq = Array.from(new Set([icon, iconDark, fallbackSvg].filter(Boolean) as string[]))
     return uniq
-  }, [icon, iconDark])
+  }, [icon, iconDark, fallbackSvg])
 
   useEffect(() => {
     setSrcIndex(0)
-  }, [icon, iconDark, name])
+  }, [icon, iconDark, name, fallbackSvg])
 
   const fallback = (
     <span
@@ -114,7 +127,7 @@ function PlatformLogo({ icon, iconDark, name, size = 20 }: { icon: string; iconD
       className="inline-flex items-center justify-center rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 font-black"
       style={{ width: size, height: size, fontSize: Math.max(10, Math.floor(size * 0.45)) }}
     >
-      {name.trim().slice(0, 1).toUpperCase()}
+      {fallbackGlyph}
     </span>
   )
 
