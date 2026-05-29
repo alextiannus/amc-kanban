@@ -13,6 +13,10 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { writeAuditLog, actorFromContext } from '@/lib/audit'
+import {
+  buildOpenclawConnectionProfile,
+  normalizeOpenclawAgentConfig,
+} from '@/lib/integrations/openclaw'
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -62,6 +66,14 @@ export function createAmcMcpServer(agentApiKey: string) {
   })
 
   const resolveAgent = () => getAgentFromKey(agentApiKey)
+  const resolvePublicBaseUrl = () => {
+    const raw =
+      process.env.APP_BASE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      'https://amc-kanban.immedi.ai'
+    return raw.replace(/\/$/, '')
+  }
 
   // ── get_brand_config ────────────────────────────────────────────────────
   server.tool(
@@ -310,6 +322,94 @@ export function createAmcMcpServer(agentApiKey: string) {
     'Self-service onboarding/config tool for AI Agent. Configure chatbot connection (chatLink/provider) and optional profile fields in AMC.',
     updateAgentProfileSchema,
     updateAgentProfileHandler
+  )
+
+  server.tool(
+    'get_openclaw_connection_profile',
+    'Get Openclaw connection profile (MCP endpoint, webhook endpoint, and auth headers) for this agent.',
+    {},
+    async () => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const profile = buildOpenclawConnectionProfile({
+        origin: resolvePublicBaseUrl(),
+        agentApiKey,
+        agentId: agent.id,
+        chatLink: agent.chatLink,
+        driveFolder: agent.driveFolder,
+      })
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            ok: true,
+            provider: 'OPENCLAW',
+            connectionReady: !!(agent.chatLink && agent.chatLink.trim()),
+            profile,
+          }, null, 2),
+        }],
+      }
+    }
+  )
+
+  server.tool(
+    'configure_openclaw_connection',
+    'Configure Openclaw connection for this agent (sets provider to OPENCLAW and updates chatLink/driveFolder/profile).',
+    {
+      chatLink: z.string().optional().describe('Openclaw direct chat URL (http/https).'),
+      driveFolder: z.string().optional().describe('Optional drive folder URL (http/https).'),
+      nickname: z.string().optional(),
+      workflow: z.string().optional(),
+    },
+    async (input) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const normalized = normalizeOpenclawAgentConfig({
+        chatLink: input.chatLink,
+        driveFolder: input.driveFolder,
+      })
+
+      if (!normalized.ok) {
+        return { content: [{ type: 'text' as const, text: `Error: ${normalized.error}` }], isError: true }
+      }
+
+      const updateData: Record<string, unknown> = { agentProvider: 'OPENCLAW' }
+      if (input.chatLink !== undefined) updateData.chatLink = normalized.data.chatLink
+      if (input.driveFolder !== undefined) updateData.driveFolder = normalized.data.driveFolder
+      if (input.nickname !== undefined) updateData.nickname = input.nickname.trim() || null
+      if (input.workflow !== undefined) updateData.workflow = input.workflow.trim() || null
+
+      const updated = await prisma.user.update({
+        where: { id: agent.id },
+        data: updateData,
+        select: {
+          id: true,
+          nickname: true,
+          workflow: true,
+          chatLink: true,
+          driveFolder: true,
+          agentProvider: true,
+        },
+      })
+
+      const profile = buildOpenclawConnectionProfile({
+        origin: resolvePublicBaseUrl(),
+        agentApiKey,
+        agentId: updated.id,
+        chatLink: updated.chatLink,
+        driveFolder: updated.driveFolder,
+      })
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ ok: true, updated, profile }, null, 2),
+        }],
+      }
+    }
   )
 
   // ── get_agent_connection_health ────────────────────────────────────────

@@ -26,6 +26,43 @@ KANBAN_AGENT_API_KEY=${apiKey}
 - Base URL: ${apiBaseUrl}
 - Authorization: Bearer ${apiKey}
 
+### OpenClaw 连接（推荐）
+可直接使用 AMC 的 OpenClaw 专用接口完成连接与自主配置：
+
+\`\`\`
+GET ${apiBaseUrl}/integrations/openclaw/connection
+Authorization: Bearer ${apiKey}
+\`\`\`
+
+返回内容包含：
+- MCP endpoint（${baseHost}/api/mcp）
+- OpenClaw webhook endpoint（${baseHost}/api/integrations/openclaw/webhook）
+- 鉴权头示例
+
+配置聊天链接与工作目录：
+
+\`\`\`
+PATCH ${apiBaseUrl}/integrations/openclaw/connection
+Authorization: Bearer ${apiKey}
+{
+  "chatLink": "https://openclaw.example.com/chat/...",
+  "driveFolder": "https://...",
+  "nickname": "你的 Agent 名",
+  "workflow": "你的工作流"
+}
+\`\`\`
+
+OpenClaw 可通过 webhook 回写配置事件（如 \`agent.config.updated\`）：
+
+\`\`\`
+POST ${apiBaseUrl}/integrations/openclaw/webhook
+Authorization: Bearer ${apiKey}
+{
+  "type": "agent.config.updated",
+  "payload": { "chatLink": "https://..." }
+}
+\`\`\`
+
 ### 核心约束：统一通过看板能力执行
 - 你不需要也不应感知底层供应商（例如 PostFast、Google、Lark）的实现细节。
 - 所有发布、素材上传、评论回复、通知都必须通过 AI Marketing Crew 看板统一能力完成。
