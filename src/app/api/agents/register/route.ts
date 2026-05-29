@@ -42,10 +42,9 @@ export async function POST(request: Request) {
       driveFolder,
     } = body
 
-    const normalizedProvider =
-      typeof agentProvider === 'string' && ['OPENCLAW', 'ACKCLAW'].includes(agentProvider)
-        ? agentProvider
-        : 'OPENCLAW'
+    const rawProvider = typeof agentProvider === 'string' ? agentProvider.trim().toUpperCase() : ''
+    const normalizedProvider: 'OPENCLAW' | 'ACKCLAW' =
+      rawProvider === 'ACKCLAW' ? 'ACKCLAW' : 'OPENCLAW'
 
     if (!agentId || typeof agentId !== 'string') {
       return NextResponse.json({ error: 'agentId is required' }, { status: 400 })
