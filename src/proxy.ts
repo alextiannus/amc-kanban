@@ -3,10 +3,12 @@ import type { NextRequest } from 'next/server'
 
 export default function proxy(request: NextRequest) {
   const session = request.cookies.get('session')?.value
+  const pathname = request.nextUrl.pathname
+  const isPublicGamePage = pathname === '/game' || pathname.startsWith('/game/')
   
-  const isAuthPage = request.nextUrl.pathname === '/'
+  const isAuthPage = pathname === '/'
 
-  if (!session && !isAuthPage && !request.nextUrl.pathname.startsWith('/api')) {
+  if (!session && !isAuthPage && !pathname.startsWith('/api') && !isPublicGamePage) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
