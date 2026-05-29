@@ -35,6 +35,7 @@ model User {
   permittedAgents  AgentPermission[] @relation("HumanUser")
   assignedToHumans AgentPermission[] @relation("AiAgent")
   brandMemberships BrandAgent[]      @relation("BrandAgents")
+  createdSubscriptions BrandSubscription[]
   comments         Comment[]
 
   createdAt DateTime @default(now())
@@ -172,6 +173,7 @@ model Brand {
   actionItems ActionItem[]
   conversions ConversionEvent[]
   brandAgents BrandAgent[]
+  subscriptions BrandSubscription[]
   gameConfig  GameConfig?
   gameSessions GameSession[]
 
@@ -179,6 +181,36 @@ model Brand {
   updatedAt   DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+model BrandSubscription {
+  id                 String   @id @default(cuid())
+  brandId            String
+  brand              Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  planId             String
+  planName           String
+  durationMonths     Int
+  billedMonths       Int
+  monthlyBaseUsd     Int
+  recurringAddonsUsd Int      @default(0)
+  oneTimeAddonsUsd   Int      @default(0)
+  totalDueUsd        Int
+  currency           String   @default("USD")
+  status             String   @default("PENDING") // PENDING | ACTIVE | CANCELLED | FAILED
+  paymentProvider    String?  // STRIPE
+  paymentSessionId   String?  @unique
+  paymentUrl         String?
+  selectedAddons     Json?
+  contractStartDate  DateTime?
+  contractEndDate    DateTime?
+  paidAt             DateTime?
+  createdById        String?
+  createdBy          User?    @relation(fields: [createdById], references: [id])
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([brandId, status])
+  @@index([createdById])
 }
 
 model SocialAccount {
