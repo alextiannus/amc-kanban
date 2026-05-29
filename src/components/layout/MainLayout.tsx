@@ -1,8 +1,9 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { Store, Calendar, BarChart2, Sun, Moon, Gift, Activity } from 'lucide-react'
+import { Store, Calendar, BarChart2, Sun, Moon, Gift, Activity, CreditCard } from 'lucide-react'
 import BrandSwitcher, { Brand } from './BrandSwitcher'
 import UserMenu from './UserMenu'
 
@@ -13,7 +14,14 @@ interface MainLayoutProps {
   brands: Brand[]
   activeBrand: Brand | null
   setActiveBrand: (brand: Brand) => void
-  user: { id: string; email: string; role: string; nickname?: string | null; avatar?: string | null } | null
+  user: {
+    id: string
+    email: string
+    role: string
+    dashboardRole?: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
+    nickname?: string | null
+    avatar?: string | null
+  } | null
   onShowSettings: () => void
   onShowSystemLog: () => void
   onNewAgentKeyGenerated: (key: string) => void
@@ -34,11 +42,39 @@ export default function MainLayout({
   onTasksCleared,
 }: MainLayoutProps) {
   const { theme, setTheme } = useTheme()
+  const router = useRouter()
   const [mounted, setMounted] = useState(false)
+  const [subscriptionButtonText, setSubscriptionButtonText] = useState('订阅计划')
+
+  const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : 'BRAND_DIRECTOR')
+  const canSeeSocialInsight = dashboardRole === 'ADMIN' || dashboardRole === 'BRAND_DIRECTOR'
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const loadSubscriptionLabel = async () => {
+      if (!activeBrand?.id) {
+        setSubscriptionButtonText('订阅计划')
+        return
+      }
+      try {
+        const res = await fetch(`/api/brands/${activeBrand.id}/subscription`)
+        const data = await res.json()
+        if (!res.ok || cancelled) return
+        const planName = data?.latestSubscription?.planName
+        setSubscriptionButtonText(planName ? `订阅: ${planName}` : '订阅计划')
+      } catch {
+        if (!cancelled) setSubscriptionButtonText('订阅计划')
+      }
+    }
+    loadSubscriptionLabel()
+    return () => {
+      cancelled = true
+    }
+  }, [activeBrand?.id])
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex flex-col font-sans transition-colors duration-300">
@@ -87,7 +123,7 @@ export default function MainLayout({
           >
             <BarChart2 size={16} /> 品牌分析
           </button>
-          {user?.role === 'ADMIN' && (
+          {canSeeSocialInsight && (
             <button
               onClick={() => setCurrentView('socialInsight')}
               className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
@@ -131,11 +167,25 @@ export default function MainLayout({
             </button>
           )}
 
+          <button
+            onClick={() => {
+              if (!activeBrand?.id) {
+                alert('请先选择品牌，再进入订阅计划')
+                return
+              }
+              router.push(`/board/subscription/${activeBrand.id}`)
+            }}
+            className="inline-flex items-center gap-2 px-3 h-10 rounded-full text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-200/70 dark:hover:bg-slate-700 transition-colors"
+            title="订阅计划"
+          >
+            <CreditCard size={16} />
+            <span className="hidden md:inline">{subscriptionButtonText}</span>
+          </button>
+
           <UserMenu
             user={user}
             currentView={currentView}
             setCurrentView={setCurrentView}
-            activeBrandId={activeBrand?.id}
             onShowSettings={onShowSettings}
             onShowSystemLog={onShowSystemLog}
             onNewAgentKeyGenerated={onNewAgentKeyGenerated}

@@ -23,5 +23,23 @@ export async function GET() {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  return NextResponse.json(user)
+  const [ownerCount, legacyOwnerCount] = await Promise.all([
+    prisma.brandOwner.count({
+      where: { userId: user.id },
+    }),
+    prisma.brand.count({
+      where: { ownerId: user.id },
+    }),
+  ])
+
+  const dashboardRole = user.role === 'ADMIN'
+    ? 'ADMIN'
+    : ownerCount > 0 || legacyOwnerCount > 0
+      ? 'BRAND_OWNER'
+      : 'BRAND_DIRECTOR'
+
+  return NextResponse.json({
+    ...user,
+    dashboardRole,
+  })
 }

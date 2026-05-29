@@ -2,14 +2,20 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { User as UserIcon, Users, Trash2, Key, Copy, Check, Settings, Link2, Bot, Inbox, LogOut, CreditCard } from 'lucide-react'
+import { User as UserIcon, Users, Trash2, Key, Copy, Check, Settings, Link2, Bot, Inbox, LogOut } from 'lucide-react'
 import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
 
 interface UserMenuProps {
-  user: { id: string; email: string; role: string; nickname?: string | null; avatar?: string | null } | null
+  user: {
+    id: string
+    email: string
+    role: string
+    dashboardRole?: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
+    nickname?: string | null
+    avatar?: string | null
+  } | null
   currentView: string
   setCurrentView: (view: 'dashboard' | 'calendar' | 'analytics' | 'agents' | 'archive' | 'game' | 'socialInsight') => void
-  activeBrandId?: string
   onShowSettings: () => void
   onShowSystemLog: () => void
   onNewAgentKeyGenerated: (key: string) => void
@@ -20,7 +26,6 @@ export default function UserMenu({
   user,
   currentView,
   setCurrentView,
-  activeBrandId,
   onShowSettings,
   onShowSystemLog,
   onNewAgentKeyGenerated,
@@ -31,6 +36,10 @@ export default function UserMenu({
   const [generatingKey, setGeneratingKey] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : 'BRAND_DIRECTOR')
+  const isAdmin = dashboardRole === 'ADMIN'
+  const isBrandOwner = dashboardRole === 'BRAND_OWNER'
+  const isBrandDirector = dashboardRole === 'BRAND_DIRECTOR'
 
   useEffect(() => {
     if (!showProfile) return
@@ -120,20 +129,17 @@ export default function UserMenu({
           <div className="p-4 border-b border-slate-100/50 dark:border-slate-800">
             <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{user?.nickname || user?.email}</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{user?.email}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{user?.role}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{dashboardRole === 'ADMIN' ? 'Admin' : dashboardRole === 'BRAND_OWNER' ? 'Brand Owner（品牌主）' : 'Brand Director（品牌主理人）'}</p>
           </div>
           <div className="p-2 space-y-1">
-            {/* Admin & user roles both get operations */}
-            {(user?.role === 'ADMIN' || user?.role === 'USER') && (
+            {isAdmin && (
               <>
-                {user?.role === 'ADMIN' && (
-                  <button
-                    onClick={() => { setShowProfile(false); router.push('/admin') }}
-                    className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                  >
-                    <Users size={16} /> 用户管理
-                  </button>
-                )}
+                <button
+                  onClick={() => { setShowProfile(false); router.push('/admin') }}
+                  className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                >
+                  <Users size={16} /> 用户管理
+                </button>
                 <button
                   onClick={async () => {
                     setShowProfile(false)
@@ -151,14 +157,12 @@ export default function UserMenu({
                 >
                   <Key size={16} /> {generatingKey ? '生成中...' : '生成新 Agent 密钥'}
                 </button>
-                {user?.role === 'ADMIN' && (
-                  <button
-                    onClick={() => { setShowProfile(false); onShowSystemLog() }}
-                    className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> 系统日志
-                  </button>
-                )}
+                <button
+                  onClick={() => { setShowProfile(false); onShowSystemLog() }}
+                  className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> 系统日志
+                </button>
                 <button
                   onClick={() => { setShowProfile(false); handleCopy() }}
                   className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors"
@@ -167,51 +171,84 @@ export default function UserMenu({
                 </button>
               </>
             )}
+
+            {isBrandDirector && (
+              <>
+                <button
+                  onClick={async () => {
+                    setShowProfile(false)
+                    await handleClearUnassignedTasks()
+                  }}
+                  className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-xl transition-colors"
+                >
+                  <Trash2 size={16} /> 清理无主任务
+                </button>
+                <button
+                  onClick={async () => { setShowProfile(false); await generateAgentKey() }}
+                  disabled={generatingKey}
+                  className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  <Key size={16} /> {generatingKey ? '生成中...' : '生成新 Agent 密钥'}
+                </button>
+                <button
+                  onClick={() => { setShowProfile(false); handleCopy() }}
+                  className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors"
+                >
+                  {copied ? <Check size={16} /> : <Copy size={16} />} 复制初始化 Skill
+                </button>
+              </>
+            )}
+
+            {isBrandOwner && (
+              <button
+                onClick={() => { setShowProfile(false); handleCopy() }}
+                className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors"
+              >
+                {copied ? <Check size={16} /> : <Copy size={16} />} 复制初始化 Skill
+              </button>
+            )}
+
             <button 
               onClick={() => { setShowProfile(false); onShowSettings() }}
               className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
             >
               <Settings size={16} /> 个人设置
             </button>
-            <button 
-              onClick={() => { setShowProfile(false); router.push('/profile') }}
-              className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-            >
-              <Link2 size={16} /> 平台链接配置
-            </button>
-            <button
-              onClick={() => {
-                setShowProfile(false)
-                if (!activeBrandId) {
-                  alert('请先选择品牌，再进入订阅计划')
-                  return
-                }
-                router.push(`/board/subscription/${activeBrandId}`)
-              }}
-              className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-            >
-              <CreditCard size={16} /> 订阅计划
-            </button>
-            <button
-              onClick={() => { setShowProfile(false); setCurrentView('agents') }}
-              className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
-                currentView === 'agents'
-                  ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Bot size={16} /> AI 序列
-            </button>
-            <button
-              onClick={() => { setShowProfile(false); setCurrentView('archive') }}
-              className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
-                currentView === 'archive'
-                  ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-bold'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Inbox size={16} /> 归档
-            </button>
+
+            {isAdmin && (
+              <button 
+                onClick={() => { setShowProfile(false); router.push('/profile') }}
+                className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+              >
+                <Link2 size={16} /> 平台链接配置
+              </button>
+            )}
+
+            {(isAdmin || isBrandDirector) && (
+              <>
+                <button
+                  onClick={() => { setShowProfile(false); setCurrentView('agents') }}
+                  className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
+                    currentView === 'agents'
+                      ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Bot size={16} /> AI 序列
+                </button>
+                <button
+                  onClick={() => { setShowProfile(false); setCurrentView('archive') }}
+                  className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
+                    currentView === 'archive'
+                      ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-bold'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Inbox size={16} /> 归档
+                </button>
+              </>
+            )}
+
             <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
             <button 
               onClick={handleLogout} 
