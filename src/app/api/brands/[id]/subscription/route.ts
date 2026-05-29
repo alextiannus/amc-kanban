@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { ALLOWED_DURATIONS, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS, calculatePricing } from '@/lib/subscription/catalog'
 import Stripe from 'stripe'
 
@@ -81,7 +82,7 @@ export async function POST(request: Request, { params }: Params) {
       totalDueUsd: summary.totalDueUsd,
       status: 'PENDING',
       paymentProvider: 'STRIPE',
-      selectedAddons: selectedAddons,
+      selectedAddons: selectedAddons as unknown as Prisma.InputJsonValue,
       createdById: session.user.id,
     },
   })
