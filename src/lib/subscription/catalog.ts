@@ -91,6 +91,8 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
 
 export const ALLOWED_DURATIONS = [3, 6, 12] as const
 
+export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.01'
+
 export function calculatePricing(planId: string, durationMonths: number, addonIds: string[]): PricingSummary {
   const plan = SUBSCRIPTION_PLANS.find((p) => p.id === planId)
   if (!plan) throw new Error('Invalid plan')

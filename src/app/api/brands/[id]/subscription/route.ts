@@ -3,7 +3,8 @@ import { getSession } from '@/lib/auth'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
-import { ALLOWED_DURATIONS, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS, calculatePricing } from '@/lib/subscription/catalog'
+import { ALLOWED_DURATIONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS, calculatePricing } from '@/lib/subscription/catalog'
+import { SUBSCRIPTION_TERMS_NOTICE, SUBSCRIPTION_TERMS_SECTIONS, SUBSCRIPTION_TERMS_TITLE } from '@/lib/subscription/terms'
 import Stripe from 'stripe'
 
 type Params = { params: Promise<{ id: string }> }
@@ -36,6 +37,10 @@ export async function GET(_req: Request, { params }: Params) {
     plans: SUBSCRIPTION_PLANS,
     addons: SUBSCRIPTION_ADDONS,
     durations: ALLOWED_DURATIONS,
+    termsVersion: DEFAULT_SUBSCRIPTION_TERMS_VERSION,
+    termsTitle: SUBSCRIPTION_TERMS_TITLE,
+    termsNotice: SUBSCRIPTION_TERMS_NOTICE,
+    termsSections: SUBSCRIPTION_TERMS_SECTIONS,
     latestSubscription: latest,
     paymentEnabled: Boolean(stripe),
   })
@@ -63,6 +68,15 @@ export async function POST(request: Request, { params }: Params) {
   const durationMonths = Number(body.durationMonths)
   const addonIds: string[] = Array.isArray(body.addonIds) ? body.addonIds.map((v: unknown) => String(v)) : []
   const uniqueAddonIds: string[] = Array.from(new Set(addonIds))
+  const agreedToTerms = Boolean(body.agreedToTerms)
+  const termsVersion = String(body.termsVersion ?? DEFAULT_SUBSCRIPTION_TERMS_VERSION)
+
+  if (!agreedToTerms) {
+    return NextResponse.json({ error: 'You must agree to the subscription terms before checkout.' }, { status: 400 })
+  }
+  if (termsVersion !== DEFAULT_SUBSCRIPTION_TERMS_VERSION) {
+    return NextResponse.json({ error: `Invalid termsVersion: ${termsVersion}` }, { status: 400 })
+  }
 
   const selectedPlan = SUBSCRIPTION_PLANS.find((p) => p.id === planId)
   if (!selectedPlan) return NextResponse.json({ error: 'Invalid planId' }, { status: 400 })
@@ -89,6 +103,8 @@ export async function POST(request: Request, { params }: Params) {
       status: 'PENDING',
       paymentProvider: 'STRIPE',
       selectedAddons: selectedAddons as unknown as Prisma.InputJsonValue,
+      termsVersion,
+      termsAcceptedAt: new Date(),
       createdById: session.user.id,
     },
   })

@@ -25,6 +25,10 @@ type SubscriptionPayload = {
   plans: Plan[]
   addons: Addon[]
   durations: number[]
+  termsVersion: string
+  termsTitle: string
+  termsNotice: string
+  termsSections: { title: string; content: string }[]
   latestSubscription?: any
   paymentEnabled: boolean
 }
@@ -43,6 +47,8 @@ export default function BrandSubscriptionPage() {
   const [planId, setPlanId] = useState<string>('starter')
   const [durationMonths, setDurationMonths] = useState<number>(3)
   const [addonIds, setAddonIds] = useState<string[]>([])
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
 
   const success = searchParams?.get('success') === '1'
   const canceled = searchParams?.get('canceled') === '1'
@@ -111,14 +117,20 @@ export default function BrandSubscriptionPage() {
   }
 
   const startCheckout = async () => {
-    if (!selectedPlan) return
+    if (!selectedPlan || !data) return
     setSubmitting(true)
     setError(null)
     try {
       const res = await fetch(`/api/brands/${brandId}/subscription`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId: selectedPlan.id, durationMonths, addonIds }),
+        body: JSON.stringify({
+          planId: selectedPlan.id,
+          durationMonths,
+          addonIds,
+          agreedToTerms,
+          termsVersion: data.termsVersion,
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to create checkout session')
@@ -262,6 +274,21 @@ export default function BrandSubscriptionPage() {
                 ))}
               </div>
             </section>
+
+            <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+              <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 mb-3">4) 用户协议</h2>
+              <p className="text-xs text-slate-500 mb-3">{data.termsNotice}</p>
+              <button
+                onClick={() => setShowTerms(true)}
+                className="text-sm font-bold text-blue-600 hover:text-blue-700"
+              >
+                查看服务协议摘要
+              </button>
+              <label className="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-0.5" />
+                <span>我已阅读并同意 {data.termsTitle}（{data.termsVersion}）</span>
+              </label>
+            </section>
           </div>
 
           <aside className="space-y-4">
@@ -292,7 +319,7 @@ export default function BrandSubscriptionPage() {
 
               <button
                 onClick={startCheckout}
-                disabled={!data.paymentEnabled || submitting || confirming}
+                disabled={!data.paymentEnabled || submitting || confirming || !agreedToTerms}
                 className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white font-bold disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
@@ -305,6 +332,26 @@ export default function BrandSubscriptionPage() {
           </aside>
         </div>
       </div>
+
+      {showTerms && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl">
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="text-base font-black text-slate-900 dark:text-slate-100">{data.termsTitle}</h3>
+              <button onClick={() => setShowTerms(false)} className="text-sm text-slate-500 hover:text-slate-700">关闭</button>
+            </div>
+            <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
+              {data.termsSections.map((s) => (
+                <div key={s.title}>
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{s.title}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">{s.content}</p>
+                </div>
+              ))}
+              <p className="text-xs text-slate-500 pt-2 border-t border-slate-200 dark:border-slate-700">{data.termsNotice}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

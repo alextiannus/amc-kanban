@@ -201,6 +201,8 @@ model BrandSubscription {
   paymentSessionId   String?  @unique
   paymentUrl         String?
   selectedAddons     Json?
+  termsVersion       String?
+  termsAcceptedAt    DateTime?
   contractStartDate  DateTime?
   contractEndDate    DateTime?
   paidAt             DateTime?

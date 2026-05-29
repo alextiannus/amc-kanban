@@ -135,6 +135,7 @@ export default function MainLayout({
             user={user}
             currentView={currentView}
             setCurrentView={setCurrentView}
+            activeBrandId={activeBrand?.id}
             onShowSettings={onShowSettings}
             onShowSystemLog={onShowSystemLog}
             onNewAgentKeyGenerated={onNewAgentKeyGenerated}
