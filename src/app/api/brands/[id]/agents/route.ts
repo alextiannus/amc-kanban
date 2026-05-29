@@ -30,6 +30,7 @@ export async function GET(_req: Request, { params }: Params) {
         select: {
           id: true, nickname: true, email: true,
           introduction: true, insights: true, themeColor: true, type: true,
+          chatLink: true,
           ...avatarSelect,
         },
       },
