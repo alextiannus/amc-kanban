@@ -221,46 +221,95 @@ export function createAmcMcpServer(agentApiKey: string) {
   )
 
   // ── update_agent_profile ────────────────────────────────────────────────
-  server.tool(
-    'update_agent_profile',
-    'Update agent nickname, avatar, introduction, themeColor, workflow, or insights.',
-    {
-      nickname: z.string().optional(),
-      avatar: z.string().optional().describe('Public URL or base64 data URI (data:image/png;base64,...). System stores it permanently.'),
-      introduction: z.string().optional(),
-      workflow: z.string().optional(),
-      themeColor: z.string().optional().describe('HEX color e.g. #6366f1'),
-      insights: z.string().optional(),
-    },
-    async (input) => {
-      const agent = await resolveAgent()
-      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+  const updateAgentProfileSchema = {
+    nickname: z.string().optional(),
+    avatar: z.string().optional().describe('Public URL or base64 data URI (data:image/png;base64,...). System stores it permanently.'),
+    introduction: z.string().optional(),
+    workflow: z.string().optional(),
+    themeColor: z.string().optional().describe('HEX color e.g. #6366f1'),
+    insights: z.string().optional(),
+    chatLink: z.string().optional().describe('Direct chatbot URL for this agent (Openclaw/Ackclaw).'),
+    agentProvider: z.enum(['OPENCLAW', 'ACKCLAW']).optional().describe('Chatbot provider for this agent.'),
+    driveFolder: z.string().optional().describe('Optional drive folder URL for this agent.'),
+  } as const
 
-      const updateData: Record<string, unknown> = { ...input }
+  const updateAgentProfileHandler = async (input: {
+    nickname?: string
+    avatar?: string
+    introduction?: string
+    workflow?: string
+    themeColor?: string
+    insights?: string
+    chatLink?: string
+    agentProvider?: 'OPENCLAW' | 'ACKCLAW'
+    driveFolder?: string
+  }) => {
+    const agent = await resolveAgent()
+    if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      if (input.avatar) {
-        if (input.avatar.startsWith('data:')) {
-          const match = input.avatar.match(/^data:([^;]+);base64,(.+)$/)
-          if (match) {
-            updateData.avatarMimeType = match[1]
-            updateData.avatarData = Buffer.from(match[2], 'base64')
+    const updateData: Record<string, unknown> = { ...input }
+
+    const normalizeOptionalUrl = (raw?: string) => {
+      if (raw === undefined) return undefined
+      const value = raw.trim()
+      if (!value) return null
+      try {
+        const url = new URL(value)
+        if (!['http:', 'https:'].includes(url.protocol)) return '__INVALID__'
+        return url.toString()
+      } catch {
+        return '__INVALID__'
+      }
+    }
+
+    const normalizedChatLink = normalizeOptionalUrl(input.chatLink)
+    if (normalizedChatLink === '__INVALID__') {
+      return { content: [{ type: 'text' as const, text: 'Error: chatLink must be a valid http/https URL' }], isError: true }
+    }
+    if (normalizedChatLink !== undefined) updateData.chatLink = normalizedChatLink
+
+    const normalizedDriveFolder = normalizeOptionalUrl(input.driveFolder)
+    if (normalizedDriveFolder === '__INVALID__') {
+      return { content: [{ type: 'text' as const, text: 'Error: driveFolder must be a valid http/https URL' }], isError: true }
+    }
+    if (normalizedDriveFolder !== undefined) updateData.driveFolder = normalizedDriveFolder
+
+    if (input.avatar) {
+      if (input.avatar.startsWith('data:')) {
+        const match = input.avatar.match(/^data:([^;]+);base64,(.+)$/)
+        if (match) {
+          updateData.avatarMimeType = match[1]
+          updateData.avatarData = Buffer.from(match[2], 'base64')
+          delete updateData.avatar
+        }
+      } else if (input.avatar.startsWith('http')) {
+        try {
+          const res = await fetch(input.avatar)
+          if (res.ok) {
+            updateData.avatarData = Buffer.from(await res.arrayBuffer())
+            updateData.avatarMimeType = res.headers.get('content-type') || 'image/jpeg'
             delete updateData.avatar
           }
-        } else if (input.avatar.startsWith('http')) {
-          try {
-            const res = await fetch(input.avatar)
-            if (res.ok) {
-              updateData.avatarData = Buffer.from(await res.arrayBuffer())
-              updateData.avatarMimeType = res.headers.get('content-type') || 'image/jpeg'
-              delete updateData.avatar
-            }
-          } catch { /* keep URL as fallback */ }
-        }
+        } catch { /* keep URL as fallback */ }
       }
-
-      await prisma.user.update({ where: { id: agent.id }, data: updateData })
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, updated: Object.keys(updateData) }) }] }
     }
+
+    await prisma.user.update({ where: { id: agent.id }, data: updateData })
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, updated: Object.keys(updateData) }) }] }
+  }
+
+  server.tool(
+    'update_agent_profile',
+    'Update agent nickname, avatar, introduction, themeColor, workflow, insights, and optional chat connection fields.',
+    updateAgentProfileSchema,
+    updateAgentProfileHandler
+  )
+
+  server.tool(
+    'configure_agent_connection',
+    'Self-service onboarding/config tool for AI Agent. Configure chatbot connection (chatLink/provider) and optional profile fields in AMC.',
+    updateAgentProfileSchema,
+    updateAgentProfileHandler
   )
 
   // ── list_tasks ──────────────────────────────────────────────────────────
