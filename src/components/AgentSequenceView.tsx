@@ -79,24 +79,7 @@ export default function AgentSequenceView({
 
   const buildAgentChatLink = (agent: any) => {
     const explicitLink = toSafeHttpUrl(agent.chatLink)
-    if (explicitLink) return explicitLink
-
-    const emailLocal = typeof agent.email === 'string' ? agent.email.split('@')[0] : ''
-    const agentId = encodeURIComponent(emailLocal)
-    const agentEmail = encodeURIComponent(agent.email || '')
-    const provider = typeof agent.agentProvider === 'string' ? agent.agentProvider.toUpperCase() : 'OPENCLAW'
-    const isAckClaw = provider === 'ACKCLAW'
-
-    const openTemplate = process.env.NEXT_PUBLIC_OPENCLAW_CHAT_URL_TEMPLATE
-    const ackTemplate = process.env.NEXT_PUBLIC_ACKCLAW_CHAT_URL_TEMPLATE
-    const selectedTemplate = (isAckClaw ? ackTemplate : openTemplate) || openTemplate || ackTemplate
-    if (!selectedTemplate) return null
-
-    const derived = selectedTemplate
-      .replaceAll('{agentId}', agentId)
-      .replaceAll('{agentEmail}', agentEmail)
-
-    return toSafeHttpUrl(derived)
+    return explicitLink
   }
 
   const openAgentChat = (e: React.MouseEvent, chatLink?: string | null) => {
