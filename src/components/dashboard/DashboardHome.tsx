@@ -96,16 +96,42 @@ interface ConnectedAccount {
 }
 
 // ── KPI Tofu Card (小豆腐块 compact) ───────────────────────────────────
-function PlatformLogo({ icon, name, size = 20 }: { icon: string; name: string; size?: number }) {
+function PlatformLogo({ icon, iconDark, name, size = 20 }: { icon: string; iconDark?: string; name: string; size?: number }) {
+  const [srcIndex, setSrcIndex] = useState(0)
+  const candidates = React.useMemo(() => {
+    const uniq = Array.from(new Set([icon, iconDark].filter(Boolean) as string[]))
+    return uniq
+  }, [icon, iconDark])
+
+  useEffect(() => {
+    setSrcIndex(0)
+  }, [icon, iconDark, name])
+
+  const fallback = (
+    <span
+      aria-label={name}
+      title={name}
+      className="inline-flex items-center justify-center rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200 font-black"
+      style={{ width: size, height: size, fontSize: Math.max(10, Math.floor(size * 0.45)) }}
+    >
+      {name.trim().slice(0, 1).toUpperCase()}
+    </span>
+  )
+
+  if (!candidates[srcIndex]) return fallback
+
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={icon}
+      src={candidates[srcIndex]}
       alt={name}
       width={size}
       height={size}
       className="object-contain"
-      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={() => setSrcIndex((i) => i + 1)}
     />
   )
 }
@@ -133,7 +159,7 @@ function KpiCard({ account }: { account: ConnectedAccount }) {
           className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform overflow-hidden border border-white dark:border-slate-700 shadow-sm"
           style={{ background: `${tint}18` }}
         >
-          <PlatformLogo icon={platform.icon} name={platform.name} size={24} />
+          <PlatformLogo icon={platform.icon} iconDark={platform.iconDark} name={platform.name} size={24} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-extrabold text-slate-700 dark:text-slate-200 truncate pr-5">{account.handle || platform.name}</p>
@@ -232,7 +258,7 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
                 className="flex flex-col items-center gap-2 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-all group active:scale-95"
               >
                 <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-100 dark:border-slate-700">
-                  <PlatformLogo icon={p.icon} name={p.name} size={22} />
+                  <PlatformLogo icon={p.icon} iconDark={p.iconDark} name={p.name} size={22} />
                 </div>
                 <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 text-center leading-tight">{p.name}</span>
               </button>
@@ -246,7 +272,7 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
             {/* Platform badge */}
             <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-100 dark:border-slate-700">
               <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center border border-slate-100 dark:border-slate-700">
-                <PlatformLogo icon={selectedPlatform.icon} name={selectedPlatform.name} size={20} />
+                <PlatformLogo icon={selectedPlatform.icon} iconDark={selectedPlatform.iconDark} name={selectedPlatform.name} size={20} />
               </div>
               <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{selectedPlatform.name}</span>
             </div>
