@@ -7,6 +7,18 @@ import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 
 type Params = { params: Promise<{ id: string }> }
 
+const GOOGLE_PLATFORM_ALIASES = [
+  'google',
+  'google_business_profile',
+  'googlebusinessprofile',
+  'google_my_business',
+  'googlemybusiness',
+  'google_maps',
+  'googlemaps',
+  'gbp',
+  'gmb',
+]
+
 function maskKey(key: string | null) {
   if (!key) return null
   return `••••••${key.slice(-4)}`
@@ -176,28 +188,66 @@ export async function PATCH(request: Request, { params }: Params) {
               continue
             }
             
-            await prisma.socialAccount.upsert({
-              where: { brandId_platformId_handle: { brandId: id, platformId: acc.platformId, handle: acc.handle } },
-              create: {
-                brandId: id,
-                platformId: acc.platformId,
-                handle: acc.handle,
-                displayName: acc.displayName ?? acc.handle,
-                profileUrl: acc.profileUrl ?? null,
-                followerCount: acc.followerCount ?? null,
-                followerDelta: acc.followerDelta ?? 0,
-                ratingScore: acc.ratingScore ?? null,
-                snapshotAt: new Date(),
-              },
-              update: {
-                displayName: acc.displayName ?? acc.handle,
-                profileUrl: acc.profileUrl ?? null,
-                followerCount: acc.followerCount ?? null,
-                followerDelta: acc.followerDelta ?? 0,
-                ratingScore: acc.ratingScore ?? null,
-                snapshotAt: new Date(),
-              },
-            })
+            if (acc.platformId === 'google') {
+              const existingGoogle = await prisma.socialAccount.findFirst({
+                where: { brandId: id, platformId: { in: GOOGLE_PLATFORM_ALIASES } },
+                orderBy: { updatedAt: 'desc' },
+                select: { id: true },
+              })
+
+              if (existingGoogle) {
+                await prisma.socialAccount.update({
+                  where: { id: existingGoogle.id },
+                  data: {
+                    platformId: 'google',
+                    handle: acc.handle,
+                    displayName: acc.displayName ?? acc.handle,
+                    profileUrl: acc.profileUrl ?? null,
+                    followerCount: acc.followerCount ?? null,
+                    followerDelta: acc.followerDelta ?? 0,
+                    ratingScore: acc.ratingScore ?? null,
+                    snapshotAt: new Date(),
+                  },
+                })
+              } else {
+                await prisma.socialAccount.create({
+                  data: {
+                    brandId: id,
+                    platformId: 'google',
+                    handle: acc.handle,
+                    displayName: acc.displayName ?? acc.handle,
+                    profileUrl: acc.profileUrl ?? null,
+                    followerCount: acc.followerCount ?? null,
+                    followerDelta: acc.followerDelta ?? 0,
+                    ratingScore: acc.ratingScore ?? null,
+                    snapshotAt: new Date(),
+                  },
+                })
+              }
+            } else {
+              await prisma.socialAccount.upsert({
+                where: { brandId_platformId_handle: { brandId: id, platformId: acc.platformId, handle: acc.handle } },
+                create: {
+                  brandId: id,
+                  platformId: acc.platformId,
+                  handle: acc.handle,
+                  displayName: acc.displayName ?? acc.handle,
+                  profileUrl: acc.profileUrl ?? null,
+                  followerCount: acc.followerCount ?? null,
+                  followerDelta: acc.followerDelta ?? 0,
+                  ratingScore: acc.ratingScore ?? null,
+                  snapshotAt: new Date(),
+                },
+                update: {
+                  displayName: acc.displayName ?? acc.handle,
+                  profileUrl: acc.profileUrl ?? null,
+                  followerCount: acc.followerCount ?? null,
+                  followerDelta: acc.followerDelta ?? 0,
+                  ratingScore: acc.ratingScore ?? null,
+                  snapshotAt: new Date(),
+                },
+              })
+            }
             syncResults.success++
             console.log(`[Settings] ✓ Synced ${acc.platformId}:${acc.handle}`)
           } catch (e: any) {

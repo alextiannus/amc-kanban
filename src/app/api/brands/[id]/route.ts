@@ -6,6 +6,18 @@ import { postfastFetchAccounts, postfastListPosts } from '@/lib/integrations/pos
 
 type Params = { params: Promise<{ id: string }> }
 
+const GOOGLE_PLATFORM_ALIASES = [
+  'google',
+  'google_business_profile',
+  'googlebusinessprofile',
+  'google_my_business',
+  'googlemybusiness',
+  'google_maps',
+  'googlemaps',
+  'gbp',
+  'gmb',
+]
+
 // GET /api/brands/[id] — brand detail with accounts, pending counts, conversion summary, recent drafts
 export async function GET(_req: Request, { params }: Params) {
   const session = await getSession()
@@ -39,17 +51,19 @@ export async function GET(_req: Request, { params }: Params) {
         for (const acc of pfResult.accounts) {
           if (!acc.platformId || !acc.handle) continue
 
-          // For Google Business Profile, a brand typically has one location.
-          // Dedup by platformId alone to prevent handle-mismatch duplicates.
+          // For Google Business Profile, treat legacy aliases as the same platform
+          // and keep a single canonical "google" row to avoid stale duplicates.
           if (acc.platformId === 'google') {
             const existing = await prisma.socialAccount.findFirst({
-              where: { brandId: id, platformId: 'google' },
+              where: { brandId: id, platformId: { in: GOOGLE_PLATFORM_ALIASES } },
+              orderBy: { updatedAt: 'desc' },
               select: { id: true },
             })
             if (existing) {
               await prisma.socialAccount.update({
                 where: { id: existing.id },
                 data: {
+                  platformId: 'google',
                   handle: acc.handle,
                   displayName: acc.displayName ?? acc.handle,
                   profileUrl: acc.profileUrl ?? null,
@@ -103,7 +117,7 @@ export async function GET(_req: Request, { params }: Params) {
     where: { id },
     include: {
       accounts: {
-        orderBy: { createdAt: 'asc' },
+        orderBy: { updatedAt: 'desc' },
         select: {
           id: true, platformId: true, handle: true, displayName: true,
           autoPilot: true, followerCount: true, followerDelta: true,
