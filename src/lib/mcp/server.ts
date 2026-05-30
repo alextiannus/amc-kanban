@@ -178,7 +178,7 @@ export function createAmcMcpServer(agentApiKey: string) {
         'postfastApiKey', 'googlePlaceId', 'googleApiKey', 'larkAppId', 'larkAppSecret',
         'larkParentFolderToken', 'larkDriveFolderId', 'larkBotWebhook', 'larkOwnerId'] as const
       const updateData: Record<string, unknown> = {}
-      if (name) updateData.name = name
+      if (input.name) updateData.name = input.name
       for (const key of WRITABLE) {
         const val = (input as Record<string, unknown>)[key]
         if (val !== undefined && val !== '') updateData[key] = val
