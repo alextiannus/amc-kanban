@@ -8,30 +8,36 @@ export interface InvitationData {
   createdAt: number
 }
 
-const ENCRYPTION_KEY = process.env.INVITATION_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex')
+function getInvitationKey() {
+  const secret = process.env.INVITATION_ENCRYPTION_KEY?.trim() || process.env.JWT_SECRET?.trim()
+  if (!secret) {
+    throw new Error('INVITATION_ENCRYPTION_KEY or JWT_SECRET is required')
+  }
+  return crypto.createHash('sha256').update(secret).digest()
+}
 
 // 生成邀请链接中的加密 token
 export function generateInvitationToken(data: InvitationData): string {
   const iv = crypto.randomBytes(16)
-  const key = Buffer.from(ENCRYPTION_KEY, 'hex').slice(0, 32)
+  const key = getInvitationKey()
   const cipher = crypto.createCipheriv('aes-256-cbc', key, iv)
   
   const json = JSON.stringify(data)
   let encrypted = cipher.update(json, 'utf-8', 'hex')
   encrypted += cipher.final('hex')
   
-  // 返回 iv + encrypted 的 base64
   const combined = iv.toString('hex') + ':' + encrypted
-  return Buffer.from(combined).toString('base64url')
+  return Buffer.from(combined, 'utf8').toString('base64url')
 }
 
 // 解密邀请 token 获取数据
 export function decryptInvitationToken(token: string): InvitationData | null {
   try {
-    const combined = Buffer.from(token, 'base64url').toString('hex')
+    const combined = Buffer.from(token, 'base64url').toString('utf8')
     const [ivHex, encrypted] = combined.split(':')
+    if (!ivHex || !encrypted) return null
     const iv = Buffer.from(ivHex, 'hex')
-    const key = Buffer.from(ENCRYPTION_KEY, 'hex').slice(0, 32)
+    const key = getInvitationKey()
     
     const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv)
     let decrypted = decipher.update(encrypted, 'hex', 'utf-8')

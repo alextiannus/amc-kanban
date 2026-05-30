@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Check, X, TrendingUp, TrendingDown, AlertCircle, Star,
-  Calendar, Zap, Shield, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink, CreditCard, MessageCircle
+  Calendar, Zap, Shield, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink, CreditCard
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
 import BrandKanbanLane from '../BrandKanbanLane'
@@ -683,22 +683,6 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
     }
   }
 
-  const toSafeHttpUrl = (raw?: string | null) => {
-    if (!raw) return null
-    try {
-      const url = new URL(raw)
-      return ['http:', 'https:'].includes(url.protocol) ? url.toString() : null
-    } catch {
-      return null
-    }
-  }
-
-  const openAgentChat = (chatLink?: string | null) => {
-    const safeUrl = toSafeHttpUrl(chatLink)
-    if (!safeUrl) return
-    window.open(safeUrl, '_blank', 'noopener,noreferrer')
-  }
-
 
   // ── Add account ───────────────────────────────────────────────────────────
   const onAccountAdded = () => { if (activeBrand?.id) loadDetail(activeBrand.id) }
@@ -907,7 +891,6 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
               {brandAgents.map((ba: any) => {
                 const agent = ba.agent
                 if (!agent) return null
-                const resolvedChatLink = toSafeHttpUrl(agent.chatLink)
                 return (
                   <div
                     key={ba.id}
@@ -946,22 +929,6 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
                         <p className="text-sm font-medium text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">{agent.insights}</p>
                       </div>
                     )}
-
-                    <div className="mt-4">
-                      <button
-                        onClick={() => openAgentChat(resolvedChatLink)}
-                        disabled={!resolvedChatLink}
-                        className={`w-full px-3 py-2 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
-                          resolvedChatLink
-                            ? 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                        }`}
-                        title={resolvedChatLink ? '打开该 Agent 的 Chatbot 对话' : '该 Agent 暂无 Chatbot 对话链接'}
-                      >
-                        <MessageCircle size={14} />
-                        {resolvedChatLink ? 'Chatbot 对话' : '暂无 Chatbot 链接'}
-                      </button>
-                    </div>
                   </div>
                 )
               })}

@@ -25,6 +25,14 @@ export async function PATCH(request: Request, { params }: Params) {
     if (!['ADMIN', 'USER'].includes(body.role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
     }
+
+    if (target.role === 'ADMIN' && body.role === 'USER') {
+      const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } })
+      if (adminCount <= 1) {
+        return NextResponse.json({ error: 'Cannot demote the last admin' }, { status: 400 })
+      }
+    }
+
     const updated = await prisma.user.update({ where: { id }, data: { role: body.role } })
     return NextResponse.json({ ok: true, role: updated.role })
   }
@@ -67,6 +75,13 @@ export async function DELETE(_req: Request, { params }: Params) {
 
   const target = await prisma.user.findUnique({ where: { id } })
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  if (target.role === 'ADMIN') {
+    const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } })
+    if (adminCount <= 1) {
+      return NextResponse.json({ error: 'Cannot delete the last admin' }, { status: 400 })
+    }
+  }
 
   await prisma.user.delete({ where: { id } })
   return NextResponse.json({ ok: true })

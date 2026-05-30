@@ -2,35 +2,57 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { decryptInvitationToken } from '@/lib/invitation'
+
+type InvitationData = {
+  email: string
+  username: string
+  password: string
+  welcomeMessage: string
+  createdAt: number
+}
 
 export default function InvitePage() {
   const params = useParams()
   const router = useRouter()
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<InvitationData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const token = params.token as string
 
   useEffect(() => {
-    if (token) {
-      const invitationData = decryptInvitationToken(token)
-      if (invitationData) {
-        // 检查链接是否过期（超过7天）
-        const linkAge = Date.now() - invitationData.createdAt
-        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
-        
-        if (linkAge > sevenDaysMs) {
-          setError('邀请链接已过期（有效期为7天）')
-        } else {
-          setData(invitationData)
-        }
-      } else {
+    let cancelled = false
+
+    async function loadInvitation() {
+      if (!token) {
         setError('无效的邀请链接')
+        setLoading(false)
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/invite/${encodeURIComponent(token)}`)
+        const payload = await response.json()
+
+        if (cancelled) return
+
+        if (!response.ok) {
+          setError(payload?.error || '无效的邀请链接')
+        } else {
+          setData(payload.invitationData)
+        }
+      } catch {
+        if (!cancelled) setError('无效的邀请链接')
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
-    setLoading(false)
+
+    loadInvitation()
+
+    return () => {
+      cancelled = true
+    }
   }, [token])
 
   const copyToClipboard = (text: string) => {

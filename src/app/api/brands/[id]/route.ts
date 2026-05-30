@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canHumanAccessBrandProject, canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canOwnBrand, canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { postfastFetchAccounts, postfastListPosts } from '@/lib/integrations/postfast'
 
 type Params = { params: Promise<{ id: string }> }
@@ -293,11 +293,10 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  // PATCH allows HUMAN users with delegated AI permission access.
   if (session.user.type === 'AI_AGENT') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
+  if (!(await canOwnBrand(id, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

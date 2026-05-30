@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canOwnBrand } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { ALLOWED_DURATIONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, PLAN_COMPARISON_ROWS, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS, calculatePricing } from '@/lib/subscription/catalog'
@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: Params) {
 
   const { id: brandId } = await params
   if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+  if (!(await canOwnBrand(brandId, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -54,7 +54,7 @@ export async function POST(request: Request, { params }: Params) {
 
   const { id: brandId } = await params
   if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+  if (!(await canOwnBrand(brandId, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

@@ -13,10 +13,6 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { writeAuditLog, actorFromContext } from '@/lib/audit'
-import {
-  buildOpenclawConnectionProfile,
-  normalizeOpenclawAgentConfig,
-} from '@/lib/integrations/openclaw'
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -58,6 +54,14 @@ export async function getAgentFromKey(apiKey: string) {
   return prisma.user.findFirst({ where: { apiKey: key, type: 'AI_AGENT' } })
 }
 
+async function requireActiveBrandLink(brandId: string, agentId: string) {
+  return prisma.brandAgent.findFirst({ where: { brandId, agentId, active: true }, select: { id: true } })
+}
+
+async function requireOwnedTask(taskId: string, agentId: string) {
+  return prisma.workUnit.findUnique({ where: { id: taskId }, select: { id: true, assigneeId: true } })
+}
+
 // ── Build and return a configured McpServer ────────────────────────────────
 export function createAmcMcpServer(agentApiKey: string) {
   const server = new McpServer({
@@ -66,14 +70,6 @@ export function createAmcMcpServer(agentApiKey: string) {
   })
 
   const resolveAgent = () => getAgentFromKey(agentApiKey)
-  const resolvePublicBaseUrl = () => {
-    const raw =
-      process.env.APP_BASE_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.RENDER_EXTERNAL_URL ||
-      'https://amc-kanban.immedi.ai'
-    return raw.replace(/\/$/, '')
-  }
 
   // ── get_brand_config ────────────────────────────────────────────────────
   server.tool(
@@ -169,24 +165,14 @@ export function createAmcMcpServer(agentApiKey: string) {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const { brandId, name, ...fields } = input
+      const { brandId, ...fields } = input
 
       if (!brandId) {
-        if (!name) return { content: [{ type: 'text' as const, text: 'Error: name required when creating a new brand' }], isError: true }
-        const brand = await prisma.brand.create({ data: { ownerId: agent.id, name, ...fields } })
-        await prisma.brandAgent.upsert({
-          where: { brandId_agentId: { brandId: brand.id, agentId: agent.id } },
-          create: { brandId: brand.id, agentId: agent.id, role: 'owner', active: true },
-          update: { active: true },
-        })
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, created: true, brandId: brand.id }) }] }
+        return { content: [{ type: 'text' as const, text: 'Error: Brand creation via MCP is disabled. Create brands from the dashboard.' }], isError: true }
       }
 
-      await prisma.brandAgent.upsert({
-        where: { brandId_agentId: { brandId, agentId: agent.id } },
-        create: { brandId, agentId: agent.id, role: 'worker', active: true },
-        update: { active: true },
-      })
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const WRITABLE = ['name', 'description', 'website', 'phone', 'address', 'location', 'timezone',
         'postfastApiKey', 'googlePlaceId', 'googleApiKey', 'larkAppId', 'larkAppSecret',
@@ -233,280 +219,45 @@ export function createAmcMcpServer(agentApiKey: string) {
   )
 
   // ── update_agent_profile ────────────────────────────────────────────────
-  const updateAgentProfileSchema = {
-    nickname: z.string().optional(),
-    avatar: z.string().optional().describe('Public URL or base64 data URI (data:image/png;base64,...). System stores it permanently.'),
-    introduction: z.string().optional(),
-    workflow: z.string().optional(),
-    themeColor: z.string().optional().describe('HEX color e.g. #6366f1'),
-    insights: z.string().optional(),
-    chatLink: z.string().optional().describe('Direct chatbot URL for this agent (Openclaw/Ackclaw).'),
-    agentProvider: z.enum(['OPENCLAW', 'ACKCLAW']).optional().describe('Chatbot provider for this agent.'),
-    driveFolder: z.string().optional().describe('Optional drive folder URL for this agent.'),
-  } as const
-
-  const updateAgentProfileHandler = async (input: {
-    nickname?: string
-    avatar?: string
-    introduction?: string
-    workflow?: string
-    themeColor?: string
-    insights?: string
-    chatLink?: string
-    agentProvider?: 'OPENCLAW' | 'ACKCLAW'
-    driveFolder?: string
-  }) => {
-    const agent = await resolveAgent()
-    if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-
-    const updateData: Record<string, unknown> = { ...input }
-
-    const normalizeOptionalUrl = (raw?: string) => {
-      if (raw === undefined) return undefined
-      const value = raw.trim()
-      if (!value) return null
-      try {
-        const url = new URL(value)
-        if (!['http:', 'https:'].includes(url.protocol)) return '__INVALID__'
-        return url.toString()
-      } catch {
-        return '__INVALID__'
-      }
-    }
-
-    const normalizedChatLink = normalizeOptionalUrl(input.chatLink)
-    if (normalizedChatLink === '__INVALID__') {
-      return { content: [{ type: 'text' as const, text: 'Error: chatLink must be a valid http/https URL' }], isError: true }
-    }
-    if (normalizedChatLink !== undefined) updateData.chatLink = normalizedChatLink
-
-    const normalizedDriveFolder = normalizeOptionalUrl(input.driveFolder)
-    if (normalizedDriveFolder === '__INVALID__') {
-      return { content: [{ type: 'text' as const, text: 'Error: driveFolder must be a valid http/https URL' }], isError: true }
-    }
-    if (normalizedDriveFolder !== undefined) updateData.driveFolder = normalizedDriveFolder
-
-    if (input.avatar) {
-      if (input.avatar.startsWith('data:')) {
-        const match = input.avatar.match(/^data:([^;]+);base64,(.+)$/)
-        if (match) {
-          updateData.avatarMimeType = match[1]
-          updateData.avatarData = Buffer.from(match[2], 'base64')
-          delete updateData.avatar
-        }
-      } else if (input.avatar.startsWith('http')) {
-        try {
-          const res = await fetch(input.avatar)
-          if (res.ok) {
-            updateData.avatarData = Buffer.from(await res.arrayBuffer())
-            updateData.avatarMimeType = res.headers.get('content-type') || 'image/jpeg'
-            delete updateData.avatar
-          }
-        } catch { /* keep URL as fallback */ }
-      }
-    }
-
-    await prisma.user.update({ where: { id: agent.id }, data: updateData })
-    return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, updated: Object.keys(updateData) }) }] }
-  }
-
   server.tool(
     'update_agent_profile',
-    'Update agent nickname, avatar, introduction, themeColor, workflow, insights, and optional chat connection fields.',
-    updateAgentProfileSchema,
-    updateAgentProfileHandler
-  )
-
-  server.tool(
-    'configure_agent_connection',
-    'Self-service onboarding/config tool for AI Agent. Configure chatbot connection (chatLink/provider) and optional profile fields in AMC.',
-    updateAgentProfileSchema,
-    updateAgentProfileHandler
-  )
-
-  server.tool(
-    'get_openclaw_connection_profile',
-    'Get Openclaw connection profile (MCP endpoint, webhook endpoint, and auth headers) for this agent.',
-    {},
-    async () => {
-      const agent = await resolveAgent()
-      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-
-      const profile = buildOpenclawConnectionProfile({
-        origin: resolvePublicBaseUrl(),
-        agentApiKey,
-        agentId: agent.id,
-        chatLink: agent.chatLink,
-        driveFolder: agent.driveFolder,
-      })
-
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            ok: true,
-            provider: 'OPENCLAW',
-            connectionReady: !!(agent.chatLink && agent.chatLink.trim()),
-            profile,
-          }, null, 2),
-        }],
-      }
-    }
-  )
-
-  server.tool(
-    'configure_openclaw_connection',
-    'Configure Openclaw connection for this agent (sets provider to OPENCLAW and updates chatLink/driveFolder/profile).',
+    'Update agent nickname, avatar, introduction, themeColor, workflow, or insights.',
     {
-      chatLink: z.string().optional().describe('Openclaw direct chat URL (http/https).'),
-      driveFolder: z.string().optional().describe('Optional drive folder URL (http/https).'),
       nickname: z.string().optional(),
+      avatar: z.string().optional().describe('Public URL or base64 data URI (data:image/png;base64,...). System stores it permanently.'),
+      introduction: z.string().optional(),
       workflow: z.string().optional(),
+      themeColor: z.string().optional().describe('HEX color e.g. #6366f1'),
+      insights: z.string().optional(),
     },
     async (input) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const normalized = normalizeOpenclawAgentConfig({
-        chatLink: input.chatLink,
-        driveFolder: input.driveFolder,
-      })
+      const updateData: Record<string, unknown> = { ...input }
 
-      if (!normalized.ok) {
-        return { content: [{ type: 'text' as const, text: `Error: ${normalized.error}` }], isError: true }
-      }
-
-      const updateData: Record<string, unknown> = { agentProvider: 'OPENCLAW' }
-      if (input.chatLink !== undefined) updateData.chatLink = normalized.data.chatLink
-      if (input.driveFolder !== undefined) updateData.driveFolder = normalized.data.driveFolder
-      if (input.nickname !== undefined) updateData.nickname = input.nickname.trim() || null
-      if (input.workflow !== undefined) updateData.workflow = input.workflow.trim() || null
-
-      const updated = await prisma.user.update({
-        where: { id: agent.id },
-        data: updateData,
-        select: {
-          id: true,
-          nickname: true,
-          workflow: true,
-          chatLink: true,
-          driveFolder: true,
-          agentProvider: true,
-        },
-      })
-
-      const profile = buildOpenclawConnectionProfile({
-        origin: resolvePublicBaseUrl(),
-        agentApiKey,
-        agentId: updated.id,
-        chatLink: updated.chatLink,
-        driveFolder: updated.driveFolder,
-      })
-
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({ ok: true, updated, profile }, null, 2),
-        }],
-      }
-    }
-  )
-
-  // ── get_agent_connection_health ────────────────────────────────────────
-  server.tool(
-    'get_agent_connection_health',
-    'Read-only health check for this agent\'s AMC connection setup. Returns readiness, missing fields, and next-step recommendations.',
-    {},
-    async () => {
-      const agent = await resolveAgent()
-      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-
-      const activeBrandLinks = await prisma.brandAgent.findMany({
-        where: { agentId: agent.id, active: true },
-        select: {
-          brandId: true,
-          role: true,
-          brand: {
-            select: {
-              id: true,
-              name: true,
-              postfastApiKey: true,
-              googlePlaceId: true,
-              googleApiKey: true,
-              larkBotWebhook: true,
-              larkOwnerId: true,
-            },
-          },
-        },
-      })
-
-      const hasChatLink = !!(agent.chatLink && agent.chatLink.trim())
-      const hasNickname = !!(agent.nickname && agent.nickname.trim())
-      const hasWorkflow = !!(agent.workflow && agent.workflow.trim())
-
-      const warnings: string[] = []
-      const recommendations: string[] = []
-
-      if (!hasChatLink) {
-        warnings.push('chatLink is not configured')
-        recommendations.push('Use configure_agent_connection with chatLink and agentProvider to set direct chatbot connection.')
-      }
-
-      if (!hasNickname) {
-        warnings.push('nickname is empty')
-        recommendations.push('Set nickname via configure_agent_connection for clearer board display.')
-      }
-
-      if (!hasWorkflow) {
-        warnings.push('workflow is empty')
-        recommendations.push('Set workflow via configure_agent_connection so collaboration standards are explicit.')
-      }
-
-      if (activeBrandLinks.length === 0) {
-        warnings.push('no active brand linkage')
-        recommendations.push('Link this agent to at least one brand in AMC so task and publish tools can target a brand context.')
-      }
-
-      const brandHealth = activeBrandLinks.map(link => {
-        const hasPostfast = !!link.brand.postfastApiKey
-        const hasGoogle = !!(link.brand.googlePlaceId && link.brand.googleApiKey)
-        const hasNotify = !!(link.brand.larkBotWebhook || link.brand.larkOwnerId)
-
-        return {
-          brandId: link.brand.id,
-          brandName: link.brand.name,
-          role: link.role,
-          integrations: {
-            postfastConfigured: hasPostfast,
-            googleConfigured: hasGoogle,
-            notifyConfigured: hasNotify,
-          },
+      if (input.avatar) {
+        if (input.avatar.startsWith('data:')) {
+          const match = input.avatar.match(/^data:([^;]+);base64,(.+)$/)
+          if (match) {
+            updateData.avatarMimeType = match[1]
+            updateData.avatarData = Buffer.from(match[2], 'base64')
+            delete updateData.avatar
+          }
+        } else if (input.avatar.startsWith('http')) {
+          try {
+            const res = await fetch(input.avatar)
+            if (res.ok) {
+              updateData.avatarData = Buffer.from(await res.arrayBuffer())
+              updateData.avatarMimeType = res.headers.get('content-type') || 'image/jpeg'
+              delete updateData.avatar
+            }
+          } catch { /* keep URL as fallback */ }
         }
-      })
-
-      const ready = warnings.length === 0
-
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            ok: true,
-            ready,
-            agent: {
-              id: agent.id,
-              email: agent.email,
-              nickname: agent.nickname,
-              agentProvider: agent.agentProvider,
-              hasChatLink,
-              hasWorkflow,
-            },
-            linkedBrandsCount: activeBrandLinks.length,
-            linkedBrands: brandHealth,
-            warnings,
-            recommendations,
-          }, null, 2),
-        }],
       }
+
+      await prisma.user.update({ where: { id: agent.id }, data: updateData })
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, updated: Object.keys(updateData) }) }] }
     }
   )
 
@@ -524,10 +275,15 @@ export function createAmcMcpServer(agentApiKey: string) {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
+      if (brandId) {
+        const link = await requireActiveBrandLink(brandId, agent.id)
+        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      }
+
       const where: Record<string, unknown> = {}
-      if (brandId) where.brandId = brandId
       if (status) where.status = status
       if (assignedToMe) where.assigneeId = agent.id
+      if (!assignedToMe) where.assigneeId = agent.id
 
       const tasks = await prisma.workUnit.findMany({
         where,
@@ -582,6 +338,10 @@ export function createAmcMcpServer(agentApiKey: string) {
     async ({ taskId, ...fields }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const existingTask = await requireOwnedTask(taskId, agent.id)
+      if (!existingTask) return { content: [{ type: 'text' as const, text: 'Error: Task not found' }], isError: true }
+      if (existingTask.assigneeId !== agent.id) return { content: [{ type: 'text' as const, text: 'Error: Task not assigned to this agent' }], isError: true }
 
       const updateData: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(fields)) {

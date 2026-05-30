@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canOwnBrand } from '@/lib/brandAccess'
 import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER, LARK_APP_DOMAIN } from '@/lib/integrations/lark'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 
@@ -33,7 +33,7 @@ export async function GET(_req: Request, { params }: Params) {
   if (session.user.type === 'AI_AGENT') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
+  if (!(await canOwnBrand(id, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   const brand = await prisma.brand.findUnique({ where: { id } })
@@ -93,7 +93,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (session.user.type === 'AI_AGENT') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
+  if (!(await canOwnBrand(id, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   const brand = await prisma.brand.findUnique({ where: { id } })
