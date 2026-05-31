@@ -1,9 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { Store, Calendar, BarChart2, Sun, Moon, Gift, Activity, CreditCard } from 'lucide-react'
+import { Store, Calendar, BarChart2, Sun, Moon, Gift, Activity } from 'lucide-react'
 import BrandSwitcher, { Brand } from './BrandSwitcher'
 import UserMenu from './UserMenu'
 
@@ -42,7 +41,6 @@ export default function MainLayout({
   onTasksCleared,
 }: MainLayoutProps) {
   const { theme, setTheme } = useTheme()
-  const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [subscriptionButtonText, setSubscriptionButtonText] = useState('订阅计划')
 
@@ -167,25 +165,12 @@ export default function MainLayout({
             </button>
           )}
 
-          <button
-            onClick={() => {
-              if (!activeBrand?.id) {
-                alert('请先选择品牌，再进入订阅计划')
-                return
-              }
-              router.push(`/board/subscription/${activeBrand.id}`)
-            }}
-            className="inline-flex items-center gap-2 px-3 h-10 rounded-full text-sm font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-200/70 dark:hover:bg-slate-700 transition-colors"
-            title="订阅计划"
-          >
-            <CreditCard size={16} />
-            <span className="hidden md:inline">{subscriptionButtonText}</span>
-          </button>
-
           <UserMenu
             user={user}
             currentView={currentView}
             setCurrentView={setCurrentView}
+            activeBrand={activeBrand}
+            subscriptionButtonText={subscriptionButtonText}
             onShowSettings={onShowSettings}
             onShowSystemLog={onShowSystemLog}
             onNewAgentKeyGenerated={onNewAgentKeyGenerated}

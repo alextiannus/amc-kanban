@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { User as UserIcon, Users, Trash2, Key, Copy, Check, Settings, Link2, Bot, Inbox, LogOut } from 'lucide-react'
+import { User as UserIcon, Users, Trash2, Key, Copy, Check, Settings, Link2, Bot, Inbox, LogOut, CreditCard } from 'lucide-react'
 import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
 
 interface UserMenuProps {
@@ -16,6 +16,8 @@ interface UserMenuProps {
   } | null
   currentView: string
   setCurrentView: (view: 'dashboard' | 'calendar' | 'analytics' | 'agents' | 'archive' | 'game' | 'socialInsight') => void
+  activeBrand: { id: string; name: string } | null
+  subscriptionButtonText: string
   onShowSettings: () => void
   onShowSystemLog: () => void
   onNewAgentKeyGenerated: (key: string) => void
@@ -26,6 +28,8 @@ export default function UserMenu({
   user,
   currentView,
   setCurrentView,
+  activeBrand,
+  subscriptionButtonText,
   onShowSettings,
   onShowSystemLog,
   onNewAgentKeyGenerated,
@@ -109,6 +113,15 @@ export default function UserMenu({
     }
   }
 
+  const handleOpenSubscription = () => {
+    setShowProfile(false)
+    if (!activeBrand?.id) {
+      alert('请先选择品牌，再进入订阅计划')
+      return
+    }
+    router.push(`/board/subscription/${activeBrand.id}`)
+  }
+
   return (
     <div className="relative" ref={containerRef}>
       <button
@@ -132,6 +145,13 @@ export default function UserMenu({
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{dashboardRole === 'ADMIN' ? 'Admin' : dashboardRole === 'BRAND_OWNER' ? 'Brand Owner（品牌主）' : 'Brand Director（品牌主理人）'}</p>
           </div>
           <div className="p-2 space-y-1">
+            <button
+              onClick={handleOpenSubscription}
+              className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors"
+            >
+              <CreditCard size={16} /> 当前订阅计划：{subscriptionButtonText.replace('订阅: ', '')}
+            </button>
+
             {isAdmin && (
               <>
                 <button

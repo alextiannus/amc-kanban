@@ -224,12 +224,12 @@ export default function BrandSubscriptionPage() {
       if (!res.ok) throw new Error(json.error || 'Failed to create checkout session')
 
       if (json.paymentMode === 'BILLING') {
-        if (json.subscription) {
+        const fresh = await fetch(`/api/brands/${brandId}/subscription`)
+        const freshJson = await fresh.json()
+        if (fresh.ok) {
+          setData(freshJson)
+        } else if (json.subscription) {
           setData((prev) => (prev ? { ...prev, latestSubscription: json.subscription } : prev))
-        } else {
-          const fresh = await fetch(`/api/brands/${brandId}/subscription`)
-          const freshJson = await fresh.json()
-          if (fresh.ok) setData(freshJson)
         }
         setActivationNotice('订阅计划已激活成功。你现在可以复制 Agent 初始化指令并完成接入。')
         scrollToInstructionCard()
@@ -272,9 +272,6 @@ export default function BrandSubscriptionPage() {
             >
               <ArrowLeft size={14} /> 返回上一页
             </button>
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold tracking-[0.18em] text-slate-600 dark:text-slate-300">
-              订阅管理
-            </div>
             <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">AI Marketing Crew (AMC) Plan</h1>
             <p className="max-w-3xl text-sm md:text-base text-slate-600 dark:text-slate-300 leading-7">
               为品牌提供持续的 AI 营销执行能力，一站式覆盖内容策划、发布协同与运营闭环。

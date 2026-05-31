@@ -45,6 +45,34 @@ export type LaunchInstructionContext = {
   }
 }
 
+function formatGeneratedTime(timezone: string | null): string {
+  const now = new Date()
+  const fallbackTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  const targetTz = timezone || fallbackTz
+
+  const build = (tz: string) => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(now)
+
+    const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value || '00'
+    return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')} (${tz})`
+  }
+
+  try {
+    return build(targetTz)
+  } catch {
+    return build(fallbackTz)
+  }
+}
+
 export function buildLaunchInstruction(params: { context: LaunchInstructionContext; apiBaseUrl: string }) {
   const { context: ctx, apiBaseUrl } = params
   const baseHost = apiBaseUrl.replace(/\/api\/?$/, '')
@@ -76,7 +104,7 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     ? ctx.ownedBrands.map((brand) => `- ${brand.name} (${brand.id})${brand.location ? ` | ${brand.location}` : ''}`).join('\n')
     : '- None'
 
-  const generatedAt = new Date().toISOString()
+  const generatedAt = formatGeneratedTime(ctx.brand.timezone)
   const skillText = buildAmcSkillText({ apiKey: ctx.agent.apiKey, apiBaseUrl })
 
   return [

@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Check, X, TrendingUp, TrendingDown, AlertCircle, Star,
-  Calendar, Zap, Shield, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink, CreditCard, FileText
+  Calendar, Zap, Shield, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink, FileText
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
 import { BrandKnowledgePanel } from './BrandKnowledgePanel'
@@ -774,14 +774,6 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
             >
               <FileText className="w-3 h-3" />
               知识库
-            </button>
-            <button
-              onClick={() => router.push(`/board/subscription/${activeBrand.id}`)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-emerald-300 dark:hover:border-emerald-600 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10"
-              title="订阅与支付"
-            >
-              <CreditCard className="w-3 h-3" />
-              订阅
             </button>
           </div>
         </div>
