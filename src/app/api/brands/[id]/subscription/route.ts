@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { canOwnBrand } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
-import { ALLOWED_DURATIONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, PLAN_COMPARISON_ROWS, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS, calculatePricing } from '@/lib/subscription/catalog'
+import { ALLOWED_DURATIONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, PLAN_COMPARISON_ROWS, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS, calculatePricing, type PlanId } from '@/lib/subscription/catalog'
 import { SUBSCRIPTION_TERMS_FULL_TEXT, SUBSCRIPTION_TERMS_NOTICE, SUBSCRIPTION_TERMS_TITLE } from '@/lib/subscription/terms'
 import { buildBillingActivatedResponse, buildBillingActivationData, buildOfflineInvoiceResponse, type SubscriptionStatus } from '@/lib/subscription/workflow'
 import { readBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
@@ -65,6 +65,13 @@ function extractStoresFromMarkdown(markdown: string): StoreSummary[] {
   }
 }
 
+function toPlanId(value: string | null | undefined): PlanId | null {
+  if (value === 'starter' || value === 'essential' || value === 'premium' || value === 'advantage') {
+    return value
+  }
+  return null
+}
+
 export async function GET(_req: Request, { params }: Params) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -107,7 +114,7 @@ export async function GET(_req: Request, { params }: Params) {
     }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, email: true, role: true, nickname: true, timezone: true },
+      select: { id: true, email: true, role: true, nickname: true },
     }),
     prisma.brand.findMany({
       where: {
@@ -137,6 +144,10 @@ export async function GET(_req: Request, { params }: Params) {
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
 
   const latest = latestActive || latestAny
+  const latestPlanId = toPlanId(latest?.planId)
+  const sessionUserTimezoneRaw = (session.user as { timezone?: unknown }).timezone
+  const sessionUserTimezone =
+    typeof sessionUserTimezoneRaw === 'string' && sessionUserTimezoneRaw.trim() ? sessionUserTimezoneRaw.trim() : null
 
   let resolvedAgentId = brandAgent?.agent.id || null
   let resolvedAgentKey = latest?.status === 'ACTIVE' ? brandAgent?.agent.apiKey || null : null
@@ -166,10 +177,10 @@ export async function GET(_req: Request, { params }: Params) {
 
   const instructionContext = {
     subscription: {
-      planId: latest?.planId || null,
+      planId: latestPlanId,
       planName: latest?.planName || null,
-      platforms: latest?.planId
-        ? PLAN_COMPARISON_ROWS.find((row) => row.key === 'channels')?.values?.[latest.planId] || null
+      platforms: latestPlanId
+        ? PLAN_COMPARISON_ROWS.find((row) => row.key === 'channels')?.values?.[latestPlanId] || null
         : null,
     },
     user: {
@@ -177,7 +188,7 @@ export async function GET(_req: Request, { params }: Params) {
       email: user?.email || session.user.email || null,
       role: user?.role || session.user.type,
       nickname: user?.nickname || null,
-      timezone: user?.timezone || null,
+      timezone: sessionUserTimezone,
     },
     brand: {
       id: brand.id,
