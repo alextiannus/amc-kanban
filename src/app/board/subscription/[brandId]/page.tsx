@@ -230,11 +230,11 @@ export default function BrandSubscriptionPage() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 text-slate-900 dark:text-slate-100">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 md:p-7 shadow-sm">
+        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:p-6 shadow-sm">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.25em] text-slate-600 dark:text-slate-300">
-                AMC Subscription
+            <div className="max-w-3xl space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold tracking-[0.18em] text-slate-600 dark:text-slate-300">
+                订阅管理
               </div>
               <div>
                 <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">订阅计划</h1>
@@ -244,9 +244,9 @@ export default function BrandSubscriptionPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Google Map included</span>
-                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">3 / 6 / 12 months</span>
-                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Online + offline billing</span>
+                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">含 Google Map 运营</span>
+                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">支持 3 / 6 / 12 个月</span>
+                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">支持在线与线下账单</span>
                 {selectedPlan?.promoMonthlyUsd ? (
                   <span className="rounded-full border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
                     当前选中 {selectedPlan.name} 促销价 USD ${selectedPlanMonthly}/月
@@ -260,15 +260,15 @@ export default function BrandSubscriptionPage() {
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">starter</p>
+                  <p className="text-[11px] tracking-[0.18em] text-slate-500">起步套餐</p>
                   <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">USD ${data.plans.find((p) => p.id === 'starter')?.promoMonthlyUsd ?? '108'}/mo</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">coverage</p>
+                  <p className="text-[11px] tracking-[0.18em] text-slate-500">服务覆盖</p>
                   <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">All packages include Google Map</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">agreement</p>
+                  <p className="text-[11px] tracking-[0.18em] text-slate-500">签约说明</p>
                   <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">Terms and billing are shown below</p>
                 </div>
               </div>
@@ -276,12 +276,12 @@ export default function BrandSubscriptionPage() {
 
             <div className="grid grid-cols-2 gap-3 lg:min-w-[340px]">
               <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">selected plan</p>
+                <p className="text-[11px] tracking-[0.18em] text-slate-500">当前套餐</p>
                 <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{selectedPlan?.name || 'Starter'}</p>
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-5">{selectedPlan?.description || '请选择一个套餐进行对比'}</p>
               </div>
               <div className="rounded-2xl border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-950/30 p-4">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">estimated total</p>
+                <p className="text-[11px] tracking-[0.18em] text-blue-600 dark:text-blue-300">预估应付</p>
                 <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">USD ${totalDue}</p>
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-5">当前周期 {durationMonths} 个月，含已选增值服务。</p>
               </div>
@@ -322,7 +322,7 @@ export default function BrandSubscriptionPage() {
         <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:p-6 shadow-sm">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl space-y-3">
-              <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-500">subscription overview</p>
+              <p className="text-[11px] font-black tracking-[0.18em] text-slate-500">订阅概览</p>
               <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white">确认套餐后即可发起订阅。</h2>
               <p className="text-sm md:text-base leading-7 text-slate-600 dark:text-slate-300">
                 页面包含套餐选择、加购、付款方式和协议确认，便于统一处理品牌订阅。
@@ -349,15 +349,15 @@ export default function BrandSubscriptionPage() {
 
           <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">plans</p>
+              <p className="text-xs font-black tracking-[0.18em] text-slate-500">套餐</p>
               <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 leading-6">支持对比不同套餐并查看对应服务范围。</p>
             </div>
             <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">addons</p>
+              <p className="text-xs font-black tracking-[0.18em] text-slate-500">加购</p>
               <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 leading-6">可按月或按次选择额外服务。</p>
             </div>
             <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">billing</p>
+              <p className="text-xs font-black tracking-[0.18em] text-slate-500">付款</p>
               <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 leading-6">支持在线支付和线下账单两种方式。</p>
             </div>
           </div>
@@ -368,7 +368,7 @@ export default function BrandSubscriptionPage() {
             <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
                 <div>
-                  <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">1) Price Plans</h2>
+                  <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200">1) 选择套餐</h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">选择按月或按年查看套餐价格。</p>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">* Prices in USD, excluding tax</p>
@@ -425,7 +425,7 @@ export default function BrandSubscriptionPage() {
                             ? 'bg-blue-600 text-white'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'
                       }`}>
-                        {isSelected ? 'CURRENT PLAN' : isRecommended ? 'RECOMMENDED FOR YOU' : 'AVAILABLE PLAN'}
+                        {isSelected ? '当前套餐' : isRecommended ? '推荐' : '可选'}
                       </div>
                       <div className="p-5">
                         <div className="mb-3 flex items-start justify-between gap-2">
@@ -455,7 +455,7 @@ export default function BrandSubscriptionPage() {
                               ? 'bg-blue-600 text-white'
                               : 'border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900'
                         }`}>
-                          {isSelected ? 'Current plan' : 'Upgrade now'}
+                          {isSelected ? '已选择' : '选择此套餐'}
                         </div>
 
                         <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
@@ -474,7 +474,7 @@ export default function BrandSubscriptionPage() {
             </section>
 
             <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-              <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200 mb-4">2) 合同周期</h2>
+              <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200 mb-4">2) 合同周期</h2>
               <div className="grid grid-cols-3 gap-3">
                 {data.durations.map((d) => (
                   <button
@@ -495,7 +495,7 @@ export default function BrandSubscriptionPage() {
             <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
               <div className="mb-4 flex items-end justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">3) Add-on Services</h2>
+                  <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200">3) 增值服务</h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">可按月或按次选择额外服务。</p>
                 </div>
               </div>
@@ -503,7 +503,7 @@ export default function BrandSubscriptionPage() {
               <div className="space-y-5">
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">Monthly add-ons</h3>
+                    <h3 className="text-xs font-black tracking-[0.18em] text-slate-500 dark:text-slate-300">按月加购</h3>
                     <span className="text-xs text-slate-500 dark:text-slate-400">Recurring</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -543,7 +543,7 @@ export default function BrandSubscriptionPage() {
 
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">One-time services</h3>
+                    <h3 className="text-xs font-black tracking-[0.18em] text-slate-500 dark:text-slate-300">按次服务</h3>
                     <span className="text-xs text-slate-500 dark:text-slate-400">Single payment</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -584,7 +584,7 @@ export default function BrandSubscriptionPage() {
             </section>
 
             <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-              <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200 mb-3">4) 支付方式</h2>
+              <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200 mb-3">4) 支付方式</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                 <button
                   onClick={() => setPaymentMode('ONLINE')}
@@ -602,7 +602,7 @@ export default function BrandSubscriptionPage() {
                 </button>
               </div>
 
-              <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200 mb-3">5) 用户协议</h2>
+              <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200 mb-3">5) 用户协议</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{data.termsNotice}</p>
               <button
                 onClick={() => setShowTerms(true)}
@@ -636,7 +636,7 @@ export default function BrandSubscriptionPage() {
             <div className="sticky top-6 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">付款汇总</h3>
+                  <h3 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200">付款汇总</h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">实时更新选中的套餐、周期和加购。</p>
                 </div>
                 <div className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
