@@ -173,6 +173,14 @@ export default function BrandSubscriptionPage() {
   const recurringAfterDiscount = Math.round(recurringSubtotal * (1 - discountPercent / 100))
   const totalDue = recurringAfterDiscount + oneTimeAddons
 
+  const activePlanId =
+    data?.latestSubscription?.status === 'ACTIVE'
+      ? data.plans.find((p) => p.name === data.latestSubscription?.planName)?.id || null
+      : null
+
+  const shouldShowPaymentSummary =
+    data?.latestSubscription?.status !== 'ACTIVE' || !activePlanId || planId !== activePlanId
+
   const instructionText = useMemo(() => {
     const ctx = data?.instructionContext
     if (!ctx) return ''
@@ -416,8 +424,8 @@ export default function BrandSubscriptionPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className={shouldShowPaymentSummary ? 'grid grid-cols-1 lg:grid-cols-3 gap-6' : 'grid grid-cols-1 gap-6'}>
+          <div className={shouldShowPaymentSummary ? 'lg:col-span-2 space-y-6' : 'space-y-6'}>
             <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
                 <div>
@@ -658,8 +666,9 @@ export default function BrandSubscriptionPage() {
             </section>
           </div>
 
-          <aside className="space-y-4">
-            <div className="sticky top-6 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+          {shouldShowPaymentSummary && (
+            <aside className="space-y-4">
+              <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200">付款汇总</h3>
@@ -713,8 +722,9 @@ export default function BrandSubscriptionPage() {
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 leading-5">
                 按 AMC 服务协议：合同费用一次性预付；12 个月提供 10% 折扣。
               </p>
-            </div>
-          </aside>
+              </div>
+            </aside>
+          )}
         </div>
       </div>
 
