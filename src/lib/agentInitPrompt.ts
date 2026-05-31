@@ -109,6 +109,11 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '1) 绑定本品牌 Agent API Key',
     '2) 告知用户信息与订阅计划（含计划覆盖平台）',
     '3) 安装并启用 AMC Skill',
+    '',
+    '【标准执行流程（必须按顺序完成）】',
+    '1) 用户订阅套餐后，使用本初始化指令将 AI Agent 与当前品牌账户关联，安装 git-plugin-amc 插件与 amc-kanban skill，完成初始化。',
+    '2) 初始化完成后，Agent 必须通过插件访问品牌配置，读取用户已有品牌设定。',
+    '3) Agent 读取完成后，必须将品牌信息与账号设置信息回写到看板，完成品牌 onboarding 全流程。',
     `生成时间：${generatedAt}`,
     '',
     '═══════════════════════════════════════',
@@ -155,6 +160,10 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '- [ ] 用以下请求验证接入是否成功：',
     `      GET ${apiBaseUrl}/brands/${brandId}/profile?refresh=1`,
     '      Authorization: Bearer $KANBAN_AGENT_API_KEY',
+    '- [ ] 向用户明确回报插件安装结果（成功 / 失败 + 失败原因）。',
+    '- [ ] 若安装成功，立即进入“品牌设置访问阶段”，先读取现有品牌配置与资料。',
+    '- [ ] 访问阶段结束后，优先将已确认信息反向更新回看板，再进入执行阶段。',
+    '- [ ] 初始化阶段禁止向用户索要整份品牌问卷；仅允许在自动读取失败时请求最小必要缺失项。',
     '',
     '═══════════════════════════════════════',
     '## Step 6：AMC 操作 Skill（工作流规范）',
@@ -189,7 +198,23 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
   - 运行时由看板后端自动读取，不在任务执行中明文传递。
 
 ### 动作 0：补充 / 更新品牌信息（品牌资料缺失或变更时执行）
-仅当品牌资料尚未建立或需要更新时，调用以下接口（brandId 使用初始化指令中提供的值）：
+仅当品牌资料尚未建立或需要更新时，调用以下接口（brandId 使用初始化指令中提供的值）。
+执行顺序必须是：
+1) 先访问品牌设置与 profile，读取已有信息；
+2) 再把你已确认的信息回写看板；
+3) 仅在仍有阻塞字段时，向用户索要“最小必要字段”。
+
+这三步对应 onboarding 定义：
+- 初始化完成（已关联品牌 + 插件与 skill 安装成功）
+- 品牌访问完成（已读取品牌设定）
+- 看板回写完成（品牌信息与账号配置已更新）
+
+只有三步都完成，才可标记“品牌 onboarding 完成”。
+
+初始化阶段行为约束：
+- 不要一次性向用户索要完整品牌故事、定位、卖点、服务理念等长表单。
+- 不要在 API key 鉴权失败时同时索要品牌资料；此时只提示用户重新生成初始化指令。
+- 必须先向用户报告 AMC 插件安装是否成功；成功后再进入品牌设置访问阶段。
 
 \`\`\`
 PATCH ${apiBaseUrl}/agent/brand-config
@@ -223,6 +248,10 @@ PATCH ${apiBaseUrl}/agent/brand-config
 \`\`\`
 
 配置完成后，后续执行不再传递第三方 API key，直接调用看板统一能力即可。
+
+若字段缺失：
+- 先尝试从已连接账号、官网、历史任务、品牌 profile 中自动补齐；
+- 仍缺失时，只提问当前任务必须字段（一次最多 1-3 项），并说明用途。
 
 ### 动作 0.5：预读品牌 Profile Markdown（每次执行品牌任务前必做）
 在执行内容创作、品牌推广、多门店运营任务前，先读取品牌 Profile：
