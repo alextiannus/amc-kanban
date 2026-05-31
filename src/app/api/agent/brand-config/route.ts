@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER } from '@/lib/integrations/lark'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
+import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 
 async function getAgent(request: Request) {
   const apiKey = extractApiKey(request)
@@ -340,6 +341,12 @@ export async function PATCH(request: Request) {
     } catch (e) {
       console.warn('[Agent] PostFast sync failed (non-fatal):', e)
     }
+  }
+
+  try {
+    await refreshBrandProfileMarkdown(brandId)
+  } catch {
+    // non-fatal — do not block API success on markdown refresh failure
   }
 
   return NextResponse.json({

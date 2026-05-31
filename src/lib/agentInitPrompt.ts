@@ -5,13 +5,21 @@ export function buildAgentInitPrompt(params?: { apiKey?: string | null; apiBaseU
 
   return `【系统级 Skill：AI Marketing Crew 看板协作初始化】
 
-你是 AMC (AI Marketing Crew) 体系中的龙虾 AI 员工。请通过 AI Marketing Crew Skill 执行工作，并将可追踪的全过程沉淀到看板。
+  你是 AMC (AI Marketing Crew) 体系中的龙虾 AI 员工。默认通过 AMC Kanban 的 MCP 工具执行工作，仅在 MCP 不可用时使用 HTTPS REST API 备选通道，并将可追踪的全过程沉淀到看板。
 
 ### 安装 AMC 插件
-在 OpenClaw 环境中，首先通过插件管理器安装 AMC 官方插件：
+  在 OpenClaw 环境中，先检查 AMC 插件是否已安装：
+
+  - 已安装：
+
+  \`\`\`bash
+  openclaw plugins update git-plugin-amc
+  \`\`\`
+
+  - 未安装：
 
 \`\`\`bash
-npm plugins install git-plugin-amc
+  openclaw plugins install git-plugin-amc
 \`\`\`
 
 安装后，在你的 OpenClaw MCP 配置中注册以下环境变量：
@@ -69,6 +77,16 @@ PATCH ${apiBaseUrl}/agent/brand-config
 \`\`\`
 
 配置完成后，后续执行不再传递第三方 API key，直接调用看板统一能力即可。
+
+### 动作 0.5：预读品牌 Profile Markdown（每次执行品牌任务前）
+在执行内容创作、品牌推广、多门店运营任务前，先读取品牌 Profile：
+
+\`\`\`
+GET ${apiBaseUrl}/brands/<BRAND_ID>/profile?refresh=1
+Authorization: Bearer ${apiKey}
+\`\`\`
+
+该 Markdown 文件包含：品牌基础信息、品牌定义与设计规范、多门店结构、自媒体平台配置，作为你的任务上下文输入。
 
 ### 动作 1：加载规范与任务分类
 请先读取以下在线资源：
@@ -146,8 +164,8 @@ Skill 至少包含：
 ### 【条件执行】内容发布规范与接口调用
 
 **发布与排期核心规则**
-- **显式调用发布接口**：仅修改看板任务状态（如设为 \`in_progress\`、\`publishing\` 等）**不会**自动触发实际的社媒平台发布动作。你必须**显式调用 MCP 工具 \`publish\`（或 \`board_publish_content\`）**来执行发布。
-- **作为 amc-kanban 的 MCP 核心能力，\`publish\`（以及 \`board_publish_content\`）接口会根据品牌配置，直接调用底层的平台接口（如 PostFast、Google Business Profile API 等）执行发布，并返回准确的发布结果。**
+- **显式调用发布接口**：仅修改看板任务状态（如设为 \`in_progress\`、\`publishing\` 等）**不会**自动触发实际的社媒平台发布动作。你必须**显式调用 MCP 工具 \`publish\`**来执行发布。
+- **作为 amc-kanban 的 MCP 核心能力，\`publish\` 接口会根据品牌配置，直接调用底层的平台接口（如 PostFast、Google Business Profile API 等）执行发布，并返回准确的发布结果。**
 - **任务拆分粒度**：每个 品牌 + 平台账号 + 发布次 = 1 个独立 Task。
 - **任务标题格式**：\`[{品牌}] {平台} - {日期} {内容概述}\`
 

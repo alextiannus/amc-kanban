@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canOwnBrand, canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { postfastFetchAccounts, postfastListPosts } from '@/lib/integrations/postfast'
+import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -318,6 +319,12 @@ export async function PATCH(request: Request, { params }: Params) {
       where: { brandId: id },
       data: { autoPilot },
     })
+  }
+
+  try {
+    await refreshBrandProfileMarkdown(id)
+  } catch {
+    // non-fatal — brand update should not fail due to profile markdown refresh
   }
 
   return NextResponse.json(updated)

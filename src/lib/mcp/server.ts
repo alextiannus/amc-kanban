@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { writeAuditLog, actorFromContext } from '@/lib/audit'
+import { readBrandProfileMarkdown, refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -138,6 +139,54 @@ export function createAmcMcpServer(agentApiKey: string) {
     }
   )
 
+  // ── get_brand_profile_markdown ─────────────────────────────────────────
+  server.tool(
+    'get_brand_profile_markdown',
+    'Read brand profile markdown for AI pre-read context. Contains brand basics, positioning, multi-store structure, and social platform config.',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+      refresh: z.boolean().optional().describe('When true, regenerate the auto snapshot section before reading.'),
+    },
+    async ({ brandId, refresh }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const profile = await readBrandProfileMarkdown(brandId, { ensureExists: true, refresh: !!refresh })
+      if (!profile) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
+
+      return { content: [{ type: 'text' as const, text: profile.markdown }] }
+    }
+  )
+
+  // ── refresh_brand_profile_markdown ─────────────────────────────────────
+  server.tool(
+    'refresh_brand_profile_markdown',
+    'Regenerate brand profile markdown auto section from latest system data while preserving manual section.',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+    },
+    async ({ brandId }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const refreshed = await refreshBrandProfileMarkdown(brandId)
+      if (!refreshed) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ ok: true, brandId, relativePath: refreshed.relativePath }, null, 2),
+        }],
+      }
+    }
+  )
+
   // ── update_brand_config ─────────────────────────────────────────────────
   server.tool(
     'update_brand_config',
@@ -199,6 +248,12 @@ export function createAmcMcpServer(agentApiKey: string) {
             }
           }
         } catch { /* non-fatal — PostFast sync failure should not block brand update */ }
+      }
+
+      try {
+        await refreshBrandProfileMarkdown(brandId)
+      } catch {
+        // non-fatal — profile refresh should not block config writes
       }
 
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, updated: Object.keys(updateData), brandId }) }] }
@@ -305,10 +360,21 @@ export function createAmcMcpServer(agentApiKey: string) {
       status: z.enum(['todo', 'in_progress', 'pending', 'void']).optional().default('todo'),
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
       weight: z.number().int().optional().describe('1 = light, 3 = normal, 5 = heavy'),
+      requiredInput: z.string().optional().describe('What human input is needed when status is pending.'),
+      deadline: z.string().describe('ISO 8601 deadline e.g. 2026-05-21T12:00:00Z'),
     },
-    async ({ title, description, status, priority, weight }) => {
+    async ({ title, description, status, priority, weight, requiredInput, deadline }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      let parsedDeadline: Date | undefined
+      if (deadline) {
+        const d = new Date(deadline)
+        if (Number.isNaN(d.getTime())) {
+          return { content: [{ type: 'text' as const, text: 'Error: deadline must be a valid ISO 8601 datetime string' }], isError: true }
+        }
+        parsedDeadline = d
+      }
 
       const task = await prisma.workUnit.create({
         data: {
@@ -317,10 +383,12 @@ export function createAmcMcpServer(agentApiKey: string) {
           status: status || 'todo',
           priority: priority || 'medium',
           weight: [1, 3, 5].includes(weight ?? 0) ? weight! : 3,
+          requiredInput: requiredInput || null,
+          deadline: parsedDeadline,
           assigneeId: agent.id,
         },
       })
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, taskId: task.id, title: task.title }) }] }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, taskId: task.id, title: task.title, deadline: task.deadline }) }] }
     }
   )
 
@@ -334,6 +402,8 @@ export function createAmcMcpServer(agentApiKey: string) {
       description: z.string().optional(),
       status: z.enum(['todo', 'in_progress', 'pending', 'done', 'archived', 'void']).optional(),
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+      requiredInput: z.string().nullable().optional().describe('Set when pending; pass null/empty to clear.'),
+      deadline: z.string().nullable().optional().describe('ISO 8601 deadline. Pass null to clear.'),
     },
     async ({ taskId, ...fields }) => {
       const agent = await resolveAgent()
@@ -348,8 +418,26 @@ export function createAmcMcpServer(agentApiKey: string) {
         if (v !== undefined) updateData[k] = v
       }
 
+      if (updateData.deadline !== undefined) {
+        const deadlineVal = updateData.deadline
+        if (deadlineVal === null || deadlineVal === '') {
+          updateData.deadline = null
+        } else {
+          const d = new Date(String(deadlineVal))
+          if (Number.isNaN(d.getTime())) {
+            return { content: [{ type: 'text' as const, text: 'Error: deadline must be a valid ISO 8601 datetime string' }], isError: true }
+          }
+          updateData.deadline = d
+        }
+      }
+
+      if (updateData.requiredInput !== undefined) {
+        const ri = updateData.requiredInput
+        if (ri === null || ri === '') updateData.requiredInput = null
+      }
+
       const task = await prisma.workUnit.update({ where: { id: taskId }, data: updateData })
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, taskId: task.id, status: task.status }) }] }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, taskId: task.id, status: task.status, deadline: task.deadline }) }] }
     }
   )
 
@@ -359,7 +447,11 @@ export function createAmcMcpServer(agentApiKey: string) {
     'Add or update a social media account for a brand.',
     {
       brandId: z.string(),
-      platformId: z.enum(['instagram', 'tiktok', 'xiaohongshu', 'facebook', 'youtube', 'twitter', 'linkedin', 'wechat']),
+      platformId: z.enum([
+        'instagram', 'tiktok', 'xiaohongshu', 'facebook', 'youtube',
+        'google', 'x', 'twitter', 'yelp', 'linkedin', 'pinterest',
+        'weibo', 'wechat', 'snapchat', 'tripadvisor',
+      ]),
       handle: z.string(),
       displayName: z.string().optional(),
       profileUrl: z.string().optional(),
@@ -430,6 +522,7 @@ export function createAmcMcpServer(agentApiKey: string) {
   }
 
   server.tool('board_list_social_accounts', 'List all connected social accounts for this brand via the board backend.', listAccountsSchema, listAccountsHandler)
+  server.tool('list_accounts', '[Compatibility alias] Use board_list_social_accounts.', listAccountsSchema, listAccountsHandler)
   server.tool('postfast_list_accounts', '[Deprecated alias] Use board_list_social_accounts.', listAccountsSchema, listAccountsHandler)
 
   const listPostsSchema = {
@@ -519,6 +612,7 @@ export function createAmcMcpServer(agentApiKey: string) {
   }
 
   server.tool('board_upload_media', 'Upload media through board backend and return storageKey for publish.', uploadMediaSchema, uploadMediaHandler)
+  server.tool('upload_asset', '[Compatibility alias] Use board_upload_media.', uploadMediaSchema, uploadMediaHandler)
   server.tool('postfast_upload_media', '[Deprecated alias] Use board_upload_media.', uploadMediaSchema, uploadMediaHandler)
 
   const connectLinkSchema = {
@@ -546,6 +640,7 @@ export function createAmcMcpServer(agentApiKey: string) {
   }
 
   server.tool('board_generate_account_connect_link', 'Generate a secure account-connect URL through board backend.', connectLinkSchema, connectLinkHandler)
+  server.tool('connect_account', '[Compatibility alias] Use board_generate_account_connect_link.', connectLinkSchema, connectLinkHandler)
   server.tool('postfast_generate_connect_link', '[Deprecated alias] Use board_generate_account_connect_link.', connectLinkSchema, connectLinkHandler)
 
   const publishContentSchema = {
@@ -662,6 +757,7 @@ export function createAmcMcpServer(agentApiKey: string) {
   }
 
   server.tool('board_reply_review', 'Reply to a review through board backend using stored brand config.', replyReviewSchema, replyReviewHandler)
+  server.tool('reply_review', '[Compatibility alias] Use board_reply_review (google/yelp).', replyReviewSchema, replyReviewHandler)
   server.tool('postfast_reply_review', '[Deprecated alias] Use board_reply_review.', replyReviewSchema, replyReviewHandler)
 
   // ── google_get_reviews ──────────────────────────────────────────────────
@@ -709,6 +805,58 @@ export function createAmcMcpServer(agentApiKey: string) {
       }
 
       // Fallback: Places API Key Flow
+      if (brand.googlePlaceId && brand.googleApiKey) {
+        const result = await fetchGoogleReviews(brand.googlePlaceId, brand.googleApiKey)
+        if (result.error) return { content: [{ type: 'text' as const, text: `Error (Places API): ${result.error}` }], isError: true }
+        const reviews = result.reviews.slice(0, limit ?? 10)
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: reviews.length, reviews, source: 'google_places_api_key' }, null, 2) }] }
+      }
+
+      return { content: [{ type: 'text' as const, text: 'Error: Google Business Profile (OAuth) or Google API Key + Place ID is not configured for this brand.' }], isError: true }
+    }
+  )
+  server.tool(
+    'get_reviews',
+    '[Compatibility alias] Use google_get_reviews. Currently returns Google reviews only.',
+    {
+      brandId: z.string().describe('Brand ID'),
+      limit: z.number().int().min(1).max(20).optional().default(10),
+    },
+    async ({ brandId, limit }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: {
+          googlePlaceId: true,
+          googleApiKey: true,
+          googleRefreshToken: true,
+          googleAccountId: true,
+          googleLocationId: true,
+          googlePreferOAuth: true,
+        },
+      })
+
+      if (!brand) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
+
+      const { fetchGoogleGBPReviews, fetchGoogleReviews, getGoogleAccessToken } = await import('@/lib/integrations/google')
+
+      if (brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId) {
+        try {
+          const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
+          const result = await fetchGoogleGBPReviews(brand.googleAccountId || 'primary', brand.googleLocationId, accessToken)
+          if (result.error) return { content: [{ type: 'text' as const, text: `Error (GBP API): ${result.error}` }], isError: true }
+          const reviews = result.reviews.slice(0, limit ?? 10)
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: reviews.length, reviews, source: 'google_business_profile_oauth' }, null, 2) }] }
+        } catch {
+          // fallback below
+        }
+      }
+
       if (brand.googlePlaceId && brand.googleApiKey) {
         const result = await fetchGoogleReviews(brand.googlePlaceId, brand.googleApiKey)
         if (result.error) return { content: [{ type: 'text' as const, text: `Error (Places API): ${result.error}` }], isError: true }
@@ -1009,6 +1157,53 @@ export function createAmcMcpServer(agentApiKey: string) {
           appSecret: brand.larkAppSecret!,
           ownerId: brand.larkOwnerId!,
           title, content, actionUrl, urgent,
+        })
+      }
+
+      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, channel: brand.larkBotWebhook ? 'webhook' : 'direct_message' }) }] }
+    }
+  )
+  server.tool(
+    'notify_owner',
+    '[Compatibility alias] Use lark_notify.',
+    {
+      brandId: z.string().describe('Brand ID — Lark credentials are auto-loaded from brand config.'),
+      title: z.string().describe('Card header title'),
+      content: z.string().describe('Message body (Lark Markdown supported)'),
+      actionUrl: z.string().optional().describe('Optional deep-link button URL, e.g. link to Kanban task'),
+      urgent: z.boolean().optional().describe('Set true to render card in red (urgent alert)'),
+    },
+    async ({ brandId, title, content, actionUrl, urgent }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: { larkBotWebhook: true, larkAppId: true, larkAppSecret: true, larkOwnerId: true },
+      })
+
+      if (!brand?.larkBotWebhook && !brand?.larkOwnerId) {
+        return { content: [{ type: 'text' as const, text: 'Error: larkBotWebhook or larkOwnerId not configured. Run update_brand_config first.' }], isError: true }
+      }
+
+      const { sendLarkWebhookNotification, sendLarkDirectMessage } = await import('@/lib/integrations/lark')
+
+      let result: { success: boolean; error?: string }
+      if (brand.larkBotWebhook) {
+        result = await sendLarkWebhookNotification({ webhookUrl: brand.larkBotWebhook, title, content, actionUrl, urgent })
+      } else {
+        result = await sendLarkDirectMessage({
+          appId: brand.larkAppId!,
+          appSecret: brand.larkAppSecret!,
+          ownerId: brand.larkOwnerId!,
+          title,
+          content,
+          actionUrl,
+          urgent,
         })
       }
 

@@ -4,6 +4,7 @@ export interface SubscriptionPlan {
   id: PlanId
   name: string
   monthlyUsd: number
+  promoMonthlyUsd?: number
   description: string
   includes: string[]
 }
@@ -40,7 +41,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'starter',
     name: 'STARTER',
-    monthlyUsd: 229,
+    monthlyUsd: 189,
+    promoMonthlyUsd: 108,
     description: '海外社媒代运营基础版',
     includes: [
       'Instagram & Facebook 图文内容发布',
@@ -82,7 +84,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     monthlyUsd: 3800,
     description: '连锁品牌门店运营版',
     includes: [
-      '含 PREMIUM 全量服务',
+      '含 PREMIUM 全量服务（含 Google Map 配置与评论监控）',
       '支持最多 5 个门店协同运营',
       '超出门店每店 +USD 200 / 月（线下合同处理）',
     ],
@@ -95,7 +97,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     name: '小红书 Xiaohongshu',
     pricing: 'monthly',
     usd: 300,
-    description: '华人社区内容运营',
+    description: '小红书内容规划、发布与互动管理。',
     details: ['每周选题与笔记规划', '图文/短视频内容协助发布', '评论区互动与私信线索整理'],
   },
   {
@@ -103,7 +105,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     name: '美团点评 Meituan Dianping',
     pricing: 'monthly',
     usd: 100,
-    description: '海外华人点评管理',
+    description: '点评监控、差评预警与回复建议。',
     details: ['差评预警与回复建议', '店铺评分趋势跟踪', '重点负评升级处理建议'],
   },
   {
@@ -111,7 +113,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     name: '12Eat 唐人街外卖',
     pricing: 'monthly',
     usd: 60,
-    description: '外卖平台账号管理',
+    description: '外卖平台菜单、活动与评价协同。',
     details: ['菜单与活动位更新建议', '基础文案优化', '订单评价监控'],
   },
   {
@@ -119,7 +121,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     name: 'Grab / Foodpanda',
     pricing: 'monthly',
     usd: 180,
-    description: '本地外卖平台管理',
+    description: '双外卖平台菜单与促销协同。',
     details: ['双平台菜单与视觉素材维护', '促销活动排期建议', '差评工单追踪'],
   },
   {
@@ -127,7 +129,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     name: 'YouTube',
     pricing: 'monthly',
     usd: 300,
-    description: '视频内容制作与发布',
+    description: 'YouTube 视频选题、发布与复盘。',
     details: ['选题脚本与封面标题建议', '视频发布排期', '基础数据复盘'],
   },
   {
@@ -135,7 +137,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     name: '抖音 / TikTok',
     pricing: 'monthly',
     usd: 300,
-    description: '短视频内容运营',
+    description: '短视频选题、发布与互动优化。',
     details: ['热点选题与脚本方向', '发布节奏管理', '评论互动与话题优化建议'],
   },
   {
@@ -143,7 +145,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     name: '现场拍摄服务',
     pricing: 'one_time',
     usd: 380,
-    description: '摄影半天，图片+视频素材',
+    description: '半天现场拍摄，交付图文与视频素材。',
     details: ['约半天现场拍摄', '交付菜品/环境素材包', '可用于社媒与广告投放'],
   },
   {
@@ -151,7 +153,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     name: '博主探店服务',
     pricing: 'one_time',
     usd: 2400,
-    description: '15 个博主探店套餐',
+    description: '15 位博主探店整合套餐。',
     details: ['8 位 1k+ 粉丝博主', '5 位 5k-1w 粉丝博主', '3 位 1w+ 粉丝博主'],
   },
 ]
@@ -249,7 +251,7 @@ export function calculatePricing(planId: string, durationMonths: number, addonId
   const billedMonths = durationMonths
   const recurringAddonsUsd = selectedAddons.filter((a) => a.pricing === 'monthly').reduce((sum, a) => sum + a.usd, 0)
   const oneTimeAddonsUsd = selectedAddons.filter((a) => a.pricing === 'one_time').reduce((sum, a) => sum + a.usd, 0)
-  const monthlyBaseUsd = plan.monthlyUsd
+  const monthlyBaseUsd = plan.promoMonthlyUsd ?? plan.monthlyUsd
   const recurringSubtotalUsd = (monthlyBaseUsd + recurringAddonsUsd) * durationMonths
   const discountPercent = durationMonths === 12 ? 10 : 0
   const recurringAfterDiscountUsd = Math.round(recurringSubtotalUsd * (1 - discountPercent / 100))

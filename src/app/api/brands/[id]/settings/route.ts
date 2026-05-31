@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { canOwnBrand } from '@/lib/brandAccess'
 import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER, LARK_APP_DOMAIN } from '@/lib/integrations/lark'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
+import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -291,6 +292,12 @@ export async function PATCH(request: Request, { params }: Params) {
     } catch (e) {
       console.warn('[Settings] PostFast sync failed (non-fatal):', e)
     }
+  }
+
+  try {
+    await refreshBrandProfileMarkdown(id)
+  } catch {
+    // non-fatal — settings save should not fail because profile file refresh fails
   }
 
   return NextResponse.json({

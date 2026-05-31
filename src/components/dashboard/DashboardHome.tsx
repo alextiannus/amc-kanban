@@ -2,9 +2,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Check, X, TrendingUp, TrendingDown, AlertCircle, Star,
-  Calendar, Zap, Shield, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink, CreditCard
+  Calendar, Zap, Shield, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink, CreditCard, FileText
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
+import { BrandKnowledgePanel } from './BrandKnowledgePanel'
 import BrandKanbanLane from '../BrandKanbanLane'
 import { useSearchParams, useRouter } from 'next/navigation'
 
@@ -609,6 +610,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   const [autoPilot, setAutoPilot] = useState(false)
   const [showAddAccount, setShowAddAccount] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showKnowledge, setShowKnowledge] = useState(false)
 
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -764,6 +766,14 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
             >
               <Settings className="w-3 h-3" />
               配置
+            </button>
+            <button
+              onClick={() => setShowKnowledge(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10"
+              title="品牌知识库"
+            >
+              <FileText className="w-3 h-3" />
+              知识库
             </button>
             <button
               onClick={() => router.push(`/board/subscription/${activeBrand.id}`)}
@@ -1011,6 +1021,16 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
           brandId={activeBrand.id}
           open={showSettings}
           onClose={() => setShowSettings(false)}
+          initialSettings={brandSettings}
+        />
+      )}
+
+      {/* ── Brand Knowledge Modal (品牌知识库) ─────────────────────────── */}
+      {activeBrand?.id && (
+        <BrandKnowledgePanel
+          brandId={activeBrand.id}
+          open={showKnowledge}
+          onClose={() => setShowKnowledge(false)}
           initialSettings={brandSettings}
         />
       )}
