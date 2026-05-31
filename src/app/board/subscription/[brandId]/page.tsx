@@ -128,14 +128,6 @@ export default function BrandSubscriptionPage() {
   const selectedPlan = useMemo(() => data?.plans.find((p) => p.id === planId), [data?.plans, planId])
   const selectedPlanMonthly = selectedPlan?.promoMonthlyUsd ?? selectedPlan?.monthlyUsd ?? 0
   const selectedPlanOriginalMonthly = selectedPlan?.monthlyUsd ?? 0
-  const selectedPlanAccent =
-    selectedPlan?.id === 'starter'
-      ? 'from-teal-400 via-cyan-500 to-sky-600'
-      : selectedPlan?.id === 'essential'
-        ? 'from-cyan-400 via-sky-500 to-blue-600'
-        : selectedPlan?.id === 'premium'
-          ? 'from-sky-400 via-cyan-500 to-blue-700'
-          : 'from-emerald-400 via-teal-500 to-cyan-600'
   const selectedAddons = useMemo(
     () => (data?.addons || []).filter((a) => addonIds.includes(a.id)),
     [data, addonIds]
@@ -236,114 +228,104 @@ export default function BrandSubscriptionPage() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-[#0f172a] p-4 md:p-8 text-slate-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(34,211,238,0.14),_transparent_30%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(17,24,39,1),_rgba(11,18,32,1))]" />
-      <div className="absolute -top-32 -left-24 h-72 w-72 rounded-full bg-teal-400/20 blur-3xl" />
-      <div className="absolute top-1/3 -right-24 h-80 w-80 rounded-full bg-cyan-400/15 blur-3xl" />
-
-      <div className="relative max-w-7xl mx-auto space-y-6">
-        <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 p-6 md:p-7 shadow-2xl backdrop-blur-xl">
-          <div className={`absolute inset-0 bg-gradient-to-br ${selectedPlanAccent} opacity-12`} />
-          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute -bottom-12 left-1/2 h-32 w-32 -translate-x-1/2 rounded-full bg-cyan-400/10 blur-3xl" />
-
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 text-slate-900 dark:text-slate-100">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 md:p-7 shadow-sm">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.25em] text-cyan-100">
-                AMC Subscription Center
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                live pricing
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.25em] text-slate-600 dark:text-slate-300">
+                AMC Subscription
               </div>
               <div>
-                <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white">AMC 订阅中心</h1>
-                <p className="mt-3 max-w-2xl text-sm md:text-base text-slate-300 leading-7">
-                  品牌：<span className="font-bold text-white">{data.brand.name}</span>。套餐、增值服务、合同周期与协议统一在一个页面完成对比、选择和支付。
+                <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">订阅计划</h1>
+                <p className="mt-3 max-w-2xl text-sm md:text-base text-slate-600 dark:text-slate-300 leading-7">
+                  品牌：<span className="font-bold text-slate-900 dark:text-white">{data.brand.name}</span>。在这里查看套餐、加购服务、合同周期和付款信息。
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1.5 text-xs font-semibold text-slate-200">Google Map included</span>
-                <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1.5 text-xs font-semibold text-slate-200">3 / 6 / 12 months</span>
-                <span className="rounded-full border border-white/10 bg-white/8 px-3 py-1.5 text-xs font-semibold text-slate-200">Online + offline billing</span>
+                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Google Map included</span>
+                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">3 / 6 / 12 months</span>
+                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">Online + offline billing</span>
                 {selectedPlan?.promoMonthlyUsd ? (
-                  <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200">
+                  <span className="rounded-full border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
                     当前选中 {selectedPlan.name} 促销价 USD ${selectedPlanMonthly}/月
                   </span>
                 ) : (
-                  <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100">
+                  <span className="rounded-full border border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
                     当前选中 {selectedPlan?.name || 'PLAN'} USD ${selectedPlanMonthly}/月
                   </span>
                 )}
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-sm">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">entry offer</p>
-                  <p className="mt-1 text-sm font-bold text-white">Starter promo USD ${data.plans.find((p) => p.id === 'starter')?.promoMonthlyUsd ?? '108'}/mo</p>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">starter</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">USD ${data.plans.find((p) => p.id === 'starter')?.promoMonthlyUsd ?? '108'}/mo</p>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-sm">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">brand coverage</p>
-                  <p className="mt-1 text-sm font-bold text-white">All packages include Google Map</p>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">coverage</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">All packages include Google Map</p>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 backdrop-blur-sm">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">contract ready</p>
-                  <p className="mt-1 text-sm font-bold text-white">Full agreement, no blanks</p>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">agreement</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">Terms and billing are shown below</p>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 lg:min-w-[340px]">
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-4 backdrop-blur-sm">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">selected plan</p>
-                <p className="mt-2 text-lg font-black text-white">{selectedPlan?.name || 'Starter'}</p>
-                <p className="mt-1 text-xs text-slate-300 leading-5">{selectedPlan?.description || '请选择一个套餐进行对比'}</p>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">selected plan</p>
+                <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{selectedPlan?.name || 'Starter'}</p>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-5">{selectedPlan?.description || '请选择一个套餐进行对比'}</p>
               </div>
-              <div className={`rounded-2xl border border-white/10 bg-gradient-to-br ${selectedPlanAccent} p-4 backdrop-blur-sm shadow-[0_18px_50px_rgba(2,132,199,0.22)]`}>
-                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">estimated total</p>
-                <p className="mt-2 text-2xl font-black text-white">USD ${totalDue}</p>
-                <p className="mt-1 text-xs text-slate-100/90 leading-5">当前周期 {durationMonths} 个月，含已选增值服务。</p>
+              <div className="rounded-2xl border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-950/30 p-4">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">estimated total</p>
+                <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">USD ${totalDue}</p>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-5">当前周期 {durationMonths} 个月，含已选增值服务。</p>
               </div>
             </div>
           </div>
         </div>
 
         {confirming && (
-          <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 text-amber-100 px-4 py-3 text-sm font-medium backdrop-blur-sm">
+          <div className="rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-200 px-4 py-3 text-sm font-medium">
             正在确认支付结果，请稍候...
           </div>
         )}
 
         {canceled && (
-          <div className="rounded-2xl border border-white/10 bg-white/8 text-slate-200 px-4 py-3 text-sm font-medium backdrop-blur-sm">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 px-4 py-3 text-sm font-medium shadow-sm">
             您已取消本次支付，订单保留为待支付状态，可重新发起支付。
           </div>
         )}
 
         {data.latestSubscription?.status === 'ACTIVE' && (
-          <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 text-emerald-100 px-4 py-3 text-sm font-medium flex items-center gap-2 backdrop-blur-sm">
+          <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-200 px-4 py-3 text-sm font-medium flex items-center gap-2">
             <CheckCircle2 size={16} /> 当前订阅已生效：{data.latestSubscription.planName}
           </div>
         )}
 
         {error && (
-          <div className="rounded-2xl border border-rose-400/30 bg-rose-400/10 text-rose-100 px-4 py-3 text-sm font-medium backdrop-blur-sm">
+          <div className="rounded-2xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-200 px-4 py-3 text-sm font-medium">
             {error}
           </div>
         )}
 
         {!data.paymentEnabled && paymentMode === 'ONLINE' && (
-          <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 text-amber-100 px-4 py-3 text-sm backdrop-blur-sm">
+          <div className="rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-200 px-4 py-3 text-sm">
             当前环境未配置在线支付（缺少 STRIPE_SECRET_KEY）。请先配置后再发起支付。
           </div>
         )}
 
-        <section className="rounded-[1.75rem] border border-white/10 bg-gradient-to-r from-teal-500/18 via-cyan-500/12 to-sky-700/18 p-5 md:p-6 shadow-[0_24px_80px_rgba(15,23,42,0.35)] backdrop-blur-xl">
+        <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:p-6 shadow-sm">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl space-y-3">
-              <p className="text-[11px] font-black uppercase tracking-[0.28em] text-cyan-200">conversion ready</p>
-              <h2 className="text-2xl md:text-3xl font-black text-white">选好套餐后，直接开始上线。</h2>
-              <p className="text-sm md:text-base leading-7 text-slate-300">
-                当前方案已经把价格、权益、协议和支付路径放在同一个页面里，减少来回沟通。你只需要确认套餐和周期，剩下的交给 AMC。
+              <p className="text-[11px] font-black uppercase tracking-[0.28em] text-slate-500">subscription overview</p>
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white">确认套餐后即可发起订阅。</h2>
+              <p className="text-sm md:text-base leading-7 text-slate-600 dark:text-slate-300">
+                页面包含套餐选择、加购、付款方式和协议确认，便于统一处理品牌订阅。
               </p>
             </div>
 
@@ -351,14 +333,14 @@ export default function BrandSubscriptionPage() {
               <button
                 onClick={startCheckout}
                 disabled={(paymentMode === 'ONLINE' && !data.paymentEnabled) || submitting || confirming || !agreedToTerms}
-                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3.5 text-sm font-black text-slate-950 shadow-[0_20px_50px_rgba(255,255,255,0.18)] transition-transform duration-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3.5 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
                 {paymentMode === 'ONLINE' ? '立即在线支付' : '创建线下账单'}
               </button>
               <button
                 onClick={() => setShowTerms(true)}
-                className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/8 px-5 py-3.5 text-sm font-bold text-white hover:bg-white/12"
+                className="inline-flex items-center justify-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-3.5 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 先看完整协议
               </button>
@@ -366,40 +348,40 @@ export default function BrandSubscriptionPage() {
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">fast start</p>
-              <p className="mt-2 text-sm text-slate-200 leading-6">套餐、合同周期和加购在一个页面完成，减少反复确认。</p>
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">plans</p>
+              <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 leading-6">支持对比不同套餐并查看对应服务范围。</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">built-in trust</p>
-              <p className="mt-2 text-sm text-slate-200 leading-6">所有套餐包含 Google Map，协议内容已完整补齐，可直接签署。</p>
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">addons</p>
+              <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 leading-6">可按月或按次选择额外服务。</p>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">clear value</p>
-              <p className="mt-2 text-sm text-slate-200 leading-6">Starter 促销价 USD ${selectedPlanOriginalMonthly ? selectedPlanMonthly : 108}/月，适合快速试跑。</p>
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-500">billing</p>
+              <p className="mt-2 text-sm text-slate-700 dark:text-slate-200 leading-6">支持在线支付和线下账单两种方式。</p>
             </div>
           </div>
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <section className="rounded-[1.75rem] border border-white/10 bg-white/7 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.45)] backdrop-blur-xl">
+            <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
                 <div>
-                  <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200">1) Price Plans</h2>
-                  <p className="text-xs text-slate-400 mt-1">参考 SaaS pricing 结构：先切换计费周期，再横向比较 plan。</p>
+                  <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">1) Price Plans</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">选择按月或按年查看套餐价格。</p>
                 </div>
-                <p className="text-xs text-slate-400">* Prices in USD, excluding tax</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">* Prices in USD, excluding tax</p>
               </div>
 
               <div className="mb-6 flex justify-center">
-                <div className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 p-1.5">
+                <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-1.5">
                   <button
                     onClick={() => {
                       setDurationMonths(3)
                     }}
                     className={`rounded-full px-6 py-2 text-sm font-bold transition ${
-                      billingCycle === 'monthly' ? 'bg-white text-slate-900' : 'text-slate-300 hover:text-white'
+                      billingCycle === 'monthly' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     Monthly
@@ -409,12 +391,12 @@ export default function BrandSubscriptionPage() {
                       setDurationMonths(12)
                     }}
                     className={`rounded-full px-6 py-2 text-sm font-bold transition ${
-                      billingCycle === 'yearly' ? 'bg-white text-slate-900' : 'text-slate-300 hover:text-white'
+                      billingCycle === 'yearly' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     Yearly
                   </button>
-                  <span className="rounded-full bg-blue-500/15 px-3 py-1.5 text-xs font-bold text-blue-200">Save 10%</span>
+                  <span className="rounded-full bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 text-xs font-bold text-blue-700 dark:text-blue-300">Save 10%</span>
                 </div>
               </div>
 
@@ -430,53 +412,53 @@ export default function BrandSubscriptionPage() {
                     <button
                       key={p.id}
                       onClick={() => setPlanId(p.id)}
-                      className={`group relative overflow-hidden text-left rounded-[1.25rem] border bg-white/95 p-0 shadow-sm transition-all duration-300 hover:-translate-y-1 ${
+                      className={`group relative overflow-hidden text-left rounded-2xl border p-0 shadow-sm transition-colors ${
                         isSelected
-                          ? 'border-blue-500 ring-2 ring-blue-400/40 shadow-[0_20px_45px_rgba(37,99,235,0.25)]'
-                          : 'border-slate-200/70 hover:border-blue-300'
+                          ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/20'
+                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
                       <div className={`px-4 py-2 text-center text-[11px] font-black tracking-[0.15em] ${
                         isSelected
-                          ? 'bg-slate-800 text-white'
+                          ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white'
                           : isRecommended
                             ? 'bg-blue-600 text-white'
-                            : 'bg-slate-100 text-slate-500'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'
                       }`}>
                         {isSelected ? 'CURRENT PLAN' : isRecommended ? 'RECOMMENDED FOR YOU' : 'AVAILABLE PLAN'}
                       </div>
                       <div className="p-5">
                         <div className="mb-3 flex items-start justify-between gap-2">
                           <div>
-                            <h3 className="text-2xl font-black text-slate-900">{p.name}</h3>
-                            <p className="mt-1 text-sm text-slate-500 leading-6">{p.description}</p>
+                            <h3 className="text-2xl font-black text-slate-900 dark:text-white">{p.name}</h3>
+                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 leading-6">{p.description}</p>
                           </div>
                         </div>
 
                         <div className="mb-4">
                           <div className="flex items-end gap-2">
-                            <span className="text-5xl font-black leading-none text-slate-900">${cycleMonthly}</span>
-                            <span className="pb-1 text-sm font-semibold text-slate-700">/ month</span>
+                            <span className="text-5xl font-black leading-none text-slate-900 dark:text-white">${cycleMonthly}</span>
+                            <span className="pb-1 text-sm font-semibold text-slate-700 dark:text-slate-300">/ month</span>
                           </div>
                           {billingCycle === 'yearly' && (
-                            <p className="mt-1 text-xs text-blue-700 font-semibold">Billed yearly at USD ${cycleTotal} (10% off)</p>
+                            <p className="mt-1 text-xs text-blue-700 dark:text-blue-300 font-semibold">Billed yearly at USD ${cycleTotal} (10% off)</p>
                           )}
                           {billingCycle === 'monthly' && (
-                            <p className="mt-1 text-xs text-slate-500">3-month contract billing cycle</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">3-month contract billing cycle</p>
                           )}
                         </div>
 
-                        <div className={`mb-4 rounded-full px-4 py-2 text-center text-base font-black transition ${
+                        <div className={`mb-4 rounded-xl px-4 py-2.5 text-center text-sm font-bold transition ${
                           isSelected
-                            ? 'bg-slate-200 text-slate-600'
+                            ? 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200'
                             : isRecommended
-                              ? 'bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)]'
-                              : 'border border-blue-500 text-blue-600 bg-white'
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900'
                         }`}>
                           {isSelected ? 'Current plan' : 'Upgrade now'}
                         </div>
 
-                        <ul className="space-y-2 text-sm text-slate-700">
+                        <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
                           {p.includes.slice(0, 4).map((item) => (
                             <li key={item} className="flex gap-2">
                               <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
@@ -491,8 +473,8 @@ export default function BrandSubscriptionPage() {
               </div>
             </section>
 
-            <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-              <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200 mb-4">2) 合同周期</h2>
+            <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+              <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200 mb-4">2) 合同周期</h2>
               <div className="grid grid-cols-3 gap-3">
                 {data.durations.map((d) => (
                   <button
@@ -500,8 +482,8 @@ export default function BrandSubscriptionPage() {
                     onClick={() => setDurationMonths(d)}
                     className={`rounded-2xl border py-3 text-sm font-bold transition-all duration-200 ${
                       durationMonths === d
-                        ? 'border-white/25 bg-white/12 text-white shadow-[0_14px_30px_rgba(59,130,246,0.18)]'
-                        : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/8'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
                     }`}
                   >
                     {d} 个月{d === 12 ? '（10%折扣）' : ''}
@@ -510,19 +492,19 @@ export default function BrandSubscriptionPage() {
               </div>
             </section>
 
-            <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.45)] backdrop-blur-xl">
+            <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
               <div className="mb-4 flex items-end justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200">3) Add-on Services</h2>
-                  <p className="text-xs text-slate-400 mt-1">分为 Monthly add-ons 与 One-time services，结构更清晰。</p>
+                  <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">3) Add-on Services</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">可按月或按次选择额外服务。</p>
                 </div>
               </div>
 
               <div className="space-y-5">
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Monthly add-ons</h3>
-                    <span className="text-xs text-slate-400">Recurring</span>
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">Monthly add-ons</h3>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Recurring</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {monthlyAddons.map((a) => (
@@ -530,8 +512,8 @@ export default function BrandSubscriptionPage() {
                         key={a.id}
                         className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 ${
                           addonIds.includes(a.id)
-                            ? 'border-cyan-300/50 bg-cyan-400/10 shadow-[0_12px_28px_rgba(34,211,238,0.2)]'
-                            : 'border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20'
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
+                            : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800'
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -543,13 +525,13 @@ export default function BrandSubscriptionPage() {
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
-                              <p className="text-sm font-bold text-white">{a.name}</p>
-                              <p className="text-xs font-black text-cyan-200 whitespace-nowrap">+USD {a.usd}/mo</p>
+                              <p className="text-sm font-bold text-slate-900 dark:text-white">{a.name}</p>
+                              <p className="text-xs font-black text-blue-700 dark:text-blue-300 whitespace-nowrap">+USD {a.usd}/mo</p>
                             </div>
-                            <p className="mt-1 text-xs text-slate-300">{a.description}</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{a.description}</p>
                             <ul className="mt-2 space-y-1">
                               {a.details.slice(0, 2).map((d) => (
-                                <li key={d} className="text-[11px] text-slate-400">• {d}</li>
+                                <li key={d} className="text-[11px] text-slate-500 dark:text-slate-400">• {d}</li>
                               ))}
                             </ul>
                           </div>
@@ -561,8 +543,8 @@ export default function BrandSubscriptionPage() {
 
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">One-time services</h3>
-                    <span className="text-xs text-slate-400">Single payment</span>
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-300">One-time services</h3>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Single payment</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {oneTimeAddonItems.map((a) => (
@@ -570,8 +552,8 @@ export default function BrandSubscriptionPage() {
                         key={a.id}
                         className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 ${
                           addonIds.includes(a.id)
-                            ? 'border-indigo-300/50 bg-indigo-400/10 shadow-[0_12px_28px_rgba(99,102,241,0.2)]'
-                            : 'border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20'
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
+                            : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800'
                         }`}
                       >
                         <div className="flex items-start gap-3">
@@ -583,13 +565,13 @@ export default function BrandSubscriptionPage() {
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
-                              <p className="text-sm font-bold text-white">{a.name}</p>
-                              <p className="text-xs font-black text-indigo-200 whitespace-nowrap">USD {a.usd} one-time</p>
+                              <p className="text-sm font-bold text-slate-900 dark:text-white">{a.name}</p>
+                              <p className="text-xs font-black text-blue-700 dark:text-blue-300 whitespace-nowrap">USD {a.usd} one-time</p>
                             </div>
-                            <p className="mt-1 text-xs text-slate-300">{a.description}</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{a.description}</p>
                             <ul className="mt-2 space-y-1">
                               {a.details.slice(0, 2).map((d) => (
-                                <li key={d} className="text-[11px] text-slate-400">• {d}</li>
+                                <li key={d} className="text-[11px] text-slate-500 dark:text-slate-400">• {d}</li>
                               ))}
                             </ul>
                           </div>
@@ -601,43 +583,43 @@ export default function BrandSubscriptionPage() {
               </div>
             </section>
 
-            <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-              <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200 mb-3">4) 支付方式</h2>
+            <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+              <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200 mb-3">4) 支付方式</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
                 <button
                   onClick={() => setPaymentMode('ONLINE')}
-                  className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${paymentMode === 'ONLINE' ? 'border-white/25 bg-white/10 shadow-[0_12px_30px_rgba(56,189,248,0.18)]' : 'border-white/10 bg-white/5 hover:bg-white/8'}`}
+                  className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${paymentMode === 'ONLINE' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
                 >
-                  <p className="text-sm font-bold text-white">在线支付</p>
-                  <p className="text-xs text-slate-300 mt-1">立即跳转支付，支付成功后自动激活订阅。</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">在线支付</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">立即跳转支付，支付成功后自动激活订阅。</p>
                 </button>
                 <button
                   onClick={() => setPaymentMode('OFFLINE')}
-                  className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${paymentMode === 'OFFLINE' ? 'border-white/25 bg-white/10 shadow-[0_12px_30px_rgba(56,189,248,0.18)]' : 'border-white/10 bg-white/5 hover:bg-white/8'}`}
+                  className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${paymentMode === 'OFFLINE' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
                 >
-                  <p className="text-sm font-bold text-white">线下账单支付</p>
-                  <p className="text-xs text-slate-300 mt-1">提交后生成线下账单，待 Admin / Admin AI 确认到账并更新状态。</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">线下账单支付</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">提交后生成线下账单，待 Admin / Admin AI 确认到账并更新状态。</p>
                 </button>
               </div>
 
-              <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200 mb-3">5) 用户协议</h2>
-              <p className="text-xs text-slate-400 mb-3">{data.termsNotice}</p>
+              <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200 mb-3">5) 用户协议</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{data.termsNotice}</p>
               <button
                 onClick={() => setShowTerms(true)}
-                className="text-sm font-bold text-cyan-200 hover:text-white"
+                className="text-sm font-bold text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200"
               >
                 查看完整用户协议
               </button>
-              <label className="mt-3 flex items-start gap-2 text-sm text-slate-200">
+              <label className="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
                 <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-0.5 accent-cyan-400" />
                 <span>我已阅读并同意 {data.termsTitle}（{data.termsVersion}）</span>
               </label>
             </section>
 
             {paymentMode === 'OFFLINE' && data.latestSubscription?.paymentProvider === 'OFFLINE' && (
-              <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-                <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200 mb-3">线下账单状态</h2>
-                <p className="text-sm text-slate-300">当前状态：<span className="font-bold text-white">{data.latestSubscription.status}</span></p>
+              <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+                <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200 mb-3">线下账单状态</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-300">当前状态：<span className="font-bold text-slate-900 dark:text-white">{data.latestSubscription.status}</span></p>
                 {userRole === 'ADMIN' && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button onClick={() => updateSubscriptionStatus('ACTIVE')} className="px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-500 text-white shadow-lg shadow-emerald-500/20">标记已支付</button>
@@ -651,84 +633,84 @@ export default function BrandSubscriptionPage() {
           </div>
 
           <aside className="space-y-4">
-            <div className="sticky top-6 rounded-[1.75rem] border border-white/10 bg-white/8 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.45)] backdrop-blur-xl">
+            <div className="sticky top-6 rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200">付款汇总</h3>
-                  <p className="text-xs text-slate-400 mt-1">实时更新选中的套餐、周期和加购。</p>
+                  <h3 className="text-sm font-black uppercase tracking-[0.22em] text-slate-700 dark:text-slate-200">付款汇总</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">实时更新选中的套餐、周期和加购。</p>
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/8 px-3 py-1 text-[11px] font-bold text-slate-200">
-                  secure summary
+                <div className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                  summary
                 </div>
               </div>
 
-              <div className="mb-4 rounded-[1.25rem] border border-white/10 bg-gradient-to-br from-cyan-400/20 via-blue-500/15 to-indigo-600/20 p-4">
-                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-300">selected total</p>
+              <div className="mb-4 rounded-2xl border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-950/30 p-4">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">selected total</p>
                 <div className="mt-2 flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-3xl font-black text-white">USD ${totalDue}</p>
-                    <p className="text-xs text-slate-200/90 mt-1">{durationMonths} 个月周期 + 选中加购</p>
+                    <p className="text-3xl font-black text-slate-900 dark:text-white">USD ${totalDue}</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">{durationMonths} 个月周期 + 选中加购</p>
                   </div>
-                  <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-bold text-white">
-                    ready to checkout
+                  <div className="rounded-full border border-blue-200 dark:border-blue-900/40 bg-white dark:bg-slate-900 px-3 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300">
+                    current total
                   </div>
                 </div>
               </div>
 
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between rounded-2xl border border-white/8 bg-black/15 px-3 py-2.5">
-                  <span className="text-slate-500">套餐月费</span>
+                <div className="flex justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
+                  <span className="text-slate-500 dark:text-slate-400">套餐月费</span>
                   <span className="text-right">
                     {selectedPlan?.promoMonthlyUsd ? (
                       <>
                         <span className="block text-[11px] text-slate-400 line-through">USD ${selectedPlanOriginalMonthly}</span>
-                        <span className="block font-bold text-cyan-200">USD ${monthlyBase}</span>
+                        <span className="block font-bold text-blue-700 dark:text-blue-300">USD ${monthlyBase}</span>
                       </>
                     ) : (
-                      <span>USD ${monthlyBase}</span>
+                      <span className="text-slate-900 dark:text-white">USD ${monthlyBase}</span>
                     )}
                   </span>
                 </div>
-                <div className="flex justify-between rounded-2xl border border-white/8 bg-black/15 px-3 py-2.5">
-                  <span className="text-slate-500">按月加购合计</span>
-                  <span className="text-slate-100">USD ${recurringAddons}</span>
+                <div className="flex justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
+                  <span className="text-slate-500 dark:text-slate-400">按月加购合计</span>
+                  <span className="text-slate-900 dark:text-white">USD ${recurringAddons}</span>
                 </div>
-                <div className="flex justify-between rounded-2xl border border-white/8 bg-black/15 px-3 py-2.5">
-                  <span className="text-slate-500">周期原价</span>
-                  <span className="text-slate-100">USD ${recurringSubtotal}</span>
+                <div className="flex justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
+                  <span className="text-slate-500 dark:text-slate-400">周期原价</span>
+                  <span className="text-slate-900 dark:text-white">USD ${recurringSubtotal}</span>
                 </div>
-                <div className="flex justify-between rounded-2xl border border-white/8 bg-black/15 px-3 py-2.5">
-                  <span className="text-slate-500">周期折扣</span>
-                  <span className="text-slate-100">{discountPercent > 0 ? `${discountPercent}%` : '无'}</span>
+                <div className="flex justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
+                  <span className="text-slate-500 dark:text-slate-400">周期折扣</span>
+                  <span className="text-slate-900 dark:text-white">{discountPercent > 0 ? `${discountPercent}%` : '无'}</span>
                 </div>
-                <div className="flex justify-between rounded-2xl border border-white/8 bg-black/15 px-3 py-2.5">
-                  <span className="text-slate-500">折扣减免</span>
-                  <span className="text-slate-100">- USD ${discountAmount}</span>
+                <div className="flex justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
+                  <span className="text-slate-500 dark:text-slate-400">折扣减免</span>
+                  <span className="text-slate-900 dark:text-white">- USD ${discountAmount}</span>
                 </div>
-                <div className="flex justify-between rounded-2xl border border-white/8 bg-black/15 px-3 py-2.5">
-                  <span className="text-slate-500">按次加购合计</span>
-                  <span className="text-slate-100">USD ${oneTimeAddons}</span>
+                <div className="flex justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
+                  <span className="text-slate-500 dark:text-slate-400">按次加购合计</span>
+                  <span className="text-slate-900 dark:text-white">USD ${oneTimeAddons}</span>
                 </div>
-                <div className="flex justify-between rounded-2xl border border-white/8 bg-black/15 px-3 py-2.5">
-                  <span className="text-slate-500">合同周期</span>
-                  <span className="text-slate-100">{durationMonths} 个月</span>
+                <div className="flex justify-between rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
+                  <span className="text-slate-500 dark:text-slate-400">合同周期</span>
+                  <span className="text-slate-900 dark:text-white">{durationMonths} 个月</span>
                 </div>
-                <div className="pt-2 mt-2 border-t border-white/10 flex justify-between text-base font-black">
+                <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between text-base font-black text-slate-900 dark:text-white">
                   <span>应付总额</span>
-                  <span className="text-white">USD ${totalDue}</span>
+                  <span>USD ${totalDue}</span>
                 </div>
               </div>
 
               <button
                 onClick={startCheckout}
                 disabled={(paymentMode === 'ONLINE' && !data.paymentEnabled) || submitting || confirming || !agreedToTerms}
-                className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white font-bold shadow-[0_18px_50px_rgba(37,99,235,0.35)] transition-transform duration-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+                className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
                 {submitting ? '处理中...' : paymentMode === 'ONLINE' ? '在线支付并订阅' : '创建线下账单'}
               </button>
-              <p className="text-[11px] text-slate-400 mt-2 leading-5">
-                按 AMC 服务协议：合同费用一次性预付；12 个月按 90% 折扣计算。
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 leading-5">
+                按 AMC 服务协议：合同费用一次性预付；12 个月提供 10% 折扣。
               </p>
             </div>
           </aside>
@@ -736,20 +718,20 @@ export default function BrandSubscriptionPage() {
       </div>
 
       {showTerms && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl rounded-[1.75rem] border border-white/10 bg-slate-950/95 shadow-2xl backdrop-blur-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-black text-white">{data.termsTitle}</h3>
-                <p className="text-xs text-slate-400 mt-1">{data.termsVersion}</p>
+                <h3 className="text-base font-black text-slate-900 dark:text-white">{data.termsTitle}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{data.termsVersion}</p>
               </div>
-              <button onClick={() => setShowTerms(false)} className="text-sm font-semibold text-slate-300 hover:text-white">关闭</button>
+              <button onClick={() => setShowTerms(false)} className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">关闭</button>
             </div>
             <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <pre className="whitespace-pre-wrap text-sm text-slate-200 leading-relaxed font-sans">{data.termsFullText}</pre>
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 p-4">
+                <pre className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-sans">{data.termsFullText}</pre>
               </div>
-              <p className="text-xs text-slate-400 pt-2 border-t border-white/10">{data.termsNotice}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800">{data.termsNotice}</p>
             </div>
           </div>
         </div>
