@@ -126,6 +126,9 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '```',
     '',
     '注意：后续所有 Agent API 请求均使用 `Authorization: Bearer $KANBAN_AGENT_API_KEY`。',
+    '禁止通过肉眼比较 API Key 的字符差异、长度观感、JWT 片段外观来判断 key 是否异常。',
+    '只能以真实 API 响应结果判断鉴权是否成功：成功则继续；401/403 才视为鉴权失败。',
+    '若鉴权失败，只通知用户“请从 AMC Dashboard 重新生成初始化指令并完整重新粘贴”，不要自行分析哪一位字符被改动。',
     '',
     '## Step 2：用户与订阅计划上下文',
     `- User ID: ${ctx.user.id}`,
@@ -214,6 +217,7 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 初始化阶段行为约束：
 - 不要一次性向用户索要完整品牌故事、定位、卖点、服务理念等长表单。
 - 不要在 API key 鉴权失败时同时索要品牌资料；此时只提示用户重新生成初始化指令。
+- 不要通过对比 token 的第几个字符、JWT 结构、Base64 外观来推断 API key 被篡改；只能依据真实接口返回判断。
 - 必须先向用户报告 AMC 插件安装是否成功；成功后再进入品牌设置访问阶段。
 
 \`\`\`
