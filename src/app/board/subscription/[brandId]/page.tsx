@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, CheckCircle2, Copy, CreditCard, Loader2 } from 'lucide-react'
 import { buildLaunchInstruction } from '@/lib/agentInitPrompt'
@@ -101,6 +101,14 @@ export default function BrandSubscriptionPage() {
   const [showTerms, setShowTerms] = useState(false)
   const [paymentMode, setPaymentMode] = useState<'ONLINE' | 'BILLING'>('ONLINE')
   const [copiedInstruction, setCopiedInstruction] = useState(false)
+  const [activationNotice, setActivationNotice] = useState<string | null>(null)
+  const instructionCardRef = useRef<HTMLElement | null>(null)
+
+  const scrollToInstructionCard = () => {
+    window.setTimeout(() => {
+      instructionCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 120)
+  }
 
   const success = searchParams?.get('success') === '1'
   const canceled = searchParams?.get('canceled') === '1'
@@ -142,7 +150,10 @@ export default function BrandSubscriptionPage() {
 
         const fresh = await fetch(`/api/brands/${brandId}/subscription`)
         const freshJson = await fresh.json()
-        if (fresh.ok) setData(freshJson)
+        if (fresh.ok) {
+          setData(freshJson)
+          scrollToInstructionCard()
+        }
       } catch (e: unknown) {
         setError(getErrorMessage(e, 'Payment confirmation failed'))
       } finally {
@@ -195,6 +206,7 @@ export default function BrandSubscriptionPage() {
     if (!selectedPlan || !data) return
     setSubmitting(true)
     setError(null)
+    setActivationNotice(null)
     try {
       const res = await fetch(`/api/brands/${brandId}/subscription`, {
         method: 'POST',
@@ -219,6 +231,8 @@ export default function BrandSubscriptionPage() {
           const freshJson = await fresh.json()
           if (fresh.ok) setData(freshJson)
         }
+        setActivationNotice('订阅计划已激活成功。你现在可以复制 Agent 初始化指令并完成接入。')
+        scrollToInstructionCard()
       } else if (json.checkoutUrl) {
         window.location.href = json.checkoutUrl
       } else {
@@ -281,7 +295,7 @@ export default function BrandSubscriptionPage() {
         )}
 
         {(success || data.latestSubscription?.status === 'ACTIVE') && instructionText && (
-          <section className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 p-4 md:p-5 shadow-sm">
+          <section ref={instructionCardRef} className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 p-4 md:p-5 shadow-sm">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-200">
                 <CheckCircle2 size={16} /> 当前订阅已生效：{data.latestSubscription?.planName || '套餐已生效'}
@@ -539,8 +553,14 @@ export default function BrandSubscriptionPage() {
                 className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                {paymentMode === 'ONLINE' ? '立即在线支付' : '确认账单并激活'}
+                {paymentMode === 'ONLINE' ? '立即在线支付' : submitting ? '正在激活订阅计划...' : '确认并激活订阅计划'}
               </button>
+
+              {activationNotice && (
+                <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-200">
+                  {activationNotice}
+                </div>
+              )}
             </section>
           </div>
         </div>

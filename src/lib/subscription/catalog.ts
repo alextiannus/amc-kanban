@@ -154,7 +154,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     pricing: 'one_time',
     usd: 2400,
     description: '15 位博主探店整合套餐。',
-    details: ['8 位 1k+ 粉丝博主', '5 位 5k-1w 粉丝博主', '3 位 1w+ 粉丝博主'],
+    details: ['8 位千粉博主', '5 位 5 千粉以上博主', '2 位万粉以上博主'],
   },
 ]
 
@@ -215,7 +215,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     values: {
       starter: '无',
       essential: '每月 1 次探店（3 名以上 KOL/KOC）含拍摄',
-      premium: 'KOL 大V探店：5 位千粉 + 3 位 5 千粉以上 + 2 位万粉以上（新加坡本地）',
+      premium: 'KOL 大V探店：5 位千粉 + 3 位 5 千粉以上 + 2 位万粉以上 KOL（仅新加坡本地）',
       advantage: '每月 1 次现场拍摄 + 大V探店推广（新加坡本地）',
     },
   },
