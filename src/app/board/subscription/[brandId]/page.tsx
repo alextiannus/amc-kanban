@@ -130,11 +130,11 @@ export default function BrandSubscriptionPage() {
   const selectedPlanOriginalMonthly = selectedPlan?.monthlyUsd ?? 0
   const selectedPlanAccent =
     selectedPlan?.id === 'starter'
-      ? 'from-amber-400 via-orange-500 to-rose-500'
+      ? 'from-teal-400 via-cyan-500 to-sky-600'
       : selectedPlan?.id === 'essential'
-        ? 'from-cyan-400 via-blue-500 to-indigo-600'
+        ? 'from-cyan-400 via-sky-500 to-blue-600'
         : selectedPlan?.id === 'premium'
-          ? 'from-fuchsia-400 via-violet-500 to-indigo-600'
+          ? 'from-sky-400 via-cyan-500 to-blue-700'
           : 'from-emerald-400 via-teal-500 to-cyan-600'
   const selectedAddons = useMemo(
     () => (data?.addons || []).filter((a) => addonIds.includes(a.id)),
@@ -236,10 +236,10 @@ export default function BrandSubscriptionPage() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-slate-950 p-4 md:p-8 text-slate-100">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(168,85,247,0.18),_transparent_28%),linear-gradient(180deg,_rgba(15,23,42,0.96),_rgba(15,23,42,1))]" />
-      <div className="absolute -top-32 -left-24 h-72 w-72 rounded-full bg-cyan-500/20 blur-3xl" />
-      <div className="absolute top-1/3 -right-24 h-80 w-80 rounded-full bg-fuchsia-500/15 blur-3xl" />
+    <div className="min-h-screen relative overflow-hidden bg-[#0f172a] p-4 md:p-8 text-slate-100">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(34,211,238,0.14),_transparent_30%),linear-gradient(180deg,_rgba(15,23,42,0.98),_rgba(17,24,39,1),_rgba(11,18,32,1))]" />
+      <div className="absolute -top-32 -left-24 h-72 w-72 rounded-full bg-teal-400/20 blur-3xl" />
+      <div className="absolute top-1/3 -right-24 h-80 w-80 rounded-full bg-cyan-400/15 blur-3xl" />
 
       <div className="relative max-w-7xl mx-auto space-y-6">
         <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 p-6 md:p-7 shadow-2xl backdrop-blur-xl">
@@ -337,7 +337,7 @@ export default function BrandSubscriptionPage() {
           </div>
         )}
 
-        <section className="rounded-[1.75rem] border border-white/10 bg-gradient-to-r from-cyan-500/15 via-blue-500/10 to-indigo-600/15 p-5 md:p-6 shadow-[0_24px_80px_rgba(15,23,42,0.35)] backdrop-blur-xl">
+        <section className="rounded-[1.75rem] border border-white/10 bg-gradient-to-r from-teal-500/18 via-cyan-500/12 to-sky-700/18 p-5 md:p-6 shadow-[0_24px_80px_rgba(15,23,42,0.35)] backdrop-blur-xl">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl space-y-3">
               <p className="text-[11px] font-black uppercase tracking-[0.28em] text-cyan-200">conversion ready</p>
@@ -396,7 +396,6 @@ export default function BrandSubscriptionPage() {
                 <div className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 p-1.5">
                   <button
                     onClick={() => {
-                      setBillingCycle('monthly')
                       setDurationMonths(3)
                     }}
                     className={`rounded-full px-6 py-2 text-sm font-bold transition ${
@@ -407,7 +406,6 @@ export default function BrandSubscriptionPage() {
                   </button>
                   <button
                     onClick={() => {
-                      setBillingCycle('yearly')
                       setDurationMonths(12)
                     }}
                     className={`rounded-full px-6 py-2 text-sm font-bold transition ${
@@ -438,18 +436,21 @@ export default function BrandSubscriptionPage() {
                           : 'border-slate-200/70 hover:border-blue-300'
                       }`}
                     >
-                      {isRecommended && (
-                        <div className="bg-blue-600 px-4 py-2 text-center text-xs font-black tracking-[0.15em] text-white">
-                          RECOMMENDED FOR YOU
-                        </div>
-                      )}
+                      <div className={`px-4 py-2 text-center text-[11px] font-black tracking-[0.15em] ${
+                        isSelected
+                          ? 'bg-slate-800 text-white'
+                          : isRecommended
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {isSelected ? 'CURRENT PLAN' : isRecommended ? 'RECOMMENDED FOR YOU' : 'AVAILABLE PLAN'}
+                      </div>
                       <div className="p-5">
                         <div className="mb-3 flex items-start justify-between gap-2">
                           <div>
                             <h3 className="text-2xl font-black text-slate-900">{p.name}</h3>
                             <p className="mt-1 text-sm text-slate-500 leading-6">{p.description}</p>
                           </div>
-                          {isSelected && <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">Current</span>}
                         </div>
 
                         <div className="mb-4">
@@ -467,10 +468,10 @@ export default function BrandSubscriptionPage() {
 
                         <div className={`mb-4 rounded-full px-4 py-2 text-center text-base font-black transition ${
                           isSelected
-                            ? 'bg-slate-300 text-slate-700'
+                            ? 'bg-slate-200 text-slate-600'
                             : isRecommended
-                              ? 'bg-blue-600 text-white'
-                              : 'border border-blue-500 text-blue-600'
+                              ? 'bg-blue-600 text-white shadow-[0_10px_24px_rgba(37,99,235,0.28)]'
+                              : 'border border-blue-500 text-blue-600 bg-white'
                         }`}>
                           {isSelected ? 'Current plan' : 'Upgrade now'}
                         </div>
