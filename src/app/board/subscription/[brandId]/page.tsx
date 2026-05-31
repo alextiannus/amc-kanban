@@ -89,6 +89,16 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
+function resolveCurrentPlanId(payload: SubscriptionPayload | null): string | null {
+  if (!payload) return null
+  const fromContext = payload.instructionContext?.subscription?.planId
+  if (fromContext) return fromContext
+
+  const activePlanName = payload.latestSubscription?.planName
+  if (!activePlanName) return null
+  return payload.plans.find((p) => p.name === activePlanName)?.id || null
+}
+
 export default function BrandSubscriptionPage() {
   const params = useParams()
   const router = useRouter()
@@ -130,7 +140,12 @@ export default function BrandSubscriptionPage() {
         const json = await res.json()
         if (!res.ok) throw new Error(json.error || 'Failed to load subscription data')
         setData(json)
-        if (json.plans?.[0]?.id) setPlanId(json.plans[0].id)
+        const currentPlanId = resolveCurrentPlanId(json)
+        if (currentPlanId) {
+          setPlanId(currentPlanId)
+        } else if (json.plans?.[0]?.id) {
+          setPlanId(json.plans[0].id)
+        }
       } catch (e: unknown) {
         setError(getErrorMessage(e, 'Failed to load'))
       } finally {
@@ -158,6 +173,8 @@ export default function BrandSubscriptionPage() {
         const freshJson = await fresh.json()
         if (fresh.ok) {
           setData(freshJson)
+          const currentPlanId = resolveCurrentPlanId(freshJson)
+          if (currentPlanId) setPlanId(currentPlanId)
           scrollToInstructionCard()
         }
       } catch (e: unknown) {
@@ -172,9 +189,10 @@ export default function BrandSubscriptionPage() {
   const billingCycle: 'quarterly' | 'yearly' = durationMonths === 12 ? 'yearly' : 'quarterly'
 
   const selectedPlan = useMemo(() => data?.plans.find((p) => p.id === planId), [data?.plans, planId])
+  const currentPlanId = useMemo(() => resolveCurrentPlanId(data), [data])
   const recommendedPlanId = !data?.plans?.length
     ? ''
-    : data.plans.find((p) => p.id === 'premium')?.id || data.plans[Math.min(2, data.plans.length - 1)].id
+    : data.plans.find((p) => p.id === 'essential')?.id || data.plans[0].id
 
   const monthlyAddons = (data?.addons || []).filter((a) => a.pricing === 'monthly')
   const oneTimeAddonItems = (data?.addons || []).filter((a) => a.pricing === 'one_time')
@@ -234,8 +252,11 @@ export default function BrandSubscriptionPage() {
         const freshJson = await fresh.json()
         if (fresh.ok) {
           setData(freshJson)
+          const newCurrentPlanId = resolveCurrentPlanId(freshJson)
+          if (newCurrentPlanId) setPlanId(newCurrentPlanId)
         } else if (json.subscription) {
           setData((prev) => (prev ? { ...prev, latestSubscription: json.subscription } : prev))
+          setPlanId(selectedPlan.id)
         }
         setActivationNotice('订阅计划已激活成功。你现在可以复制 Agent 初始化指令并完成接入。')
         scrollToInstructionCard()
@@ -356,6 +377,7 @@ export default function BrandSubscriptionPage() {
               <div className="mx-auto flex w-full max-w-[1120px] gap-5 pb-1">
                 {data.plans.map((p) => {
                   const isSelected = planId === p.id
+                  const isCurrentPlan = currentPlanId === p.id
                   const isRecommended = p.id === recommendedPlanId
                   const baseMonthly = p.promoMonthlyUsd ?? p.monthlyUsd
                   const cycleMonthly = billingCycle === 'yearly' ? Math.round(baseMonthly * 0.9) : baseMonthly
@@ -368,17 +390,21 @@ export default function BrandSubscriptionPage() {
                       className={`group relative min-w-[360px] max-w-[360px] flex-1 overflow-hidden text-left rounded-2xl border p-0 shadow-sm transition-colors ${
                         isSelected
                           ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/20'
+                          : isCurrentPlan
+                            ? 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20'
                           : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
                       <div className={`px-4 py-2 text-center text-[11px] font-black tracking-[0.15em] ${
                         isSelected
                           ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white'
+                          : isCurrentPlan
+                            ? 'bg-emerald-500 text-white'
                           : isRecommended
                             ? 'bg-blue-600 text-white'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'
                       }`}>
-                        {isSelected ? '当前套餐' : isRecommended ? '推荐' : '可选'}
+                        {isSelected ? '当前选择' : isCurrentPlan ? '当前套餐' : isRecommended ? '推荐' : '可选'}
                       </div>
                       <div className="p-5">
                         <div className="mb-3 flex items-start justify-between gap-2">
