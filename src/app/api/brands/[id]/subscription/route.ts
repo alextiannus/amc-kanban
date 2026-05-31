@@ -144,7 +144,7 @@ export async function GET(_req: Request, { params }: Params) {
     resolvedAgentKey = ensured.apiKey
   }
 
-  const parsedStores = profileMarkdown ? extractStoresFromMarkdown(profileMarkdown) : []
+  const parsedStores = profileMarkdown?.markdown ? extractStoresFromMarkdown(profileMarkdown.markdown) : []
   const stores = parsedStores.length
     ? parsedStores
     : [
