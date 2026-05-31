@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, CheckCircle2, CreditCard, Loader2 } from 'lucide-react'
+import { useParams, useSearchParams } from 'next/navigation'
+import { CheckCircle2, CreditCard, Loader2 } from 'lucide-react'
 
 type Plan = {
   id: string
@@ -32,14 +32,19 @@ type SubscriptionPayload = {
   termsTitle: string
   termsNotice: string
   termsFullText: string
-  latestSubscription?: any
+  latestSubscription?: { id?: string; status?: string; planName?: string; paymentProvider?: string }
   paymentEnabled: boolean
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error) return error
+  return fallback
 }
 
 export default function BrandSubscriptionPage() {
   const params = useParams()
   const searchParams = useSearchParams()
-  const router = useRouter()
   const brandId = String(params.brandId)
 
   const [loading, setLoading] = useState(true)
@@ -70,8 +75,8 @@ export default function BrandSubscriptionPage() {
         if (!res.ok) throw new Error(json.error || 'Failed to load subscription data')
         setData(json)
         if (json.plans?.[0]?.id) setPlanId(json.plans[0].id)
-      } catch (e: any) {
-        setError(e.message || 'Failed to load')
+      } catch (e: unknown) {
+        setError(getErrorMessage(e, 'Failed to load'))
       } finally {
         setLoading(false)
       }
@@ -109,14 +114,16 @@ export default function BrandSubscriptionPage() {
         const fresh = await fetch(`/api/brands/${brandId}/subscription`)
         const freshJson = await fresh.json()
         if (fresh.ok) setData(freshJson)
-      } catch (e: any) {
-        setError(e.message || 'Payment confirmation failed')
+      } catch (e: unknown) {
+        setError(getErrorMessage(e, 'Payment confirmation failed'))
       } finally {
         setConfirming(false)
       }
     }
     confirmPayment()
   }, [success, checkoutSessionId, subscriptionId, brandId])
+
+  const billingCycle: 'monthly' | 'yearly' = durationMonths === 12 ? 'yearly' : 'monthly'
 
   const selectedPlan = useMemo(() => data?.plans.find((p) => p.id === planId), [data?.plans, planId])
   const selectedPlanMonthly = selectedPlan?.promoMonthlyUsd ?? selectedPlan?.monthlyUsd ?? 0
@@ -131,8 +138,14 @@ export default function BrandSubscriptionPage() {
           : 'from-emerald-400 via-teal-500 to-cyan-600'
   const selectedAddons = useMemo(
     () => (data?.addons || []).filter((a) => addonIds.includes(a.id)),
-    [data?.addons, addonIds]
+    [data, addonIds]
   )
+  const recommendedPlanId = !data?.plans?.length
+    ? ''
+    : data.plans.find((p) => p.id === 'premium')?.id || data.plans[Math.min(2, data.plans.length - 1)].id
+
+  const monthlyAddons = (data?.addons || []).filter((a) => a.pricing === 'monthly')
+  const oneTimeAddonItems = (data?.addons || []).filter((a) => a.pricing === 'one_time')
 
   const recurringAddons = selectedAddons.filter((a) => a.pricing === 'monthly').reduce((sum, a) => sum + a.usd, 0)
   const oneTimeAddons = selectedAddons.filter((a) => a.pricing === 'one_time').reduce((sum, a) => sum + a.usd, 0)
@@ -176,8 +189,8 @@ export default function BrandSubscriptionPage() {
       } else {
         throw new Error('Checkout URL is missing')
       }
-    } catch (e: any) {
-      setError(e.message || 'Failed to create checkout')
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to create checkout'))
     } finally {
       setSubmitting(false)
     }
@@ -199,8 +212,8 @@ export default function BrandSubscriptionPage() {
       const fresh = await fetch(`/api/brands/${brandId}/subscription`)
       const freshJson = await fresh.json()
       if (fresh.ok) setData(freshJson)
-    } catch (e: any) {
-      setError(e.message || 'Failed to update status')
+    } catch (e: unknown) {
+      setError(getErrorMessage(e, 'Failed to update status'))
     } finally {
       setSubmitting(false)
     }
@@ -371,115 +384,105 @@ export default function BrandSubscriptionPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <section className="rounded-[1.75rem] border border-white/10 bg-white/7 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.45)] backdrop-blur-xl">
-              <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
                 <div>
-                  <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200">1) 选择套餐</h2>
-                  <p className="text-xs text-slate-400 mt-1">每个 plan 独立放入泳道，方便横向对比。</p>
+                  <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200">1) Price Plans</h2>
+                  <p className="text-xs text-slate-400 mt-1">参考 SaaS pricing 结构：先切换计费周期，再横向比较 plan。</p>
                 </div>
-                <div className="text-xs text-slate-400">点击任意泳道即可选中</div>
+                <p className="text-xs text-slate-400">* Prices in USD, excluding tax</p>
+              </div>
+
+              <div className="mb-6 flex justify-center">
+                <div className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/10 p-1.5">
+                  <button
+                    onClick={() => {
+                      setBillingCycle('monthly')
+                      setDurationMonths(3)
+                    }}
+                    className={`rounded-full px-6 py-2 text-sm font-bold transition ${
+                      billingCycle === 'monthly' ? 'bg-white text-slate-900' : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Monthly
+                  </button>
+                  <button
+                    onClick={() => {
+                      setBillingCycle('yearly')
+                      setDurationMonths(12)
+                    }}
+                    className={`rounded-full px-6 py-2 text-sm font-bold transition ${
+                      billingCycle === 'yearly' ? 'bg-white text-slate-900' : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    Yearly
+                  </button>
+                  <span className="rounded-full bg-blue-500/15 px-3 py-1.5 text-xs font-bold text-blue-200">Save 10%</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
                 {data.plans.map((p) => {
                   const isSelected = planId === p.id
-                  const promoMonthly = p.promoMonthlyUsd ?? p.monthlyUsd
-                  const ribbonLabel =
-                    p.id === 'starter'
-                      ? 'ENTRY OFFER'
-                      : p.id === 'essential'
-                        ? 'CORE GROWTH'
-                        : p.id === 'premium'
-                          ? 'GROWTH ENGINE'
-                          : 'MULTI-LOCATION'
-                  const laneGlow =
-                    p.id === 'starter'
-                      ? 'from-amber-400/25 via-orange-400/10 to-transparent'
-                      : p.id === 'essential'
-                        ? 'from-cyan-400/25 via-blue-400/10 to-transparent'
-                        : p.id === 'premium'
-                          ? 'from-fuchsia-400/25 via-violet-400/10 to-transparent'
-                          : 'from-emerald-400/25 via-teal-400/10 to-transparent'
+                  const isRecommended = p.id === recommendedPlanId
+                  const baseMonthly = p.promoMonthlyUsd ?? p.monthlyUsd
+                  const cycleMonthly = billingCycle === 'yearly' ? Math.round(baseMonthly * 0.9) : baseMonthly
+                  const cycleTotal = cycleMonthly * (billingCycle === 'yearly' ? 12 : 3)
+
                   return (
                     <button
                       key={p.id}
                       onClick={() => setPlanId(p.id)}
-                      className={`group relative overflow-hidden text-left rounded-[1.5rem] border p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 ${
+                      className={`group relative overflow-hidden text-left rounded-[1.25rem] border bg-white/95 p-0 shadow-sm transition-all duration-300 hover:-translate-y-1 ${
                         isSelected
-                          ? 'border-white/25 bg-white/10 ring-1 ring-white/20 shadow-[0_20px_60px_rgba(59,130,246,0.22)]'
-                          : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/8'
+                          ? 'border-blue-500 ring-2 ring-blue-400/40 shadow-[0_20px_45px_rgba(37,99,235,0.25)]'
+                          : 'border-slate-200/70 hover:border-blue-300'
                       }`}
                     >
-                      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${laneGlow}`} />
-                      <div className={`absolute inset-0 bg-gradient-to-br ${laneGlow} opacity-0 transition-opacity duration-300 group-hover:opacity-100`} />
-
-                      <div className="absolute right-4 top-4">
-                        <span className="inline-flex items-center rounded-full border border-white/10 bg-black/25 px-2.5 py-1 text-[10px] font-black tracking-[0.2em] text-slate-200">
-                          {ribbonLabel}
-                        </span>
-                      </div>
-
-                      <div className="flex items-start justify-between gap-3 mb-4">
-                        <div>
-                          <p className="text-[11px] font-black tracking-[0.35em] text-slate-400">PLAN</p>
-                          <h3 className="mt-1 text-xl font-black text-white">{p.name}</h3>
-                          <p className="text-xs text-slate-300 mt-1 leading-relaxed">{p.description}</p>
+                      {isRecommended && (
+                        <div className="bg-blue-600 px-4 py-2 text-center text-xs font-black tracking-[0.15em] text-white">
+                          RECOMMENDED FOR YOU
                         </div>
-                        {isSelected && (
-                          <span className="inline-flex items-center rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white border border-white/15">
-                            已选中
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mb-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-                        {p.promoMonthlyUsd ? (
-                          <>
-                            <div className="flex items-end gap-2">
-                              <span className="text-xs text-slate-400 line-through">USD ${p.monthlyUsd}/月</span>
-                              <span className="text-3xl font-black text-white">USD ${promoMonthly}</span>
-                            </div>
-                            <p className="mt-1 text-[11px] font-bold text-amber-200">促销价</p>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-3xl font-black text-white">USD ${p.monthlyUsd}/月</div>
-                            <p className="mt-1 text-[11px] font-bold text-slate-400">标准价</p>
-                          </>
-                        )}
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">monthly</p>
-                            <p className="mt-1 text-sm font-bold text-white">USD ${promoMonthly}</p>
+                      )}
+                      <div className="p-5">
+                        <div className="mb-3 flex items-start justify-between gap-2">
+                          <div>
+                            <h3 className="text-2xl font-black text-slate-900">{p.name}</h3>
+                            <p className="mt-1 text-sm text-slate-500 leading-6">{p.description}</p>
                           </div>
-                          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                            <p className="text-[10px] uppercase tracking-[0.18em] text-slate-400">status</p>
-                            <p className="mt-1 text-sm font-bold text-white">{isSelected ? 'selected' : 'compare'}</p>
+                          {isSelected && <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">Current</span>}
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="flex items-end gap-2">
+                            <span className="text-5xl font-black leading-none text-slate-900">${cycleMonthly}</span>
+                            <span className="pb-1 text-sm font-semibold text-slate-700">/ month</span>
                           </div>
+                          {billingCycle === 'yearly' && (
+                            <p className="mt-1 text-xs text-blue-700 font-semibold">Billed yearly at USD ${cycleTotal} (10% off)</p>
+                          )}
+                          {billingCycle === 'monthly' && (
+                            <p className="mt-1 text-xs text-slate-500">3-month contract billing cycle</p>
+                          )}
                         </div>
 
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-300 mb-2">套餐包含</p>
-                          <ul className="space-y-1 text-sm text-slate-200">
-                            {p.includes.map((item) => (
-                              <li key={item} className="flex gap-2">
-                                <span className="mt-1 h-1.5 w-1.5 rounded-full bg-gradient-to-r from-cyan-300 to-blue-400 shrink-0 shadow-[0_0_16px_rgba(56,189,248,0.55)]" />
-                                <span>{item}</span>
-                              </li>
-                            ))}
-                          </ul>
+                        <div className={`mb-4 rounded-full px-4 py-2 text-center text-base font-black transition ${
+                          isSelected
+                            ? 'bg-slate-300 text-slate-700'
+                            : isRecommended
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-blue-500 text-blue-600'
+                        }`}>
+                          {isSelected ? 'Current plan' : 'Upgrade now'}
                         </div>
 
-                        <div className="pt-3 border-t border-white/10 space-y-2">
-                          {data.comparisonRows.map((row) => (
-                            <div key={`${row.key}-${p.id}`} className="flex items-start justify-between gap-3 text-xs">
-                              <span className="font-bold text-slate-400">{row.label}</span>
-                              <span className="text-right text-slate-200 leading-relaxed">{row.values[p.id]}</span>
-                            </div>
+                        <ul className="space-y-2 text-sm text-slate-700">
+                          {p.includes.slice(0, 4).map((item) => (
+                            <li key={item} className="flex gap-2">
+                              <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
+                              <span>{item}</span>
+                            </li>
                           ))}
-                        </div>
+                        </ul>
                       </div>
                     </button>
                   )
@@ -500,7 +503,7 @@ export default function BrandSubscriptionPage() {
                         : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/8'
                     }`}
                   >
-                    {d} 个月{d === 12 ? '（90%折扣）' : ''}
+                    {d} 个月{d === 12 ? '（10%折扣）' : ''}
                   </button>
                 ))}
               </div>
@@ -509,28 +512,91 @@ export default function BrandSubscriptionPage() {
             <section className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.45)] backdrop-blur-xl">
               <div className="mb-4 flex items-end justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200">3) 增值服务下单</h2>
-                  <p className="text-xs text-slate-400 mt-1">每个服务只保留一行摘要，快速扫读。</p>
+                  <h2 className="text-sm font-black uppercase tracking-[0.22em] text-slate-200">3) Add-on Services</h2>
+                  <p className="text-xs text-slate-400 mt-1">分为 Monthly add-ons 与 One-time services，结构更清晰。</p>
                 </div>
               </div>
-              <div className="space-y-2">
-                {data.addons.map((a) => (
-                  <label key={a.id} className="group flex items-start gap-3 p-3 rounded-2xl border border-white/10 bg-white/5 cursor-pointer transition-all duration-200 hover:bg-white/8 hover:border-white/20">
-                    <input
-                      type="checkbox"
-                      checked={addonIds.includes(a.id)}
-                      onChange={() => toggleAddon(a.id)}
-                      className="mt-1 accent-cyan-400"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-white">{a.name}</p>
-                      <p className="text-xs text-slate-300">{a.description}</p>
-                    </div>
-                    <p className="text-xs font-bold text-cyan-200 whitespace-nowrap">
-                      {a.pricing === 'monthly' ? `+USD ${a.usd}/mo` : `USD ${a.usd} one-time`}
-                    </p>
-                  </label>
-                ))}
+
+              <div className="space-y-5">
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Monthly add-ons</h3>
+                    <span className="text-xs text-slate-400">Recurring</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {monthlyAddons.map((a) => (
+                      <label
+                        key={a.id}
+                        className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 ${
+                          addonIds.includes(a.id)
+                            ? 'border-cyan-300/50 bg-cyan-400/10 shadow-[0_12px_28px_rgba(34,211,238,0.2)]'
+                            : 'border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={addonIds.includes(a.id)}
+                            onChange={() => toggleAddon(a.id)}
+                            className="mt-1 accent-cyan-400"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-sm font-bold text-white">{a.name}</p>
+                              <p className="text-xs font-black text-cyan-200 whitespace-nowrap">+USD {a.usd}/mo</p>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-300">{a.description}</p>
+                            <ul className="mt-2 space-y-1">
+                              {a.details.slice(0, 2).map((d) => (
+                                <li key={d} className="text-[11px] text-slate-400">• {d}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">One-time services</h3>
+                    <span className="text-xs text-slate-400">Single payment</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {oneTimeAddonItems.map((a) => (
+                      <label
+                        key={a.id}
+                        className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 ${
+                          addonIds.includes(a.id)
+                            ? 'border-indigo-300/50 bg-indigo-400/10 shadow-[0_12px_28px_rgba(99,102,241,0.2)]'
+                            : 'border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={addonIds.includes(a.id)}
+                            onChange={() => toggleAddon(a.id)}
+                            className="mt-1 accent-indigo-400"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="text-sm font-bold text-white">{a.name}</p>
+                              <p className="text-xs font-black text-indigo-200 whitespace-nowrap">USD {a.usd} one-time</p>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-300">{a.description}</p>
+                            <ul className="mt-2 space-y-1">
+                              {a.details.slice(0, 2).map((d) => (
+                                <li key={d} className="text-[11px] text-slate-400">• {d}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
             </section>
 
