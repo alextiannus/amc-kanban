@@ -60,6 +60,31 @@ export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAge
   })
 
   let agentId = existingLink?.agent.id
+  let resolvedApiKey = existingLink?.agent.apiKey || null
+
+  // Keep using the current key when this brand already has an active agent with API key.
+  // This prevents key churn during plan upgrades/downgrades.
+  if (agentId && resolvedApiKey) {
+    await prisma.agentPermission.upsert({
+      where: {
+        humanId_agentId: {
+          humanId: ownerId,
+          agentId,
+        },
+      },
+      create: {
+        humanId: ownerId,
+        agentId,
+      },
+      update: {},
+    })
+
+    return {
+      agentId,
+      apiKey: resolvedApiKey,
+    }
+  }
+
   if (!agentId) {
     const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { name: true } })
     const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
@@ -87,6 +112,8 @@ export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAge
         active: true,
       },
     })
+
+    resolvedApiKey = null
   }
 
   await prisma.agentPermission.upsert({
@@ -103,6 +130,7 @@ export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAge
     update: {},
   })
 
+  // Generate a new key only if the active brand agent has no key yet.
   const plaintextApiKey = await encrypt({ agentId, type: 'AI_AGENT', brandId }, '36500d')
 
   await prisma.user.update({
