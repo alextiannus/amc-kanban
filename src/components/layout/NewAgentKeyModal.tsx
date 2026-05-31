@@ -31,7 +31,7 @@ export default function NewAgentKeyModal({ newApiKey, onClose }: NewAgentKeyModa
           <p className="text-xs text-amber-700 dark:text-amber-500">
             系统已为您预注册了新的 AI 身份。你有两种接入方式：<br/>
             <b>方式一：</b> 单独复制 Key 填入底层 MCP 配置（推荐，最稳定）。<br/>
-            <b>方式二：</b> 一键复制包含 Key 的完整指令发给 AI，让它动态携带。
+            <b>方式二：</b> 一键复制包含 Key 的完整 Skill 正文发给 AI，让它动态携带。
           </p>
         </div>
 
@@ -59,7 +59,7 @@ export default function NewAgentKeyModal({ newApiKey, onClose }: NewAgentKeyModa
         </div>
 
         <div className="mb-8">
-          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">📜 包含 Key 的完整初始化指令</label>
+          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">📜 包含 Key 的完整 Skill 正文</label>
           <div className="relative">
             <textarea 
               readOnly 

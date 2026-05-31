@@ -85,7 +85,7 @@ export default function UserMenu({
       } else {
         alert(data.error || 'Failed to generate key')
       }
-    } catch (e) {
+    } catch {
       alert('Error generating key')
     } finally {
       setGeneratingKey(false)
@@ -103,7 +103,7 @@ export default function UserMenu({
         } else {
           alert('清理失败，请确保您是管理员')
         }
-      } catch (error) {
+      } catch {
         alert('网络错误，请重试')
       }
     }
@@ -167,7 +167,7 @@ export default function UserMenu({
                   onClick={() => { setShowProfile(false); handleCopy() }}
                   className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors"
                 >
-                  {copied ? <Check size={16} /> : <Copy size={16} />} 复制初始化 Skill
+                  {copied ? <Check size={16} /> : <Copy size={16} />} 复制 Skill 正文
                 </button>
               </>
             )}
@@ -194,7 +194,7 @@ export default function UserMenu({
                   onClick={() => { setShowProfile(false); handleCopy() }}
                   className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors"
                 >
-                  {copied ? <Check size={16} /> : <Copy size={16} />} 复制初始化 Skill
+                  {copied ? <Check size={16} /> : <Copy size={16} />} 复制 Skill 正文
                 </button>
               </>
             )}
@@ -204,7 +204,7 @@ export default function UserMenu({
                 onClick={() => { setShowProfile(false); handleCopy() }}
                 className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors"
               >
-                {copied ? <Check size={16} /> : <Copy size={16} />} 复制初始化 Skill
+                {copied ? <Check size={16} /> : <Copy size={16} />} 复制 Skill 正文
               </button>
             )}
 

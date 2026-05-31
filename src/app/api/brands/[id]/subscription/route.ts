@@ -75,7 +75,7 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  const [brand, latest, user, ownedBrands, profileMarkdown, brandAgent] = await Promise.all([
+  const [brand, latestAny, latestActive, user, ownedBrands, profileMarkdown, brandAgent] = await Promise.all([
     prisma.brand.findUnique({
       where: { id: brandId },
       select: {
@@ -99,6 +99,10 @@ export async function GET(_req: Request, { params }: Params) {
     }),
     prisma.brandSubscription.findFirst({
       where: { brandId },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.brandSubscription.findFirst({
+      where: { brandId, status: 'ACTIVE' },
       orderBy: { createdAt: 'desc' },
     }),
     prisma.user.findUnique({
@@ -131,6 +135,8 @@ export async function GET(_req: Request, { params }: Params) {
   ])
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+
+  const latest = latestActive || latestAny
 
   let resolvedAgentId = brandAgent?.agent.id || null
   let resolvedAgentKey = latest?.status === 'ACTIVE' ? brandAgent?.agent.apiKey || null : null
@@ -269,17 +275,21 @@ export async function POST(request: Request, { params }: Params) {
       where: { id: pending.id },
       data: activationData,
     })
+    const activatedSubscription = await prisma.brandSubscription.findUnique({
+      where: { id: pending.id },
+    })
     const keyResult = await ensureBrandAgentKeyAfterSubscription({
       brandId,
       ownerId: session.user.id,
     })
-    return NextResponse.json(
-      buildBillingActivatedResponse({
+    return NextResponse.json({
+      ...buildBillingActivatedResponse({
         subscriptionId: pending.id,
         totalDueUsd: summary.totalDueUsd,
         agentId: keyResult.agentId,
-      })
-    )
+      }),
+      subscription: activatedSubscription,
+    })
   }
 
   if (paymentMode === 'OFFLINE') {

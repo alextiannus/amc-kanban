@@ -2,13 +2,160 @@
  * buildAmcSkillText — generates the AMC operational Skill text.
  *
  * This is the reusable "AMC Skill" that brand owners can push to their AI Agent at any
- * time to update operational rules. It does NOT contain bootstrap/auth setup steps —
- * those belong in the per-subscription "AMC Account Initialization Instruction"
- * generated on the subscription success page.
- *
- * buildAgentInitPrompt is kept as a backward-compatible alias (used in
- * NewAgentKeyModal and UserMenu for admin-generated keys).
+ * time to update operational rules. It does NOT contain bootstrap/auth setup steps.
  */
+export type LaunchInstructionContext = {
+  user: {
+    id: string
+    email: string | null
+    role: string
+    nickname: string | null
+  }
+  brand: {
+    id: string
+    name: string
+    location: string | null
+    timezone: string | null
+    website: string | null
+    phone: string | null
+    address: string | null
+  }
+  stores: Array<{
+    storeId: string
+    name: string
+    isPrimary: boolean
+    timezone: string | null
+    address: string | null
+    location: string | null
+  }>
+  socialAccounts: Array<{
+    platformId: string
+    handle: string
+    displayName: string | null
+    profileUrl: string | null
+  }>
+  ownedBrands: Array<{
+    id: string
+    name: string
+    location: string | null
+  }>
+  agent: {
+    id: string | null
+    apiKey: string | null
+  }
+}
+
+export function buildLaunchInstruction(params: { context: LaunchInstructionContext; apiBaseUrl: string }) {
+  const { context: ctx, apiBaseUrl } = params
+  const baseHost = apiBaseUrl.replace(/\/api\/?$/, '')
+  const apiKey = ctx.agent.apiKey || '<AGENT_API_KEY — activate subscription first>'
+  const brandId = ctx.brand.id
+
+  const platforms = Array.from(new Set(ctx.socialAccounts.map((a) => a.platformId))).sort()
+  const platformText = platforms.length ? platforms.join(', ') : 'None'
+
+  const accountLines = ctx.socialAccounts.length
+    ? ctx.socialAccounts
+        .map(
+          (acc) =>
+            `- ${acc.platformId}: ${acc.handle}${acc.displayName ? ` (${acc.displayName})` : ''}${acc.profileUrl ? ` | ${acc.profileUrl}` : ''}`,
+        )
+        .join('\n')
+    : '- No social accounts linked yet'
+
+  const storeLines = ctx.stores.length
+    ? ctx.stores
+        .map(
+          (store, idx) =>
+            `- Store ${idx + 1}: ${store.name}${store.isPrimary ? ' [Primary]' : ''} | timezone=${store.timezone || 'N/A'} | location=${store.location || 'N/A'} | address=${store.address || 'N/A'}`,
+        )
+        .join('\n')
+    : '- No stores configured yet'
+
+  const otherBrandsLines = ctx.ownedBrands.length
+    ? ctx.ownedBrands.map((brand) => `- ${brand.name} (${brand.id})${brand.location ? ` | ${brand.location}` : ''}`).join('\n')
+    : '- None'
+
+  const generatedAt = new Date().toISOString()
+  const skillText = buildAmcSkillText({ apiKey: ctx.agent.apiKey, apiBaseUrl })
+
+  return [
+    '【AMC 账号初始化指令】',
+    '将本指令完整粘贴给 AI Agent，即可完成 AMC 接入初始化。',
+    `生成时间：${generatedAt}`,
+    '',
+    '═══════════════════════════════════════',
+    '## Step 1：安装 / 更新 AMC 插件',
+    '在 OpenClaw 环境中执行以下命令之一：',
+    '',
+    '```bash',
+    '# 未安装时：',
+    'openclaw plugins install git-plugin-amc',
+    '',
+    '# 已安装时：',
+    'openclaw plugins update git-plugin-amc',
+    '```',
+    '',
+    '## Step 2：配置 MCP 环境变量',
+    '安装完成后，在 OpenClaw MCP 配置中注册以下环境变量：',
+    '',
+    '```env',
+    `KANBAN_BASE_URL=${baseHost}`,
+    `KANBAN_AGENT_API_KEY=${apiKey}`,
+    '```',
+    '',
+    '## Step 3：你的身份与接入凭证',
+    `- Agent ID: ${ctx.agent.id || 'N/A'}`,
+    `- Agent API Key: ${apiKey}`,
+    `- AMC Kanban Base URL: ${baseHost}`,
+    `- 默认品牌 ID: ${brandId}`,
+    '- 所有 Agent 专属 API 均使用 Bearer Token 鉴权：',
+    `  Authorization: Bearer ${apiKey}`,
+    '',
+    '## Step 4：当前品牌与账号上下文',
+    '',
+    '### 4.1 操作用户',
+    `- User ID: ${ctx.user.id}`,
+    `- Email: ${ctx.user.email || 'N/A'}`,
+    `- Role: ${ctx.user.role}`,
+    `- Nickname: ${ctx.user.nickname || 'N/A'}`,
+    '',
+    '### 4.2 主品牌',
+    `- Brand ID: ${brandId}`,
+    `- Brand Name: ${ctx.brand.name}`,
+    `- Timezone: ${ctx.brand.timezone || 'N/A'}`,
+    `- Location: ${ctx.brand.location || 'N/A'}`,
+    `- Address: ${ctx.brand.address || 'N/A'}`,
+    `- Website: ${ctx.brand.website || 'N/A'}`,
+    `- Phone: ${ctx.brand.phone || 'N/A'}`,
+    '',
+    '### 4.3 社交媒体账号',
+    `- 已连接平台：${platformText}`,
+    accountLines,
+    '',
+    '### 4.4 门店',
+    storeLines,
+    '',
+    '### 4.5 同一用户下的其他品牌',
+    otherBrandsLines,
+    '',
+    '## Step 5：品牌初始化工作清单（与品牌主共同完成）',
+    `- [ ] 确认品牌基本信息（名称 / 简介 / 地址 / 电话 / 官网）已写入看板`,
+    `- [ ] 确认门店结构已配置（多门店时分别登记）`,
+    `- [ ] 确认社交媒体账号已在看板中连接并测试`,
+    `- [ ] 确认 PostFast / Google / Lark 集成凭证已在看板品牌设置中配置`,
+    `- [ ] 读取品牌 Profile 确认数据完整：`,
+    `      GET ${apiBaseUrl}/brands/${brandId}/profile?refresh=1`,
+    `      Authorization: Bearer ${apiKey}`,
+    '',
+    '═══════════════════════════════════════',
+    '## Step 6：AMC 操作 Skill（工作流规范）',
+    '以下为 AMC Skill 正文，保存后可随时复用，品牌主也可单独推送更新版本。',
+    '',
+    skillText,
+  ].join('\n')
+}
+
 export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?: string }) {
   const apiKey = params?.apiKey || '<AGENT_API_KEY>'
   const apiBaseUrl = params?.apiBaseUrl || '<KANBAN_API_BASE_URL>'
