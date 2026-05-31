@@ -62,20 +62,20 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '专属品牌主理人',
       'Google Map 配置与评论监控',
       '中英双语 + 每周舆情报告',
-      '赠送 1 次博主探店与现场手机拍摄',
+      '每月 1 次探店（3 名以上 KOL/KOC）含拍摄',
     ],
   },
   {
     id: 'premium',
     name: 'PREMIUM',
     monthlyUsd: 1600,
-    description: '海外社媒代运营增强版',
+    description: '海外社媒代运营，品牌推广，到店转化增效版（仅新加坡本地）',
     includes: [
       'Instagram / Facebook / TikTok / 小红书 图文与视频',
       '可每天发布',
       'Google Map 配置与评论监控',
       '每月一次现场拍摄素材服务',
-      '每半年一次流量激活探店推广套餐',
+      'KOL 大V探店：5 位千粉 + 3 位 5 千粉以上 + 2 位万粉以上 KOL（仅新加坡本地）',
     ],
   },
   {
@@ -214,9 +214,9 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     label: '拍摄/探店权益',
     values: {
       starter: '无',
-      essential: '赠送 1 次博主探店 + 现场手机拍摄',
-      premium: '每月 1 次现场拍摄 + 半年 1 次流量激活探店',
-      advantage: '每月 1 次现场拍摄 + 半年 1 次流量激活探店',
+      essential: '每月 1 次探店（3 名以上 KOL/KOC）含拍摄',
+      premium: 'KOL 大V探店：5 位千粉 + 3 位 5 千粉以上 + 2 位万粉以上（新加坡本地）',
+      advantage: '每月 1 次现场拍摄 + 大V探店推广（新加坡本地）',
     },
   },
   {
