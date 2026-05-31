@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
-import { CheckCircle2, Copy, CreditCard, Loader2 } from 'lucide-react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { ArrowLeft, CheckCircle2, Copy, CreditCard, Loader2 } from 'lucide-react'
 import { buildAmcSkillText } from '@/lib/agentInitPrompt'
 
 type Plan = {
@@ -85,6 +85,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 export default function BrandSubscriptionPage() {
   const params = useParams()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const brandId = String(params.brandId)
 
@@ -353,6 +354,12 @@ export default function BrandSubscriptionPage() {
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:p-6 shadow-sm">
           <div className="space-y-3">
+            <button
+              onClick={() => router.back()}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+            >
+              <ArrowLeft size={14} /> 返回上一页
+            </button>
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold tracking-[0.18em] text-slate-600 dark:text-slate-300">
               订阅管理
             </div>
