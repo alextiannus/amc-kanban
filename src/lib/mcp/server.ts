@@ -60,7 +60,13 @@ async function requireActiveBrandLink(brandId: string, agentId: string) {
 }
 
 async function requireOwnedTask(taskId: string, agentId: string) {
-  return prisma.workUnit.findUnique({ where: { id: taskId }, select: { id: true, assigneeId: true } })
+  return prisma.workUnit.findFirst({ where: { id: taskId, assigneeId: agentId }, select: { id: true, assigneeId: true } })
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error) return error
+  return fallback
 }
 
 // ── Build and return a configured McpServer ────────────────────────────────
@@ -214,7 +220,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const { brandId, ...fields } = input
+      const { brandId } = input
 
       if (!brandId) {
         return { content: [{ type: 'text' as const, text: 'Error: Brand creation via MCP is disabled. Create brands from the dashboard.' }], isError: true }
@@ -268,7 +274,9 @@ export function createAmcMcpServer(agentApiKey: string) {
     async () => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-      const { password: _, apiKey: __, avatarData: ___, ...safe } = agent as any
+      const safe = Object.fromEntries(
+        Object.entries(agent).filter(([key]) => key !== 'password' && key !== 'apiKey' && key !== 'avatarData')
+      )
       return { content: [{ type: 'text' as const, text: JSON.stringify(safe, null, 2) }] }
     }
   )
@@ -483,7 +491,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       description: z.string().describe('Full content or action details'),
       platform: z.string().optional(),
     },
-    async ({ brandId, type, priority, title, description, platform }) => {
+    async ({ brandId, type, priority, title, description }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
@@ -709,8 +717,8 @@ export function createAmcMcpServer(agentApiKey: string) {
           mediaUrls,
           accessToken,
         })
-      } catch (e: any) {
-        result = { success: false, error: e.message || 'Direct Google GBP publish failed' }
+      } catch (e: unknown) {
+        result = { success: false, error: errorMessage(e, 'Direct Google GBP publish failed') }
       }
     } else {
       if (!brand.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured for this brand. Run update_brand_config first.' }], isError: true }
@@ -799,7 +807,7 @@ export function createAmcMcpServer(agentApiKey: string) {
           if (result.error) return { content: [{ type: 'text' as const, text: `Error (GBP API): ${result.error}` }], isError: true }
           const reviews = result.reviews.slice(0, limit ?? 10)
           return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: reviews.length, reviews, source: 'google_business_profile_oauth' }, null, 2) }] }
-        } catch (e: any) {
+        } catch (e: unknown) {
           console.error('[MCP Get Reviews] GBP OAuth flow failed, trying fallback...', e)
         }
       }
@@ -911,9 +919,9 @@ export function createAmcMcpServer(agentApiKey: string) {
           })
           if (!result.success) return { content: [{ type: 'text' as const, text: `Error (GBP API): ${result.error}` }], isError: true }
           return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, via: 'direct_oauth' }) }] }
-        } catch (e: any) {
+        } catch (e: unknown) {
           console.error('[MCP Reply Review] GBP OAuth flow failed...', e)
-          return { content: [{ type: 'text' as const, text: `Error (GBP OAuth): ${e.message}` }], isError: true }
+          return { content: [{ type: 'text' as const, text: `Error (GBP OAuth): ${errorMessage(e, 'Unknown error')}` }], isError: true }
         }
       }
 
@@ -992,7 +1000,7 @@ export function createAmcMcpServer(agentApiKey: string) {
               })
               if (!result.success) return { content: [{ type: 'text' as const, text: `Error (GBP API): ${result.error}` }], isError: true }
               return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, via: 'direct_oauth' }) }] }
-            } catch (e: any) {
+            } catch (e: unknown) {
               console.error('[execute_brand_action] GBP OAuth reply failed, falling back...', e)
             }
           }
@@ -1038,16 +1046,16 @@ export function createAmcMcpServer(agentApiKey: string) {
             replyText,
           })
           return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, result }) }] }
-        } catch (e: any) {
+        } catch (e: unknown) {
           // Log send command error
           writeAuditLog({
             actor: actorFromContext(null, agent),
             action: 'EXTENSION_CMD_ERR',
             resourceId: brandId,
             resourceType: 'ExtensionBridge',
-            reason: `AI 代理触发国内平台自动回复失败 (评论 ID: ${reviewId})。错误: ${e.message || String(e)}`,
+            reason: `AI 代理触发国内平台自动回复失败 (评论 ID: ${reviewId})。错误: ${errorMessage(e, String(e))}`,
           }).catch(console.error)
-          return { content: [{ type: 'text' as const, text: `Error (Extension Bridge): ${e.message || String(e)}` }], isError: true }
+          return { content: [{ type: 'text' as const, text: `Error (Extension Bridge): ${errorMessage(e, String(e))}` }], isError: true }
         }
       }
 
@@ -1093,8 +1101,8 @@ export function createAmcMcpServer(agentApiKey: string) {
               mediaUrls,
               accessToken,
             })
-          } catch (e: any) {
-            result = { success: false, error: e.message || 'Direct Google GBP publish failed' }
+          } catch (e: unknown) {
+            result = { success: false, error: errorMessage(e, 'Direct Google GBP publish failed') }
           }
         } else {
           if (!brand.postfastApiKey) {
@@ -1239,7 +1247,7 @@ export function createAmcMcpServer(agentApiKey: string) {
         return { content: [{ type: 'text' as const, text: 'Error: larkAppId and larkAppSecret not configured. Run update_brand_config first.' }], isError: true }
       }
 
-      const targetFolder = folderId || (brand as any).larkDriveFolderId
+      const targetFolder = folderId || brand.larkDriveFolderId
       if (!targetFolder) {
         return { content: [{ type: 'text' as const, text: 'Error: No Lark folder target. Either provide folderId or create a workspace first with lark_create_workspace.' }], isError: true }
       }
