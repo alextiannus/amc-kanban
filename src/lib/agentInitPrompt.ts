@@ -5,11 +5,17 @@
  * time to update operational rules. It does NOT contain bootstrap/auth setup steps.
  */
 export type LaunchInstructionContext = {
+  subscription: {
+    planId: string | null
+    planName: string | null
+    platforms: string | null
+  }
   user: {
     id: string
     email: string | null
     role: string
     nickname: string | null
+    timezone: string | null
   }
   brand: {
     id: string
@@ -45,10 +51,10 @@ export type LaunchInstructionContext = {
   }
 }
 
-function formatGeneratedTime(timezone: string | null): string {
+function formatGeneratedTime(userTimezone: string | null): string {
   const now = new Date()
-  const fallbackTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  const targetTz = timezone || fallbackTz
+  const defaultTz = 'Asia/Singapore'
+  const targetTz = userTimezone || defaultTz
 
   const build = (tz: string) => {
     const parts = new Intl.DateTimeFormat('en-CA', {
@@ -69,7 +75,7 @@ function formatGeneratedTime(timezone: string | null): string {
   try {
     return build(targetTz)
   } catch {
-    return build(fallbackTz)
+    return build(defaultTz)
   }
 }
 
@@ -78,9 +84,12 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
   const baseHost = apiBaseUrl.replace(/\/api\/?$/, '')
   const apiKey = ctx.agent.apiKey || '<AGENT_API_KEY — activate subscription first>'
   const brandId = ctx.brand.id
+  const userTimezone = ctx.user.timezone || 'Asia/Singapore'
+  const selectedPlanName = ctx.subscription.planName || '待激活计划'
+  const selectedPlanPlatforms = ctx.subscription.platforms || '待确认（激活后自动更新）'
 
-  const platforms = Array.from(new Set(ctx.socialAccounts.map((a) => a.platformId))).sort()
-  const platformText = platforms.length ? platforms.join(', ') : 'None'
+  const connectedPlatforms = Array.from(new Set(ctx.socialAccounts.map((a) => a.platformId))).sort()
+  const connectedPlatformText = connectedPlatforms.length ? connectedPlatforms.join(', ') : '暂无已连接平台'
 
   const accountLines = ctx.socialAccounts.length
     ? ctx.socialAccounts
@@ -89,92 +98,63 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
             `- ${acc.platformId}: ${acc.handle}${acc.displayName ? ` (${acc.displayName})` : ''}${acc.profileUrl ? ` | ${acc.profileUrl}` : ''}`,
         )
         .join('\n')
-    : '- No social accounts linked yet'
+    : '- 暂无已连接账号'
 
-  const storeLines = ctx.stores.length
-    ? ctx.stores
-        .map(
-          (store, idx) =>
-            `- Store ${idx + 1}: ${store.name}${store.isPrimary ? ' [Primary]' : ''} | timezone=${store.timezone || 'N/A'} | location=${store.location || 'N/A'} | address=${store.address || 'N/A'}`,
-        )
-        .join('\n')
-    : '- No stores configured yet'
-
-  const otherBrandsLines = ctx.ownedBrands.length
-    ? ctx.ownedBrands.map((brand) => `- ${brand.name} (${brand.id})${brand.location ? ` | ${brand.location}` : ''}`).join('\n')
-    : '- None'
-
-  const generatedAt = formatGeneratedTime(ctx.brand.timezone)
-  const skillText = buildAmcSkillText({ apiKey: ctx.agent.apiKey, apiBaseUrl })
+  const generatedAt = formatGeneratedTime(ctx.user.timezone)
+  const skillText = buildAmcSkillText({ apiBaseUrl })
 
   return [
     '【AMC 账号初始化指令】',
-    '将本指令完整粘贴给 AI Agent，即可完成 AMC 接入初始化。',
+    '将本指令完整粘贴给 AI Agent，即可完成 AMC 接入初始化。初始化目标只有三件事：',
+    '1) 绑定本品牌 Agent API Key',
+    '2) 告知用户信息与订阅计划（含计划覆盖平台）',
+    '3) 安装并启用 AMC Skill',
     `生成时间：${generatedAt}`,
     '',
     '═══════════════════════════════════════',
-    '## Step 1：安装 / 更新 AMC 插件',
-    '在 OpenClaw 环境中执行以下命令之一：',
-    '',
-    '```bash',
-    '# 未安装时：',
-    'openclaw plugins install git-plugin-amc',
-    '',
-    '# 已安装时：',
-    'openclaw plugins update git-plugin-amc',
-    '```',
-    '',
-    '## Step 2：配置 MCP 环境变量',
-    '安装完成后，在 OpenClaw MCP 配置中注册以下环境变量：',
+    '## Step 1：配置 MCP 接入凭证（核心）',
+    '在 OpenClaw MCP 配置中注册以下环境变量：',
     '',
     '```env',
     `KANBAN_BASE_URL=${baseHost}`,
     `KANBAN_AGENT_API_KEY=${apiKey}`,
     '```',
     '',
-    '## Step 3：你的身份与接入凭证',
-    `- Agent ID: ${ctx.agent.id || 'N/A'}`,
-    `- Agent API Key: ${apiKey}`,
-    `- AMC Kanban Base URL: ${baseHost}`,
-    `- 默认品牌 ID: ${brandId}`,
-    '- 所有 Agent 专属 API 均使用 Bearer Token 鉴权：',
-    `  Authorization: Bearer ${apiKey}`,
+    '注意：后续所有 Agent API 请求均使用 `Authorization: Bearer $KANBAN_AGENT_API_KEY`。',
     '',
-    '## Step 4：当前品牌与账号上下文',
-    '',
-    '### 4.1 操作用户',
+    '## Step 2：用户与订阅计划上下文',
     `- User ID: ${ctx.user.id}`,
     `- Email: ${ctx.user.email || 'N/A'}`,
     `- Role: ${ctx.user.role}`,
     `- Nickname: ${ctx.user.nickname || 'N/A'}`,
+    `- Timezone: ${userTimezone}`,
     '',
-    '### 4.2 主品牌',
-    `- Brand ID: ${brandId}`,
-    `- Brand Name: ${ctx.brand.name}`,
-    `- Timezone: ${ctx.brand.timezone || 'N/A'}`,
-    `- Location: ${ctx.brand.location || 'N/A'}`,
-    `- Address: ${ctx.brand.address || 'N/A'}`,
-    `- Website: ${ctx.brand.website || 'N/A'}`,
-    `- Phone: ${ctx.brand.phone || 'N/A'}`,
-    '',
-    '### 4.3 社交媒体账号',
-    `- 已连接平台：${platformText}`,
+    `- 当前订阅计划: ${selectedPlanName}`,
+    `- 该计划覆盖平台（按订阅计划生效）: ${selectedPlanPlatforms}`,
+    `- 当前已连接平台（参考）: ${connectedPlatformText}`,
     accountLines,
     '',
-    '### 4.4 门店',
-    storeLines,
+    '## Step 3：Agent 身份绑定确认',
+    `- Agent ID: ${ctx.agent.id || 'N/A'}`,
+    '- Agent API Key: 使用 Step 1 中的 KANBAN_AGENT_API_KEY（不重复展示）',
+    `- AMC Kanban Base URL: ${baseHost}`,
+    `- 默认品牌 ID: ${brandId}`,
     '',
-    '### 4.5 同一用户下的其他品牌',
-    otherBrandsLines,
+    '## Step 4：安装并启用 AMC Skill',
+    '- 将下方 AMC Skill 正文保存为可复用 Skill。',
+    '- 后续收到新版本 Skill 时，仅更新 Skill 文本；凭证仍以本初始化指令为准。',
     '',
-    '## Step 5：品牌初始化工作清单（与品牌主共同完成）',
-    `- [ ] 确认品牌基本信息（名称 / 简介 / 地址 / 电话 / 官网）已写入看板`,
-    `- [ ] 确认门店结构已配置（多门店时分别登记）`,
-    `- [ ] 确认社交媒体账号已在看板中连接并测试`,
-    `- [ ] 确认 PostFast / Google / Lark 集成凭证已在看板品牌设置中配置`,
-    `- [ ] 读取品牌 Profile 确认数据完整：`,
+    '## Step 5：初始化工作清单（执行动作）',
+    '- [ ] 安装或更新 AMC 插件：',
+    '```bash',
+    '# 未安装时：',
+    'openclaw plugins install git-plugin-amc',
+    '# 已安装时：',
+    'openclaw plugins update git-plugin-amc',
+    '```',
+    '- [ ] 用以下请求验证接入是否成功：',
     `      GET ${apiBaseUrl}/brands/${brandId}/profile?refresh=1`,
-    `      Authorization: Bearer ${apiKey}`,
+    '      Authorization: Bearer $KANBAN_AGENT_API_KEY',
     '',
     '═══════════════════════════════════════',
     '## Step 6：AMC 操作 Skill（工作流规范）',
@@ -185,7 +165,6 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
 }
 
 export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?: string }) {
-  const apiKey = params?.apiKey || '<AGENT_API_KEY>'
   const apiBaseUrl = params?.apiBaseUrl || '<KANBAN_API_BASE_URL>'
   const baseHost = apiBaseUrl.replace(/\/api\/?$/, '')
 
@@ -195,7 +174,7 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 不含启动凭证和品牌上下文——这些信息由订阅时生成的「AMC 账号初始化指令」提供。
 
 > **凭证规则**
-> - 当前关联凭证：Bearer ${apiKey}
+> - 本 Skill 不内置密钥；始终使用最新「AMC 账号初始化指令」中的 KANBAN_BASE_URL 与 KANBAN_AGENT_API_KEY。
 > - Base URL：${apiBaseUrl}
 > - 若收到新的「AMC 账号初始化指令」，其中的 Agent API Key 和 Brand ID 优先级高于本 Skill 中的值，必须以新指令为准并覆盖配置。
 > - 不要自行生成新密钥，除非品牌主明确要求轮换。
@@ -214,7 +193,7 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 
 \`\`\`
 PATCH ${apiBaseUrl}/agent/brand-config
-Authorization: Bearer ${apiKey}
+Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
 {
   "brandId": "<BRAND_ID>",
   "name": "品牌名称",
@@ -250,7 +229,7 @@ PATCH ${apiBaseUrl}/agent/brand-config
 
 \`\`\`
 GET ${apiBaseUrl}/brands/<BRAND_ID>/profile?refresh=1
-Authorization: Bearer ${apiKey}
+Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
 \`\`\`
 
 该 Markdown 文件包含：品牌基础信息、品牌定义与设计规范、多门店结构、自媒体平台配置，作为你的任务上下文输入。

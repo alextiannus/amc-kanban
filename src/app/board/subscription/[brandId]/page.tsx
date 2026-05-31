@@ -36,11 +36,17 @@ type SubscriptionPayload = {
   latestSubscription?: { id?: string; status?: string; planName?: string; paymentProvider?: string }
   paymentEnabled: boolean
   instructionContext?: {
+    subscription: {
+      planId: string | null
+      planName: string | null
+      platforms: string | null
+    }
     user: {
       id: string
       email: string | null
       role: string
       nickname: string | null
+      timezone: string | null
     }
     brand: {
       id: string

@@ -107,7 +107,7 @@ export async function GET(_req: Request, { params }: Params) {
     }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, email: true, role: true, nickname: true },
+      select: { id: true, email: true, role: true, nickname: true, timezone: true },
     }),
     prisma.brand.findMany({
       where: {
@@ -165,11 +165,19 @@ export async function GET(_req: Request, { params }: Params) {
       ]
 
   const instructionContext = {
+    subscription: {
+      planId: latest?.planId || null,
+      planName: latest?.planName || null,
+      platforms: latest?.planId
+        ? PLAN_COMPARISON_ROWS.find((row) => row.key === 'channels')?.values?.[latest.planId] || null
+        : null,
+    },
     user: {
       id: user?.id || session.user.id,
       email: user?.email || session.user.email || null,
       role: user?.role || session.user.type,
       nickname: user?.nickname || null,
+      timezone: user?.timezone || null,
     },
     brand: {
       id: brand.id,
