@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { activateSubscriptionByPaymentSession } from '@/lib/subscription/service'
+import { activateSubscriptionByPaymentSession, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -8,6 +8,12 @@ export const dynamic = 'force-dynamic'
 const stripeKey = process.env.STRIPE_SECRET_KEY
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 const stripe = stripeKey ? new Stripe(stripeKey) : null
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error) return error
+  return 'Unknown error'
+}
 
 export async function POST(request: Request) {
   if (!stripe || !webhookSecret) {
@@ -22,15 +28,21 @@ export async function POST(request: Request) {
 
   try {
     event = stripe.webhooks.constructEvent(payload, signature, webhookSecret)
-  } catch (e: any) {
-    return NextResponse.json({ error: `Invalid signature: ${e.message}` }, { status: 400 })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: `Invalid signature: ${getErrorMessage(e)}` }, { status: 400 })
   }
 
   try {
     if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data.object as Stripe.Checkout.Session
       if (session.id) {
-        await activateSubscriptionByPaymentSession(session.id)
+        const activated = await activateSubscriptionByPaymentSession(session.id)
+        if (activated.ok && !activated.alreadyActive && activated.subscription.createdById) {
+          await ensureBrandAgentKeyAfterSubscription({
+            brandId: activated.subscription.brandId,
+            ownerId: activated.subscription.createdById,
+          })
+        }
       }
     }
 
@@ -43,8 +55,8 @@ export async function POST(request: Request) {
         })
       }
     }
-  } catch (e: any) {
-    return NextResponse.json({ error: `Webhook handler error: ${e.message}` }, { status: 500 })
+  } catch (e: unknown) {
+    return NextResponse.json({ error: `Webhook handler error: ${getErrorMessage(e)}` }, { status: 500 })
   }
 
   return NextResponse.json({ received: true })

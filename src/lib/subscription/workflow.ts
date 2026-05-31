@@ -27,6 +27,30 @@ export function buildOfflineInvoiceResponse(params: {
   }
 }
 
+export function buildBillingActivatedResponse(params: {
+  subscriptionId: string
+  totalDueUsd: number
+  agentId: string | null
+}) {
+  return {
+    subscriptionId: params.subscriptionId,
+    paymentMode: 'BILLING' as const,
+    status: 'ACTIVE' as const,
+    totalDueUsd: params.totalDueUsd,
+    agentId: params.agentId,
+    message: 'Subscription activated immediately via billing mode.',
+  }
+}
+
+export function buildBillingActivationData(durationMonths: number, now = new Date()) {
+  return {
+    status: 'ACTIVE' as SubscriptionStatus,
+    paidAt: now,
+    contractStartDate: now,
+    contractEndDate: addMonths(now, durationMonths),
+  }
+}
+
 export function buildAdminStatusUpdateData(
   existing: MutableSubscriptionDates,
   status: SubscriptionStatus,

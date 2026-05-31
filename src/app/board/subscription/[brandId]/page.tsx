@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
-import { CheckCircle2, CreditCard, Loader2 } from 'lucide-react'
+import { CheckCircle2, Copy, CreditCard, Loader2 } from 'lucide-react'
+import { buildAmcSkillText } from '@/lib/agentInitPrompt'
 
 type Plan = {
   id: string
@@ -34,6 +35,46 @@ type SubscriptionPayload = {
   termsFullText: string
   latestSubscription?: { id?: string; status?: string; planName?: string; paymentProvider?: string }
   paymentEnabled: boolean
+  instructionContext?: {
+    user: {
+      id: string
+      email: string | null
+      role: string
+      nickname: string | null
+    }
+    brand: {
+      id: string
+      name: string
+      location: string | null
+      timezone: string | null
+      website: string | null
+      phone: string | null
+      address: string | null
+    }
+    stores: Array<{
+      storeId: string
+      name: string
+      isPrimary: boolean
+      timezone: string | null
+      address: string | null
+      location: string | null
+    }>
+    socialAccounts: Array<{
+      platformId: string
+      handle: string
+      displayName: string | null
+      profileUrl: string | null
+    }>
+    ownedBrands: Array<{
+      id: string
+      name: string
+      location: string | null
+    }>
+    agent: {
+      id: string | null
+      apiKey: string | null
+    }
+  }
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -57,8 +98,9 @@ export default function BrandSubscriptionPage() {
   const [addonIds, setAddonIds] = useState<string[]>([])
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
-  const [paymentMode, setPaymentMode] = useState<'ONLINE' | 'OFFLINE'>('ONLINE')
+  const [paymentMode, setPaymentMode] = useState<'ONLINE' | 'OFFLINE' | 'BILLING'>('ONLINE')
   const [userRole, setUserRole] = useState<string>('USER')
+  const [copiedInstruction, setCopiedInstruction] = useState(false)
 
   const success = searchParams?.get('success') === '1'
   const canceled = searchParams?.get('canceled') === '1'
@@ -123,7 +165,7 @@ export default function BrandSubscriptionPage() {
     confirmPayment()
   }, [success, checkoutSessionId, subscriptionId, brandId])
 
-  const billingCycle: 'monthly' | 'yearly' = durationMonths === 12 ? 'yearly' : 'monthly'
+  const billingCycle: 'quarterly' | 'yearly' = durationMonths === 12 ? 'yearly' : 'quarterly'
 
   const selectedPlan = useMemo(() => data?.plans.find((p) => p.id === planId), [data?.plans, planId])
   const selectedPlanMonthly = selectedPlan?.promoMonthlyUsd ?? selectedPlan?.monthlyUsd ?? 0
@@ -148,8 +190,139 @@ export default function BrandSubscriptionPage() {
   const discountAmount = recurringSubtotal - recurringAfterDiscount
   const totalDue = recurringAfterDiscount + oneTimeAddons
 
+  const instructionText = useMemo(() => {
+    const ctx = data?.instructionContext
+    if (!ctx) return ''
+
+    const baseHost =
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_KANBAN_HOST || 'https://amc-kanban.immedi.ai'
+    const apiBaseUrl = `${baseHost}/api`
+    const apiKey = ctx.agent.apiKey || '<AGENT_API_KEY — activate subscription first>'
+    const brandId = ctx.brand.id
+
+    const platforms = Array.from(new Set(ctx.socialAccounts.map((a) => a.platformId))).sort()
+    const platformText = platforms.length ? platforms.join(', ') : 'None'
+
+    const accountLines = ctx.socialAccounts.length
+      ? ctx.socialAccounts
+          .map(
+            (acc) =>
+              `- ${acc.platformId}: ${acc.handle}${acc.displayName ? ` (${acc.displayName})` : ''}${acc.profileUrl ? ` | ${acc.profileUrl}` : ''}`,
+          )
+          .join('\n')
+      : '- No social accounts linked yet'
+
+    const storeLines = ctx.stores.length
+      ? ctx.stores
+          .map(
+            (store, idx) =>
+              `- Store ${idx + 1}: ${store.name}${store.isPrimary ? ' [Primary]' : ''} | timezone=${store.timezone || 'N/A'} | location=${store.location || 'N/A'} | address=${store.address || 'N/A'}`,
+          )
+          .join('\n')
+      : '- No stores configured yet'
+
+    const otherBrandsLines = ctx.ownedBrands.length
+      ? ctx.ownedBrands
+          .map((brand) => `- ${brand.name} (${brand.id})${brand.location ? ` | ${brand.location}` : ''}`)
+          .join('\n')
+      : '- None'
+
+    const generatedAt = new Date().toISOString()
+
+    const skillText = buildAmcSkillText({ apiKey: ctx.agent.apiKey, apiBaseUrl })
+
+    return [
+      '【AMC 账号初始化指令】',
+      '将本指令完整粘贴给 AI Agent，即可完成 AMC 接入初始化。',
+      `生成时间：${generatedAt}`,
+      '',
+      '═══════════════════════════════════════',
+      '## Step 1：安装 / 更新 AMC 插件',
+      '在 OpenClaw 环境中执行以下命令之一：',
+      '',
+      '```bash',
+      '# 未安装时：',
+      'openclaw plugins install git-plugin-amc',
+      '',
+      '# 已安装时：',
+      'openclaw plugins update git-plugin-amc',
+      '```',
+      '',
+      '## Step 2：配置 MCP 环境变量',
+      '安装完成后，在 OpenClaw MCP 配置中注册以下环境变量：',
+      '',
+      '```env',
+      `KANBAN_BASE_URL=${baseHost}`,
+      `KANBAN_AGENT_API_KEY=${apiKey}`,
+      '```',
+      '',
+      '## Step 3：你的身份与接入凭证',
+      `- Agent ID: ${ctx.agent.id || 'N/A'}`,
+      `- Agent API Key: ${apiKey}`,
+      `- AMC Kanban Base URL: ${baseHost}`,
+      `- 默认品牌 ID: ${brandId}`,
+      '- 所有 Agent 专属 API 均使用 Bearer Token 鉴权：',
+      `  Authorization: Bearer ${apiKey}`,
+      '',
+      '## Step 4：当前品牌与账号上下文',
+      '',
+      '### 4.1 操作用户',
+      `- User ID: ${ctx.user.id}`,
+      `- Email: ${ctx.user.email || 'N/A'}`,
+      `- Role: ${ctx.user.role}`,
+      `- Nickname: ${ctx.user.nickname || 'N/A'}`,
+      '',
+      '### 4.2 主品牌',
+      `- Brand ID: ${brandId}`,
+      `- Brand Name: ${ctx.brand.name}`,
+      `- Timezone: ${ctx.brand.timezone || 'N/A'}`,
+      `- Location: ${ctx.brand.location || 'N/A'}`,
+      `- Address: ${ctx.brand.address || 'N/A'}`,
+      `- Website: ${ctx.brand.website || 'N/A'}`,
+      `- Phone: ${ctx.brand.phone || 'N/A'}`,
+      '',
+      '### 4.3 社交媒体账号',
+      `- 已连接平台：${platformText}`,
+      accountLines,
+      '',
+      '### 4.4 门店',
+      storeLines,
+      '',
+      '### 4.5 同一用户下的其他品牌',
+      otherBrandsLines,
+      '',
+      '## Step 5：品牌初始化工作清单（与品牌主共同完成）',
+      `- [ ] 确认品牌基本信息（名称 / 简介 / 地址 / 电话 / 官网）已写入看板`,
+      `- [ ] 确认门店结构已配置（多门店时分别登记）`,
+      `- [ ] 确认社交媒体账号已在看板中连接并测试`,
+      `- [ ] 确认 PostFast / Google / Lark 集成凭证已在看板品牌设置中配置`,
+      `- [ ] 读取品牌 Profile 确认数据完整：`,
+      `      GET ${apiBaseUrl}/brands/${brandId}/profile?refresh=1`,
+      `      Authorization: Bearer ${apiKey}`,
+      '',
+      '═══════════════════════════════════════',
+      '## Step 6：AMC 操作 Skill（工作流规范）',
+      '以下为 AMC Skill 正文，保存后可随时复用，品牌主也可单独推送更新版本。',
+      '',
+      skillText,
+    ].join('\n')
+  }, [data?.instructionContext])
+
   const toggleAddon = (id: string) => {
     setAddonIds((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]))
+  }
+
+  const copyInstruction = async () => {
+    if (!instructionText) return
+    try {
+      await navigator.clipboard.writeText(instructionText)
+      setCopiedInstruction(true)
+      window.setTimeout(() => setCopiedInstruction(false), 1800)
+    } catch {
+      setError('复制失败，请手动复制 instruction 内容。')
+    }
   }
 
   const startCheckout = async () => {
@@ -172,7 +345,7 @@ export default function BrandSubscriptionPage() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Failed to create checkout session')
 
-      if (json.paymentMode === 'OFFLINE') {
+      if (json.paymentMode === 'OFFLINE' || json.paymentMode === 'BILLING') {
         const fresh = await fetch(`/api/brands/${brandId}/subscription`)
         const freshJson = await fresh.json()
         if (fresh.ok) setData(freshJson)
@@ -231,60 +404,19 @@ export default function BrandSubscriptionPage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 text-slate-900 dark:text-slate-100">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:p-6 shadow-sm">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold tracking-[0.18em] text-slate-600 dark:text-slate-300">
-                订阅管理
-              </div>
-              <div>
-                <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">订阅计划</h1>
-                <p className="mt-3 max-w-2xl text-sm md:text-base text-slate-600 dark:text-slate-300 leading-7">
-                  品牌：<span className="font-bold text-slate-900 dark:text-white">{data.brand.name}</span>。在这里查看套餐、加购服务、合同周期和付款信息。
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">含 Google Map 运营</span>
-                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">支持 3 / 6 / 12 个月</span>
-                <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">支持在线与线下账单</span>
-                {selectedPlan?.promoMonthlyUsd ? (
-                  <span className="rounded-full border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                    当前选中 {selectedPlan.name} 促销价 USD ${selectedPlanMonthly}/月
-                  </span>
-                ) : (
-                  <span className="rounded-full border border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                    当前选中 {selectedPlan?.name || 'PLAN'} USD ${selectedPlanMonthly}/月
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 px-4 py-3">
-                  <p className="text-[11px] tracking-[0.18em] text-slate-500">起步套餐</p>
-                  <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">USD ${data.plans.find((p) => p.id === 'starter')?.promoMonthlyUsd ?? '108'}/mo</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 px-4 py-3">
-                  <p className="text-[11px] tracking-[0.18em] text-slate-500">服务覆盖</p>
-                  <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">All packages include Google Map</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 px-4 py-3">
-                  <p className="text-[11px] tracking-[0.18em] text-slate-500">签约说明</p>
-                  <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">Terms and billing are shown below</p>
-                </div>
-              </div>
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-bold tracking-[0.18em] text-slate-600 dark:text-slate-300">
+              订阅管理
             </div>
-
-            <div className="grid grid-cols-2 gap-3 lg:min-w-[340px]">
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-4">
-                <p className="text-[11px] tracking-[0.18em] text-slate-500">当前套餐</p>
-                <p className="mt-2 text-lg font-black text-slate-900 dark:text-white">{selectedPlan?.name || 'Starter'}</p>
-                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-5">{selectedPlan?.description || '请选择一个套餐进行对比'}</p>
-              </div>
-              <div className="rounded-2xl border border-blue-100 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-950/30 p-4">
-                <p className="text-[11px] tracking-[0.18em] text-blue-600 dark:text-blue-300">预估应付</p>
-                <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">USD ${totalDue}</p>
-                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-5">当前周期 {durationMonths} 个月，含已选增值服务。</p>
-              </div>
+            <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">订阅计划</h1>
+            <p className="max-w-2xl text-sm md:text-base text-slate-600 dark:text-slate-300 leading-7">
+              品牌：<span className="font-bold text-slate-900 dark:text-white">{data.brand.name}</span>。选择适合的套餐，按季度或按年订阅，所有方案均包含 Google Map 运营，支持在线支付、线下账单及账单模式。
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">含 Google Map 运营</span>
+              <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">按季度 / 按年订阅</span>
+              <span className="rounded-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">支持在线与线下账单</span>
+              <span className="rounded-full border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300">年订享 9 折优惠</span>
             </div>
           </div>
         </div>
@@ -305,6 +437,26 @@ export default function BrandSubscriptionPage() {
           <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-200 px-4 py-3 text-sm font-medium flex items-center gap-2">
             <CheckCircle2 size={16} /> 当前订阅已生效：{data.latestSubscription.planName}
           </div>
+        )}
+
+        {(success || data.latestSubscription?.status === 'ACTIVE') && instructionText && (
+          <section className="rounded-2xl border border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-950/20 p-4 md:p-5 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-black tracking-[0.18em] text-blue-700 dark:text-blue-300">Agent Account Instruction</h2>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">订阅成功后可将以下指令一键复制给 Agent，用于自动完成账号与品牌上下文接入。</p>
+              </div>
+              <button
+                onClick={copyInstruction}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+              >
+                <Copy size={14} /> {copiedInstruction ? '已复制' : '一键复制'}
+              </button>
+            </div>
+            <div className="rounded-xl border border-blue-200/60 dark:border-blue-900/40 bg-white dark:bg-slate-900 p-3">
+              <pre className="whitespace-pre-wrap text-xs leading-6 text-slate-700 dark:text-slate-200 font-mono">{instructionText}</pre>
+            </div>
+          </section>
         )}
 
         {error && (
@@ -336,7 +488,7 @@ export default function BrandSubscriptionPage() {
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3.5 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                {paymentMode === 'ONLINE' ? '立即在线支付' : '创建线下账单'}
+                {paymentMode === 'ONLINE' ? '立即在线支付' : paymentMode === 'BILLING' ? '确认账单并激活' : '创建线下账单'}
               </button>
               <button
                 onClick={() => setShowTerms(true)}
@@ -369,7 +521,7 @@ export default function BrandSubscriptionPage() {
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
                 <div>
                   <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200">1) 选择套餐</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">选择按月或按年查看套餐价格。</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">选择按季度或按年查看套餐价格。</p>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">* Prices in USD, excluding tax</p>
               </div>
@@ -377,30 +529,27 @@ export default function BrandSubscriptionPage() {
               <div className="mb-6 flex justify-center">
                 <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-1.5">
                   <button
-                    onClick={() => {
-                      setDurationMonths(3)
-                    }}
+                    onClick={() => setDurationMonths(3)}
                     className={`rounded-full px-6 py-2 text-sm font-bold transition ${
-                      billingCycle === 'monthly' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                      billingCycle === 'quarterly' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    Monthly
+                    季度订阅
                   </button>
                   <button
-                    onClick={() => {
-                      setDurationMonths(12)
-                    }}
-                    className={`rounded-full px-6 py-2 text-sm font-bold transition ${
+                    onClick={() => setDurationMonths(12)}
+                    className={`relative rounded-full px-6 py-2 text-sm font-bold transition ${
                       billingCycle === 'yearly' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
-                    Yearly
+                    年度订阅
+                    <span className="absolute -top-2.5 -right-2.5 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-black text-white leading-none shadow-sm">-10%</span>
                   </button>
-                  <span className="rounded-full bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 text-xs font-bold text-blue-700 dark:text-blue-300">Save 10%</span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+              <div className="overflow-x-auto -mx-1 px-1">
+              <div className="grid grid-cols-4 gap-4 min-w-[840px]">
                 {data.plans.map((p) => {
                   const isSelected = planId === p.id
                   const isRecommended = p.id === recommendedPlanId
@@ -441,10 +590,10 @@ export default function BrandSubscriptionPage() {
                             <span className="pb-1 text-sm font-semibold text-slate-700 dark:text-slate-300">/ month</span>
                           </div>
                           {billingCycle === 'yearly' && (
-                            <p className="mt-1 text-xs text-blue-700 dark:text-blue-300 font-semibold">Billed yearly at USD ${cycleTotal} (10% off)</p>
+                            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400 font-semibold">年付 USD ${cycleTotal} · 已享 9 折</p>
                           )}
-                          {billingCycle === 'monthly' && (
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">3-month contract billing cycle</p>
+                          {billingCycle === 'quarterly' && (
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">季度付 USD ${cycleTotal} / 3 个月</p>
                           )}
                         </div>
 
@@ -471,31 +620,9 @@ export default function BrandSubscriptionPage() {
                   )
                 })}
               </div>
-            </section>
 
-            <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-              <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200 mb-4">2) 合同周期</h2>
-              <div className="grid grid-cols-3 gap-3">
-                {data.durations.map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setDurationMonths(d)}
-                    className={`rounded-2xl border py-3 text-sm font-bold transition-all duration-200 ${
-                      durationMonths === d
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    {d} 个月{d === 12 ? '（10%折扣）' : ''}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-              <div className="mb-4 flex items-end justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200">3) 增值服务</h2>
+                  <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200">2) 增值服务</h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">可按月或按次选择额外服务。</p>
                 </div>
               </div>
@@ -584,8 +711,8 @@ export default function BrandSubscriptionPage() {
             </section>
 
             <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-              <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200 mb-3">4) 支付方式</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+              <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200 mb-3">3) 支付方式</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                 <button
                   onClick={() => setPaymentMode('ONLINE')}
                   className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${paymentMode === 'ONLINE' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
@@ -600,9 +727,16 @@ export default function BrandSubscriptionPage() {
                   <p className="text-sm font-bold text-slate-900 dark:text-white">线下账单支付</p>
                   <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">提交后生成线下账单，待 Admin / Admin AI 确认到账并更新状态。</p>
                 </button>
+                <button
+                  onClick={() => setPaymentMode('BILLING')}
+                  className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${paymentMode === 'BILLING' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                >
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">账单模式 🇸🇬</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">新加坡本地用户适用。确认账单后视为已付款，订阅立即激活。</p>
+                </button>
               </div>
 
-              <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200 mb-3">5) 用户协议</h2>
+              <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200 mb-3">4) 用户协议</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{data.termsNotice}</p>
               <button
                 onClick={() => setShowTerms(true)}
@@ -707,7 +841,7 @@ export default function BrandSubscriptionPage() {
                 className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-50"
               >
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                {submitting ? '处理中...' : paymentMode === 'ONLINE' ? '在线支付并订阅' : '创建线下账单'}
+                {submitting ? '处理中...' : paymentMode === 'ONLINE' ? '在线支付并订阅' : paymentMode === 'BILLING' ? '确认账单并激活' : '创建线下账单'}
               </button>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 leading-5">
                 按 AMC 服务协议：合同费用一次性预付；12 个月提供 10% 折扣。

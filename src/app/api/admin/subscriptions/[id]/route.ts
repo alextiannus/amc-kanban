@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildAdminStatusUpdateData, type SubscriptionStatus } from '@/lib/subscription/workflow'
+import { ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -27,6 +28,24 @@ export async function PATCH(request: Request, { params }: Params) {
     where: { id },
     data: buildAdminStatusUpdateData(existing, status),
   })
+
+  if (existing.status !== 'ACTIVE' && updated.status === 'ACTIVE') {
+    let ownerId = updated.createdById || null
+    if (!ownerId) {
+      const [ownerLink, legacyBrand] = await Promise.all([
+        prisma.brandOwner.findFirst({ where: { brandId: updated.brandId }, select: { userId: true }, orderBy: { createdAt: 'asc' } }),
+        prisma.brand.findUnique({ where: { id: updated.brandId }, select: { ownerId: true } }),
+      ])
+      ownerId = ownerLink?.userId || legacyBrand?.ownerId || null
+    }
+
+    if (ownerId) {
+      await ensureBrandAgentKeyAfterSubscription({
+        brandId: updated.brandId,
+        ownerId,
+      })
+    }
+  }
 
   return NextResponse.json({ ok: true, subscription: updated })
 }

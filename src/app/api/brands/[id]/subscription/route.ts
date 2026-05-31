@@ -5,13 +5,65 @@ import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { ALLOWED_DURATIONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, PLAN_COMPARISON_ROWS, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS, calculatePricing } from '@/lib/subscription/catalog'
 import { SUBSCRIPTION_TERMS_FULL_TEXT, SUBSCRIPTION_TERMS_NOTICE, SUBSCRIPTION_TERMS_TITLE } from '@/lib/subscription/terms'
-import { buildOfflineInvoiceResponse, type SubscriptionStatus } from '@/lib/subscription/workflow'
+import { buildBillingActivatedResponse, buildBillingActivationData, buildOfflineInvoiceResponse, type SubscriptionStatus } from '@/lib/subscription/workflow'
+import { readBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
+import { ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
 import Stripe from 'stripe'
 
 type Params = { params: Promise<{ id: string }> }
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeKey ? new Stripe(stripeKey) : null
+
+const STORES_CONFIG_START = '<!-- AMC:BRAND_PROFILE:STORES_CONFIG:START -->'
+const STORES_CONFIG_END = '<!-- AMC:BRAND_PROFILE:STORES_CONFIG:END -->'
+
+type StoreSummary = {
+  storeId: string
+  name: string
+  isPrimary: boolean
+  timezone: string | null
+  address: string | null
+  location: string | null
+}
+
+function toStringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function extractStoresFromMarkdown(markdown: string): StoreSummary[] {
+  const startIdx = markdown.indexOf(STORES_CONFIG_START)
+  const endIdx = markdown.indexOf(STORES_CONFIG_END)
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) return []
+
+  const section = markdown.slice(startIdx + STORES_CONFIG_START.length, endIdx)
+  const codeMatch = section.match(/```json\s*([\s\S]*?)```/i)
+  if (!codeMatch) return []
+
+  try {
+    const parsed: unknown = JSON.parse(codeMatch[1])
+    if (!parsed || typeof parsed !== 'object') return []
+    const storesVal = (parsed as { stores?: unknown }).stores
+    if (!Array.isArray(storesVal)) return []
+
+    return storesVal
+      .map((item, index) => {
+        if (!item || typeof item !== 'object') return null
+        const obj = item as Record<string, unknown>
+        return {
+          storeId: toStringOrNull(obj.storeId) || `store-${index + 1}`,
+          name: toStringOrNull(obj.name) || `门店 ${index + 1}`,
+          isPrimary: Boolean(obj.isPrimary),
+          timezone: toStringOrNull(obj.timezone),
+          address: toStringOrNull(obj.address),
+          location: toStringOrNull(obj.location),
+        }
+      })
+      .filter((store): store is StoreSummary => Boolean(store))
+  } catch {
+    return []
+  }
+}
 
 export async function GET(_req: Request, { params }: Params) {
   const session = await getSession()
@@ -23,15 +75,115 @@ export async function GET(_req: Request, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  const [brand, latest] = await Promise.all([
-    prisma.brand.findUnique({ where: { id: brandId }, select: { id: true, name: true } }),
+  const [brand, latest, user, ownedBrands, profileMarkdown, brandAgent] = await Promise.all([
+    prisma.brand.findUnique({
+      where: { id: brandId },
+      select: {
+        id: true,
+        name: true,
+        location: true,
+        timezone: true,
+        website: true,
+        phone: true,
+        address: true,
+        accounts: {
+          select: {
+            platformId: true,
+            handle: true,
+            displayName: true,
+            profileUrl: true,
+          },
+          orderBy: [{ platformId: 'asc' }, { handle: 'asc' }],
+        },
+      },
+    }),
     prisma.brandSubscription.findFirst({
       where: { brandId },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, email: true, role: true, nickname: true },
+    }),
+    prisma.brand.findMany({
+      where: {
+        OR: [
+          { ownerId: session.user.id },
+          { owners: { some: { userId: session.user.id } } },
+        ],
+      },
+      select: { id: true, name: true, location: true },
+      orderBy: { name: 'asc' },
+    }),
+    readBrandProfileMarkdown(brandId).catch(() => null),
+    prisma.brandAgent.findFirst({
+      where: { brandId, active: true },
+      include: {
+        agent: {
+          select: {
+            id: true,
+            apiKey: true,
+          },
+        },
+      },
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+    }),
   ])
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+
+  let resolvedAgentId = brandAgent?.agent.id || null
+  let resolvedAgentKey = latest?.status === 'ACTIVE' ? brandAgent?.agent.apiKey || null : null
+
+  if (latest?.status === 'ACTIVE' && !resolvedAgentKey) {
+    const ensured = await ensureBrandAgentKeyAfterSubscription({
+      brandId,
+      ownerId: session.user.id,
+    })
+    resolvedAgentId = ensured.agentId
+    resolvedAgentKey = ensured.apiKey
+  }
+
+  const parsedStores = profileMarkdown ? extractStoresFromMarkdown(profileMarkdown) : []
+  const stores = parsedStores.length
+    ? parsedStores
+    : [
+        {
+          storeId: 'main',
+          name: `${brand.name} 主门店`,
+          isPrimary: true,
+          timezone: brand.timezone,
+          address: brand.address,
+          location: brand.location,
+        },
+      ]
+
+  const instructionContext = {
+    user: {
+      id: user?.id || session.user.id,
+      email: user?.email || session.user.email || null,
+      role: user?.role || session.user.type,
+      nickname: user?.nickname || null,
+    },
+    brand: {
+      id: brand.id,
+      name: brand.name,
+      location: brand.location,
+      timezone: brand.timezone,
+      website: brand.website,
+      phone: brand.phone,
+      address: brand.address,
+    },
+    stores,
+    socialAccounts: brand.accounts,
+    ownedBrands: ownedBrands
+      .filter((b) => b.id !== brand.id)
+      .map((b) => ({ id: b.id, name: b.name, location: b.location })),
+    agent: {
+      id: resolvedAgentId,
+      apiKey: resolvedAgentKey,
+    },
+  }
 
   return NextResponse.json({
     brand,
@@ -45,6 +197,7 @@ export async function GET(_req: Request, { params }: Params) {
     termsFullText: SUBSCRIPTION_TERMS_FULL_TEXT,
     latestSubscription: latest,
     paymentEnabled: Boolean(stripe),
+    instructionContext,
   })
 }
 
@@ -66,7 +219,9 @@ export async function POST(request: Request, { params }: Params) {
   const durationMonths = Number(body.durationMonths)
   const addonIds: string[] = Array.isArray(body.addonIds) ? body.addonIds.map((v: unknown) => String(v)) : []
   const uniqueAddonIds: string[] = Array.from(new Set(addonIds))
-  const paymentMode = body.paymentMode === 'OFFLINE' ? 'OFFLINE' : 'ONLINE'
+  const rawMode = body.paymentMode
+  const paymentMode: 'ONLINE' | 'OFFLINE' | 'BILLING' =
+    rawMode === 'OFFLINE' ? 'OFFLINE' : rawMode === 'BILLING' ? 'BILLING' : 'ONLINE'
   const agreedToTerms = Boolean(body.agreedToTerms)
   const termsVersion = String(body.termsVersion ?? DEFAULT_SUBSCRIPTION_TERMS_VERSION)
 
@@ -100,13 +255,32 @@ export async function POST(request: Request, { params }: Params) {
       oneTimeAddonsUsd: summary.oneTimeAddonsUsd,
       totalDueUsd: summary.totalDueUsd,
       status: 'PENDING',
-      paymentProvider: paymentMode === 'ONLINE' ? 'STRIPE' : 'OFFLINE',
+      paymentProvider: paymentMode === 'ONLINE' ? 'STRIPE' : paymentMode,
       selectedAddons: selectedAddons as unknown as Prisma.InputJsonValue,
       termsVersion,
       termsAcceptedAt: new Date(),
       createdById: session.user.id,
     },
   })
+
+  if (paymentMode === 'BILLING') {
+    const activationData = buildBillingActivationData(summary.durationMonths)
+    await prisma.brandSubscription.update({
+      where: { id: pending.id },
+      data: activationData,
+    })
+    const keyResult = await ensureBrandAgentKeyAfterSubscription({
+      brandId,
+      ownerId: session.user.id,
+    })
+    return NextResponse.json(
+      buildBillingActivatedResponse({
+        subscriptionId: pending.id,
+        totalDueUsd: summary.totalDueUsd,
+        agentId: keyResult.agentId,
+      })
+    )
+  }
 
   if (paymentMode === 'OFFLINE') {
     return NextResponse.json(
