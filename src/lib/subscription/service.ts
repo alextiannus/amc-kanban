@@ -60,7 +60,9 @@ export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAge
   })
 
   let agentId = existingLink?.agent.id
-  let resolvedApiKey = existingLink?.agent.apiKey || null
+  const rawExistingApiKey = existingLink?.agent.apiKey || null
+  const resolvedApiKey =
+    rawExistingApiKey && !rawExistingApiKey.startsWith('placeholder-') ? rawExistingApiKey : null
 
   // Keep using the current key when this brand already has an active agent with API key.
   // This prevents key churn during plan upgrades/downgrades.
@@ -112,8 +114,6 @@ export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAge
         active: true,
       },
     })
-
-    resolvedApiKey = null
   }
 
   await prisma.agentPermission.upsert({
