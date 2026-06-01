@@ -41,7 +41,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'starter',
     name: 'STARTER',
-    monthlyUsd: 189,
+    monthlyUsd: 249,
     promoMonthlyUsd: 108,
     description: '英文平台基础运营自动化方案',
     includes: [
