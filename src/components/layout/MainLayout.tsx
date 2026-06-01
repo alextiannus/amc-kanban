@@ -54,12 +54,8 @@ export default function MainLayout({
   useEffect(() => {
     let cancelled = false
     const loadSubscriptionLabel = async () => {
-      if (!activeBrand?.id) {
-        setSubscriptionButtonText('订阅计划')
-        return
-      }
       try {
-        const res = await fetch(`/api/brands/${activeBrand.id}/subscription`)
+        const res = await fetch('/api/subscription')
         const data = await res.json()
         if (!res.ok || cancelled) return
         const planName = data?.latestSubscription?.planName
@@ -72,7 +68,7 @@ export default function MainLayout({
     return () => {
       cancelled = true
     }
-  }, [activeBrand?.id])
+  }, [])
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex flex-col font-sans transition-colors duration-300">
@@ -169,7 +165,6 @@ export default function MainLayout({
             user={user}
             currentView={currentView}
             setCurrentView={setCurrentView}
-            activeBrand={activeBrand}
             subscriptionButtonText={subscriptionButtonText}
             onShowSettings={onShowSettings}
             onShowSystemLog={onShowSystemLog}

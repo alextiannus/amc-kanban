@@ -16,7 +16,6 @@ interface UserMenuProps {
   } | null
   currentView: string
   setCurrentView: (view: 'dashboard' | 'calendar' | 'analytics' | 'agents' | 'archive' | 'game' | 'socialInsight') => void
-  activeBrand: { id: string; name: string } | null
   subscriptionButtonText: string
   onShowSettings: () => void
   onShowSystemLog: () => void
@@ -28,7 +27,6 @@ export default function UserMenu({
   user,
   currentView,
   setCurrentView,
-  activeBrand,
   subscriptionButtonText,
   onShowSettings,
   onShowSystemLog,
@@ -115,11 +113,7 @@ export default function UserMenu({
 
   const handleOpenSubscription = () => {
     setShowProfile(false)
-    if (!activeBrand?.id) {
-      alert('请先选择品牌，再进入订阅计划')
-      return
-    }
-    router.push(`/board/subscription/${activeBrand.id}`)
+    router.push('/board/subscription')
   }
 
   return (
