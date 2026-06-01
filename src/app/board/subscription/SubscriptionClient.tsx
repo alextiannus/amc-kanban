@@ -293,6 +293,7 @@ export default function BrandSubscriptionPage() {
           durationMonths,
           addonIds,
           paymentMode,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           agreedToTerms,
           termsVersion: data.termsVersion,
         }),

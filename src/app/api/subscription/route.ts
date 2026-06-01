@@ -83,6 +83,18 @@ function toPlanId(value: string | null | undefined): PlanId | null {
   return null
 }
 
+function normalizeTimezone(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const timezone = value.trim()
+  if (!timezone) return null
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone })
+    return timezone
+  } catch {
+    return null
+  }
+}
+
 async function findOwnerBrand(ownerId: string) {
   return prisma.brand.findFirst({
     where: {
@@ -110,15 +122,47 @@ async function findOwnerBrand(ownerId: string) {
   })
 }
 
-async function resolveOrCreateOwnerBrand(ownerId: string, email: string | null, nickname: string | null) {
+async function resolveOrCreateOwnerBrand(
+  ownerId: string,
+  email: string | null,
+  nickname: string | null,
+  preferredTimezone: string | null
+) {
   const existing = await findOwnerBrand(ownerId)
-  if (existing) return existing
+  if (existing) {
+    if (preferredTimezone && existing.timezone === 'America/New_York' && preferredTimezone !== existing.timezone) {
+      return prisma.brand.update({
+        where: { id: existing.id },
+        data: { timezone: preferredTimezone },
+        select: {
+          id: true,
+          name: true,
+          location: true,
+          timezone: true,
+          website: true,
+          phone: true,
+          address: true,
+          accounts: {
+            select: {
+              platformId: true,
+              handle: true,
+              displayName: true,
+              profileUrl: true,
+            },
+            orderBy: [{ platformId: 'asc' }, { handle: 'asc' }],
+          },
+        },
+      })
+    }
+    return existing
+  }
 
   const prefix = nickname?.trim() || email?.split('@')[0] || 'New'
   const created = await prisma.brand.create({
     data: {
       ownerId,
       name: `${prefix} Brand`,
+      ...(preferredTimezone ? { timezone: preferredTimezone } : {}),
       owners: {
         create: {
           userId: ownerId,
@@ -326,13 +370,20 @@ export async function POST(request: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  const body = await request.json()
+  const preferredTimezone = normalizeTimezone(body.timezone)
+
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { email: true, nickname: true },
   })
-  const brand = await resolveOrCreateOwnerBrand(session.user.id, user?.email || null, user?.nickname || null)
+  const brand = await resolveOrCreateOwnerBrand(
+    session.user.id,
+    user?.email || null,
+    user?.nickname || null,
+    preferredTimezone
+  )
 
-  const body = await request.json()
   const planId = String(body.planId ?? '')
   const durationMonths = Number(body.durationMonths)
   const addonIds: string[] = Array.isArray(body.addonIds) ? body.addonIds.map((v: unknown) => String(v)) : []
