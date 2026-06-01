@@ -111,9 +111,9 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '3) 安装并启用 AMC Skill',
     '',
     '【标准执行流程（必须按顺序完成）】',
-    '1) 用户订阅套餐后，使用本初始化指令将 AI Agent 与当前品牌账户关联，安装 git-plugin-amc 插件与 amc-kanban skill，完成初始化。',
-    '2) 初始化完成后，Agent 必须通过插件访问品牌配置，读取用户已有品牌设定。',
-    '3) Agent 读取完成后，必须将品牌信息与账号设置信息回写到看板，完成品牌 onboarding 全流程。',
+    '1) 用户订阅套餐后，使用本初始化指令将 AI Agent 与当前品牌账户关联，安装 git-plugin-amc 插件与 amc-kanban skill；插件安装成功后必须立刻激活 Bootstrap Mode。',
+    '2) Bootstrap Mode 激活后，Agent 必须访问品牌配置并读取用户已有品牌设定。',
+    '3) 品牌访问完成后，Agent 必须将品牌信息与账号设置信息回写到 AMC 看板。只有完成写回，才可判定初始化完成。',
     `生成时间：${generatedAt}`,
     '',
     '═══════════════════════════════════════',
@@ -162,6 +162,7 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '# 已安装时：',
     'openclaw plugins update git-plugin-amc',
     '```',
+    '- [ ] 插件安装成功后，立即激活插件 Bootstrap Mode（不可跳过，不可延后）。',
     '- [ ] 使用 REST API 验证接入（优先使用 REST API，不依赖 MCP 插件可用性）：',
     '      步骤 1 — 验证 Agent 身份：',
     `      GET ${apiBaseUrl}/agents/profile`,
@@ -172,10 +173,11 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '      Authorization: Bearer $KANBAN_AGENT_API_KEY',
     '      → 期望：200，返回品牌 profile Markdown',
     '      步骤 3 — 若步骤 2 返回 401，代表 Agent 尚未绑定品牌，须向用户报告系统侧配置异常，不要尝试创建测试任务。',
-    '      步骤 3 — 若步骤 2 返回 200，进入品牌 onboarding 阶段。',
+    '      步骤 4 — 若步骤 2 返回 200，进入品牌 onboarding 阶段。',
     '- [ ] 向用户明确回报 REST API 验证结果（成功 / 失败 + 步骤编号 + HTTP 状态码）。',
-    '- [ ] 若安装成功，立即进入“品牌设置访问阶段”，先读取现有品牌配置与资料。',
-    '- [ ] 访问阶段结束后，优先将已确认信息反向更新回看板，再进入执行阶段。',
+    '- [ ] Bootstrap Mode 激活后，立即进入“品牌设置访问阶段”，先读取现有品牌配置与资料。',
+    '- [ ] 访问阶段结束后，必须将已确认信息回写 AMC 看板，再进入执行阶段。',
+    '- [ ] 仅当“插件安装成功 + Bootstrap Mode 激活 + 品牌访问完成 + 看板回写完成”四项都完成，才可向用户报告“初始化完成”。',
     '- [ ] 初始化阶段禁止向用户索要整份品牌问卷；仅允许在自动读取失败时请求最小必要缺失项。',
     '',
     '═══════════════════════════════════════',
@@ -218,7 +220,7 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 3) 仅在仍有阻塞字段时，向用户索要“最小必要字段”。
 
 这三步对应 onboarding 定义：
-- 初始化完成（已关联品牌 + 插件与 skill 安装成功）
+- 初始化准备完成（已关联品牌 + 插件与 skill 安装成功 + Bootstrap Mode 已激活）
 - 品牌访问完成（已读取品牌设定）
 - 看板回写完成（品牌信息与账号配置已更新）
 
@@ -229,7 +231,7 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 - 不要在 API key 鉴权失败时同时索要品牌资料。
 - 不要通过对比 token 的第几个字符、JWT 结构、Base64 外观来推断 API key 被篡改；只能依据真实接口返回判断。
 - 同一次初始化尝试中，不要要求用户回看板重新复制初始化指令；若重试后仍失败，只报告系统侧阻塞状态。
-- 必须先向用户报告 AMC 插件安装是否成功；成功后再进入品牌设置访问阶段。
+- 必须先向用户报告 AMC 插件安装是否成功，并在成功后立即激活 Bootstrap Mode；完成激活后再进入品牌设置访问阶段。
 
 \`\`\`
 PATCH ${apiBaseUrl}/agent/brand-config
