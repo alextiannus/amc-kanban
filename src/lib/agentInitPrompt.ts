@@ -83,37 +83,21 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
   const { context: ctx, apiBaseUrl } = params
   const baseHost = apiBaseUrl.replace(/\/api\/?$/, '')
   const apiKey = ctx.agent.apiKey || '<AGENT_API_KEY — activate subscription first>'
-  const brandId = ctx.brand.id
   const userTimezone = ctx.user.timezone || 'Asia/Singapore'
   const selectedPlanName = ctx.subscription.planName || '待激活计划'
   const selectedPlanPlatforms = ctx.subscription.platforms || '待确认（激活后自动更新）'
 
-  const connectedPlatforms = Array.from(new Set(ctx.socialAccounts.map((a) => a.platformId))).sort()
-  const connectedPlatformText = connectedPlatforms.length ? connectedPlatforms.join(', ') : '暂无已连接平台'
-
-  const accountLines = ctx.socialAccounts.length
-    ? ctx.socialAccounts
-        .map(
-          (acc) =>
-            `- ${acc.platformId}: ${acc.handle}${acc.displayName ? ` (${acc.displayName})` : ''}${acc.profileUrl ? ` | ${acc.profileUrl}` : ''}`,
-        )
-        .join('\n')
-    : '- 暂无已连接账号'
-
   const generatedAt = formatGeneratedTime(ctx.user.timezone)
-  const skillText = buildAmcSkillText({ apiBaseUrl })
 
   return [
     '【AMC 账号初始化指令】',
-    '将本指令完整粘贴给 AI Agent，即可完成 AMC 接入初始化。初始化目标只有三件事：',
-    '1) 绑定本品牌 Agent API Key',
-    '2) 告知用户信息与订阅计划（含计划覆盖平台）',
-    '3) 安装并启用 AMC Skill',
+    '将本指令完整粘贴给 AI Agent，即可完成 AMC 接入初始化。',
+    '注意：初始化阶段禁止执行任何品牌读取、品牌授权校验、品牌资料写入。',
     '',
     '【标准执行流程（必须按顺序完成）】',
-    '1) 用户订阅套餐后，使用本初始化指令将 AI Agent 与当前品牌账户关联，安装 git-plugin-amc 插件与 amc-kanban skill；插件安装成功后必须立刻激活 Bootstrap Mode。',
-    '2) Bootstrap Mode 激活后，Agent 必须访问品牌配置并读取用户已有品牌设定。',
-    '3) 品牌访问完成后，Agent 必须将品牌信息与账号设置信息回写到 AMC 看板。只有完成写回，才可判定初始化完成。',
+    '1) 安装或更新 AMC 插件（git-plugin-amc）与 amc-kanban skill。',
+    '2) 插件安装成功后，立即激活 Bootstrap Mode。',
+    '3) 仅执行 Agent 身份鉴权验证，初始化阶段到此结束。',
     `生成时间：${generatedAt}`,
     '',
     '═══════════════════════════════════════',
@@ -141,17 +125,14 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '',
     `- 当前订阅计划: ${selectedPlanName}`,
     `- 该计划覆盖平台（按订阅计划生效）: ${selectedPlanPlatforms}`,
-    `- 当前已连接平台（参考）: ${connectedPlatformText}`,
-    accountLines,
     '',
     '## Step 3：Agent 身份绑定确认',
     `- Agent ID: ${ctx.agent.id || 'N/A'}`,
     '- Agent API Key: 使用 Step 1 中的 KANBAN_AGENT_API_KEY（不重复展示）',
     `- AMC Kanban Base URL: ${baseHost}`,
-    `- 默认品牌 ID: ${brandId}`,
     '',
     '## Step 4：安装并启用 AMC Skill',
-    '- 将下方 AMC Skill 正文保存为可复用 Skill。',
+    '- 将 AMC Skill 保存为可复用 Skill。',
     '- 后续收到新版本 Skill 时，仅更新 Skill 文本；凭证仍以本初始化指令为准。',
     '',
     '## Step 5：初始化工作清单（执行动作）',
@@ -168,23 +149,18 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     `      GET ${apiBaseUrl}/agents/profile`,
     '      Authorization: Bearer $KANBAN_AGENT_API_KEY',
     '      → 期望：200，返回 agent 信息',
-    '      步骤 2 — 验证品牌授权：',
-    `      GET ${apiBaseUrl}/brands/${brandId}/profile?refresh=1`,
-    '      Authorization: Bearer $KANBAN_AGENT_API_KEY',
-    '      → 期望：200，返回品牌 profile Markdown',
-    '      步骤 3 — 若步骤 2 返回 401，代表 Agent 尚未绑定品牌，须向用户报告系统侧配置异常，不要尝试创建测试任务。',
-    '      步骤 4 — 若步骤 2 返回 200，进入品牌 onboarding 阶段。',
+    '      步骤 2 — 若步骤 1 返回 401/403，报告系统侧鉴权异常并停止初始化。',
     '- [ ] 向用户明确回报 REST API 验证结果（成功 / 失败 + 步骤编号 + HTTP 状态码）。',
-    '- [ ] Bootstrap Mode 激活后，立即进入“品牌设置访问阶段”，先读取现有品牌配置与资料。',
-    '- [ ] 访问阶段结束后，必须将已确认信息回写 AMC 看板，再进入执行阶段。',
-    '- [ ] 仅当“插件安装成功 + Bootstrap Mode 激活 + 品牌访问完成 + 看板回写完成”四项都完成，才可向用户报告“初始化完成”。',
-    '- [ ] 初始化阶段禁止向用户索要整份品牌问卷；仅允许在自动读取失败时请求最小必要缺失项。',
+    '- [ ] 仅当“插件安装成功 + Bootstrap Mode 激活 + Agent 身份验证成功”三项都完成，才可向用户报告“初始化完成”。',
+    '- [ ] 初始化完成后，不得自动执行品牌任务，改为进入下一步建议。',
     '',
     '═══════════════════════════════════════',
-    '## Step 6：AMC 操作 Skill（工作流规范）',
-    '以下为 AMC Skill 正文，保存后可随时复用，品牌主也可单独推送更新版本。',
+    '## 初始化完成后的下一步建议（固定顺序）',
+    '1) AMC 插件：确认插件在当前工作环境可持续调用（含重启后可用）。',
+    '2) 开启品牌访问：在用户确认后，开始读取品牌相关配置与资料。',
+    '3) 回填 AMC 看板：将访问阶段确认后的品牌信息回写到 AMC 看板。',
     '',
-    skillText,
+    '向用户输出“下一步建议”时必须严格保持以上顺序，不允许交换。',
   ].join('\n')
 }
 
