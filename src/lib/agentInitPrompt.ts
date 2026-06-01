@@ -95,14 +95,14 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '注意：初始化阶段禁止执行任何品牌读取、品牌授权校验、品牌资料写入。',
     '',
     '【标准执行流程（必须按顺序完成）】',
-    '1) 安装或更新 AMC 插件（git-plugin-amc）与 amc-kanban skill。',
-    '2) 插件安装成功后，立即激活 Bootstrap Mode。',
-    '3) 仅执行 Agent 身份鉴权验证，初始化阶段到此结束。',
+    '1) 使用 REST API 完成 Agent 接入与身份鉴权。',
+    '2) 仅执行 Agent 身份鉴权验证，初始化阶段到此结束。',
+    '3) 初始化阶段不依赖任何插件桥接层。',
     `生成时间：${generatedAt}`,
     '',
     '═══════════════════════════════════════',
-    '## Step 1：配置 MCP 接入凭证（核心）',
-    '在 OpenClaw MCP 配置中注册以下环境变量：',
+    '## Step 1：配置 REST 接入凭证（核心）',
+    '在当前执行环境中设置以下环境变量：',
     '',
     '```env',
     `KANBAN_BASE_URL=${baseHost}`,
@@ -113,7 +113,7 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '禁止通过肉眼比较 API Key 的字符差异、长度观感、JWT 片段外观来判断 key 是否异常。',
     '只能以真实 API 响应结果判断鉴权是否成功：成功则继续；401/403 才视为鉴权失败。',
     '本初始化指令在一次初始化流程中应被视为完整且自洽的唯一凭证来源；禁止要求用户回 AMC Dashboard 再复制一次初始化指令。',
-    '若出现 401/403，先在当前会话内复核 MCP 环境变量是否完整注入，并使用同一凭证重试一次。',
+    '若出现 401/403，先在当前会话内复核 REST 接入环境变量是否完整注入，并使用同一凭证重试一次。',
     '若复核后仍然 401/403，只能向用户报告“系统侧鉴权异常，当前初始化被阻塞”，不要归因于用户复制错误，更不要自行分析哪一位字符被改动。',
     '',
     '## Step 2：用户与订阅计划上下文',
@@ -136,22 +136,14 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '- 后续收到新版本 Skill 时，仅更新 Skill 文本；凭证仍以本初始化指令为准。',
     '',
     '## Step 5：初始化工作清单（执行动作）',
-    '- [ ] 安装或更新 AMC 插件：',
-    '```bash',
-    '# 未安装时：',
-    'openclaw plugins install git-plugin-amc',
-    '# 已安装时：',
-    'openclaw plugins update git-plugin-amc',
-    '```',
-    '- [ ] 插件安装成功后，立即激活插件 Bootstrap Mode（不可跳过，不可延后）。',
-    '- [ ] 使用 REST API 验证接入（优先使用 REST API，不依赖 MCP 插件可用性）：',
+    '- [ ] 使用 REST API 验证接入：',
     '      步骤 1 — 验证 Agent 身份：',
     `      GET ${apiBaseUrl}/agents/profile`,
     '      Authorization: Bearer $KANBAN_AGENT_API_KEY',
     '      → 期望：200，返回 agent 信息',
     '      步骤 2 — 若步骤 1 返回 401/403，报告系统侧鉴权异常并停止初始化。',
     '- [ ] 向用户明确回报 REST API 验证结果（成功 / 失败 + 步骤编号 + HTTP 状态码）。',
-    '- [ ] 仅当“插件安装成功 + Bootstrap Mode 激活 + Agent 身份验证成功”三项都完成，才可向用户报告“初始化完成”。',
+    '- [ ] 仅当“REST API 接入配置完成 + Agent 身份验证成功”两项都完成，才可向用户报告“初始化完成”。',
     '- [ ] 初始化完成后，不得自动执行品牌任务，改为进入下一步建议。',
     '',
     '═══════════════════════════════════════',
@@ -185,18 +177,18 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 - 所有发布、素材上传、评论回复、通知都必须通过 AI Marketing Crew 看板统一能力完成。
 - 集成密钥仅保存在看板后台品牌配置中：
   - 可由人类在看板设置中配置；
-  - 也可由你通过 MCP /agent/brand-config 写入；
+  - 也可由你通过 REST API 写入品牌配置；
   - 运行时由看板后端自动读取，不在任务执行中明文传递。
 
 ### 动作 0：补充 / 更新品牌信息（品牌资料缺失或变更时执行）
-仅当品牌资料尚未建立或需要更新时，调用以下接口（brandId 使用初始化指令中提供的值）。
+仅当品牌资料尚未建立或需要更新时，调用以下 REST 接口（brandId 使用初始化指令中提供的值）。
 执行顺序必须是：
 1) 先访问品牌设置与 profile，读取已有信息；
 2) 再把你已确认的信息回写看板；
 3) 仅在仍有阻塞字段时，向用户索要“最小必要字段”。
 
 这三步对应 onboarding 定义：
-- 初始化准备完成（已关联品牌 + 插件与 skill 安装成功 + Bootstrap Mode 已激活）
+- 初始化准备完成（REST API 接入配置完成 + Agent 身份验证成功）
 - 品牌访问完成（已读取品牌设定）
 - 看板回写完成（品牌信息与账号配置已更新）
 
@@ -207,7 +199,7 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 - 不要在 API key 鉴权失败时同时索要品牌资料。
 - 不要通过对比 token 的第几个字符、JWT 结构、Base64 外观来推断 API key 被篡改；只能依据真实接口返回判断。
 - 同一次初始化尝试中，不要要求用户回看板重新复制初始化指令；若重试后仍失败，只报告系统侧阻塞状态。
-- 必须先向用户报告 AMC 插件安装是否成功，并在成功后立即激活 Bootstrap Mode；完成激活后再进入品牌设置访问阶段。
+- 必须先向用户报告 REST API 接入是否成功；完成验证后再进入品牌设置访问阶段。
 
 \`\`\`
 PATCH ${apiBaseUrl}/agent/brand-config
@@ -332,8 +324,8 @@ Skill 至少包含：
 ### 【条件执行】内容发布规范与接口调用
 
 **发布与排期核心规则**
-- **显式调用发布接口**：仅修改看板任务状态（如设为 \`in_progress\`、\`publishing\` 等）**不会**自动触发实际的社媒平台发布动作。你必须**显式调用 MCP 工具 \`publish\`**来执行发布。
-- **作为 amc-kanban 的 MCP 核心能力，\`publish\` 接口会根据品牌配置，直接调用底层的平台接口（如 PostFast、Google Business Profile API 等）执行发布，并返回准确的发布结果。**
+- **显式调用发布接口**：仅修改看板任务状态（如设为 \`in_progress\`、\`publishing\` 等）**不会**自动触发实际的社媒平台发布动作。你必须**显式调用 REST 发布接口**来执行发布。
+- **发布接口会根据品牌配置，直接调用底层的平台接口（如 PostFast、Google Business Profile API 等）执行发布，并返回准确的发布结果。**
 - **任务拆分粒度**：每个 品牌 + 平台账号 + 发布次 = 1 个独立 Task。
 - **任务标题格式**：\`[{品牌}] {平台} - {日期} {内容概述}\`
 
