@@ -12,6 +12,9 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [nickname, setNickname] = useState('')
+  const [country, setCountry] = useState('')
+  const [phone, setPhone] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -21,6 +24,9 @@ export default function Login() {
     setError('')
     setPassword('')
     setConfirmPassword('')
+    setNickname('')
+    setCountry('')
+    setPhone('')
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -31,7 +37,7 @@ export default function Login() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, nickname, country, phone }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -141,19 +147,57 @@ export default function Login() {
             />
           </div>
           {isRegister && (
-            <div>
-              <label className="sr-only" htmlFor="confirm-password">Confirm password</label>
-              <input
-                id="confirm-password"
-                type="password"
-                required
-                autoComplete="new-password"
-                className={INPUT_CLASS}
-                placeholder="Confirm password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
+            <>
+              <div>
+                <label className="sr-only" htmlFor="nickname">Nickname</label>
+                <input
+                  id="nickname"
+                  type="text"
+                  required
+                  className={INPUT_CLASS}
+                  placeholder="Nickname"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="sr-only" htmlFor="country">Country</label>
+                <input
+                  id="country"
+                  type="text"
+                  required
+                  className={INPUT_CLASS}
+                  placeholder="Country"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="sr-only" htmlFor="phone">Contact phone</label>
+                <input
+                  id="phone"
+                  type="tel"
+                  required
+                  className={INPUT_CLASS}
+                  placeholder="Contact phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="sr-only" htmlFor="confirm-password">Confirm password</label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  className={INPUT_CLASS}
+                  placeholder="Confirm password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+            </>
           )}
 
           {error && <div className="text-red-500 text-sm text-center font-medium">{error}</div>}

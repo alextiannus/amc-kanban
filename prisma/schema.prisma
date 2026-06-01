@@ -13,6 +13,8 @@ model User {
   password     String
   type         String   @default("HUMAN") // HUMAN or AI_AGENT
   role         String   @default("USER")  // ADMIN or USER (针对人类)
+  country      String?
+  phone        String?
   
   // AI Agent 独占属性
   nickname     String?

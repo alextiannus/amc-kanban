@@ -117,7 +117,7 @@ export default function BrandSubscriptionPage() {
   const [addonIds, setAddonIds] = useState<string[]>([])
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [showTerms, setShowTerms] = useState(false)
-  const [paymentMode, setPaymentMode] = useState<'ONLINE' | 'BILLING'>('ONLINE')
+  const [paymentMode, setPaymentMode] = useState<'ONLINE' | 'BILLING'>('BILLING')
   const [copiedInstruction, setCopiedInstruction] = useState(false)
   const [activationNotice, setActivationNotice] = useState<string | null>(null)
   const [showAgentCreationModal, setShowAgentCreationModal] = useState(false)
