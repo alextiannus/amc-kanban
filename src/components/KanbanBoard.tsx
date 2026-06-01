@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter } from 'next/navigation'
+import { Store } from 'lucide-react'
 import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
 import ArchiveView from './ArchiveView'
@@ -22,6 +24,7 @@ interface Brand {
 }
 
 export default function KanbanBoard({ initialView = 'dashboard' }: { initialView?: 'agents' | 'archive' | 'dashboard' | 'analytics' | 'calendar' | 'game' | 'socialInsight' }) {
+  const router = useRouter()
   const [tasks, setTasks] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState('pending')
   const [selectedTask, setSelectedTask] = useState<any | null>(null)
@@ -53,6 +56,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
 
   const [newApiKey, setNewApiKey] = useState<string | null>(null)
   const [showSystemLog, setShowSystemLog] = useState(false)
+  const [subscriptionActive, setSubscriptionActive] = useState<boolean | null>(null)
   const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : 'BRAND_DIRECTOR')
 
   const activeBrandIdRef = useRef<string | undefined>(undefined)
@@ -87,6 +91,22 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       }
     } catch (e) {
       console.error('[KanbanBoard] fetchUser error', e)
+    }
+  }
+
+  const fetchSubscriptionState = async () => {
+    try {
+      const res = await fetch('/api/subscription')
+      if (!res.ok) {
+        setSubscriptionActive(false)
+        return
+      }
+
+      const data = await res.json()
+      setSubscriptionActive(data?.latestSubscription?.status === 'ACTIVE')
+    } catch (e) {
+      console.error('[KanbanBoard] fetchSubscriptionState error', e)
+      setSubscriptionActive(false)
     }
   }
 
@@ -131,6 +151,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
 
   useEffect(() => {
     fetchUser()
+    fetchSubscriptionState()
     fetchBrands()
 
     const eventSource = new EventSource('/api/events')
@@ -145,6 +166,41 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       eventSource.close()
     }
   }, [])
+
+  if (subscriptionActive === false) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex items-center justify-center">
+        <div className="w-full max-w-2xl rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 md:p-8 shadow-sm text-center space-y-4">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-300 mx-auto">
+            <Store size={28} />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white">订阅未激活</h1>
+            <p className="text-sm leading-7 text-slate-600 dark:text-slate-300">
+              当前账号还没有生效的订阅计划，因此暂不展示品牌主看板、品牌切换器和其他需要品牌上下文的页面。
+            </p>
+          </div>
+          <button
+            onClick={() => router.push('/board/subscription')}
+            className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700"
+          >
+            去订阅计划
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (subscriptionActive === null) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-500 dark:text-slate-400">
+          <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin" />
+          <p className="text-sm font-medium">检查订阅状态...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <MainLayout
