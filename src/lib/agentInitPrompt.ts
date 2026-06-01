@@ -144,10 +144,12 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '      步骤 2 — 若步骤 1 返回 401/403，报告系统侧鉴权异常并停止初始化。',
     '- [ ] 向用户明确回报 REST API 验证结果（成功 / 失败 + 步骤编号 + HTTP 状态码）。',
     '- [ ] 仅当“REST API 接入配置完成 + Agent 身份验证成功”两项都完成，才可向用户报告“初始化完成”。',
-    '- [ ] 初始化完成后进入 onboarding-flow：品牌访问通过 amc plugin 执行，不需要额外连接看板。',
-    '- [ ] onboarding-flow 访问结束后，将品牌名和品牌设定回写到 AMC 看板。',
-    '- [ ] 回写品牌信息时，同时用自己的昵称更新 Agent 在看板中的展示名字，并补全自我介绍。',
-    '- [ ] 如果具备生图技能，为自己绘制并上传一个可爱的头像到 Agent 名片。',
+    '',
+    '下一步：Onboarding Flow',
+    '1. 访问品牌信息 - 使用 amc plugin 品牌访问技能，开始和品牌主对齐品牌理解。',
+    '2. 回写品牌信息到看板 - onboarding-flow 访问结束后，将品牌名和品牌设定写入 AMC 看板。',
+    '3. 更新 Agent 展示信息 - 回写品牌信息时，用自己的昵称（例如“孙尚香”）更新看板中的 Agent 名字，并补全自我介绍。',
+    '4. 上传头像 - 如果具备生图技能，为自己绘制并上传一个可爱的头像。',
   ].join('\n')
 }
 
