@@ -10,6 +10,7 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 2. Enforce permission-scoped visibility between humans and agents.
 3. Distinguish each AI agent using per-agent API keys.
 4. Enable fast external AI onboarding through documented APIs and SOP endpoints.
+5. Formalize a subscription model where plan ownership belongs to agent identity first, and brand data is collected later during onboarding.
 
 ### 1.3 Personas
 1. Administrator: manages users, permissions, and initialization.
@@ -73,6 +74,23 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 1. Create users and agent accounts.
 2. Maintain permission graph between humans and agents.
 3. Review global system activity and delivery outputs.
+
+### 4.5 Subscription and Initialization Flow (Brand-Later Model)
+1. Subscription ownership belongs to the AI agent connection identity (agent token / API key), not to a brand record.
+2. Brand information is optional at plan-selection time; the system should bind plan -> agent identity first.
+3. Entry Path A (recommended):
+	- User selects a subscription plan.
+	- System auto-generates and binds the corresponding AI agent connection token.
+	- System returns initialization command and proceeds to bootstrap/onboarding.
+4. Entry Path B (key-first):
+	- User generates a new AI connection key first.
+	- System requires explicit plan selection for that key.
+	- Only after plan binding can the key proceed to initialization.
+5. Brand profile is written into the system only after the AI agent finishes brand discovery/structuring.
+6. Initialization is considered complete only when all conditions are met:
+	- Plan is bound to the target agent token.
+	- Plugin installation succeeds and Bootstrap Mode is activated.
+	- Brand access and board write-back are completed.
 
 ## 5. Technical Architecture
 
@@ -167,6 +185,7 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 3. Admin can create users and assign permissions successfully.
 4. Dashboard metrics reflect current board state.
 5. Production deployment builds and runs on Render with PostgreSQL.
+6. Both onboarding paths are supported: plan-first-token-auto and key-first-plan-binding, without requiring brand info before subscription.
 
 ## 11. Roadmap
 
