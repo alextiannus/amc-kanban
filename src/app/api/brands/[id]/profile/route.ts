@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canOwnBrand, canSessionAccessBrandProject } from '@/lib/brandAccess'
 import {
   readBrandProfileMarkdown,
@@ -12,17 +12,24 @@ type Params = { params: Promise<{ id: string }> }
 // GET /api/brands/[id]/profile?refresh=1
 export async function GET(request: Request, { params }: Params) {
   const session = await getSession()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { id } = await params
 
-  const ok = await canSessionAccessBrandProject(
-    id,
-    session.user.id,
-    session.user.type ?? 'HUMAN',
-    session.user.role
-  )
-  if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // Support both cookie session (human) and Bearer API key (AI agent)
+  if (session?.user) {
+    const ok = await canSessionAccessBrandProject(
+      id,
+      session.user.id,
+      session.user.type ?? 'HUMAN',
+      session.user.role
+    )
+    if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  } else {
+    const apiKey = extractApiKey(request)
+    const agent = apiKey ? await getAgentFromApiKey(apiKey) : null
+    if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const ok = await canSessionAccessBrandProject(id, agent.id, 'AI_AGENT')
+    if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
   const url = new URL(request.url)
   const refresh = ['1', 'true', 'yes'].includes((url.searchParams.get('refresh') || '').toLowerCase())
