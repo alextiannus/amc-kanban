@@ -94,27 +94,24 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 
 ### 4.6 Plan to AI Crew Entitlement Mapping
 To guarantee "subscription = operational capacity", each plan must map to a standard AI Crew entitlement bundle with at least:
-1. Base connection token quota (number of activatable AI agent accounts).
+1. Platform/content operations capability scope.
 2. Field campaign / store-visit quota.
 3. Dedicated brand manager support tier.
 
 Current standard matrix (configurable by operations, but single source of truth is required):
 1. STARTER
-	- Base tokens: 1
 	- Platform scope: Instagram, Facebook, and other core English channels
 	- Content capability: fully automated image/text content creation and publishing
 	- Field campaign quota: none
 	- Dedicated brand manager: none (standard support)
 	- Operational support: Google Map optimization, review monitoring, and performance reporting
 2. ESSENTIAL
-	- Base tokens: 1
 	- Platform scope: Instagram, Facebook, TikTok (English-channel operations)
 	- Content capability: fully automated image/text content creation and publishing
 	- Field campaign quota: 1 free influencer store-visit per month
 	- Dedicated brand manager: included (1:1)
 	- Operational support: brand operation planning, asset-library organization, Google Map optimization, review monitoring, and performance reporting
 3. ADVANCED
-	- Base tokens: 2 (expandable via add-on)
 	- Platform scope: unlimited English channels (within integrated connectors)
 	- Content capability: fully automated image/text content creation and publishing
 	- Field campaign quota: 1 free influencer store-visit per month + 1 follower-growth campaign per quarter
@@ -122,10 +119,9 @@ Current standard matrix (configurable by operations, but single source of truth 
 	- Operational support: brand operation planning, asset-library organization, Google Map optimization, review monitoring, and performance reporting
 
 Extension rules:
-1. When user adds a new AI agent key and exceeds base token quota, system must enforce upgrade or token add-on purchase.
-2. Token-plan binding must be auditable (creator, timestamp, status changes).
-3. Field campaign and brand manager benefits are plan entitlements and must persist beyond any single initialization command.
-4. Multi-store operations are no longer a standalone base plan; they are sold as an add-on per additional store (recommended: +USD 200/store/month).
+1. Token limit policy is intentionally deferred from current package commitments; it will be shipped in the next stage after quota, billing, and audit designs are finalized.
+2. Field campaign and brand manager benefits are plan entitlements and must persist beyond any single initialization command.
+3. Multi-store operations are no longer a standalone base plan; they are sold as an add-on per additional store (recommended: +USD 200/store/month).
 
 ## 5. Technical Architecture
 
@@ -221,7 +217,7 @@ Extension rules:
 4. Dashboard metrics reflect current board state.
 5. Production deployment builds and runs on Render with PostgreSQL.
 6. Both onboarding paths are supported: plan-first-token-auto and key-first-plan-binding, without requiring brand info before subscription.
-7. System correctly computes and displays AI Crew entitlements by plan (token quota, field campaign quota, dedicated brand manager tier).
+7. System correctly computes and displays AI Crew entitlements by plan (field campaign quota, dedicated brand manager tier, operations scope).
 
 ## 11. Roadmap
 
@@ -229,6 +225,7 @@ Extension rules:
 1. Add strict input validation schema for all write APIs.
 2. Upgrade password policy minimums and rotation guidance.
 3. Align background upload with avatar safety checks.
+4. Design token-limit framework (quota model, overage handling, billing and audit), and stage rollout in the next app development phase.
 
 ### 11.2 Mid Term
 1. Move from polling to SSE/WebSocket realtime sync.
