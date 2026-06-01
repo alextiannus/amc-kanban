@@ -78,14 +78,14 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 ### 4.5 Subscription and Initialization Flow (Brand-Later Model)
 1. Subscription ownership belongs to the AI agent connection identity (agent token / API key), not to a brand record.
 2. Brand information is optional at plan-selection time; the system should bind plan -> agent identity first.
-3. Entry Path A (recommended):
-	- User selects a subscription plan.
-	- System auto-generates and binds the corresponding AI agent connection token.
-	- System returns initialization command and proceeds to bootstrap/onboarding.
-4. Entry Path B (key-first):
-	- User generates a new AI connection key first.
-	- System requires explicit plan selection for that key.
-	- Only after plan binding can the key proceed to initialization.
+3. Entry Path A (new-user subscription path, recommended):
+	- A new user selects a subscription plan first.
+	- The system auto-creates the corresponding AI agent account and connection token (API key).
+	- The system binds plan -> token and returns initialization command for bootstrap/onboarding.
+4. Entry Path B (add-agent path, key-first):
+	- User adds a new AI agent by generating a new connection key first.
+	- User must select a subscription plan for that new key.
+	- Only after plan binding can that new agent proceed to initialization.
 5. Brand profile is written into the system only after the AI agent finishes brand discovery/structuring.
 6. Initialization is considered complete only when all conditions are met:
 	- Plan is bound to the target agent token.
