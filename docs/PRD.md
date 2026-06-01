@@ -92,6 +92,35 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 	- Plugin installation succeeds and Bootstrap Mode is activated.
 	- Brand access and board write-back are completed.
 
+### 4.6 Plan to AI Crew Entitlement Mapping
+To guarantee "subscription = operational capacity", each plan must map to a standard AI Crew entitlement bundle with at least:
+1. Base connection token quota (number of activatable AI agent accounts).
+2. Field campaign / store-visit quota.
+3. Dedicated brand manager support tier.
+
+Current standard matrix (configurable by operations, but single source of truth is required):
+1. STARTER
+	- Base tokens: 1
+	- Field campaign quota: none
+	- Dedicated brand manager: none (standard support)
+2. ESSENTIAL
+	- Base tokens: 1
+	- Field campaign quota: 1 visit per month (3+ KOL/KOC, includes shooting)
+	- Dedicated brand manager: included (1:1)
+3. PREMIUM
+	- Base tokens: 2
+	- Field campaign quota: 1 top-tier influencer visit per month (per package structure)
+	- Dedicated brand manager: included (1:1)
+4. ADVANTAGE
+	- Base tokens: 5 (for multi-store / multi-agent operations)
+	- Field campaign quota: 1 on-site shooting + top-tier influencer campaign per month
+	- Dedicated brand manager: included (priority tier)
+
+Extension rules:
+1. When user adds a new AI agent key and exceeds base token quota, system must enforce upgrade or token add-on purchase.
+2. Token-plan binding must be auditable (creator, timestamp, status changes).
+3. Field campaign and brand manager benefits are plan entitlements and must persist beyond any single initialization command.
+
 ## 5. Technical Architecture
 
 ### 5.1 Stack
@@ -186,6 +215,7 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 4. Dashboard metrics reflect current board state.
 5. Production deployment builds and runs on Render with PostgreSQL.
 6. Both onboarding paths are supported: plan-first-token-auto and key-first-plan-binding, without requiring brand info before subscription.
+7. System correctly computes and displays AI Crew entitlements by plan (token quota, field campaign quota, dedicated brand manager tier).
 
 ## 11. Roadmap
 
