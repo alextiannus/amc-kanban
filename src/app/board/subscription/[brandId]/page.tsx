@@ -5,6 +5,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, CheckCircle2, Copy, CreditCard, Loader2 } from 'lucide-react'
 import { buildLaunchInstruction } from '@/lib/agentInitPrompt'
 
+const AI_CREW_CREATION_DURATION_MS = 30_000
+
 type Plan = {
   id: string
   name: string
@@ -118,12 +120,26 @@ export default function BrandSubscriptionPage() {
   const [paymentMode, setPaymentMode] = useState<'ONLINE' | 'BILLING'>('ONLINE')
   const [copiedInstruction, setCopiedInstruction] = useState(false)
   const [activationNotice, setActivationNotice] = useState<string | null>(null)
+  const [showAgentCreationModal, setShowAgentCreationModal] = useState(false)
+  const [activationJustCompleted, setActivationJustCompleted] = useState(false)
+  const [agentCreationProgress, setAgentCreationProgress] = useState(0)
+  const [agentCreationDone, setAgentCreationDone] = useState(false)
+  const [agentCreationStartedAt, setAgentCreationStartedAt] = useState<number | null>(null)
   const instructionCardRef = useRef<HTMLElement | null>(null)
 
   const scrollToInstructionCard = () => {
     window.setTimeout(() => {
       instructionCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 120)
+  }
+
+  const beginAgentCreationExperience = () => {
+    setActivationJustCompleted(true)
+    setAgentCreationDone(false)
+    setAgentCreationProgress(0)
+    setAgentCreationStartedAt(Date.now())
+    setShowAgentCreationModal(true)
+    setActivationNotice('订阅计划已激活。正在为你创建 AI 员工，请稍候...')
   }
 
   const success = searchParams?.get('success') === '1'
@@ -175,7 +191,7 @@ export default function BrandSubscriptionPage() {
           setData(freshJson)
           const currentPlanId = resolveCurrentPlanId(freshJson)
           if (currentPlanId) setPlanId(currentPlanId)
-          scrollToInstructionCard()
+          beginAgentCreationExperience()
         }
       } catch (e: unknown) {
         setError(getErrorMessage(e, 'Payment confirmation failed'))
@@ -185,6 +201,33 @@ export default function BrandSubscriptionPage() {
     }
     confirmPayment()
   }, [success, checkoutSessionId, subscriptionId, brandId])
+
+  useEffect(() => {
+    if (!showAgentCreationModal || !agentCreationStartedAt) return
+
+    const timer = window.setInterval(() => {
+      const elapsed = Date.now() - agentCreationStartedAt
+      const progress = Math.min(100, Math.round((elapsed / AI_CREW_CREATION_DURATION_MS) * 100))
+      setAgentCreationProgress(progress)
+
+      if (progress >= 100) {
+        window.clearInterval(timer)
+        setAgentCreationDone(true)
+        setActivationNotice('AI 员工创建流程已完成。现在可以复制初始化指令并连接平台。')
+      }
+    }, 200)
+
+    return () => window.clearInterval(timer)
+  }, [showAgentCreationModal, agentCreationStartedAt])
+
+  useEffect(() => {
+    if (!agentCreationDone) return
+    const closeTimer = window.setTimeout(() => {
+      setShowAgentCreationModal(false)
+      scrollToInstructionCard()
+    }, 900)
+    return () => window.clearTimeout(closeTimer)
+  }, [agentCreationDone])
 
   const billingCycle: 'quarterly' | 'yearly' = durationMonths === 12 ? 'yearly' : 'quarterly'
 
@@ -258,8 +301,7 @@ export default function BrandSubscriptionPage() {
           setData((prev) => (prev ? { ...prev, latestSubscription: json.subscription } : prev))
           setPlanId(selectedPlan.id)
         }
-        setActivationNotice('订阅计划已激活成功。你现在可以复制 Agent 初始化指令并完成接入。')
-        scrollToInstructionCard()
+        beginAgentCreationExperience()
       } else if (json.checkoutUrl) {
         window.location.href = json.checkoutUrl
       } else {
@@ -318,7 +360,7 @@ export default function BrandSubscriptionPage() {
           </div>
         )}
 
-        {(success || data.latestSubscription?.status === 'ACTIVE') && instructionText && (
+        {((success || data.latestSubscription?.status === 'ACTIVE') && instructionText && (!activationJustCompleted || agentCreationDone)) && (
           <section ref={instructionCardRef} className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 p-4 md:p-5 shadow-sm">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-200">
@@ -610,6 +652,53 @@ export default function BrandSubscriptionPage() {
                 <pre className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-sans">{data.termsFullText}</pre>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800">{data.termsNotice}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAgentCreationModal && (
+        <div className="fixed inset-0 z-[70] bg-slate-950/65 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-slate-200/70 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">正在创建你的 AI 员工</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-300 mt-1">
+                正在生成连接身份、初始化工作档案并准备接入环境。
+              </p>
+            </div>
+
+            <div className="px-6 py-6 space-y-5">
+              <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 transition-all duration-300"
+                  style={{ width: `${agentCreationProgress}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-300">
+                <span>创建进度</span>
+                <span>{agentCreationProgress}%</span>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <p className={`${agentCreationProgress >= 20 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {agentCreationProgress >= 20 ? '✓' : '•'} 分配 AI 员工连接身份（API Key）
+                </p>
+                <p className={`${agentCreationProgress >= 50 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {agentCreationProgress >= 50 ? '✓' : '•'} 初始化协作档案与基础权限
+                </p>
+                <p className={`${agentCreationProgress >= 80 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {agentCreationProgress >= 80 ? '✓' : '•'} 预热接入流程并准备初始化指令
+                </p>
+                <p className={`${agentCreationProgress >= 100 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                  {agentCreationProgress >= 100 ? '✓' : '•'} 完成，可开始连接平台
+                </p>
+              </div>
+
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {agentCreationDone
+                  ? 'AI 员工创建完成，正在打开初始化入口...'
+                  : '预计耗时约 30 秒，请勿关闭当前页面。'}
+              </p>
             </div>
           </div>
         </div>
