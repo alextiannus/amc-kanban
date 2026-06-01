@@ -17,7 +17,7 @@ Social Media Management Services Agreement
 乙方为 Deliverychinatown Pte. Ltd.，服务品牌为 AMC — Your AI Marketing Crew，联系邮箱为 service@deliverychinatown.com。
 
 二、服务套餐
-甲方可选择 STARTER、ESSENTIAL、PREMIUM 或 ADVANTAGE 套餐，并可按需加购增值服务。
+甲方可选择 STARTER、ESSENTIAL、ADVANCED 套餐，并可按需加购增值服务（含多门店运营支持 Add-on）。
 所有套餐均包含 Google Map 配置、评论监控与基础评分优化。
 
 三、服务范围

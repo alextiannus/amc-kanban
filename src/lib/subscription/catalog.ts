@@ -1,4 +1,4 @@
-export type PlanId = 'starter' | 'essential' | 'premium' | 'advantage'
+export type PlanId = 'starter' | 'essential' | 'advanced'
 
 export interface SubscriptionPlan {
   id: PlanId
@@ -43,50 +43,42 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     name: 'STARTER',
     monthlyUsd: 189,
     promoMonthlyUsd: 108,
-    description: '海外社媒代运营基础版',
+    description: '英文平台基础运营自动化方案',
     includes: [
-      'Instagram & Facebook 图文内容发布',
+      'Instagram / Facebook 英文平台基础运营',
+      'AI 自动图文内容创作与发布',
       'Google Map 配置与评论监控',
-      '中英双语内容',
-      '每周舆情报告',
-      '远程交付',
+      '推广效果周报（内容与互动数据）',
+      '标准远程交付支持',
     ],
   },
   {
     id: 'essential',
     name: 'ESSENTIAL',
     monthlyUsd: 600,
-    description: '海外社媒代运营新加坡本地版',
+    description: '英文平台增强运营与品牌陪跑方案',
     includes: [
-      'Instagram / Facebook / TikTok 图文发布',
-      '专属品牌主理人',
+      'Instagram / Facebook / TikTok 英文平台运营',
+      'AI 自动图文内容创作与发布',
+      '专属品牌主理人（品牌运营计划与素材库整理）',
       'Google Map 配置与评论监控',
-      '中英双语 + 每周舆情报告',
-      '每月 1 次探店（3 名以上 KOL/KOC）含拍摄',
+      '推广效果周报（内容与互动数据）',
+      '每月 1 次免费博主探店',
     ],
   },
   {
-    id: 'premium',
-    name: 'PREMIUM',
+    id: 'advanced',
+    name: 'ADVANCED',
     monthlyUsd: 1600,
-    description: '海外社媒代运营，品牌推广，到店转化增效版（仅新加坡本地）',
+    description: '不限英文平台的高阶增长运营方案',
     includes: [
-      'Instagram / Facebook / TikTok / 小红书 图文与视频',
-      '可每天发布',
+      '不限数量英文平台运营（按可接入渠道）',
+      'AI 自动图文内容创作与发布',
+      '专属品牌主理人（品牌运营计划与素材库整理）',
       'Google Map 配置与评论监控',
-      '每月一次现场拍摄素材服务',
-      'KOL 大V探店：5 位千粉 + 3 位 5 千粉以上 + 2 位万粉以上 KOL（仅新加坡本地）',
-    ],
-  },
-  {
-    id: 'advantage',
-    name: 'ADVANTAGE',
-    monthlyUsd: 3800,
-    description: '连锁品牌门店运营版',
-    includes: [
-      '含 PREMIUM 全量服务（含 Google Map 配置与评论监控）',
-      '支持最多 5 个门店协同运营',
-      '超出门店每店 +USD 200 / 月（线下合同处理）',
+      '推广效果周报（内容与互动数据）',
+      '每月 1 次免费博主探店',
+      '每季度 1 次增粉营销活动',
     ],
   },
 ]
@@ -156,6 +148,14 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     description: '15 位博主探店整合套餐。',
     details: ['8 位千粉博主', '5 位 5 千粉以上博主', '2 位万粉以上博主'],
   },
+  {
+    id: 'multi_store_support',
+    name: '多门店运营支持（Add-on）',
+    pricing: 'monthly',
+    usd: 200,
+    description: '为新增门店提供独立运营协同支持，按门店计费。',
+    details: ['每新增 1 个门店 +USD 200/月', '门店级内容与任务协同', '适用于连锁门店扩展'],
+  },
 ]
 
 export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
@@ -165,8 +165,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     values: {
       starter: 'Instagram + Facebook',
       essential: 'Instagram + Facebook + TikTok',
-      premium: 'Instagram + Facebook + TikTok + 小红书',
-      advantage: 'Premium 全渠道 + 多门店协同',
+      advanced: '不限英文平台（按可接入渠道）',
     },
   },
   {
@@ -175,8 +174,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     values: {
       starter: '图文内容',
       essential: '图文内容',
-      premium: '图文 + 视频',
-      advantage: '图文 + 视频',
+      advanced: '图文内容',
     },
   },
   {
@@ -185,8 +183,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     values: {
       starter: '可每日发布（素材商家提供）',
       essential: '可每日发布',
-      premium: '可每日发布',
-      advantage: '可每日发布（多门店）',
+      advanced: '可每日发布（不限英文平台）',
     },
   },
   {
@@ -195,18 +192,16 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     values: {
       starter: '配置 + 评论监控 + 打分优化',
       essential: '配置 + 评论监控 + 打分优化',
-      premium: '配置 + 评论监控 + 打分优化',
-      advantage: '配置 + 评论监控 + 打分优化',
+      advanced: '配置 + 评论监控 + 打分优化',
     },
   },
   {
     key: 'report',
     label: '报告机制',
     values: {
-      starter: '中英双语 + 每周舆情报告',
-      essential: '中英双语 + 每周舆情报告',
-      premium: '中英双语 + 每周舆情报告',
-      advantage: '中英双语 + 每周舆情报告',
+      starter: '推广效果周报',
+      essential: '推广效果周报',
+      advanced: '推广效果周报 + 季度复盘',
     },
   },
   {
@@ -214,19 +209,26 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     label: '拍摄/探店权益',
     values: {
       starter: '无',
-      essential: '每月 1 次探店（3 名以上 KOL/KOC）含拍摄',
-      premium: 'KOL 大V探店：5 位千粉 + 3 位 5 千粉以上 + 2 位万粉以上 KOL（仅新加坡本地）',
-      advantage: '每月 1 次现场拍摄 + 大V探店推广（新加坡本地）',
+      essential: '每月 1 次免费博主探店',
+      advanced: '每月 1 次免费博主探店 + 每季度 1 次增粉营销活动',
+    },
+  },
+  {
+    key: 'brandManager',
+    label: '品牌主理人支持',
+    values: {
+      starter: '标准支持（无专属主理人）',
+      essential: '专属品牌主理人',
+      advanced: '专属品牌主理人（增长策略优先）',
     },
   },
   {
     key: 'multiStore',
     label: '多门店支持',
     values: {
-      starter: '不支持',
-      essential: '不支持',
-      premium: '不支持',
-      advantage: '支持最多 5 门店，超出每店 +USD 200/月',
+      starter: '可加购（每店 +USD 200/月）',
+      essential: '可加购（每店 +USD 200/月）',
+      advanced: '可加购（每店 +USD 200/月）',
     },
   },
 ]

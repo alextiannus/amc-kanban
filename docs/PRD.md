@@ -101,25 +101,31 @@ To guarantee "subscription = operational capacity", each plan must map to a stan
 Current standard matrix (configurable by operations, but single source of truth is required):
 1. STARTER
 	- Base tokens: 1
+	- Platform scope: Instagram, Facebook, and other core English channels
+	- Content capability: fully automated image/text content creation and publishing
 	- Field campaign quota: none
 	- Dedicated brand manager: none (standard support)
+	- Operational support: Google Map optimization, review monitoring, and performance reporting
 2. ESSENTIAL
 	- Base tokens: 1
-	- Field campaign quota: 1 visit per month (3+ KOL/KOC, includes shooting)
+	- Platform scope: Instagram, Facebook, TikTok (English-channel operations)
+	- Content capability: fully automated image/text content creation and publishing
+	- Field campaign quota: 1 free influencer store-visit per month
 	- Dedicated brand manager: included (1:1)
-3. PREMIUM
-	- Base tokens: 2
-	- Field campaign quota: 1 top-tier influencer visit per month (per package structure)
+	- Operational support: brand operation planning, asset-library organization, Google Map optimization, review monitoring, and performance reporting
+3. ADVANCED
+	- Base tokens: 2 (expandable via add-on)
+	- Platform scope: unlimited English channels (within integrated connectors)
+	- Content capability: fully automated image/text content creation and publishing
+	- Field campaign quota: 1 free influencer store-visit per month + 1 follower-growth campaign per quarter
 	- Dedicated brand manager: included (1:1)
-4. ADVANTAGE
-	- Base tokens: 5 (for multi-store / multi-agent operations)
-	- Field campaign quota: 1 on-site shooting + top-tier influencer campaign per month
-	- Dedicated brand manager: included (priority tier)
+	- Operational support: brand operation planning, asset-library organization, Google Map optimization, review monitoring, and performance reporting
 
 Extension rules:
 1. When user adds a new AI agent key and exceeds base token quota, system must enforce upgrade or token add-on purchase.
 2. Token-plan binding must be auditable (creator, timestamp, status changes).
 3. Field campaign and brand manager benefits are plan entitlements and must persist beyond any single initialization command.
+4. Multi-store operations are no longer a standalone base plan; they are sold as an add-on per additional store (recommended: +USD 200/store/month).
 
 ## 5. Technical Architecture
 

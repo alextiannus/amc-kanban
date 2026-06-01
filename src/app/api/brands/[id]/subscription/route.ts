@@ -66,9 +66,11 @@ function extractStoresFromMarkdown(markdown: string): StoreSummary[] {
 }
 
 function toPlanId(value: string | null | undefined): PlanId | null {
-  if (value === 'starter' || value === 'essential' || value === 'premium' || value === 'advantage') {
+  // Legacy plan IDs are mapped to advanced to keep existing subscriptions readable.
+  if (value === 'starter' || value === 'essential' || value === 'advanced') {
     return value
   }
+  if (value === 'premium' || value === 'advantage') return 'advanced'
   return null
 }
 
