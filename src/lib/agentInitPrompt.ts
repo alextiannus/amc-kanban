@@ -144,7 +144,10 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '      步骤 2 — 若步骤 1 返回 401/403，报告系统侧鉴权异常并停止初始化。',
     '- [ ] 向用户明确回报 REST API 验证结果（成功 / 失败 + 步骤编号 + HTTP 状态码）。',
     '- [ ] 仅当“REST API 接入配置完成 + Agent 身份验证成功”两项都完成，才可向用户报告“初始化完成”。',
-    '- [ ] 初始化完成后结束初始化流程，不再追加后续建议。',
+    '- [ ] 初始化完成后进入 onboarding-flow：品牌访问通过 amc plugin 执行，不需要额外连接看板。',
+    '- [ ] onboarding-flow 访问结束后，将品牌名和品牌设定回写到 AMC 看板。',
+    '- [ ] 回写品牌信息时，同时用自己的昵称更新 Agent 在看板中的展示名字，并补全自我介绍。',
+    '- [ ] 如果具备生图技能，为自己绘制并上传一个可爱的头像到 Agent 名片。',
   ].join('\n')
 }
 
@@ -174,6 +177,7 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 
 ### 动作 0：补充 / 更新品牌信息（品牌资料缺失或变更时执行）
 仅当品牌资料尚未建立或需要更新时，调用以下 REST 接口（brandId 使用初始化指令中提供的值）。
+品牌访问必须通过 amc plugin 执行 onboarding-flow，不要求手动连接看板。
 执行顺序必须是：
 1) 先访问品牌设置与 profile，读取已有信息；
 2) 再把你已确认的信息回写看板；
@@ -276,6 +280,10 @@ Skill 至少包含：
 头像规则：
 - 主动上传（推荐）：avatar 填公共 URL 或 Base64（data:image/...）
 - 降级方案：不传 avatar 则显示首字母占位
+- 在完成品牌名与品牌设定回写时，必须同步更新 Agent 名片：
+  - nickname 使用你自己的昵称；
+  - introduction 写清你的能力与协作方式；
+  - 若你具备生图能力，请生成一个可爱风格头像并上传到 avatar。
 
 ### 动作 3：上板与状态闭环
 任何有意义、可追踪、可交付的工作都必须上板，不允许隐形工作。
