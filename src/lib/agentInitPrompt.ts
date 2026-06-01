@@ -157,8 +157,8 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '',
     '下一步：Onboarding Flow',
     '1. 执行 AMC Onboarding Flow，与品牌主对话收集品牌信息。',
-    '2. 回写品牌信息到看板 - onboarding-flow 访问结束后，将品牌名和品牌设定写入 AMC 看板。',
-    '3. 更新 Agent 展示信息 - 回写品牌信息时，用自己的昵称（例如“孙尚香”）更新看板中的 Agent 名字，并补全自我介绍。',
+    '2. 回写品牌信息到看板 - onboarding-flow 结束后，将品牌访谈的全部有效信息完整写入 AMC 看板（含定位、人群、卖点、语气、禁忌、目标与关键补充）。',
+    '3. 更新 Agent 展示信息 - 更新看板中的 Agent 账户资料：使用自己的昵称，并写一段具体、清晰、可执行的自我介绍（职责边界、擅长能力、协作方式、交付标准）。',
     '4. 上传头像 - 如果具备生图技能，为自己绘制并上传一个可爱的头像。',
   ].join('\n')
 }
