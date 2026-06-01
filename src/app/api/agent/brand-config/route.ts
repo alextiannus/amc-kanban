@@ -114,6 +114,50 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
+  const normalizedName = name.trim()
+
+  // Deduplicate by agent + brand name: if this agent already created/linked the same brand,
+  // return the existing one instead of creating a duplicate record.
+  const existingForAgent = await prisma.brandAgent.findFirst({
+    where: {
+      agentId: agent.id,
+      brand: {
+        name: {
+          equals: normalizedName,
+          mode: 'insensitive',
+        },
+      },
+    },
+    include: {
+      brand: {
+        select: {
+          id: true,
+          name: true,
+          location: true,
+          timezone: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  if (existingForAgent?.brand) {
+    if (!existingForAgent.active) {
+      await prisma.brandAgent.update({
+        where: { id: existingForAgent.id },
+        data: { active: true },
+      })
+    }
+
+    return NextResponse.json({
+      ok: true,
+      created: false,
+      deduplicated: true,
+      brand: existingForAgent.brand,
+      message: 'Brand already exists for this agent. Reusing existing brand.',
+    })
+  }
+
   // Find all human users linked to this agent via AgentPermission
   const permissions = await prisma.agentPermission.findMany({
     where: { agentId: agent.id },
@@ -143,7 +187,7 @@ export async function POST(request: Request) {
   const brand = await prisma.brand.create({
     data: {
       ownerId: primaryOwnerId,
-      name: name.trim(),
+      name: normalizedName,
       location: location?.trim() || null,
       timezone: timezone || 'Asia/Singapore',
     },
