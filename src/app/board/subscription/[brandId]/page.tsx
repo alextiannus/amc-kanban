@@ -7,6 +7,8 @@ import { buildLaunchInstruction } from '@/lib/agentInitPrompt'
 
 const AI_CREW_CREATION_DURATION_MS = 30_000
 
+type AgentCreationMode = 'create' | 'update'
+
 type Plan = {
   id: string
   name: string
@@ -125,6 +127,7 @@ export default function BrandSubscriptionPage() {
   const [agentCreationProgress, setAgentCreationProgress] = useState(0)
   const [agentCreationDone, setAgentCreationDone] = useState(false)
   const [agentCreationStartedAt, setAgentCreationStartedAt] = useState<number | null>(null)
+  const [agentCreationMode, setAgentCreationMode] = useState<AgentCreationMode>('create')
   const instructionCardRef = useRef<HTMLElement | null>(null)
 
   const scrollToInstructionCard = () => {
@@ -133,13 +136,18 @@ export default function BrandSubscriptionPage() {
     }, 120)
   }
 
-  const beginAgentCreationExperience = () => {
+  const beginAgentCreationExperience = (mode: AgentCreationMode) => {
     setActivationJustCompleted(true)
     setAgentCreationDone(false)
     setAgentCreationProgress(0)
     setAgentCreationStartedAt(Date.now())
+    setAgentCreationMode(mode)
     setShowAgentCreationModal(true)
-    setActivationNotice('订阅计划已激活。正在为你创建 AI 员工，请稍候...')
+    setActivationNotice(
+      mode === 'update'
+        ? '订阅计划已更新。正在同步你的 AI 员工使命，请稍候...'
+        : '订阅计划已激活。正在为你创建 AI 员工，请稍候...'
+    )
   }
 
   const success = searchParams?.get('success') === '1'
@@ -191,7 +199,7 @@ export default function BrandSubscriptionPage() {
           setData(freshJson)
           const currentPlanId = resolveCurrentPlanId(freshJson)
           if (currentPlanId) setPlanId(currentPlanId)
-          beginAgentCreationExperience()
+          beginAgentCreationExperience(currentPlanId && currentPlanId !== resolveCurrentPlanId(freshJson) ? 'update' : 'create')
         }
       } catch (e: unknown) {
         setError(getErrorMessage(e, 'Payment confirmation failed'))
@@ -213,12 +221,16 @@ export default function BrandSubscriptionPage() {
       if (progress >= 100) {
         window.clearInterval(timer)
         setAgentCreationDone(true)
-        setActivationNotice('AI 员工创建流程已完成。现在可以复制初始化指令并连接平台。')
+        setActivationNotice(
+          agentCreationMode === 'update'
+            ? 'AI 员工使命更新完成。现在可以复制初始化指令并继续连接平台。'
+            : 'AI 员工创建流程已完成。现在可以复制初始化指令并连接平台。'
+        )
       }
     }, 200)
 
     return () => window.clearInterval(timer)
-  }, [showAgentCreationModal, agentCreationStartedAt])
+  }, [showAgentCreationModal, agentCreationStartedAt, agentCreationMode])
 
   useEffect(() => {
     if (!agentCreationDone) return
@@ -301,7 +313,7 @@ export default function BrandSubscriptionPage() {
           setData((prev) => (prev ? { ...prev, latestSubscription: json.subscription } : prev))
           setPlanId(selectedPlan.id)
         }
-        beginAgentCreationExperience()
+        beginAgentCreationExperience(currentPlanId && currentPlanId !== selectedPlan.id ? 'update' : 'create')
       } else if (json.checkoutUrl) {
         window.location.href = json.checkoutUrl
       } else {
@@ -661,9 +673,13 @@ export default function BrandSubscriptionPage() {
         <div className="fixed inset-0 z-[70] bg-slate-950/65 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-xl rounded-2xl border border-slate-200/70 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white">正在创建你的 AI 员工</h3>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                {agentCreationMode === 'update' ? '正在更新你的 AI 员工使命' : '正在创建你的 AI 员工'}
+              </h3>
               <p className="text-sm text-slate-500 dark:text-slate-300 mt-1">
-                正在生成连接身份、初始化工作档案并准备接入环境。
+                {agentCreationMode === 'update'
+                  ? '正在同步新的订阅计划、工作边界与执行重点。'
+                  : '正在生成连接身份、初始化工作档案并准备接入环境。'}
               </p>
             </div>
 
@@ -681,16 +697,16 @@ export default function BrandSubscriptionPage() {
 
               <div className="space-y-2 text-sm">
                 <p className={`${agentCreationProgress >= 20 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {agentCreationProgress >= 20 ? '✓' : '•'} 分配 AI 员工连接身份（API Key）
+                  {agentCreationProgress >= 20 ? '✓' : '•'} {agentCreationMode === 'update' ? '同步新的套餐权限与目标范围' : '分配 AI 员工连接身份（API Key）'}
                 </p>
                 <p className={`${agentCreationProgress >= 50 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {agentCreationProgress >= 50 ? '✓' : '•'} 初始化协作档案与基础权限
+                  {agentCreationProgress >= 50 ? '✓' : '•'} {agentCreationMode === 'update' ? '重载协作档案与执行策略' : '初始化协作档案与基础权限'}
                 </p>
                 <p className={`${agentCreationProgress >= 80 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {agentCreationProgress >= 80 ? '✓' : '•'} 预热接入流程并准备初始化指令
+                  {agentCreationProgress >= 80 ? '✓' : '•'} {agentCreationMode === 'update' ? '刷新初始化指令与接入流程' : '预热接入流程并准备初始化指令'}
                 </p>
                 <p className={`${agentCreationProgress >= 100 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {agentCreationProgress >= 100 ? '✓' : '•'} 完成，可开始连接平台
+                  {agentCreationProgress >= 100 ? '✓' : '•'} {agentCreationMode === 'update' ? '完成，可按新使命继续执行' : '完成，可开始连接平台'}
                 </p>
               </div>
 
