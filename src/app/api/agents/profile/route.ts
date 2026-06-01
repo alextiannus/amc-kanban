@@ -5,6 +5,64 @@ import crypto from 'crypto'
 import fs from 'fs/promises'
 import path from 'path'
 
+function buildAgentProfileResponse(agent: {
+  id: string
+  nickname: string | null
+  introduction: string | null
+  workflow: string | null
+  themeColor: string | null
+  avatar: string | null
+  insights: string | null
+}) {
+  return {
+    success: true,
+    agent: {
+      id: agent.id,
+      agentId: agent.id,
+      nickname: agent.nickname,
+      introduction: agent.introduction,
+      workflow: agent.workflow,
+      themeColor: agent.themeColor,
+      avatar: agent.avatar,
+      insights: agent.insights,
+    },
+  }
+}
+
+export async function GET(request: Request) {
+  const apiKey = extractApiKey(request)
+  if (!apiKey) {
+    return NextResponse.json({ error: 'Unauthorized: Bearer token required' }, { status: 401 })
+  }
+
+  const authenticatedAgent = await getAgentFromApiKey(apiKey)
+  if (!authenticatedAgent) {
+    return NextResponse.json(
+      { error: 'Invalid API key. Please use a valid key generated from the AI Marketing Crew dashboard.' },
+      { status: 401 }
+    )
+  }
+
+  const agent = await prisma.user.findUnique({
+    where: { id: authenticatedAgent.id },
+    select: {
+      id: true,
+      nickname: true,
+      introduction: true,
+      workflow: true,
+      themeColor: true,
+      avatar: true,
+      insights: true,
+    },
+  })
+
+  if (!agent) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  return NextResponse.json(buildAgentProfileResponse(agent))
+}
+
 export async function POST(request: Request) {
   try {
     const apiKey = extractApiKey(request)
@@ -101,19 +159,15 @@ export async function POST(request: Request) {
       }
     })
 
-    return NextResponse.json({ 
-      success: true, 
-      agent: { 
-        id: updatedAgent.id, 
-        agentId: agentId, 
-        nickname: updatedAgent.nickname, 
-        introduction: updatedAgent.introduction, 
-        workflow: updatedAgent.workflow, 
-        themeColor: updatedAgent.themeColor, 
-        avatar: updatedAgent.avatar, 
-        insights: updatedAgent.insights
-      } 
-    })
+    return NextResponse.json(buildAgentProfileResponse({
+      id: updatedAgent.id,
+      nickname: updatedAgent.nickname,
+      introduction: updatedAgent.introduction,
+      workflow: updatedAgent.workflow,
+      themeColor: updatedAgent.themeColor,
+      avatar: updatedAgent.avatar,
+      insights: updatedAgent.insights,
+    }))
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
