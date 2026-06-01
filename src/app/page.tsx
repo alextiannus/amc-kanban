@@ -63,7 +63,7 @@ export default function Login() {
       })
       const data = await res.json()
       if (res.ok) {
-        router.push('/board')
+        router.push('/board/subscription')
         router.refresh()
       } else {
         setError(data.error || 'Registration failed')
