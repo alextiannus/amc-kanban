@@ -429,7 +429,7 @@ export default function BrandSubscriptionPage() {
                     <button
                       key={p.id}
                       onClick={() => setPlanId(p.id)}
-                      className={`group relative min-w-[360px] max-w-[360px] flex-1 overflow-hidden text-left rounded-2xl border p-0 shadow-sm transition-colors ${
+                      className={`group relative min-w-[380px] max-w-[380px] flex-1 overflow-hidden text-left rounded-2xl border p-0 shadow-sm transition-colors ${
                         isSelected
                           ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/20'
                           : isCurrentPlan
@@ -480,7 +480,7 @@ export default function BrandSubscriptionPage() {
                         </div>
 
                         <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
-                          {p.includes.slice(0, 4).map((item) => (
+                          {p.includes.map((item) => (
                             <li key={item} className="flex gap-2">
                               <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
                               <span>{item}</span>
