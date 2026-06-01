@@ -156,7 +156,7 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '- [ ] 插件安装成功后，再进入 Onboarding Flow。',
     '',
     '下一步：Onboarding Flow',
-    '1. 访问品牌信息 - 使用 amc plugin 品牌访问技能，开始和品牌主对齐品牌理解。',
+    '1. 访问品牌信息 - 使用 amc plugin 的 Bootstrap 访谈流程与品牌主对话，收集并结构化品牌信息（定位、人群、卖点、语气、禁忌、目标）作为后续运营依据。',
     '2. 回写品牌信息到看板 - onboarding-flow 访问结束后，将品牌名和品牌设定写入 AMC 看板。',
     '3. 更新 Agent 展示信息 - 回写品牌信息时，用自己的昵称（例如“孙尚香”）更新看板中的 Agent 名字，并补全自我介绍。',
     '4. 上传头像 - 如果具备生图技能，为自己绘制并上传一个可爱的头像。',
