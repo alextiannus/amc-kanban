@@ -28,7 +28,7 @@ type Addon = {
 }
 
 type SubscriptionPayload = {
-  brand: { id: string; name: string }
+  brand: { id: string; name: string } | null
   plans: Plan[]
   comparisonRows: { key: string; label: string; values: Record<string, string> }[]
   addons: Addon[]
@@ -84,7 +84,7 @@ type SubscriptionPayload = {
       id: string | null
       apiKey: string | null
     }
-  }
+  } | null
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -374,7 +374,7 @@ export default function BrandSubscriptionPage() {
           <section ref={instructionCardRef} className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 p-4 md:p-5 shadow-sm">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-200">
-                <CheckCircle2 size={16} /> {data.brand.name} · 当前订阅已生效：{data.latestSubscription?.planName || '套餐已生效'}
+                <CheckCircle2 size={16} /> {(data.brand?.name || '当前账号')} · 当前订阅已生效：{data.latestSubscription?.planName || '套餐已生效'}
               </div>
               <button
                 onClick={copyInstruction}

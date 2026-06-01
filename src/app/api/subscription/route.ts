@@ -83,8 +83,8 @@ function toPlanId(value: string | null | undefined): PlanId | null {
   return null
 }
 
-async function resolveOrCreateOwnerBrand(ownerId: string, email: string | null, nickname: string | null) {
-  const existing = await prisma.brand.findFirst({
+async function findOwnerBrand(ownerId: string) {
+  return prisma.brand.findFirst({
     where: {
       OR: [{ ownerId }, { owners: { some: { userId: ownerId } } }],
     },
@@ -108,6 +108,10 @@ async function resolveOrCreateOwnerBrand(ownerId: string, email: string | null, 
     },
     orderBy: { createdAt: 'asc' },
   })
+}
+
+async function resolveOrCreateOwnerBrand(ownerId: string, email: string | null, nickname: string | null) {
+  const existing = await findOwnerBrand(ownerId)
   if (existing) return existing
 
   const prefix = nickname?.trim() || email?.split('@')[0] || 'New'
@@ -189,17 +193,36 @@ export async function GET() {
     })
   }
   if (!brand) {
-    brand = await resolveOrCreateOwnerBrand(session.user.id, user?.email || null, user?.nickname || null)
+    brand = await findOwnerBrand(session.user.id)
   }
 
-  const [ownedBrands, profileMarkdown, brandAgent] = await Promise.all([
-    prisma.brand.findMany({
-      where: {
-        OR: [{ ownerId: session.user.id }, { owners: { some: { userId: session.user.id } } }],
-      },
-      select: { id: true, name: true, location: true },
-      orderBy: { name: 'asc' },
-    }),
+  const ownedBrands = await prisma.brand.findMany({
+    where: {
+      OR: [{ ownerId: session.user.id }, { owners: { some: { userId: session.user.id } } }],
+    },
+    select: { id: true, name: true, location: true },
+    orderBy: { name: 'asc' },
+  })
+
+  if (!brand) {
+    return NextResponse.json({
+      brand: null,
+      plans: SUBSCRIPTION_PLANS,
+      comparisonRows: PLAN_COMPARISON_ROWS,
+      addons: SUBSCRIPTION_ADDONS,
+      durations: ALLOWED_DURATIONS,
+      termsVersion: DEFAULT_SUBSCRIPTION_TERMS_VERSION,
+      termsTitle: SUBSCRIPTION_TERMS_TITLE,
+      termsNotice: SUBSCRIPTION_TERMS_NOTICE,
+      termsFullText: SUBSCRIPTION_TERMS_FULL_TEXT,
+      latestSubscription: latest,
+      paymentEnabled: Boolean(stripe),
+      instructionContext: null,
+      ownedBrands,
+    })
+  }
+
+  const [profileMarkdown, brandAgent] = await Promise.all([
     readBrandProfileMarkdown(brand.id).catch(() => null),
     prisma.brandAgent.findFirst({
       where: { brandId: brand.id, active: true },
@@ -294,6 +317,7 @@ export async function GET() {
     latestSubscription: latest,
     paymentEnabled: Boolean(stripe),
     instructionContext,
+    ownedBrands,
   })
 }
 
