@@ -11,6 +11,8 @@ AI Marketing Crew 是一个面向 Human-AI 协同的任务操作系统。系统�
 3. 通过每个 Agent 独立 API Key 实现机器身份可区分、可治理。
 4. 提供标准化接入规范，支持外部 AI 通过 API 快速接入。
 5. 明确“订阅归属 AI Agent，品牌信息后置补全”的商业流程，避免将品牌创建作为订阅前置条件。
+6. 品牌信息必须完整持久化保存，品牌 profile markdown 与配置文件需要长期存储，供 AI Agent 调用与维护。
+6. 品牌信息需要完整持久化保存，品牌 profile markdown 与配置文件必须作为 AI 调用上下文长期保留。
 
 ### 1.3 目标用户
 1. 管理员：维护用户体系、权限关系与系统初始化。
@@ -75,7 +77,14 @@ AI Marketing Crew 是一个面向 Human-AI 协同的任务操作系统。系统�
 2. 处理 `pending` 任务，补充输入并推进状态。
 3. 管理员可随时调整授权关系。
 
-### 4.4 订阅与初始化流程（品牌后置）
+### 4.4 品牌与 Agent 关系
+1. 品牌是 AI Agent 运营和维护的对象，不是订阅归属对象。
+2. 每个品牌都必须保留完整的结构化数据、profile markdown 与配置文件，供 AI Agent 调用。
+3. AI Agent 可以在不同品牌之间切换运营，不受订阅计划绑定到单一品牌的限制。
+4. 品牌资料变更必须可追踪、可回写、可重建。
+5. 品牌的完整数据、markdown 与配置文件，是 AI Agent 工作上下文的一部分，必须保留在系统中。
+
+### 4.5 订阅与初始化流程（Agent 归属）
 1. 订阅对象是 AI Agent 连接身份（Agent Token / API Key），不是品牌实体。
 2. 用户选择订阅计划时，允许品牌信息为空；系统先完成计划与 Agent 身份绑定。
 3. 标准入口 A（新用户订阅入口，推荐）：
@@ -92,7 +101,7 @@ AI Marketing Crew 是一个面向 Human-AI 协同的任务操作系统。系统�
   - 插件安装成功且 Bootstrap Mode 已激活；
   - 品牌访问与品牌信息回写看板已完成。
 
-### 4.5 套餐与 AI Crew 权益映射（Plan Entitlement Matrix）
+### 4.6 套餐与 AI Crew 权益映射（Plan Entitlement Matrix）
 为保证“订阅即能力”，每个订阅计划必须映射到 AI Crew 的标准化权益包，至少包含以下三类：
 1. 平台与内容运营能力范围。
 2. 探店活动额度（每月/每周期包含次数或等级）。
@@ -129,6 +138,7 @@ AI Marketing Crew 是一个面向 Human-AI 协同的任务操作系统。系统�
 关键字段：
 1. 身份与认证：`email`、`password`、`type`、`role`、`apiKey`。
 2. Agent 档案：`nickname`、`introduction`、`workflow`、`insights`、`themeColor`、`avatar`、`driveFolder`、`chatLink`。
+3. 说明：订阅计划与 Agent 身份绑定，品牌归属与品牌维护通过 Agent 对品牌的运营关系体现，不作为 User 主键归属。
 
 约束：
 1. `email` 唯一。

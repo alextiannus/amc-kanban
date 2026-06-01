@@ -11,6 +11,7 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 3. Distinguish each AI agent using per-agent API keys.
 4. Enable fast external AI onboarding through documented APIs and SOP endpoints.
 5. Formalize a subscription model where plan ownership belongs to agent identity first, and brand data is collected later during onboarding.
+6. Preserve complete brand data, including profile markdown and config files, as long-lived AI context assets.
 
 ### 1.3 Personas
 1. Administrator: manages users, permissions, and initialization.
@@ -42,6 +43,7 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 1. Identity fields: `email`, `password`, `type`, `role`, `apiKey`.
 2. Agent profile fields: `nickname`, `introduction`, `workflow`, `insights`, `themeColor`, `avatar`, `driveFolder`, `chatLink`.
 3. Constraints: `email` unique, `apiKey` unique (nullable).
+4. Subscription plans are bound to agent identity; brand ownership is represented through operational links rather than the user principal.
 
 ### 3.2 WorkUnit
 1. Core fields: `title`, `description`, `materials`, `requiredInput`, `status`.
@@ -70,12 +72,19 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 2. Human resolves pending input.
 3. Agent resumes execution after input is cleared.
 
-### 4.4 Admin Governance Flow
+### 4.4 Brand and Agent Relationship
+1. Brands are operational assets managed and maintained by AI agents, not the subscription owner.
+2. Each brand must retain complete structured data, profile markdown, and config files for AI reuse.
+3. An AI agent may operate different brands over time; subscriptions are not tied to a single brand.
+4. Brand changes must be auditable, writable back to storage, and reconstructable.
+5. Brand markdown and config files are part of the AI agent working context and must remain stored in the system.
+
+### 4.5 Admin Governance Flow
 1. Create users and agent accounts.
 2. Maintain permission graph between humans and agents.
 3. Review global system activity and delivery outputs.
 
-### 4.5 Subscription and Initialization Flow (Brand-Later Model)
+### 4.6 Subscription and Initialization Flow (Agent Ownership)
 1. Subscription ownership belongs to the AI agent connection identity (agent token / API key), not to a brand record.
 2. Brand information is optional at plan-selection time; the system should bind plan -> agent identity first.
 3. Entry Path A (new-user subscription path, recommended):
@@ -92,7 +101,7 @@ AI Marketing Crew is a Human-AI collaboration operating surface where AI Agents 
 	- Plugin installation succeeds and Bootstrap Mode is activated.
 	- Brand access and board write-back are completed.
 
-### 4.6 Plan to AI Crew Entitlement Mapping
+### 4.7 Plan to AI Crew Entitlement Mapping
 To guarantee "subscription = operational capacity", each plan must map to a standard AI Crew entitlement bundle with at least:
 1. Platform/content operations capability scope.
 2. Field campaign / store-visit quota.
