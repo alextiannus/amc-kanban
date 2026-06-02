@@ -366,10 +366,10 @@ export default function BrandSubscriptionPage() {
         <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:p-6 shadow-sm">
           <div className="space-y-3">
             <button
-              onClick={() => router.back()}
+              onClick={() => router.push('/board')}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
             >
-              <ArrowLeft size={14} /> 返回上一页
+              <ArrowLeft size={14} /> 返回首页，打开品牌主看板
             </button>
             <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">AI Marketing Crew (AMC) Plan</h1>
             <p className="max-w-3xl text-sm md:text-base text-slate-600 dark:text-slate-300 leading-7">

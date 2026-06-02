@@ -130,6 +130,10 @@ export async function GET() {
   })
 
   const latest = latestActive || latestAny
+  const latestPlanId = toPlanId(latest?.planId)
+  const sessionUserTimezoneRaw = (session.user as { timezone?: unknown }).timezone
+  const sessionUserTimezone =
+    typeof sessionUserTimezoneRaw === 'string' && sessionUserTimezoneRaw.trim() ? sessionUserTimezoneRaw.trim() : null
 
   // Subscription belongs to the AI agent/user identity; do not derive active brand
   // from latest subscription.brandId. Brand context is resolved independently.
@@ -143,7 +147,53 @@ export async function GET() {
     orderBy: { name: 'asc' },
   })
 
+  let resolvedAgentId: string | null = null
+  let resolvedAgentKey: string | null = null
+
+  if (latest?.status === 'ACTIVE') {
+    const ensured = await ensureBrandAgentKeyAfterSubscription({
+      ownerId: session.user.id,
+    })
+    resolvedAgentId = ensured.agentId
+    resolvedAgentKey = ensured.apiKey
+  }
+
   if (!brand) {
+    const instructionContext = resolvedAgentId
+      ? {
+          subscription: {
+            planId: latestPlanId,
+            planName: latest?.planName || null,
+            platforms: latestPlanId
+              ? PLAN_COMPARISON_ROWS.find((row) => row.key === 'channels')?.values?.[latestPlanId] || null
+              : null,
+          },
+          user: {
+            id: user?.id || session.user.id,
+            email: user?.email || session.user.email || null,
+            role: user?.role || session.user.type,
+            nickname: user?.nickname || null,
+            timezone: sessionUserTimezone,
+          },
+          brand: {
+            id: '',
+            name: '',
+            location: null,
+            timezone: null,
+            website: null,
+            phone: null,
+            address: null,
+          },
+          stores: [],
+          socialAccounts: [],
+          ownedBrands: ownedBrands.map((b) => ({ id: b.id, name: b.name, location: b.location })),
+          agent: {
+            id: resolvedAgentId,
+            apiKey: resolvedAgentKey,
+          },
+        }
+      : null
+
     return NextResponse.json({
       brand: null,
       plans: SUBSCRIPTION_PLANS,
@@ -156,7 +206,7 @@ export async function GET() {
       termsFullText: SUBSCRIPTION_TERMS_FULL_TEXT,
       latestSubscription: latest,
       paymentEnabled: Boolean(stripe),
-      instructionContext: null,
+      instructionContext,
       ownedBrands,
     })
   }
@@ -177,13 +227,8 @@ export async function GET() {
     }),
   ])
 
-  const latestPlanId = toPlanId(latest?.planId)
-  const sessionUserTimezoneRaw = (session.user as { timezone?: unknown }).timezone
-  const sessionUserTimezone =
-    typeof sessionUserTimezoneRaw === 'string' && sessionUserTimezoneRaw.trim() ? sessionUserTimezoneRaw.trim() : null
-
-  let resolvedAgentId = brandAgent?.agent.id || null
-  let resolvedAgentKey = latest?.status === 'ACTIVE' ? brandAgent?.agent.apiKey || null : null
+  resolvedAgentId = brandAgent?.agent.id || resolvedAgentId
+  resolvedAgentKey = latest?.status === 'ACTIVE' ? brandAgent?.agent.apiKey || resolvedAgentKey : null
 
   if (latest?.status === 'ACTIVE' && !resolvedAgentKey) {
     const ensured = await ensureBrandAgentKeyAfterSubscription({
