@@ -138,6 +138,7 @@ model Brand {
   location       String?
   timezone       String   @default("America/New_York")
   autoPilot      Boolean  @default(true)
+  status         String   @default("ACTIVE") // ACTIVE | PAUSED | ARCHIVED
 
   // Brand profile (Agent can populate these)
   description    String?  // Brand tagline / about text

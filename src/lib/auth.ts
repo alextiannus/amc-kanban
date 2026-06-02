@@ -79,7 +79,7 @@ export async function getAgentFromApiKey(apiKey: string) {
     // 1. Try finding it as plaintext (new format)
     let agent = await prisma.user.findUnique({
       where: { apiKey },
-      select: { id: true, email: true, type: true }
+      select: { id: true, email: true, type: true, role: true }
     })
 
     // 2. Fallback to hashed format (legacy support)
@@ -87,7 +87,7 @@ export async function getAgentFromApiKey(apiKey: string) {
       const hashedApiKey = crypto.createHash('sha256').update(apiKey).digest('hex')
       agent = await prisma.user.findUnique({
         where: { apiKey: hashedApiKey },
-        select: { id: true, email: true, type: true }
+        select: { id: true, email: true, type: true, role: true }
       })
     }
 
@@ -98,7 +98,7 @@ export async function getAgentFromApiKey(apiKey: string) {
         if (payload && payload.agentId) {
           agent = await prisma.user.findUnique({
             where: { id: payload.agentId },
-            select: { id: true, email: true, type: true }
+            select: { id: true, email: true, type: true, role: true }
           })
         }
       } catch {
