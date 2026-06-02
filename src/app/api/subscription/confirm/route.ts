@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   const keyResult = activated.alreadyActive
     ? null
     : await ensureBrandAgentKeyAfterSubscription({
-        brandId: sub.brandId,
+        brandId: sub.brandId || null,
         ownerId: session.user.id,
       })
 

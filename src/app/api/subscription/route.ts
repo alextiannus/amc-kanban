@@ -280,19 +280,9 @@ export async function POST(request: Request) {
   const body = await request.json()
   const preferredTimezone = normalizeTimezone(body.timezone)
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { email: true, nickname: true },
-  })
   let brand = await findOwnerBrand(session.user.id)
-  if (!brand) {
-    return NextResponse.json(
-      { error: 'No brand is linked to this account. Create or link a brand first, then subscribe.' },
-      { status: 400 }
-    )
-  }
 
-  if (preferredTimezone && brand.timezone === 'America/New_York' && preferredTimezone !== brand.timezone) {
+  if (brand && preferredTimezone && brand.timezone === 'America/New_York' && preferredTimezone !== brand.timezone) {
     brand = await prisma.brand.update({
       where: { id: brand.id },
       data: { timezone: preferredTimezone },
@@ -347,7 +337,7 @@ export async function POST(request: Request) {
 
   const pending = await prisma.brandSubscription.create({
     data: {
-      brandId: brand.id,
+      ...(brand?.id ? { brandId: brand.id } : {}),
       planId: selectedPlan.id,
       planName: selectedPlan.name,
       durationMonths: summary.durationMonths,
@@ -375,7 +365,7 @@ export async function POST(request: Request) {
       where: { id: pending.id },
     })
     const keyResult = await ensureBrandAgentKeyAfterSubscription({
-      brandId: brand.id,
+      brandId: brand?.id || null,
       ownerId: session.user.id,
     })
     return NextResponse.json({
@@ -426,7 +416,7 @@ export async function POST(request: Request) {
     cancel_url: cancelUrl,
     line_items: lineItems,
     metadata: {
-      brandId: brand.id,
+      ...(brand?.id ? { brandId: brand.id } : {}),
       subscriptionId: pending.id,
       planId,
       paymentMode,

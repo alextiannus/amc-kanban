@@ -31,7 +31,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   if (existing.status !== 'ACTIVE' && updated.status === 'ACTIVE') {
     let ownerId = updated.createdById || null
-    if (!ownerId) {
+    if (!ownerId && updated.brandId) {
       const [ownerLink, legacyBrand] = await Promise.all([
         prisma.brandOwner.findFirst({ where: { brandId: updated.brandId }, select: { userId: true }, orderBy: { createdAt: 'asc' } }),
         prisma.brand.findUnique({ where: { id: updated.brandId }, select: { ownerId: true } }),
@@ -41,7 +41,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
     if (ownerId) {
       await ensureBrandAgentKeyAfterSubscription({
-        brandId: updated.brandId,
+        brandId: updated.brandId || null,
         ownerId,
       })
     }

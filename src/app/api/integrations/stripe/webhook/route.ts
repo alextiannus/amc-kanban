@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         const activated = await activateSubscriptionByPaymentSession(session.id)
         if (activated.ok && !activated.alreadyActive && activated.subscription.createdById) {
           await ensureBrandAgentKeyAfterSubscription({
-            brandId: activated.subscription.brandId,
+            brandId: activated.subscription.brandId || null,
             ownerId: activated.subscription.createdById,
           })
         }

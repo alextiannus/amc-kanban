@@ -187,8 +187,8 @@ model Brand {
 
 model BrandSubscription {
   id                 String   @id @default(cuid())
-  brandId            String
-  brand              Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brandId            String?
+  brand              Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
   planId             String
   planName           String
   durationMonths     Int

@@ -38,26 +38,28 @@ export async function activateSubscriptionByPaymentSession(paymentSessionId: str
 }
 
 type EnsureBrandAgentKeyInput = {
-  brandId: string
+  brandId?: string | null
   ownerId: string
 }
 
 export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAgentKeyInput) {
   const { brandId, ownerId } = input
 
-  const existingBrandLink = await prisma.brandAgent.findFirst({
-    where: { brandId, active: true },
-    include: {
-      agent: {
-        select: {
-          id: true,
-          email: true,
-          apiKey: true,
+  const existingBrandLink = brandId
+    ? await prisma.brandAgent.findFirst({
+        where: { brandId, active: true },
+        include: {
+          agent: {
+            select: {
+              id: true,
+              email: true,
+              apiKey: true,
+            },
+          },
         },
-      },
-    },
-    orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
-  })
+        orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      })
+    : null
 
   // Reuse the owner's existing AI employee across brands whenever possible.
   // Subscription belongs to the AI employee identity, not a single brand.
@@ -80,7 +82,7 @@ export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAge
   let rawExistingApiKey = existingBrandLink?.agent.apiKey || ownerLinkedAgent?.apiKey || null
 
   if (!agentId) {
-    const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { name: true } })
+    const brand = brandId ? await prisma.brand.findUnique({ where: { id: brandId }, select: { name: true } }) : null
     const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
     const email = `sub-${ownerId.slice(0, 12)}-${suffix}@agent.amc.local`
 
@@ -115,23 +117,25 @@ export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAge
   })
 
   // Ensure the reused/created AI employee can operate this brand as well.
-  await prisma.brandAgent.upsert({
-    where: {
-      brandId_agentId: {
+  if (brandId) {
+    await prisma.brandAgent.upsert({
+      where: {
+        brandId_agentId: {
+          brandId,
+          agentId,
+        },
+      },
+      create: {
         brandId,
         agentId,
+        role: 'lead',
+        active: true,
       },
-    },
-    create: {
-      brandId,
-      agentId,
-      role: 'lead',
-      active: true,
-    },
-    update: {
-      active: true,
-    },
-  })
+      update: {
+        active: true,
+      },
+    })
+  }
 
   const resolvedApiKey =
     rawExistingApiKey && !rawExistingApiKey.startsWith('placeholder-') ? rawExistingApiKey : null
