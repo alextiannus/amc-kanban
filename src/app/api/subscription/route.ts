@@ -187,7 +187,6 @@ export async function GET() {
 
   if (latest?.status === 'ACTIVE' && !resolvedAgentKey) {
     const ensured = await ensureBrandAgentKeyAfterSubscription({
-      brandId: brand.id,
       ownerId: session.user.id,
     })
     resolvedAgentId = ensured.agentId
