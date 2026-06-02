@@ -38,28 +38,11 @@ export async function activateSubscriptionByPaymentSession(paymentSessionId: str
 }
 
 type EnsureBrandAgentKeyInput = {
-  brandId?: string | null
   ownerId: string
 }
 
 export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAgentKeyInput) {
-  const { brandId, ownerId } = input
-
-  const existingBrandLink = brandId
-    ? await prisma.brandAgent.findFirst({
-        where: { brandId, active: true },
-        include: {
-          agent: {
-            select: {
-              id: true,
-              email: true,
-              apiKey: true,
-            },
-          },
-        },
-        orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
-      })
-    : null
+  const { ownerId } = input
 
   // Reuse the owner's existing AI employee across brands whenever possible.
   // Subscription belongs to the AI employee identity, not a single brand.
@@ -78,11 +61,10 @@ export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAge
     },
   })
 
-  let agentId = existingBrandLink?.agent.id || ownerLinkedAgent?.id
-  let rawExistingApiKey = existingBrandLink?.agent.apiKey || ownerLinkedAgent?.apiKey || null
+  let agentId = ownerLinkedAgent?.id
+  let rawExistingApiKey = ownerLinkedAgent?.apiKey || null
 
   if (!agentId) {
-    const brand = brandId ? await prisma.brand.findUnique({ where: { id: brandId }, select: { name: true } }) : null
     const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
     const email = `sub-${ownerId.slice(0, 12)}-${suffix}@agent.amc.local`
 
@@ -92,7 +74,7 @@ export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAge
         password: crypto.randomBytes(16).toString('hex'),
         type: 'AI_AGENT',
         role: 'USER',
-        nickname: `${brand?.name || 'Brand'} Subscription Agent`,
+        nickname: 'Subscription Agent',
         apiKey: `placeholder-${crypto.randomUUID()}`,
       },
       select: { id: true, apiKey: true },
@@ -115,27 +97,6 @@ export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAge
     },
     update: {},
   })
-
-  // Ensure the reused/created AI employee can operate this brand as well.
-  if (brandId) {
-    await prisma.brandAgent.upsert({
-      where: {
-        brandId_agentId: {
-          brandId,
-          agentId,
-        },
-      },
-      create: {
-        brandId,
-        agentId,
-        role: 'lead',
-        active: true,
-      },
-      update: {
-        active: true,
-      },
-    })
-  }
 
   const resolvedApiKey =
     rawExistingApiKey && !rawExistingApiKey.startsWith('placeholder-') ? rawExistingApiKey : null

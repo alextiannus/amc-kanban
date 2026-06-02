@@ -175,7 +175,6 @@ model Brand {
   actionItems ActionItem[]
   conversions ConversionEvent[]
   brandAgents BrandAgent[]
-  subscriptions BrandSubscription[]
   gameConfig  GameConfig?
   gameSessions GameSession[]
 
@@ -187,8 +186,6 @@ model Brand {
 
 model BrandSubscription {
   id                 String   @id @default(cuid())
-  brandId            String?
-  brand              Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
   planId             String
   planName           String
   durationMonths     Int
@@ -213,7 +210,7 @@ model BrandSubscription {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  @@index([brandId, status])
+  @@index([status])
   @@index([createdById])
 }
 

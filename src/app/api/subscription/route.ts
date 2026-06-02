@@ -83,18 +83,6 @@ function toPlanId(value: string | null | undefined): PlanId | null {
   return null
 }
 
-function normalizeTimezone(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const timezone = value.trim()
-  if (!timezone) return null
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: timezone })
-    return timezone
-  } catch {
-    return null
-  }
-}
-
 async function findOwnerBrand(ownerId: string) {
   return prisma.brand.findFirst({
     where: {
@@ -278,34 +266,6 @@ export async function POST(request: Request) {
   if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json()
-  const preferredTimezone = normalizeTimezone(body.timezone)
-
-  let brand = await findOwnerBrand(session.user.id)
-
-  if (brand && preferredTimezone && brand.timezone === 'America/New_York' && preferredTimezone !== brand.timezone) {
-    brand = await prisma.brand.update({
-      where: { id: brand.id },
-      data: { timezone: preferredTimezone },
-      select: {
-        id: true,
-        name: true,
-        location: true,
-        timezone: true,
-        website: true,
-        phone: true,
-        address: true,
-        accounts: {
-          select: {
-            platformId: true,
-            handle: true,
-            displayName: true,
-            profileUrl: true,
-          },
-          orderBy: [{ platformId: 'asc' }, { handle: 'asc' }],
-        },
-      },
-    })
-  }
 
   const planId = String(body.planId ?? '')
   const durationMonths = Number(body.durationMonths)
@@ -337,7 +297,6 @@ export async function POST(request: Request) {
 
   const pending = await prisma.brandSubscription.create({
     data: {
-      ...(brand?.id ? { brandId: brand.id } : {}),
       planId: selectedPlan.id,
       planName: selectedPlan.name,
       durationMonths: summary.durationMonths,
@@ -365,7 +324,6 @@ export async function POST(request: Request) {
       where: { id: pending.id },
     })
     const keyResult = await ensureBrandAgentKeyAfterSubscription({
-      brandId: brand?.id || null,
       ownerId: session.user.id,
     })
     return NextResponse.json({
@@ -416,7 +374,6 @@ export async function POST(request: Request) {
     cancel_url: cancelUrl,
     line_items: lineItems,
     metadata: {
-      ...(brand?.id ? { brandId: brand.id } : {}),
       subscriptionId: pending.id,
       planId,
       paymentMode,
