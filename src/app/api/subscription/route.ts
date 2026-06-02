@@ -122,75 +122,6 @@ async function findOwnerBrand(ownerId: string) {
   })
 }
 
-async function resolveOrCreateOwnerBrand(
-  ownerId: string,
-  email: string | null,
-  nickname: string | null,
-  preferredTimezone: string | null
-) {
-  const existing = await findOwnerBrand(ownerId)
-  if (existing) {
-    if (preferredTimezone && existing.timezone === 'America/New_York' && preferredTimezone !== existing.timezone) {
-      return prisma.brand.update({
-        where: { id: existing.id },
-        data: { timezone: preferredTimezone },
-        select: {
-          id: true,
-          name: true,
-          location: true,
-          timezone: true,
-          website: true,
-          phone: true,
-          address: true,
-          accounts: {
-            select: {
-              platformId: true,
-              handle: true,
-              displayName: true,
-              profileUrl: true,
-            },
-            orderBy: [{ platformId: 'asc' }, { handle: 'asc' }],
-          },
-        },
-      })
-    }
-    return existing
-  }
-
-  const prefix = nickname?.trim() || email?.split('@')[0] || 'New'
-  const created = await prisma.brand.create({
-    data: {
-      ownerId,
-      name: `${prefix} Brand`,
-      ...(preferredTimezone ? { timezone: preferredTimezone } : {}),
-      owners: {
-        create: {
-          userId: ownerId,
-        },
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      location: true,
-      timezone: true,
-      website: true,
-      phone: true,
-      address: true,
-      accounts: {
-        select: {
-          platformId: true,
-          handle: true,
-          displayName: true,
-          profileUrl: true,
-        },
-        orderBy: [{ platformId: 'asc' }, { handle: 'asc' }],
-      },
-    },
-  })
-  return created
-}
-
 export async function GET() {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -212,33 +143,9 @@ export async function GET() {
 
   const latest = latestActive || latestAny
 
-  let brand = null as Awaited<ReturnType<typeof resolveOrCreateOwnerBrand>> | null
-  if (latest?.brandId) {
-    brand = await prisma.brand.findUnique({
-      where: { id: latest.brandId },
-      select: {
-        id: true,
-        name: true,
-        location: true,
-        timezone: true,
-        website: true,
-        phone: true,
-        address: true,
-        accounts: {
-          select: {
-            platformId: true,
-            handle: true,
-            displayName: true,
-            profileUrl: true,
-          },
-          orderBy: [{ platformId: 'asc' }, { handle: 'asc' }],
-        },
-      },
-    })
-  }
-  if (!brand) {
-    brand = await findOwnerBrand(session.user.id)
-  }
+  // Subscription belongs to the AI agent/user identity; do not derive active brand
+  // from latest subscription.brandId. Brand context is resolved independently.
+  const brand = await findOwnerBrand(session.user.id)
 
   const ownedBrands = await prisma.brand.findMany({
     where: {
@@ -377,12 +284,38 @@ export async function POST(request: Request) {
     where: { id: session.user.id },
     select: { email: true, nickname: true },
   })
-  const brand = await resolveOrCreateOwnerBrand(
-    session.user.id,
-    user?.email || null,
-    user?.nickname || null,
-    preferredTimezone
-  )
+  let brand = await findOwnerBrand(session.user.id)
+  if (!brand) {
+    return NextResponse.json(
+      { error: 'No brand is linked to this account. Create or link a brand first, then subscribe.' },
+      { status: 400 }
+    )
+  }
+
+  if (preferredTimezone && brand.timezone === 'America/New_York' && preferredTimezone !== brand.timezone) {
+    brand = await prisma.brand.update({
+      where: { id: brand.id },
+      data: { timezone: preferredTimezone },
+      select: {
+        id: true,
+        name: true,
+        location: true,
+        timezone: true,
+        website: true,
+        phone: true,
+        address: true,
+        accounts: {
+          select: {
+            platformId: true,
+            handle: true,
+            displayName: true,
+            profileUrl: true,
+          },
+          orderBy: [{ platformId: 'asc' }, { handle: 'asc' }],
+        },
+      },
+    })
+  }
 
   const planId = String(body.planId ?? '')
   const durationMonths = Number(body.durationMonths)
