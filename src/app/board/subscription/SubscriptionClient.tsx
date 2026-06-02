@@ -93,6 +93,18 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
+function isValidCheckoutSessionId(value: string): boolean {
+  if (!value) return false
+  if (value.includes('{') || value.includes('}')) return false
+  return /^cs_[A-Za-z0-9_]+$/.test(value)
+}
+
+function isValidSubscriptionId(value: string): boolean {
+  if (!value) return false
+  if (value.includes('{') || value.includes('}')) return false
+  return /^[A-Za-z0-9_-]{8,}$/.test(value)
+}
+
 function resolveCurrentPlanId(payload: SubscriptionPayload | null): string | null {
   if (!payload) return null
   const fromContext = payload.instructionContext?.subscription?.planId
@@ -180,6 +192,13 @@ export default function BrandSubscriptionPage() {
   useEffect(() => {
     const confirmPayment = async () => {
       if (!success || !checkoutSessionId || !subscriptionId) return
+
+      if (!isValidCheckoutSessionId(checkoutSessionId) || !isValidSubscriptionId(subscriptionId)) {
+        setError('支付回调参数无效，请返回订阅页重新发起支付。')
+        router.replace('/board/subscription')
+        return
+      }
+
       setConfirming(true)
       setError(null)
       try {
@@ -206,7 +225,7 @@ export default function BrandSubscriptionPage() {
       }
     }
     confirmPayment()
-  }, [success, checkoutSessionId, subscriptionId])
+  }, [success, checkoutSessionId, subscriptionId, router])
 
   useEffect(() => {
     if (!showAgentCreationModal || !agentCreationStartedAt) return
