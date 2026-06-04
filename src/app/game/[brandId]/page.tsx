@@ -189,7 +189,7 @@ export default function GameH5Page() {
       uploadPhotos: '📷 店内环境/菜品美图分享',
       uploadPhotosSub: '成功上传 3 张店内照片即可获得 5 个积分',
       submitReview: '⭐ 社媒平台发表好评',
-      submitReviewSub: '在 Google Maps/小红书/Instagram 发布好评或标记并上传截图获得 5 个积分',
+      submitReviewSub: '在 Google Maps/小红书/Instagram 发布好评或标记并上传凭证图片获得 5 个积分',
       photoSlot: '照片',
       copyright: '我同意数据使用协议：商家有权下载和使用本次发布所用的图片',
       submitTask: '提交任务',
@@ -199,7 +199,7 @@ export default function GameH5Page() {
       instagram: 'Instagram 直达',
       copyText: '一键复制好评文案',
       copied: '文案已复制到剪贴板！',
-      uploadScreenshot: '上传好评截图',
+      uploadScreenshot: '上传任务凭证图片',
       clerkTitle: '等待店员人工确认',
       clerkDesc: '请向收银台店员出示您的评论页面，并请店员输入 6 位密码确认后发放积分。',
       inputPin: '输入店员授权密码',
@@ -214,10 +214,10 @@ export default function GameH5Page() {
       unclaimedTitle: '🎁 您有一个未领取的奖品！',
       unclaimedClaim: '立即查看',
       combinedTask: '⭐ 发布好评并上传店内美图',
-      combinedTaskSub: '在 Google Maps/小红书/Instagram 发表好评或标记，上传截图及店内美图即可获得 5 个积分',
-      screenshotFirstHint: '（提示：第 1 张请上传好评截图，其余为店内美图）',
+      combinedTaskSub: '在 Google Maps/小红书/Instagram 发表好评或标记，上传凭证图片及店内美图即可获得 5 个积分',
+      screenshotFirstHint: '（提示：请上传可核验任务完成的凭证图片）',
       addMore: '添加照片',
-      uploadPlaceholder: '上传截图与店内美图 (可多选)',
+      uploadPlaceholder: '上传任务凭证与店内美图 (可多选)',
     },
     en: {
       points: 'Points Balance',
@@ -227,7 +227,7 @@ export default function GameH5Page() {
       uploadPhotos: '📷 Share Store & Food Photos',
       uploadPhotosSub: 'Upload 3 store photos to earn 5 points',
       submitReview: '⭐ Leave a Social Review',
-      submitReviewSub: 'Post on Google Maps/Xiaohongshu/Instagram and upload screenshot to get 5 points',
+      submitReviewSub: 'Post on Google Maps/Xiaohongshu/Instagram and upload proof images to get 5 points',
       photoSlot: 'Photo',
       copyright: 'I agree to the Data Use Agreement: The merchant has the right to download and use the photos/screenshots uploaded for this post.',
       submitTask: 'Submit Task',
@@ -237,7 +237,7 @@ export default function GameH5Page() {
       instagram: 'Direct Instagram',
       copyText: 'Copy Review Text',
       copied: 'Copied to clipboard!',
-      uploadScreenshot: 'Upload Screenshot',
+      uploadScreenshot: 'Upload Proof Images',
       clerkTitle: 'Manual Confirmation Required',
       clerkDesc: 'Please show your review screen to the clerk and ask them to enter the 6-digit PIN to grant points.',
       inputPin: 'Enter Staff Code',
@@ -252,10 +252,10 @@ export default function GameH5Page() {
       unclaimedTitle: '🎁 You have an unclaimed prize!',
       unclaimedClaim: 'Claim Now',
       combinedTask: '⭐ Post Review & Share Photos',
-      combinedTaskSub: 'Post on Google Maps/Xiaohongshu/Instagram, upload screenshot & store photos to earn 5 points',
-      screenshotFirstHint: '(Note: 1st image must be the review screenshot)',
+      combinedTaskSub: 'Post on Google Maps/Xiaohongshu/Instagram, upload proof images & store photos to earn 5 points',
+      screenshotFirstHint: '(Note: upload images that can verify task completion)',
       addMore: 'Add Photo',
-      uploadPlaceholder: 'Upload screenshot & store photos (multi-select)',
+      uploadPlaceholder: 'Upload proof images & store photos (multi-select)',
     }
   }[lang]
 
@@ -760,9 +760,9 @@ export default function GameH5Page() {
     
     const platformsText = platforms.join('/')
     if (lang === 'zh') {
-      return `在 ${platformsText} 发布好评或标记并上传截图获得 5 个积分`
+      return `在 ${platformsText} 发布好评或标记并上传凭证图片获得 5 个积分`
     } else {
-      return `Post on ${platformsText} and upload screenshot to get 5 points`
+      return `Post on ${platformsText} and upload proof images to get 5 points`
     }
   }
 
