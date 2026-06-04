@@ -169,7 +169,7 @@ export default function GameH5Page() {
     }, 2500)
   }
 
-  // AI & Manual Verification Modals
+  // Manual verification modal
   const [verifyingTaskId, setVerifyingTaskId] = useState<string | null>(null)
   const [verificationError, setVerificationError] = useState<string | null>(null)
   const [showPinModal, setShowPinModal] = useState<{ submissionId: string } | null>(null)
@@ -193,15 +193,15 @@ export default function GameH5Page() {
       photoSlot: '照片',
       copyright: '我同意数据使用协议：商家有权下载和使用本次发布所用的图片',
       submitTask: '提交任务',
-      submitting: '正在提交并进行 AI 审核...',
+      submitting: '正在提交，等待店员人工确认...',
       googleMaps: 'Google Maps 直达',
       xiaohongshu: '小红书直达',
       instagram: 'Instagram 直达',
       copyText: '一键复制好评文案',
       copied: '文案已复制到剪贴板！',
       uploadScreenshot: '上传好评截图',
-      clerkTitle: 'AI 自动审核未通过',
-      clerkDesc: '系统无法自动核实。请向收银台店员出示您的评论页面，并请店员输入 6 位密码解锁积分。',
+      clerkTitle: '等待店员人工确认',
+      clerkDesc: '请向收银台店员出示您的评论页面，并请店员输入 6 位密码确认后发放积分。',
       inputPin: '输入店员授权密码',
       submitPin: '确认授权',
       invalidPin: '密码错误，请重新输入',
@@ -231,15 +231,15 @@ export default function GameH5Page() {
       photoSlot: 'Photo',
       copyright: 'I agree to the Data Use Agreement: The merchant has the right to download and use the photos/screenshots uploaded for this post.',
       submitTask: 'Submit Task',
-      submitting: 'Submitting and verifying with AI...',
+      submitting: 'Submitting and waiting for manual staff confirmation...',
       googleMaps: 'Direct Google Maps',
       xiaohongshu: 'Direct Xiaohongshu',
       instagram: 'Direct Instagram',
       copyText: 'Copy Review Text',
       copied: 'Copied to clipboard!',
       uploadScreenshot: 'Upload Screenshot',
-      clerkTitle: 'AI Verification Failed',
-      clerkDesc: 'System could not verify automatically. Please show your review screen to the clerk and ask them to input the 6-digit PIN to unlock points.',
+      clerkTitle: 'Manual Confirmation Required',
+      clerkDesc: 'Please show your review screen to the clerk and ask them to enter the 6-digit PIN to grant points.',
       inputPin: 'Enter Staff Code',
       submitPin: 'Approve',
       invalidPin: 'Incorrect PIN, please try again.',
@@ -431,7 +431,7 @@ export default function GameH5Page() {
         setFilePreviews([])
         alert(lang === 'zh' ? '任务提交成功！获得 5 积分！' : 'Task submitted successfully! Earned 5 points!')
       } else {
-        // AI verification failed, trigger manual Clerk override Modal
+        // Directly enter manual clerk confirmation flow.
         setShowPinModal({ submissionId: data.submissionId })
       }
     } catch (err: any) {

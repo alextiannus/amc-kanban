@@ -10,72 +10,6 @@ function computeMD5(buffer: Buffer): string {
   return crypto.createHash('md5').update(buffer).digest('hex')
 }
 
-// Native fetch implementation of Gemini Vision API with zero external dependencies
-async function runGeminiVisionAnalysis(
-  imageBuffer: Buffer,
-  mimeType: string,
-  brandName: string
-): Promise<{ approved: boolean; reason: string }> {
-  const apiKey = process.env.GEMINI_API_KEY
-  if (!apiKey) {
-    console.log('[Gemini Vision] No GEMINI_API_KEY set. Simulating AI review.')
-    // Simulating approval unless filename or content triggers manual review
-    return { approved: true, reason: 'AI Simulation: Review looks valid.' }
-  }
-
-  try {
-    const payload = {
-      contents: [
-        {
-          parts: [
-            {
-              text: `Analyze this screenshot. Determine if it is a valid review for the brand "${brandName}". Check if: 1. It is a review on a social/map platform. 2. The rating is positive (4 or 5 stars). 3. The review date is recent (e.g., "just now", "1 day ago"). Respond with a JSON object ONLY: { "approved": boolean, "platform": "GOOGLE"|"YELP"|"INSTAGRAM"|"OTHER", "rating": number, "reason": "why approved or rejected" }. Do not add markdown code blocks.`
-            },
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: imageBuffer.toString('base64'),
-              },
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
-    }
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      }
-    )
-
-    if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.statusText}`)
-    }
-
-    const json = await response.json()
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text
-    const result = JSON.parse(text)
-    return {
-      approved: !!result.approved,
-      reason: result.reason || 'AI Analysis complete.',
-    }
-  } catch (e: any) {
-    console.error('[Gemini Vision Error]', e)
-    return {
-      approved: false,
-      reason: `AI Verification failed: ${e.message}. Clerk override needed.`,
-    }
-  }
-}
-
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
@@ -112,7 +46,6 @@ export async function POST(request: Request) {
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
       select: {
-        name: true,
         larkAppId: true,
         larkAppSecret: true,
         larkDriveFolderId: true,
@@ -204,11 +137,9 @@ export async function POST(request: Request) {
       isApproved = true
       aiReason = 'Photos uploaded successfully.'
     } else if (taskType === 'REVIEW_SUBMIT') {
-      // Run Gemini Vision on the review screenshot (fileData[0])
-      const reviewImage = fileData[0]
-      const aiResult = await runGeminiVisionAnalysis(reviewImage.buffer, reviewImage.type, brand.name)
-      isApproved = aiResult.approved
-      aiReason = aiResult.reason
+      // Review submissions now always enter manual confirmation flow.
+      isApproved = false
+      aiReason = 'Pending manual clerk confirmation.'
     }
 
     // 7. Save task submission in database
