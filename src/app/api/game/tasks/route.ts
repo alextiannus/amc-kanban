@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (files.length === 0) {
+    if (taskType !== 'REVIEW_SUBMIT' && files.length === 0) {
       return NextResponse.json({ error: 'No files uploaded' }, { status: 400 })
     }
 

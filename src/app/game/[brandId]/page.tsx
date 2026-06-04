@@ -393,7 +393,6 @@ export default function GameH5Page() {
 
   // 5. Submit Unified/Merged Task
   const submitTask = async () => {
-    if (uploadedFiles.length === 0) return
     if (!copyrightAgreed) return
 
     setIsSubmittingTask(true)
@@ -411,7 +410,7 @@ export default function GameH5Page() {
         formData.append('reviewPlatform', reviewPlatform)
       }
 
-      // Compress and append each photo
+      // Optional: append files if user selected any (legacy-compatible)
       for (let i = 0; i < uploadedFiles.length; i++) {
         const compressedBlob = await compressImage(uploadedFiles[i])
         formData.append(`files[${i}]`, compressedBlob, uploadedFiles[i].name)
@@ -1341,45 +1340,6 @@ export default function GameH5Page() {
               </button>
             </div>
 
-            {/* Photo upload / screenshot selector */}
-            <div className="flex flex-col gap-2">
-              <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                {t.uploadScreenshot}
-              </label>
-
-              {/* Thumbnails list/grid */}
-              <div className="grid grid-cols-3 gap-3">
-                {filePreviews.map((preview, idx) => (
-                  <div key={idx} className="relative aspect-square rounded-xl border border-slate-700 bg-slate-900/50 flex items-center justify-center overflow-hidden">
-                    <img src={preview} alt={`preview_${idx}`} className="w-full h-full object-cover" />
-                    <button 
-                      type="button"
-                      onClick={() => removeFile(idx)}
-                      className="absolute top-1 right-1 bg-slate-950/80 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-
-                {/* Plus button to add more */}
-                {filePreviews.length === 0 && (
-                  <label className="aspect-square rounded-xl border-2 border-dashed border-slate-700 hover:border-blue-500 transition bg-slate-900/50 flex flex-col items-center justify-center cursor-pointer text-center">
-                    <span className="text-2xl text-slate-500">+</span>
-                    <span className="text-[10px] text-slate-400 mt-1 font-semibold">
-                      {t.uploadScreenshot}
-                    </span>
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      onChange={handleFilesChange}
-                      className="hidden" 
-                    />
-                  </label>
-                )}
-              </div>
-            </div>
-
             {verificationError && (
               <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400">
                 {verificationError}
@@ -1389,7 +1349,6 @@ export default function GameH5Page() {
             {/* Submit btn */}
             <button
               disabled={
-                uploadedFiles.length === 0 ||
                 !copyrightAgreed ||
                 isSubmittingTask
               }
