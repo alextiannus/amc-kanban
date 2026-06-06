@@ -4,6 +4,7 @@ import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import crypto from 'crypto'
 import fs from 'fs/promises'
 import path from 'path'
+import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
 
 function buildAgentProfileResponse(agent: {
   id: string
@@ -13,18 +14,22 @@ function buildAgentProfileResponse(agent: {
   themeColor: string | null
   avatar: string | null
   insights: string | null
+  avatarData?: Buffer | Uint8Array | null
+  avatarMimeType?: string | null
 }) {
+  const resolvedAgent = withResolvedAvatar(agent)
+
   return {
     success: true,
     agent: {
-      id: agent.id,
-      agentId: agent.id,
-      nickname: agent.nickname,
-      introduction: agent.introduction,
-      workflow: agent.workflow,
-      themeColor: agent.themeColor,
-      avatar: agent.avatar,
-      insights: agent.insights,
+      id: resolvedAgent.id,
+      agentId: resolvedAgent.id,
+      nickname: resolvedAgent.nickname,
+      introduction: resolvedAgent.introduction,
+      workflow: resolvedAgent.workflow,
+      themeColor: resolvedAgent.themeColor,
+      avatar: resolvedAgent.avatar,
+      insights: resolvedAgent.insights,
     },
   }
 }
@@ -51,8 +56,8 @@ export async function GET(request: Request) {
       introduction: true,
       workflow: true,
       themeColor: true,
-      avatar: true,
       insights: true,
+      ...avatarSelect,
     },
   })
 
@@ -146,7 +151,7 @@ export async function POST(request: Request) {
     }
 
     // Update the pre-provisioned agent with its new identity
-    const updatedAgent = await prisma.user.update({
+    await prisma.user.update({
       where: { id: authenticatedAgent.id },
       data: {
         email,
@@ -159,15 +164,24 @@ export async function POST(request: Request) {
       }
     })
 
-    return NextResponse.json(buildAgentProfileResponse({
-      id: updatedAgent.id,
-      nickname: updatedAgent.nickname,
-      introduction: updatedAgent.introduction,
-      workflow: updatedAgent.workflow,
-      themeColor: updatedAgent.themeColor,
-      avatar: updatedAgent.avatar,
-      insights: updatedAgent.insights,
-    }))
+    const refreshedAgent = await prisma.user.findUnique({
+      where: { id: authenticatedAgent.id },
+      select: {
+        id: true,
+        nickname: true,
+        introduction: true,
+        workflow: true,
+        themeColor: true,
+        insights: true,
+        ...avatarSelect,
+      },
+    })
+
+    if (!refreshedAgent) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
+    return NextResponse.json(buildAgentProfileResponse(refreshedAgent))
   } catch (error) {
     console.error(error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

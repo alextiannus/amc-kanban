@@ -3,8 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 // GET /api/brands — list brands for the logged-in user
-// - HUMAN users: brands they own (BrandOwner join table)
-// - AI_AGENT users: brands linked via BrandAgent table
+// Only return brands that have at least one active AI Agent assigned.
 export async function GET() {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -25,6 +24,14 @@ export async function GET() {
   }
 
   try {
+    const activeBrandFilter = {
+      brandAgents: {
+        some: {
+          active: true,
+        },
+      },
+    }
+
     // AI Agent — return brands linked via BrandAgent join table
     if (session.user.type === 'AI_AGENT') {
       const agentLinks = await prisma.brandAgent.findMany({
@@ -41,6 +48,7 @@ export async function GET() {
     // (Agents may create brands with themselves as ownerId; admins need full visibility)
     if (session.user.role === 'ADMIN') {
       const allBrands = await prisma.brand.findMany({
+        where: activeBrandFilter,
         include: { accounts: accountsSelect, _count: countsSelect },
         orderBy: { createdAt: 'asc' },
       })
@@ -52,12 +60,12 @@ export async function GET() {
       prisma.brandOwner.findMany({
         where: { userId: session.user.id },
         include: {
-          brand: { include: { accounts: accountsSelect, _count: countsSelect } },
+          brand: { where: activeBrandFilter, include: { accounts: accountsSelect, _count: countsSelect } },
         },
         orderBy: { createdAt: 'asc' },
       }),
       prisma.brand.findMany({
-        where: { ownerId: session.user.id },
+        where: { ownerId: session.user.id, ...activeBrandFilter },
         include: { accounts: accountsSelect, _count: countsSelect },
         orderBy: { createdAt: 'asc' },
       }),
@@ -87,7 +95,7 @@ export async function GET() {
     const delegatedBrandIds = Array.from(new Set(delegatedBrandLinks.map((link) => link.brandId)))
     const delegatedBrands = delegatedBrandIds.length
       ? await prisma.brand.findMany({
-          where: { id: { in: delegatedBrandIds } },
+          where: { id: { in: delegatedBrandIds }, ...activeBrandFilter },
           include: { accounts: accountsSelect, _count: countsSelect },
           orderBy: { createdAt: 'asc' },
         })

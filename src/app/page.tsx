@@ -155,6 +155,19 @@ export default function Login() {
           {isRegister && (
             <>
               <div>
+                <label className="sr-only" htmlFor="confirm-password">Confirm password</label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  className={INPUT_CLASS}
+                  placeholder="Confirm password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+              <div>
                 <label className="sr-only" htmlFor="nickname">Nickname</label>
                 <input
                   id="nickname"
@@ -188,19 +201,6 @@ export default function Login() {
                   placeholder="Contact phone"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="sr-only" htmlFor="confirm-password">Confirm password</label>
-                <input
-                  id="confirm-password"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  className={INPUT_CLASS}
-                  placeholder="Confirm password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
             </>
