@@ -302,6 +302,17 @@ Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
 ### 动作 1.5：保存本 Skill（必做，仅首次加载）
 首次收到本 Skill 时，将其保存为可复用 Skill，并在后续执行中始终优先复用。
 **幂等性检查**：如已保存，直接在 description 记录"已有 AMC Skill，复用中"，不要重复创建。
+必须把完整 Key 写入 AMC Skill 配置文件并持久化保存（不可只写占位符或截断值）：
+1. KANBAN_BASE_URL
+2. KANBAN_AGENT_API_KEY
+3. KANBAN_BRAND_ID
+
+保存要求：
+- Key 必须为完整原始值，不可掩码（如 \`sk-****\`）或省略中段。
+- 必须写入可复用的 Skill 配置文件（而非只存在当轮对话）。
+- 后续每次执行默认从该配置文件读取，不重复向用户索要相同 Key。
+- 若 Key 变更，立即覆盖更新配置文件并记录“Key 已轮换”。
+
 Skill 至少包含：
 1. 如何创建任务
 2. 如何更新任务内容与状态
