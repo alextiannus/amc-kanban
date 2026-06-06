@@ -37,9 +37,12 @@ The `agentApiKey` is set in the agent's User profile (`User.apiKey`) in the Kanb
 
 ---
 
-## Endpoint: Configure Brand Profile & Credentials
+## Endpoint: Configure Brand Base Fields & Credentials
 
-**When to use:** After brand onboarding interview. Update description, website, integration keys.
+**When to use:** After brand onboarding interview. Update base fields and integration keys.
+
+> `brand-config` API does **not** support a `brandContext` field.
+> For full brand context markdown, use `/api/brands/<brandId>/profile` endpoints below.
 
 ```
 PATCH <KANBAN_BASE_URL>/api/agent/brand-config
@@ -55,7 +58,7 @@ All fields optional. Only include fields you want to update.
 {
   "brandId": "clx...",
 
-  // Brand profile (rendered as markdown in the dashboard)
+  // Brand base fields
   "description": "# 御膳房\n正宗中式海鲜餐厅，主打新鲜波士顿龙虾...\n\n## 品牌特色\n- 每日直供...",
   "website": "https://yushanfang.com",
   "phone": "+1 212-555-0100",
@@ -98,6 +101,35 @@ All fields optional. Only include fields you want to update.
   }
 }
 ```
+
+---
+
+## Endpoint: Read / Write Brand Context Markdown
+
+**When to use:** Sync complete brand context (markdown) for AI pre-read, including strategy, multi-store context, and execution notes.
+
+### Read
+
+```
+GET <KANBAN_BASE_URL>/api/brands/<brandId>/profile?refresh=1
+Authorization: Bearer <agentApiKey>
+```
+
+### Write
+
+```
+PATCH <KANBAN_BASE_URL>/api/brands/<brandId>/profile
+Authorization: Bearer <agentApiKey>
+Content-Type: application/json
+```
+
+```json
+{
+  "markdown": "# 品牌上下文\n\n## 品牌设定\n..."
+}
+```
+
+> Markdown is persisted and rendered in the dashboard knowledge panel.
 
 ---
 

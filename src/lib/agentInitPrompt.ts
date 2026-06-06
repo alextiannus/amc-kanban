@@ -212,6 +212,11 @@ Brand Profile 回写标准：
 - 若字段暂缺，先写已确认字段，再以最小问题集补齐。
 - 每次品牌信息变化后，都要再次 PATCH 更新，保持品牌档案与事实一致。
 
+品牌上下文（Brand Context）规则：
+- \`PATCH /agent/brand-config\` 不支持 \`brandContext\` 字段。
+- 完整上下文必须通过 \`PATCH /brands/<BRAND_ID>/profile\` 的 \`markdown\` 字段写入。
+- 执行内容任务前，始终通过 \`GET /brands/<BRAND_ID>/profile?refresh=1\` 预读最新 Markdown。
+
 这三步对应 onboarding 定义：
 - 初始化准备完成（REST API 接入配置完成 + Agent 身份验证成功）
 - 品牌访问完成（已读取品牌设定）
@@ -238,6 +243,16 @@ Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
   "website": "https://...",
   "phone": "+1 xxx-xxxx",
   "address": "完整地址"
+}
+\`\`\`
+
+品牌上下文 Markdown 回写（必须使用该接口）：
+
+\`\`\`
+PATCH ${apiBaseUrl}/brands/<BRAND_ID>/profile
+Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
+{
+  "markdown": "# 品牌上下文\n\n## 品牌设定\n..."
 }
 \`\`\`
 

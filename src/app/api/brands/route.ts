@@ -58,9 +58,9 @@ export async function GET() {
     // Regular human user — brands via BrandOwner join table
     const [ownerLinks, legacyOwnedBrands, delegatedAgentPermissions] = await Promise.all([
       prisma.brandOwner.findMany({
-        where: { userId: session.user.id },
+        where: { userId: session.user.id, brand: activeBrandFilter },
         include: {
-          brand: { where: activeBrandFilter, include: { accounts: accountsSelect, _count: countsSelect } },
+          brand: { include: { accounts: accountsSelect, _count: countsSelect } },
         },
         orderBy: { createdAt: 'asc' },
       }),

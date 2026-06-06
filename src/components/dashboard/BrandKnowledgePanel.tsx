@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from 'react'
 import { X, Save, Loader2, CheckCircle2, Plus, Trash2, FileText } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 type Props = {
   brandId: string
@@ -123,6 +125,7 @@ export function BrandKnowledgePanel({ brandId, open, onClose, initialSettings }:
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileMarkdown, setProfileMarkdown] = useState('')
+  const [profileViewMode, setProfileViewMode] = useState<'edit' | 'preview'>('edit')
   const [stores, setStores] = useState<StoreDraft[]>([])
   const [storesSaving, setStoresSaving] = useState(false)
 
@@ -340,22 +343,48 @@ export function BrandKnowledgePanel({ brandId, open, onClose, initialSettings }:
           <div className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-extrabold text-slate-700 dark:text-slate-200 inline-flex items-center gap-2"><FileText className="w-4 h-4" /> 品牌 Profile Markdown（AI 预读）</p>
-              <button
-                type="button"
-                onClick={handleRefreshProfile}
-                disabled={profileLoading || profileSaving}
-                className="text-[11px] px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
-              >
-                {profileLoading ? '刷新中...' : '刷新自动区'}
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setProfileViewMode('edit')}
+                    className={`text-[11px] px-2 py-1 ${profileViewMode === 'edit' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProfileViewMode('preview')}
+                    className={`text-[11px] px-2 py-1 border-l border-slate-200 dark:border-slate-700 ${profileViewMode === 'preview' ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  >
+                    预览
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRefreshProfile}
+                  disabled={profileLoading || profileSaving}
+                  className="text-[11px] px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
+                >
+                  {profileLoading ? '刷新中...' : '刷新自动区'}
+                </button>
+              </div>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">可直接编辑品牌定义、设计策略、推广语境。系统自动区会在刷新时同步。</p>
-            <textarea
-              value={profileMarkdown}
-              onChange={(e) => setProfileMarkdown(e.target.value)}
-              placeholder="加载后可编辑品牌 Profile Markdown..."
-              className="w-full min-h-[340px] px-3 py-2 rounded-xl text-xs font-mono bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-            />
+            {profileViewMode === 'edit' ? (
+              <textarea
+                value={profileMarkdown}
+                onChange={(e) => setProfileMarkdown(e.target.value)}
+                placeholder="加载后可编辑品牌 Profile Markdown..."
+                className="w-full min-h-[340px] px-3 py-2 rounded-xl text-xs font-mono bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+              />
+            ) : (
+              <div className="w-full min-h-[340px] px-4 py-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 overflow-auto prose prose-slate dark:prose-invert max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {profileMarkdown || '（暂无内容）'}
+                </ReactMarkdown>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => handleSaveProfile()}

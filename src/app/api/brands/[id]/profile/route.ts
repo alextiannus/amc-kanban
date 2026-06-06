@@ -52,15 +52,22 @@ export async function GET(request: Request, { params }: Params) {
 // Body: { markdown: string } OR { refresh: true }
 export async function PATCH(request: Request, { params }: Params) {
   const session = await getSession()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   const { id } = await params
 
-  if (session.user.type === 'AI_AGENT') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
-  if (!(await canOwnBrand(id, session.user.id))) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // Support both cookie session (human owner) and Bearer API key (AI agent)
+  if (session?.user) {
+    if (session.user.type === 'AI_AGENT') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    if (!(await canOwnBrand(id, session.user.id))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+  } else {
+    const apiKey = extractApiKey(request)
+    const agent = apiKey ? await getAgentFromApiKey(apiKey) : null
+    if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const ok = await canSessionAccessBrandProject(id, agent.id, 'AI_AGENT')
+    if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
   const body = await request.json().catch(() => ({} as Record<string, unknown>))

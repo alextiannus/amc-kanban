@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { writeAuditLog, actorFromContext } from '@/lib/audit'
-import { readBrandProfileMarkdown, refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
+import { readBrandProfileMarkdown, refreshBrandProfileMarkdown, writeBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -188,6 +188,32 @@ export function createAmcMcpServer(agentApiKey: string) {
         content: [{
           type: 'text' as const,
           text: JSON.stringify({ ok: true, brandId, relativePath: refreshed.relativePath }, null, 2),
+        }],
+      }
+    }
+  )
+
+  // ── update_brand_profile_markdown ──────────────────────────────────────
+  server.tool(
+    'update_brand_profile_markdown',
+    'Write full brand context markdown for this brand. Use this for long-form brand context; brand-config does not support brandContext field.',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+      markdown: z.string().describe('Full markdown content to persist as brand profile context.'),
+    },
+    async ({ brandId, markdown }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!markdown.trim()) return { content: [{ type: 'text' as const, text: 'Error: markdown is required' }], isError: true }
+
+      const saved = await writeBrandProfileMarkdown(brandId, markdown)
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ ok: true, brandId, relativePath: saved.relativePath }, null, 2),
         }],
       }
     }
