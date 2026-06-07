@@ -37,7 +37,7 @@ type SubscriptionPayload = {
   termsTitle: string
   termsNotice: string
   termsFullText: string
-  latestSubscription?: { id?: string; status?: string; planName?: string; paymentProvider?: string }
+  latestSubscription?: { id?: string; status?: string; planName?: string; paymentProvider?: string; contractEndDate?: string | null }
   paymentEnabled: boolean
   instructionContext?: {
     subscription: {
@@ -110,9 +110,17 @@ function resolveCurrentPlanId(payload: SubscriptionPayload | null): string | nul
   const fromContext = payload.instructionContext?.subscription?.planId
   if (fromContext) return fromContext
 
+  if (!isEffectiveActiveSubscription(payload.latestSubscription)) return null
+
   const activePlanName = payload.latestSubscription?.planName
   if (!activePlanName) return null
   return payload.plans.find((p) => p.name === activePlanName)?.id || null
+}
+
+function isEffectiveActiveSubscription(subscription?: { status?: string; contractEndDate?: string | null } | null) {
+  if (subscription?.status !== 'ACTIVE') return false
+  if (!subscription.contractEndDate) return true
+  return new Date(subscription.contractEndDate).getTime() > Date.now()
 }
 
 export default function BrandSubscriptionPage() {
@@ -414,7 +422,7 @@ export default function BrandSubscriptionPage() {
           </div>
         )}
 
-        {((success || data.latestSubscription?.status === 'ACTIVE') && instructionText && (!activationJustCompleted || agentCreationDone)) && (
+        {((success || isEffectiveActiveSubscription(data.latestSubscription)) && instructionText && (!activationJustCompleted || agentCreationDone)) && (
           <section ref={instructionCardRef} className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 p-4 md:p-5 shadow-sm">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-200">

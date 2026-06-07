@@ -88,6 +88,12 @@ interface DashboardSettingsData {
   [key: string]: unknown
 }
 
+function isEffectiveActiveSubscription(subscription?: { status?: string; contractEndDate?: string | null } | null) {
+  if (subscription?.status !== 'ACTIVE') return false
+  if (!subscription.contractEndDate) return true
+  return new Date(subscription.contractEndDate).getTime() > Date.now()
+}
+
 // ── KPI Tofu Card (小豆腐块 compact) ───────────────────────────────────
 function PlatformLogo({ icon, iconDark, name, size = 20 }: { icon: string; iconDark?: string; name: string; size?: number }) {
   const [srcIndex, setSrcIndex] = useState(0)
@@ -613,14 +619,16 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   const searchParams = useSearchParams()
   const router = useRouter()
 
-  const currentBrandSubscription = activeBrand?.subscriptions?.find((sub) => sub.status === 'ACTIVE')
+  const currentBrandSubscription = activeBrand?.subscriptions?.find(isEffectiveActiveSubscription)
     || activeBrand?.subscriptions?.[0]
 
   const subscriptionStatusLabel =
-    currentBrandSubscription?.status === 'ACTIVE'
+    isEffectiveActiveSubscription(currentBrandSubscription)
       ? '已生效'
       : currentBrandSubscription?.status === 'PENDING'
         ? '待生效'
+        : currentBrandSubscription?.status === 'ACTIVE'
+          ? '已过期'
         : currentBrandSubscription?.status
           ? `状态: ${currentBrandSubscription.status}`
           : '未配置'

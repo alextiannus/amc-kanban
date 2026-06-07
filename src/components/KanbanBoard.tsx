@@ -44,6 +44,12 @@ type BoardTask = {
   } | null
 }
 
+function isEffectiveActiveSubscription(subscription?: { status?: string; contractEndDate?: string | null } | null) {
+  if (subscription?.status !== 'ACTIVE') return false
+  if (!subscription.contractEndDate) return true
+  return new Date(subscription.contractEndDate).getTime() > Date.now()
+}
+
 export default function KanbanBoard({ initialView = 'dashboard' }: { initialView?: 'agents' | 'archive' | 'dashboard' | 'calendar' | 'game' | 'socialInsight' }) {
   const router = useRouter()
   const [tasks, setTasks] = useState<BoardTask[]>([])
@@ -124,7 +130,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       }
 
       const data = await res.json()
-      setSubscriptionActive(data?.latestSubscription?.status === 'ACTIVE')
+      setSubscriptionActive(isEffectiveActiveSubscription(data?.latestSubscription))
     } catch (e) {
       console.error('[KanbanBoard] fetchSubscriptionState error', e)
       setSubscriptionActive(false)

@@ -63,6 +63,12 @@ export async function POST(request: Request) {
         timezone: pendingBrandTimezone || null,
       })
     : null
+  if (pendingBrandName && !createdBrand?.ok) {
+    return NextResponse.json(
+      { error: '支付已确认，但品牌创建失败，请联系管理员处理。', reason: createdBrand?.reason || 'unknown' },
+      { status: 500 }
+    )
+  }
 
   const keyResult = activated.alreadyActive
     ? null

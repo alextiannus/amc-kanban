@@ -143,11 +143,16 @@ export async function GET(request: Request) {
     orderBy: { createdAt: 'desc' },
   })
   const latestActive = await prisma.brandSubscription.findFirst({
-    where: { ...latestWhere, status: 'ACTIVE' },
+    where: {
+      ...latestWhere,
+      status: 'ACTIVE',
+      OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+    },
     orderBy: { createdAt: 'desc' },
   })
 
   const latest = latestActive || latestAny
+  const hasEffectiveActiveSubscription = Boolean(latestActive)
   const latestPlanId = toPlanId(latest?.planId)
   const sessionUserTimezoneRaw = (session.user as { timezone?: unknown }).timezone
   const sessionUserTimezone =
@@ -168,7 +173,7 @@ export async function GET(request: Request) {
   let resolvedAgentId: string | null = null
   let resolvedAgentKey: string | null = null
 
-  if (latest?.status === 'ACTIVE') {
+  if (hasEffectiveActiveSubscription) {
     const ensured = await ensureBrandAgentKeyAfterSubscription({
       ownerId: session.user.id,
     })
@@ -246,9 +251,9 @@ export async function GET(request: Request) {
   ])
 
   resolvedAgentId = brandAgent?.agent.id || resolvedAgentId
-  resolvedAgentKey = latest?.status === 'ACTIVE' ? brandAgent?.agent.apiKey || resolvedAgentKey : null
+  resolvedAgentKey = hasEffectiveActiveSubscription ? brandAgent?.agent.apiKey || resolvedAgentKey : null
 
-  if (latest?.status === 'ACTIVE' && !resolvedAgentKey) {
+  if (hasEffectiveActiveSubscription && !resolvedAgentKey) {
     const ensured = await ensureBrandAgentKeyAfterSubscription({
       ownerId: session.user.id,
     })
@@ -401,9 +406,6 @@ export async function POST(request: Request) {
       where: { id: pending.id },
       data: activationData,
     })
-    const activatedSubscription = await prisma.brandSubscription.findUnique({
-      where: { id: pending.id },
-    })
     const createdBrand = pendingBrandName
       ? await createBrandForActivatedSubscription({
           subscriptionId: pending.id,
@@ -413,6 +415,15 @@ export async function POST(request: Request) {
           timezone: pendingBrandTimezone,
         })
       : null
+    if (pendingBrandName && !createdBrand?.ok) {
+      return NextResponse.json(
+        { error: '订阅已激活，但品牌创建失败，请联系管理员处理。', reason: createdBrand?.reason || 'unknown' },
+        { status: 500 }
+      )
+    }
+    const activatedSubscription = await prisma.brandSubscription.findUnique({
+      where: { id: pending.id },
+    })
     const keyResult = pendingBrandName
       ? { agentId: createdBrand?.ok ? createdBrand.agentId || null : null }
       : await ensureBrandAgentKeyAfterSubscription({

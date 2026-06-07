@@ -4,18 +4,6 @@ import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
 import { resolveAssignment } from '@/lib/assignmentPool'
 
-const subscriptionSummarySelect = {
-  orderBy: { createdAt: 'desc' as const },
-  take: 1,
-  select: {
-    id: true,
-    planId: true,
-    planName: true,
-    status: true,
-    contractEndDate: true,
-  },
-}
-
 // GET /api/brands — list brands for the logged-in user
 // Only return brands that have at least one active AI Agent assigned.
 export async function GET() {
@@ -38,13 +26,26 @@ export async function GET() {
   }
 
   try {
+    const activeSubscriptionWhere = {
+      status: 'ACTIVE' as const,
+      OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+    }
+    const subscriptionSummarySelect = {
+      where: activeSubscriptionWhere,
+      orderBy: { createdAt: 'desc' as const },
+      take: 1,
+      select: {
+        id: true,
+        planId: true,
+        planName: true,
+        status: true,
+        contractEndDate: true,
+      },
+    }
     const activeBrandFilter = {
       status: { not: 'ARCHIVED' as const },
       subscriptions: {
-        some: {
-          status: 'ACTIVE',
-          OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
-        },
+        some: activeSubscriptionWhere,
       },
       brandAgents: {
         some: {
@@ -56,7 +57,7 @@ export async function GET() {
     // AI Agent — return brands linked via BrandAgent join table
     if (session.user.type === 'AI_AGENT') {
       const agentLinks = await prisma.brandAgent.findMany({
-        where: { agentId: session.user.id, active: true },
+        where: { agentId: session.user.id, active: true, brand: activeBrandFilter },
         include: {
           brand: { include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect } },
         },

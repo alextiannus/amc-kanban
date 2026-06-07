@@ -68,7 +68,18 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
 
   if (subscription.brandId) {
     const existingBrand = await prisma.brand.findUnique({ where: { id: subscription.brandId } })
-    return { ok: true as const, brand: existingBrand, alreadyCreated: true as const }
+    if (!existingBrand) {
+      return { ok: false as const, reason: 'brand_not_found' as const }
+    }
+
+    const agentKey = await ensureBrandAgentKeyAfterSubscription({ ownerId: input.ownerId })
+    await prisma.brandAgent.upsert({
+      where: { brandId_agentId: { brandId: existingBrand.id, agentId: agentKey.agentId } },
+      create: { brandId: existingBrand.id, agentId: agentKey.agentId, role: 'worker', active: true },
+      update: { role: 'worker', active: true },
+    })
+
+    return { ok: true as const, brand: existingBrand, alreadyCreated: true as const, agentId: agentKey.agentId }
   }
 
   const brand = await prisma.$transaction(async (tx) => {
