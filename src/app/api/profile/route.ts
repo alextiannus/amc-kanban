@@ -88,11 +88,15 @@ export async function GET() {
     if (user.role !== 'ADMIN' && user.type === 'HUMAN' && user.permittedAgents.length === 0) {
       return NextResponse.json({
         ...user,
+        dashboardRole: user.ownedBrands.length > 0 ? 'BRAND_OWNER' : 'BRAND_DIRECTOR',
         permittedAgents: []
       })
     }
 
-    return NextResponse.json(user)
+    return NextResponse.json({
+      ...user,
+      dashboardRole: user.role === 'ADMIN' ? 'ADMIN' : user.ownedBrands.length > 0 ? 'BRAND_OWNER' : 'BRAND_DIRECTOR',
+    })
   } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }

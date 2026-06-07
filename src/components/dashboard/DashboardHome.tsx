@@ -791,6 +791,17 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
               <FileText className="w-3 h-3" />
               知识库
             </button>
+            <button
+              onClick={openBrandSubscription}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-600 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+              title={`当前订阅计划: ${currentBrandSubscription?.planName || '未绑定计划'}${currentBrandSubscription?.contractEndDate ? ` · 到期: ${new Date(currentBrandSubscription.contractEndDate).toLocaleDateString('zh-CN')}` : ''}`}
+            >
+              <CreditCard className="w-3 h-3" />
+              <span className="truncate max-w-[180px]">{currentBrandSubscription?.planName || '未绑定计划'}</span>
+              <span className="inline-flex items-center rounded-full bg-white/80 dark:bg-slate-900/60 px-1.5 py-0.5 text-[10px] font-black text-blue-600 dark:text-blue-300">
+                {subscriptionStatusLabel}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -821,31 +832,6 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
               </div>
             </button>
           )}
-
-          <button
-            onClick={openBrandSubscription}
-            className="mb-4 w-full rounded-2xl border border-blue-200/80 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-950/20 px-4 py-3.5 text-left hover:bg-blue-100/70 dark:hover:bg-blue-900/30 transition-colors"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[11px] font-bold tracking-widest uppercase text-blue-600 dark:text-blue-300 flex items-center gap-1.5">
-                  <CreditCard className="w-3.5 h-3.5" /> 当前订阅计划
-                </p>
-                <p className="mt-1 text-sm font-black text-slate-800 dark:text-slate-100 truncate">
-                  {currentBrandSubscription?.planName || '未绑定计划'}
-                </p>
-                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                  {subscriptionStatusLabel}
-                  {currentBrandSubscription?.contractEndDate
-                    ? ` · 到期: ${new Date(currentBrandSubscription.contractEndDate).toLocaleDateString('zh-CN')}`
-                    : ''}
-                </p>
-              </div>
-              <span className="inline-flex items-center rounded-xl bg-white/80 dark:bg-slate-900/60 border border-blue-200 dark:border-blue-800 px-3 py-1.5 text-xs font-bold text-blue-600 dark:text-blue-300">
-                管理计划
-              </span>
-            </div>
-          </button>
 
           {(activeBrand.location || brandDetail?.website || brandDetail?.phone || brandDetail?.address) && (
             <div className="flex flex-wrap gap-2">
