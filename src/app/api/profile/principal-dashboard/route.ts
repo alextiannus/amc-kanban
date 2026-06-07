@@ -30,22 +30,15 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const activeBrandFilter = {
+  const visibleBrandFilter = {
     status: { not: 'ARCHIVED' as const },
-    subscriptions: {
-      some: {
-        status: 'ACTIVE',
-        OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
-      },
-    },
-    brandAgents: { some: { active: true } },
   }
 
   let visibleBrandIds: string[] = []
 
   if (isAdmin) {
     const allBrands = await prisma.brand.findMany({
-      where: activeBrandFilter,
+      where: visibleBrandFilter,
       select: { id: true },
     })
     visibleBrandIds = allBrands.map((b) => b.id)
@@ -67,7 +60,7 @@ export async function GET() {
           where: {
             active: true,
             agentId: { in: delegatedAgentIds },
-            brand: activeBrandFilter,
+            brand: visibleBrandFilter,
           },
           select: { brandId: true },
         })
@@ -77,7 +70,7 @@ export async function GET() {
     const orgBrands = orgOwnerIds.length
       ? await prisma.brand.findMany({
           where: {
-            ...activeBrandFilter,
+            ...visibleBrandFilter,
             OR: [
               { ownerId: { in: orgOwnerIds } },
               {

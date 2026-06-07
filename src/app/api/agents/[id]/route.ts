@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
 import type { Prisma } from '@prisma/client'
+import crypto from 'crypto'
+
+const DISMISSED_AGENT_TYPE = 'DISMISSED_AGENT'
 
 export async function GET(
   request: Request,
@@ -183,6 +186,14 @@ export async function DELETE(
 
     const { id } = await params
 
+    const agent = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, type: true, email: true, nickname: true }
+    })
+    if (!agent || agent.type !== 'AI_AGENT') {
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+    }
+
     if (session.user.role !== 'ADMIN') {
       const permission = await prisma.agentPermission.findFirst({
         where: { 
@@ -195,17 +206,85 @@ export async function DELETE(
       }
     }
 
-    // Delete permissions first to satisfy constraints if any
-    await prisma.agentPermission.deleteMany({
-      where: { agentId: id }
+    const dismissedAt = new Date()
+    const dismissedEmail = `dismissed-${id}-${crypto.randomUUID()}@agent.amc.local`
+    const dismissedPassword = `dismissed-${crypto.randomUUID()}`
+
+    const result = await prisma.$transaction(async (tx) => {
+      const [permissions, brandAgents, assignmentPoolMembers, openTasks, fallbackConfigs, drafts, actionItems] = await Promise.all([
+        tx.agentPermission.deleteMany({ where: { agentId: id } }),
+        tx.brandAgent.updateMany({ where: { agentId: id, active: true }, data: { active: false } }),
+        tx.assignmentPoolMember.deleteMany({ where: { agentId: id } }),
+        tx.workUnit.updateMany({
+          where: {
+            assigneeId: id,
+            status: { in: ['todo', 'in_progress', 'pending'] },
+          },
+          data: { assigneeId: null },
+        }),
+        tx.assignmentPoolConfig.updateMany({
+          where: { fallbackAgentId: id },
+          data: { fallbackAgentId: null },
+        }),
+        tx.contentDraft.updateMany({ where: { agentId: id }, data: { agentId: null } }),
+        tx.actionItem.updateMany({ where: { agentId: id }, data: { agentId: null } }),
+      ])
+
+      await tx.user.update({
+        where: { id },
+        data: {
+          type: DISMISSED_AGENT_TYPE,
+          email: dismissedEmail,
+          password: dismissedPassword,
+          apiKey: null,
+          nickname: agent.nickname ? `${agent.nickname}（已遣散）` : '已遣散 Agent',
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          actorId: session.user.id,
+          actorType: 'HUMAN',
+          actorName: session.user.email || null,
+          action: 'AGENT_DISMISSED',
+          resourceId: id,
+          resourceType: 'User',
+          oldValue: {
+            id: agent.id,
+            email: agent.email,
+            nickname: agent.nickname,
+            type: agent.type,
+          },
+          newValue: {
+            type: DISMISSED_AGENT_TYPE,
+            dismissedAt: dismissedAt.toISOString(),
+          },
+          metadata: {
+            permissionsRemoved: permissions.count,
+            brandAgentsDeactivated: brandAgents.count,
+            assignmentPoolMembersRemoved: assignmentPoolMembers.count,
+            openTasksUnassigned: openTasks.count,
+            fallbackConfigsCleared: fallbackConfigs.count,
+            draftsDetached: drafts.count,
+            actionItemsDetached: actionItems.count,
+          },
+        },
+      })
+
+      return {
+        permissionsRemoved: permissions.count,
+        brandAgentsDeactivated: brandAgents.count,
+        assignmentPoolMembersRemoved: assignmentPoolMembers.count,
+        openTasksUnassigned: openTasks.count,
+        fallbackConfigsCleared: fallbackConfigs.count,
+        draftsDetached: drafts.count,
+        actionItemsDetached: actionItems.count,
+      }
     })
 
-    await prisma.user.delete({
-      where: { id }
-    })
-
-    return NextResponse.json({ success: true })
-  } catch {
+    return NextResponse.json({ success: true, dismissed: true, cleanup: result })
+  } catch (error) {
+    console.error('[DELETE /api/agents/:id] Failed to dismiss agent:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
