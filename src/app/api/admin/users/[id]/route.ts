@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { generateInvitationLink } from '@/lib/invitation'
+import type { Prisma } from '@prisma/client'
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -21,6 +22,51 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const target = await prisma.user.findUnique({ where: { id } })
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+  const agentProfileFields = ['email', 'nickname', 'insights', 'introduction', 'workflow', 'themeColor', 'chatLink', 'driveFolder']
+  if (target.type === 'AI_AGENT' && agentProfileFields.some((field) => field in body)) {
+    const data: Prisma.UserUpdateInput = {}
+
+    if ('email' in body) {
+      if (typeof body.email !== 'string' || !body.email.trim()) {
+        return NextResponse.json({ error: 'email is required' }, { status: 400 })
+      }
+      const email = body.email.trim().toLowerCase()
+      const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+      if (existing && existing.id !== id) {
+        return NextResponse.json({ error: 'Email already exists' }, { status: 400 })
+      }
+      data.email = email
+    }
+
+    for (const field of ['nickname', 'insights', 'introduction', 'workflow', 'themeColor', 'chatLink', 'driveFolder'] as const) {
+      if (field in body) {
+        const value = body[field]
+        if (value !== null && typeof value !== 'string') {
+          return NextResponse.json({ error: `${field} must be string or null` }, { status: 400 })
+        }
+        data[field] = typeof value === 'string' && value.trim() ? value.trim() : null
+      }
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        email: true,
+        nickname: true,
+        insights: true,
+        introduction: true,
+        workflow: true,
+        themeColor: true,
+        chatLink: true,
+        driveFolder: true,
+      },
+    })
+
+    return NextResponse.json({ ok: true, user: updated })
+  }
 
   // role change
   if (body.role !== undefined) {

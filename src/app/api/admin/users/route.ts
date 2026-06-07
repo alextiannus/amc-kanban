@@ -22,11 +22,17 @@ export async function GET() {
         type: true,
         role: true,
         insights: true,
+        introduction: true,
+        workflow: true,
+        themeColor: true,
         driveFolder: true,
         chatLink: true,
         createdAt: true,
         permittedAgents: {
           include: { agent: { select: { id: true, email: true, nickname: true } } }
+        },
+        assignedToHumans: {
+          include: { human: { select: { id: true, email: true, nickname: true } } }
         }
       },
       orderBy: { createdAt: 'desc' }

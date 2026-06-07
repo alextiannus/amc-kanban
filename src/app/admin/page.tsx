@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft } from 'lucide-react'
+import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users } from 'lucide-react'
 
 interface UserRecord {
   id: string
@@ -10,8 +10,15 @@ interface UserRecord {
   nickname: string | null
   type: 'HUMAN' | 'AI_AGENT'
   role: 'ADMIN' | 'USER'
+  insights?: string | null
+  introduction?: string | null
+  workflow?: string | null
+  themeColor?: string | null
+  chatLink?: string | null
+  driveFolder?: string | null
   createdAt: string
   permittedAgents: { agent: { id: string; email: string; nickname: string | null } }[]
+  assignedToHumans: { human: { id: string; email: string; nickname: string | null } }[]
 }
 
 interface InvitationResult {
@@ -71,6 +78,19 @@ export default function AdminPage() {
   const [invitationData, setInvitationData] = useState<InvitationResult | null>(null)
   const [resetData, setResetData] = useState<{ email: string; temporaryPassword: string; invitationLink: string } | null>(null)
   const [selectedHuman, setSelectedHuman] = useState<UserRecord | null>(null)
+  const [selectedAgent, setSelectedAgent] = useState<UserRecord | null>(null)
+  const [selectedAgentHumanIds, setSelectedAgentHumanIds] = useState<string[]>([])
+  const [editingAgent, setEditingAgent] = useState<UserRecord | null>(null)
+  const [agentDraft, setAgentDraft] = useState({
+    email: '',
+    nickname: '',
+    insights: '',
+    introduction: '',
+    workflow: '',
+    themeColor: '',
+    chatLink: '',
+    driveFolder: '',
+  })
   const [assignedAgentIds, setAssignedAgentIds] = useState<string[]>([])
   const [savingPerms, setSavingPerms] = useState(false)
   const [actionLoading, setActionLoading] = useState<Record<string, string>>({})
@@ -79,12 +99,7 @@ export default function AdminPage() {
   const [poolMembers, setPoolMembers] = useState<AssignmentPoolMember[]>([])
   const [poolDecisions, setPoolDecisions] = useState<AssignmentDecision[]>([])
   const [poolLoading, setPoolLoading] = useState(false)
-  const [poolSaving, setPoolSaving] = useState(false)
-  const [newPoolAgentId, setNewPoolAgentId] = useState('')
-  const [newPoolCapacity, setNewPoolCapacity] = useState(30)
-  const [newPoolPriority, setNewPoolPriority] = useState(100)
-  const [newPoolIndustries, setNewPoolIndustries] = useState('')
-  const [newPoolRegions, setNewPoolRegions] = useState('')
+  const [poolDrafts, setPoolDrafts] = useState<Record<string, { capacity: number; priority: number; industries: string; regions: string }>>({})
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -101,7 +116,16 @@ export default function AdminPage() {
         fetch('/api/admin/agent-assignment-pool/members'),
       ])
       if (configRes.ok) setPoolConfig(await configRes.json())
-      if (membersRes.ok) setPoolMembers(await membersRes.json())
+      if (membersRes.ok) {
+        const members = await membersRes.json() as AssignmentPoolMember[]
+        setPoolMembers(members)
+        setPoolDrafts(Object.fromEntries(members.map((member) => [member.agentId, {
+          capacity: member.capacity,
+          priority: member.priority,
+          industries: member.industries.join(', '),
+          regions: member.regions.join(', '),
+        }])))
+      }
     } finally {
       setPoolLoading(false)
     }
@@ -122,48 +146,17 @@ export default function AdminPage() {
     })
   }, [])
 
-  const savePoolConfig = async () => {
-    if (!poolConfig) return
-    setPoolSaving(true)
-    try {
-      const res = await fetch('/api/admin/agent-assignment-pool/config', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          enabled: poolConfig.enabled,
-          overflowPolicy: poolConfig.overflowPolicy,
-          rebalancePolicy: poolConfig.rebalancePolicy,
-          matchingOrder: poolConfig.matchingOrder,
-          fallbackAgentId: poolConfig.fallbackAgentId,
-        }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        alert(data.error || '保存分配池配置失败')
-        return
-      }
-      await fetchPoolData()
-      await fetchDecisionLogs()
-    } finally {
-      setPoolSaving(false)
-    }
-  }
-
-  const createPoolMember = async () => {
-    if (!newPoolAgentId.trim()) {
-      alert('请填写 agentId')
-      return
-    }
-
+  const createPoolMember = async (agent: UserRecord) => {
+    const draft = poolDrafts[agent.id] || { capacity: 30, priority: 100, industries: '', regions: '' }
     const res = await fetch('/api/admin/agent-assignment-pool/members', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        agentId: newPoolAgentId.trim(),
-        capacity: newPoolCapacity,
-        priority: newPoolPriority,
-        industries: newPoolIndustries.split(',').map(s => s.trim()).filter(Boolean),
-        regions: newPoolRegions.split(',').map(s => s.trim()).filter(Boolean),
+        agentId: agent.id,
+        capacity: draft.capacity,
+        priority: draft.priority,
+        industries: draft.industries.split(',').map(s => s.trim()).filter(Boolean),
+        regions: draft.regions.split(',').map(s => s.trim()).filter(Boolean),
       }),
     })
     if (!res.ok) {
@@ -172,9 +165,6 @@ export default function AdminPage() {
       return
     }
 
-    setNewPoolAgentId('')
-    setNewPoolIndustries('')
-    setNewPoolRegions('')
     await fetchPoolData()
   }
 
@@ -190,6 +180,92 @@ export default function AdminPage() {
       return
     }
     await fetchPoolData()
+  }
+
+  const poolMemberForAgent = (agentId: string) => poolMembers.find(member => member.agentId === agentId)
+
+  const updatePoolDraft = (agentId: string, patch: Partial<{ capacity: number; priority: number; industries: string; regions: string }>) => {
+    setPoolDrafts(prev => ({
+      ...prev,
+      [agentId]: {
+        capacity: prev[agentId]?.capacity ?? 30,
+        priority: prev[agentId]?.priority ?? 100,
+        industries: prev[agentId]?.industries ?? '',
+        regions: prev[agentId]?.regions ?? '',
+        ...patch,
+      },
+    }))
+  }
+
+  const openAgentEditor = (agent: UserRecord) => {
+    setEditingAgent(agent)
+    setAgentDraft({
+      email: agent.email,
+      nickname: agent.nickname || '',
+      insights: agent.insights || '',
+      introduction: agent.introduction || '',
+      workflow: agent.workflow || '',
+      themeColor: agent.themeColor || '',
+      chatLink: agent.chatLink || '',
+      driveFolder: agent.driveFolder || '',
+    })
+  }
+
+  const saveAgentDraft = async () => {
+    if (!editingAgent) return
+    setActionLoading(p => ({ ...p, [editingAgent.id + '_edit']: '1' }))
+    try {
+      const res = await fetch(`/api/admin/users/${editingAgent.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(agentDraft),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(data.error || '保存 Agent 失败')
+        return
+      }
+      setEditingAgent(null)
+      await fetchUsers()
+    } finally {
+      setActionLoading(p => { const n = { ...p }; delete n[editingAgent.id + '_edit']; return n })
+    }
+  }
+
+  const openAgentPrincipalModal = (agent: UserRecord) => {
+    setSelectedAgent(agent)
+    setSelectedAgentHumanIds(agent.assignedToHumans.map(link => link.human.id))
+  }
+
+  const saveAgentPrincipals = async () => {
+    if (!selectedAgent) return
+    setSavingPerms(true)
+    try {
+      for (const human of humans) {
+        const currentAgentIds = human.permittedAgents.map(pa => pa.agent.id)
+        const shouldHaveAgent = selectedAgentHumanIds.includes(human.id)
+        const nextAgentIds = shouldHaveAgent
+          ? Array.from(new Set([...currentAgentIds, selectedAgent.id]))
+          : currentAgentIds.filter(id => id !== selectedAgent.id)
+
+        if (nextAgentIds.length === currentAgentIds.length && nextAgentIds.every(id => currentAgentIds.includes(id))) continue
+
+        const res = await fetch('/api/admin/permissions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ humanId: human.id, agentIds: nextAgentIds }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          alert(data.error || '保存主理人分配失败')
+          return
+        }
+      }
+      setSelectedAgent(null)
+      await fetchUsers()
+    } finally {
+      setSavingPerms(false)
+    }
   }
 
   const deletePoolMember = async (member: AssignmentPoolMember) => {
@@ -257,7 +333,7 @@ export default function AdminPage() {
     if (!confirm(`确认删除用户 ${user.email}？此操作不可撤销。`)) return
     setActionLoading(p => ({ ...p, [user.id + '_del']: '1' }))
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' })
+      const res = await fetch(user.type === 'AI_AGENT' ? `/api/agents/${user.id}` : `/api/admin/users/${user.id}`, { method: 'DELETE' })
       if (res.ok) setUsers(prev => prev.filter(u => u.id !== user.id))
       else { const d = await res.json(); alert(d.error || '删除失败') }
     } finally { setActionLoading(p => { const n = { ...p }; delete n[user.id + '_del']; return n }) }
@@ -430,7 +506,7 @@ export default function AdminPage() {
               <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
                 <Bot size={15} className="text-slate-500" />
                 <span className="text-sm font-black text-slate-800 dark:text-slate-100">AI Agents</span>
-                <span className="ml-auto text-xs text-slate-400">{agents.length} 个</span>
+                <span className="ml-auto text-xs text-slate-400">{agents.length} 个 · {poolMembers.length} 个在自动分配池</span>
               </div>
               {loading ? (
                 <div className="p-6 text-center text-sm text-slate-400">加载中...</div>
@@ -438,145 +514,80 @@ export default function AdminPage() {
                 <div className="p-6 text-center text-sm text-slate-400">暂无 AI Agent</div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {agents.map(agent => (
-                    <li key={agent.id} className="px-6 py-4 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center flex-shrink-0">
-                        <Bot size={14} className="text-white" />
+                  {agents.map(agent => {
+                    const member = poolMemberForAgent(agent.id)
+                    const draft = poolDrafts[agent.id] || {
+                      capacity: member?.capacity ?? 30,
+                      priority: member?.priority ?? 100,
+                      industries: member?.industries.join(', ') ?? '',
+                      regions: member?.regions.join(', ') ?? '',
+                    }
+
+                    return (
+                    <li key={agent.id} className="px-6 py-4 space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center flex-shrink-0">
+                          <Bot size={14} className="text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{agent.nickname || agent.email}</p>
+                          <p className="text-[11px] text-slate-400 truncate">{agent.nickname ? agent.email : agent.id}</p>
+                          <p className="text-[11px] text-slate-400 mt-1">
+                            已分配主理人：{agent.assignedToHumans.length ? agent.assignedToHumans.map(link => link.human.nickname || link.human.email).join('、') : '未分配'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button onClick={() => openAgentEditor(agent)} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition" title="编辑 Agent">
+                            <Edit3 size={14} />
+                          </button>
+                          <button onClick={() => openAgentPrincipalModal(agent)} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition" title="分配给 AMC 主理人">
+                            <Users size={14} />
+                          </button>
+                          <button onClick={() => handleDelete(agent)} disabled={!!actionLoading[agent.id + '_del']} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition disabled:opacity-50" title="删除 Agent">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{agent.nickname || agent.email}</p>
-                        <p className="text-[11px] text-slate-400 truncate">{agent.nickname ? agent.email : agent.id}</p>
+
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 p-3 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className={`rounded-full px-2 py-0.5 font-bold ${member ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
+                            {member ? '自动分配池中' : '未加入自动分配池'}
+                          </span>
+                          {member && <span className="text-slate-400">Load {member.currentLoad}/{member.capacity} · Priority {member.priority}</span>}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                          <input type="number" value={draft.capacity} onChange={e => updatePoolDraft(agent.id, { capacity: Number(e.target.value) || 30 })} placeholder="Capacity" className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-xs dark:text-white" />
+                          <input type="number" value={draft.priority} onChange={e => updatePoolDraft(agent.id, { priority: Number(e.target.value) || 100 })} placeholder="Priority" className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-xs dark:text-white" />
+                          <input value={draft.industries} onChange={e => updatePoolDraft(agent.id, { industries: e.target.value })} placeholder="Industries" className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-xs dark:text-white" />
+                          <input value={draft.regions} onChange={e => updatePoolDraft(agent.id, { regions: e.target.value })} placeholder="Regions" className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-xs dark:text-white" />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {member ? (
+                            <>
+                              <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                <input type="checkbox" checked={member.active} onChange={e => patchPoolMember(member, { active: e.target.checked })} /> Active
+                              </label>
+                              <button onClick={() => patchPoolMember(member, { capacity: draft.capacity, priority: draft.priority, industries: draft.industries.split(',').map(s => s.trim()).filter(Boolean), regions: draft.regions.split(',').map(s => s.trim()).filter(Boolean) })} className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700">
+                                <Save size={12} /> 保存池设置
+                              </button>
+                              <button onClick={() => deletePoolMember(member)} className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-900/50 dark:bg-slate-900 dark:text-rose-300">
+                                移出分配池
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => createPoolMember(agent)} className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">
+                              <Plus size={12} /> 添加到自动分配池
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <button onClick={() => handleDelete(agent)} disabled={!!actionLoading[agent.id + '_del']} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition disabled:opacity-50">
-                        <Trash2 size={14} />
-                      </button>
                     </li>
-                  ))}
+                    )
+                  })}
                 </ul>
               )}
             </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-black text-slate-800 dark:text-slate-100">Agent 分配池配置</h2>
-              <button onClick={fetchPoolData} className="text-xs text-blue-600 hover:text-blue-700">刷新</button>
-            </div>
-            {poolLoading || !poolConfig ? (
-              <p className="text-sm text-slate-400">加载中...</p>
-            ) : (
-              <div className="space-y-3">
-                <label className="flex items-center justify-between text-sm text-slate-700 dark:text-slate-200">
-                  启用自动分配
-                  <input
-                    type="checkbox"
-                    checked={poolConfig.enabled}
-                    onChange={e => setPoolConfig({ ...poolConfig, enabled: e.target.checked })}
-                  />
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500">overflowPolicy</label>
-                    <select
-                      value={poolConfig.overflowPolicy}
-                      onChange={e => setPoolConfig({ ...poolConfig, overflowPolicy: e.target.value as AssignmentPoolConfig['overflowPolicy'] })}
-                      className="w-full border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-lg px-2 py-2 text-sm"
-                    >
-                      <option value="fallback_only">fallback_only</option>
-                      <option value="pending_queue">pending_queue</option>
-                      <option value="allow_soft_overflow">allow_soft_overflow</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500">rebalancePolicy</label>
-                    <select
-                      value={poolConfig.rebalancePolicy}
-                      onChange={e => setPoolConfig({ ...poolConfig, rebalancePolicy: e.target.value as AssignmentPoolConfig['rebalancePolicy'] })}
-                      className="w-full border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-lg px-2 py-2 text-sm"
-                    >
-                      <option value="manual_only">manual_only</option>
-                      <option value="scheduled_daily">scheduled_daily</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500">matchingOrder</label>
-                    <select
-                      value={poolConfig.matchingOrder}
-                      onChange={e => setPoolConfig({ ...poolConfig, matchingOrder: e.target.value as AssignmentPoolConfig['matchingOrder'] })}
-                      className="w-full border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-lg px-2 py-2 text-sm"
-                    >
-                      <option value="industry_first">industry_first</option>
-                      <option value="region_first">region_first</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-slate-500">fallbackAgentId</label>
-                    <select
-                      value={poolConfig.fallbackAgentId || ''}
-                      onChange={e => setPoolConfig({ ...poolConfig, fallbackAgentId: e.target.value || null })}
-                      className="w-full border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-lg px-2 py-2 text-sm"
-                    >
-                      <option value="">(none)</option>
-                      {poolMembers.map(m => (
-                        <option key={m.agentId} value={m.agentId}>
-                          {m.agentNickname || m.agentId}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <button
-                  onClick={savePoolConfig}
-                  disabled={poolSaving}
-                  className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {poolSaving ? '保存中...' : '保存分配池配置'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4">
-            <h2 className="text-sm font-black text-slate-800 dark:text-slate-100">新增池成员</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                value={newPoolAgentId}
-                onChange={e => setNewPoolAgentId(e.target.value)}
-                placeholder="agentId"
-                className="border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                value={newPoolCapacity}
-                onChange={e => setNewPoolCapacity(Number(e.target.value) || 30)}
-                placeholder="capacity"
-                className="border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                value={newPoolPriority}
-                onChange={e => setNewPoolPriority(Number(e.target.value) || 100)}
-                placeholder="priority"
-                className="border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                value={newPoolIndustries}
-                onChange={e => setNewPoolIndustries(e.target.value)}
-                placeholder="industries: food,beauty"
-                className="border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2 text-sm"
-              />
-              <input
-                value={newPoolRegions}
-                onChange={e => setNewPoolRegions(e.target.value)}
-                placeholder="regions: sg,new york"
-                className="border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-lg px-3 py-2 text-sm md:col-span-2"
-              />
-            </div>
-            <button onClick={createPoolMember} className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
-              添加到分配池
-            </button>
           </div>
         </div>
 
@@ -692,6 +703,87 @@ export default function AdminPage() {
               <button onClick={() => setSelectedHuman(null)} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">取消</button>
               <button onClick={savePermissions} disabled={savingPerms} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50">
                 {savingPerms ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedAgent && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800">
+            <h2 className="text-base font-black text-slate-900 dark:text-white mb-1">分配给 AMC 主理人</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{selectedAgent.nickname || selectedAgent.email}</p>
+            <div className="space-y-2 max-h-64 overflow-y-auto mb-5">
+              {humans.map(human => (
+                <label key={human.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={selectedAgentHumanIds.includes(human.id)}
+                    onChange={() => setSelectedAgentHumanIds(prev => prev.includes(human.id) ? prev.filter(id => id !== human.id) : [...prev, human.id])}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{human.nickname || human.email}</p>
+                    {human.nickname && <p className="text-[11px] text-slate-400 truncate">{human.email}</p>}
+                  </div>
+                </label>
+              ))}
+              {humans.length === 0 && <p className="text-sm text-slate-400 text-center py-4">暂无可分配的主理人</p>}
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setSelectedAgent(null)} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">取消</button>
+              <button onClick={saveAgentPrincipals} disabled={savingPerms} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50">
+                {savingPerms ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingAgent && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800">
+            <h2 className="text-base font-black text-slate-900 dark:text-white mb-1">编辑 AMC Agent</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">{editingAgent.id}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="space-y-1.5">
+                <span className="text-xs font-bold text-slate-500">邮箱</span>
+                <input value={agentDraft.email} onChange={e => setAgentDraft(prev => ({ ...prev, email: e.target.value }))} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white" />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-bold text-slate-500">昵称</span>
+                <input value={agentDraft.nickname} onChange={e => setAgentDraft(prev => ({ ...prev, nickname: e.target.value }))} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white" />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-bold text-slate-500">主题色</span>
+                <input value={agentDraft.themeColor} onChange={e => setAgentDraft(prev => ({ ...prev, themeColor: e.target.value }))} placeholder="#6366f1" className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white" />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-bold text-slate-500">Chat Link</span>
+                <input value={agentDraft.chatLink} onChange={e => setAgentDraft(prev => ({ ...prev, chatLink: e.target.value }))} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white" />
+              </label>
+              <label className="space-y-1.5 md:col-span-2">
+                <span className="text-xs font-bold text-slate-500">Drive Folder</span>
+                <input value={agentDraft.driveFolder} onChange={e => setAgentDraft(prev => ({ ...prev, driveFolder: e.target.value }))} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white" />
+              </label>
+              <label className="space-y-1.5 md:col-span-2">
+                <span className="text-xs font-bold text-slate-500">Workflow 摘要</span>
+                <textarea value={agentDraft.insights} onChange={e => setAgentDraft(prev => ({ ...prev, insights: e.target.value }))} rows={3} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white" />
+              </label>
+              <label className="space-y-1.5 md:col-span-2">
+                <span className="text-xs font-bold text-slate-500">个人简介</span>
+                <textarea value={agentDraft.introduction} onChange={e => setAgentDraft(prev => ({ ...prev, introduction: e.target.value }))} rows={5} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white" />
+              </label>
+              <label className="space-y-1.5 md:col-span-2">
+                <span className="text-xs font-bold text-slate-500">执行流</span>
+                <textarea value={agentDraft.workflow} onChange={e => setAgentDraft(prev => ({ ...prev, workflow: e.target.value }))} rows={5} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white" />
+              </label>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button onClick={() => setEditingAgent(null)} className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">取消</button>
+              <button onClick={saveAgentDraft} disabled={!!actionLoading[editingAgent.id + '_edit']} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50">
+                {actionLoading[editingAgent.id + '_edit'] ? '保存中...' : '保存 Agent'}
               </button>
             </div>
           </div>
