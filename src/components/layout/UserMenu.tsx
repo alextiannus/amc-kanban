@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { User as UserIcon, Users, Trash2, Key, Copy, Check, Settings, Link2, Bot, Inbox, LogOut, CreditCard } from 'lucide-react'
+import { User as UserIcon, Users, Trash2, Key, Copy, Check, Settings, Link2, Inbox, LogOut, CreditCard } from 'lucide-react'
 import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
 
 interface UserMenuProps {
@@ -241,16 +241,6 @@ export default function UserMenu({
 
             {(isAdmin || isBrandDirector) && (
               <>
-                <button
-                  onClick={() => { setShowProfile(false); setCurrentView('agents') }}
-                  className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
-                    currentView === 'agents'
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Bot size={16} /> AI 序列
-                </button>
                 <button
                   onClick={() => { setShowProfile(false); setCurrentView('archive') }}
                   className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${

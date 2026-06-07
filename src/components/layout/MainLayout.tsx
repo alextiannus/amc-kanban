@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
-import { Store, Calendar, Sun, Moon, Gift, Activity } from 'lucide-react'
+import { Store, Calendar, Sun, Moon, Gift, Activity, Bot } from 'lucide-react'
 import BrandSwitcher, { Brand } from './BrandSwitcher'
 import UserMenu from './UserMenu'
 
@@ -46,6 +46,7 @@ export default function MainLayout({
 
   const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : 'BRAND_DIRECTOR')
   const canSeeSocialInsight = dashboardRole === 'ADMIN' || dashboardRole === 'BRAND_DIRECTOR'
+  const canSeeAgentsWorkflow = dashboardRole === 'ADMIN' || dashboardRole === 'BRAND_DIRECTOR'
   const currentTheme = resolvedTheme || theme || 'light'
 
   useEffect(() => {
@@ -127,6 +128,19 @@ export default function MainLayout({
           >
             <Gift size={16} /> 店内活动
           </button>
+          {canSeeAgentsWorkflow && (
+            <button
+              onClick={() => setCurrentView('agents')}
+              className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
+                currentView === 'agents'
+                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+              }`}
+              id="nav-agents"
+            >
+              <Bot size={16} /> AI 序列
+            </button>
+          )}
         </div>
 
         {/* Brand Switcher */}

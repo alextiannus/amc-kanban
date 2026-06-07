@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, CheckCircle2, Copy, CreditCard, Loader2 } from 'lucide-react'
 import { buildLaunchInstruction } from '@/lib/agentInitPrompt'
 
@@ -117,6 +117,7 @@ function resolveCurrentPlanId(payload: SubscriptionPayload | null): string | nul
 
 export default function BrandSubscriptionPage() {
   const router = useRouter()
+  const params = useParams<{ brandId?: string }>()
   const searchParams = useSearchParams()
 
   const [loading, setLoading] = useState(true)
@@ -164,13 +165,19 @@ export default function BrandSubscriptionPage() {
   const canceled = searchParams?.get('canceled') === '1'
   const checkoutSessionId = searchParams?.get('sid') || ''
   const subscriptionId = searchParams?.get('sub') || ''
+  const queryBrandId = searchParams?.get('brandId') || ''
+  const routeBrandId = typeof params?.brandId === 'string' ? params.brandId : ''
+  const effectiveBrandId = routeBrandId || queryBrandId
+  const subscriptionApiPath = effectiveBrandId
+    ? `/api/subscription?brandId=${encodeURIComponent(effectiveBrandId)}`
+    : '/api/subscription'
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch('/api/subscription')
+        const res = await fetch(subscriptionApiPath)
         const json = await res.json()
         if (!res.ok) throw new Error(json.error || 'Failed to load subscription data')
         setData(json)
@@ -187,7 +194,7 @@ export default function BrandSubscriptionPage() {
       }
     }
     load()
-  }, [])
+  }, [subscriptionApiPath])
 
   useEffect(() => {
     const confirmPayment = async () => {
@@ -205,12 +212,12 @@ export default function BrandSubscriptionPage() {
         const res = await fetch('/api/subscription/confirm', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ checkoutSessionId, subscriptionId }),
+          body: JSON.stringify({ checkoutSessionId, subscriptionId, brandId: effectiveBrandId || undefined }),
         })
         const json = await res.json()
         if (!res.ok) throw new Error(json.error || 'Payment confirmation failed')
 
-        const fresh = await fetch('/api/subscription')
+        const fresh = await fetch(subscriptionApiPath)
         const freshJson = await fresh.json()
         if (fresh.ok) {
           setData(freshJson)
@@ -225,7 +232,7 @@ export default function BrandSubscriptionPage() {
       }
     }
     confirmPayment()
-  }, [success, checkoutSessionId, subscriptionId, router])
+  }, [success, checkoutSessionId, subscriptionId, router, effectiveBrandId, subscriptionApiPath])
 
   useEffect(() => {
     if (!showAgentCreationModal || !agentCreationStartedAt) return
@@ -308,6 +315,7 @@ export default function BrandSubscriptionPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          brandId: effectiveBrandId || undefined,
           planId: selectedPlan.id,
           durationMonths,
           addonIds,
@@ -321,7 +329,7 @@ export default function BrandSubscriptionPage() {
       if (!res.ok) throw new Error(json.error || 'Failed to create checkout session')
 
       if (json.paymentMode === 'BILLING') {
-        const fresh = await fetch('/api/subscription')
+        const fresh = await fetch(subscriptionApiPath)
         const freshJson = await fresh.json()
         if (fresh.ok) {
           setData(freshJson)

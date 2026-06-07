@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Check, X, TrendingUp, TrendingDown, AlertCircle, Star,
   Zap, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink, FileText,
-  Users, UserPlus, Shield, Archive, UserMinus, RefreshCw
+  CreditCard,
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
 import { BrandKnowledgePanel } from './BrandKnowledgePanel'
@@ -82,19 +82,6 @@ interface DashboardDetail {
   website?: string
   phone?: string
   address?: string
-}
-
-interface BrandMemberRecord {
-  id: string
-  role: 'owner' | 'collaborator'
-  userId: string
-  user: {
-    id: string
-    email: string
-    nickname?: string | null
-    type: string
-    role: string
-  }
 }
 
 interface DashboardSettingsData {
@@ -453,7 +440,18 @@ function ConversionCard({ label, value, sub, progress, color }: { label: string,
 }
 
 // ── Brand Switcher ───────────────────────────────────────────────────────────
-interface Brand { id: string; name: string; location?: string }
+interface Brand {
+  id: string
+  name: string
+  location?: string
+  subscriptions?: Array<{
+    id: string
+    planId?: string
+    planName?: string
+    status?: string
+    contractEndDate?: string | null
+  }>
+}
 
 function BrandSwitcher({ brands, activeBrand, onChange }: {
   brands: Brand[]
@@ -519,7 +517,18 @@ function BrandSwitcher({ brands, activeBrand, onChange }: {
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
-interface Brand { id: string; name: string; location?: string }
+interface Brand {
+  id: string
+  name: string
+  location?: string
+  subscriptions?: Array<{
+    id: string
+    planId?: string
+    planName?: string
+    status?: string
+    contractEndDate?: string | null
+  }>
+}
 
 interface DashboardHomeProps {
   brand?: Brand
@@ -567,30 +576,6 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
     if (r.ok) setBrandAgents(await r.json())
   }, [])
 
-  const [brandMembers, setBrandMembers] = useState<BrandMemberRecord[]>([])
-  const [brandMembersLoading, setBrandMembersLoading] = useState(false)
-  const [brandMembersVisible, setBrandMembersVisible] = useState(false)
-  const [newMemberEmail, setNewMemberEmail] = useState('')
-  const [newMemberRole, setNewMemberRole] = useState<'owner' | 'collaborator'>('collaborator')
-  const [memberSaving, setMemberSaving] = useState(false)
-  const [archivingBrand, setArchivingBrand] = useState(false)
-
-  const loadBrandMembers = useCallback(async (id: string) => {
-    setBrandMembersLoading(true)
-    try {
-      const r = await fetch(`/api/brands/${id}/owners`)
-      if (r.ok) {
-        setBrandMembers(await r.json())
-        setBrandMembersVisible(true)
-      } else {
-        setBrandMembers([])
-        setBrandMembersVisible(false)
-      }
-    } finally {
-      setBrandMembersLoading(false)
-    }
-  }, [])
-
   // ── Local UI state ───────────────────────────────────────────────────────
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const [autoPilot, setAutoPilot] = useState(false)
@@ -605,15 +590,12 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
         setBrandDetail(null)
         setBrandSettings(null)
         setBrandAgents([])
-        setBrandMembers([])
-        setBrandMembersVisible(false)
         setDismissedIds(new Set())
         setAutoPilot(false)
         // Load new brand data
         loadDetail(activeBrand.id)
         loadSettings(activeBrand.id)
         loadAgents(activeBrand.id)
-        loadBrandMembers(activeBrand.id)
       })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -630,7 +612,23 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
 
   const searchParams = useSearchParams()
   const router = useRouter()
-  void router
+
+  const currentBrandSubscription = activeBrand?.subscriptions?.find((sub) => sub.status === 'ACTIVE')
+    || activeBrand?.subscriptions?.[0]
+
+  const subscriptionStatusLabel =
+    currentBrandSubscription?.status === 'ACTIVE'
+      ? '已生效'
+      : currentBrandSubscription?.status === 'PENDING'
+        ? '待生效'
+        : currentBrandSubscription?.status
+          ? `状态: ${currentBrandSubscription.status}`
+          : '未配置'
+
+  const openBrandSubscription = () => {
+    if (!activeBrand?.id) return
+    router.push(`/board/subscription/${activeBrand.id}`)
+  }
 
   useEffect(() => {
     if (searchParams && searchParams.get('google_success') === 'true') {
@@ -703,79 +701,6 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
       await fetch(`/api/brands/${activeBrand.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoPilot: next }) })
     }
   }
-
-  const saveBrandMember = async () => {
-    if (!activeBrand?.id) return
-    if (!newMemberEmail.trim()) {
-      alert('请输入成员邮箱')
-      return
-    }
-    setMemberSaving(true)
-    try {
-      const res = await fetch(`/api/brands/${activeBrand.id}/owners`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newMemberEmail.trim(), role: newMemberRole }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        alert(data.error || '添加品牌成员失败')
-        return
-      }
-      setNewMemberEmail('')
-      setNewMemberRole('collaborator')
-      await loadBrandMembers(activeBrand.id)
-    } finally {
-      setMemberSaving(false)
-    }
-  }
-
-  const updateBrandMemberRole = async (member: BrandMemberRecord, nextRole: 'owner' | 'collaborator') => {
-    if (!activeBrand?.id) return
-    const res = await fetch(`/api/brands/${activeBrand.id}/owners/${member.userId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: nextRole }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      alert(data.error || '更新成员角色失败')
-      return
-    }
-    await loadBrandMembers(activeBrand.id)
-  }
-
-  const removeBrandMember = async (member: BrandMemberRecord) => {
-    if (!activeBrand?.id) return
-    if (!confirm(`确认移除 ${member.user.email} 吗？`)) return
-    const res = await fetch(`/api/brands/${activeBrand.id}/owners/${member.userId}`, {
-      method: 'DELETE',
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      alert(data.error || '移除成员失败')
-      return
-    }
-    await loadBrandMembers(activeBrand.id)
-  }
-
-  const archiveBrand = async () => {
-    if (!activeBrand?.id) return
-    if (!confirm(`确认归档品牌「${activeBrand.name}」？归档后将从活跃品牌列表隐藏。`)) return
-    setArchivingBrand(true)
-    try {
-      const res = await fetch(`/api/brands/${activeBrand.id}`, { method: 'DELETE' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        alert(data.error || '归档品牌失败')
-        return
-      }
-      window.location.href = '/board'
-    } finally {
-      setArchivingBrand(false)
-    }
-  }
-
 
   // ── Add account ───────────────────────────────────────────────────────────
   const onAccountAdded = () => { if (activeBrand?.id) loadDetail(activeBrand.id) }
@@ -897,106 +822,30 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
             </button>
           )}
 
-          <div className="mb-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/30 p-4 space-y-4">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-indigo-500" />
-                <p className="text-sm font-black text-slate-800 dark:text-slate-100">品牌成员</p>
-                {brandMembersLoading && <span className="text-xs text-slate-400">加载中...</span>}
+          <button
+            onClick={openBrandSubscription}
+            className="mb-4 w-full rounded-2xl border border-blue-200/80 dark:border-blue-900/40 bg-blue-50/70 dark:bg-blue-950/20 px-4 py-3.5 text-left hover:bg-blue-100/70 dark:hover:bg-blue-900/30 transition-colors"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold tracking-widest uppercase text-blue-600 dark:text-blue-300 flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5" /> 当前订阅计划
+                </p>
+                <p className="mt-1 text-sm font-black text-slate-800 dark:text-slate-100 truncate">
+                  {currentBrandSubscription?.planName || '未绑定计划'}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  {subscriptionStatusLabel}
+                  {currentBrandSubscription?.contractEndDate
+                    ? ` · 到期: ${new Date(currentBrandSubscription.contractEndDate).toLocaleDateString('zh-CN')}`
+                    : ''}
+                </p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => loadBrandMembers(activeBrand.id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-400"
-                >
-                  <RefreshCw className="w-3 h-3" /> 刷新
-                </button>
-                <button
-                  onClick={archiveBrand}
-                  disabled={archivingBrand}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 disabled:opacity-50"
-                >
-                  <Archive className="w-3 h-3" /> {archivingBrand ? '归档中...' : '归档品牌'}
-                </button>
-              </div>
+              <span className="inline-flex items-center rounded-xl bg-white/80 dark:bg-slate-900/60 border border-blue-200 dark:border-blue-800 px-3 py-1.5 text-xs font-bold text-blue-600 dark:text-blue-300">
+                管理计划
+              </span>
             </div>
-
-            {brandMembersVisible ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                  <div className="md:col-span-2">
-                    <input
-                      value={newMemberEmail}
-                      onChange={(e) => setNewMemberEmail(e.target.value)}
-                      placeholder="输入成员邮箱，例如 teammate@example.com"
-                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-100"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <select
-                      value={newMemberRole}
-                      onChange={(e) => setNewMemberRole(e.target.value as 'owner' | 'collaborator')}
-                      className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-100"
-                    >
-                      <option value="collaborator">collaborator</option>
-                      <option value="owner">owner</option>
-                    </select>
-                    <button
-                      onClick={saveBrandMember}
-                      disabled={memberSaving}
-                      className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  {brandMembers.length > 0 ? brandMembers.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{member.user.email}</p>
-                          {member.role === 'owner' ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-black text-amber-700 dark:text-amber-400">
-                              <Shield className="w-3 h-3" /> owner
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:text-slate-400">
-                              collaborator
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-400 truncate">{member.user.nickname || member.user.id}</p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <select
-                          value={member.role}
-                          onChange={(e) => updateBrandMemberRole(member, e.target.value as 'owner' | 'collaborator')}
-                          className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200"
-                        >
-                          <option value="owner">owner</option>
-                          <option value="collaborator">collaborator</option>
-                        </select>
-                        <button
-                          onClick={() => removeBrandMember(member)}
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"
-                        >
-                          <UserMinus className="w-3.5 h-3.5" /> 移除
-                        </button>
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-4 text-sm text-slate-400 text-center">
-                      暂无品牌成员
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400">当前账号没有品牌成员管理权限，或品牌成员信息暂不可用。</p>
-            )}
-          </div>
+          </button>
 
           {(activeBrand.location || brandDetail?.website || brandDetail?.phone || brandDetail?.address) && (
             <div className="flex flex-wrap gap-2">

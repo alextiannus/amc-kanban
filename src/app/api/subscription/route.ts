@@ -83,9 +83,11 @@ function toPlanId(value: string | null | undefined): PlanId | null {
   return null
 }
 
-async function findOwnerBrand(ownerId: string) {
+async function findOwnerBrand(ownerId: string, brandId?: string | null) {
+  const scopedBrandId = typeof brandId === 'string' && brandId.trim() ? brandId.trim() : null
   return prisma.brand.findFirst({
     where: {
+      ...(scopedBrandId ? { id: scopedBrandId } : {}),
       OR: [{ ownerId }, { owners: { some: { userId: ownerId } } }],
     },
     select: {
@@ -110,10 +112,26 @@ async function findOwnerBrand(ownerId: string) {
   })
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const url = new URL(request.url)
+  const queryBrandId = url.searchParams.get('brandId')
+  const scopedBrandId = typeof queryBrandId === 'string' && queryBrandId.trim() ? queryBrandId.trim() : null
+
+  const scopedBrand = scopedBrandId
+    ? await findOwnerBrand(session.user.id, scopedBrandId)
+    : null
+
+  if (scopedBrandId && !scopedBrand) {
+    return NextResponse.json({ error: 'Brand not found or no access' }, { status: 404 })
+  }
+
+  const latestWhere = scopedBrandId
+    ? { createdById: session.user.id, brandId: scopedBrandId }
+    : { createdById: session.user.id }
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
@@ -121,11 +139,11 @@ export async function GET() {
   })
 
   const latestAny = await prisma.brandSubscription.findFirst({
-    where: { createdById: session.user.id },
+    where: latestWhere,
     orderBy: { createdAt: 'desc' },
   })
   const latestActive = await prisma.brandSubscription.findFirst({
-    where: { createdById: session.user.id, status: 'ACTIVE' },
+    where: { ...latestWhere, status: 'ACTIVE' },
     orderBy: { createdAt: 'desc' },
   })
 
@@ -137,7 +155,7 @@ export async function GET() {
 
   // Subscription belongs to the AI agent/user identity; do not derive active brand
   // from latest subscription.brandId. Brand context is resolved independently.
-  const brand = await findOwnerBrand(session.user.id)
+  const brand = scopedBrand || await findOwnerBrand(session.user.id)
 
   const ownedBrands = await prisma.brand.findMany({
     where: {
@@ -310,6 +328,17 @@ export async function POST(request: Request) {
   if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json()
+  const url = new URL(request.url)
+  const queryBrandId = url.searchParams.get('brandId')
+  const rawBrandId = String(body.brandId ?? queryBrandId ?? '').trim()
+  const brandId = rawBrandId || null
+
+  if (brandId) {
+    const brand = await findOwnerBrand(session.user.id, brandId)
+    if (!brand) {
+      return NextResponse.json({ error: 'Brand not found or no access' }, { status: 404 })
+    }
+  }
 
   const planId = String(body.planId ?? '')
   const durationMonths = Number(body.durationMonths)
@@ -341,6 +370,7 @@ export async function POST(request: Request) {
 
   const pending = await prisma.brandSubscription.create({
     data: {
+      brandId,
       planId: selectedPlan.id,
       planName: selectedPlan.name,
       durationMonths: summary.durationMonths,
@@ -395,8 +425,11 @@ export async function POST(request: Request) {
   }
 
   const origin = new URL(request.url).origin
-  const successUrl = `${origin}/board/subscription?success=1&sid={CHECKOUT_SESSION_ID}&sub=${pending.id}`
-  const cancelUrl = `${origin}/board/subscription?canceled=1&sub=${pending.id}`
+  const baseSubscriptionUrl = brandId
+    ? `${origin}/board/subscription/${encodeURIComponent(brandId)}`
+    : `${origin}/board/subscription`
+  const successUrl = `${baseSubscriptionUrl}?success=1&sid={CHECKOUT_SESSION_ID}&sub=${pending.id}${brandId ? `&brandId=${encodeURIComponent(brandId)}` : ''}`
+  const cancelUrl = `${baseSubscriptionUrl}?canceled=1&sub=${pending.id}${brandId ? `&brandId=${encodeURIComponent(brandId)}` : ''}`
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
     {
