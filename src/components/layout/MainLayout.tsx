@@ -2,8 +2,9 @@
 /* eslint-disable @next/next/no-img-element */
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { Store, Calendar, Sun, Moon, Gift, Activity, Bot } from 'lucide-react'
+import { Store, Calendar, Sun, Moon, Gift, Activity, Bot, LayoutDashboard } from 'lucide-react'
 import BrandSwitcher, { Brand } from './BrandSwitcher'
 import UserMenu from './UserMenu'
 
@@ -41,32 +42,14 @@ export default function MainLayout({
   onNewAgentKeyGenerated,
   onTasksCleared,
 }: MainLayoutProps) {
+  const router = useRouter()
   const { theme, resolvedTheme, setTheme } = useTheme()
-  const [subscriptionButtonText, setSubscriptionButtonText] = useState('订阅计划')
 
-  const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : 'BRAND_DIRECTOR')
+  const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : user?.role === 'BRAND_OWNER' ? 'BRAND_OWNER' : 'BRAND_DIRECTOR')
   const canSeeSocialInsight = dashboardRole === 'ADMIN' || dashboardRole === 'BRAND_DIRECTOR'
-  const canSeeAgentsWorkflow = dashboardRole === 'ADMIN' || dashboardRole === 'BRAND_DIRECTOR'
+  const canSeeAgentsWorkflow = dashboardRole === 'BRAND_OWNER'
+  const canSeePrincipalDashboard = dashboardRole === 'ADMIN' || dashboardRole === 'BRAND_DIRECTOR'
   const currentTheme = resolvedTheme || theme || 'light'
-
-  useEffect(() => {
-    let cancelled = false
-    const loadSubscriptionLabel = async () => {
-      try {
-        const res = await fetch('/api/subscription')
-        const data = await res.json()
-        if (!res.ok || cancelled) return
-        const planName = data?.latestSubscription?.planName
-        setSubscriptionButtonText(planName ? `订阅: ${planName}` : '订阅计划')
-      } catch {
-        if (!cancelled) setSubscriptionButtonText('订阅计划')
-      }
-    }
-    loadSubscriptionLabel()
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex flex-col font-sans transition-colors duration-300">
@@ -141,6 +124,15 @@ export default function MainLayout({
               <Bot size={16} /> AI 序列
             </button>
           )}
+          {canSeePrincipalDashboard && (
+            <button
+              onClick={() => router.push('/profile/principal')}
+              className="flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50"
+              id="nav-principal-dashboard"
+            >
+              <LayoutDashboard size={16} /> 主理人看板
+            </button>
+          )}
         </div>
 
         {/* Brand Switcher */}
@@ -163,7 +155,6 @@ export default function MainLayout({
             user={user}
             currentView={currentView}
             setCurrentView={setCurrentView}
-            subscriptionButtonText={subscriptionButtonText}
             onShowSettings={onShowSettings}
             onShowSystemLog={onShowSystemLog}
             onNewAgentKeyGenerated={onNewAgentKeyGenerated}

@@ -78,7 +78,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   const [newApiKey, setNewApiKey] = useState<string | null>(null)
   const [showSystemLog, setShowSystemLog] = useState(false)
   const [subscriptionActive, setSubscriptionActive] = useState<boolean | null>(null)
-  const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : 'BRAND_DIRECTOR')
+  const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : user?.role === 'BRAND_OWNER' ? 'BRAND_OWNER' : 'BRAND_DIRECTOR')
 
   const activeBrandIdRef = useRef<string | undefined>(undefined)
 
