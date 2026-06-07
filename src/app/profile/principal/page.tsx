@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, KeyRound, Plus, Settings } from 'lucide-react'
+import { ArrowLeft, Bot, KeyRound, Plus, RefreshCw, Settings, X } from 'lucide-react'
+import AgentDetailPanel from '@/components/AgentDetailPanel'
 import AgentSequenceView from '@/components/AgentSequenceView'
+import AvatarImage from '@/components/AvatarImage'
 import NewAgentKeyModal from '@/components/layout/NewAgentKeyModal'
 
 type DashboardPayload = {
@@ -17,6 +19,12 @@ type DashboardPayload = {
     id: string
     email: string
     nickname: string | null
+    introduction?: string | null
+    insights?: string | null
+    workflow?: string | null
+    themeColor?: string | null
+    avatar?: string | null
+    apiKey?: string | null
     isOnline: boolean
     boundBrands: Array<{ id: string; name: string; role: string }>
   }>
@@ -62,12 +70,31 @@ type DashboardPayload = {
   }>
 }
 
+type AgentDetail = DashboardPayload['agents'][number]
+
+function statusBadgeClass(status: string) {
+  switch (status) {
+    case 'ACTIVE':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300'
+    case 'PAUSED':
+      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300'
+    case 'ARCHIVED':
+      return 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+    default:
+      return 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300'
+  }
+}
+
 export default function PrincipalDashboardPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<DashboardPayload | null>(null)
   const [newApiKey, setNewApiKey] = useState<string | null>(null)
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [agentSelections, setAgentSelections] = useState<Record<string, string>>({})
+  const [selectedAgent, setSelectedAgent] = useState<AgentDetail | null>(null)
+  const [agentModalLoading, setAgentModalLoading] = useState(false)
 
   const loadDashboard = useCallback(async () => {
     setLoading(true)
@@ -127,15 +154,106 @@ export default function PrincipalDashboardPage() {
     }
   }
 
+  const withBusy = async (key: string, action: () => Promise<void>) => {
+    setBusyKey(key)
+    try {
+      await action()
+    } finally {
+      setBusyKey(null)
+    }
+  }
+
+  const openAgentModal = async (agentId: string) => {
+    const localAgent = data.agents.find((agent) => agent.id === agentId)
+    if (localAgent) setSelectedAgent(localAgent)
+    setAgentModalLoading(true)
+    try {
+      const res = await fetch(`/api/agents/${agentId}`)
+      const json = await res.json().catch(() => null)
+      if (res.ok && json) {
+        setSelectedAgent({
+          ...(localAgent || {} as AgentDetail),
+          ...json,
+          isOnline: localAgent?.isOnline ?? Boolean(json.tasksAsAssignee?.length),
+          boundBrands: localAgent?.boundBrands || [],
+        })
+      } else if (!localAgent) {
+        alert(json?.error || '打开 Agent 详情失败')
+      }
+    } catch {
+      if (!localAgent) alert('打开 Agent 详情失败')
+    } finally {
+      setAgentModalLoading(false)
+    }
+  }
+
+  const bindBrandAgent = async (brandId: string) => {
+    const agentId = agentSelections[brandId]
+    if (!agentId) {
+      alert('请选择 AI 序列中的 Agent')
+      return
+    }
+
+    await withBusy(`agent-add-${brandId}`, async () => {
+      const res = await fetch(`/api/brands/${brandId}/agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId, role: 'worker' }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(json.error || '添加 Agent 失败')
+        return
+      }
+      setAgentSelections((prev) => ({ ...prev, [brandId]: '' }))
+      await loadDashboard()
+    })
+  }
+
+  const replaceBrandAgent = async (brandId: string, currentAgentIds: string[]) => {
+    const agentId = agentSelections[brandId]
+    if (!agentId) {
+      alert('请选择要替换成的 Agent')
+      return
+    }
+
+    await withBusy(`agent-replace-${brandId}`, async () => {
+      for (const currentAgentId of currentAgentIds) {
+        if (currentAgentId === agentId) continue
+        const removeRes = await fetch(`/api/brands/${brandId}/agents?agentId=${encodeURIComponent(currentAgentId)}`, {
+          method: 'DELETE',
+        })
+        if (!removeRes.ok) {
+          const json = await removeRes.json().catch(() => ({}))
+          alert(json.error || '替换 Agent 失败')
+          return
+        }
+      }
+
+      const res = await fetch(`/api/brands/${brandId}/agents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId, role: 'worker' }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(json.error || '替换 Agent 失败')
+        return
+      }
+      setAgentSelections((prev) => ({ ...prev, [brandId]: '' }))
+      await loadDashboard()
+    })
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
       <div className="space-y-4">
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push('/board')}
           className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
-          <ArrowLeft className="h-4 w-4" /> 返回
+          <ArrowLeft className="h-4 w-4" /> 返回首页
         </button>
         <div>
           <h1 className="text-3xl font-black text-slate-900 dark:text-white">主理人看板</h1>
@@ -194,7 +312,7 @@ export default function PrincipalDashboardPage() {
                 <th className="py-2 pr-3">品牌</th>
                 <th className="py-2 pr-3">品牌主信息</th>
                 <th className="py-2 pr-3">状态</th>
-                <th className="py-2 pr-3">绑定 AMC Agent</th>
+                <th className="py-2 pr-3">AI 序列</th>
                 <th className="py-2 pr-3">动作项</th>
                 <th className="py-2">管理</th>
               </tr>
@@ -216,22 +334,54 @@ export default function PrincipalDashboardPage() {
                       </div>
                     ) : <p className="text-xs text-slate-400">暂无品牌主</p>}
                   </td>
-                  <td className="py-2 pr-3 text-xs">{brand.status}</td>
+                  <td className="py-2 pr-3 text-xs">
+                    <span className={`inline-flex rounded-full border px-2 py-0.5 font-bold ${statusBadgeClass(brand.status)}`}>
+                      {brand.status}
+                    </span>
+                  </td>
                   <td className="py-2 pr-3 align-top">
-                    <div className="flex flex-wrap gap-2">
-                      {brand.brandAgents.length === 0 ? (
-                        <p className="text-xs text-slate-400">未绑定</p>
-                      ) : (
-                        brand.brandAgents.map((link) => (
-                          <button
-                            key={`${brand.id}-${link.agentId}`}
-                            onClick={() => router.push(`/agents/${link.agentId}`)}
-                            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-300"
-                          >
-                            {link.agent.nickname || link.agent.email}
-                          </button>
-                        ))
-                      )}
+                    <div className="min-w-[260px] space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        {brand.brandAgents.length === 0 ? (
+                          <p className="text-xs text-slate-400">未绑定</p>
+                        ) : (
+                          brand.brandAgents.map((link) => (
+                            <button
+                              key={`${brand.id}-${link.agentId}`}
+                              onClick={() => openAgentModal(link.agentId)}
+                              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-300"
+                            >
+                              {link.agent.nickname || link.agent.email}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                      <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+                        <select
+                          value={agentSelections[brand.id] || ''}
+                          onChange={(event) => setAgentSelections((prev) => ({ ...prev, [brand.id]: event.target.value }))}
+                          className="min-w-0 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-400"
+                        >
+                          <option value="">选择 Agent</option>
+                          {data.agents.map((agent) => (
+                            <option key={agent.id} value={agent.id}>{agent.nickname || agent.email}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => bindBrandAgent(brand.id)}
+                          disabled={!agentSelections[brand.id] || busyKey === `agent-add-${brand.id}` || busyKey === `agent-replace-${brand.id}`}
+                          className="rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          添加
+                        </button>
+                        <button
+                          onClick={() => replaceBrandAgent(brand.id, brand.brandAgents.map((link) => link.agentId))}
+                          disabled={!agentSelections[brand.id] || brand.brandAgents.length === 0 || busyKey === `agent-add-${brand.id}` || busyKey === `agent-replace-${brand.id}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-2.5 py-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-50"
+                        >
+                          <RefreshCw className="h-3 w-3" /> 替换
+                        </button>
+                      </div>
                     </div>
                   </td>
                   <td className="py-2 text-xs font-semibold text-slate-600 dark:text-slate-300">{brand._count.actionItems}</td>
@@ -278,6 +428,59 @@ export default function PrincipalDashboardPage() {
           newApiKey={newApiKey}
           onClose={() => setNewApiKey(null)}
         />
+      )}
+
+      {selectedAgent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setSelectedAgent(null)}>
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-4">
+                <div
+                  style={selectedAgent.themeColor ? { backgroundColor: `${selectedAgent.themeColor}20`, color: selectedAgent.themeColor } : undefined}
+                  className={`h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-white dark:border-slate-700 shadow-sm flex items-center justify-center text-sm font-bold ${!selectedAgent.themeColor ? 'bg-slate-200 text-slate-600' : ''}`}
+                >
+                  {selectedAgent.avatar ? (
+                    <AvatarImage src={selectedAgent.avatar} alt="Avatar" className="h-full w-full object-cover" />
+                  ) : (
+                    (selectedAgent.nickname || selectedAgent.email.split('@')[0]).substring(0, 2).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-xl font-black text-slate-900 dark:text-slate-50">{selectedAgent.nickname || selectedAgent.email.split('@')[0]}</p>
+                  <p className="truncate text-sm text-slate-400">{selectedAgent.email}</p>
+                  {agentModalLoading && <p className="mt-1 text-xs text-indigo-500">正在刷新详情...</p>}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedAgent(null)}
+                className="rounded-lg border border-slate-200 dark:border-slate-700 p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                aria-label="关闭 Agent 详情"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {selectedAgent.insights && (
+              <div className="mt-5">
+                <span className="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded flex w-fit mb-2">
+                  Workflow
+                </span>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-400 leading-relaxed">{selectedAgent.insights}</p>
+              </div>
+            )}
+
+            <AgentDetailPanel agent={selectedAgent} />
+
+            {!selectedAgent.apiKey && !selectedAgent.introduction && !selectedAgent.workflow && (
+              <div className="mt-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-4 text-sm text-slate-500 dark:text-slate-400">
+                <Bot className="mb-2 h-5 w-5" /> 暂无更多 Agent 详情。
+              </div>
+            )}
+          </div>
+        </div>
       )}
       </div>
     </div>

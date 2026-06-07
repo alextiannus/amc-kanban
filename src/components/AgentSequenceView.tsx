@@ -3,15 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
 import { Bot, Search, Trash2 } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import AgentDetailPanel from './AgentDetailPanel'
 import AgentEditModal from './AgentEditModal'
 import AvatarImage from './AvatarImage'
-import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
-
-const markdownComponents = {
-  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-}
 
 type AgentItem = {
   id: string
@@ -38,8 +32,6 @@ export default function AgentSequenceView({
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterTab, setFilterTab] = useState<'all' | 'online' | 'offline'>(initialFilter)
-  const [copiedKey, setCopiedKey] = useState<string | null>(null)
-  const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
   const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null)
 
   const fetchAgents = useCallback(async () => {
@@ -53,13 +45,6 @@ export default function AgentSequenceView({
       setLoading(false)
     }
   }, [])
-
-  const getCopyCommand = (apiKey: string | null = null) => {
-    const hostFromEnv = process.env.NEXT_PUBLIC_KANBAN_HOST
-    const hostFromWindow = typeof window !== 'undefined' ? window.location.origin : null
-    const baseHost = hostFromEnv || hostFromWindow || 'https://amc-kanban.immedi.ai'
-    return buildAgentInitPrompt({ apiKey, apiBaseUrl: `${baseHost}/api` })
-  }
 
   useEffect(() => {
     queueMicrotask(() => setFilterTab(initialFilter))
@@ -233,67 +218,7 @@ export default function AgentSequenceView({
 
                 {/* Expanded: credentials + intro + workflow */}
                 {expandedAgentIds.includes(agent.id) && (
-                  <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-5 animate-in fade-in slide-in-from-top-2">
-                    {agent.apiKey && (
-                      <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-3">🔑 凭证管理</span>
-                        <div className="flex flex-col gap-2">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              readOnly
-                              value={agent.apiKey}
-                              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-600 dark:text-slate-300 font-mono text-xs focus:outline-none"
-                            />
-                            <button
-                              onClick={e => {
-                                e.stopPropagation()
-                                navigator.clipboard.writeText(agent.apiKey ?? '')
-                                setCopiedKey(agent.id)
-                                setTimeout(() => setCopiedKey(null), 2000)
-                              }}
-                              className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold transition-colors whitespace-nowrap flex-shrink-0"
-                            >
-                              {copiedKey === agent.id ? '已复制 Key' : '复制 Key'}
-                            </button>
-                          </div>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation()
-                              navigator.clipboard.writeText(getCopyCommand(agent.apiKey ?? null))
-                              setCopiedCommand(agent.id)
-                              setTimeout(() => setCopiedCommand(null), 2000)
-                            }}
-                            className="w-full px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 mt-1"
-                          >
-                            📜 {copiedCommand === agent.id ? 'Skill 已复制' : '一键复制完整初始化 Skill'}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {agent.introduction && (
-                      <div>
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-2 flex items-center gap-2">
-                          <Bot size={14} /> 个人简介
-                        </span>
-                        <div className="text-sm text-slate-600 dark:text-slate-400 prose prose-sm dark:prose-invert">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                            {agent.introduction}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
-                    {agent.workflow && (
-                      <div>
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-2">执行流</span>
-                        <div className="text-sm text-slate-600 dark:text-slate-400 prose prose-sm dark:prose-invert">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                            {agent.workflow}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <AgentDetailPanel agent={agent} />
                 )}
               </div>
             ))}

@@ -38,6 +38,7 @@ export async function GET(
         type: true,
         nickname: true,
         email: true,
+        ...(session.user.role === 'ADMIN' ? { apiKey: true } : {}),
         insights: true,
         introduction: true,
         workflow: true,
