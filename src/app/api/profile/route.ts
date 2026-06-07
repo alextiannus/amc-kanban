@@ -23,6 +23,46 @@ export async function GET() {
         nickname: true,
         introduction: true,
         avatar: true,
+        organizationMembers: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            member: {
+              select: {
+                id: true,
+                email: true,
+                nickname: true,
+                type: true,
+                role: true,
+              },
+            },
+          },
+        },
+        organizationsJoined: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            owner: {
+              select: {
+                id: true,
+                email: true,
+                nickname: true,
+              },
+            },
+          },
+        },
+        ownedBrands: {
+          where: { role: 'owner' },
+          orderBy: { createdAt: 'asc' },
+          include: {
+            brand: {
+              select: {
+                id: true,
+                name: true,
+                location: true,
+                status: true,
+              },
+            },
+          },
+        },
         permittedAgents: {
           include: { 
             agent: { 

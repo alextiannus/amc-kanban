@@ -32,6 +32,8 @@ model User {
   // 关系映射
   tasksAsAssignee  WorkUnit[]        @relation("TaskAssignee")
   ownedBrands      BrandOwner[]      @relation("BrandOwners")
+  organizationMembers OrganizationMember[] @relation("OrganizationOwner")
+  organizationsJoined OrganizationMember[] @relation("OrganizationMember")
 
   // 权限映射表（人类用户能看到哪些 AI Agent 的工作）
   permittedAgents  AgentPermission[] @relation("HumanUser")
@@ -44,6 +46,21 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// 组织成员关系：owner 管理组织，member 可查看 owner 的全部品牌
+model OrganizationMember {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    User     @relation("OrganizationMember", fields: [memberId], references: [id], onDelete: Cascade)
+  role      String   @default("member") // member | manager
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, memberId])
+  @@index([ownerId])
+  @@index([memberId])
 }
 
 model WorkUnit {

@@ -60,6 +60,45 @@ export async function canAccessBrandViaAgentPermission(
 }
 
 /**
+ * Returns true when humanUserId is an organization member of any brand owner.
+ * Organization members can view all brands under that owner.
+ */
+export async function canAccessBrandViaOrganization(
+  brandId: string,
+  humanUserId: string
+): Promise<boolean> {
+  const orgOwnerIds = (
+    await prisma.organizationMember.findMany({
+      where: { memberId: humanUserId },
+      select: { ownerId: true },
+    })
+  ).map((m) => m.ownerId)
+
+  if (orgOwnerIds.length === 0) return false
+
+  const link = await prisma.brand.findFirst({
+    where: {
+      id: brandId,
+      OR: [
+        {
+          ownerId: { in: orgOwnerIds },
+        },
+        {
+          owners: {
+            some: {
+              role: 'owner',
+              userId: { in: orgOwnerIds },
+            },
+          },
+        },
+      ],
+    },
+    select: { id: true },
+  })
+  return !!link
+}
+
+/**
  * Returns true if the given agentId is actively linked to the brand
  * via the BrandAgent join table.
  */
@@ -83,6 +122,8 @@ export async function canHumanAccessBrandProject(
   if (isAmcOperatorRole(userRole)) return true
 
   if (await canOwnBrand(brandId, userId)) return true
+
+  if (await canAccessBrandViaOrganization(brandId, userId)) return true
 
   return canAccessBrandViaAgentPermission(brandId, userId)
 }

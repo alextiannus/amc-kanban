@@ -16,7 +16,7 @@ interface UserMenuProps {
     avatar?: string | null
   } | null
   currentView: string
-  setCurrentView: (view: 'dashboard' | 'calendar' | 'analytics' | 'agents' | 'archive' | 'game' | 'socialInsight') => void
+  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight') => void
   subscriptionButtonText: string
   onShowSettings: () => void
   onShowSystemLog: () => void

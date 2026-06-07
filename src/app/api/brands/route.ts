@@ -125,7 +125,7 @@ export async function GET() {
     }
 
     // Regular human user — brands via BrandOwner join table
-    const [ownerLinks, legacyOwnedBrands, delegatedAgentPermissions] = await Promise.all([
+    const [ownerLinks, legacyOwnedBrands, delegatedAgentPermissions, organizationMemberships] = await Promise.all([
       prisma.brandOwner.findMany({
         where: { userId: session.user.id, brand: activeBrandFilter },
         include: {
@@ -141,6 +141,10 @@ export async function GET() {
       prisma.agentPermission.findMany({
         where: { humanId: session.user.id },
         select: { agentId: true },
+      }),
+      prisma.organizationMember.findMany({
+        where: { memberId: session.user.id },
+        select: { ownerId: true },
       }),
     ])
 
@@ -162,9 +166,37 @@ export async function GET() {
       : []
 
     const delegatedBrandIds = Array.from(new Set(delegatedBrandLinks.map((link) => link.brandId)))
+    const organizationOwnerIds = Array.from(new Set(organizationMemberships.map((m) => m.ownerId)))
     const delegatedBrands = delegatedBrandIds.length
       ? await prisma.brand.findMany({
           where: { id: { in: delegatedBrandIds }, ...activeBrandFilter },
+          include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
+          orderBy: { createdAt: 'asc' },
+        })
+      : []
+
+    const excludedBrandIds = Array.from(new Set([
+      ...ownedBrandIds,
+      ...delegatedBrandIds,
+    ]))
+
+    const organizationBrands = organizationOwnerIds.length
+      ? await prisma.brand.findMany({
+          where: {
+            ...activeBrandFilter,
+            id: { notIn: excludedBrandIds },
+            OR: [
+              { ownerId: { in: organizationOwnerIds } },
+              {
+                owners: {
+                  some: {
+                    role: 'owner',
+                    userId: { in: organizationOwnerIds },
+                  },
+                },
+              },
+            ],
+          },
           include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
           orderBy: { createdAt: 'asc' },
         })
@@ -174,6 +206,7 @@ export async function GET() {
       ...ownerLinks.map((link) => link.brand),
       ...legacyOwnedBrands,
       ...delegatedBrands,
+      ...organizationBrands,
     ])
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Internal Server Error'
