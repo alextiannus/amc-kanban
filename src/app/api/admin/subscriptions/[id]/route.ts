@@ -30,7 +30,7 @@ export async function PATCH(request: Request, { params }: Params) {
   })
 
   if (existing.status !== 'ACTIVE' && updated.status === 'ACTIVE') {
-    let ownerId = updated.createdById || null
+    const ownerId = updated.createdById || null
 
     if (ownerId) {
       await ensureBrandAgentKeyAfterSubscription({

@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: amc_phase1_db
+    environment:
+      POSTGRES_DB: amc
+      POSTGRES_USER: amc_user
+      POSTGRES_PASSWORD: amc_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amc_user -d amc"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "5432:5432"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.localtest
+    container_name: amc_phase1_app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://amc_user:amc_password@db:5432/amc?schema=public
+      JWT_SECRET: local-phase1-jwt-secret
+      API_KEY: local-openclaw-key
+      AI_SINGLE_AGENT_MODE: "false"
+      BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+      BOOTSTRAP_ADMIN_INITIAL_PASSWORD: password123
+      NODE_ENV: development
+    command: >
+      sh -lc "
+      npx prisma generate &&
+      npx prisma db push --accept-data-loss &&
+      node --experimental-strip-types prisma/seed.ts &&
+      node node_modules/next/dist/bin/next dev -p 3000
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/meta/openapi >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    ports:
+      - "3000:3000"
+
+  tester:
+    build:
+      context: .
+      dockerfile: Dockerfile.localtest
+    container_name: amc_phase1_tester
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://amc_user:amc_password@db:5432/amc?schema=public
+      JWT_SECRET: local-phase1-jwt-secret
+      API_KEY: local-openclaw-key
+      TEST_AGENT_API_KEY: amc-agent-dev-key-001
+      AMC_BASE_URL: http://app:3000
+      PHASE1_SERVER_URL: http://app:3000
+      PERMISSION_TEST_BASE_URL: http://app:3000
+    command: >
+      sh -lc "
+      npx prisma generate &&
+      npm run test:phase1-local
+      "

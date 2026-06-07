@@ -26,16 +26,6 @@ interface UploadAssetRequest {
   fileBase64: string    // base64-encoded file data (no 'data:' prefix)
 }
 
-interface UploadAssetResponse {
-  ok: boolean
-  assetId: string       // unique identifier in asset library
-  assetUrl: string      // public URL to access the asset
-  storageEngine: string // 'postfast', 'lark', or 'local'
-  filename: string
-  mimeType: string
-  uploadedAt: string    // ISO 8601 timestamp
-}
-
 // POST /api/brands/[id]/assets/upload
 // Upload a file to the brand's asset library
 export async function POST(request: Request, { params }: Params) {
@@ -163,12 +153,14 @@ export async function POST(request: Request, { params }: Params) {
       { status: 400 }
     )
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Upload failed'
+    const details = error instanceof Error && 'code' in error ? String((error as { code?: unknown }).code ?? '') : undefined
     console.error(`[Assets] Unexpected error for brand ${brandId}:`, error)
     return NextResponse.json(
       {
-        error: error.message || 'Upload failed',
-        details: error.code || undefined,
+        error: message,
+        details: details || undefined,
       },
       { status: 500 }
     )

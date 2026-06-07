@@ -9,7 +9,7 @@ type Props = {
   brandId: string
   open: boolean
   onClose: () => void
-  initialSettings?: Record<string, any>
+  initialSettings?: Record<string, unknown>
 }
 
 type StoreDraft = {
@@ -26,22 +26,46 @@ type StoreDraft = {
   googleLocationName: string
 }
 
+type ParsedStoreConfig = {
+  storeId?: unknown
+  name?: unknown
+  timezone?: unknown
+  address?: unknown
+  location?: unknown
+  isPrimary?: unknown
+  phone?: unknown
+  website?: unknown
+  contact?: {
+    phone?: unknown
+    website?: unknown
+  }
+  googleBusiness?: {
+    placeId?: unknown
+    locationId?: unknown
+    locationName?: unknown
+  }
+}
+
 const STORES_CONFIG_START = '<!-- AMC:BRAND_PROFILE:STORES_CONFIG:START -->'
 const STORES_CONFIG_END = '<!-- AMC:BRAND_PROFILE:STORES_CONFIG:END -->'
 
-function makePrimaryStoreFromSettings(initialSettings: Record<string, any> | undefined): StoreDraft {
+function asString(value: unknown, fallback = '') {
+  return typeof value === 'string' ? value : fallback
+}
+
+function makePrimaryStoreFromSettings(initialSettings: Record<string, unknown> | undefined): StoreDraft {
   return {
     storeId: 'main',
-    name: (initialSettings?.googleLocationName as string) || '主门店',
-    timezone: (initialSettings?.timezone as string) || 'Asia/Singapore',
-    address: (initialSettings?.address as string) || '',
-    location: (initialSettings?.location as string) || '',
+    name: asString(initialSettings?.googleLocationName, '主门店'),
+    timezone: asString(initialSettings?.timezone, 'Asia/Singapore'),
+    address: asString(initialSettings?.address),
+    location: asString(initialSettings?.location),
     isPrimary: true,
-    phone: (initialSettings?.phone as string) || '',
-    website: (initialSettings?.website as string) || '',
-    googlePlaceId: (initialSettings?.googlePlaceId as string) || '',
-    googleLocationId: (initialSettings?.googleLocationId as string) || '',
-    googleLocationName: (initialSettings?.googleLocationName as string) || '',
+    phone: asString(initialSettings?.phone),
+    website: asString(initialSettings?.website),
+    googlePlaceId: asString(initialSettings?.googlePlaceId),
+    googleLocationId: asString(initialSettings?.googleLocationId),
+    googleLocationName: asString(initialSettings?.googleLocationName),
   }
 }
 
@@ -62,22 +86,29 @@ function extractStoresFromMarkdown(markdown: string, fallbackStore: StoreDraft):
 
   try {
     const parsed = JSON.parse(match[1])
-    const stores = Array.isArray(parsed?.stores) ? parsed.stores : []
+    const stores = Array.isArray((parsed as { stores?: unknown[] })?.stores)
+      ? ((parsed as { stores?: unknown[] }).stores as ParsedStoreConfig[])
+      : []
     if (!stores.length) return [fallbackStore]
 
-    return ensureAtLeastOnePrimary(stores.map((item: any, idx: number) => ({
-      storeId: typeof item?.storeId === 'string' && item.storeId.trim() ? item.storeId : `store_${idx + 1}`,
-      name: typeof item?.name === 'string' ? item.name : '',
-      timezone: typeof item?.timezone === 'string' && item.timezone ? item.timezone : fallbackStore.timezone,
-      address: typeof item?.address === 'string' ? item.address : '',
-      location: typeof item?.location === 'string' ? item.location : '',
-      isPrimary: !!item?.isPrimary,
-      phone: typeof item?.contact?.phone === 'string' ? item.contact.phone : (typeof item?.phone === 'string' ? item.phone : ''),
-      website: typeof item?.contact?.website === 'string' ? item.contact.website : (typeof item?.website === 'string' ? item.website : ''),
-      googlePlaceId: typeof item?.googleBusiness?.placeId === 'string' ? item.googleBusiness.placeId : '',
-      googleLocationId: typeof item?.googleBusiness?.locationId === 'string' ? item.googleBusiness.locationId : '',
-      googleLocationName: typeof item?.googleBusiness?.locationName === 'string' ? item.googleBusiness.locationName : '',
-    })))
+    return ensureAtLeastOnePrimary(
+      stores.map((item, idx) => {
+        const store = item as ParsedStoreConfig
+        return {
+          storeId: typeof store.storeId === 'string' && store.storeId.trim() ? store.storeId : `store_${idx + 1}`,
+          name: typeof store.name === 'string' ? store.name : '',
+          timezone: typeof store.timezone === 'string' && store.timezone ? store.timezone : fallbackStore.timezone,
+          address: typeof store.address === 'string' ? store.address : '',
+          location: typeof store.location === 'string' ? store.location : '',
+          isPrimary: !!store.isPrimary,
+          phone: typeof store.contact?.phone === 'string' ? store.contact.phone : (typeof store.phone === 'string' ? store.phone : ''),
+          website: typeof store.contact?.website === 'string' ? store.contact.website : (typeof store.website === 'string' ? store.website : ''),
+          googlePlaceId: typeof store.googleBusiness?.placeId === 'string' ? store.googleBusiness.placeId : '',
+          googleLocationId: typeof store.googleBusiness?.locationId === 'string' ? store.googleBusiness.locationId : '',
+          googleLocationName: typeof store.googleBusiness?.locationName === 'string' ? store.googleBusiness.locationName : '',
+        }
+      })
+    )
   } catch {
     return [fallbackStore]
   }
@@ -133,7 +164,7 @@ export function BrandKnowledgePanel({ brandId, open, onClose, initialSettings }:
     if (!open) return
 
     const fallbackStore = makePrimaryStoreFromSettings(initialSettings)
-    setStores([fallbackStore])
+    queueMicrotask(() => setStores([fallbackStore]))
 
     const loadProfile = async () => {
       setProfileLoading(true)

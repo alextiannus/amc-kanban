@@ -1,26 +1,46 @@
 'use client'
+/* eslint-disable @next/next/no-img-element */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+type ProfileAgent = {
+  id: string
+  email: string
+  chatLink?: string | null
+  driveFolder?: string | null
+}
+
+type ProfileData = {
+  avatar?: string | null
+  nickname?: string | null
+  email: string
+  role: string
+  type: string
+  introduction?: string | null
+  permittedAgents: Array<{ agent: ProfileAgent }>
+}
+
 export default function ProfilePage() {
-  const [profile, setProfile] = useState<any>(null)
+  const [profile, setProfile] = useState<ProfileData | null>(null)
   const router = useRouter()
 
-  useEffect(() => {
-    fetchProfile()
-  }, [])
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     const res = await fetch('/api/profile')
     if (res.ok) {
-      const data = await res.json()
+      const data = await res.json() as ProfileData
       setProfile(data)
     } else {
       router.push('/')
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void fetchProfile()
+    })
+  }, [fetchProfile])
 
   if (!profile) return <div className="p-8 text-center text-gray-500">Loading profile...</div>
 
@@ -68,7 +88,7 @@ export default function ProfilePage() {
           <p className="text-gray-500">No AI agents have been assigned to you by the administrator.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {profile.permittedAgents.map((pa: any) => {
+            {profile.permittedAgents.map((pa) => {
               const agent = pa.agent
               return (
                 <Link key={agent.id} href={`/agents/${agent.id}`} className="block bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-blue-500 transition-colors">

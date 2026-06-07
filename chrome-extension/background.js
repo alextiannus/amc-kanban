@@ -1,5 +1,5 @@
 // Listen for execution commands from the AMC content script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender) => {
   if (message.type === 'EXECUTE_ACTION') {
     const senderTabId = sender.tab?.id;
     if (!senderTabId) {
@@ -44,7 +44,7 @@ async function handleExecuteAction(action, payload) {
     throw new Error(`Unsupported extension action: ${action}`);
   }
 
-  const { platform, reviewId, replyText } = payload;
+  const { reviewId, replyText } = payload;
   if (!reviewId || !replyText) {
     throw new Error('reviewId and replyText are required for review replies.');
   }

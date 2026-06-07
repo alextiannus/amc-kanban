@@ -3,9 +3,11 @@ import { prisma } from '@/lib/prisma'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { buildWeeklyMetrics, getNaturalWeekWindow } from '@/lib/projectExecution'
 
-function parseJsonObject(value: unknown): Record<string, any> | null {
+type JsonObject = Record<string, unknown>
+
+function parseJsonObject(value: unknown): JsonObject | null {
   if (!value || typeof value !== 'object') return null
-  return value as Record<string, any>
+  return value as JsonObject
 }
 
 async function canHumanAccessAgent(humanId: string, role: string | undefined, agentId: string) {

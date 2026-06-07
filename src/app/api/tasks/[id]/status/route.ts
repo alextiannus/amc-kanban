@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
@@ -63,7 +64,7 @@ export async function PATCH(
       }
     }
 
-    const data: any = { status }
+    const data: Prisma.WorkUnitUpdateInput = { status }
     
     // Specifically handle requiredInput, allowing null to clear it
     if (requiredInput !== undefined) {

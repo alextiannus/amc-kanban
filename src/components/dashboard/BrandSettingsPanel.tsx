@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { X, Save, Loader2, CheckCircle2 } from 'lucide-react'
 
 // ── Integration field types ──────────────────────────────────────────────────
@@ -37,7 +37,7 @@ interface Props {
   brandId: string
   open: boolean
   onClose: () => void
-  initialSettings?: Record<string, any>
+  initialSettings?: Record<string, unknown>
 }
 
 function isMaskedValue(value: unknown) {
@@ -48,7 +48,11 @@ function asText(value: unknown) {
   return typeof value === 'string' ? value : ''
 }
 
-function buildInitialForm(initialSettings?: Record<string, any>): Record<string, string> {
+function asBool(value: unknown, fallback = false) {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+function buildInitialForm(initialSettings?: Record<string, unknown>): Record<string, string> {
   if (!initialSettings) {
     return {
       postfastApiKey: '',
@@ -83,6 +87,25 @@ function buildInitialForm(initialSettings?: Record<string, any>): Record<string,
     larkOwnerId: asText(initialSettings.larkOwnerId),
   }
 }
+function StatusBadge({ ok }: { ok?: boolean }) {
+  return ok ? (
+    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">已连接</span>
+  ) : (
+    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">未配置</span>
+  )
+}
+
+function Section({ label, badge, children }: { label: string; badge: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-extrabold text-slate-700 dark:text-slate-200">{label}</p>
+        {badge}
+      </div>
+      <div className="space-y-3">{children}</div>
+    </div>
+  )
+}
 
 export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: Props) {
   const [form, setForm] = useState<Record<string, string>>({})
@@ -92,36 +115,51 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
   const [postfastSync, setPostfastSync] = useState<{ synced: number; accounts: string[] } | null>(null)
   const [preferOAuth, setPreferOAuth] = useState(true)
 
+  const googleLocationName = asText(initialSettings?.googleLocationName)
+  const larkFolderUrl = asText(initialSettings?.larkFolderUrl)
+  const larkDriveFolderId = asText(initialSettings?.larkDriveFolderId)
+  const googlePreferOAuth = asBool(initialSettings?.googlePreferOAuth, true)
+
   useEffect(() => {
     if (!open) return
 
-    if (initialSettings) {
-      setForm(buildInitialForm(initialSettings))
-      setPreferOAuth(initialSettings.googlePreferOAuth ?? true)
-      setStatus({
-        postfast: !!initialSettings.postfastConfigured,
-        google: !!initialSettings.googleConfigured,
-        lark: !!initialSettings.larkConfigured,
-        extension: false,
-      })
-    } else {
-      setForm({})
-    }
-  }, [initialSettings, open])
+    queueMicrotask(() => {
+      if (initialSettings) {
+        setForm(buildInitialForm(initialSettings))
+        setPreferOAuth(googlePreferOAuth)
+        setStatus({
+          postfast: asBool(initialSettings.postfastConfigured),
+          google: asBool(initialSettings.googleConfigured),
+          lark: asBool(initialSettings.larkConfigured),
+          extension: false,
+        })
+      } else {
+        setForm({})
+      }
+    })
+  }, [googlePreferOAuth, initialSettings, open])
 
-  useEffect(() => {
-    if (open) fetchStatus()
-  }, [open, brandId])
-
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     const res = await fetch(`/api/integrations/status?brandId=${brandId}`)
     if (res.ok) {
       const data = await res.json()
       const s: Record<string, boolean> = {}
-      data.statuses?.forEach((st: any) => { s[st.name] = st.ok })
+      const statuses = Array.isArray(data?.statuses) ? data.statuses : []
+      statuses.forEach((st: { name?: string; ok?: boolean }) => {
+        if (typeof st.name === 'string') {
+          s[st.name] = !!st.ok
+        }
+      })
       setStatus(s)
     }
-  }
+  }, [brandId])
+
+  useEffect(() => {
+    if (!open) return
+    queueMicrotask(() => {
+      void fetchStatus()
+    })
+  }, [open, fetchStatus])
 
   const [disconnecting, setDisconnecting] = useState(false)
   const handleGoogleDisconnect = async () => {
@@ -163,17 +201,30 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      if (res.ok) {
-        const data = await res.json()
-        setStatus({ postfast: data.postfastConfigured, google: data.googleConfigured, lark: data.larkConfigured })
-        if (data.googlePreferOAuth !== undefined) {
-          setPreferOAuth(data.googlePreferOAuth)
-        }
-        if (data.postfastSync) setPostfastSync(data.postfastSync)
-        setSaved(true)
-        setTimeout(() => setSaved(false), 3000)
-        setForm({})
+
+      if (!res.ok) {
+        alert('保存失败，请重试')
+        return
       }
+
+      const data = await res.json()
+      setStatus({
+        postfast: !!data.postfastConfigured,
+        google: !!data.googleConfigured,
+        lark: !!data.larkConfigured,
+        extension: false,
+      })
+      if (data.googlePreferOAuth !== undefined) {
+        setPreferOAuth(!!data.googlePreferOAuth)
+      }
+      if (data.postfastSync) setPostfastSync(data.postfastSync)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+      setForm({})
+
+    } catch (e) {
+      console.error(e)
+      alert('保存失败，请检查网络')
     } finally {
       setSaving(false)
     }
@@ -192,23 +243,6 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
         className="w-full px-3 py-2 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
       />
       {f.helpText && <p className="text-[10px] text-slate-400">{f.helpText}</p>}
-    </div>
-  )
-
-  const StatusBadge = ({ ok }: { ok?: boolean }) =>
-    ok ? (
-      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">已连接</span>
-    ) : (
-      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">未配置</span>
-    )
-
-  const Section = ({ label, badge, children }: { label: string; badge: React.ReactNode; children: React.ReactNode }) => (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-extrabold text-slate-700 dark:text-slate-200">{label}</p>
-        {badge}
-      </div>
-      <div className="space-y-3">{children}</div>
     </div>
   )
 
@@ -257,7 +291,7 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
                   <div className="space-y-0.5">
                     <p className="text-xs font-black text-emerald-800 dark:text-emerald-400">已授权直连 Google 商家</p>
                     <p className="text-[10px] text-emerald-600 dark:text-emerald-500 font-medium">
-                      关联店铺：<span className="font-bold">{initialSettings.googleLocationName || '未命名位置'}</span>
+                      关联店铺：<span className="font-bold">{googleLocationName || '未命名位置'}</span>
                     </p>
                   </div>
                   <button
@@ -312,17 +346,17 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
 
           {/* Lark */}
           <Section label="飞书（素材存储 + 通知）" badge={<StatusBadge ok={status.lark} />}>
-            {initialSettings?.larkFolderUrl && (
+            {larkFolderUrl && (
               <a
-                href={initialSettings.larkFolderUrl}
+                href={larkFolderUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors"
               >
                 <span>📁</span>
                 <span className="flex-1 truncate">品牌 Workspace 文件夹（自动创建）</span>
-                {initialSettings.larkDriveFolderId && (
-                  <span className="text-[10px] font-mono opacity-60 flex-shrink-0">{initialSettings.larkDriveFolderId.slice(0, 8)}…</span>
+                {larkDriveFolderId && (
+                  <span className="text-[10px] font-mono opacity-60 flex-shrink-0">{larkDriveFolderId.slice(0, 8)}…</span>
                 )}
               </a>
             )}

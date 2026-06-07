@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
@@ -100,8 +101,8 @@ export async function GET(
 
     const taskWithAvatar = {
       ...task,
-      assignee: (task as any).assignee ? withResolvedAvatar((task as any).assignee) : null,
-      comments: (task as any).comments?.map((comment: any) => ({
+      assignee: task.assignee ? withResolvedAvatar(task.assignee) : null,
+      comments: task.comments?.map((comment) => ({
         ...comment,
         author: comment.author ? withResolvedAvatar(comment.author) : null
       }))
@@ -218,11 +219,13 @@ export async function PATCH(
       ])
     }
 
-    const data: any = {}
+    const data: Prisma.WorkUnitUpdateInput = {}
     if (title !== undefined) data.title = title
     if (description !== undefined) data.description = description
     if (materials !== undefined) data.materials = materials
-    if (assigneeId !== undefined) data.assigneeId = assigneeId
+    if (assigneeId !== undefined) {
+      data.assignee = assigneeId ? { connect: { id: assigneeId } } : { disconnect: true }
+    }
     if (status !== undefined) data.status = status
     if (priority !== undefined) data.priority = priority || 'medium'
     if (estimatedHours !== undefined) data.estimatedHours = estimatedHours !== null && estimatedHours !== '' ? Number(estimatedHours) : null

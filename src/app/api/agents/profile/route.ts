@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
-import crypto from 'crypto'
 import fs from 'fs/promises'
 import path from 'path'
 import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'

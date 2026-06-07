@@ -1,4 +1,5 @@
 'use client'
+/* eslint-disable @next/next/no-img-element */
 import React, { useEffect, useState } from 'react'
 import { Search, Upload, Image as ImageIcon, Video, Tag, Check, Sparkles, Filter, X } from 'lucide-react'
 

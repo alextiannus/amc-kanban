@@ -12,6 +12,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { writeAuditLog } from '@/lib/audit'
+import type { Prisma } from '@prisma/client'
 import {
   scrapeGoogleMapsReviews,
   scrapeInstagram,
@@ -23,6 +24,10 @@ import {
 } from '@/lib/integrations/apify'
 
 type Params = { params: Promise<{ id: string }> }
+
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : []
+}
 
 // ── GET — return latest sync result ──────────────────────────────────────────
 export async function GET(req: Request, { params }: Params) {
@@ -115,8 +120,7 @@ export async function POST(req: Request, { params }: Params) {
   }
 
   const t0 = Date.now()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const jobResults: Record<string, any> = {}
+  const jobResults: Record<string, unknown> = {}
   const errors: string[] = []
 
   // ── Run all scrapers in parallel ─────────────────────────────────────────
@@ -154,7 +158,7 @@ export async function POST(req: Request, { params }: Params) {
     where: { resourceId: id, resourceType: 'ApifySync' },
     orderBy: { timestamp: 'desc' },
   })
-  const prevMeta = (previousLog?.metadata ?? {}) as Record<string, any>
+  const prevMeta = (previousLog?.metadata ?? {}) as Record<string, unknown>
 
   // ── Collect results ───────────────────────────────────────────────────────
   if (googleResult.error) errors.push(`Google Maps: ${googleResult.error}`)
@@ -165,27 +169,27 @@ export async function POST(req: Request, { params }: Params) {
   // Smart merge: use fresh data if we got any, otherwise fall back to previous
   const googleReviews = googleResult.reviews.length > 0
     ? googleResult.reviews
-    : (prevMeta.googleReviews ?? [])
+    : asArray<ApifyReview>(prevMeta.googleReviews)
 
   const instagramPosts = instagramResult.posts.length > 0
     ? instagramResult.posts
-    : (prevMeta.instagramPosts ?? [])
+    : asArray<ApifyPost>(prevMeta.instagramPosts)
 
   const instagramProfiles = instagramResult.profiles.length > 0
     ? instagramResult.profiles
-    : (prevMeta.instagramProfiles ?? [])
+    : asArray<ApifyProfile>(prevMeta.instagramProfiles)
 
   const tiktokPosts = tiktokResult.posts.length > 0
     ? tiktokResult.posts
-    : (prevMeta.tiktokPosts ?? [])
+    : asArray<ApifyPost>(prevMeta.tiktokPosts)
 
   const tiktokProfiles = tiktokResult.profiles.length > 0
     ? tiktokResult.profiles
-    : (prevMeta.tiktokProfiles ?? [])
+    : asArray<ApifyProfile>(prevMeta.tiktokProfiles)
 
-  const xiaohongshuPosts = (xiaohongshuResult as any).posts?.length > 0
-    ? (xiaohongshuResult as any).posts
-    : (prevMeta.xiaohongshuPosts ?? [])
+  const xiaohongshuPosts = xiaohongshuResult.posts.length > 0
+    ? xiaohongshuResult.posts
+    : asArray<ApifyPost>(prevMeta.xiaohongshuPosts)
 
   jobResults.googleReviews     = googleReviews
   jobResults.instagramPosts    = instagramPosts
@@ -204,7 +208,7 @@ export async function POST(req: Request, { params }: Params) {
       google:      googleResult.reviews.length > 0,
       instagram:   instagramResult.posts.length > 0,
       tiktok:      tiktokResult.posts.length > 0,
-      xiaohongshu: (xiaohongshuResult as any).posts?.length > 0,
+        xiaohongshu: xiaohongshuResult.posts.length > 0,
     },
     totalDurationMs,
     scrapedAt: new Date().toISOString(),
@@ -223,7 +227,7 @@ export async function POST(req: Request, { params }: Params) {
       resourceId: id,
       resourceType: 'ApifySync',
       reason: `Sync: ${googleReviews.length} reviews (${googleResult.reviews.length} fresh), ${instagramPosts.length} IG (${instagramResult.posts.length} fresh), ${tiktokPosts.length} TT (${tiktokResult.posts.length} fresh)`,
-      metadata: jobResults,
+      metadata: jobResults as Prisma.InputJsonValue,
     },
   })
 
@@ -237,9 +241,13 @@ export async function POST(req: Request, { params }: Params) {
       take: 200,
     })
     const existingHashes = new Set(
-      existingItems.map((i: any) => {
-        const p = (i.payload as any) ?? {}
-        return `${p.reviewerName ?? ''}:${(p.reviewText ?? '').slice(0, 40)}`
+      existingItems.map((i) => {
+        const payload = i.payload && typeof i.payload === 'object'
+          ? (i.payload as { reviewerName?: unknown; reviewText?: unknown })
+          : null
+        const reviewerName = typeof payload?.reviewerName === 'string' ? payload.reviewerName : ''
+        const reviewText = typeof payload?.reviewText === 'string' ? payload.reviewText : ''
+        return `${reviewerName}:${reviewText.slice(0, 40)}`
       })
     )
 

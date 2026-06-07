@@ -53,7 +53,7 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   try {
-    const allReviews: any[] = []
+    const allReviews: unknown[] = []
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Fetch from PostFast (covers Google Business via PostFast, Yelp, etc.)
@@ -79,10 +79,11 @@ export async function GET(request: Request, { params }: Params) {
       reviews: allReviews,
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch reviews'
     console.error(`[Reviews] Failed to fetch reviews for brand ${brandId}:`, error)
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch reviews' },
+      { error: message },
       { status: 500 }
     )
   }
@@ -171,12 +172,14 @@ export async function POST(request: Request, { params }: Params) {
       { status: 400 }
     )
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Reply failed'
+    const details = error instanceof Error && 'code' in error ? String((error as { code?: unknown }).code ?? '') : undefined
     console.error(`[Reviews] Unexpected error for brand ${brandId}:`, error)
     return NextResponse.json(
       {
-        error: error.message || 'Reply failed',
-        details: error.code || undefined,
+        error: message,
+        details: details || undefined,
       },
       { status: 500 }
     )

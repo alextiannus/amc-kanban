@@ -7,6 +7,13 @@ export interface Brand {
   id: string
   name: string
   location?: string
+  subscriptions?: Array<{
+    id: string
+    planId?: string
+    planName?: string
+    status?: string
+    contractEndDate?: string | null
+  }>
 }
 
 interface BrandSwitcherProps {
@@ -18,6 +25,26 @@ interface BrandSwitcherProps {
 export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: BrandSwitcherProps) {
   const [showBrandMenu, setShowBrandMenu] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  const getSubscriptionMeta = (brand: Brand) => {
+    const subscription = brand.subscriptions?.[0]
+    if (!subscription) {
+      return {
+        label: '未绑定配套',
+        className: 'bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300',
+      }
+    }
+    if (subscription.status === 'ACTIVE') {
+      return {
+        label: subscription.planName ? `已配套 ${subscription.planName}` : '配套已激活',
+        className: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300',
+      }
+    }
+    return {
+      label: subscription.planName ? `${subscription.planName} (${subscription.status || 'UNKNOWN'})` : `配套 ${subscription.status || 'UNKNOWN'}`,
+      className: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
+    }
+  }
 
   useEffect(() => {
     if (!showBrandMenu) return
@@ -61,7 +88,9 @@ export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: B
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">切换品牌</p>
           </div>
           <div className="p-1.5 space-y-0.5">
-            {brands.map(b => (
+            {brands.map((b) => {
+              const subscriptionMeta = getSubscriptionMeta(b)
+              return (
               <button
                 key={b.id}
                 onClick={() => { setActiveBrand(b); setShowBrandMenu(false) }}
@@ -77,12 +106,16 @@ export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: B
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold truncate">{b.name}</p>
                   {b.location && <p className="text-[10px] text-slate-400 truncate">{b.location}</p>}
+                  <span className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${subscriptionMeta.className}`}>
+                    {subscriptionMeta.label}
+                  </span>
                 </div>
                 {activeBrand?.id === b.id && (
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
                 )}
               </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}

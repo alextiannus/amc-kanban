@@ -26,6 +26,19 @@ import {
   postfastGetGBPLocations,
 } from '@/lib/integrations/postfast'
 
+type PostFastRouteBody = {
+  brandId?: string
+  action?: string
+  status?: string
+  platform?: string
+  limit?: number
+  page?: number
+  postId?: string
+  label?: string
+  redirectUrl?: string
+  accountId?: string
+}
+
 // ── Auth: accept session OR agent API key ──────────────────────────────────
 
 async function resolveAccess(request: Request): Promise<{
@@ -79,7 +92,7 @@ export async function POST(request: Request) {
   const access = await resolveAccess(request)
   if (access.error) return NextResponse.json({ error: access.error }, { status: 401 })
 
-  let body: any
+  let body: PostFastRouteBody
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
@@ -107,8 +120,16 @@ export async function POST(request: Request) {
     }
 
     case 'list_posts': {
+      const status =
+        params.status === 'scheduled' ||
+        params.status === 'published' ||
+        params.status === 'failed' ||
+        params.status === 'draft'
+          ? params.status
+          : undefined
+
       const result = await postfastListPosts(apiKey, {
-        status: params.status,
+        status,
         platform: params.platform,
         limit: params.limit ?? 20,
         page: params.page,

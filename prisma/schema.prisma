@@ -39,6 +39,8 @@ model User {
   brandMemberships BrandAgent[]      @relation("BrandAgents")
   createdSubscriptions BrandSubscription[]
   comments         Comment[]
+  sentInvitations  Invitation[] @relation("InvitationInviter")
+  receivedInvitations Invitation[] @relation("InvitationInvitee")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -89,6 +91,86 @@ model AuditLog {
   @@index([timestamp])
 }
 
+model AssignmentPoolConfig {
+  id               String   @id @default("default")
+  enabled          Boolean  @default(true)
+  overflowPolicy   String   @default("fallback_only")
+  rebalancePolicy  String   @default("manual_only")
+  matchingOrder    String   @default("industry_first")
+  fallbackAgentId  String?
+  updatedById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model AssignmentPoolMember {
+  id         String   @id @default(cuid())
+  agentId    String   @unique
+  active     Boolean  @default(true)
+  capacity   Int      @default(30)
+  priority   Int      @default(100)
+  industries String[] @default([])
+  regions    String[] @default([])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([active, priority])
+}
+
+model AssignmentDecisionLog {
+  id                String   @id @default(cuid())
+  subjectType       String
+  subjectId         String
+  requestedIndustry String?
+  requestedRegion   String?
+  referenceCode     String?
+  matchedBy         String?
+  selectedAgentId   String?
+  reason            String?
+  createdBy         String   @default("system")
+  overflowHandled   Boolean  @default(false)
+  fallbackUsed      Boolean  @default(false)
+  idempotencyKey    String?
+  createdAt         DateTime @default(now())
+
+  @@index([subjectType, subjectId])
+  @@index([selectedAgentId])
+  @@index([createdAt])
+}
+
+model IdempotencyRecord {
+  id          String   @id @default(cuid())
+  scope       String
+  key         String
+  requestHash String
+  statusCode  Int?
+  response    Json?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([scope, key])
+  @@index([expiresAt])
+}
+
+model Invitation {
+  id             String   @id @default(cuid())
+  inviterId      String?
+  inviter        User?    @relation("InvitationInviter", fields: [inviterId], references: [id])
+  inviteeEmail   String
+  inviteeUserId  String?
+  inviteeUser    User?    @relation("InvitationInvitee", fields: [inviteeUserId], references: [id])
+  status         String   @default("PENDING") // PENDING | CLAIMED | EXPIRED | REVOKED
+  claimedAt      DateTime?
+  revokedAt      DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([inviteeEmail, status])
+  @@index([inviteeUserId, status])
+  @@index([expiresAt])
+}
+
 // 多对多权限关联表
 model AgentPermission {
   id           String @id @default(cuid())
@@ -119,10 +201,12 @@ model BrandOwner {
   brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation("BrandOwners", fields: [userId], references: [id])
+  role      String   @default("owner") // owner | collaborator
   createdAt DateTime @default(now())
   @@unique([brandId, userId])
   @@index([brandId])
   @@index([userId])
+  @@index([brandId, role])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -176,6 +260,7 @@ model Brand {
   actionItems ActionItem[]
   conversions ConversionEvent[]
   brandAgents BrandAgent[]
+  subscriptions BrandSubscription[]
   gameConfig  GameConfig?
   gameSessions GameSession[]
 
@@ -206,6 +291,8 @@ model BrandSubscription {
   contractStartDate  DateTime?
   contractEndDate    DateTime?
   paidAt             DateTime?
+  brandId            String?
+  brand              Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
   createdById        String?
   createdBy          User?    @relation(fields: [createdById], references: [id])
   createdAt          DateTime @default(now())
@@ -213,6 +300,8 @@ model BrandSubscription {
 
   @@index([status])
   @@index([createdById])
+  @@index([brandId])
+  @@index([createdById, status, brandId])
 }
 
 model SocialAccount {

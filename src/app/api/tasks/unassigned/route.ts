@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
 
-export async function DELETE(request: Request) {
+export async function DELETE() {
   try {
     const session = await getSession()
 

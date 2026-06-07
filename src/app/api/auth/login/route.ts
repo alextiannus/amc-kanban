@@ -43,6 +43,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid password' }, { status: 401 })
     }
 
+    await prisma.invitation.updateMany({
+      where: {
+        inviteeEmail: user.email,
+        status: 'PENDING',
+        expiresAt: { gt: new Date() },
+      },
+      data: {
+        status: 'CLAIMED',
+        claimedAt: new Date(),
+      },
+    })
+
     if (bootstrapAdminEmail && user.email === bootstrapAdminEmail && user.role !== 'ADMIN') {
       user = await prisma.user.update({
         where: { id: user.id },

@@ -1,11 +1,22 @@
 import { useState, useMemo } from 'react'
 import { X } from 'lucide-react'
 
-export default function ArchiveFilters({ tasks, onFilter }: { tasks: any[], onFilter: (params: any) => void }) {
+type ArchiveTask = {
+  assignee?: {
+    nickname?: string | null
+    email?: string | null
+    workflow?: string | null
+  } | null
+}
+
+export default function ArchiveFilters({ tasks, onFilter }: { tasks: ArchiveTask[], onFilter: (params: { agent: string; workflow: string; dateFrom: string; dateTo: string }) => void }) {
   // 自动聚合选项
   const agentOptions = useMemo(() => {
     const set = new Set<string>()
-    tasks.forEach(t => t.assignee && set.add(t.assignee.nickname || t.assignee.email))
+    tasks.forEach((t) => {
+      const label = t.assignee?.nickname ?? t.assignee?.email
+      if (typeof label === 'string' && label.trim()) set.add(label)
+    })
     return Array.from(set).sort()
   }, [tasks])
   const workflowOptions = useMemo(() => {

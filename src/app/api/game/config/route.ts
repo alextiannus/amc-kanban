@@ -5,6 +5,15 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canHumanAccessBrandProject, canOwnBrand } from '@/lib/brandAccess'
 
+type GamePrizeInput = {
+  id?: string
+  name: string
+  type: string
+  probability?: number | string | null
+  totalInventory?: number | string | null
+  imageUrl?: string | null
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const brandId = url.searchParams.get('brandId')
@@ -106,14 +115,18 @@ export async function GET(request: Request) {
 
     // Security: Do not expose clerkPin on public API
     if (isPublic) {
-      const { clerkPin, ...publicConfig } = config
+      const publicConfig = {
+        ...config,
+        clerkPin: undefined,
+      }
       return NextResponse.json(publicConfig)
     }
 
     return NextResponse.json(config)
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Internal Server Error'
     console.error('[GET /api/game/config]', e)
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -140,8 +153,6 @@ export async function POST(request: Request) {
       title,
       description,
       themeColor,
-      taskPhotoEnabled,
-      taskReviewEnabled,
       clerkPin,
       maxSpinsPerUserDay,
       templateType,
@@ -199,7 +210,10 @@ export async function POST(request: Request) {
         where: { gameConfigId: config.id },
         select: { id: true },
       })
-      const incomingIds = prizes.map((p: any) => p.id).filter(Boolean)
+      const typedPrizes: GamePrizeInput[] = Array.isArray(prizes) ? prizes : []
+      const incomingIds = typedPrizes
+        .map((p) => (typeof p.id === 'string' ? p.id : null))
+        .filter((id): id is string => Boolean(id))
       const toDeleteIds = currentPrizes.map(p => p.id).filter(id => !incomingIds.includes(id))
 
       // Delete removed prizes
@@ -211,12 +225,12 @@ export async function POST(request: Request) {
 
       // 3. Upsert incoming prizes
       const updatedPrizes = []
-      for (const p of prizes) {
+      for (const p of typedPrizes) {
         const prizeData = {
           name: p.name,
           type: p.type,
-          probability: parseFloat(p.probability) || 0,
-          totalInventory: p.totalInventory !== undefined && p.totalInventory !== '' ? parseInt(p.totalInventory) : null,
+          probability: Number.parseFloat(String(p.probability ?? '0')) || 0,
+          totalInventory: p.totalInventory !== undefined && p.totalInventory !== '' ? Number.parseInt(String(p.totalInventory), 10) : null,
           imageUrl: p.imageUrl || null,
         }
 
@@ -244,8 +258,9 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json(result)
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Internal Server Error'
     console.error('[POST /api/game/config]', e)
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

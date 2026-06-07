@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Repo utility scripts/sandboxes (not app runtime code):
+    "next.config.js",
+    "scratch/**",
+    "scripts/**",
   ]),
 ]);
 

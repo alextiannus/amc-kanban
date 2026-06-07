@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
+import type { Prisma } from '@prisma/client'
 
 export async function GET(request: Request) {
   try {
@@ -26,9 +27,25 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Not an AI Agent' }, { status: 403 })
     }
 
-    const { password, apiKey: key, ...data } = agent
-    return NextResponse.json(data)
-  } catch (error) {
+    return NextResponse.json({
+      id: agent.id,
+      email: agent.email,
+      type: agent.type,
+      role: agent.role,
+      nickname: agent.nickname,
+      insights: agent.insights,
+      introduction: agent.introduction,
+      workflow: agent.workflow,
+      themeColor: agent.themeColor,
+      avatar: agent.avatar,
+      avatarData: agent.avatarData,
+      avatarMimeType: agent.avatarMimeType,
+      createdAt: agent.createdAt,
+      updatedAt: agent.updatedAt,
+      driveFolder: agent.driveFolder,
+      chatLink: agent.chatLink,
+    })
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -60,7 +77,7 @@ export async function PATCH(request: Request) {
     const body = await request.json()
     const { insights, nickname, introduction, workflow, themeColor } = body
 
-    const data: any = {}
+    const data: Prisma.UserUpdateInput = {}
     if (insights !== undefined) data.insights = insights
     if (nickname !== undefined) data.nickname = nickname
     if (introduction !== undefined) data.introduction = introduction
@@ -72,9 +89,25 @@ export async function PATCH(request: Request) {
       data
     })
 
-    const { password, apiKey: key, ...result } = updatedAgent
-    return NextResponse.json(result)
-  } catch (error) {
+    return NextResponse.json({
+      id: updatedAgent.id,
+      email: updatedAgent.email,
+      type: updatedAgent.type,
+      role: updatedAgent.role,
+      nickname: updatedAgent.nickname,
+      insights: updatedAgent.insights,
+      introduction: updatedAgent.introduction,
+      workflow: updatedAgent.workflow,
+      themeColor: updatedAgent.themeColor,
+      avatar: updatedAgent.avatar,
+      avatarData: updatedAgent.avatarData,
+      avatarMimeType: updatedAgent.avatarMimeType,
+      createdAt: updatedAgent.createdAt,
+      updatedAt: updatedAgent.updatedAt,
+      driveFolder: updatedAgent.driveFolder,
+      chatLink: updatedAgent.chatLink,
+    })
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

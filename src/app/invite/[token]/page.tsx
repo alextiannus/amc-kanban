@@ -18,6 +18,7 @@ export default function InvitePage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [claiming, setClaiming] = useState(false)
   const token = params.token as string
 
   useEffect(() => {
@@ -61,8 +62,19 @@ export default function InvitePage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const handleLogin = () => {
-    router.push('/')
+  const handleLogin = async () => {
+    if (!token) {
+      router.push('/')
+      return
+    }
+
+    setClaiming(true)
+    try {
+      await fetch(`/api/invite/${encodeURIComponent(token)}`, { method: 'POST' })
+    } finally {
+      setClaiming(false)
+      router.push('/')
+    }
   }
 
   if (loading) {
@@ -168,9 +180,10 @@ export default function InvitePage() {
         <div className="flex gap-4">
           <button
             onClick={handleLogin}
+            disabled={claiming}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition"
           >
-            前往登录
+            {claiming ? '处理中...' : '前往登录'}
           </button>
           <button
             onClick={() => {

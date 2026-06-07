@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { encrypt } from '@/lib/auth'
 import { cookies } from 'next/headers'
+import { resolveAssignment } from '@/lib/assignmentPool'
 
 const MIN_PASSWORD_LENGTH = 8
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
 
-    const { email, password, nickname, country, phone } = body as Record<string, unknown>
+    const { email, password, nickname, country, phone, referenceCode } = body as Record<string, unknown>
 
     if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) {
       return NextResponse.json({ error: 'Valid email is required' }, { status: 400 })
@@ -59,6 +60,20 @@ export async function POST(request: Request) {
       },
     })
 
+    let assignedAgentId: string | null = null
+    try {
+      const assignment = await resolveAssignment({
+        subjectType: 'user_register',
+        subjectId: user.id,
+        region: normalizedCountry,
+        referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
+        createdBy: 'system',
+      })
+      assignedAgentId = assignment.selectedAgentId
+    } catch (assignmentError) {
+      console.error('[POST /api/auth/register] assignment failed:', assignmentError)
+    }
+
     // Auto-login: set session cookie so user lands on /board directly
     const sessionData = {
       user: {
@@ -86,6 +101,7 @@ export async function POST(request: Request) {
           nickname: user.nickname,
           country: user.country,
           phone: user.phone,
+          assignedAgentId,
         },
       },
       { status: 201 }

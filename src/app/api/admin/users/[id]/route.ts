@@ -5,6 +5,8 @@ import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { generateInvitationLink } from '@/lib/invitation'
 
+const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
 type Params = { params: Promise<{ id: string }> }
 
 // PATCH /api/admin/users/[id] — update role or reset password
@@ -43,6 +45,27 @@ export async function PATCH(request: Request, { params }: Params) {
     const hashedPassword = await bcrypt.hash(temporaryPassword, 12)
     await prisma.user.update({ where: { id }, data: { password: hashedPassword } })
 
+    const expiresAt = new Date(Date.now() + INVITATION_TTL_MS)
+    await prisma.invitation.updateMany({
+      where: {
+        status: 'PENDING',
+        OR: [{ inviteeEmail: target.email }, { inviteeUserId: target.id }],
+      },
+      data: {
+        status: 'REVOKED',
+        revokedAt: new Date(),
+      },
+    })
+    const invitation = await prisma.invitation.create({
+      data: {
+        inviterId: session.user.id,
+        inviteeEmail: target.email,
+        inviteeUserId: target.id,
+        status: 'PENDING',
+        expiresAt,
+      },
+    })
+
     const requestUrl = new URL(request.url)
     const baseUrl =
       process.env.NEXT_PUBLIC_KANBAN_HOST ||
@@ -51,8 +74,31 @@ export async function PATCH(request: Request, { params }: Params) {
       target.email,
       temporaryPassword,
       (target.nickname ?? target.email.split('@')[0]),
-      baseUrl
+      baseUrl,
+      {
+        invitationId: invitation.id,
+        expiresAt: expiresAt.getTime(),
+      }
     )
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: session.user.id,
+        actorType: 'HUMAN',
+        actorName: session.user.email || null,
+        action: 'INVITATION_CREATED',
+        resourceId: invitation.id,
+        resourceType: 'Invitation',
+        newValue: {
+          inviteeEmail: invitation.inviteeEmail,
+          inviteeUserId: invitation.inviteeUserId,
+          expiresAt: invitation.expiresAt,
+          status: invitation.status,
+          reason: 'password_reset',
+        },
+      },
+    })
+
     return NextResponse.json({ ok: true, temporaryPassword, invitationLink })
   }
 

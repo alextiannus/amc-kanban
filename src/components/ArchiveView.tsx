@@ -1,21 +1,37 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Inbox, ChevronLeft, ChevronRight, Activity, Calendar } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import AvatarImage from './AvatarImage'
 import ArchiveFilters from './ArchiveFilters'
-const markdownComponents: any = {
-  p: ({ children }: any) => <span>{children}</span>,
-  a: ({ href, children }: any) => (
+type ArchiveTask = {
+  id: string
+  title?: string
+  description?: string | null
+  createdAt: string
+  status: string
+  workflow?: string | null
+  assignee?: {
+    id?: string | null
+    nickname?: string | null
+    email?: string | null
+    avatar?: string | null
+    themeColor?: string | null
+  } | null
+}
+
+const markdownComponents = {
+  p: ({ children }: React.PropsWithChildren) => <span>{children}</span>,
+  a: ({ href, children }: React.AnchorHTMLAttributes<HTMLAnchorElement> & React.PropsWithChildren) => (
     <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
       {children}
     </a>
   ),
 }
 
-export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) => void }) {
-  const [allTasks, setAllTasks] = useState<any[]>([])
-  const [tasks, setTasks] = useState<any[]>([])
+export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: ArchiveTask) => void }) {
+  const [allTasks, setAllTasks] = useState<ArchiveTask[]>([])
+  const [tasks, setTasks] = useState<ArchiveTask[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -23,30 +39,7 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
   const [filters, setFilters] = useState({ agent: '', workflow: '', dateFrom: '', dateTo: '' })
   const limit = 20
 
-  useEffect(() => {
-    fetchArchiveTasks()
-  }, [page])
-
-  const fetchArchiveTasks = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/tasks?archive=true&page=${page}&limit=${limit}`)
-      if (res.ok) {
-        const data = await res.json()
-        const taskList = data.tasks ?? (Array.isArray(data) ? data : [])
-        setAllTasks(taskList)
-        applyFilters(taskList)
-        setTotalPages(data.pagination?.totalPages ?? 1)
-        setTotal(data.pagination?.total ?? taskList.length)
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const applyFilters = (taskList: any[]) => {
+  const applyFilters = useCallback((taskList: ArchiveTask[]) => {
     let filtered = taskList
     if (filters.agent) {
       filtered = filtered.filter(t => t.assignee?.id === filters.agent)
@@ -63,9 +56,34 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
       filtered = filtered.filter(t => new Date(t.createdAt) <= endDate)
     }
     setTasks(filtered)
-  }
+  }, [filters])
 
-  const handleFilter = (newFilters: any) => {
+  const fetchArchiveTasks = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/tasks?archive=true&page=${page}&limit=${limit}`)
+      if (res.ok) {
+        const data = await res.json()
+        const taskList = (data.tasks ?? (Array.isArray(data) ? data : [])) as ArchiveTask[]
+        setAllTasks(taskList)
+        applyFilters(taskList)
+        setTotalPages(data.pagination?.totalPages ?? 1)
+        setTotal(data.pagination?.total ?? taskList.length)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }, [applyFilters, page])
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void fetchArchiveTasks()
+    })
+  }, [fetchArchiveTasks])
+
+  const handleFilter = (newFilters: { agent: string; workflow: string; dateFrom: string; dateTo: string }) => {
     setFilters(newFilters)
     applyFilters(allTasks)
   }
@@ -95,6 +113,12 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
         ) : (
           <div className="space-y-4">
             {tasks.map(task => (
+              (() => {
+                const assigneeLabel = task.assignee?.nickname
+                  ?? (typeof task.assignee?.email === 'string' ? task.assignee.email.split('@')[0] : null)
+                  ?? 'Unknown'
+
+                return (
               <div 
                 key={task.id} 
                 onClick={() => onTaskClick(task)}
@@ -108,7 +132,7 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
                     ) : 'AI'}
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{task.assignee?.nickname || task.assignee?.email.split('@')[0] || 'Unknown'}</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{assigneeLabel}</p>
                     <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${task.status === 'done' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'}`}>
                       {task.status}
                     </span>
@@ -127,6 +151,8 @@ export default function ArchiveView({ onTaskClick }: { onTaskClick: (task: any) 
                   {new Date(task.createdAt).toLocaleString()}
                 </div>
               </div>
+                )
+              })()
             ))}
           </div>
         )}

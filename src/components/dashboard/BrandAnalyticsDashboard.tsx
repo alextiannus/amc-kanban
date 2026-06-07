@@ -1,4 +1,5 @@
 'use client'
+/* eslint-disable @next/next/no-img-element */
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { TrendingUp, Download, ChevronDown, Heart, Eye, Users, BarChart2, MessageCircle, Activity, FileText, X } from 'lucide-react'
 import PostDetailModal from './PostDetailModal'
@@ -16,6 +17,52 @@ const CONTENT_TYPE_COLORS: Record<string, string> = {
 }
 
 // ── Small helpers ────────────────────────────────────────────────────────────
+type AnalyticsPost = {
+  id: string
+  platform?: string
+  publishedAt: string
+  contentType?: string
+  likes: number
+  comments: number
+  shares: number
+  impressions: number
+  handle?: string
+  status?: string
+  caption?: string
+}
+
+type ContentTypeBreakdownItem = {
+  type: string
+  count: number
+  avgEngRate?: number
+}
+
+type AnalyticsSeriesPoint = {
+  date: string
+  engagement: number
+  impressions: number
+  reach: number
+  likes: number
+  engRate: number
+  postCount?: number
+}
+
+type AnalyticsDashboardData = {
+  kpis?: {
+    totalPosts?: number
+    totalEngagement?: number
+    totalImpressions?: number
+    avgReach?: number
+    totalLikes?: number
+    avgEngRate?: number
+  }
+  timeSeries?: AnalyticsSeriesPoint[]
+  allPosts?: AnalyticsPost[]
+  topPosts?: AnalyticsPost[]
+  contentTypeBreakdown?: ContentTypeBreakdownItem[]
+  hasPostfastData?: boolean
+}
+
 function fmtNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
@@ -72,7 +119,7 @@ const METRIC_OPTIONS: { key: MetricKey; label: string; icon: React.ReactNode; co
 ]
 
 function AreaChart({ series, activeMetric, activeDate, onPointClick }: {
-  series: { date: string; engagement: number; impressions: number; reach: number; likes: number; engRate: number; postCount?: number }[]
+  series: AnalyticsSeriesPoint[]
   activeMetric: MetricKey
   activeDate?: string | null
   onPointClick?: (date: string) => void
@@ -208,8 +255,9 @@ function ContentTypeChart({ data, activeType, onTypeClick }: {
 }
 
 // ── Top Post Row ─────────────────────────────────────────────────────────────
-function TopPostRow({ post, rank, onClick }: { post: any; rank: number; onClick?: () => void }) {
-  const platformColor = PLATFORM_COLORS[post.platform?.toLowerCase()] ?? '#6366f1'
+function TopPostRow({ post, rank, onClick }: { post: AnalyticsPost; rank: number; onClick?: () => void }) {
+  const platformKey: string = post.platform?.toLowerCase() ?? 'unknown'
+  const platformColor = PLATFORM_COLORS[platformKey] ?? PLATFORM_COLORS.unknown
   const interactions = post.likes + post.comments + post.shares
   return (
     <div
@@ -256,7 +304,7 @@ const PRESETS = [
 interface BrandAnalyticsDashboardProps { brandId: string; brandName?: string }
 
 export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAnalyticsDashboardProps) {
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<AnalyticsDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeMetric, setActiveMetric] = useState<MetricKey>('postCount')
@@ -265,7 +313,7 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
   const [days, setDays] = useState(30)
   const [activeDate, setActiveDate] = useState<string | null>(null)
   const [activeType, setActiveType] = useState<string | null>(null)
-  const [selectedPost, setSelectedPost] = useState<any | null>(null)
+  const [selectedPost, setSelectedPost] = useState<AnalyticsPost | null>(null)
   const postsRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<HTMLDivElement>(null)
   const presetRef = useRef<HTMLDivElement>(null)
@@ -277,15 +325,19 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
       const from = new Date(to.getTime() - (d - 1) * 24 * 60 * 60 * 1000)
       const res = await fetch(`/api/brands/${brandId}/analytics?from=${from.toISOString()}&to=${to.toISOString()}`)
       if (!res.ok) throw new Error('Failed to load analytics')
-      setData(await res.json())
-    } catch (e: any) {
-      setError(e.message)
+      setData(await res.json() as AnalyticsDashboardData)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to load analytics')
     } finally {
       setLoading(false)
     }
   }, [brandId])
 
-  useEffect(() => { load(days) }, [load, days])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load(days)
+    })
+  }, [load, days])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -297,14 +349,14 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
 
   const kpis = data?.kpis ?? {}
   const timeSeries = data?.timeSeries ?? []
-  const allPosts: any[] = data?.allPosts ?? data?.topPosts ?? []
+  const allPosts: AnalyticsPost[] = data?.allPosts ?? data?.topPosts ?? []
 
   // ── Client-side filtering ────────────────────────────────────────────────
-  const filteredPosts = allPosts.filter((p: any) => {
+  const filteredPosts = allPosts.filter((p) => {
     if (activeDate && p.publishedAt.slice(0, 10) !== activeDate) return false
     if (activeType && p.contentType !== activeType) return false
     return true
-  }).sort((a: any, b: any) => {
+  }).sort((a, b) => {
     if (topSort === 'impressions') return b.impressions - a.impressions
     if (topSort === 'engagement') return (b.likes + b.comments + b.shares) - (a.likes + a.comments + a.shares)
     return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
@@ -312,8 +364,10 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
 
   const hasFilter = !!activeDate || !!activeType
   const contentTypeBreakdown = data?.contentTypeBreakdown ?? []
-  const prevFrom = new Date(Date.now() - (days * 2 - 1) * 24 * 60 * 60 * 1000)
-  const prevTo = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+  const prevTo = new Date()
+  prevTo.setDate(prevTo.getDate() - days)
+  const prevFrom = new Date(prevTo)
+  prevFrom.setDate(prevTo.getDate() - (days - 1))
 
   const clearFilters = () => { setActiveDate(null); setActiveType(null) }
   const scrollToPosts = () => postsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -469,7 +523,7 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
                 <div className="relative">
                   <select
                     value={topSort}
-                    onChange={e => setTopSort(e.target.value as any)}
+                    onChange={e => setTopSort(e.target.value as 'engagement' | 'impressions' | 'recent')}
                     className="appearance-none pl-3 pr-8 py-1.5 text-[11px] font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 focus:outline-none cursor-pointer"
                     id="analytics-top-posts-sort"
                   >
@@ -483,7 +537,7 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
               <div className="px-5 divide-y divide-slate-50 dark:divide-slate-800/80 max-h-[500px] overflow-y-auto">
                 {filteredPosts.slice(0, 10).length === 0 ? (
                   <div className="py-12 text-center text-xs text-slate-400">暂无内容记录</div>
-                ) : filteredPosts.slice(0, 10).map((post: any, i: number) => (
+                ) : filteredPosts.slice(0, 10).map((post, i: number) => (
                   <TopPostRow key={post.id} post={post} rank={i + 1} onClick={() => setSelectedPost(post)} />
                 ))}
               </div>
@@ -508,7 +562,7 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
                 {/* Color legend */}
                 {contentTypeBreakdown.length > 0 && (
                   <div className="mt-5 space-y-2">
-                    {contentTypeBreakdown.map((d: any) => (
+                    {contentTypeBreakdown.map((d) => (
                       <div key={d.type} className="flex items-center justify-between text-[11px]">
                         <div className="flex items-center gap-2">
                           <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: CONTENT_TYPE_COLORS[d.type] ?? '#6366f1' }} />
@@ -549,7 +603,7 @@ export default function BrandAnalyticsDashboard({ brandId, brandName }: BrandAna
           <div className="px-5 divide-y divide-slate-50 dark:divide-slate-800/80 max-h-[600px] overflow-y-auto">
             {filteredPosts.length === 0 ? (
               <div className="py-10 text-center text-xs text-slate-400">该筛选条件下暂无内容</div>
-            ) : filteredPosts.map((post: any, i: number) => (
+            ) : filteredPosts.map((post, i: number) => (
               <TopPostRow key={post.id} post={post} rank={i + 1} onClick={() => setSelectedPost(post)} />
             ))}
           </div>

@@ -86,7 +86,7 @@ export async function GET(request: Request) {
       pendingTasksCount,
       completedTasksCount
     })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

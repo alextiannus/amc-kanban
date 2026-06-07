@@ -5,6 +5,50 @@ import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 
+async function hasAvailableBrandSubscriptionSlot(userId: string) {
+  const availableBrandPackageSlots = await prisma.brandSubscription.count({
+    where: {
+      createdById: userId,
+      status: 'ACTIVE',
+      brandId: null,
+    },
+  })
+
+  return {
+    ok: availableBrandPackageSlots > 0,
+    availableBrandPackageSlots,
+  }
+}
+
+type BrandWithCredentials = {
+  postfastApiKey: string | null
+  googleApiKey: string | null
+  larkAppId: string | null
+  larkAppSecret: string | null
+  larkBotWebhook: string | null
+  googlePlaceId: string | null
+  larkOwnerId: string | null
+}
+
+function toPublicBrand<T extends BrandWithCredentials>(brand: T) {
+  const {
+    postfastApiKey,
+    googleApiKey,
+    larkAppId,
+    larkAppSecret,
+    larkBotWebhook,
+    ...publicBrand
+  } = brand
+
+  return {
+    ...publicBrand,
+    postfastConfigured: !!postfastApiKey,
+    googleConfigured: !!brand.googlePlaceId && !!googleApiKey,
+    larkConfigured: !!larkAppId && !!larkAppSecret,
+    larkNotifyConfigured: !!brand.larkOwnerId || !!larkBotWebhook,
+  }
+}
+
 async function getAgent(request: Request) {
   const apiKey = extractApiKey(request)
   if (!apiKey) return null
@@ -40,24 +84,7 @@ export async function GET(request: Request) {
         },
       },
     })
-    const safeBrands = links.map((l) => {
-      const {
-        postfastApiKey,
-        googleApiKey,
-        larkAppId,
-        larkAppSecret,
-        larkBotWebhook,
-        ...publicBrand
-      } = l.brand as any
-
-      return {
-        ...publicBrand,
-        postfastConfigured: !!postfastApiKey,
-        googleConfigured: !!publicBrand.googlePlaceId && !!googleApiKey,
-        larkConfigured: !!larkAppId && !!larkAppSecret,
-        larkNotifyConfigured: !!publicBrand.larkOwnerId || !!larkBotWebhook,
-      }
-    })
+    const safeBrands = links.map((l) => toPublicBrand(l.brand))
     return NextResponse.json(safeBrands)
   }
 
@@ -79,22 +106,7 @@ export async function GET(request: Request) {
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
 
-  const {
-    postfastApiKey,
-    googleApiKey,
-    larkAppId,
-    larkAppSecret,
-    larkBotWebhook,
-    ...publicBrand
-  } = brand as any
-
-  return NextResponse.json({
-    ...publicBrand,
-    postfastConfigured: !!postfastApiKey,
-    googleConfigured: !!publicBrand.googlePlaceId && !!googleApiKey,
-    larkConfigured: !!larkAppId && !!larkAppSecret,
-    larkNotifyConfigured: !!publicBrand.larkOwnerId || !!larkBotWebhook,
-  })
+  return NextResponse.json(toPublicBrand(brand))
 }
 
 // POST /api/agent/brand-config
@@ -183,28 +195,74 @@ export async function POST(request: Request) {
 
   const primaryOwnerId = linkedHumans[0].id
 
-  // Create the brand (ownerId = primary owner for legacy compat)
-  const brand = await prisma.brand.create({
-    data: {
-      ownerId: primaryOwnerId,
-      name: normalizedName,
-      location: location?.trim() || null,
-      timezone: timezone || 'Asia/Singapore',
-    },
+  const entitlement = await hasAvailableBrandSubscriptionSlot(primaryOwnerId)
+  if (!entitlement.ok) {
+    return NextResponse.json(
+      {
+        error: '每个品牌都需要独立订阅配套。当前无可用配套额度，请先购买新的品牌配套后再创建品牌。',
+        code: 'SUBSCRIPTION_REQUIRED_PER_BRAND',
+        redirectTo: '/board/subscription',
+        summary: {
+          availableBrandPackageSlots: entitlement.availableBrandPackageSlots,
+        },
+      },
+      { status: 402 }
+    )
+  }
+
+  const creation = await prisma.$transaction(async (tx) => {
+    const subscriptionToBind = await tx.brandSubscription.findFirst({
+      where: {
+        createdById: primaryOwnerId,
+        status: 'ACTIVE',
+        brandId: null,
+      },
+      orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, planId: true, planName: true, status: true },
+    })
+
+    if (!subscriptionToBind) return null
+
+    const brand = await tx.brand.create({
+      data: {
+        ownerId: primaryOwnerId,
+        name: normalizedName,
+        location: location?.trim() || null,
+        timezone: timezone || 'Asia/Singapore',
+      },
+    })
+
+    await tx.brandOwner.createMany({
+      data: linkedHumans.map(h => ({ brandId: brand.id, userId: h.id })),
+      skipDuplicates: true,
+    })
+
+    await tx.brandAgent.upsert({
+      where: { brandId_agentId: { brandId: brand.id, agentId: agent.id } },
+      create: { brandId: brand.id, agentId: agent.id, role: 'worker', active: true },
+      update: { active: true },
+    })
+
+    await tx.brandSubscription.update({
+      where: { id: subscriptionToBind.id },
+      data: { brandId: brand.id },
+    })
+
+    return { brand, boundSubscription: subscriptionToBind }
   })
 
-  // Add ALL linked humans as owners
-  await prisma.brandOwner.createMany({
-    data: linkedHumans.map(h => ({ brandId: brand.id, userId: h.id })),
-    skipDuplicates: true,
-  })
+  if (!creation) {
+    return NextResponse.json(
+      {
+        error: '每个品牌都需要独立订阅配套。当前无可用配套额度，请先购买新的品牌配套后再创建品牌。',
+        code: 'SUBSCRIPTION_REQUIRED_PER_BRAND',
+        redirectTo: '/board/subscription',
+      },
+      { status: 402 }
+    )
+  }
 
-  // Auto-link this agent to the new brand
-  await prisma.brandAgent.upsert({
-    where: { brandId_agentId: { brandId: brand.id, agentId: agent.id } },
-    create: { brandId: brand.id, agentId: agent.id, role: 'worker', active: true },
-    update: { active: true },
-  })
+  const { brand, boundSubscription } = creation
 
   return NextResponse.json({
     ok: true,
@@ -215,6 +273,12 @@ export async function POST(request: Request) {
       name: brand.name,
       location: brand.location,
       timezone: brand.timezone,
+    },
+    subscription: {
+      id: boundSubscription.id,
+      planId: boundSubscription.planId,
+      planName: boundSubscription.planName,
+      status: boundSubscription.status,
     },
   }, { status: 201 })
 }

@@ -74,8 +74,9 @@ export async function GET(request: Request) {
             via: 'oauth',
             locationName: brand.googleLocationName
           }
-        } catch (e: any) {
-          return { name: 'google', ok: false, message: `授权连接失败: ${e.message}`, via: 'oauth' }
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : '未知错误'
+          return { name: 'google', ok: false, message: `授权连接失败: ${message}`, via: 'oauth' }
         }
       }
 

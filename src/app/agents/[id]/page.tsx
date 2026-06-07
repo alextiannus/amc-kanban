@@ -1,31 +1,52 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { use } from 'react'
 import AvatarImage from '@/components/AvatarImage'
 
+type AgentTask = {
+  id: string
+  title?: string | null
+  status: string
+  description?: string | null
+  requiredInput?: string | null
+}
+
+type AgentDetail = {
+  id: string
+  email: string
+  nickname?: string | null
+  avatar?: string | null
+  chatLink?: string | null
+  driveFolder?: string | null
+  insights?: string | null
+  tasksAsAssignee: AgentTask[]
+}
+
 export default function AgentProfilePage({ params }: { params: Promise<{ id: string }> }) {
-  const [agent, setAgent] = useState<any>(null)
+  const [agent, setAgent] = useState<AgentDetail | null>(null)
   const [error, setError] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const router = useRouter()
   const resolvedParams = use(params)
 
-  useEffect(() => {
-    fetchAgent()
-  }, [])
-
-  const fetchAgent = async () => {
+  const fetchAgent = useCallback(async () => {
     const res = await fetch(`/api/agents/${resolvedParams.id}`)
     if (res.ok) {
-      const data = await res.json()
+      const data = await res.json() as AgentDetail
       setAgent(data)
     } else {
       setError('Agent not found or access denied')
     }
-  }
+  }, [resolvedParams.id])
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void fetchAgent()
+    })
+  }, [fetchAgent])
 
   const handleAvatarUpload = async () => {
     if (!selectedFile) {
@@ -151,7 +172,7 @@ export default function AgentProfilePage({ params }: { params: Promise<{ id: str
               <p className="text-gray-500">No tasks assigned to this agent.</p>
             ) : (
               <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                {agent.tasksAsAssignee.map((task: any) => (
+                {agent.tasksAsAssignee.map((task) => (
                   <li key={task.id} className="py-4">
                     <div className="flex justify-between items-start mb-1">
                       <h3 className="font-semibold text-gray-900 dark:text-white">{task.title}</h3>

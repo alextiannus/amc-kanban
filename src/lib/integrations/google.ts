@@ -14,6 +14,31 @@ export interface GoogleReview {
   replyTime?: string
 }
 
+type PlacesApiReview = {
+  author_name?: string
+  rating?: number
+  text?: string
+  time: number
+}
+
+type GoogleLocationEntry = {
+  name: string
+  title?: string
+  storefrontAddress?: {
+    name?: string
+    addressLines?: string[]
+  }
+}
+
+type GoogleBusinessReviewEntry = {
+  reviewId: string
+  reviewer?: { displayName?: string }
+  starRating?: 'ONE' | 'TWO' | 'THREE' | 'FOUR' | 'FIVE'
+  comment?: string
+  createTime: string
+  reviewReply?: { comment?: string; updateTime?: string }
+}
+
 export interface GoogleReviewsResult {
   reviews: GoogleReview[]
   error?: string
@@ -39,7 +64,7 @@ export async function fetchGoogleReviews(
     if (data.status !== 'OK') return { reviews: [], error: data.status }
 
     const rawReviews = data.result?.reviews ?? []
-    const reviews: GoogleReview[] = rawReviews.map((r: any, i: number) => ({
+    const reviews: GoogleReview[] = (rawReviews as PlacesApiReview[]).map((r: PlacesApiReview, i: number) => ({
       reviewId: `${placeId}_${i}_${r.time}`,
       reviewer: r.author_name ?? 'Anonymous',
       rating: r.rating ?? 0,
@@ -48,8 +73,8 @@ export async function fetchGoogleReviews(
     }))
 
     return { reviews }
-  } catch (e: any) {
-    return { reviews: [], error: e.message }
+  } catch (e: unknown) {
+    return { reviews: [], error: e instanceof Error ? e.message : 'Google review fetch failed' }
   }
 }
 
@@ -80,8 +105,8 @@ export async function replyGoogleReview(input: {
       return { success: false, error: err.error?.message ?? `HTTP ${res.status}` }
     }
     return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : 'Google reply failed' }
   }
 }
 
@@ -168,9 +193,9 @@ export async function fetchGoogleLocations(accessToken: string): Promise<Array<{
   });
   if (!locRes.ok) throw new Error(`Google Locations HTTP ${locRes.status}`);
   const locData = await locRes.json();
-  const locations = locData.locations ?? [];
+  const locations = (locData.locations ?? []) as GoogleLocationEntry[]
 
-  return locations.map((l: any) => ({
+  return locations.map((l: GoogleLocationEntry) => ({
     id: l.name.split('/').pop() || l.name, // Extract location ID
     name: l.title ?? l.storefrontAddress?.name ?? 'Unnamed Store',
     address: l.storefrontAddress?.addressLines?.join(', ') ?? '',
@@ -229,9 +254,9 @@ export async function fetchGoogleGBPReviews(
     if (!res.ok) return { reviews: [], error: `Google Business API HTTP ${res.status}` };
 
     const data = await res.json();
-    const rawReviews = data.reviews ?? [];
+    const rawReviews = data.reviews ?? []
     
-    const reviews: GoogleReview[] = rawReviews.map((r: any) => ({
+    const reviews: GoogleReview[] = (rawReviews as GoogleBusinessReviewEntry[]).map((r: GoogleBusinessReviewEntry) => ({
       reviewId: r.reviewId,
       reviewer: r.reviewer?.displayName ?? 'Anonymous',
       rating: r.starRating === 'FIVE' ? 5 : r.starRating === 'FOUR' ? 4 : r.starRating === 'THREE' ? 3 : r.starRating === 'TWO' ? 2 : 1,
@@ -242,8 +267,8 @@ export async function fetchGoogleGBPReviews(
     }));
 
     return { reviews };
-  } catch (e: any) {
-    return { reviews: [], error: e.message };
+  } catch (e: unknown) {
+    return { reviews: [], error: e instanceof Error ? e.message : 'Google Business review fetch failed' };
   }
 }
 
@@ -282,8 +307,8 @@ export async function replyGoogleGBPReview(input: {
       return { success: false, error: err.error?.message ?? `HTTP ${res.status}` };
     }
     return { success: true };
-  } catch (e: any) {
-    return { success: false, error: e.message };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : 'Google Business post failed' };
   }
 }
 
@@ -319,7 +344,7 @@ export async function createGoogleGBPLocalPost(input: {
         }))
       : undefined;
 
-    const postBody: Record<string, any> = {
+    const postBody: Record<string, unknown> = {
       summary: input.caption,
       languageCode: 'zh-CN',
     };
@@ -346,8 +371,8 @@ export async function createGoogleGBPLocalPost(input: {
       postId: data.name,
       url: data.searchUrl || undefined
     };
-  } catch (e: any) {
-    return { success: false, error: e.message };
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : 'Google Business post failed' }
   }
 }
 

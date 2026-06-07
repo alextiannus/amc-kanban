@@ -1,7 +1,18 @@
+/* eslint-disable @next/next/no-img-element */
 import { useState } from 'react'
 import { X, Upload, Check } from 'lucide-react'
 
-export default function AgentEditModal({ agent, onClose, onUpdate }: { agent: any, onClose: () => void, onUpdate: () => void }) {
+type AgentRecord = {
+  id: string
+  nickname?: string | null
+  introduction?: string | null
+  workflow?: string | null
+  insights?: string | null
+  themeColor?: string | null
+  avatar?: string | null
+}
+
+export default function AgentEditModal({ agent, onClose, onUpdate }: { agent: AgentRecord, onClose: () => void, onUpdate: () => void }) {
   const [nickname, setNickname] = useState(agent.nickname || '')
   const [introduction, setIntroduction] = useState(agent.introduction || '')
   const [workflow, setWorkflow] = useState(agent.workflow || '')
@@ -61,9 +72,9 @@ export default function AgentEditModal({ agent, onClose, onUpdate }: { agent: an
       setTimeout(() => {
         onUpdate()
       }, 500)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Avatar upload error:', err)
-      setError(err.message)
+      setError(err instanceof Error ? err.message : 'Failed to update agent')
       setIsSubmitting(false)
     }
   }

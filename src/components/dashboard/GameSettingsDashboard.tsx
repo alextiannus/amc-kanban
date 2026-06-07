@@ -1,7 +1,8 @@
 'use client'
+/* eslint-disable @next/next/no-img-element */
 
-import React, { useState, useEffect } from 'react'
-import { Save, Loader2, Plus, Trash2, HelpCircle, Check, Copy, Printer, RefreshCw, Eye, Sparkles } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Save, Loader2, Plus, Trash2, HelpCircle, Check, Copy, Printer, RefreshCw, Eye } from 'lucide-react'
 import QRCode from 'qrcode'
 
 interface Prize {
@@ -40,8 +41,6 @@ interface Props {
 function allocateGridSlots(prizesList: Prize[]): Prize[] {
   const activePrizes = prizesList.filter(p => p.probability > 0 || p.name);
   if (activePrizes.length === 0) return [];
-  
-  const slots: Prize[] = new Array(8).fill(null);
   
   if (activePrizes.length <= 8) {
     // 1. Give each active prize at least 1 slot
@@ -140,11 +139,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   const [isPreviewSpinning, setIsPreviewSpinning] = useState(false)
   const [previewActiveSlot, setPreviewActiveSlot] = useState<number | null>(null)
 
-  useEffect(() => {
-    fetchConfig()
-  }, [brandId])
-
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -174,13 +169,19 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
         },
       })
       setQrCodeUrl(qrDataUrl)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      setError(err.message)
+      setError(err instanceof Error ? err.message : 'Failed to load game configuration')
     } finally {
       setLoading(false)
     }
-  }
+  }, [brandId])
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      void fetchConfig()
+    })
+  }, [fetchConfig])
 
   const handleSave = async () => {
     if (!config) return
@@ -240,9 +241,9 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       setConfig(savedData)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      setError(err.message)
+      setError(err instanceof Error ? err.message : 'Failed to save configuration')
     } finally {
       setSaving(false)
     }
@@ -293,7 +294,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
     setIsPreviewSpinning(true)
     
     if (config.templateType === 'GRID') {
-      const slots = allocateGridSlots(config.prizes);
+      const slots = allocateGridSlots(config.prizes)
       if (slots.length === 0) {
         setIsPreviewSpinning(false);
         return;
@@ -672,7 +673,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                     <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">奖品类型</label>
                     <select
                       value={prize.type}
-                      onChange={(e) => handleUpdatePrize(idx, { type: e.target.value as any })}
+                      onChange={(e) => handleUpdatePrize(idx, { type: e.target.value as Prize['type'] })}
                       className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                     >
                       <option value="COUPON">优惠券 (COUPON)</option>

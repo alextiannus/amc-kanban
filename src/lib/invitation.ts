@@ -1,11 +1,13 @@
 import crypto from 'crypto'
 
 export interface InvitationData {
+  invitationId?: string
   email: string
   username: string
   password: string
   welcomeMessage: string
   createdAt: number
+  expiresAt?: number
 }
 
 function getInvitationKey() {
@@ -55,16 +57,19 @@ export function generateInvitationLink(
   email: string,
   password: string,
   username: string = email.split('@')[0],
-  baseUrl: string = process.env.NEXT_PUBLIC_KANBAN_HOST || 'http://localhost:3000'
+  baseUrl: string = process.env.NEXT_PUBLIC_KANBAN_HOST || 'http://localhost:3000',
+  options?: { invitationId?: string; expiresAt?: number }
 ): { link: string; token: string } {
   const welcomeMessage = `欢迎 ${username}！\n\n您已被邀请加入 AI Marketing Crew 看板系统。\n请使用以下凭证登录：\n\n用户名/邮箱: ${email}\n密码: ${password}`
   
   const data: InvitationData = {
+    invitationId: options?.invitationId,
     email,
     username,
     password,
     welcomeMessage,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    expiresAt: options?.expiresAt,
   }
   
   const token = generateInvitationToken(data)

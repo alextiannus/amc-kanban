@@ -1,4 +1,5 @@
 'use client'
+/* eslint-disable @next/next/no-img-element */
 
 import React, { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
@@ -40,16 +41,12 @@ export default function MainLayout({
   onNewAgentKeyGenerated,
   onTasksCleared,
 }: MainLayoutProps) {
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
+  const { theme, resolvedTheme, setTheme } = useTheme()
   const [subscriptionButtonText, setSubscriptionButtonText] = useState('订阅计划')
 
   const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : 'BRAND_DIRECTOR')
   const canSeeSocialInsight = dashboardRole === 'ADMIN' || dashboardRole === 'BRAND_DIRECTOR'
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  const currentTheme = resolvedTheme || theme || 'light'
 
   useEffect(() => {
     let cancelled = false
@@ -152,14 +149,12 @@ export default function MainLayout({
 
         {/* Toolbar controls (Theme & User menu) */}
         <div className="absolute right-4 top-8 z-40 flex items-center gap-2 lg:static lg:right-auto lg:top-auto">
-          {mounted && (
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
-            >
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-          )}
+          <button
+            onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+          >
+            {currentTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
 
           <UserMenu
             user={user}

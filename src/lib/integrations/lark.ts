@@ -24,6 +24,16 @@ export interface WorkspaceResult {
   error?: string
 }
 
+interface LarkApiResponse {
+  code?: number
+  msg?: string
+  data?: { token?: string; file_token?: string }
+  tenant_access_token?: string
+  expire?: number
+  StatusCode?: number
+  StatusMessage?: string
+}
+
 /**
  * Creates `Workspace_<brandName>` inside the brand's configured parent folder.
  * All credentials are per-brand (appId, appSecret, parentFolderToken).
@@ -59,21 +69,23 @@ export async function createBrandWorkspace(input: {
       body: JSON.stringify({ title: folderName }),
     })
 
-    const data = await res.json()
+    const data = (await res.json()) as LarkApiResponse
     if (data.code !== 0) {
       return { success: false, error: `Lark API error ${data.code}: ${data.msg}` }
     }
 
-    const folderToken: string = data.data?.token
-    if (!folderToken) return { success: false, error: 'Lark did not return a folder token' }
+    const folderToken = data.data?.token
+    if (typeof folderToken !== 'string' || !folderToken) {
+      return { success: false, error: 'Lark did not return a folder token' }
+    }
 
     return {
       success: true,
       folderToken,
       folderUrl: `${LARK_APP_DOMAIN}/drive/folder/${folderToken}`,
     }
-  } catch (e: any) {
-    return { success: false, error: e.message }
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : 'Failed to create Lark workspace' }
   }
 }
 
@@ -98,14 +110,18 @@ export async function getLarkTenantToken(appId: string, appSecret: string): Prom
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
     })
-    const data = await res.json()
+    const data = (await res.json()) as LarkApiResponse
     if (data.code !== 0) return null
 
+    const tenantToken = data.tenant_access_token
+    const expireSeconds = data.expire
+    if (!tenantToken || typeof expireSeconds !== 'number') return null
+
     tokenCache.set(cacheKey, {
-      token: data.tenant_access_token,
-      expiresAt: Date.now() + data.expire * 1000,
+      token: tenantToken,
+      expiresAt: Date.now() + expireSeconds * 1000,
     })
-    return data.tenant_access_token
+    return tenantToken
   } catch {
     return null
   }
@@ -146,7 +162,7 @@ export async function uploadToLarkDrive(input: {
       body: formData,
     })
 
-    const data = await res.json()
+    const data = (await res.json()) as LarkApiResponse
     if (data.code !== 0) return { success: false, error: data.msg }
 
     const fileToken = data.data?.file_token
@@ -156,8 +172,8 @@ export async function uploadToLarkDrive(input: {
       // Construct a stable download URL using file token
       downloadUrl: `${LARK_BASE}/drive/v1/medias/${fileToken}/download`,
     }
-  } catch (e: any) {
-    return { success: false, error: e.message }
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : 'Failed to upload to Lark Drive' }
   }
 }
 
@@ -225,13 +241,13 @@ export async function sendLarkWebhookNotification(input: {
       body: JSON.stringify(body),
     })
 
-    const data = await res.json()
+    const data = (await res.json()) as LarkApiResponse
     if (data.code !== 0 && data.StatusCode !== 0) {
       return { success: false, error: data.msg ?? data.StatusMessage }
     }
     return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : 'Failed to send Lark webhook notification' }
   }
 }
 

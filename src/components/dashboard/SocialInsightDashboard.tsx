@@ -1,10 +1,11 @@
 'use client'
+/* eslint-disable @next/next/no-img-element */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { 
-  TrendingUp, Download, ChevronDown, Heart, Eye, Users, 
+  TrendingUp, ChevronDown, Heart, Eye, Users, 
   BarChart2, MessageCircle, Activity, FileText, X, ShieldAlert,
-  ArrowUpRight, DollarSign, Percent, Star, MessageSquare, ExternalLink, RefreshCw
+  DollarSign, Percent, Star, RefreshCw
 } from 'lucide-react'
 
 // ── Colour palette for platforms ────────────────────────────────────────────
@@ -80,6 +81,80 @@ function MetricCard({ label, value, delta, icon, highlight = false, onClick, act
 
 // ── SVG Area Chart for time-series metrics ──────────────────────────────────
 type MetricKey = 'engagement' | 'impressions' | 'reach' | 'likes' | 'engRate' | 'postCount'
+type SocialInsightTab = 'overview' | 'channels' | 'sentiment' | 'roi' | 'competitors'
+
+interface InsightSeriesPoint {
+  date: string
+  engagement?: number
+  impressions?: number
+  reach?: number
+  likes?: number
+  engRate?: number
+  postCount?: number
+}
+
+interface ConversionSeriesPoint {
+  date: string
+  total: number
+  nav_click: number
+  booking_click: number
+  coupon_redemption: number
+}
+
+interface SocialPost {
+  id: string
+  platform: string
+  handle?: string | null
+  publishedAt: string
+  contentType?: string | null
+  caption?: string | null
+  likes: number
+  comments: number
+  shares: number
+  impressions: number
+  engRate?: number | string | null
+}
+
+interface SocialAccount {
+  id: string
+  platformId: string
+  handle: string
+  autoPilot?: boolean
+  followerCount?: number | null
+  followerDelta?: number | null
+  ratingScore?: number | null
+}
+
+interface ReviewItem {
+  id?: string
+  reviewerName?: string
+  rating: number
+  text?: string | null
+  createdAt?: string | Date
+  replyStatus?: 'replied' | 'pending' | string
+}
+
+type SentimentKeyword = {
+  text: string
+  count?: number
+  sentiment?: 'positive' | 'neutral' | 'negative' | string
+}
+
+interface SocialInsightData {
+  kpis?: Record<string, number>
+  timeSeries?: InsightSeriesPoint[]
+  topPosts?: SocialPost[]
+  contentTypeBreakdown?: Array<{ type: string; count: number; avgEngRate: number }>
+  accounts?: SocialAccount[]
+  conversions?: { total: number; nav_click: number; booking_click: number; coupon_redemption: number; timeSeries: ConversionSeriesPoint[] }
+  sentiment?: { averageRating: number | null; positivePct: number; neutralPct: number; negativePct: number; keywords: SentimentKeyword[]; reviews: ReviewItem[] }
+  competitors?: unknown[]
+  brandStats?: { postsPerWeek: number | null; avgEngRate: number | null; followersInstagram: number | null }
+  kpiTrends?: Record<string, number | null | undefined>
+  previousConversions?: { total: number | null; nav_click: number | null; booking_click: number | null; coupon_redemption: number | null }
+  apifySync?: { hasSyncData: boolean; syncedAt: string | null; googleReviewCount: number; instagramPostCount: number; tiktokPostCount: number; xiaohongshuPostCount: number }
+  hasPostfastData?: boolean
+}
 const METRIC_OPTIONS: { key: MetricKey; label: string; icon: React.ReactNode; color: string }[] = [
   { key: 'engagement', label: '互动数', icon: <Activity className="w-3.5 h-3.5" />, color: '#c084fc' },
   { key: 'impressions', label: '曝光量', icon: <Eye className="w-3.5 h-3.5" />, color: '#60a5fa' },
@@ -90,7 +165,7 @@ const METRIC_OPTIONS: { key: MetricKey; label: string; icon: React.ReactNode; co
 ]
 
 function AreaChart({ series, activeMetric }: {
-  series: any[]
+  series: InsightSeriesPoint[]
   activeMetric: MetricKey
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -102,14 +177,14 @@ function AreaChart({ series, activeMetric }: {
     <div className="h-48 flex items-center justify-center text-slate-300 dark:text-slate-700 text-sm">暂无趋势数据</div>
   )
 
-  const vals = series.map(d => d[activeMetric] as number)
+  const vals = series.map(d => (d[activeMetric] ?? 0) as number)
   const maxV = Math.max(...vals, 1)
   const xStep = (W - PAD.l - PAD.r) / (series.length - 1 || 1)
 
   const toX = (i: number) => PAD.l + i * xStep
   const toY = (v: number) => PAD.t + (H - PAD.t - PAD.b) * (1 - v / maxV)
 
-  const points = series.map((d, i) => ({ x: toX(i), y: toY(d[activeMetric] as number), d }))
+  const points = series.map((d, i) => ({ x: toX(i), y: toY((d[activeMetric] ?? 0) as number), d }))
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
   const areaPath = `${linePath} L${points[points.length - 1].x},${H - PAD.b} L${points[0].x},${H - PAD.b} Z`
 
@@ -135,7 +210,7 @@ function AreaChart({ series, activeMetric }: {
             x: (closest.x / W) * 100,
             y: (closest.y / H) * 100,
             label: fmtDate(closest.d.date),
-            value: activeMetric === 'engRate' ? `${(closest.d[activeMetric] as number).toFixed(2)}%` : fmtNum(closest.d[activeMetric] as number),
+            value: activeMetric === 'engRate' ? `${((closest.d[activeMetric] ?? 0) as number).toFixed(2)}%` : fmtNum((closest.d[activeMetric] ?? 0) as number),
           })
         }}
       >
@@ -181,7 +256,7 @@ function AreaChart({ series, activeMetric }: {
 }
 
 // ── SVG Conversions Chart for ROI tab ────────────────────────────────────────
-function ConversionsChart({ series }: { series: any[] }) {
+function ConversionsChart({ series }: { series: ConversionSeriesPoint[] }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string; nav: number; booking: number; coupon: number } | null>(null)
   const W = 900; const H = 220; const PAD = { t: 25, r: 20, b: 35, l: 50 }
@@ -271,7 +346,7 @@ function ConversionsChart({ series }: { series: any[] }) {
 }
 
 // ── Top Post Row ─────────────────────────────────────────────────────────────
-function TopPostRow({ post, rank, onClick }: { post: any; rank: number; onClick?: () => void }) {
+function TopPostRow({ post, rank, onClick }: { post: SocialPost; rank: number; onClick?: () => void }) {
   const platformColor = PLATFORM_COLORS[post.platform?.toLowerCase()] ?? '#6366f1'
   const interactions = post.likes + post.comments + post.shares
   return (
@@ -306,14 +381,14 @@ function TopPostRow({ post, rank, onClick }: { post: any; rank: number; onClick?
 interface SocialInsightDashboardProps { brandId: string; brandName?: string }
 
 export default function SocialInsightDashboard({ brandId, brandName }: SocialInsightDashboardProps) {
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<SocialInsightData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'channels' | 'sentiment' | 'roi' | 'competitors'>('overview')
+  const [activeTab, setActiveTab] = useState<SocialInsightTab>('overview')
   const [activeMetric, setActiveMetric] = useState<MetricKey>('postCount')
   const [days, setDays] = useState(30)
   const [showPresets, setShowPresets] = useState(false)
-  const [selectedPost, setSelectedPost] = useState<any | null>(null)
+  const [selectedPost, setSelectedPost] = useState<SocialPost | null>(null)
   const [reviewFilter, setReviewFilter] = useState<string | null>(null)
   const [apifySyncing, setApifySyncing] = useState(false)
   const [apifySyncMsg, setApifySyncMsg] = useState<string | null>(null)
@@ -332,14 +407,18 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
       const res = await fetch(`/api/brands/${brandId}/social-insight?from=${from.toISOString()}&to=${to.toISOString()}`)
       if (!res.ok) throw new Error('拉取三方分析数据失败')
       setData(await res.json())
-    } catch (e: any) {
-      setError(e.message)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '拉取三方分析数据失败')
     } finally {
       setLoading(false)
     }
   }, [brandId])
 
-  useEffect(() => { load(days) }, [load, days])
+  useEffect(() => {
+    void (async () => {
+      await load(days)
+    })()
+  }, [load, days])
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -356,7 +435,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
   const accounts = data?.accounts ?? []
   const conversions = data?.conversions ?? { total: 0, nav_click: 0, booking_click: 0, coupon_redemption: 0, timeSeries: [] }
   const sentiment = data?.sentiment ?? { averageRating: null, positivePct: 0, neutralPct: 0, negativePct: 0, keywords: [], reviews: [] }
-  const competitors = data?.competitors ?? []
+  void (data?.competitors ?? [])
   const brandStats = data?.brandStats ?? { postsPerWeek: null, avgEngRate: null, followersInstagram: null }
   const kpiTrends = data?.kpiTrends ?? {}
   const prevConversions = data?.previousConversions ?? { total: null, nav_click: null, booking_click: null, coupon_redemption: null }
@@ -389,19 +468,19 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
       const res = await fetch(`/api/brands/${brandId}/apify-sync`, { method: 'POST' })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? '同步失败')
-      const s = json.summary
+      const s = json.summary as Partial<{ googleReviewCount: number; instagramPostCount: number; tiktokPostCount: number }>
       setApifySyncMsg(`✅ 同步完成：${s?.googleReviewCount ?? 0} 条评论, ${s?.instagramPostCount ?? 0} IG 帖子, ${s?.tiktokPostCount ?? 0} TT 帖子`)
       // Reload data to pick up new Apify results
       await load(days)
-    } catch (e: any) {
-      setApifySyncMsg(`❌ ${e.message}`)
+    } catch (e: unknown) {
+      setApifySyncMsg(`❌ ${e instanceof Error ? e.message : '同步失败'}`)
     } finally {
       setApifySyncing(false)
     }
   }
 
   // Filter reviews by selected keyword sentiment/type
-  const filteredReviews = sentiment.reviews.filter((r: any) => {
+  const filteredReviews = sentiment.reviews.filter((r) => {
     if (!reviewFilter) return true
     if (reviewFilter === 'positive') return r.rating >= 4
     if (reviewFilter === 'negative') return r.rating <= 2
@@ -524,7 +603,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
         ].map(t => (
           <button
             key={t.id}
-            onClick={() => setActiveTab(t.id as any)}
+            onClick={() => setActiveTab(t.id as SocialInsightTab)}
             className={`flex items-center gap-2 px-5 py-2.5 text-xs font-black rounded-xl transition-all duration-300 whitespace-nowrap ${
               activeTab === t.id
                 ? 'bg-white dark:bg-slate-850 text-emerald-600 dark:text-emerald-400 shadow-md ring-1 ring-slate-100/50 dark:ring-slate-800/50'
@@ -619,7 +698,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                   <div className="divide-y divide-slate-50 dark:divide-slate-800/40 max-h-[460px] overflow-y-auto pr-1">
                     {topPosts.length === 0 ? (
                       <div className="py-20 text-center text-xs text-slate-400">暂无内容发布数据</div>
-                    ) : topPosts.map((post: any, i: number) => (
+                    ) : topPosts.map((post, i: number) => (
                       <TopPostRow key={post.id} post={post} rank={i + 1} onClick={() => setSelectedPost(post)} />
                     ))}
                   </div>
@@ -632,7 +711,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                     <p className="text-[11px] text-slate-400 mt-0.5">按图片、视频、长文等类型的分析汇总</p>
                   </div>
                   <div className="space-y-4">
-                    {contentTypeBreakdown.map((ct: any) => (
+                    {contentTypeBreakdown.map((ct) => (
                       <div key={ct.type} className="space-y-1.5">
                         <div className="flex justify-between items-center text-xs">
                           <span className="font-bold text-slate-650 dark:text-slate-350">{ct.type === 'IMAGE' ? '🖼️ 图片' : ct.type === 'VIDEO' ? '🎥 视频' : ct.type === 'SHORT' ? '📱 短视频' : '📝 长图文'}</span>
@@ -642,7 +721,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                           <div 
                             className="h-full rounded-full transition-all duration-700" 
                             style={{ 
-                              width: `${(ct.count / Math.max(...contentTypeBreakdown.map((t: any) => t.count), 1)) * 100}%`,
+                              width: `${(ct.count / Math.max(...contentTypeBreakdown.map((t) => t.count), 1)) * 100}%`,
                               backgroundColor: CONTENT_TYPE_COLORS[ct.type] ?? '#6366f1' 
                             }} 
                           />
@@ -669,7 +748,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
             <div className="space-y-6">
               {/* Account Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {accounts.map((acc: any) => {
+                {accounts.map((acc) => {
                   const platColor = PLATFORM_COLORS[acc.platformId.toLowerCase()] ?? '#6366f1'
                   return (
                     <div key={acc.id} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-4 hover:shadow-md transition-shadow relative overflow-hidden group">
@@ -734,7 +813,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 dark:divide-slate-850">
-                      {accounts.map((acc: any) => {
+                      {accounts.map((acc) => {
                         const platColor = PLATFORM_COLORS[acc.platformId.toLowerCase()] ?? '#6366f1'
                         return (
                           <tr key={acc.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
@@ -842,14 +921,16 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
 
                 {/* Keyword list */}
                 <div className="flex flex-wrap gap-2.5 py-4">
-                  {sentiment.keywords.map((kw: any) => {
+                    {sentiment.keywords.map((kw) => {
                     const isActive = reviewFilter === kw.text
+                    const kwCount = kw.count ?? 0
+                    const kwSentiment = kw.sentiment ?? 'neutral'
                     let kwBg = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-350'
-                    if (kw.sentiment === 'positive') {
+                    if (kwSentiment === 'positive') {
                       kwBg = isActive 
                         ? 'bg-emerald-500 text-white shadow-md' 
                         : 'bg-emerald-500/10 text-emerald-550 dark:text-emerald-400 hover:bg-emerald-500/20'
-                    } else if (kw.sentiment === 'negative') {
+                    } else if (kwSentiment === 'negative') {
                       kwBg = isActive 
                         ? 'bg-red-500 text-white shadow-md' 
                         : 'bg-red-500/10 text-red-550 dark:text-red-400 hover:bg-red-500/20'
@@ -860,9 +941,9 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                         key={kw.text}
                         onClick={() => setReviewFilter(prev => prev === kw.text ? null : kw.text)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${kwBg}`}
-                        style={{ fontSize: `${11 + (kw.count / 10)}px` }}
+                        style={{ fontSize: `${11 + (kwCount / 10)}px` }}
                       >
-                        {kw.text} ({kw.count})
+                        {kw.text} ({kwCount})
                       </button>
                     );
                   })}
@@ -872,10 +953,10 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                 <div className="flex-1 mt-4 overflow-y-auto max-h-[300px] border-t border-slate-50 dark:border-slate-800/60 pt-4 space-y-3 pr-1">
                   {filteredReviews.length === 0 ? (
                     <div className="py-12 text-center text-xs text-slate-400 font-medium">没有找到包含此标签的评语</div>
-                  ) : filteredReviews.map((r: any) => (
-                    <div key={r.id} className="bg-slate-50 dark:bg-slate-900/60 border border-slate-100/40 dark:border-slate-850 p-4 rounded-2xl relative">
+                  ) : filteredReviews.map((r) => (
+                    <div key={r.id ?? `${r.reviewerName ?? 'reviewer'}-${r.text ?? ''}`} className="bg-slate-50 dark:bg-slate-900/60 border border-slate-100/40 dark:border-slate-850 p-4 rounded-2xl relative">
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-[11px] font-black text-slate-700 dark:text-slate-300">{r.reviewerName}</span>
+                        <span className="text-[11px] font-black text-slate-700 dark:text-slate-300">{r.reviewerName ?? 'Anonymous'}</span>
                         <div className="flex gap-0.5 text-amber-400 shrink-0">
                           {[1, 2, 3, 4, 5].map(s => (
                             <Star key={s} className={`w-2.5 h-2.5 ${s <= r.rating ? 'fill-current' : ''}`} />
@@ -884,7 +965,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                       </div>
                       <p className="text-xs text-slate-550 dark:text-slate-400 leading-relaxed">{r.text}</p>
                       <div className="flex justify-between items-center mt-3 border-t border-slate-100/50 dark:border-slate-800/50 pt-2 text-[9px] font-bold text-slate-400">
-                        <span>谷歌商户中心 · {new Date(r.createdAt).toLocaleDateString('zh-CN')}</span>
+                        <span>谷歌商户中心 · {new Date(r.createdAt ?? Date.now()).toLocaleDateString('zh-CN')}</span>
                         <span className={`px-2 py-0.5 rounded ${r.replyStatus === 'replied' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500 animate-pulse'}`}>
                           {r.replyStatus === 'replied' ? 'AI已回复' : '待处理'}
                         </span>
@@ -1064,8 +1145,8 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                   <div className="py-10 text-center text-slate-400 text-xs">暂无已绑定的社交账号</div>
                 ) : (
                   <div className="space-y-5">
-                    {accounts.map((acc: any) => {
-                      const maxFollowers = Math.max(1, ...accounts.map((a: any) => a.followerCount ?? 0))
+                    {accounts.map((acc) => {
+                      const maxFollowers = Math.max(1, ...accounts.map((a) => a.followerCount ?? 0))
                       const pct = maxFollowers > 0 ? ((acc.followerCount ?? 0) / maxFollowers) * 100 : 0
                       const colorMap: Record<string, string> = {
                         instagram: '#E4405F', tiktok: '#010101', xiaohongshu: '#FF2442',

@@ -274,9 +274,10 @@ export async function PATCH(request: Request, { params }: Params) {
             }
             syncResults.success++
             console.log(`[Settings] ✓ Synced ${acc.platformId}:${acc.handle}`)
-          } catch (e: any) {
+          } catch (e: unknown) {
             syncResults.failed++
-            const errMsg = e.message?.split('\n')[0] ?? String(e)
+            const message = e instanceof Error ? e.message : String(e)
+            const errMsg = message.split('\n')[0] ?? message
             syncResults.errors.push(`${acc.platformId}:${acc.handle} - ${errMsg}`)
             console.error(`[Settings] ✗ Failed to sync ${acc.platformId}:${acc.handle}:`, errMsg)
           }

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
-import { withResolvedAvatar } from '@/lib/avatarUtils'
+import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
+import type { Prisma } from '@prisma/client'
 
 export async function GET(
   request: Request,
@@ -29,20 +30,28 @@ export async function GET(
 
     const agent = await prisma.user.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        type: true,
+        nickname: true,
+        email: true,
+        insights: true,
+        introduction: true,
+        workflow: true,
+        themeColor: true,
+        ...avatarSelect,
         tasksAsAssignee: {
           orderBy: { createdAt: 'desc' }
         }
-      }
+      },
     })
 
     if (!agent || agent.type !== 'AI_AGENT') {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
     }
 
-    const { password, apiKey, ...agentData } = agent as any
-    return NextResponse.json(withResolvedAvatar(agentData))
-  } catch (error) {
+    return NextResponse.json(withResolvedAvatar(agent))
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -80,7 +89,7 @@ export async function PATCH(
     const insights = formData.get('insights') as string | null
     const themeColor = formData.get('themeColor') as string | null
     
-    const updateData: any = {}
+    const updateData: Prisma.UserUpdateInput = {}
     if (nickname !== null) updateData.nickname = nickname
     if (introduction !== null) updateData.introduction = introduction
     if (workflow !== null) updateData.workflow = workflow
@@ -119,9 +128,10 @@ export async function PATCH(
         avatarUpdated = true
         
         console.log(`[AVATAR] Avatar will be stored in database: ${file.type}, ${buffer.length} bytes`)
-      } catch (bufferError: any) {
-        console.error(`[AVATAR] Failed to process buffer: ${bufferError.message}`)
-        return NextResponse.json({ error: `Buffer processing failed: ${bufferError.message}` }, { status: 500 })
+      } catch (bufferError: unknown) {
+        const message = bufferError instanceof Error ? bufferError.message : 'Unknown buffer processing error'
+        console.error(`[AVATAR] Failed to process buffer: ${message}`)
+        return NextResponse.json({ error: `Buffer processing failed: ${message}` }, { status: 500 })
       }
     }
 
@@ -139,17 +149,25 @@ export async function PATCH(
       })
       
       // Build data URI from stored binary data for response
-      const updatedAgent = await prisma.user.findUnique({ where: { id } }) as any
+      const updatedAgent = await prisma.user.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          ...avatarSelect,
+        },
+      })
       const avatarUrl = updatedAgent ? withResolvedAvatar(updatedAgent).avatar : null
       console.log(`[AVATAR] Agent updated successfully. Avatar updated: ${avatarUpdated}`)
       return NextResponse.json({ success: true, agent: { id: agent.id, avatar: avatarUrl } })
-    } catch (dbError: any) {
-      console.error(`[AVATAR] Database update failed: ${dbError.message}`)
-      return NextResponse.json({ error: `Database error: ${dbError.message}` }, { status: 500 })
+    } catch (dbError: unknown) {
+      const message = dbError instanceof Error ? dbError.message : 'Unknown database error'
+      console.error(`[AVATAR] Database update failed: ${message}`)
+      return NextResponse.json({ error: `Database error: ${message}` }, { status: 500 })
     }
-  } catch (error: any) {
-    console.error(`[AVATAR] Unexpected error: ${error.message}`, error)
-    return NextResponse.json({ error: `Internal Server Error: ${error.message}` }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    console.error(`[AVATAR] Unexpected error: ${message}`, error)
+    return NextResponse.json({ error: `Internal Server Error: ${message}` }, { status: 500 })
   }
 }
 
@@ -187,7 +205,7 @@ export async function DELETE(
     })
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

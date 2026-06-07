@@ -7,6 +7,32 @@
 
 const POSTFAST_BASE = process.env.POSTFAST_BASE_URL || 'https://api.postfa.st'
 
+type JsonRecord = Record<string, unknown>
+
+function asObject(value: unknown): JsonRecord {
+  return value && typeof value === 'object' ? (value as JsonRecord) : {}
+}
+
+function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function asNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+interface PfFetchResult {
+  ok: boolean
+  status: number
+  data: unknown
+  error?: string
+}
+
 // ── Platform name normalisation ────────────────────────────────────────────
 
 const PLATFORM_MAP: Record<string, string> = {
@@ -48,7 +74,7 @@ async function pfFetch(
   apiKey: string,
   path: string,
   options: RequestInit = {}
-): Promise<{ ok: boolean; status: number; data: any; error?: string }> {
+): Promise<PfFetchResult> {
   try {
     const res = await fetch(`${POSTFAST_BASE}${path}`, {
       ...options,
@@ -59,23 +85,24 @@ async function pfFetch(
       },
       signal: AbortSignal.timeout(15_000),
     })
-    let data: any = {}
+    let data: unknown = {}
     try { data = await res.json() } catch { /* plain-text response */ }
     if (!res.ok) {
+      const obj = asObject(data)
       // PostFast may return errors as an array e.g. ["Maximum 15 posts...", "posts must be an array"]
       let errMsg: string
       if (Array.isArray(data)) {
-        errMsg = data.join(', ')
-      } else if (Array.isArray(data?.errors)) {
-        errMsg = data.errors.join(', ')
+        errMsg = data.map((item) => asString(item, String(item))).join(', ')
+      } else if (Array.isArray(obj.errors)) {
+        errMsg = obj.errors.map((item) => asString(item, String(item))).join(', ')
       } else {
-        errMsg = data?.message ?? data?.error ?? `HTTP ${res.status}`
+        errMsg = asString(obj.message) || asString(obj.error) || `HTTP ${res.status}`
       }
       return { ok: false, status: res.status, data, error: errMsg }
     }
     return { ok: true, status: res.status, data }
-  } catch (e: any) {
-    return { ok: false, status: 0, data: null, error: e.message }
+  } catch (e: unknown) {
+    return { ok: false, status: 0, data: null, error: e instanceof Error ? e.message : 'PostFast request failed' }
   }
 }
 
@@ -167,20 +194,24 @@ export async function postfastFetchAccounts(apiKey: string): Promise<{
   const r = await pfFetch(apiKey, '/social-media/my-social-accounts')
   if (!r.ok) return { success: false, accounts: [], error: r.error }
 
-  const raw: any[] = Array.isArray(r.data) ? r.data : []
+  const raw: JsonRecord[] = Array.isArray(r.data) ? (r.data as JsonRecord[]) : []
   const accounts: PostFastAccount[] = raw.map(a => {
     const pfPlatform = String(a.platform ?? '').toUpperCase().trim()
+    const followerCount = asNumber(a.followerCount)
+    const followerDelta = asNumber(a.followerDelta)
+    const ratingScore = asNumber(a.ratingScore)
+
     return {
-      id: a.id,
+      id: asString(a.id),
       platform: pfPlatform,
       platformId: normalizePlatform(a.platform),
-      handle: a.platformUsername || a.displayName || a.id,
-      displayName: a.displayName,
-      profileUrl: a.profileUrl,
+      handle: asString(a.platformUsername) || asString(a.displayName) || asString(a.id),
+      displayName: asString(a.displayName) || undefined,
+      profileUrl: asString(a.profileUrl) || undefined,
       connected: a.isConnected !== false,
-      followerCount: a.followerCount != null ? parseInt(a.followerCount) : undefined,
-      followerDelta: a.followerDelta != null ? parseInt(a.followerDelta) : undefined,
-      ratingScore: a.ratingScore != null ? parseFloat(a.ratingScore) : undefined,
+      followerCount,
+      followerDelta,
+      ratingScore,
     }
   })
   return { success: true, accounts }
@@ -199,7 +230,11 @@ export async function postfastGenerateConnectLink(apiKey: string, options?: {
     body: JSON.stringify(options ?? {}),
   })
   if (!r.ok) return { success: false, error: r.error }
-  return { success: true, connectUrl: r.data?.link ?? r.data?.url ?? r.data?.connectUrl }
+  const obj = asObject(r.data)
+  return {
+    success: true,
+    connectUrl: asString(obj.link) || asString(obj.url) || asString(obj.connectUrl) || undefined,
+  }
 }
 
 /**
@@ -213,11 +248,13 @@ export async function postfastGetGBPLocations(apiKey: string, accountId: string)
 }> {
   const r = await pfFetch(apiKey, `/social-media/${accountId}/gbp-locations`)
   if (!r.ok) return { success: false, locations: [], error: r.error }
-  const locs = (Array.isArray(r.data) ? r.data : r.data?.locations ?? []).map((l: any) => ({
-    id: l.id ?? l.locationId,
-    name: l.name ?? l.locationName,
-    address: l.address,
-    placeId: l.placeId ?? l.googlePlaceId,
+  const dataObj = asObject(r.data)
+  const locSource = Array.isArray(r.data) ? (r.data as JsonRecord[]) : (Array.isArray(dataObj.locations) ? dataObj.locations as JsonRecord[] : [])
+  const locs = locSource.map((l) => ({
+    id: asString(l.id) || asString(l.locationId),
+    name: asString(l.name) || asString(l.locationName),
+    address: asString(l.address) || undefined,
+    placeId: asString(l.placeId) || asString(l.googlePlaceId) || undefined,
   }))
   return { success: true, locations: locs }
 }
@@ -242,14 +279,16 @@ export async function postfastGetAnalytics(apiKey: string, options?: {
   const r = await pfFetch(apiKey, `/social-posts/analytics?${params}`)
   if (!r.ok) return { success: false, posts: [], error: r.error }
 
-  const raw: any[] = Array.isArray(r.data) ? r.data : (r.data?.data ?? [])
+  const raw: JsonRecord[] = Array.isArray(r.data)
+    ? r.data as JsonRecord[]
+    : (Array.isArray(asObject(r.data).data) ? asObject(r.data).data as JsonRecord[] : [])
   const posts: PostFastAnalyticsPost[] = raw.map(p => ({
-    id: p.id,
-    content: p.content ?? '',
-    socialMediaId: p.socialMediaId ?? '',
-    platformPostId: p.platformPostId ?? '',
-    publishedAt: p.publishedAt ?? new Date().toISOString(),
-    latestMetric: p.latestMetric ?? null,
+    id: asString(p.id),
+    content: asString(p.content),
+    socialMediaId: asString(p.socialMediaId),
+    platformPostId: asString(p.platformPostId),
+    publishedAt: asString(p.publishedAt) || new Date().toISOString(),
+    latestMetric: (p.latestMetric && typeof p.latestMetric === 'object') ? (p.latestMetric as PostFastAnalyticsPost['latestMetric']) : null,
   }))
   return { success: true, posts }
 }
@@ -274,24 +313,36 @@ export async function postfastListPosts(apiKey: string, options?: {
   const r = await pfFetch(apiKey, `/social-posts?${params}`)
   if (!r.ok) return { success: false, posts: [], error: r.error }
 
-  const rawPosts: any[] = Array.isArray(r.data) ? r.data : (r.data?.data ?? r.data?.posts ?? [])
+  const dataObj = asObject(r.data)
+  const rawPosts: JsonRecord[] = Array.isArray(r.data)
+    ? r.data as JsonRecord[]
+    : (Array.isArray(dataObj.data) ? dataObj.data as JsonRecord[] : (Array.isArray(dataObj.posts) ? dataObj.posts as JsonRecord[] : []))
   const posts: PostFastPost[] = rawPosts.map(p => {
-    const pfPlatform = (p.platform ?? '').toUpperCase()
+    const pfPlatform = asString(p.platform).toUpperCase()
+    const rawStatus = asString(p.status).toLowerCase()
+    const status: PostFastPost['status'] =
+      rawStatus === 'scheduled' || rawStatus === 'published' || rawStatus === 'failed' || rawStatus === 'draft'
+        ? rawStatus
+        : 'draft'
+
+    const mediaItems = Array.isArray(p.mediaItems) ? (p.mediaItems as Array<{ url?: unknown }>) : []
+
     return {
-      id: p.id,
+      id: asString(p.id),
       platform: pfPlatform,
       platformId: PLATFORM_MAP[pfPlatform] ?? pfPlatform.toLowerCase(),
-      caption: p.content ?? p.caption ?? '',   // API returns 'content', not 'caption'
-      status: p.status?.toLowerCase() ?? 'draft',
-      scheduledAt: p.scheduledAt ?? p.scheduled_at,
-      publishedAt: p.publishedAt ?? p.published_at,
-      postUrl: p.url ?? p.postUrl,
-      mediaUrls: (p.mediaItems ?? []).map((m: any) => m.url).filter(Boolean),
-      hashtags: p.hashtags ?? [],
+      caption: asString(p.content) || asString(p.caption),   // API returns 'content', not 'caption'
+      status,
+      scheduledAt: asString(p.scheduledAt) || asString(p.scheduled_at) || undefined,
+      publishedAt: asString(p.publishedAt) || asString(p.published_at) || undefined,
+      postUrl: asString(p.url) || asString(p.postUrl) || undefined,
+      mediaUrls: mediaItems.map((m) => m.url).filter((url): url is string => typeof url === 'string' && url.length > 0),
+      hashtags: Array.isArray(p.hashtags) ? (p.hashtags as string[]) : [],
       // No engagement stats from this endpoint — use postfastGetAnalytics()
     }
   })
-  return { success: true, posts, total: r.data?.totalCount ?? rawPosts.length }
+  const totalCount = asNumber(dataObj.totalCount)
+  return { success: true, posts, total: totalCount ?? rawPosts.length }
 }
 
 /**
@@ -338,12 +389,20 @@ export async function postfastGetSignedUploadUrls(apiKey: string, files: Array<{
   if (!r.ok) return { success: false, slots: [], error: r.error }
 
   // Response may be array directly or nested under urls/files/data key
-  const raw: any[] = Array.isArray(r.data) ? r.data : (r.data?.urls ?? r.data?.files ?? r.data?.data ?? [])
+  const raw: JsonRecord[] = Array.isArray(r.data)
+    ? r.data as JsonRecord[]
+    : (() => {
+        const dataObj = asObject(r.data)
+        if (Array.isArray(dataObj.urls)) return dataObj.urls as JsonRecord[]
+        if (Array.isArray(dataObj.files)) return dataObj.files as JsonRecord[]
+        if (Array.isArray(dataObj.data)) return dataObj.data as JsonRecord[]
+        return [] as JsonRecord[]
+      })()
   const slots: PostFastUploadSlot[] = raw.map(s => ({
-    uploadUrl: s.uploadUrl ?? s.upload_url ?? s.signedUrl ?? s.signed_url ?? s.url,
-    storageKey: s.storageKey ?? s.storage_key ?? s.key ?? s.fileToken ?? s.file_token,
-    fileToken: s.fileToken ?? s.file_token ?? s.storageKey ?? s.storage_key,
-    expiresAt: s.expiresAt ?? s.expires_at,
+    uploadUrl: asString(s.uploadUrl) || asString(s.upload_url) || asString(s.signedUrl) || asString(s.signed_url) || asString(s.url),
+    storageKey: asString(s.storageKey) || asString(s.storage_key) || asString(s.key) || asString(s.fileToken) || asString(s.file_token),
+    fileToken: asString(s.fileToken) || asString(s.file_token) || asString(s.storageKey) || asString(s.storage_key),
+    expiresAt: asString(s.expiresAt) || asString(s.expires_at) || undefined,
   }))
   return { success: true, slots }
 }
@@ -366,8 +425,8 @@ export async function postfastUploadFile(
     })
     if (!res.ok) return { success: false, error: `Upload HTTP ${res.status}` }
     return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e.message }
+  } catch (e: unknown) {
+    return { success: false, error: e instanceof Error ? e.message : 'Publish failed' }
   }
 }
 
@@ -464,7 +523,7 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
             a.handle.toLowerCase() === targetHandle
           )
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Failed to look up social account in database:', e)
       }
     }
@@ -497,8 +556,8 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
       try {
         const storageKey = await uploadPublicUrlToPostfast(input.apiKey, url)
         mediaKeys.push(storageKey)
-      } catch (e: any) {
-        return { success: false, error: `媒体文件上传失败 (${url}): ${e.message}` }
+      } catch (e: unknown) {
+        return { success: false, error: `媒体文件上传失败 (${url}): ${e instanceof Error ? e.message : String(e)}` }
       }
     }
   }
@@ -537,11 +596,16 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   if (!r.ok) return { success: false, error: r.error }
 
   // Response may be array of created posts or a single object
-  const created = Array.isArray(r.data) ? r.data[0] : (r.data?.posts?.[0] ?? r.data)
+  const dataObj = asObject(r.data)
+  const created = Array.isArray(r.data)
+    ? r.data[0]
+    : (Array.isArray(dataObj.posts) ? dataObj.posts[0] : r.data)
+  const createdObj = asObject(created)
+
   return {
     success: true,
-    postId: created?.post_id ?? created?.id,
-    url: created?.url ?? created?.postUrl,
+    postId: asString(createdObj.post_id) || asString(createdObj.id) || undefined,
+    url: asString(createdObj.url) || asString(createdObj.postUrl) || undefined,
     scheduledAt: input.scheduledAt,
   }
 }

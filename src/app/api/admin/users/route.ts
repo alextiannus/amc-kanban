@@ -5,6 +5,8 @@ import crypto from 'crypto'
 import { getSession } from '@/lib/auth'
 import { generateInvitationLink } from '@/lib/invitation'
 
+const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
 export async function GET() {
   try {
     const session = await getSession()
@@ -30,7 +32,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     })
     return NextResponse.json(users)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -64,6 +66,27 @@ export async function POST(request: Request) {
       }
     })
 
+    const expiresAt = new Date(Date.now() + INVITATION_TTL_MS)
+    await prisma.invitation.updateMany({
+      where: {
+        status: 'PENDING',
+        OR: [{ inviteeEmail: email }, { inviteeUserId: user.id }],
+      },
+      data: {
+        status: 'REVOKED',
+        revokedAt: new Date(),
+      },
+    })
+    const invitation = await prisma.invitation.create({
+      data: {
+        inviterId: session.user.id,
+        inviteeEmail: email,
+        inviteeUserId: user.id,
+        status: 'PENDING',
+        expiresAt,
+      },
+    })
+
     // 生成邀请链接，优先使用环境变量，其次取实际请求 origin
     const requestUrl = new URL(request.url)
     const baseUrl = process.env.NEXT_PUBLIC_KANBAN_HOST
@@ -72,8 +95,29 @@ export async function POST(request: Request) {
       email,
       temporaryPassword,
       email.split('@')[0],
-      baseUrl
+      baseUrl,
+      {
+        invitationId: invitation.id,
+        expiresAt: expiresAt.getTime(),
+      }
     )
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: session.user.id,
+        actorType: 'HUMAN',
+        actorName: session.user.email || null,
+        action: 'INVITATION_CREATED',
+        resourceId: invitation.id,
+        resourceType: 'Invitation',
+        newValue: {
+          inviteeEmail: invitation.inviteeEmail,
+          inviteeUserId: invitation.inviteeUserId,
+          expiresAt: invitation.expiresAt,
+          status: invitation.status,
+        },
+      },
+    })
 
     return NextResponse.json({
       success: true,

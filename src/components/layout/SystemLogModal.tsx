@@ -6,8 +6,33 @@ interface SystemLogModalProps {
   onClose: () => void
 }
 
+type SystemLogMetadata = {
+  source?: string
+  success?: boolean
+  postCount?: number
+  reviewCount?: number
+  rating?: number | null
+  accounts?: number
+  conversions?: number
+  durationMs?: number
+  error?: string
+  dateRange?: string
+}
+
+type SystemLogEntry = {
+  id: string
+  timestamp: string
+  action?: string
+  resourceType?: string
+  resourceId?: string
+  actorName?: string | null
+  actorType?: string | null
+  reason?: string | null
+  metadata?: SystemLogMetadata | null
+}
+
 export default function SystemLogModal({ onClose }: SystemLogModalProps) {
-  const [logs, setLogs] = useState<any[]>([])
+  const [logs, setLogs] = useState<SystemLogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
 
@@ -54,7 +79,7 @@ export default function SystemLogModal({ onClose }: SystemLogModalProps) {
     database:      '数据库',
   }
 
-  const isDataFetch = (log: any) => log.resourceType === 'SocialDataFetch'
+  const isDataFetch = (log: SystemLogEntry) => log.resourceType === 'SocialDataFetch'
 
   return (
     <div className="fixed inset-0 bg-slate-900/30 dark:bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={onClose}>
@@ -189,31 +214,36 @@ export default function SystemLogModal({ onClose }: SystemLogModalProps) {
                 </div>
               ) : (
                 /* ── Standard audit log entry ── */
-                <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${ACTION_COLORS[log.action] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
-                        {log.action}
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                        {log.resourceType}
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400 truncate max-w-[120px]">#{log.resourceId?.substring(0, 10)}</span>
+                (() => {
+                  const action = log.action ?? 'UNKNOWN'
+                  return (
+                    <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${ACTION_COLORS[action] ?? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
+                            {action}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                            {log.resourceType}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400 truncate max-w-[120px]">#{log.resourceId?.substring(0, 10)}</span>
+                        </div>
+                        {log.reason && (
+                          <p className="text-xs text-slate-600 dark:text-slate-300 truncate">{log.reason}</p>
+                        )}
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] text-slate-400">
+                            {log.actorName ?? log.actorType ?? 'SYSTEM'}
+                          </span>
+                          <span className="text-[10px] text-slate-300 dark:text-slate-600">·</span>
+                          <span className="text-[10px] text-slate-400">
+                            {new Date(log.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    {log.reason && (
-                      <p className="text-xs text-slate-600 dark:text-slate-300 truncate">{log.reason}</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] text-slate-400">
-                        {log.actorName ?? log.actorType ?? 'SYSTEM'}
-                      </span>
-                      <span className="text-[10px] text-slate-300 dark:text-slate-600">·</span>
-                      <span className="text-[10px] text-slate-400">
-                        {new Date(log.timestamp).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  )
+                })()
               )
             ))
           )}

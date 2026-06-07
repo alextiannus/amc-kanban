@@ -82,7 +82,7 @@ async function main() {
   console.log('✅ Brands created:', brandA.name, brandB.name)
 
   // ── Social Accounts ────────────────────────────────────────────────────────
-  const [ig, xhs, google, tiktok] = await Promise.all([
+  const [ig, xhs, google] = await Promise.all([
     prisma.socialAccount.create({
       data: {
         brandId: brandA.id,

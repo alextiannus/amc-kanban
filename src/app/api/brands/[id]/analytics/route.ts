@@ -93,9 +93,10 @@ async function fetchPostfastPosts(apiKey: string, from: Date, to: Date): Promise
     })
 
     return { posts }
-  } catch (e: any) {
-    console.error('[Analytics] PostFast fetch exception:', e?.message)
-    return { posts: [], error: e?.message }
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown PostFast fetch error'
+    console.error('[Analytics] PostFast fetch exception:', message)
+    return { posts: [], error: message }
   }
 }
 

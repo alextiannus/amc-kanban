@@ -118,7 +118,7 @@ export async function POST(request: Request) {
       }
 
       // 10. Record Spin Log
-      const spinLog = await tx.gameSpinLog.create({
+      await tx.gameSpinLog.create({
         data: {
           sessionId: session.id,
           prizeId: selectedPrize.id,
@@ -142,8 +142,9 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json(result)
-  } catch (e: any) {
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Spin failed'
     console.error('[POST /api/game/spin]', e)
-    return NextResponse.json({ error: e.message }, { status: 400 })
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 }

@@ -3,6 +3,13 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { bridgeState } from '@/lib/integrations/extensionBridge'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 
+type ExtensionResponseBody = {
+  requestId?: string
+  success?: boolean
+  data?: unknown
+  error?: string
+}
+
 export async function POST(request: Request) {
   // 1. Authenticate caller (session or api key)
   const session = await getSession()
@@ -21,10 +28,10 @@ export async function POST(request: Request) {
   }
 
   // 2. Parse response body
-  let body: any
+  let body: ExtensionResponseBody
   try {
     body = await request.json()
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 

@@ -3,12 +3,19 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastPublish } from '@/lib/integrations/postfast'
 
+type SessionUser = {
+  id: string
+  email?: string | null
+  nickname?: string | null
+}
+
 // POST /api/tasks/[id]/retry-publish
 // Human-triggered retry for a task that failed auto-publishing.
 // Task must be in 'pending' status with a publish-error requiredInput.
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const sessionUser = session.user as SessionUser
 
   const { id } = await params
   const task = await prisma.workUnit.findFirst({
@@ -59,7 +66,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: {
       actorId: session.user.id,
       actorType: 'HUMAN',
-      actorName: (session.user as any).nickname ?? session.user.email,
+      actorName: sessionUser.nickname ?? sessionUser.email,
       action: 'RETRY_PUBLISH',
       resourceId: task.id,
       resourceType: 'WorkUnit',
@@ -103,7 +110,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       data: {
         actorId: session.user.id,
         actorType: 'HUMAN',
-        actorName: (session.user as any).nickname ?? session.user.email,
+        actorName: sessionUser.nickname ?? sessionUser.email,
         action: 'PUBLISH_SUCCESS',
         resourceId: task.id,
         resourceType: 'WorkUnit',
@@ -130,7 +137,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       data: {
         actorId: session.user.id,
         actorType: 'HUMAN',
-        actorName: (session.user as any).nickname ?? session.user.email,
+        actorName: sessionUser.nickname ?? sessionUser.email,
         action: 'PUBLISH_FAILED',
         resourceId: task.id,
         resourceType: 'WorkUnit',

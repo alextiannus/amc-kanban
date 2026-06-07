@@ -155,10 +155,11 @@ export async function POST(request: Request, { params }: Params) {
           scheduledAt: 'immediate',
           engine: 'google_direct',
         })
-      } catch (e: any) {
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Direct Google GBP publish failed'
         console.error(`[Posts] Direct Google publish error for brand ${brandId}:`, e)
         return NextResponse.json(
-          { error: e.message || 'Direct Google GBP publish failed' },
+          { error: message },
           { status: 500 }
         )
       }
@@ -214,12 +215,14 @@ export async function POST(request: Request, { params }: Params) {
       { status: 400 }
     )
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Publishing failed'
+    const details = error instanceof Error && 'code' in error ? String((error as { code?: unknown }).code ?? '') : undefined
     console.error(`[Posts] Unexpected error for brand ${brandId}:`, error)
     return NextResponse.json(
       { 
-        error: error.message || 'Publishing failed',
-        details: error.code || undefined,
+        error: message,
+        details: details || undefined,
       },
       { status: 500 }
     )

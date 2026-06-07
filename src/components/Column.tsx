@@ -3,7 +3,27 @@ import { Inbox } from 'lucide-react'
 import TaskCard from './TaskCard'
 import AvatarImage from './AvatarImage'
 
-export default function Column({ column, tasks, onTaskClick }: { column: any, tasks: any[], onTaskClick: (t: any) => void }) {
+type KanbanColumn = {
+  id: string
+  title: string
+  highlight?: boolean
+}
+
+type KanbanTask = {
+  id: string
+  assigneeId?: string | null
+  assignee?: {
+    nickname?: string | null
+    email?: string | null
+    themeColor?: string | null
+    avatar?: string | null
+    type?: string | null
+  } | null
+  status: string
+  title?: string
+}
+
+export default function Column({ column, tasks, onTaskClick }: { column: KanbanColumn, tasks: KanbanTask[], onTaskClick: (t: KanbanTask) => void }) {
   const { setNodeRef } = useDroppable({ id: column.id })
 
   return (
@@ -41,6 +61,10 @@ export default function Column({ column, tasks, onTaskClick }: { column: any, ta
                 const currentAssigneeId = task.assigneeId || 'unassigned';
                 const showHeader = currentAssigneeId !== lastAssigneeId;
                 lastAssigneeId = currentAssigneeId;
+                const assigneeEmailName = typeof task.assignee?.email === 'string'
+                  ? task.assignee.email.split('@')[0]
+                  : ''
+                const assigneeName = task.assignee?.nickname || assigneeEmailName || 'Unknown'
                 
                 return (
                   <div key={task.id} className="flex flex-col gap-2">
@@ -53,11 +77,11 @@ export default function Column({ column, tasks, onTaskClick }: { column: any, ta
                           {task.assignee.avatar ? (
                             <AvatarImage src={task.assignee.avatar} alt="Avatar" className="w-full h-full object-cover" />
                           ) : (
-                            (task.assignee.nickname || task.assignee.email.split('@')[0]).substring(0, 2).toUpperCase()
+                            assigneeName.substring(0, 2).toUpperCase()
                           )}
                         </div>
                         <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                          {task.assignee.nickname || task.assignee.email.split('@')[0]}
+                          {assigneeName}
                         </span>
                       </div>
                     )}

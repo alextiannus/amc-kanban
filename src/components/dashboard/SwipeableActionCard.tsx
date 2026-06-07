@@ -1,7 +1,7 @@
 'use client'
-import React, { useState } from 'react'
-import { motion, useMotionValue, useTransform } from 'framer-motion'
-import { Check, X, Edit, Send, Sparkles, AlertCircle } from 'lucide-react'
+import React from 'react'
+import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion'
+import { Check, X, AlertCircle } from 'lucide-react'
 
 interface SwipeableActionCardProps {
   id: string
@@ -18,10 +18,7 @@ export default function SwipeableActionCard({ id, title, description, type, onAp
   const rotate = useTransform(x, [-120, 120], [-4, 4])
   
   // Background colors based on drag direction using gradients
-  const bgApprove = useTransform(x, [0, 120], ['rgba(34, 197, 94, 0)', 'rgba(16, 185, 129, 0.95)']) // Emerald
-  const bgReject = useTransform(x, [0, -120], ['rgba(239, 68, 68, 0)', 'rgba(244, 63, 94, 0.95)']) // Rose
-
-  const handleDragEnd = (event: any, info: any) => {
+  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const threshold = 100
     if (info.offset.x > threshold) {
       setTimeout(() => onApprove(id), 100)

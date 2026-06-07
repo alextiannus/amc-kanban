@@ -70,7 +70,7 @@ export async function POST(request: Request, { params }: Params) {
     // ═══════════════════════════════════════════════════════════════════════════
     // Priority: Lark Bot > Lark App > Email
 
-    const notifications: any[] = []
+    const notifications: Array<{ channel: string; status: 'sent' }> = []
 
     // Send via Lark Bot Webhook (fastest, real-time)
     if (brand.larkBotWebhook) {
@@ -113,8 +113,9 @@ export async function POST(request: Request, { params }: Params) {
           const error = await response.text()
           console.warn(`[Notifications] Lark bot webhook failed: ${error}`)
         }
-      } catch (error: any) {
-        console.warn(`[Notifications] Lark bot webhook error: ${error.message}`)
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown webhook error'
+        console.warn(`[Notifications] Lark bot webhook error: ${message}`)
       }
     }
 
@@ -156,12 +157,14 @@ export async function POST(request: Request, { params }: Params) {
       timestamp: new Date().toISOString(),
     })
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Notification failed'
+    const details = error instanceof Error && 'code' in error ? String((error as { code?: unknown }).code ?? '') : undefined
     console.error(`[Notifications] Unexpected error for brand ${brandId}:`, error)
     return NextResponse.json(
       {
-        error: error.message || 'Notification failed',
-        details: error.code || undefined,
+        error: message,
+        details: details || undefined,
       },
       { status: 500 }
     )

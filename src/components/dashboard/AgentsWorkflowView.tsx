@@ -1,8 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { Users, Activity, AlertCircle, CheckCircle2 } from 'lucide-react'
-import TaskCard from '../TaskCard'
+import { Bot, Sparkles, Store, KeyRound, ArrowRight } from 'lucide-react'
 import AgentSequenceView from '../AgentSequenceView'
 
 export const COLUMNS = [
@@ -13,185 +11,94 @@ export const COLUMNS = [
   { id: 'void', title: 'Void' },
 ]
 
-interface AgentsWorkflowViewProps {
-  tasks: any[]
-  summary: {
-    collaborativeAgentsCount: number
-    runningAgentsCount: number
-    notRunningAgentsCount: number
-    pendingTasksCount: number
-    completedTasksCount: number
+interface WorkflowTask {
+  id: string
+  status: string
+  priority?: string | null
+  assigneeId?: string | null
+  deadline?: string | null
+  updatedAt?: string | null
+  createdAt?: string | null
+  title?: string | null
+  description?: string | null
+  materials?: string | null
+  tags?: string[] | null
+  assignee?: {
+    nickname?: string | null
+    email?: string | null
   } | null
-  activeBrand: { id: string; name: string } | null
-  onTaskClick: (task: any) => void
-  searchQuery: string
-  setSearchQuery: (query: string) => void
-  activeTab: string
-  setActiveTab: (tab: string) => void
-  agentsFilter: 'all' | 'online' | 'offline'
-  setAgentsFilter: (filter: 'all' | 'online' | 'offline') => void
+}
+
+interface AgentsWorkflowViewProps {
+  onOpenDashboard: () => void
+  onCreateAgent: () => void | Promise<void>
 }
 
 export default function AgentsWorkflowView({
-  tasks,
-  summary,
-  activeBrand,
-  onTaskClick,
-  searchQuery,
-  setSearchQuery,
-  activeTab,
-  setActiveTab,
-  agentsFilter,
-  setAgentsFilter,
+  onOpenDashboard,
+  onCreateAgent,
 }: AgentsWorkflowViewProps) {
-  // Local filtering states that don't need to be bubbled up
-  const [priorityFilter] = useState('all')
-  const [agentFilter] = useState('all')
-  const [sortBy] = useState('updatedAt')
-  const [showOverdueOnly] = useState(false)
-
-  const openAgentsWithFilter = (filter: 'all' | 'online' | 'offline') => {
-    setAgentsFilter(filter)
-  }
-
-  const searchLower = searchQuery.toLowerCase().trim()
-
-  const activeTasks = tasks
-    .filter(t => t.status !== 'void') // always hide cancelled tasks
-    .filter(t => t.status === activeTab)
-    .filter(t => priorityFilter === 'all' || (t.priority || 'medium') === priorityFilter)
-    .filter(t => agentFilter === 'all' || t.assigneeId === agentFilter)
-    .filter(t => !showOverdueOnly || (t.deadline && new Date(t.deadline).getTime() < Date.now() && t.status !== 'done'))
-    .filter(t => {
-      if (!searchLower) return true
-      const assigneeName = t.assignee ? (t.assignee.nickname || t.assignee.email || '').toLowerCase() : ''
-      const tagMatch = (t.tags || []).some((tag: string) => tag.toLowerCase().includes(searchLower))
-      return (
-        t.id.toLowerCase().includes(searchLower) ||
-        (t.title || '').toLowerCase().includes(searchLower) ||
-        (t.description || '').toLowerCase().includes(searchLower) ||
-        (t.materials || '').toLowerCase().includes(searchLower) ||
-        assigneeName.includes(searchLower) ||
-        tagMatch
-      )
-    })
-    .sort((a, b) => {
-      if (sortBy === 'priority') {
-        const rank: Record<string, number> = { high: 0, medium: 1, low: 2 }
-        return (rank[a.priority || 'medium'] ?? 1) - (rank[b.priority || 'medium'] ?? 1)
-      }
-      if (sortBy === 'deadline') {
-        return new Date(a.deadline || '9999-12-31').getTime() - new Date(b.deadline || '9999-12-31').getTime()
-      }
-      return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
-    })
-
   return (
     <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      
-      {/* ── 监控大盘 ── */}
-      <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
-        <h2 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-4">
-          <span className="text-emerald-500">⭐</span> 监控大盘
-        </h2>
-        {summary ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div onClick={() => openAgentsWithFilter('all')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors border border-transparent hover:border-indigo-100 dark:hover:border-indigo-800/50">
-              <Users size={20} className="text-indigo-500 mb-2 group-hover:scale-110 transition-transform" />
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">协作Agent</p>
-              <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.collaborativeAgentsCount}</p>
+      <section className="relative overflow-hidden rounded-[2rem] border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(14,165,233,0.12),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.10),transparent_38%)]" />
+        <div className="relative p-6 md:p-8 lg:p-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr] items-center">
+          <div className="space-y-5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-100 dark:border-sky-900/60 bg-sky-50/80 dark:bg-sky-900/20 px-4 py-2 text-xs font-bold text-sky-700 dark:text-sky-300">
+              <Sparkles className="h-4 w-4" /> AMC 主理人工作台
             </div>
-            <div onClick={() => openAgentsWithFilter('online')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors border border-transparent hover:border-emerald-100 dark:hover:border-emerald-800/50">
-              <Activity size={20} className="text-emerald-500 mb-2 group-hover:scale-110 transition-transform" />
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">活跃 Agent</p>
-              <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.runningAgentsCount}</p>
-            </div>
-            <div onClick={() => setActiveTab('pending')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors border border-transparent hover:border-amber-100 dark:hover:border-amber-800/50">
-              <AlertCircle size={20} className="text-amber-500 mb-2 group-hover:scale-110 transition-transform" />
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">待输入任务</p>
-              <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.pendingTasksCount}</p>
-            </div>
-            <div onClick={() => setActiveTab('done')} className="cursor-pointer group bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl flex flex-col items-center text-center hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border border-transparent hover:border-blue-100 dark:hover:border-blue-800/50">
-              <CheckCircle2 size={20} className="text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">今日完成</p>
-              <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{summary.completedTasksCount}</p>
-            </div>
-          </div>
-        ) : (
-          <div className="animate-pulse">
-            <div className="w-full h-32 bg-slate-100 dark:bg-slate-800 rounded-2xl"></div>
-          </div>
-        )}
-      </div>
-
-      {/* ── 全局任务看板（原首页内容）── */}
-      <div className="w-full bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-          {COLUMNS.filter(col => col.id !== 'void').map(col => {
-            const count = tasks.filter(t => t.status === col.id).length
-            const isActive = activeTab === col.id
-            return (
-              <button
-                key={col.id}
-                onClick={() => setActiveTab(col.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-300 whitespace-nowrap ${
-                  isActive
-                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
-                    : 'bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-700'
-                }`}
-              >
-                {col.title}
-                <span className={`text-[10px] px-2 py-0.5 rounded-full ${isActive ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                  {count}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-        <div className="mb-6 relative">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M16.65 16.65A7.5 7.5 0 1116.65 2a7.5 7.5 0 010 14.65z" />
-          </svg>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search tasks by title, description, tags, assignee, or task ID…"
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-sm font-semibold text-slate-700 dark:text-slate-200 placeholder:text-slate-400 placeholder:font-normal outline-none focus:ring-2 focus:ring-emerald-400/50"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
-          {activeTasks.length === 0 ? (
-            <div className="col-span-full py-20 flex flex-col items-center justify-center text-slate-400">
-              <div className="w-20 h-20 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center mb-4">
-                <Activity size={32} className="opacity-50" />
-              </div>
-              <p className="font-medium text-slate-500">
-                {searchQuery ? 'No tasks match the current search' : 'No tasks in this lane'}
+            <div className="space-y-3">
+              <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-slate-50">
+                让 AMC Agent 帮你经营多个品牌
+              </h1>
+              <p className="max-w-2xl text-sm md:text-base leading-7 text-slate-600 dark:text-slate-300">
+                这里只展示当前用户的 AMC Agent 序列。你可以先添加品牌，再为每个品牌绑定对应的 AMC Agent，随后通过 API 和 MCP 加载 Skill，按时间、按顺序推进内容生成任务。
               </p>
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="mt-3 text-xs font-bold text-emerald-500 hover:text-emerald-600 underline">
-                  Clear search
-                </button>
-              )}
             </div>
-          ) : (
-            activeTasks.map(task => (
-              <TaskCard key={task.id} task={task} onClick={() => onTaskClick(task)} onTagClick={(tag) => setSearchQuery(tag)} />
-            ))
-          )}
-        </div>
-      </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={onOpenDashboard}
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-900/10 transition-transform hover:-translate-y-0.5 dark:bg-white dark:text-slate-900"
+              >
+                <Store className="h-4 w-4" /> 开始添加品牌
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              <button
+                onClick={onCreateAgent}
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-950 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm transition-colors hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-300"
+              >
+                <KeyRound className="h-4 w-4" /> 新增 AMC Agent
+              </button>
+            </div>
+          </div>
 
-      {/* ── AI 序列 + 活动战报 ── */}
-      <AgentSequenceView initialFilter={agentsFilter} brandId={activeBrand?.id} />
+          <div className="grid gap-3 rounded-[1.5rem] border border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/60 p-4 md:p-5">
+            {[
+              '品牌信息统一存在 amc-kanban：上下文、素材库路径、连接方式都可追踪。',
+              '主理人可管理多个 AMC Agent，每个品牌可自动对应一个 Agent。',
+              'Skill 可通过 API / MCP 加载，支持品牌运营与内容执行。',
+            ].map((text) => (
+              <div key={text} className="flex items-start gap-3 rounded-2xl bg-white dark:bg-slate-900 px-4 py-3 text-sm leading-6 text-slate-600 dark:text-slate-300 border border-slate-100 dark:border-slate-800">
+                <Bot className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" />
+                <span>{text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-6 md:p-8 space-y-5">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">AMC Agent 序列</p>
+            <h2 className="mt-1 text-xl font-black text-slate-900 dark:text-slate-50">当前用户的 AMC Agent</h2>
+          </div>
+          <p className="max-w-xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+            这里展示你当前可见的 Agent 序列。打开任一 Agent 可查看 Skill 正文、执行流和身份密钥。
+          </p>
+        </div>
+        <AgentSequenceView />
+      </section>
     </div>
   )
 }

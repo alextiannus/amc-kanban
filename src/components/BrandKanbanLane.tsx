@@ -6,17 +6,36 @@ import TaskCard from './TaskCard'
 import TaskModal from './TaskModal'
 import { COLUMNS } from './dashboard/AgentsWorkflowView'
 
+type KanbanTask = {
+  id: string
+  status: string
+  title?: string
+  description?: string | null
+  materials?: string | null
+  createdAt?: string
+  updatedAt?: string | null
+  assigneeId?: string | null
+  assignee?: {
+    nickname?: string | null
+    email?: string | null
+    themeColor?: string | null
+    avatar?: string | null
+    type?: string | null
+  } | null
+  tags?: string[] | null
+}
+
 /**
  * A brand-scoped Kanban swim-lane.
  * Fetches /api/tasks?active=true&brandId=<brandId> and renders
  * the same tab-strip + search + TaskCard grid as the main KanbanBoard.
  */
 export default function BrandKanbanLane({ brandId }: { brandId: string }) {
-  const [tasks, setTasks] = useState<any[]>([])
+  const [tasks, setTasks] = useState<KanbanTask[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('pending')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedTask, setSelectedTask] = useState<any | null>(null)
+  const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null)
 
   const fetchTasks = useCallback(async () => {
     setLoading(true)
@@ -30,7 +49,11 @@ export default function BrandKanbanLane({ brandId }: { brandId: string }) {
     setLoading(false)
   }, [brandId])
 
-  useEffect(() => { fetchTasks() }, [fetchTasks])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void fetchTasks()
+    })
+  }, [fetchTasks])
 
   const searchLower = searchQuery.toLowerCase().trim()
 
@@ -55,9 +78,11 @@ export default function BrandKanbanLane({ brandId }: { brandId: string }) {
       )
     })
     .sort(
-      (a, b) =>
-        new Date(b.updatedAt || b.createdAt).getTime() -
-        new Date(a.updatedAt || a.createdAt).getTime()
+      (a, b) => {
+        const bTime = new Date(b.updatedAt ?? b.createdAt ?? 0).getTime()
+        const aTime = new Date(a.updatedAt ?? a.createdAt ?? 0).getTime()
+        return bTime - aTime
+      }
     )
 
   return (
@@ -133,7 +158,7 @@ export default function BrandKanbanLane({ brandId }: { brandId: string }) {
             <div className="flex flex-col items-center justify-center py-16 text-slate-400 opacity-60">
               <Inbox size={36} className="mb-3" />
               <p className="text-sm font-bold">
-                {searchQuery
+                  {searchQuery
                   ? '没有找到匹配的任务'
                   : `${COLUMNS.find((c: { id: string }) => c.id === activeTab)?.title} 暂无任务`}
               </p>

@@ -21,13 +21,35 @@ interface Brand {
   id: string
   name: string
   location?: string
+  subscriptions?: Array<{
+    id: string
+    planId?: string
+    planName?: string
+    status?: string
+    contractEndDate?: string | null
+  }>
+}
+
+type BoardTask = {
+  id: string
+  status: string
+  title?: string | null
+  description?: string | null
+  materials?: string | null
+  updatedAt?: string | null
+  createdAt?: string | null
+  assigneeId?: string | null
+  assignee?: {
+    nickname?: string | null
+    email?: string | null
+  } | null
 }
 
 export default function KanbanBoard({ initialView = 'dashboard' }: { initialView?: 'agents' | 'archive' | 'dashboard' | 'analytics' | 'calendar' | 'game' | 'socialInsight' }) {
   const router = useRouter()
-  const [tasks, setTasks] = useState<any[]>([])
+  const [tasks, setTasks] = useState<BoardTask[]>([])
   const [activeTab, setActiveTab] = useState('pending')
-  const [selectedTask, setSelectedTask] = useState<any | null>(null)
+  const [selectedTask, setSelectedTask] = useState<BoardTask | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [summary, setSummary] = useState<{
     collaborativeAgentsCount: number
@@ -117,7 +139,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       const res = await fetch(url)
       if (res.ok) {
         const data = await res.json()
-        setTasks(data)
+        setTasks((Array.isArray(data) ? data : data.tasks ?? []) as BoardTask[])
       }
     } catch (e) {
       console.error('[KanbanBoard] fetchTasks error', e)
@@ -138,6 +160,21 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     }
   }
 
+  const createAgentKey = async () => {
+    try {
+      const res = await fetch('/api/agents/keys', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(data.error || '生成 Agent 密钥失败')
+        return
+      }
+      setNewApiKey(data.apiKey)
+    } catch (e) {
+      console.error('[KanbanBoard] createAgentKey error', e)
+      alert('生成 Agent 密钥失败，请稍后重试')
+    }
+  }
+
   // Fetch tasks and summary when active brand changes
   useEffect(() => {
     if (activeBrand?.id) {
@@ -150,20 +187,23 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   }, [activeBrand?.id])
 
   useEffect(() => {
-    fetchUser()
-    fetchSubscriptionState()
-    fetchBrands()
+    let eventSource: EventSource | null = null
+    queueMicrotask(() => {
+      void fetchUser()
+      void fetchSubscriptionState()
+      void fetchBrands()
 
-    const eventSource = new EventSource('/api/events')
-    eventSource.onmessage = (event) => {
-      if (event.data === 'update') {
-        fetchTasks()
-        fetchSummary()
+      eventSource = new EventSource('/api/events')
+      eventSource.onmessage = (event) => {
+        if (event.data === 'update') {
+          void fetchTasks()
+          void fetchSummary()
+        }
       }
-    }
+    })
 
     return () => {
-      eventSource.close()
+      eventSource?.close()
     }
   }, [])
 
@@ -220,16 +260,8 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     >
       {currentView === 'agents' ? (
         <AgentsWorkflowView
-          tasks={tasks}
-          summary={summary}
-          activeBrand={activeBrand}
-          onTaskClick={setSelectedTask}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          agentsFilter={agentsFilter}
-          setAgentsFilter={setAgentsFilter}
+          onOpenDashboard={() => setCurrentView('dashboard')}
+          onCreateAgent={createAgentKey}
         />
       ) : currentView === 'archive' ? (
         <div className="flex-1 animate-in fade-in slide-in-from-bottom-2 duration-300">

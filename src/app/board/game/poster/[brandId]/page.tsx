@@ -1,9 +1,17 @@
 'use client'
+/* eslint-disable @next/next/no-img-element */
 
 import React, { useState, useEffect } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import QRCode from 'qrcode'
 import { Printer, ArrowLeft } from 'lucide-react'
+
+type PosterTheme = 'black' | 'blue' | 'green' | 'purple' | 'gold'
+
+type BrandItem = {
+  id: string
+  name: string
+}
 
 export default function StickerPrintPage() {
   const params = useParams()
@@ -12,7 +20,11 @@ export default function StickerPrintPage() {
   const brandId = params.brandId as string
   const [stickerTitle, setStickerTitle] = useState(searchParams.get('title') || 'Scan & Win!')
   const [stickerDesc, setStickerDesc] = useState(searchParams.get('desc') || 'Leave a review to spin and win rewards instantly!')
-  const [theme, setTheme] = useState<'black' | 'blue' | 'green' | 'purple' | 'gold'>((searchParams.get('theme') as any) || 'black')
+  const isPosterTheme = (value: string | null): value is PosterTheme =>
+    value === 'black' || value === 'blue' || value === 'green' || value === 'purple' || value === 'gold'
+  const initialThemeParam = searchParams.get('theme')
+
+  const [theme, setTheme] = useState<PosterTheme>(isPosterTheme(initialThemeParam) ? initialThemeParam : 'black')
 
   const [brandName, setBrandName] = useState('AMC Store')
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState('')
@@ -70,17 +82,17 @@ export default function StickerPrintPage() {
       .then(res => res.json())
       .then(async (data) => {
         // Fetch brand details
-        const brandRes = await fetch(`/api/brands`)
+        const brandRes = await fetch('/api/brands')
         if (brandRes.ok) {
-          const list = await brandRes.json()
-          const brandObj = list.find((b: any) => b.id === brandId)
+          const list = (await brandRes.json()) as BrandItem[]
+          const brandObj = list.find((b) => b.id === brandId)
           if (brandObj) setBrandName(brandObj.name)
         }
 
         // Initialize values from config
         if (data.posterTitle) setStickerTitle(data.posterTitle)
         if (data.posterDesc) setStickerDesc(data.posterDesc)
-        if (data.posterTheme) setTheme(data.posterTheme as any)
+        if (isPosterTheme(data.posterTheme)) setTheme(data.posterTheme)
 
         // Generate QR code for customer game H5
         const gameUrl = `${window.location.origin}/game/${brandId}`

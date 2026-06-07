@@ -22,7 +22,7 @@ export async function PATCH(request: Request) {
     })
 
     return NextResponse.json({ success: true, insights: updatedAgent.insights })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

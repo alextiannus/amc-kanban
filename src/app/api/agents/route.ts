@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
+import type { Prisma } from '@prisma/client'
 
 export async function GET() {
   try {
@@ -10,7 +11,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    let whereClause: any = { type: 'AI_AGENT' }
+    let whereClause: Prisma.UserWhereInput = { type: 'AI_AGENT' }
 
     if (session.user.role !== 'ADMIN') {
       const [permissions, ownedRows, legacyOwnedBrands] = await Promise.all([
@@ -88,7 +89,7 @@ export async function GET() {
     })
 
     // Convert avatar data to data URI and format response
-    const formattedAgents = agents.map((agent: any) => {
+    const formattedAgents = agents.map((agent) => {
       const { tasksAsAssignee, ...rest } = agent
       return {
         ...withResolvedAvatar(rest),
@@ -97,7 +98,7 @@ export async function GET() {
     })
 
     return NextResponse.json(formattedAgents)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

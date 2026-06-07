@@ -34,8 +34,9 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json({ ok: true, disconnected: true })
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[Google Disconnect Error]', e)
-    return NextResponse.json({ error: e.message || 'Failed to disconnect Google account' }, { status: 500 })
+    const message = e instanceof Error ? e.message : 'Failed to disconnect Google account'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

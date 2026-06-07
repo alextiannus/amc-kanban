@@ -4,11 +4,26 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
+import type { Prisma } from '@prisma/client'
 
 function normalizeTaskWeight(input: unknown): number {
   const parsed = Number(input)
   if ([1, 3, 5].includes(parsed)) return parsed
   return 3
+}
+
+type TaskCreateBody = {
+  title?: string
+  description?: string | null
+  materials?: string | null
+  status?: string | null
+  assigneeId?: string | null
+  priority?: string | null
+  estimatedHours?: number | string | null
+  deadline?: string | null
+  tags?: string[] | string | null
+  weight?: number | string | null
+  blockerTaskIds?: unknown
 }
 
 export async function GET(request: Request) {
@@ -35,7 +50,7 @@ export async function GET(request: Request) {
 
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
 
-    let whereClause: any = {}
+    let whereClause: Prisma.WorkUnitWhereInput = {}
     if (status) {
       whereClause.status = status
     } else if (active === 'true') {
@@ -78,16 +93,27 @@ export async function GET(request: Request) {
 
       // Intersect with any existing assigneeId filter
       if (whereClause.assigneeId) {
-        const existing = Array.isArray(whereClause.assigneeId.in)
-          ? whereClause.assigneeId.in
-          : [whereClause.assigneeId]
-        whereClause.assigneeId = { in: existing.filter((id: string) => brandAgentIds.includes(id)) }
+        const current = whereClause.assigneeId
+        let existing: string[] = []
+
+        if (typeof current === 'string') {
+          existing = [current]
+        } else if (current && typeof current === 'object') {
+          const maybeIn = (current as { in?: unknown }).in
+          if (Array.isArray(maybeIn)) {
+            existing = maybeIn.filter((id): id is string => typeof id === 'string')
+          } else if (typeof maybeIn === 'string') {
+            existing = [maybeIn]
+          }
+        }
+
+        whereClause.assigneeId = { in: existing.filter((id) => brandAgentIds.includes(id)) }
       } else {
         whereClause.assigneeId = { in: brandAgentIds }
       }
     }
 
-    const queryOptions: any = {
+    const tasks = await prisma.workUnit.findMany({
       where: whereClause,
       orderBy: { createdAt: 'desc' },
       include: {
@@ -115,16 +141,10 @@ export async function GET(request: Request) {
             }
           }
         }
-      }
-    }
-
-    if (limit) {
-      queryOptions.take = limit
-      queryOptions.skip = (page - 1) * limit
-    }
-
-    const tasks = await prisma.workUnit.findMany(queryOptions)
-    const tasksWithAvatar = tasks.map((t: any) => ({
+      },
+      ...(limit ? { take: limit, skip: (page - 1) * limit } : {}),
+    })
+    const tasksWithAvatar = tasks.map((t) => ({
       ...t,
       assignee: t.assignee ? withResolvedAvatar(t.assignee) : null
     }))
@@ -143,7 +163,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json(tasksWithAvatar)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -162,8 +182,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
-    const body = await request.json()
-    let { title, description, materials, status, assigneeId, priority, estimatedHours, deadline, tags, weight, blockerTaskIds } = body
+    const body = await request.json() as TaskCreateBody
+    const { title, description, materials, status, priority, estimatedHours, deadline, tags, weight, blockerTaskIds } = body
+    let assigneeId = body.assigneeId
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 })

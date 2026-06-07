@@ -63,8 +63,9 @@ export async function POST(request: Request) {
     })
 
     return NextResponse.json(result)
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[POST /api/game/tasks/override]', e)
-    return NextResponse.json({ error: e.message }, { status: 400 })
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 }

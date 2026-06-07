@@ -5,8 +5,63 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { postfastGetAnalytics, postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { fetchGoogleReviews, fetchGoogleGBPReviews, getGoogleAccessToken } from '@/lib/integrations/google'
 import { writeAuditLog } from '@/lib/audit'
+import {
+  asArray,
+  computePeriodTrend,
+  detectContentType,
+  extractKeywordsFromTexts,
+  toNumber,
+} from './socialInsightUtils'
 
 type Params = { params: Promise<{ id: string }> }
+
+type JsonObject = Record<string, unknown>
+
+type PostfastAccount = {
+  id: string
+  platformId?: string
+  handle?: string
+  displayName?: string
+}
+
+type PostfastMetric = {
+  likes?: string
+  comments?: string
+  shares?: string
+  impressions?: string
+  reach?: string
+}
+
+type PostfastAnalyticsItem = {
+  id: string
+  socialMediaId?: string
+  content: string
+  publishedAt: string
+  latestMetric?: PostfastMetric | null
+}
+
+type ApifyCachedPost = {
+  source?: string
+  postId?: string
+  platform?: string
+  handle?: string
+  caption?: string
+  url?: string
+  publishedAt?: string
+  imageUrl?: string
+  likes?: number
+  comments?: number
+  shares?: number
+  views?: number
+}
+
+type ApifyCachedReview = {
+  reviewerName?: string
+  rating?: number
+  text?: string
+  replyText?: string
+  publishedAt?: string
+}
 
 export interface AnalyticsPost {
   id: string
@@ -46,9 +101,11 @@ async function fetchPostfastPosts(
       return { posts: [], error: analyticsResult.error, durationMs: Date.now() - t0 }
     }
 
-    const accountMap = new Map((accountsResult.accounts ?? []).map((a: any) => [a.id, a]))
+    const accountMap = new Map(
+      asArray<PostfastAccount>(accountsResult.accounts).map((a) => [a.id, a])
+    )
 
-    const posts: AnalyticsPost[] = analyticsResult.posts.map((p: any) => {
+    const posts: AnalyticsPost[] = asArray<PostfastAnalyticsItem>(analyticsResult.posts).map((p) => {
       const m = p.latestMetric
       const likes       = m ? parseInt(m.likes ?? '0', 10) : 0
       const comments    = m ? parseInt(m.comments ?? '0', 10) : 0
@@ -56,7 +113,7 @@ async function fetchPostfastPosts(
       const impressions = m ? parseInt(m.impressions ?? '0', 10) : 0
       const reach       = m ? parseInt(m.reach ?? '0', 10) : 0
       const interactions = likes + comments + shares
-      const account = accountMap.get(p.socialMediaId) as any
+      const account = p.socialMediaId ? accountMap.get(p.socialMediaId) : undefined
 
       return {
         id: `pf_${p.id}`,
@@ -81,8 +138,9 @@ async function fetchPostfastPosts(
     })
 
     return { posts, durationMs: Date.now() - t0 }
-  } catch (e: any) {
-    return { posts: [], error: e?.message, durationMs: Date.now() - t0 }
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'PostFast fetch failed'
+    return { posts: [], error: message, durationMs: Date.now() - t0 }
   }
 }
 
@@ -157,24 +215,25 @@ async function fetchRealGoogleReviews(brand: {
       const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
       const result = await fetchGoogleGBPReviews(brand.googleAccountId, brand.googleLocationId, accessToken)
       if (!result.error && result.reviews && result.reviews.length > 0) {
-        const reviews: NormalizedReview[] = result.reviews.map((r: any) => ({
+        const reviews: NormalizedReview[] = asArray<JsonObject>(result.reviews).map((r) => ({
           reviewerName:
             typeof r.reviewer === 'string'
               ? r.reviewer
-              : r.reviewer?.displayName ?? '匿名顾客',
+              : ((r.reviewer as { displayName?: string } | null | undefined)?.displayName ?? '匿名顾客'),
           rating:
             typeof r.rating === 'number'
               ? r.rating
-              : (STAR_RATING_MAP[r.rating] ?? STAR_RATING_MAP[r.starRating] ?? 3),
-          text: r.comment ?? '',
-          createTime: r.createTime ?? new Date().toISOString(),
-          replyText: r.replyText ?? undefined,
+              : (STAR_RATING_MAP[String(r.rating ?? '')] ?? STAR_RATING_MAP[String(r.starRating ?? '')] ?? 3),
+          text: typeof r.comment === 'string' ? r.comment : '',
+          createTime: typeof r.createTime === 'string' ? r.createTime : new Date().toISOString(),
+          replyText: typeof r.replyText === 'string' ? r.replyText : undefined,
           source: 'gbp' as const,
         }))
         return { reviews, overallRating: null, durationMs: Date.now() - t0 }
       }
-    } catch (e: any) {
-      console.error('[SocialInsight] GBP reviews error:', e?.message)
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'GBP reviews fetch failed'
+      console.error('[SocialInsight] GBP reviews error:', message)
     }
   }
 
@@ -183,105 +242,30 @@ async function fetchRealGoogleReviews(brand: {
     try {
       const result = await fetchGoogleReviews(brand.googlePlaceId, brand.googleApiKey)
       if (!result.error && result.reviews && result.reviews.length > 0) {
-        const reviews: NormalizedReview[] = result.reviews.map((r: any) => ({
+        const reviews: NormalizedReview[] = asArray<JsonObject>(result.reviews).map((r) => ({
           reviewerName:
             typeof r.reviewer === 'string'
               ? r.reviewer
-              : r.reviewer?.displayName ?? '匿名顾客',
+              : ((r.reviewer as { displayName?: string } | null | undefined)?.displayName ?? '匿名顾客'),
           rating:
             typeof r.rating === 'number'
               ? r.rating
-              : (STAR_RATING_MAP[r.rating] ?? 3),
-          text: r.comment ?? r.text ?? '',
-          createTime: r.createTime ?? (r.time ? new Date(r.time * 1000).toISOString() : new Date().toISOString()),
+              : (STAR_RATING_MAP[String(r.rating ?? '')] ?? 3),
+          text: typeof r.comment === 'string' ? r.comment : (typeof r.text === 'string' ? r.text : ''),
+          createTime: typeof r.createTime === 'string'
+            ? r.createTime
+            : (typeof r.time === 'number' ? new Date(r.time * 1000).toISOString() : new Date().toISOString()),
           source: 'places' as const,
         }))
         return { reviews, overallRating: null, durationMs: Date.now() - t0 }
       }
-    } catch (e: any) {
-      console.error('[SocialInsight] Places reviews error:', e?.message)
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Places reviews fetch failed'
+      console.error('[SocialInsight] Places reviews error:', message)
     }
   }
 
   return { reviews: [], overallRating: null, durationMs: Date.now() - t0 }
-}
-
-// ── Extract real keywords from review texts ──────────────────────────────────
-const EN_STOP_WORDS = new Set([
-  'the','a','an','and','or','but','in','on','at','to','for','of','with','is','was','are',
-  'were','be','been','has','have','had','do','did','will','would','could','should','may',
-  'might','shall','can','this','that','it','they','we','i','you','he','she','very','so',
-  'really','just','here','there','their','our','my','your','its','not','no','also','more',
-  'about','than','from','by','all','as','if','then','when','where','which','who','what',
-  'how','get','got','went','said','come','came','go','well','good','great','nice','love',
-  'loved','like','liked','make','made','place','time','times','back','always','never',
-  'definitely','absolutely','highly','would','recommend','overall','experience',
-])
-
-const POSITIVE_SIGNALS = new Set([
-  'amazing','excellent','fantastic','wonderful','great','good','best','delicious','fresh',
-  'friendly','love','perfect','outstanding','awesome','incredible','superb','tasty',
-  'beautiful','clean','fast','quick','efficient','helpful','recommend','wonderful',
-  '好吃','美味','新鲜','服务好','环境好','推荐','好评','满意','非常棒','赞',
-  'authentic','flavorful','generous','attentive','warm','cozy',
-])
-const NEGATIVE_SIGNALS = new Set([
-  'bad','terrible','awful','horrible','worst','slow','dirty','rude','expensive',
-  'disappointing','poor','mediocre','cold','hard','stale','loud','crowded',
-  'overpriced','wait','waiting','waited','wrong','missing','undercooked','greasy',
-  '难吃','太贵','等待','慢','脏','差评','不好','失望','冷',
-])
-
-function extractKeywordsFromTexts(
-  texts: string[]
-): Array<{ text: string; count: number; sentiment: 'positive' | 'negative' | 'neutral'; isSynthetic: boolean }> {
-  if (texts.length === 0) return []
-
-  const wordFreq: Record<string, number> = {}
-
-  for (const rawText of texts) {
-    const text = rawText.toLowerCase()
-
-    // Single words (length > 3, not stopwords)
-    const words = text
-      .split(/[\s,.\!?;:"""''()\[\]\/\\]+/g)
-      .filter(w => w.length > 3 && !EN_STOP_WORDS.has(w) && /^[a-z\u4e00-\u9fff\-']+$/.test(w))
-    words.forEach(w => { wordFreq[w] = (wordFreq[w] ?? 0) + 1 })
-
-    // 2-word English phrases
-    const rawWords = text.split(/\s+/)
-    for (let i = 0; i < rawWords.length - 1; i++) {
-      const w1 = rawWords[i].replace(/[^a-z]/g, '')
-      const w2 = rawWords[i + 1].replace(/[^a-z]/g, '')
-      if (w1.length > 3 && w2.length > 3 && !EN_STOP_WORDS.has(w1) && !EN_STOP_WORDS.has(w2)) {
-        const phrase = `${w1} ${w2}`
-        wordFreq[phrase] = (wordFreq[phrase] ?? 0) + 1
-      }
-    }
-  }
-
-  return Object.entries(wordFreq)
-    .filter(([, count]) => count >= 2)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 14)
-    .map(([text, count]) => ({
-      text,
-      count,
-      sentiment: (POSITIVE_SIGNALS.has(text) ? 'positive' : NEGATIVE_SIGNALS.has(text) ? 'negative' : 'neutral') as 'positive' | 'negative' | 'neutral',
-      isSynthetic: false,
-    }))
-}
-
-// ── Compute in-period trend (first half vs second half) ──────────────────────
-function computePeriodTrend(series: any[], metric: string): number | null {
-  if (!series || series.length < 4) return null
-  const mid = Math.floor(series.length / 2)
-  const firstHalf = series.slice(0, mid)
-  const secondHalf = series.slice(mid)
-  const firstSum = firstHalf.reduce((s: number, d: any) => s + (d[metric] ?? 0), 0)
-  const secondSum = secondHalf.reduce((s: number, d: any) => s + (d[metric] ?? 0), 0)
-  if (firstSum === 0) return secondSum > 0 ? 100 : null
-  return Number((((secondSum - firstSum) / firstSum) * 100).toFixed(1))
 }
 
 // ── Main GET handler ─────────────────────────────────────────────────────────
@@ -442,14 +426,17 @@ export async function GET(req: Request, { params }: Params) {
     : pfResult.posts.filter(p => p.platform.toLowerCase() === platformFilter.toLowerCase())
 
   // Merge Apify cached posts (Instagram + TikTok + Xiaohongshu) if available
-  const apifyMeta = (latestApifyLog?.metadata ?? {}) as Record<string, any>
+  const apifyMeta = (latestApifyLog?.metadata ?? {}) as Record<string, unknown>
   const apifySyncedAt: string | null = latestApifyLog?.timestamp?.toISOString() ?? null
+  const apifyInstagramPosts = asArray<ApifyCachedPost>(apifyMeta.instagramPosts)
+  const apifyTiktokPosts = asArray<ApifyCachedPost>(apifyMeta.tiktokPosts)
+  const apifyXiaohongshuPosts = asArray<ApifyCachedPost>(apifyMeta.xiaohongshuPosts)
   const apifyPosts: AnalyticsPost[] = [
-    ...(apifyMeta.instagramPosts ?? []),
-    ...(apifyMeta.tiktokPosts ?? []),
-    ...(apifyMeta.xiaohongshuPosts ?? []),
+    ...apifyInstagramPosts,
+    ...apifyTiktokPosts,
+    ...apifyXiaohongshuPosts,
   ]
-    .filter((p: any) => {
+    .filter((p) => {
       if (platformFilter !== 'all' && p.platform?.toLowerCase() !== platformFilter.toLowerCase()) return false
       // Include post if it has no date (can't determine), or if the date is within range.
       // Also include posts up to 180 days before `from` to catch content that drives
@@ -463,7 +450,7 @@ export async function GET(req: Request, { params }: Params) {
       return d >= sixMonthsBeforeFrom && d <= to.getTime()
     })
 
-    .map((p: any): AnalyticsPost => ({
+    .map((p): AnalyticsPost => ({
       id: `apify_${p.source}_${p.postId ?? Math.random()}`,
       source: p.source ?? 'apify',
       platform: p.platform ?? 'unknown',
@@ -476,19 +463,19 @@ export async function GET(req: Request, { params }: Params) {
       hashtags: [],
       mediaUrls: p.imageUrl ? [p.imageUrl] : [],
       scheduledAt: null,
-      likes: p.likes ?? 0,
-      comments: p.comments ?? 0,
-      shares: p.shares ?? 0,
-      impressions: p.views ?? 0,
-      reach: p.views ?? 0,
-      engRate: (p.views ?? 0) > 0
-        ? Number((((p.likes + p.comments + p.shares) / p.views) * 100).toFixed(2))
+      likes: toNumber(p.likes),
+      comments: toNumber(p.comments),
+      shares: toNumber(p.shares),
+      impressions: toNumber(p.views),
+      reach: toNumber(p.views),
+      engRate: toNumber(p.views) > 0
+        ? Number((((toNumber(p.likes) + toNumber(p.comments) + toNumber(p.shares)) / toNumber(p.views)) * 100).toFixed(2))
         : 0,
     }))
 
   const posts: AnalyticsPost[] = [...filteredPostfastPosts, ...internalDrafts, ...apifyPosts]
   const hasPostfastData = pfResult.posts.length > 0
-  const hasApifyData = apifyPosts.length > 0 || (apifyMeta.googleReviews?.length ?? 0) > 0
+  const hasApifyData = apifyPosts.length > 0 || asArray<ApifyCachedReview>(apifyMeta.googleReviews).length > 0
 
   // ── KPI aggregates ───────────────────────────────────────────────────────
   const totalPosts      = posts.length
@@ -569,18 +556,18 @@ export async function GET(req: Request, { params }: Params) {
 
   // ── Conversion events ────────────────────────────────────────────────────
   const totalConversions    = conversions.length
-  const navClickCount       = conversions.filter((c: any) => c.type === 'nav_click').length
-  const bookingClickCount   = conversions.filter((c: any) => c.type === 'booking_click').length
-  const couponRedeemCount   = conversions.filter((c: any) => c.type === 'coupon_redemption').length
+  const navClickCount       = conversions.filter((c) => c.type === 'nav_click').length
+  const bookingClickCount   = conversions.filter((c) => c.type === 'booking_click').length
+  const couponRedeemCount   = conversions.filter((c) => c.type === 'coupon_redemption').length
 
   // Previous period conversion aggregates (for real deltas)
   const prevConvTotal       = prevConversions.length
-  const prevNavClick        = prevConversions.filter((c: any) => c.type === 'nav_click').length
-  const prevBookingClick    = prevConversions.filter((c: any) => c.type === 'booking_click').length
-  const prevCouponRedeem    = prevConversions.filter((c: any) => c.type === 'coupon_redemption').length
+  const prevNavClick        = prevConversions.filter((c) => c.type === 'nav_click').length
+  const prevBookingClick    = prevConversions.filter((c) => c.type === 'booking_click').length
+  const prevCouponRedeem    = prevConversions.filter((c) => c.type === 'coupon_redemption').length
 
   const convDayMap = new Map<string, { date: string; nav_click: number; booking_click: number; coupon_redemption: number; total: number }>()
-  conversions.forEach((c: any) => {
+  conversions.forEach((c) => {
     const key = c.occurredAt.toISOString().slice(0, 10)
     if (!convDayMap.has(key)) convDayMap.set(key, { date: key, nav_click: 0, booking_click: 0, coupon_redemption: 0, total: 0 })
     const day = convDayMap.get(key)!
@@ -602,18 +589,20 @@ export async function GET(req: Request, { params }: Params) {
   const allRatings: number[] = []
 
   // From DB sentiment alerts (includes apify_review type)
-  sentimentAlerts.forEach((item: any) => {
-    const pl = (item.payload as any) ?? {}
-    if (pl.rating && typeof pl.rating === 'number') allRatings.push(pl.rating)
+  sentimentAlerts.forEach((item) => {
+    const pl = item.payload && typeof item.payload === 'object'
+      ? (item.payload as { rating?: unknown })
+      : null
+    if (typeof pl?.rating === 'number') allRatings.push(pl.rating)
   })
 
   // From Google reviews (GBP/Places live fetch)
   googleResult.reviews.forEach(r => { if (r.rating >= 1 && r.rating <= 5) allRatings.push(r.rating) })
 
   // From Apify cached Google Maps reviews
-  const apifyGoogleReviews: any[] = apifyMeta.googleReviews ?? []
-  apifyGoogleReviews.forEach((r: any) => {
-    if (r.rating >= 1 && r.rating <= 5) allRatings.push(r.rating)
+  const apifyGoogleReviews = asArray<ApifyCachedReview>(apifyMeta.googleReviews)
+  apifyGoogleReviews.forEach((r) => {
+    if (typeof r.rating === 'number' && r.rating >= 1 && r.rating <= 5) allRatings.push(r.rating)
   })
 
   // Compute sentiment percentages from real data
@@ -622,7 +611,6 @@ export async function GET(req: Request, { params }: Params) {
   if (allRatings.length >= 3) {
     const pos = allRatings.filter(r => r >= 4).length
     const neu = allRatings.filter(r => r === 3).length
-    const neg = allRatings.filter(r => r <= 2).length
     const total = allRatings.length
     positivePct = Math.round((pos / total) * 100)
     neutralPct  = Math.round((neu / total) * 100)
@@ -646,9 +634,11 @@ export async function GET(req: Request, { params }: Params) {
   const reviewTexts: string[] = []
 
   // From DB sentiment alerts (includes apify_review type)
-  sentimentAlerts.forEach((item: any) => {
-    const pl = (item.payload as any) ?? {}
-    if (pl.reviewText) reviewTexts.push(pl.reviewText)
+  sentimentAlerts.forEach((item) => {
+    const pl = item.payload && typeof item.payload === 'object'
+      ? (item.payload as { reviewText?: unknown })
+      : null
+    if (typeof pl?.reviewText === 'string') reviewTexts.push(pl.reviewText)
     else if (item.description) reviewTexts.push(item.description)
   })
 
@@ -656,19 +646,21 @@ export async function GET(req: Request, { params }: Params) {
   googleResult.reviews.forEach(r => { if (r.text) reviewTexts.push(r.text) })
 
   // From Apify cached Google Maps reviews
-  apifyGoogleReviews.forEach((r: any) => { if (r.text) reviewTexts.push(r.text) })
+  apifyGoogleReviews.forEach((r) => { if (r.text) reviewTexts.push(r.text) })
 
   const realKeywords = extractKeywordsFromTexts(reviewTexts)
 
   // ── Build review feed (DB + Google, no duplicates) ───────────────────────
-  const dbReviews = sentimentAlerts.map((item: any) => {
-    const pl = (item.payload as any) ?? {}
+  const dbReviews = sentimentAlerts.map((item) => {
+    const pl = item.payload && typeof item.payload === 'object'
+      ? (item.payload as { platform?: unknown; reviewerName?: unknown; rating?: unknown; reviewText?: unknown })
+      : null
     return {
       id: item.id,
-      platform: pl.platform ?? 'google',
-      reviewerName: pl.reviewerName ?? '匿名顾客',
-      rating: pl.rating ?? 2,
-      text: pl.reviewText ?? item.description ?? '',
+      platform: typeof pl?.platform === 'string' ? pl.platform : 'google',
+      reviewerName: typeof pl?.reviewerName === 'string' ? pl.reviewerName : '匿名顾客',
+      rating: typeof pl?.rating === 'number' ? pl.rating : 2,
+      text: typeof pl?.reviewText === 'string' ? pl.reviewText : (item.description ?? ''),
       replyStatus: item.status === 'resolved' ? 'replied' : 'pending',
       createdAt: item.createdAt.toISOString(),
       source: 'db',
@@ -687,7 +679,7 @@ export async function GET(req: Request, { params }: Params) {
   }))
 
   // Apify Google Maps cached review feed
-  const apifyReviewFeed = apifyGoogleReviews.map((r: any, idx: number) => ({
+  const apifyReviewFeed = apifyGoogleReviews.map((r, idx: number) => ({
     id: `apify_${idx}`,
     platform: 'google_maps',
     reviewerName: r.reviewerName ?? '匿名顾客',
@@ -745,20 +737,10 @@ export async function GET(req: Request, { params }: Params) {
       hasSyncData: hasApifyData,
       syncedAt: apifySyncedAt,
       googleReviewCount: apifyGoogleReviews.length,
-      instagramPostCount: (apifyMeta.instagramPosts ?? []).length,
-      tiktokPostCount: (apifyMeta.tiktokPosts ?? []).length,
-      xiaohongshuPostCount: (apifyMeta.xiaohongshuPosts ?? []).length,
+      instagramPostCount: apifyInstagramPosts.length,
+      tiktokPostCount: apifyTiktokPosts.length,
+      xiaohongshuPostCount: apifyXiaohongshuPosts.length,
     },
   })
 }
 
-function detectContentType(caption: string, mediaUrls: string[], hashtags: string[]): string {
-  const cap  = (caption ?? '').toLowerCase()
-  const tags = (hashtags ?? []).map(h => h.toLowerCase())
-  if (tags.some(t => t.includes('reel') || t.includes('short') || t.includes('tiktok')) || cap.includes('#reels')) return 'SHORT'
-  if (tags.some(t => t.includes('story') || t.includes('stories'))) return 'STORY'
-  if ((mediaUrls ?? []).some(u => u.match(/\.(mp4|mov|avi|webm)/i))) return 'VIDEO'
-  if ((mediaUrls ?? []).length > 0) return 'IMAGE'
-  if (cap.length > 400) return 'LONG'
-  return 'SHORT'
-}

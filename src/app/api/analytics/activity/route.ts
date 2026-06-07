@@ -5,9 +5,11 @@ import { getNaturalWeekWindow } from '@/lib/projectExecution'
 
 type EventBehavior = 'created' | 'started' | 'pending' | 'input_added' | 'completed' | 'reworked' | 'reopened' | 'updated'
 
-function parseJsonObject(value: unknown): Record<string, any> | null {
+type JsonObject = Record<string, unknown>
+
+function parseJsonObject(value: unknown): JsonObject | null {
   if (!value || typeof value !== 'object') return null
-  return value as Record<string, any>
+  return value as JsonObject
 }
 
 function getTimeWindow(searchParams: URLSearchParams) {
@@ -48,7 +50,7 @@ function getTimeWindow(searchParams: URLSearchParams) {
   return { start: week.start, end: week.end, preset: 'week' }
 }
 
-function mapBehavior(action: string, oldObj: Record<string, any> | null, newObj: Record<string, any> | null, actorType: string | null): EventBehavior {
+function mapBehavior(action: string, oldObj: JsonObject | null, newObj: JsonObject | null, actorType: string | null): EventBehavior {
   if (action === 'TASK_CREATED') return 'created'
 
   const oldStatus = typeof oldObj?.status === 'string' ? oldObj.status : null

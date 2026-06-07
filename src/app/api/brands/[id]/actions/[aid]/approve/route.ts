@@ -131,8 +131,9 @@ export async function PATCH(request: Request, { params }: Params) {
               mediaUrls: draft.mediaUrls,
               accessToken,
             })
-          } catch (e: any) {
-            result = { success: false, error: e.message || 'Direct Google GBP publish failed' }
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Direct Google GBP publish failed'
+            result = { success: false, error: message }
           }
         } else {
           result = await postfastPublish({
@@ -186,9 +187,13 @@ export async function PATCH(request: Request, { params }: Params) {
 
   // ── Sentiment Alert → Reply via PostFast (Google/Yelp) ──────────────────
   if (item.type === 'sentiment_alert' && typeof body.selectedReply === 'number') {
-    const payload = item.payload as any
-    const replyText = payload?.suggestedReplies?.[body.selectedReply]
-    const reviewId = payload?.reviewId
+    const payload = item.payload && typeof item.payload === 'object'
+      ? item.payload as { suggestedReplies?: unknown; reviewId?: unknown }
+      : null
+    const suggestedReplies = Array.isArray(payload?.suggestedReplies) ? payload.suggestedReplies : []
+    const selected = suggestedReplies[body.selectedReply]
+    const replyText = typeof selected === 'string' ? selected : null
+    const reviewId = typeof payload?.reviewId === 'string' ? payload.reviewId : null
 
     if (replyText) {
       await prisma.actionItem.update({

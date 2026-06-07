@@ -67,7 +67,7 @@ export async function GET(request: Request) {
   let oauthSession: { state: string; brandId: string }
   try {
     oauthSession = JSON.parse(stateCookieVal)
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: 'Invalid OAuth session state cookie' }, { status: 400 })
   }
 
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: `Google Token exchange failed: ${tokenRes.status} - ${errText}` }, { status: 502 })
     }
 
-    const tokenData = await tokenRes.json()
+    const tokenData = await tokenRes.json() as { access_token: string; refresh_token?: string | null }
     const accessToken = tokenData.access_token
     const refreshToken = tokenData.refresh_token // Note: Google only sends this on the first consent
 
@@ -149,8 +149,9 @@ export async function GET(request: Request) {
     const redirectUrl = new URL('/board', url.origin)
     redirectUrl.searchParams.set('google_success', 'true')
     return NextResponse.redirect(redirectUrl)
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[Google OAuth Callback Error]', e)
-    return NextResponse.json({ error: e.message || 'OAuth callback failed' }, { status: 500 })
+    const message = e instanceof Error ? e.message : 'OAuth callback failed'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

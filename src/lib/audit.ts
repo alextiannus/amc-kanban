@@ -1,4 +1,5 @@
 import { prisma } from './prisma'
+import type { PrismaClient } from '@prisma/client'
 
 type Actor = {
   id?: string | null
@@ -24,7 +25,7 @@ function safeJson(value: unknown) {
 
 export async function writeAuditLog(input: AuditInput) {
   try {
-    await (prisma as any).auditLog.create({
+    await (prisma as PrismaClient).auditLog.create({
       data: {
         actorId: input.actor?.id ?? null,
         actorType: input.actor?.type ?? 'SYSTEM',
@@ -44,7 +45,9 @@ export async function writeAuditLog(input: AuditInput) {
   }
 }
 
-export function actorFromContext(sessionUser?: any, agent?: any): Actor {
+type ContextUser = { id?: string | null; email?: string | null }
+
+export function actorFromContext(sessionUser?: ContextUser | null, agent?: ContextUser | null): Actor {
   if (agent) {
     return {
       id: agent.id,

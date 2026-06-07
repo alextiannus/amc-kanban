@@ -4,6 +4,13 @@ import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { sendExtensionCommand } from '@/lib/integrations/extensionBridge'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 
+type ExtensionTestTriggerBody = {
+  brandId?: string
+  platform?: string
+  reviewId?: string
+  replyText?: string
+}
+
 /**
  * POST /api/integrations/extension/test-trigger
  * Allows developers or store owners to manually trigger an automation command
@@ -15,10 +22,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let body: any
+  let body: ExtensionTestTriggerBody
   try {
     body = await request.json()
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
@@ -49,8 +56,9 @@ export async function POST(request: Request) {
       replyText
     })
     return NextResponse.json({ success: true, result })
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[Extension Test Trigger] Error:', e)
-    return NextResponse.json({ success: false, error: e.message || String(e) }, { status: 502 })
+    const message = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ success: false, error: message }, { status: 502 })
   }
 }

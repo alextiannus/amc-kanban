@@ -44,7 +44,7 @@ export async function GET(request: Request) {
         const avatarPath = path.join(process.cwd(), 'public', agent.avatar)
         await fs.access(avatarPath)
         avatarAccessible = true
-      } catch (e) {
+      } catch {
         avatarAccessible = false
       }
     }
@@ -66,7 +66,8 @@ export async function GET(request: Request) {
         mismatch: agent.avatar && !avatarAccessible ? 'Avatar in DB but file not found on disk' : 'OK'
       }
     })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal Server Error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -2,18 +2,50 @@ import { useState } from 'react'
 import { Calendar, Clock, Flag, Copy, Check } from 'lucide-react'
 import AvatarImage from './AvatarImage'
 
+type TaskAssignee = {
+  nickname?: string | null
+  email?: string | null
+  themeColor?: string | null
+  avatar?: string | null
+  type?: string | null
+}
+
+type TaskDependency = {
+  blockerTask?: {
+    status: string
+  } | null
+}
+
+type TaskCardTask = {
+  id: string
+  status: string
+  title?: string | null
+  priority?: string | null
+  deadline?: string | null
+  estimatedHours?: number | null
+  requiredInput?: string | null
+  description?: string | null
+  materials?: string | null
+  tags?: string[] | null
+  createdAt?: string | null
+  assignee?: TaskAssignee | null
+  assigneeId?: string | null
+  dependencies?: TaskDependency[] | null
+}
+
 const priorityStyles: Record<string, string> = {
   high: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300',
   medium: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300',
   low: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
 }
 
-export default function TaskCard({ task, onClick, onTagClick }: { task: any, onClick?: () => void, onTagClick?: (tag: string) => void }) {
+export default function TaskCard({ task, onClick, onTagClick }: { task: TaskCardTask, onClick?: () => void, onTagClick?: (tag: string) => void }) {
   const [idCopied, setIdCopied] = useState(false)
   const assigneeThemeColor = task.assignee?.themeColor
+  const assigneeEmailPrefix = task.assignee?.email?.split('@')[0] ?? ''
 
   const activeBlockers = (task.dependencies || []).filter(
-    (dep: any) => dep.blockerTask && !['done', 'void'].includes(dep.blockerTask.status)
+    (dep) => dep.blockerTask && !['done', 'void'].includes(dep.blockerTask.status)
   )
   const isBlocked = activeBlockers.length > 0
 
@@ -39,7 +71,7 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
             {task.assignee.avatar ? (
               <AvatarImage src={task.assignee.avatar} alt="Agent Avatar" className="w-full h-full object-cover" />
             ) : (
-              (task.assignee.nickname || task.assignee.email.split('@')[0]).substring(0, 2).toUpperCase()
+              (task.assignee.nickname || assigneeEmailPrefix || '??').substring(0, 2).toUpperCase()
             )}
           </div>
         ) : (
@@ -50,7 +82,7 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
         
         <div className="flex-1 min-w-0">
           <div className="flex justify-between items-start gap-2">
-            <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 leading-snug truncate">{task.title}</h3>
+            <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 leading-snug truncate">{task.title || 'Untitled task'}</h3>
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {isBlocked && (
                 <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -69,7 +101,7 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
             </div>
           </div>
           <p className="text-xs font-medium text-slate-400 truncate mt-1">
-            {task.assignee ? (task.assignee.nickname || task.assignee.email.split('@')[0]) : 'Unassigned'}
+            {task.assignee ? (task.assignee.nickname || assigneeEmailPrefix || 'Unassigned') : 'Unassigned'}
           </p>
         </div>
       </div>
@@ -112,7 +144,10 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
         {(task.tags || []).slice(0, 3).map((tag: string) => (
           <button
             key={tag}
-            onClick={(e) => { e.stopPropagation(); onTagClick && onTagClick(tag) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (onTagClick) onTagClick(tag)
+            }}
             className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-emerald-100 hover:text-emerald-700 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
           >
             #{tag}
@@ -125,7 +160,7 @@ export default function TaskCard({ task, onClick, onTagClick }: { task: any, onC
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          {new Date(task.createdAt).toLocaleDateString()}
+          {task.createdAt ? new Date(task.createdAt).toLocaleDateString() : 'Unknown date'}
         </span>
         <span className="flex items-center gap-1.5 group-hover:text-emerald-500 transition-colors uppercase tracking-wider">
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

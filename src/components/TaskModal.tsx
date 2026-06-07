@@ -1,10 +1,47 @@
+/* eslint-disable @next/next/no-img-element */
 import { useState, useMemo, useEffect } from 'react'
 import { X, AlertCircle, Check, Copy, ChevronLeft, ChevronRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 const markdownComponents = {
-  a: ({ ...props }: any) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+}
+
+type TaskCommentAuthor = {
+  type?: string
+  themeColor?: string
+  avatar?: string | null
+  nickname?: string | null
+  email?: string | null
+}
+
+type TaskComment = {
+  id: string
+  createdAt: string
+  content: string
+  author?: TaskCommentAuthor | null
+}
+
+type TaskItem = {
+  id: string
+  status: string
+  title?: string | null
+  priority?: string | null
+  deadline?: string | null
+  estimatedHours?: number | null
+  requiredInput?: string | null
+  description?: string | null
+  materials?: string | null
+  tags?: string[] | null
+  assigneeId?: string | null
+  assignee?: {
+    nickname?: string | null
+    email?: string | null
+  } | null
+  dependencies?: Array<{ id: string; blockerTaskId: string; blockerTask?: TaskItem | null }> | null
+  comments?: TaskComment[] | null
+  createdAt?: string | null
 }
 
 function renderTextWithLinks(text: string | null) {
@@ -40,13 +77,13 @@ function extractWorkLinks(materials: string | null) {
 }
 
 export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilter }: {
-  task: any,
+  task: TaskItem,
   onClose: () => void,
   onUpdate: () => void,
-  allTasks?: any[],
+  allTasks?: TaskItem[],
   onTagFilter?: (tag: string) => void,
 }) {
-  const [currentTask, setCurrentTask] = useState(task)
+  const [currentTask, setCurrentTask] = useState<TaskItem>(task)
   const [updating, setUpdating] = useState(false)
   const [idCopied, setIdCopied] = useState(false)
   const [newComment, setNewComment] = useState('')
@@ -75,17 +112,17 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
 
   // If task prop changes from parent, reset
   useEffect(() => {
-    setCurrentTask(task)
+    queueMicrotask(() => setCurrentTask(task))
   }, [task])
 
   const eligibleBlockers = useMemo(() => {
     if (!allTasks) return []
-    return allTasks.filter(t => t.id !== currentTask.id && t.status !== 'void' && !(currentTask.dependencies || []).some((d: any) => d.blockerTaskId === t.id))
+    return allTasks.filter(t => t.id !== currentTask.id && t.status !== 'void' && !(currentTask.dependencies || []).some((d) => d.blockerTaskId === t.id))
   }, [allTasks, currentTask.id, currentTask.dependencies])
 
   const handleAddBlocker = async (blockerId: string) => {
     if (!blockerId) return
-    const currentBlockerIds = (currentTask.dependencies || []).map((d: any) => d.blockerTaskId)
+    const currentBlockerIds = (currentTask.dependencies || []).map((d) => d.blockerTaskId)
     const newBlockerIds = [...currentBlockerIds, blockerId]
     setUpdating(true)
     try {
@@ -109,7 +146,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
   }
 
   const handleRemoveBlocker = async (blockerId: string) => {
-    const currentBlockerIds = (currentTask.dependencies || []).map((d: any) => d.blockerTaskId)
+    const currentBlockerIds = (currentTask.dependencies || []).map((d) => d.blockerTaskId)
     const newBlockerIds = currentBlockerIds.filter((id: string) => id !== blockerId)
     setUpdating(true)
     try {
@@ -163,7 +200,11 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
     if (!allTasks) return []
     return [...allTasks]
       .filter(t => t.status !== 'void')
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+      .sort((a, b) => {
+        const aTime = new Date(a.createdAt ?? 0).getTime()
+        const bTime = new Date(b.createdAt ?? 0).getTime()
+        return aTime - bTime
+      })
   }, [allTasks])
 
   const currentIndex = sortedTasks.findIndex(t => t.id === currentTask.id)
@@ -209,7 +250,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
   }
 
   const taskTags: string[] = currentTask.tags || []
-  const { draftUrl, postUrl } = extractWorkLinks(currentTask.materials)
+  const { draftUrl, postUrl } = extractWorkLinks(currentTask.materials ?? null)
   const relatedTasks = allTasks
     ? allTasks
         .filter(t => t.id !== currentTask.id && t.status !== 'void')
@@ -325,7 +366,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
                         if (data.success) {
                           onUpdate()
                         } else {
-                          setCurrentTask((prev: any) => ({ ...prev, requiredInput: data.error ?? '重试失败，请稍后再试' }))
+                          setCurrentTask((prev) => ({ ...prev, requiredInput: data.error ?? '重试失败，请稍后再试' }))
                         }
                       } catch (e) {
                         console.error(e)
@@ -361,7 +402,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
             <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 space-y-3">
               {(currentTask.dependencies || []).length > 0 ? (
                 <div className="flex flex-col gap-2">
-                  {(currentTask.dependencies || []).map((dep: any) => {
+                  {(currentTask.dependencies || []).map((dep) => {
                     const bt = dep.blockerTask
                     if (!bt) return null
                     const isFinished = ['done', 'void'].includes(bt.status)
@@ -409,7 +450,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
                     className="flex-1 max-w-xs text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-slate-200 outline-none focus:ring-1 focus:ring-emerald-500"
                   >
                     <option value="" disabled>Select a task to block this one...</option>
-                    {eligibleBlockers.map((t: any) => (
+                    {eligibleBlockers.map((t) => (
                       <option key={t.id} value={t.id}>{t.title} ({t.status})</option>
                     ))}
                   </select>
@@ -529,7 +570,7 @@ export default function TaskModal({ task, onClose, onUpdate, allTasks, onTagFilt
             
             <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1 mb-4">
               {(currentTask.comments || []).length > 0 ? (
-                (currentTask.comments || []).map((comment: any) => {
+                (currentTask.comments || []).map((comment) => {
                   const author = comment.author || {}
                   const isAgent = author.type === 'AI_AGENT'
                   const authorColor = author.themeColor || (isAgent ? '#8b5cf6' : '#64748b')

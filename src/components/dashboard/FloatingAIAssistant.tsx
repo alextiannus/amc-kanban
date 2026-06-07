@@ -1,10 +1,10 @@
 'use client'
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Sparkles, ImageIcon, Mic, Send, ChevronDown, Check } from 'lucide-react'
+import { X, Sparkles, ImageIcon, Mic, Send } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface Message {
-  id: number
+  id: number | string
   role: 'user' | 'ai' | 'system'
   content: string
   quickReplies?: string[]
@@ -32,6 +32,8 @@ export default function FloatingAIAssistant() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  const createMessageId = () => crypto.randomUUID()
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -46,7 +48,7 @@ export default function FloatingAIAssistant() {
 
   const sendMessage = (text: string) => {
     if (!text.trim()) return
-    const userMsg: Message = { id: Date.now(), role: 'user', content: text }
+    const userMsg: Message = { id: createMessageId(), role: 'user', content: text }
     setMessages(p => [...p, userMsg])
     setInputText('')
     setIsTyping(true)
@@ -58,25 +60,25 @@ export default function FloatingAIAssistant() {
 
       if (text.includes('差评') || text.includes('Google')) {
         aiResponse = {
-          id: Date.now() + 1, role: 'ai',
+          id: createMessageId(), role: 'ai',
           content: '收到！Google Maps 那条 2 星差评我已经准备好 3 套回复方案。推荐使用方案 A：\n\n"非常抱歉给您带来了不好的体验！我们正在优化等位体验，并为您提供一张专属 15% 折扣券，诚邀您再次光临。"',
           quickReplies: ['发送方案 A', '看看方案 B', '自己再改改']
         }
       } else if (text.includes('帖子') || text.includes('审核')) {
         aiResponse = {
-          id: Date.now() + 1, role: 'ai',
+          id: createMessageId(), role: 'ai',
           content: '两条帖子都已就绪 ✅\n\n① 母亲节预热 (IG) — 图文帖，计划今晚 8PM 发布\n② 波士顿龙虾新品 (小红书) — 笔记，建议明天中午\n\n您要一起批准，还是分开看？',
           quickReplies: ['全部批准！', '先看 IG 那条', '先看小红书']
         }
       } else if (text.includes('发') || text.includes('批准') || text.includes('ok') || text.toLowerCase().includes('ok')) {
         aiResponse = {
-          id: Date.now() + 1, role: 'ai',
+          id: createMessageId(), role: 'ai',
           content: '👍 明白！已加入发布队列，PostFast 会在指定时间自动发布。\n\n发布后我会在这里通知您数据表现，通常 2 小时后会有初步互动数据。',
           quickReplies: ['好的，辛苦了', '顺便帮我看看 TikTok']
         }
       } else {
         aiResponse = {
-          id: Date.now() + 1, role: 'ai',
+          id: createMessageId(), role: 'ai',
           content: '明白！我来处理。您还需要我做什么？',
           quickReplies: ['查看今日计划', '投喂新素材', '没了，辛苦']
         }

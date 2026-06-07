@@ -178,8 +178,9 @@ export async function POST(request: Request) {
       pointsBalance: currentPoints,
       aiReason,
     }, { status: 201 })
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[POST /api/game/tasks]', e)
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    const message = e instanceof Error ? e.message : 'Internal Server Error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

@@ -1,22 +1,18 @@
 'use client'
 import React, { useEffect, useState } from 'react'
-import { Home } from 'lucide-react'
 
 interface MobileLayoutProps {
   children: React.ReactNode
 }
 
 export default function MobileLayout({ children }: MobileLayoutProps) {
-  const [activeBrandId, setActiveBrandId] = useState<string | undefined>(undefined)
-
-  useEffect(() => {
+  const [activeBrandId, setActiveBrandId] = useState<string | undefined>(() => {
     try {
-      const saved = window.localStorage.getItem('dashboard.activeBrandId')
-      if (saved) setActiveBrandId(saved)
+      return window.localStorage.getItem('dashboard.activeBrandId') || undefined
     } catch {
-      // Ignore storage errors and continue without persistence.
+      return undefined
     }
-  }, [])
+  })
 
   useEffect(() => {
     if (!activeBrandId) return
@@ -27,8 +23,13 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     }
   }, [activeBrandId])
 
+  type ChildProps = {
+    activeBrandId?: string
+    onActiveBrandIdChange?: (id: string | undefined) => void
+  }
+
   const home = React.isValidElement(children)
-    ? React.cloneElement(children as React.ReactElement<any>, {
+    ? React.cloneElement(children as React.ReactElement<ChildProps>, {
         activeBrandId,
         onActiveBrandIdChange: setActiveBrandId,
       })

@@ -329,3 +329,53 @@ export async function PATCH(request: Request, { params }: Params) {
 
   return NextResponse.json(updated)
 }
+
+// DELETE /api/brands/[id] — soft-delete by archiving brand
+export async function DELETE(_request: Request, { params }: Params) {
+  const session = await getSession()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await params
+  if (session.user.type === 'AI_AGENT') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  if (!(await canOwnBrand(id, session.user.id))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  const existing = await prisma.brand.findUnique({ where: { id } })
+  if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  if (existing.status === 'ARCHIVED') {
+    return NextResponse.json({ ok: true, alreadyArchived: true })
+  }
+
+  const archived = await prisma.$transaction(async (tx) => {
+    const updatedBrand = await tx.brand.update({
+      where: { id },
+      data: { status: 'ARCHIVED' },
+    })
+
+    await tx.brandAgent.updateMany({
+      where: { brandId: id, active: true },
+      data: { active: false },
+    })
+
+    await tx.auditLog.create({
+      data: {
+        actorId: session.user.id,
+        actorType: 'HUMAN',
+        actorName: session.user.email || null,
+        action: 'BRAND_ARCHIVED',
+        resourceId: updatedBrand.id,
+        resourceType: 'Brand',
+        oldValue: { status: existing.status },
+        newValue: { status: updatedBrand.status },
+      },
+    })
+
+    return updatedBrand
+  })
+
+  return NextResponse.json(archived)
+}

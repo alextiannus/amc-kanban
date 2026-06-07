@@ -137,10 +137,10 @@ export default function MockMerchantPage() {
       } else {
         throw new Error(data.error || '未收到扩展响应，请确保插件已安装并连接。')
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setAlertInfo({
         type: 'error',
-        message: `触发失败: ${e.message || String(e)}`,
+        message: `触发失败: ${e instanceof Error ? e.message : String(e)}`,
       })
     } finally {
       setTriggeringReviewId(null)
@@ -238,7 +238,7 @@ export default function MockMerchantPage() {
 
                   {/* Comment */}
                   <p className="text-xs text-slate-350 leading-relaxed font-medium bg-slate-950/40 p-3.5 rounded-xl border border-slate-850/50">
-                    "{rev.comment}"
+                    &quot;{rev.comment}&quot;
                   </p>
 
                   {/* Reply Input Section (matching runDomesticReplyInPage selectors) */}
@@ -268,7 +268,7 @@ export default function MockMerchantPage() {
                         </div>
                         <div className="flex items-center justify-between">
                           <p className="text-[10px] text-slate-500">
-                            插件查找元素路径: <code className="font-mono text-indigo-400">[data-review-id="{rev.id}"] .reply-textarea</code>
+                            插件查找元素路径: <code className="font-mono text-indigo-400">[data-review-id=&quot;{rev.id}&quot;] .reply-textarea</code>
                           </p>
                           <div className="flex gap-2">
                             {/* Simulator button */}
@@ -356,7 +356,7 @@ export default function MockMerchantPage() {
                 <div className="flex gap-2">
                   <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-300 font-extrabold flex items-center justify-center shrink-0">4</span>
                   <p>
-                    在左侧选择对应评价，点击 <span className="text-indigo-400 font-bold">"AI 自动响应测试"</span> 按钮。系统将模拟 AI 调用 MCP 工具，下发回复命令。
+                    在左侧选择对应评价，点击 <span className="text-indigo-400 font-bold">&quot;AI 自动响应测试&quot;</span> 按钮。系统将模拟 AI 调用 MCP 工具，下发回复命令。
                   </p>
                 </div>
                 <div className="flex gap-2">

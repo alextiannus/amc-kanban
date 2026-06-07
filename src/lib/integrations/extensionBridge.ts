@@ -1,10 +1,17 @@
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }
+
+interface ExtensionStreamController {
+  enqueue(message: string): void
+  close?(): void
+}
+
 interface ExtensionBridgeState {
-  activeExtensions: Map<string, any>;
+  activeExtensions: Map<string, ExtensionStreamController>;
   pendingRequests: Map<
     string,
     {
-      resolve: (value: any) => void;
-      reject: (reason?: any) => void;
+      resolve: (value: unknown) => void;
+      reject: (reason?: unknown) => void;
       timeout: NodeJS.Timeout;
     }
   >;
@@ -26,12 +33,12 @@ export const bridgeState = globalForBridge.extensionBridgeState;
 /**
  * Register an active extension's SSE stream controller.
  */
-export function registerExtension(brandId: string, controller: any) {
+export function registerExtension(brandId: string, controller: ExtensionStreamController) {
   const oldController = bridgeState.activeExtensions.get(brandId);
   if (oldController) {
     try {
-      oldController.close();
-    } catch (e) {
+      oldController.close?.();
+    } catch {
       // Ignored
     }
   }
@@ -54,8 +61,8 @@ export function unregisterExtension(brandId: string) {
 export async function sendExtensionCommand(
   brandId: string,
   action: string,
-  payload: any
-): Promise<any> {
+  payload: JsonValue
+): Promise<unknown> {
   const controller = bridgeState.activeExtensions.get(brandId);
   if (!controller) {
     throw new Error('No active browser extension connection found for this brand.');
@@ -75,10 +82,10 @@ export async function sendExtensionCommand(
       // Format as standard Server-Sent Event data line
       const message = `data: ${JSON.stringify({ id: requestId, action, payload })}\n\n`;
       controller.enqueue(message);
-    } catch (e: any) {
+    } catch (e: unknown) {
       clearTimeout(timeout);
       bridgeState.pendingRequests.delete(requestId);
-      reject(new Error(`Failed to send command to extension: ${e?.message || String(e)}`));
+      reject(new Error(`Failed to send command to extension: ${e instanceof Error ? e.message : String(e)}`));
     }
   });
 }

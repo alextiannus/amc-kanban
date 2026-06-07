@@ -24,10 +24,16 @@ export const avatarSelect = {
   avatarMimeType: true,
 } as const
 
+type AvatarEntity = {
+  avatar?: string | null
+  avatarData?: Buffer | Uint8Array | null
+  avatarMimeType?: string | null
+}
+
 /**
  * Strip raw binary avatar fields from a response object and inject resolved URL.
  */
-export function withResolvedAvatar<T extends { avatar?: string | null; avatarData?: any; avatarMimeType?: any }>(
+export function withResolvedAvatar<T extends AvatarEntity>(
   entity: T
 ): Omit<T, 'avatarData' | 'avatarMimeType'> & { avatar: string | null } {
   const { avatarData, avatarMimeType, ...rest } = entity

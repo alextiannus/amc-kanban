@@ -211,7 +211,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     </div>
                     {/* Event pills */}
                     <div className="space-y-1">
-                      {dayEvents.slice(0, 2).map((ev, i) => (
+                      {dayEvents.slice(0, 2).map((ev) => (
                         <div key={ev.id} className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border truncate ${PLATFORM_COLORS[normalizePlatformLabel(ev.platform)] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                           {normalizePlatformLabel(ev.platform)} · {ev.title.length > 8 ? ev.title.slice(0, 8) + '…' : ev.title}
                         </div>
@@ -244,7 +244,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
             </div>
           ) : (
             <div className="divide-y divide-slate-50 dark:divide-slate-800">
-              {selectedEvents.map((ev, i) => (
+              {selectedEvents.map((ev) => (
                 <div key={ev.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                   <div className={`text-[10px] font-black px-2.5 py-1.5 rounded-xl border ${PLATFORM_COLORS[normalizePlatformLabel(ev.platform)] || 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                     {normalizePlatformLabel(ev.platform)}

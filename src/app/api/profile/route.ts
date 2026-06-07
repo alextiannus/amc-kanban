@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import fs from 'fs/promises'
@@ -10,9 +12,6 @@ export async function GET() {
     if (!session || !session.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    const singleAgentMode = process.env.AI_SINGLE_AGENT_MODE === 'true'
-    const canonicalAgentId = process.env.AI_SINGLE_AGENT_ID || 'amc-main'
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -54,7 +53,7 @@ export async function GET() {
     }
 
     return NextResponse.json(user)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -67,7 +66,7 @@ export async function PATCH(request: Request) {
     }
 
     const contentType = request.headers.get('content-type') || ''
-    const updateData: any = {}
+    const updateData: Prisma.UserUpdateInput = {}
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData()
@@ -88,7 +87,6 @@ export async function PATCH(request: Request) {
         if (password.trim().length < 4) {
           return NextResponse.json({ error: 'Password must be at least 4 characters' }, { status: 400 })
         }
-        const bcrypt = require('bcryptjs')
         updateData.password = await bcrypt.hash(password, 10)
       }
 
@@ -118,7 +116,7 @@ export async function PATCH(request: Request) {
         updateData.avatar = `/uploads/${fileName}`
       }
     } else {
-      const body = await request.json()
+      const body = await request.json() as { password?: unknown; nickname?: unknown }
       const { password, nickname } = body
 
       if (nickname !== undefined) {
@@ -129,7 +127,6 @@ export async function PATCH(request: Request) {
         if (String(password).trim().length < 4) {
           return NextResponse.json({ error: 'Password must be at least 4 characters' }, { status: 400 })
         }
-        const bcrypt = require('bcryptjs')
         updateData.password = await bcrypt.hash(String(password), 10)
       }
     }
@@ -153,7 +150,7 @@ export async function PATCH(request: Request) {
     })
 
     return NextResponse.json({ success: true, user: updated })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

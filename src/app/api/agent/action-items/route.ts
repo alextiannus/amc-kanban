@@ -211,8 +211,9 @@ export async function POST(request: Request) {
               mediaUrls: draft.mediaUrls,
               accessToken,
             })
-          } catch (e: any) {
-            publish = { success: false, error: e.message || 'Direct Google GBP publish failed' }
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Direct Google GBP publish failed'
+            publish = { success: false, error: message }
           }
         } else {
           publish = await postfastPublish({

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Bot, Search, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -9,24 +9,47 @@ import AvatarImage from './AvatarImage'
 import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
 
 const markdownComponents = {
-  a: ({ ...props }: any) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+}
+
+type AgentItem = {
+  id: string
+  email: string
+  nickname?: string | null
+  insights?: string | null
+  introduction?: string | null
+  workflow?: string | null
+  themeColor?: string | null
+  avatar?: string | null
+  apiKey?: string | null
+  isOnline?: boolean
 }
 
 export default function AgentSequenceView({
   initialFilter = 'all',
-  brandId,
 }: {
   initialFilter?: 'all' | 'online' | 'offline'
-  brandId?: string
 }) {
-  const [agents, setAgents] = useState<any[]>([])
+  const [agents, setAgents] = useState<AgentItem[]>([])
   const [expandedAgentIds, setExpandedAgentIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterTab, setFilterTab] = useState<'all' | 'online' | 'offline'>(initialFilter)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [copiedCommand, setCopiedCommand] = useState<string | null>(null)
-  const [editingAgent, setEditingAgent] = useState<any | null>(null)
+  const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null)
+
+  const fetchAgents = useCallback(async () => {
+    try {
+      const res = await fetch('/api/agents')
+      const data = await res.json() as AgentItem[]
+      setAgents(data)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   const getCopyCommand = (apiKey: string | null = null) => {
     const hostFromEnv = process.env.NEXT_PUBLIC_KANBAN_HOST
@@ -35,20 +58,14 @@ export default function AgentSequenceView({
     return buildAgentInitPrompt({ apiKey, apiBaseUrl: `${baseHost}/api` })
   }
 
-  useEffect(() => { setFilterTab(initialFilter) }, [initialFilter])
-  useEffect(() => { fetchAgents() }, [])
-
-  const fetchAgents = async () => {
-    try {
-      const res = await fetch('/api/agents')
-      const data = await res.json()
-      setAgents(data)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
+  useEffect(() => {
+    queueMicrotask(() => setFilterTab(initialFilter))
+  }, [initialFilter])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void fetchAgents()
+    })
+  }, [fetchAgents])
 
   const handleDeleteAgent = async (e: React.MouseEvent, agentId: string) => {
     e.stopPropagation()
@@ -227,7 +244,7 @@ export default function AgentSequenceView({
                             <button
                               onClick={e => {
                                 e.stopPropagation()
-                                navigator.clipboard.writeText(agent.apiKey)
+                                navigator.clipboard.writeText(agent.apiKey ?? '')
                                 setCopiedKey(agent.id)
                                 setTimeout(() => setCopiedKey(null), 2000)
                               }}
@@ -239,7 +256,7 @@ export default function AgentSequenceView({
                           <button
                             onClick={e => {
                               e.stopPropagation()
-                              navigator.clipboard.writeText(getCopyCommand(agent.apiKey))
+                              navigator.clipboard.writeText(getCopyCommand(agent.apiKey ?? null))
                               setCopiedCommand(agent.id)
                               setTimeout(() => setCopiedCommand(null), 2000)
                             }}

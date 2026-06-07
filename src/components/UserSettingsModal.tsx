@@ -1,7 +1,15 @@
+/* eslint-disable @next/next/no-img-element */
 import { useState, type ChangeEvent } from 'react'
 import { X, Check } from 'lucide-react'
 
-export default function UserSettingsModal({ user, onClose, onUpdated }: { user: any, onClose: () => void, onUpdated?: () => void }) {
+type UserProfile = {
+  nickname?: string | null
+  introduction?: string | null
+  avatar?: string | null
+  email: string
+}
+
+export default function UserSettingsModal({ user, onClose, onUpdated }: { user: UserProfile, onClose: () => void, onUpdated?: () => void }) {
   const [nickname, setNickname] = useState(user.nickname || '')
   const [introduction, setIntroduction] = useState(user.introduction || '')
   const [password, setPassword] = useState('')
@@ -71,7 +79,7 @@ export default function UserSettingsModal({ user, onClose, onUpdated }: { user: 
         const data = await res.json()
         setError(data.error || 'Failed to update password')
       }
-    } catch (e) {
+    } catch {
       setError('An error occurred')
     } finally {
       setSaving(false)

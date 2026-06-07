@@ -1,39 +1,31 @@
 import { useEffect, useState } from 'react'
+/* eslint-disable @next/next/no-img-element */
 
 interface AvatarImageProps {
   src?: string | null
   alt?: string
   className?: string
-  fallbackClassName?: string
-  size?: 'sm' | 'md' | 'lg'
 }
 
 export default function AvatarImage({ 
   src, 
   alt = 'Avatar', 
-  className = 'w-full h-full object-cover',
-  fallbackClassName = '',
-  size = 'md'
+  className = 'w-full h-full object-cover'
 }: AvatarImageProps) {
   const [hasError, setHasError] = useState(false)
-  const [isLoading, setIsLoading] = useState(!!src)
   const [cacheBuster, setCacheBuster] = useState(0)
 
   useEffect(() => {
     // Reset image state whenever src changes, and add cache buster
-    setHasError(false)
-    setIsLoading(!!src)
-    // Add timestamp to URL to bust browser cache on new uploads
-    setCacheBuster(Date.now())
+    queueMicrotask(() => {
+      setHasError(false)
+      // Add timestamp to URL to bust browser cache on new uploads
+      setCacheBuster(new Date().getTime())
+    })
   }, [src])
 
   const handleError = () => {
     setHasError(true)
-    setIsLoading(false)
-  }
-
-  const handleLoad = () => {
-    setIsLoading(false)
   }
 
   if (!src) {
@@ -67,7 +59,6 @@ export default function AvatarImage({
       alt={alt}
       className={className}
       onError={handleError}
-      onLoad={handleLoad}
     />
   )
 }

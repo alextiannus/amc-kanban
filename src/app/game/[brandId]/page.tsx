@@ -1,129 +1,14 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-
-interface Prize {
-  id: string
-  name: string
-  type: string
-  probability: number
-  totalInventory: number | null
-  claimedCount: number
-  imageUrl: string | null
-}
-
-interface GameConfig {
-  title: string
-  description: string
-  themeColor: string
-  taskPhotoEnabled: boolean
-  taskReviewEnabled: boolean
-  taskGoogleMapsEnabled: boolean
-  taskXiaohongshuEnabled: boolean
-  taskInstagramEnabled: boolean
-  maxSpinsPerUserDay: number
-  templateType: 'WHEEL' | 'GRID'
-  brand?: {
-    name: string
-    location: string | null
-    googlePlaceId: string | null
-    googleBusinessUrl?: string | null
-    googleReviewUrl?: string | null
-    accounts: Array<{
-      platformId: string
-      profileUrl: string | null
-      handle: string
-    }>
-  }
-}
-
-interface UnclaimedPrize {
-  logId: string
-  prizeName: string
-  prizeType: string
-  redemptionCode: string
-  createdAt: string
-}
-
-function allocateGridSlots(prizesList: Prize[]): Prize[] {
-  const activePrizes = prizesList.filter(p => p.probability > 0 || p.name);
-  if (activePrizes.length === 0) return [];
-  
-  const slots: Prize[] = new Array(8).fill(null);
-  
-  if (activePrizes.length <= 8) {
-    // 1. Give each active prize at least 1 slot
-    const allocatedCounts = activePrizes.map(() => 1);
-    let remainingSlots = 8 - activePrizes.length;
-    
-    // 2. Distribute remaining slots dynamically
-    while (remainingSlots > 0) {
-      let bestIndex = -1;
-      let maxDeficit = -Infinity;
-      
-      for (let i = 0; i < activePrizes.length; i++) {
-        const targetFraction = 8 * activePrizes[i].probability;
-        const deficit = targetFraction - allocatedCounts[i];
-        if (deficit > maxDeficit) {
-          maxDeficit = deficit;
-          bestIndex = i;
-        }
-      }
-      
-      if (bestIndex !== -1) {
-        allocatedCounts[bestIndex]++;
-        remainingSlots--;
-      } else {
-        break;
-      }
-    }
-    
-    // Construct flat array of allocated items
-    const rawSlots: Prize[] = [];
-    activePrizes.forEach((prize, idx) => {
-      const count = allocatedCounts[idx];
-      for (let c = 0; c < count; c++) {
-        rawSlots.push(prize);
-      }
-    });
-    
-    // Interleave the rawSlots to avoid placing duplicates adjacent
-    const counts: { [key: string]: number } = {};
-    rawSlots.forEach(item => {
-      const key = item.id || item.name;
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    
-    const uniquePrizes = [...activePrizes].sort((a, b) => {
-      const keyA = a.id || a.name;
-      const keyB = b.id || b.name;
-      return counts[keyB] - counts[keyA];
-    });
-    
-    const orderedSlots: Prize[] = new Array(8).fill(null);
-    const order = [0, 2, 4, 6, 1, 3, 5, 7];
-    
-    const sortedSlots: Prize[] = [];
-    uniquePrizes.forEach(prize => {
-      const key = prize.id || prize.name;
-      const count = counts[key] || 0;
-      for (let i = 0; i < count; i++) {
-        sortedSlots.push(prize);
-      }
-    });
-    
-    for (let i = 0; i < 8; i++) {
-      orderedSlots[order[i]] = sortedSlots[i];
-    }
-    
-    return orderedSlots;
-  } else {
-    // If more than 8 active prizes, take the top 8 by probability descending
-    const sorted = [...activePrizes].sort((a, b) => b.probability - a.probability);
-    return sorted.slice(0, 8);
-  }
-}
+import {
+  allocateGridSlots,
+  type ConfettiParticle,
+  type GameConfig,
+  type Prize,
+  type UnclaimedPrize,
+} from './gameModels'
 
 export default function GameH5Page() {
   const params = useParams()
@@ -151,13 +36,14 @@ export default function GameH5Page() {
   // Merged Task States
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
   const [filePreviews, setFilePreviews] = useState<string[]>([])
+  void filePreviews
   const [isSubmittingTask, setIsSubmittingTask] = useState<boolean>(false)
   const [copyrightAgreed, setCopyrightAgreed] = useState<boolean>(true)
   const [reviewPlatform, setReviewPlatform] = useState<string | null>(null)
   const [useAiText, setUseAiText] = useState<boolean>(true)
 
   // Toast Notification State
-  const toastTimerRef = useRef<any>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const showToastMessage = (msg: string) => {
     setToast(msg)
@@ -171,6 +57,8 @@ export default function GameH5Page() {
 
   // Manual verification modal
   const [verifyingTaskId, setVerifyingTaskId] = useState<string | null>(null)
+  void verifyingTaskId
+  void setVerifyingTaskId
   const [verificationError, setVerificationError] = useState<string | null>(null)
   const [showPinModal, setShowPinModal] = useState<{ submissionId: string } | null>(null)
   const [pinInput, setPinInput] = useState<string>('')
@@ -272,43 +160,45 @@ export default function GameH5Page() {
 
   // 1. Initialize transient sessionId and fetch Config
   useEffect(() => {
-    let session = localStorage.getItem('amc_game_session')
-    if (!session) {
-      session = 'gs_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-      localStorage.setItem('amc_game_session', session)
-    }
-    setSessionId(session)
+    queueMicrotask(() => {
+      let session = localStorage.getItem('amc_game_session')
+      if (!session) {
+        session = `gs_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`
+        localStorage.setItem('amc_game_session', session)
+      }
+      setSessionId(session)
 
-    // Load Public Game Configuration
-    fetch(`/api/game/config?brandId=${brandId}&public=true&t=${Date.now()}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.title) {
-          setConfig(data)
-          setPrizes(data.prizes || [])
-          
-          // Auto-select platform if only 1 is enabled
-          const isGoogle = data.taskGoogleMapsEnabled ?? true
-          const isXhs = data.taskXiaohongshuEnabled ?? true
-          const isInsta = data.taskInstagramEnabled ?? true
-          const enabledCount = (isGoogle ? 1 : 0) + (isXhs ? 1 : 0) + (isInsta ? 1 : 0)
-          
-          if (enabledCount === 1) {
-            if (isGoogle) setReviewPlatform('GOOGLE')
-            else if (isXhs) setReviewPlatform('XIAOHONGSHU')
-            else if (isInsta) setReviewPlatform('INSTAGRAM')
+      // Load Public Game Configuration
+      fetch(`/api/game/config?brandId=${brandId}&public=true&t=${Date.now()}`)
+        .then(res => res.json())
+        .then((data: GameConfig) => {
+          if (data.title) {
+            setConfig(data)
+            setPrizes(data.brand ? (data as unknown as { prizes?: Prize[] }).prizes || [] : [])
+
+            // Auto-select platform if only 1 is enabled
+            const isGoogle = data.taskGoogleMapsEnabled ?? true
+            const isXhs = data.taskXiaohongshuEnabled ?? true
+            const isInsta = data.taskInstagramEnabled ?? true
+            const enabledCount = (isGoogle ? 1 : 0) + (isXhs ? 1 : 0) + (isInsta ? 1 : 0)
+
+            if (enabledCount === 1) {
+              if (isGoogle) setReviewPlatform('GOOGLE')
+              else if (isXhs) setReviewPlatform('XIAOHONGSHU')
+              else if (isInsta) setReviewPlatform('INSTAGRAM')
+            }
           }
-        }
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error('Failed to load game config', err)
-        setLoading(false)
+          setLoading(false)
+        })
+        .catch((err: unknown) => {
+          console.error('Failed to load game config', err)
+          setLoading(false)
+        })
       })
   }, [brandId])
 
   // 2. Fetch customer status & unclaimed logs
-  const fetchStatus = () => {
+  const fetchStatus = useCallback(() => {
     if (!brandId || !sessionId) return
     fetch(`/api/game/status?brandId=${brandId}&sessionId=${sessionId}&t=${Date.now()}`)
       .then(res => res.json())
@@ -322,14 +212,14 @@ export default function GameH5Page() {
           setUnclaimedPrize(null)
         }
       })
-      .catch(err => console.error('Failed to load status', err))
-  }
+        .catch((err: unknown) => console.error('Failed to load status', err))
+      }, [brandId, sessionId])
 
   useEffect(() => {
     if (sessionId) {
       fetchStatus()
     }
-  }, [brandId, sessionId])
+  }, [sessionId, fetchStatus])
 
   // 3. Client-side Image compression helper
   const compressImage = (file: File): Promise<Blob> => {
@@ -391,6 +281,9 @@ export default function GameH5Page() {
     setFilePreviews(prev => prev.filter((_, i) => i !== index))
   }
 
+  void handleFilesChange
+  void removeFile
+
   // 5. Submit Unified/Merged Task
   const submitTask = async () => {
     if (!copyrightAgreed) return
@@ -433,9 +326,9 @@ export default function GameH5Page() {
         // Directly enter manual clerk confirmation flow.
         setShowPinModal({ submissionId: data.submissionId })
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err)
-      setVerificationError(err.message)
+      setVerificationError(err instanceof Error ? err.message : 'Submission failed')
     } finally {
       setIsSubmittingTask(false)
     }
@@ -466,8 +359,8 @@ export default function GameH5Page() {
       setShowPinModal(null)
       setPinInput('')
       alert(lang === 'zh' ? '店员授权成功！已发放 5 积分！' : 'Staff authorized successfully! Granted 5 points!')
-    } catch (err: any) {
-      setPinError(err.message || 'Incorrect PIN')
+    } catch (err: unknown) {
+      setPinError(err instanceof Error ? err.message : 'Incorrect PIN')
     }
   }
 
@@ -512,8 +405,8 @@ export default function GameH5Page() {
           }
         });
 
-        const targetSlot = matchingIndices.length > 0 
-          ? matchingIndices[Math.floor(Math.random() * matchingIndices.length)] 
+        const targetSlot = matchingIndices.length > 0
+          ? matchingIndices[0]
           : 0;
 
         const startSlot = activeGridSlot !== null ? activeGridSlot : 0;
@@ -574,9 +467,9 @@ export default function GameH5Page() {
           }
         }, 5000) // 5 seconds spin animation
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setIsSpinning(false)
-      alert(err.message)
+      alert(err instanceof Error ? err.message : 'Spin failed')
     }
   }
 
@@ -590,7 +483,7 @@ export default function GameH5Page() {
     canvas.width = window.innerWidth
     canvas.height = window.innerHeight
 
-    const particles: any[] = []
+    const particles: ConfettiParticle[] = []
     const colors = ['#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#06b6d4', '#10b981']
 
     for (let i = 0; i < 150; i++) {

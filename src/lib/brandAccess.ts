@@ -10,6 +10,7 @@
  */
 
 import { prisma } from './prisma'
+import { isAmcOperator, isAmcOperatorRole } from './amcOperator'
 
 /**
  * Returns true if the given userId is an owner of the brand
@@ -17,8 +18,8 @@ import { prisma } from './prisma'
  */
 export async function canOwnBrand(brandId: string, userId: string): Promise<boolean> {
   // ADMIN users have full access to all brands
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } })
-  if (user?.role === 'ADMIN') return true
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { type: true, role: true } })
+  if (isAmcOperator(user)) return true
 
   // Primary: BrandOwner join table
   const ownerRow = await prisma.brandOwner.findUnique({
@@ -79,7 +80,7 @@ export async function canHumanAccessBrandProject(
   userId: string,
   userRole?: string
 ): Promise<boolean> {
-  if (userRole === 'ADMIN') return true
+  if (isAmcOperatorRole(userRole)) return true
 
   if (await canOwnBrand(brandId, userId)) return true
 

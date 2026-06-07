@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from 'jose'
+import { SignJWT, jwtVerify, type JWTPayload } from 'jose'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
 
@@ -11,7 +11,30 @@ function getJwtKey() {
 }
 const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim()
 
-export async function encrypt(payload: any, expiresIn: string = '7d') {
+type SessionPayload = JWTPayload & {
+  user?: {
+    id?: string
+    email?: string
+    role?: string
+    type?: string
+    [key: string]: unknown
+  }
+  agentId?: string
+}
+
+export type SessionUser = {
+  id: string
+  email?: string
+  role: string
+  type: string
+  [key: string]: unknown
+}
+
+export type Session = Omit<SessionPayload, 'user'> & {
+  user: SessionUser
+}
+
+export async function encrypt(payload: JWTPayload, expiresIn: string = '7d') {
   const key = getJwtKey()
   const builder = new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
@@ -22,33 +45,47 @@ export async function encrypt(payload: any, expiresIn: string = '7d') {
   return await builder.sign(key)
 }
 
-export async function decrypt(input: string): Promise<any> {
+export async function decrypt(input: string): Promise<SessionPayload> {
   const key = getJwtKey()
   const { payload } = await jwtVerify(input, key, {
     algorithms: ['HS256'],
   })
-  return payload
+  return payload as SessionPayload
 }
 
-export async function getSession() {
+export async function getSession(): Promise<Session | null> {
   const cookieStore = await cookies()
   const session = cookieStore.get('session')?.value
   if (!session) return null
   try {
     const payload = await decrypt(session)
+    if (!payload.user || typeof payload.user.id !== 'string') {
+      return null
+    }
 
-    if (bootstrapAdminEmail && payload?.user?.email === bootstrapAdminEmail && payload.user.role !== 'ADMIN') {
+    const normalizedUser: SessionUser = {
+      ...payload.user,
+      id: payload.user.id,
+      email: typeof payload.user.email === 'string' ? payload.user.email : undefined,
+      role: typeof payload.user.role === 'string' ? payload.user.role : 'USER',
+      type: typeof payload.user.type === 'string' ? payload.user.type : 'HUMAN',
+    }
+
+    if (bootstrapAdminEmail && normalizedUser.email === bootstrapAdminEmail && normalizedUser.role !== 'ADMIN') {
       return {
         ...payload,
         user: {
-          ...payload.user,
+          ...normalizedUser,
           role: 'ADMIN'
         }
       }
     }
 
-    return payload
-  } catch (error) {
+    return {
+      ...payload,
+      user: normalizedUser,
+    }
+  } catch {
     return null
   }
 }

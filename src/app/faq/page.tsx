@@ -3,34 +3,24 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  TrendingUp,
   Bot,
-  ShieldCheck,
-  Layers,
   MessageSquare,
-  Activity,
-  CheckCircle,
   XCircle,
   ArrowRight,
   ArrowLeft,
   Calculator,
   HelpCircle,
   Search,
-  Building2,
   Sparkles,
   Lock,
-  RefreshCw,
   Sliders,
   Globe,
-  Percent,
   ChevronDown,
   ChevronUp,
   Award,
   Zap,
   BookOpen,
-  MapPin,
-  UtensilsCrossed,
-  MousePointerClick
+  UtensilsCrossed
 } from 'lucide-react'
 
 // Slide data types
@@ -56,6 +46,8 @@ interface FaqItem {
   answer: string
   category: 'security' | 'automation' | 'integrations' | 'pricing'
 }
+
+type FaqCategory = 'all' | 'security' | 'automation' | 'integrations' | 'pricing'
 
 const faqData: FaqItem[] = [
   {
@@ -106,7 +98,7 @@ export default function PitchDeckPage() {
 
   // FAQ Search & Category Filter State
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedFaqCategory, setSelectedFaqCategory] = useState<'all' | 'security' | 'automation' | 'integrations' | 'pricing'>('all')
+  const [selectedFaqCategory, setSelectedFaqCategory] = useState<FaqCategory>('all')
   const [expandedFaqIndex, setExpandedFaqIndex] = useState<number | null>(null)
 
   // Keyboard navigation for Slide Deck
@@ -128,8 +120,6 @@ export default function PitchDeckPage() {
   const amcTotalCost = (storeCount === 1 ? 699 : 2999) * 12
   const savedCost = Math.round(manualLaborCost - amcTotalCost)
   const expectedTrafficIncreasePercent = 22
-  const additionalVisits = storeCount * 180 * 12
-  const conversionValue = Math.round(additionalVisits * 0.05 * 45)
 
   // Filtered FAQ Items
   const filteredFaqs = faqData.filter(faq => {
@@ -451,7 +441,7 @@ export default function PitchDeckPage() {
                                     AI 在系统中有独立的虚拟头像和工号。主理人可以像指派真实店员一样，分派“小红书推广员”撰写图文探店文案，“抖音引流员”撰写短视频发布脚本。AI 不知疲倦地完成起草工作，极大地解放人力。
                                   </p>
                                   <div className="bg-slate-950/90 border border-slate-900 rounded-xl p-4 font-mono text-[10px] text-indigo-300/90 shadow-inner">
-                                    <span className="text-slate-500">// 在看板上像指派店员一样分配 AI 的工作</span><br />
+                                    <span className="text-slate-500">{'// 在看板上像指派店员一样分配 AI 的工作'}</span><br />
                                     图文平台分配给：<span className="text-emerald-400">小红书写作员Agent</span><br />
                                     视频平台分配给：<span className="text-purple-400">抖音脚本助手Agent</span>
                                   </div>
@@ -643,7 +633,7 @@ export default function PitchDeckPage() {
                                     <>
                                       <div className="text-xs font-black text-slate-200">差评直通车拦截中</div>
                                       <div className="text-[10px] text-red-400 bg-red-500/5 py-1.5 px-3 border border-red-500/10 rounded-lg italic">
-                                        "店里的牛腩太柴了，吃得不舒服！"
+                                        &quot;店里的牛腩太柴了，吃得不舒服！&quot;
                                       </div>
                                       <div className="text-[9px] bg-emerald-500/15 text-emerald-400 py-1.5 px-3 rounded-xl border border-emerald-500/20 inline-block font-bold">
                                         系统已自动向该桌发放：¥50 致歉消费券
@@ -948,7 +938,7 @@ export default function PitchDeckPage() {
                   ].map(cat => (
                     <button
                       key={cat.id}
-                      onClick={() => setSelectedFaqCategory(cat.id as any)}
+                      onClick={() => setSelectedFaqCategory(cat.id as FaqCategory)}
                       className={`text-[11px] font-black px-4 py-2 rounded-full border transition-all cursor-pointer ${
                         selectedFaqCategory === cat.id
                           ? 'bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-500/10'

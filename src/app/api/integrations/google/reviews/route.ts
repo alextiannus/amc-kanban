@@ -11,6 +11,16 @@ import {
   replyGoogleGBPReview,
 } from '@/lib/integrations/google'
 
+type GoogleReview = {
+  reviewId: string
+  reviewer: string
+  rating: number
+  comment: string
+  createTime?: string
+  replyText?: string
+  replyTime?: string
+}
+
 // Gemini reply generator helper
 async function generateReviewReply(
   comment: string,
@@ -63,7 +73,7 @@ ${
     const json = await response.json()
     const text = json.candidates?.[0]?.content?.parts?.[0]?.text
     return text ? text.trim() : '非常感谢您的反馈！'
-  } catch (e) {
+  } catch (e: unknown) {
     console.error('[Gemini Reply Generator Error]', e)
     if (rating >= 4) {
       return `非常感谢对我们【${brandName}】的五星好评！我们会继续保持，期待您的再次光临！`
@@ -167,7 +177,7 @@ export async function GET(request: Request) {
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
 
-  let reviews: any[] = []
+  let reviews: GoogleReview[] = []
   let error: string | undefined
   let source = 'none'
 
@@ -183,9 +193,9 @@ export async function GET(request: Request) {
         reviews = res.reviews
         source = 'google_business_profile_oauth'
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[Google Reviews API] Direct OAuth fetch failed, trying API Key fallback...', e)
-      error = e.message
+      error = e instanceof Error ? e.message : 'Unknown error'
     }
   }
 
@@ -239,7 +249,7 @@ export async function POST(request: Request) {
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
 
-  let reviews: any[] = []
+  let reviews: GoogleReview[] = []
   let error: string | undefined
   let source = 'none'
   let googleAccessToken: string | null = null
@@ -256,9 +266,9 @@ export async function POST(request: Request) {
         reviews = res.reviews
         source = 'google_business_profile_oauth'
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[Google Reviews API] Direct OAuth fetch failed, trying API Key fallback...', e)
-      error = e.message
+      error = e instanceof Error ? e.message : 'Unknown error'
     }
   }
 

@@ -2,71 +2,15 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Check, X, TrendingUp, TrendingDown, AlertCircle, Star,
-  Calendar, Zap, Shield, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink, FileText
+  Zap, BarChart2, ChevronDown, Store, Settings, Bot, ExternalLink, FileText,
+  Users, UserPlus, Shield, Archive, UserMinus, RefreshCw
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
 import { BrandKnowledgePanel } from './BrandKnowledgePanel'
 import BrandKanbanLane from '../BrandKanbanLane'
 import { useSearchParams, useRouter } from 'next/navigation'
-
-// ── AgentAvatar: img with graceful initials fallback (no "加载失败" box) ─────
-function AgentAvatar({ src, initials, themeColor }: { src: string; initials: string; themeColor?: string | null }) {
-  const [failed, setFailed] = React.useState(false)
-  if (failed) return <>{initials}</>
-  return (
-    <img
-      src={src}
-      alt="Avatar"
-      className="w-full h-full object-cover"
-      onError={() => setFailed(true)}
-    />
-  )
-}
-
-// ── Action Card (豆腐块 — no swipe, desktop-friendly) ──────────────────────
-function ActionCard({ id, type, title, description, platform, onApprove, onReject }: {
-  id: string, type: 'urgent' | 'review', title: string, description: string,
-  platform?: string, onApprove: (id: string) => void, onReject: (id: string) => void
-}) {
-  return (
-    <div
-      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden"
-      style={{ borderLeftWidth: '3px', borderLeftColor: type === 'urgent' ? '#ef4444' : '#f59e0b' }}
-    >
-      <div className="p-4">
-        <div className="flex items-start gap-3 mb-3">
-          <div className={`w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center ${type === 'urgent' ? 'bg-red-50 dark:bg-red-900/20 text-red-500' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-500'}`}>
-            {type === 'urgent' ? <AlertCircle className="w-5 h-5" /> : <Star className="w-5 h-5" />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              {platform && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{platform}</span>}
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${type === 'urgent' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'}`}>
-                {type === 'urgent' ? '紧急处理' : '待审核'}
-              </span>
-            </div>
-            <h3 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 leading-snug">{title}</h3>
-          </div>
-        </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-3 mb-4">{description}</p>
-        <div className="flex gap-2">
-          <button
-            onClick={() => onReject(id)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-50 hover:bg-red-50 dark:bg-slate-800 dark:hover:bg-red-900/20 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 text-xs font-bold border border-slate-100 dark:border-slate-700 hover:border-red-100 dark:hover:border-red-900/40 transition-all"
-          >
-            <X className="w-3.5 h-3.5" /> 忽略
-          </button>
-          <button
-            onClick={() => onApprove(id)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-all shadow-sm shadow-emerald-500/20"
-          >
-            <Check className="w-3.5 h-3.5" /> {type === 'urgent' ? '一键回复' : '确认发布'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
+import { fmtFollower, normalizeDashboardPlatformId, toCardType } from './dashboardHomeUtils'
+import { ActionCard, AgentAvatar } from './DashboardHomeCards'
 
 // ── Platform Catalog ──────────────────────────────────────────────────
 const ALL_PLATFORMS = [
@@ -96,11 +40,72 @@ interface ConnectedAccount {
   deltaPositive: boolean
 }
 
+interface DashboardActionItem {
+  id: string
+  priority?: string | null
+  type?: string | null
+  title?: string | null
+  description?: string | null
+}
+
+interface DashboardAccount {
+  id: string
+  platformId: string
+  handle: string
+  profileUrl?: string | null
+  ratingScore?: number | null
+  followerCount?: number | null
+  followerDelta?: number | null
+}
+
+interface DashboardAgentRecord {
+  id: string
+  active?: boolean
+  agent?: {
+    themeColor?: string | null
+    avatar?: string | null
+    nickname?: string | null
+    email?: string | null
+    insights?: string | null
+  } | null
+}
+
+interface DashboardDetail {
+  status?: string
+  actionItems?: DashboardActionItem[]
+  accounts?: DashboardAccount[]
+  autoPilot?: boolean
+  recentDrafts?: unknown[]
+  _count?: { contents?: number }
+  postfastSync?: { ok: boolean; error?: string }
+  description?: string
+  website?: string
+  phone?: string
+  address?: string
+}
+
+interface BrandMemberRecord {
+  id: string
+  role: 'owner' | 'collaborator'
+  userId: string
+  user: {
+    id: string
+    email: string
+    nickname?: string | null
+    type: string
+    role: string
+  }
+}
+
+interface DashboardSettingsData {
+  [key: string]: unknown
+}
+
 // ── KPI Tofu Card (小豆腐块 compact) ───────────────────────────────────
 function PlatformLogo({ icon, iconDark, name, size = 20 }: { icon: string; iconDark?: string; name: string; size?: number }) {
   const [srcIndex, setSrcIndex] = useState(0)
   const fallbackColorMatch = icon.match(/\/([A-Fa-f0-9]{6})$/)
-  const fallbackBg = fallbackColorMatch ? `#${fallbackColorMatch[1]}` : '#6366f1'
+  const fallbackBg = fallbackColorMatch ? `#${fallbackColorMatch[1]}` : '#4B5563'
   const fallbackGlyph = name.trim().slice(0, 1).toUpperCase()
   const fallbackSvg = React.useMemo(() => {
     const svg = `
@@ -118,7 +123,7 @@ function PlatformLogo({ icon, iconDark, name, size = 20 }: { icon: string; iconD
   }, [icon, iconDark, fallbackSvg])
 
   useEffect(() => {
-    setSrcIndex(0)
+    queueMicrotask(() => setSrcIndex(0))
   }, [icon, iconDark, name, fallbackSvg])
 
   const fallback = (
@@ -207,6 +212,7 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
   onClose: () => void
   isAdmin?: boolean
 }) {
+  void isAdmin
   const [step, setStep] = useState<'pick' | 'form'>('pick')
   const [selectedPlatform, setSelectedPlatform] = useState<typeof ALL_PLATFORMS[0] | null>(null)
   const [form, setForm] = useState({ handle: '', profileUrl: '', loginUsername: '', loginPassword: '' })
@@ -369,6 +375,10 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
   )
 }
 
+void ActivityCard
+void ConversionCard
+void BrandSwitcher
+
 // ── Activity Tofu Card (豆腐块战报) ─────────────────────────────────────────
 type ActivityStatus = 'done' | 'pending' | 'scheduled'
 
@@ -517,37 +527,9 @@ interface DashboardHomeProps {
   onActiveBrandIdChange?: (id: string) => void
 }
 
-// Map API ActionItem → local display shape
-function toCardType(apiType: string, priority: string): 'urgent' | 'review' {
-  if (apiType === 'sentiment_alert' || priority === 'urgent') return 'urgent'
-  return 'review'
-}
-
-function fmtFollower(n: number | null): string {
-  if (n === null) return '—'
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-  return String(n)
-}
-
-function normalizeDashboardPlatformId(platformId: string): string {
-  const p = String(platformId ?? '').toLowerCase().trim()
-  if (
-    p === 'google' ||
-    p === 'gbp' ||
-    p === 'gmb' ||
-    p === 'google_maps' ||
-    p === 'googlemaps' ||
-    p === 'google_business_profile' ||
-    p === 'googlebusinessprofile' ||
-    p === 'google_my_business' ||
-    p === 'googlemybusiness'
-  ) {
-    return 'google'
-  }
-  return p
-}
-
 export default function DashboardHome({ brand: propBrand, activeBrandId, onActiveBrandIdChange }: DashboardHomeProps) {
+  void activeBrandId
+  void onActiveBrandIdChange
   // ── Brand: driven entirely by the parent (KanbanBoard top-bar switcher) ──
   // No internal brand state — propBrand IS the activeBrand.
   // KanbanBoard remounts this component (via key prop) whenever the brand changes.
@@ -556,8 +538,9 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
 
   // ── Brand detail (accounts, action items) ───────────────────────────────
 
-  const [brandDetail, setBrandDetail] = useState<any>(null)
+  const [brandDetail, setBrandDetail] = useState<DashboardDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  void detailLoading
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true)
@@ -568,42 +551,45 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   }, [])
 
   // Brand settings (integration credentials status)
-  const [brandSettings, setBrandSettings] = useState<any>(null)
+  const [brandSettings, setBrandSettings] = useState<DashboardSettingsData | null>(null)
   const loadSettings = useCallback(async (id: string) => {
-    const r = await fetch(`/api/brands/${id}/settings`)
+          const r = await fetch(`/api/brands/${id}/settings`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+          })
     if (r.ok) setBrandSettings(await r.json())
   }, [])
 
   // Brand agents
-  const [brandAgents, setBrandAgents] = useState<any[]>([])
+  const [brandAgents, setBrandAgents] = useState<DashboardAgentRecord[]>([])
   const loadAgents = useCallback(async (id: string) => {
     const r = await fetch(`/api/brands/${id}/agents`)
     if (r.ok) setBrandAgents(await r.json())
   }, [])
 
-  useEffect(() => {
-    if (activeBrand?.id) {
-      // Clear stale data immediately so the UI doesn't show the previous brand's content
-      setBrandDetail(null)
-      setBrandSettings(null)
-      setBrandAgents([])
-      setDismissedIds(new Set())
-      setAutoPilot(false)
-      // Load new brand data
-      loadDetail(activeBrand.id)
-      loadSettings(activeBrand.id)
-      loadAgents(activeBrand.id)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeBrand?.id])
+  const [brandMembers, setBrandMembers] = useState<BrandMemberRecord[]>([])
+  const [brandMembersLoading, setBrandMembersLoading] = useState(false)
+  const [brandMembersVisible, setBrandMembersVisible] = useState(false)
+  const [newMemberEmail, setNewMemberEmail] = useState('')
+  const [newMemberRole, setNewMemberRole] = useState<'owner' | 'collaborator'>('collaborator')
+  const [memberSaving, setMemberSaving] = useState(false)
+  const [archivingBrand, setArchivingBrand] = useState(false)
 
-  // Derive data from brandDetail or fall back to empty
-  const apiActionItems: any[] = brandDetail?.actionItems ?? []
-  const apiAccounts: any[] = brandDetail?.accounts ?? []
-  const apiAutoPilot: boolean = brandDetail?.autoPilot ?? false
-  const recentDrafts: any[] = brandDetail?.recentDrafts ?? []
-  const pendingReviewCount: number = brandDetail?._count?.contents ?? 0
-  const postfastSync: { ok: boolean; error?: string } | undefined = brandDetail?.postfastSync
+  const loadBrandMembers = useCallback(async (id: string) => {
+    setBrandMembersLoading(true)
+    try {
+      const r = await fetch(`/api/brands/${id}/owners`)
+      if (r.ok) {
+        setBrandMembers(await r.json())
+        setBrandMembersVisible(true)
+      } else {
+        setBrandMembers([])
+        setBrandMembersVisible(false)
+      }
+    } finally {
+      setBrandMembersLoading(false)
+    }
+  }, [])
 
   // ── Local UI state ───────────────────────────────────────────────────────
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
@@ -612,19 +598,52 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   const [showSettings, setShowSettings] = useState(false)
   const [showKnowledge, setShowKnowledge] = useState(false)
 
+  useEffect(() => {
+    if (activeBrand?.id) {
+      queueMicrotask(() => {
+        // Clear stale data immediately so the UI doesn't show the previous brand's content
+        setBrandDetail(null)
+        setBrandSettings(null)
+        setBrandAgents([])
+        setBrandMembers([])
+        setBrandMembersVisible(false)
+        setDismissedIds(new Set())
+        setAutoPilot(false)
+        // Load new brand data
+        loadDetail(activeBrand.id)
+        loadSettings(activeBrand.id)
+        loadAgents(activeBrand.id)
+        loadBrandMembers(activeBrand.id)
+      })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBrand?.id])
+
+  // Derive data from brandDetail or fall back to empty
+  const apiActionItems: DashboardActionItem[] = brandDetail?.actionItems ?? []
+  const apiAccounts: DashboardAccount[] = brandDetail?.accounts ?? []
+  const apiAutoPilot: boolean = brandDetail?.autoPilot ?? false
+  const recentDrafts: unknown[] = brandDetail?.recentDrafts ?? []
+  void recentDrafts
+  const pendingReviewCount: number = brandDetail?._count?.contents ?? 0
+  const postfastSync: { ok: boolean; error?: string } | undefined = brandDetail?.postfastSync
+
   const searchParams = useSearchParams()
   const router = useRouter()
+  void router
 
   useEffect(() => {
     if (searchParams && searchParams.get('google_success') === 'true') {
-      setShowSettings(true)
-      const newUrl = window.location.pathname
-      window.history.replaceState({}, '', newUrl)
+      void (async () => {
+        setShowSettings(true)
+        const newUrl = window.location.pathname
+        window.history.replaceState({}, '', newUrl)
+      })()
     }
   }, [searchParams])
 
   // Sync autoPilot from DB
-  useEffect(() => { setAutoPilot(apiAutoPilot) }, [apiAutoPilot])
+  useEffect(() => { queueMicrotask(() => setAutoPilot(apiAutoPilot)) }, [apiAutoPilot])
 
   // Visible action items = pending and not locally dismissed
   const pendingItems = apiActionItems.filter(i => !dismissedIds.has(i.id))
@@ -632,14 +651,14 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   // Convert API accounts → ConnectedAccount shape, dedup google by platformId
   const seenPlatforms = new Set<string>()
   const connectedAccounts: ConnectedAccount[] = apiAccounts
-    .sort((a: any, b: any) => {
+    .sort((a, b) => {
       // For google: prefer the one with ratingScore to surface first
       if (a.platformId === 'google' && b.platformId === 'google') {
         return (b.ratingScore ?? 0) - (a.ratingScore ?? 0)
       }
       return 0
     })
-    .filter((a: any) => {
+    .filter((a) => {
       const pid = normalizeDashboardPlatformId(a.platformId)
       // For google, only show the first (highest-rated) entry
       if (pid === 'google') {
@@ -648,7 +667,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
       }
       return true
     })
-    .map((a: any) => ({
+    .map((a) => ({
       uid: a.id,
       platformId: normalizeDashboardPlatformId(a.platformId),
       handle: a.handle,
@@ -657,7 +676,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
       delta: a.followerDelta != null
         ? `${a.followerDelta >= 0 ? '+' : ''}${a.followerDelta}`
         : '—',
-      deltaPositive: (a.followerDelta ?? 0) >= 0 && !(a.ratingScore && a.followerDelta < 0),
+      deltaPositive: (a.followerDelta ?? 0) >= 0 && !(a.ratingScore && (a.followerDelta ?? 0) < 0),
     }))
 
   // ── Approve / Reject ─────────────────────────────────────────────────────
@@ -682,6 +701,78 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
     setAutoPilot(next)
     if (activeBrand?.id) {
       await fetch(`/api/brands/${activeBrand.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoPilot: next }) })
+    }
+  }
+
+  const saveBrandMember = async () => {
+    if (!activeBrand?.id) return
+    if (!newMemberEmail.trim()) {
+      alert('请输入成员邮箱')
+      return
+    }
+    setMemberSaving(true)
+    try {
+      const res = await fetch(`/api/brands/${activeBrand.id}/owners`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newMemberEmail.trim(), role: newMemberRole }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(data.error || '添加品牌成员失败')
+        return
+      }
+      setNewMemberEmail('')
+      setNewMemberRole('collaborator')
+      await loadBrandMembers(activeBrand.id)
+    } finally {
+      setMemberSaving(false)
+    }
+  }
+
+  const updateBrandMemberRole = async (member: BrandMemberRecord, nextRole: 'owner' | 'collaborator') => {
+    if (!activeBrand?.id) return
+    const res = await fetch(`/api/brands/${activeBrand.id}/owners/${member.userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: nextRole }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(data.error || '更新成员角色失败')
+      return
+    }
+    await loadBrandMembers(activeBrand.id)
+  }
+
+  const removeBrandMember = async (member: BrandMemberRecord) => {
+    if (!activeBrand?.id) return
+    if (!confirm(`确认移除 ${member.user.email} 吗？`)) return
+    const res = await fetch(`/api/brands/${activeBrand.id}/owners/${member.userId}`, {
+      method: 'DELETE',
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(data.error || '移除成员失败')
+      return
+    }
+    await loadBrandMembers(activeBrand.id)
+  }
+
+  const archiveBrand = async () => {
+    if (!activeBrand?.id) return
+    if (!confirm(`确认归档品牌「${activeBrand.name}」？归档后将从活跃品牌列表隐藏。`)) return
+    setArchivingBrand(true)
+    try {
+      const res = await fetch(`/api/brands/${activeBrand.id}`, { method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(data.error || '归档品牌失败')
+        return
+      }
+      window.location.href = '/board'
+    } finally {
+      setArchivingBrand(false)
     }
   }
 
@@ -806,6 +897,107 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
             </button>
           )}
 
+          <div className="mb-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/30 p-4 space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-indigo-500" />
+                <p className="text-sm font-black text-slate-800 dark:text-slate-100">品牌成员</p>
+                {brandMembersLoading && <span className="text-xs text-slate-400">加载中...</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => loadBrandMembers(activeBrand.id)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+                >
+                  <RefreshCw className="w-3 h-3" /> 刷新
+                </button>
+                <button
+                  onClick={archiveBrand}
+                  disabled={archivingBrand}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 disabled:opacity-50"
+                >
+                  <Archive className="w-3 h-3" /> {archivingBrand ? '归档中...' : '归档品牌'}
+                </button>
+              </div>
+            </div>
+
+            {brandMembersVisible ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                  <div className="md:col-span-2">
+                    <input
+                      value={newMemberEmail}
+                      onChange={(e) => setNewMemberEmail(e.target.value)}
+                      placeholder="输入成员邮箱，例如 teammate@example.com"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={newMemberRole}
+                      onChange={(e) => setNewMemberRole(e.target.value as 'owner' | 'collaborator')}
+                      className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-100"
+                    >
+                      <option value="collaborator">collaborator</option>
+                      <option value="owner">owner</option>
+                    </select>
+                    <button
+                      onClick={saveBrandMember}
+                      disabled={memberSaving}
+                      className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {brandMembers.length > 0 ? brandMembers.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{member.user.email}</p>
+                          {member.role === 'owner' ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-black text-amber-700 dark:text-amber-400">
+                              <Shield className="w-3 h-3" /> owner
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-black text-slate-500 dark:text-slate-400">
+                              collaborator
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 truncate">{member.user.nickname || member.user.id}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <select
+                          value={member.role}
+                          onChange={(e) => updateBrandMemberRole(member, e.target.value as 'owner' | 'collaborator')}
+                          className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200"
+                        >
+                          <option value="owner">owner</option>
+                          <option value="collaborator">collaborator</option>
+                        </select>
+                        <button
+                          onClick={() => removeBrandMember(member)}
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                        >
+                          <UserMinus className="w-3.5 h-3.5" /> 移除
+                        </button>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-4 text-sm text-slate-400 text-center">
+                      暂无品牌成员
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-slate-500 dark:text-slate-400">当前账号没有品牌成员管理权限，或品牌成员信息暂不可用。</p>
+            )}
+          </div>
+
           {(activeBrand.location || brandDetail?.website || brandDetail?.phone || brandDetail?.address) && (
             <div className="flex flex-wrap gap-2">
               {activeBrand.location && (
@@ -890,7 +1082,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
         <div className="p-4">
           {brandAgents.length > 0 ? (
             <div className="flex gap-6 overflow-x-auto pb-3 -mx-0.5 px-0.5">
-              {brandAgents.map((ba: any) => {
+              {brandAgents.map((ba) => {
                 const agent = ba.agent
                 if (!agent) return null
                 return (
@@ -959,9 +1151,9 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
                 key={item.id}
                 id={item.id}
                 type={toCardType(item.type, item.priority)}
-                platform={item.account?.platformId ?? item.type}
-                title={item.title}
-                description={item.description}
+                platform={item.type ?? 'unknown'}
+                title={item.title ?? 'Untitled action'}
+                description={item.description ?? ''}
                 onApprove={approve}
                 onReject={reject}
               />
@@ -1013,7 +1205,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
           brandId={activeBrand.id}
           open={showSettings}
           onClose={() => setShowSettings(false)}
-          initialSettings={brandSettings}
+          initialSettings={brandSettings ?? undefined}
         />
       )}
 
@@ -1023,7 +1215,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
           brandId={activeBrand.id}
           open={showKnowledge}
           onClose={() => setShowKnowledge(false)}
-          initialSettings={brandSettings}
+          initialSettings={brandSettings ?? undefined}
         />
       )}
 

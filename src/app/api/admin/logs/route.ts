@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 
 // GET /api/admin/logs?limit=100&level=all&action=all
 export async function GET(req: Request) {
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
   const action = url.searchParams.get('action') || 'all'
   const resourceType = url.searchParams.get('resourceType') || 'all'
 
-  const where: any = {}
+  const where: Prisma.AuditLogWhereInput = {}
   if (action !== 'all') where.action = action
   if (resourceType !== 'all') where.resourceType = resourceType
 

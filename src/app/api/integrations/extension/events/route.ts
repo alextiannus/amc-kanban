@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(': heartbeat\n\n')
-        } catch (e) {
+        } catch {
           clearInterval(heartbeat)
         }
       }, 30000)
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
         }).catch(console.error)
         try {
           controller.close()
-        } catch (e) {
+        } catch {
           // Ignored
         }
       })

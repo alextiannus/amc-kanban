@@ -19,7 +19,7 @@ export interface ActionItemData {
   priority: string  // urgent | high | normal
   title: string
   description: string
-  payload: Record<string, any> | null
+  payload: Record<string, unknown> | null
   status: string
   draftId: string | null
   draft: {
@@ -65,15 +65,21 @@ export function useBrand(brandId: string | null) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setData(json)
-    } catch (e: any) {
-      if (e.name !== 'AbortError') setError(e.message)
+    } catch (e: unknown) {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        setError(e instanceof Error ? e.message : 'Failed to load brand')
+      }
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (brandId) load(brandId)
+    if (!brandId) return
+
+    void (async () => {
+      await load(brandId)
+    })()
     return () => abortRef.current?.abort()
   }, [brandId, load])
 
@@ -113,8 +119,8 @@ export async function resolveActionItem(
       return { ok: false, error: j.error || `HTTP ${res.status}` }
     }
     return { ok: true }
-  } catch (e: any) {
-    return { ok: false, error: e.message }
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : '操作失败' }
   }
 }
 
