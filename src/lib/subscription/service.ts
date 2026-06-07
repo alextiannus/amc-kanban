@@ -42,6 +42,7 @@ type CreateBrandForSubscriptionInput = {
   ownerId: string
   name: string
   location?: string | null
+  ownerEmail?: string | null
   timezone?: string | null
 }
 
@@ -82,10 +83,24 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     return { ok: true as const, brand: existingBrand, alreadyCreated: true as const, agentId: agentKey.agentId }
   }
 
+  const normalizedOwnerEmail = input.ownerEmail?.trim().toLowerCase() || null
+  const brandOwner = normalizedOwnerEmail
+    ? await prisma.user.findUnique({
+        where: { email: normalizedOwnerEmail },
+        select: { id: true, type: true },
+      })
+    : null
+
+  if (normalizedOwnerEmail && (!brandOwner || brandOwner.type !== 'HUMAN')) {
+    return { ok: false as const, reason: 'brand_owner_not_found' as const }
+  }
+
+  const brandOwnerId = brandOwner?.id || input.ownerId
+
   const brand = await prisma.$transaction(async (tx) => {
     const created = await tx.brand.create({
       data: {
-        ownerId: input.ownerId,
+        ownerId: brandOwnerId,
         name,
         location: input.location?.trim() || null,
         timezone: input.timezone || 'America/New_York',
@@ -94,10 +109,18 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     })
 
     await tx.brandOwner.upsert({
-      where: { brandId_userId: { brandId: created.id, userId: input.ownerId } },
-      create: { brandId: created.id, userId: input.ownerId, role: 'owner' },
+      where: { brandId_userId: { brandId: created.id, userId: brandOwnerId } },
+      create: { brandId: created.id, userId: brandOwnerId, role: 'owner' },
       update: { role: 'owner' },
     })
+
+    if (brandOwnerId !== input.ownerId) {
+      await tx.brandOwner.upsert({
+        where: { brandId_userId: { brandId: created.id, userId: input.ownerId } },
+        create: { brandId: created.id, userId: input.ownerId, role: 'collaborator' },
+        update: { role: 'collaborator' },
+      })
+    }
 
     await tx.brandSubscription.update({
       where: { id: input.subscriptionId },

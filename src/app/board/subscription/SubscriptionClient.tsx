@@ -176,6 +176,7 @@ export default function BrandSubscriptionPage() {
   const queryBrandId = searchParams?.get('brandId') || ''
   const pendingBrandName = (searchParams?.get('newBrandName') || '').trim()
   const pendingBrandLocation = (searchParams?.get('newBrandLocation') || '').trim()
+  const pendingBrandOwnerEmail = (searchParams?.get('newBrandOwnerEmail') || '').trim()
   const returnToRaw = searchParams?.get('returnTo') || ''
   const returnTo = returnToRaw.startsWith('/') ? returnToRaw : ''
   const routeBrandId = typeof params?.brandId === 'string' ? params.brandId : ''
@@ -333,6 +334,7 @@ export default function BrandSubscriptionPage() {
           brandId: effectiveBrandId || undefined,
           pendingBrandName: pendingBrandName || undefined,
           pendingBrandLocation: pendingBrandLocation || undefined,
+          pendingBrandOwnerEmail: pendingBrandOwnerEmail || undefined,
           returnTo: returnTo || undefined,
           planId: selectedPlan.id,
           durationMonths,

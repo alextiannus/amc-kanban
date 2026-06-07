@@ -50,6 +50,9 @@ export async function POST(request: Request) {
   const pendingBrandLocation = typeof checkout.metadata?.pendingBrandLocation === 'string'
     ? checkout.metadata.pendingBrandLocation.trim()
     : ''
+  const pendingBrandOwnerEmail = typeof checkout.metadata?.pendingBrandOwnerEmail === 'string'
+    ? checkout.metadata.pendingBrandOwnerEmail.trim().toLowerCase()
+    : ''
   const pendingBrandTimezone = typeof checkout.metadata?.pendingBrandTimezone === 'string'
     ? checkout.metadata.pendingBrandTimezone.trim()
     : ''
@@ -60,6 +63,7 @@ export async function POST(request: Request) {
         ownerId: session.user.id,
         name: pendingBrandName,
         location: pendingBrandLocation || null,
+        ownerEmail: pendingBrandOwnerEmail || null,
         timezone: pendingBrandTimezone || null,
       })
     : null

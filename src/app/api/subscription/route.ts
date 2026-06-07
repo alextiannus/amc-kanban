@@ -339,6 +339,7 @@ export async function POST(request: Request) {
   const brandId = rawBrandId || null
   const pendingBrandName = String(body.pendingBrandName ?? '').trim()
   const pendingBrandLocation = String(body.pendingBrandLocation ?? '').trim()
+  const pendingBrandOwnerEmail = String(body.pendingBrandOwnerEmail ?? '').trim().toLowerCase()
   const pendingBrandTimezone = String(body.timezone ?? '').trim() || 'America/New_York'
 
   if (brandId && pendingBrandName) {
@@ -412,6 +413,7 @@ export async function POST(request: Request) {
           ownerId: session.user.id,
           name: pendingBrandName,
           location: pendingBrandLocation || null,
+          ownerEmail: pendingBrandOwnerEmail || null,
           timezone: pendingBrandTimezone,
         })
       : null
@@ -462,6 +464,7 @@ export async function POST(request: Request) {
   const pendingBrandParams = new URLSearchParams()
   if (pendingBrandName) pendingBrandParams.set('newBrandName', pendingBrandName)
   if (pendingBrandLocation) pendingBrandParams.set('newBrandLocation', pendingBrandLocation)
+  if (pendingBrandOwnerEmail) pendingBrandParams.set('newBrandOwnerEmail', pendingBrandOwnerEmail)
   if (returnTo) pendingBrandParams.set('returnTo', returnTo)
   const pendingBrandQuery = pendingBrandParams.toString() ? `&${pendingBrandParams.toString()}` : ''
   const successUrl = `${baseSubscriptionUrl}?success=1&sid={CHECKOUT_SESSION_ID}&sub=${pending.id}${brandId ? `&brandId=${encodeURIComponent(brandId)}` : ''}${pendingBrandQuery}`
@@ -494,6 +497,7 @@ export async function POST(request: Request) {
       discountPercent: String(summary.discountPercent),
       pendingBrandName,
       pendingBrandLocation,
+      pendingBrandOwnerEmail,
       pendingBrandTimezone,
     },
   })

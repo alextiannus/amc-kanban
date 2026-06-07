@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import type { ReactNode } from 'react'
 import { Bot, Search, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -27,8 +28,10 @@ type AgentItem = {
 
 export default function AgentSequenceView({
   initialFilter = 'all',
+  headerAction,
 }: {
   initialFilter?: 'all' | 'online' | 'offline'
+  headerAction?: ReactNode
 }) {
   const [agents, setAgents] = useState<AgentItem[]>([])
   const [expandedAgentIds, setExpandedAgentIds] = useState<string[]>([])
@@ -111,6 +114,7 @@ export default function AgentSequenceView({
         </h2>
 
         <div className="flex flex-col sm:flex-row gap-4 items-center w-full sm:w-auto">
+          {headerAction}
           <div className="relative w-full sm:w-64">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
