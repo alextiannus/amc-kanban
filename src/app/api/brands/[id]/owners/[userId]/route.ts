@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canOwnBrand } from '@/lib/brandAccess'
+import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 
 const ALLOWED_MEMBER_ROLES = ['owner', 'collaborator'] as const
 
@@ -25,7 +25,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id, userId } = await params
-  if (!(await canOwnBrand(id, session.user.id))) {
+  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -92,7 +92,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id, userId } = await params
-  if (!(await canOwnBrand(id, session.user.id))) {
+  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

@@ -37,6 +37,75 @@ export async function activateSubscriptionByPaymentSession(paymentSessionId: str
   return { ok: true as const, subscription: updated, alreadyActive: false as const }
 }
 
+type CreateBrandForSubscriptionInput = {
+  subscriptionId: string
+  ownerId: string
+  name: string
+  location?: string | null
+  timezone?: string | null
+}
+
+export async function createBrandForActivatedSubscription(input: CreateBrandForSubscriptionInput) {
+  const name = input.name.trim()
+  if (!name) {
+    return { ok: false as const, reason: 'name_required' as const }
+  }
+
+  const now = new Date()
+  const subscription = await prisma.brandSubscription.findFirst({
+    where: {
+      id: input.subscriptionId,
+      createdById: input.ownerId,
+      status: 'ACTIVE',
+      OR: [{ contractEndDate: null }, { contractEndDate: { gt: now } }],
+    },
+    select: { id: true, brandId: true },
+  })
+
+  if (!subscription) {
+    return { ok: false as const, reason: 'subscription_not_active' as const }
+  }
+
+  if (subscription.brandId) {
+    const existingBrand = await prisma.brand.findUnique({ where: { id: subscription.brandId } })
+    return { ok: true as const, brand: existingBrand, alreadyCreated: true as const }
+  }
+
+  const brand = await prisma.$transaction(async (tx) => {
+    const created = await tx.brand.create({
+      data: {
+        ownerId: input.ownerId,
+        name,
+        location: input.location?.trim() || null,
+        timezone: input.timezone || 'America/New_York',
+        status: 'ACTIVE',
+      },
+    })
+
+    await tx.brandOwner.upsert({
+      where: { brandId_userId: { brandId: created.id, userId: input.ownerId } },
+      create: { brandId: created.id, userId: input.ownerId, role: 'owner' },
+      update: { role: 'owner' },
+    })
+
+    await tx.brandSubscription.update({
+      where: { id: input.subscriptionId },
+      data: { brandId: created.id },
+    })
+
+    return created
+  })
+
+  const agentKey = await ensureBrandAgentKeyAfterSubscription({ ownerId: input.ownerId })
+  await prisma.brandAgent.upsert({
+    where: { brandId_agentId: { brandId: brand.id, agentId: agentKey.agentId } },
+    create: { brandId: brand.id, agentId: agentKey.agentId, role: 'worker', active: true },
+    update: { role: 'worker', active: true },
+  })
+
+  return { ok: true as const, brand, alreadyCreated: false as const, agentId: agentKey.agentId }
+}
+
 type EnsureBrandAgentKeyInput = {
   ownerId: string
 }

@@ -166,6 +166,10 @@ export default function BrandSubscriptionPage() {
   const checkoutSessionId = searchParams?.get('sid') || ''
   const subscriptionId = searchParams?.get('sub') || ''
   const queryBrandId = searchParams?.get('brandId') || ''
+  const pendingBrandName = (searchParams?.get('newBrandName') || '').trim()
+  const pendingBrandLocation = (searchParams?.get('newBrandLocation') || '').trim()
+  const returnToRaw = searchParams?.get('returnTo') || ''
+  const returnTo = returnToRaw.startsWith('/') ? returnToRaw : ''
   const routeBrandId = typeof params?.brandId === 'string' ? params.brandId : ''
   const effectiveBrandId = routeBrandId || queryBrandId
   const subscriptionApiPath = effectiveBrandId
@@ -225,6 +229,9 @@ export default function BrandSubscriptionPage() {
           if (currentPlanId) setPlanId(currentPlanId)
           beginAgentCreationExperience(currentPlanId && currentPlanId !== resolveCurrentPlanId(freshJson) ? 'update' : 'create')
         }
+        if (json.brand && returnTo) {
+          router.replace(returnTo)
+        }
       } catch (e: unknown) {
         setError(getErrorMessage(e, 'Payment confirmation failed'))
       } finally {
@@ -232,7 +239,7 @@ export default function BrandSubscriptionPage() {
       }
     }
     confirmPayment()
-  }, [success, checkoutSessionId, subscriptionId, router, effectiveBrandId, subscriptionApiPath])
+  }, [success, checkoutSessionId, subscriptionId, router, effectiveBrandId, subscriptionApiPath, returnTo])
 
   useEffect(() => {
     if (!showAgentCreationModal || !agentCreationStartedAt) return
@@ -316,6 +323,9 @@ export default function BrandSubscriptionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           brandId: effectiveBrandId || undefined,
+          pendingBrandName: pendingBrandName || undefined,
+          pendingBrandLocation: pendingBrandLocation || undefined,
+          returnTo: returnTo || undefined,
           planId: selectedPlan.id,
           durationMonths,
           addonIds,
@@ -329,6 +339,10 @@ export default function BrandSubscriptionPage() {
       if (!res.ok) throw new Error(json.error || 'Failed to create checkout session')
 
       if (json.paymentMode === 'BILLING') {
+        if (json.brand && returnTo) {
+          router.push(returnTo)
+          return
+        }
         const fresh = await fetch(subscriptionApiPath)
         const freshJson = await fresh.json()
         if (fresh.ok) {
@@ -381,7 +395,9 @@ export default function BrandSubscriptionPage() {
             </button>
             <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">AI Marketing Crew (AMC) Plan</h1>
             <p className="max-w-3xl text-sm md:text-base text-slate-600 dark:text-slate-300 leading-7">
-              为品牌提供持续的 AI 营销执行能力，一站式覆盖内容策划、发布协同与运营闭环。
+              {pendingBrandName
+                ? `为新品牌「${pendingBrandName}」购买订阅套餐。支付成功后系统会创建品牌并自动绑定该套餐。`
+                : '为品牌提供持续的 AI 营销执行能力，一站式覆盖内容策划、发布协同与运营闭环。'}
             </p>
           </div>
         </div>

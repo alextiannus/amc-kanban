@@ -5,21 +5,6 @@ import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 
-async function hasAvailableBrandSubscriptionSlot(userId: string) {
-  const availableBrandPackageSlots = await prisma.brandSubscription.count({
-    where: {
-      createdById: userId,
-      status: 'ACTIVE',
-      brandId: null,
-    },
-  })
-
-  return {
-    ok: availableBrandPackageSlots > 0,
-    availableBrandPackageSlots,
-  }
-}
-
 type BrandWithCredentials = {
   postfastApiKey: string | null
   googleApiKey: string | null
@@ -67,7 +52,19 @@ export async function GET(request: Request) {
   // No brandId → return all brands this agent is linked to
   if (!brandId) {
     const links = await prisma.brandAgent.findMany({
-      where: { agentId: agent.id, active: true },
+      where: {
+        agentId: agent.id,
+        active: true,
+        brand: {
+          status: { not: 'ARCHIVED' },
+          subscriptions: {
+            some: {
+              status: 'ACTIVE',
+              OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+            },
+          },
+        },
+      },
       include: {
         brand: {
           select: {
@@ -120,167 +117,20 @@ export async function POST(request: Request) {
   if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, location, timezone } = body
+  const { name } = body
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  const normalizedName = name.trim()
-
-  // Deduplicate by agent + brand name: if this agent already created/linked the same brand,
-  // return the existing one instead of creating a duplicate record.
-  const existingForAgent = await prisma.brandAgent.findFirst({
-    where: {
-      agentId: agent.id,
-      brand: {
-        name: {
-          equals: normalizedName,
-          mode: 'insensitive',
-        },
-      },
+  return NextResponse.json(
+    {
+      error: '新增品牌必须由用户先完成该品牌的订阅购买，支付成功后系统会自动创建品牌。',
+      code: 'SUBSCRIPTION_REQUIRED_BEFORE_BRAND_CREATE',
+      redirectTo: `/board/subscription?newBrandName=${encodeURIComponent(name.trim())}`,
     },
-    include: {
-      brand: {
-        select: {
-          id: true,
-          name: true,
-          location: true,
-          timezone: true,
-        },
-      },
-    },
-    orderBy: { createdAt: 'asc' },
-  })
-
-  if (existingForAgent?.brand) {
-    if (!existingForAgent.active) {
-      await prisma.brandAgent.update({
-        where: { id: existingForAgent.id },
-        data: { active: true },
-      })
-    }
-
-    return NextResponse.json({
-      ok: true,
-      created: false,
-      deduplicated: true,
-      brand: existingForAgent.brand,
-      message: 'Brand already exists for this agent. Reusing existing brand.',
-    })
-  }
-
-  // Find all human users linked to this agent via AgentPermission
-  const permissions = await prisma.agentPermission.findMany({
-    where: { agentId: agent.id },
-    include: { human: { select: { id: true, email: true, role: true } } },
-  })
-  let linkedHumans = permissions.map(p => p.human)
-
-  // Fallback: use first ADMIN if agent has no linked humans yet
-  if (linkedHumans.length === 0) {
-    const admin = await prisma.user.findFirst({
-      where: { role: 'ADMIN' },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, email: true, role: true },
-    })
-    if (!admin) {
-      return NextResponse.json(
-        { error: 'No admin user found. Please complete system bootstrap first.' },
-        { status: 503 }
-      )
-    }
-    linkedHumans = [admin]
-  }
-
-  const primaryOwnerId = linkedHumans[0].id
-
-  const entitlement = await hasAvailableBrandSubscriptionSlot(primaryOwnerId)
-  if (!entitlement.ok) {
-    return NextResponse.json(
-      {
-        error: '每个品牌都需要独立订阅配套。当前无可用配套额度，请先购买新的品牌配套后再创建品牌。',
-        code: 'SUBSCRIPTION_REQUIRED_PER_BRAND',
-        redirectTo: '/board/subscription',
-        summary: {
-          availableBrandPackageSlots: entitlement.availableBrandPackageSlots,
-        },
-      },
-      { status: 402 }
-    )
-  }
-
-  const creation = await prisma.$transaction(async (tx) => {
-    const subscriptionToBind = await tx.brandSubscription.findFirst({
-      where: {
-        createdById: primaryOwnerId,
-        status: 'ACTIVE',
-        brandId: null,
-      },
-      orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
-      select: { id: true, planId: true, planName: true, status: true },
-    })
-
-    if (!subscriptionToBind) return null
-
-    const brand = await tx.brand.create({
-      data: {
-        ownerId: primaryOwnerId,
-        name: normalizedName,
-        location: location?.trim() || null,
-        timezone: timezone || 'Asia/Singapore',
-      },
-    })
-
-    await tx.brandOwner.createMany({
-      data: linkedHumans.map(h => ({ brandId: brand.id, userId: h.id })),
-      skipDuplicates: true,
-    })
-
-    await tx.brandAgent.upsert({
-      where: { brandId_agentId: { brandId: brand.id, agentId: agent.id } },
-      create: { brandId: brand.id, agentId: agent.id, role: 'worker', active: true },
-      update: { active: true },
-    })
-
-    await tx.brandSubscription.update({
-      where: { id: subscriptionToBind.id },
-      data: { brandId: brand.id },
-    })
-
-    return { brand, boundSubscription: subscriptionToBind }
-  })
-
-  if (!creation) {
-    return NextResponse.json(
-      {
-        error: '每个品牌都需要独立订阅配套。当前无可用配套额度，请先购买新的品牌配套后再创建品牌。',
-        code: 'SUBSCRIPTION_REQUIRED_PER_BRAND',
-        redirectTo: '/board/subscription',
-      },
-      { status: 402 }
-    )
-  }
-
-  const { brand, boundSubscription } = creation
-
-  return NextResponse.json({
-    ok: true,
-    created: true,
-    owners: linkedHumans.map(h => ({ id: h.id, email: h.email })),
-    brand: {
-      id: brand.id,
-      name: brand.name,
-      location: brand.location,
-      timezone: brand.timezone,
-    },
-    subscription: {
-      id: boundSubscription.id,
-      planId: boundSubscription.planId,
-      planName: boundSubscription.planName,
-      status: boundSubscription.status,
-    },
-  }, { status: 201 })
+    { status: 402 }
+  )
 }
 
 

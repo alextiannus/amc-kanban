@@ -19,7 +19,7 @@ import {
   type SubscriptionStatus,
 } from '@/lib/subscription/workflow'
 import { readBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
-import { ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
+import { createBrandForActivatedSubscription, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
 import Stripe from 'stripe'
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
@@ -332,6 +332,13 @@ export async function POST(request: Request) {
   const queryBrandId = url.searchParams.get('brandId')
   const rawBrandId = String(body.brandId ?? queryBrandId ?? '').trim()
   const brandId = rawBrandId || null
+  const pendingBrandName = String(body.pendingBrandName ?? '').trim()
+  const pendingBrandLocation = String(body.pendingBrandLocation ?? '').trim()
+  const pendingBrandTimezone = String(body.timezone ?? '').trim() || 'America/New_York'
+
+  if (brandId && pendingBrandName) {
+    return NextResponse.json({ error: 'brandId and pendingBrandName cannot be used together' }, { status: 400 })
+  }
 
   if (brandId) {
     const brand = await findOwnerBrand(session.user.id, brandId)
@@ -397,9 +404,20 @@ export async function POST(request: Request) {
     const activatedSubscription = await prisma.brandSubscription.findUnique({
       where: { id: pending.id },
     })
-    const keyResult = await ensureBrandAgentKeyAfterSubscription({
-      ownerId: session.user.id,
-    })
+    const createdBrand = pendingBrandName
+      ? await createBrandForActivatedSubscription({
+          subscriptionId: pending.id,
+          ownerId: session.user.id,
+          name: pendingBrandName,
+          location: pendingBrandLocation || null,
+          timezone: pendingBrandTimezone,
+        })
+      : null
+    const keyResult = pendingBrandName
+      ? { agentId: createdBrand?.ok ? createdBrand.agentId || null : null }
+      : await ensureBrandAgentKeyAfterSubscription({
+          ownerId: session.user.id,
+        })
     return NextResponse.json({
       ...buildBillingActivatedResponse({
         subscriptionId: pending.id,
@@ -407,6 +425,7 @@ export async function POST(request: Request) {
         agentId: keyResult.agentId,
       }),
       subscription: activatedSubscription,
+      brand: createdBrand?.ok ? createdBrand.brand : null,
     })
   }
 
@@ -428,8 +447,14 @@ export async function POST(request: Request) {
   const baseSubscriptionUrl = brandId
     ? `${origin}/board/subscription/${encodeURIComponent(brandId)}`
     : `${origin}/board/subscription`
-  const successUrl = `${baseSubscriptionUrl}?success=1&sid={CHECKOUT_SESSION_ID}&sub=${pending.id}${brandId ? `&brandId=${encodeURIComponent(brandId)}` : ''}`
-  const cancelUrl = `${baseSubscriptionUrl}?canceled=1&sub=${pending.id}${brandId ? `&brandId=${encodeURIComponent(brandId)}` : ''}`
+  const returnTo = typeof body.returnTo === 'string' && body.returnTo.startsWith('/') ? body.returnTo : ''
+  const pendingBrandParams = new URLSearchParams()
+  if (pendingBrandName) pendingBrandParams.set('newBrandName', pendingBrandName)
+  if (pendingBrandLocation) pendingBrandParams.set('newBrandLocation', pendingBrandLocation)
+  if (returnTo) pendingBrandParams.set('returnTo', returnTo)
+  const pendingBrandQuery = pendingBrandParams.toString() ? `&${pendingBrandParams.toString()}` : ''
+  const successUrl = `${baseSubscriptionUrl}?success=1&sid={CHECKOUT_SESSION_ID}&sub=${pending.id}${brandId ? `&brandId=${encodeURIComponent(brandId)}` : ''}${pendingBrandQuery}`
+  const cancelUrl = `${baseSubscriptionUrl}?canceled=1&sub=${pending.id}${brandId ? `&brandId=${encodeURIComponent(brandId)}` : ''}${pendingBrandQuery}`
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
     {
@@ -456,6 +481,9 @@ export async function POST(request: Request) {
       paymentMode,
       durationMonths: String(summary.durationMonths),
       discountPercent: String(summary.discountPercent),
+      pendingBrandName,
+      pendingBrandLocation,
+      pendingBrandTimezone,
     },
   })
 

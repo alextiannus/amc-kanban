@@ -32,6 +32,12 @@ export async function GET() {
 
   const activeBrandFilter = {
     status: { not: 'ARCHIVED' as const },
+    subscriptions: {
+      some: {
+        status: 'ACTIVE',
+        OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+      },
+    },
     brandAgents: { some: { active: true } },
   }
 
@@ -103,6 +109,34 @@ export async function GET() {
             name: true,
             location: true,
             status: true,
+            owners: {
+              where: { role: 'owner' },
+              select: {
+                userId: true,
+                role: true,
+                user: {
+                  select: {
+                    id: true,
+                    email: true,
+                    nickname: true,
+                  },
+                },
+              },
+            },
+            brandAgents: {
+              where: { active: true },
+              select: {
+                agentId: true,
+                role: true,
+                agent: {
+                  select: {
+                    id: true,
+                    email: true,
+                    nickname: true,
+                  },
+                },
+              },
+            },
             _count: {
               select: {
                 actionItems: true,

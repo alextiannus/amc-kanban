@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canOwnBrand, canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canHumanAccessBrandProject, canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { postfastFetchAccounts, postfastListPosts } from '@/lib/integrations/postfast'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 
@@ -297,7 +297,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (session.user.type === 'AI_AGENT') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  if (!(await canOwnBrand(id, session.user.id))) {
+  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -339,7 +339,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   if (session.user.type === 'AI_AGENT') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-  if (!(await canOwnBrand(id, session.user.id))) {
+  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

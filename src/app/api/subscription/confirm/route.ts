@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { activateSubscriptionByPaymentSession, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
+import { activateSubscriptionByPaymentSession, createBrandForActivatedSubscription, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
 import Stripe from 'stripe'
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
@@ -44,9 +44,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Subscription order not found by payment session' }, { status: 404 })
   }
 
+  const pendingBrandName = typeof checkout.metadata?.pendingBrandName === 'string'
+    ? checkout.metadata.pendingBrandName.trim()
+    : ''
+  const pendingBrandLocation = typeof checkout.metadata?.pendingBrandLocation === 'string'
+    ? checkout.metadata.pendingBrandLocation.trim()
+    : ''
+  const pendingBrandTimezone = typeof checkout.metadata?.pendingBrandTimezone === 'string'
+    ? checkout.metadata.pendingBrandTimezone.trim()
+    : ''
+
+  const createdBrand = pendingBrandName
+    ? await createBrandForActivatedSubscription({
+        subscriptionId,
+        ownerId: session.user.id,
+        name: pendingBrandName,
+        location: pendingBrandLocation || null,
+        timezone: pendingBrandTimezone || null,
+      })
+    : null
+
   const keyResult = activated.alreadyActive
     ? null
-    : await ensureBrandAgentKeyAfterSubscription({
+    : pendingBrandName
+      ? null
+      : await ensureBrandAgentKeyAfterSubscription({
         ownerId: session.user.id,
       })
 
@@ -56,5 +78,6 @@ export async function POST(request: Request) {
     alreadyActive: activated.alreadyActive,
     agentKeyGenerated: Boolean(keyResult),
     agentId: keyResult?.agentId || null,
+    brand: createdBrand?.ok ? createdBrand.brand : null,
   })
 }

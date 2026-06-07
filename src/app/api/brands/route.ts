@@ -4,56 +4,6 @@ import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
 import { resolveAssignment } from '@/lib/assignmentPool'
 
-async function reconcileBrandSubscriptionBindings(userId: string) {
-  const [brandsWithoutSubscription, availableSlots] = await Promise.all([
-    prisma.brand.findMany({
-      where: {
-        status: { not: 'ARCHIVED' },
-        OR: [{ ownerId: userId }, { owners: { some: { userId } } }],
-        subscriptions: { none: { status: 'ACTIVE' } },
-      },
-      select: { id: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-    prisma.brandSubscription.findMany({
-      where: {
-        createdById: userId,
-        status: 'ACTIVE',
-        brandId: null,
-      },
-      select: { id: true },
-      orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
-    }),
-  ])
-
-  const bindCount = Math.min(brandsWithoutSubscription.length, availableSlots.length)
-  if (bindCount <= 0) return
-
-  await prisma.$transaction(
-    Array.from({ length: bindCount }).map((_, idx) =>
-      prisma.brandSubscription.update({
-        where: { id: availableSlots[idx].id },
-        data: { brandId: brandsWithoutSubscription[idx].id },
-      })
-    )
-  )
-}
-
-async function getAvailableBrandPackageSlots(userId: string) {
-  const availableBrandPackageSlots = await prisma.brandSubscription.count({
-    where: {
-      createdById: userId,
-      status: 'ACTIVE',
-      brandId: null,
-    },
-  })
-
-  return {
-    ok: availableBrandPackageSlots > 0,
-    availableBrandPackageSlots,
-  }
-}
-
 const subscriptionSummarySelect = {
   orderBy: { createdAt: 'desc' as const },
   take: 1,
@@ -71,10 +21,6 @@ const subscriptionSummarySelect = {
 export async function GET() {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  if (session.user.type !== 'AI_AGENT') {
-    await reconcileBrandSubscriptionBindings(session.user.id)
-  }
 
   const accountsSelect = {
     orderBy: { createdAt: 'asc' as const },
@@ -94,6 +40,12 @@ export async function GET() {
   try {
     const activeBrandFilter = {
       status: { not: 'ARCHIVED' as const },
+      subscriptions: {
+        some: {
+          status: 'ACTIVE',
+          OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+        },
+      },
       brandAgents: {
         some: {
           active: true,
@@ -227,16 +179,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  const entitlement = await getAvailableBrandPackageSlots(session.user.id)
-  if (!entitlement.ok) {
+  const subscriptionId = typeof body.subscriptionId === 'string' ? body.subscriptionId.trim() : ''
+  if (!subscriptionId) {
     return NextResponse.json(
       {
-        error: '每个品牌都需要独立订阅配套。当前无可用配套额度，请先购买新的品牌配套后再创建品牌。',
-        code: 'SUBSCRIPTION_REQUIRED_PER_BRAND',
+        error: '新增品牌需要先完成该品牌的订阅购买。',
+        code: 'SUBSCRIPTION_REQUIRED_BEFORE_BRAND_CREATE',
         redirectTo: '/board/subscription',
-        summary: {
-          availableBrandPackageSlots: entitlement.availableBrandPackageSlots,
-        },
       },
       { status: 402 }
     )
@@ -245,9 +194,11 @@ export async function POST(request: Request) {
   const creation = await prisma.$transaction(async (tx) => {
     const subscriptionToBind = await tx.brandSubscription.findFirst({
       where: {
+        id: subscriptionId,
         createdById: session.user.id,
         status: 'ACTIVE',
         brandId: null,
+        OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
       },
       orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
       select: { id: true, planId: true, planName: true, status: true },
@@ -281,8 +232,8 @@ export async function POST(request: Request) {
   if (!creation) {
     return NextResponse.json(
       {
-        error: '每个品牌都需要独立订阅配套。当前无可用配套额度，请先购买新的品牌配套后再创建品牌。',
-        code: 'SUBSCRIPTION_REQUIRED_PER_BRAND',
+        error: '订阅未支付成功或已经绑定其他品牌，无法创建品牌。',
+        code: 'SUBSCRIPTION_NOT_AVAILABLE_FOR_BRAND_CREATE',
         redirectTo: '/board/subscription',
       },
       { status: 402 }
