@@ -17,7 +17,8 @@ interface UserRecord {
   chatLink?: string | null
   driveFolder?: string | null
   createdAt: string
-  permittedAgents: { agent: { id: string; email: string; nickname: string | null } }[]
+  brandMemberships: { brand: { id: string; name: string; status: string } }[]
+  permittedAgents: { agent: { id: string; email: string; nickname: string | null; brandMemberships: { brand: { id: string; name: string; status: string } }[] } }[]
   assignedToHumans: { human: { id: string; email: string; nickname: string | null } }[]
 }
 
@@ -71,7 +72,7 @@ export default function AdminPage() {
   // Create form
   const [email, setEmail] = useState('')
   const [type, setType] = useState('HUMAN')
-  const [role, setRole] = useState('ADMIN')
+  const [role, setRole] = useState('USER')
   const [creating, setCreating] = useState(false)
 
   // Modals
@@ -241,25 +242,15 @@ export default function AdminPage() {
     if (!selectedAgent) return
     setSavingPerms(true)
     try {
-      for (const human of humans) {
-        const currentAgentIds = human.permittedAgents.map(pa => pa.agent.id)
-        const shouldHaveAgent = selectedAgentHumanIds.includes(human.id)
-        const nextAgentIds = shouldHaveAgent
-          ? Array.from(new Set([...currentAgentIds, selectedAgent.id]))
-          : currentAgentIds.filter(id => id !== selectedAgent.id)
-
-        if (nextAgentIds.length === currentAgentIds.length && nextAgentIds.every(id => currentAgentIds.includes(id))) continue
-
-        const res = await fetch('/api/admin/permissions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ humanId: human.id, agentIds: nextAgentIds }),
-        })
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          alert(data.error || '保存主理人分配失败')
-          return
-        }
+      const res = await fetch('/api/admin/permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: selectedAgent.id, humanIds: selectedAgentHumanIds }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || '保存主理人分配失败')
+        return
       }
       setSelectedAgent(null)
       await fetchUsers()
@@ -310,6 +301,10 @@ export default function AdminPage() {
         body: JSON.stringify({ role: newRole }),
       })
       if (res.ok) setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u))
+      else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || '更新角色失败')
+      }
     } finally { setActionLoading(p => { const n = { ...p }; delete n[user.id + '_role']; return n }) }
   }
 
@@ -354,6 +349,26 @@ export default function AdminPage() {
 
   const humans = users.filter(u => u.type === 'HUMAN')
   const agents = users.filter(u => u.type === 'AI_AGENT')
+
+  const uniqueBrandsFromAgentLinks = (links: { brand: { id: string; name: string; status: string } }[] = []) => {
+    const map = new Map<string, { id: string; name: string; status: string }>()
+    for (const link of links) map.set(link.brand.id, link.brand)
+    return Array.from(map.values())
+  }
+
+  const uniqueBrandsFromPermittedAgents = (links: UserRecord['permittedAgents']) => {
+    const map = new Map<string, { id: string; name: string; status: string }>()
+    for (const link of links) {
+      for (const brandLink of link.agent.brandMemberships || []) map.set(brandLink.brand.id, brandLink.brand)
+    }
+    return Array.from(map.values())
+  }
+
+  const formatBrandNames = (brands: { name: string }[], max = 3) => {
+    if (brands.length === 0) return '暂无绑定品牌'
+    const head = brands.slice(0, max).map((brand) => brand.name).join('、')
+    return brands.length > max ? `${head} 等 ${brands.length} 个品牌` : head
+  }
 
   const RoleBadge = ({ role }: { role: string }) =>
     role === 'ADMIN' ? (
@@ -437,10 +452,10 @@ export default function AdminPage() {
                 </div>
                 {type === 'HUMAN' && (
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">初始权限</label>
+                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">人类账号角色</label>
                     <select value={role} onChange={e => setRole(e.target.value)} className="w-full border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-                      <option value="ADMIN">ADMIN（管理员）</option>
-                      <option value="USER">USER（普通用户）</option>
+                      <option value="USER">USER（普通用户 / AMC 主理人）</option>
+                      <option value="ADMIN">ADMIN（系统管理员）</option>
                     </select>
                   </div>
                 )}
@@ -470,7 +485,9 @@ export default function AdminPage() {
                 <div className="p-6 text-center text-sm text-slate-400">暂无人类用户</div>
               ) : (
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {humans.map(user => (
+                  {humans.map(user => {
+                    const derivedBrands = uniqueBrandsFromPermittedAgents(user.permittedAgents)
+                    return (
                     <li key={user.id} className="px-6 py-4 flex items-center gap-3 flex-wrap">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -478,12 +495,15 @@ export default function AdminPage() {
                           <RoleBadge role={user.role} />
                         </div>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          {new Date(user.createdAt).toLocaleDateString('zh-CN')} · {user.permittedAgents.length} 个 Agent
+                          {new Date(user.createdAt).toLocaleDateString('zh-CN')} · {user.permittedAgents.length} 个 Agent · 可见 {derivedBrands.length} 个品牌
+                        </p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                          间接运营品牌：{formatBrandNames(derivedBrands)}
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button onClick={() => { setSelectedHuman(user); setAssignedAgentIds(user.permittedAgents.map(pa => pa.agent.id)) }} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
-                          Agent 权限
+                          运营权限
                         </button>
                         <button onClick={() => handleRoleToggle(user)} disabled={!!actionLoading[user.id + '_role']} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition disabled:opacity-50">
                           {actionLoading[user.id + '_role'] ? '...' : user.role === 'ADMIN' ? '降为 USER' : '升为 ADMIN'}
@@ -496,7 +516,8 @@ export default function AdminPage() {
                         </button>
                       </div>
                     </li>
-                  ))}
+                    )
+                  })}
                 </ul>
               )}
             </div>
@@ -516,6 +537,7 @@ export default function AdminPage() {
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                   {agents.map(agent => {
                     const member = poolMemberForAgent(agent.id)
+                    const operatingBrands = uniqueBrandsFromAgentLinks(agent.brandMemberships)
                     const draft = poolDrafts[agent.id] || {
                       capacity: member?.capacity ?? 30,
                       priority: member?.priority ?? 100,
@@ -533,14 +555,17 @@ export default function AdminPage() {
                           <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{agent.nickname || agent.email}</p>
                           <p className="text-[11px] text-slate-400 truncate">{agent.nickname ? agent.email : agent.id}</p>
                           <p className="text-[11px] text-slate-400 mt-1">
-                            已分配主理人：{agent.assignedToHumans.length ? agent.assignedToHumans.map(link => link.human.nickname || link.human.email).join('、') : '未分配'}
+                            对应 AMC 主理人：{agent.assignedToHumans.length ? agent.assignedToHumans.map(link => link.human.nickname || link.human.email).join('、') : '未分配'}
+                          </p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                            运营品牌：{formatBrandNames(operatingBrands)}
                           </p>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           <button onClick={() => openAgentEditor(agent)} className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition" title="编辑 Agent">
                             <Edit3 size={14} />
                           </button>
-                          <button onClick={() => openAgentPrincipalModal(agent)} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition" title="分配给 AMC 主理人">
+                          <button onClick={() => openAgentPrincipalModal(agent)} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition" title="对应 AMC 主理人">
                             <Users size={14} />
                           </button>
                           <button onClick={() => handleDelete(agent)} disabled={!!actionLoading[agent.id + '_del']} className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition disabled:opacity-50" title="删除 Agent">
@@ -685,18 +710,24 @@ export default function AdminPage() {
       {selectedHuman && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800">
-            <h2 className="text-base font-black text-slate-900 dark:text-white mb-1">Agent 权限</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{selectedHuman.email}</p>
+            <h2 className="text-base font-black text-slate-900 dark:text-white mb-1">主理人运营权限</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+              {selectedHuman.email} · 勾选 Agent 后，该主理人会间接看到这些 Agent 绑定运营的品牌。
+            </p>
             <div className="space-y-2 max-h-64 overflow-y-auto mb-5">
-              {agents.map(agent => (
+              {agents.map(agent => {
+                const operatingBrands = uniqueBrandsFromAgentLinks(agent.brandMemberships)
+                return (
                 <label key={agent.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer select-none">
                   <input type="checkbox" checked={assignedAgentIds.includes(agent.id)} onChange={() => setAssignedAgentIds(prev => prev.includes(agent.id) ? prev.filter(id => id !== agent.id) : [...prev, agent.id])} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{agent.nickname || agent.email}</p>
                     {agent.nickname && <p className="text-[11px] text-slate-400 truncate">{agent.email}</p>}
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">运营品牌：{formatBrandNames(operatingBrands, 2)}</p>
                   </div>
                 </label>
-              ))}
+                )
+              })}
               {agents.length === 0 && <p className="text-sm text-slate-400 text-center py-4">暂无可分配的 AI Agent</p>}
             </div>
             <div className="flex justify-end gap-3">
@@ -712,8 +743,11 @@ export default function AdminPage() {
       {selectedAgent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800">
-            <h2 className="text-base font-black text-slate-900 dark:text-white mb-1">分配给 AMC 主理人</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">{selectedAgent.nickname || selectedAgent.email}</p>
+            <h2 className="text-base font-black text-slate-900 dark:text-white mb-1">对应 AMC 主理人</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{selectedAgent.nickname || selectedAgent.email}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+              该 Agent 运营品牌：{formatBrandNames(uniqueBrandsFromAgentLinks(selectedAgent.brandMemberships))}。被勾选的主理人会间接成为这些品牌的主理人之一。
+            </p>
             <div className="space-y-2 max-h-64 overflow-y-auto mb-5">
               {humans.map(human => (
                 <label key={human.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer select-none">

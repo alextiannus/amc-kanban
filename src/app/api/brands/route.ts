@@ -181,6 +181,60 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
+  const adminCreate = isAmcOperator(session.user)
+  if (adminCreate) {
+    const ownerEmail = typeof body.ownerEmail === 'string' ? body.ownerEmail.trim().toLowerCase() : ''
+    const owner = ownerEmail
+      ? await prisma.user.findFirst({ where: { email: ownerEmail, type: 'HUMAN' }, select: { id: true, email: true } })
+      : { id: session.user.id, email: session.user.email || null }
+
+    if (!owner) {
+      return NextResponse.json({ error: 'Brand owner must be an existing HUMAN user' }, { status: 404 })
+    }
+
+    const brand = await prisma.brand.create({
+      data: {
+        ownerId: owner.id,
+        name: name.trim(),
+        location: location?.trim() || null,
+        timezone: timezone || 'America/New_York',
+      },
+    })
+
+    await prisma.brandOwner.upsert({
+      where: { brandId_userId: { brandId: brand.id, userId: owner.id } },
+      create: { brandId: brand.id, userId: owner.id, role: 'owner' },
+      update: { role: 'owner' },
+    })
+
+    try {
+      await ensureBrandWorkspace(brand.id)
+    } catch (workspaceError) {
+      console.error('[POST /api/brands] admin workspace init failed:', workspaceError)
+    }
+
+    let assignment: { selectedAgentId: string | null; matchedBy: string | null; decisionId: string | null } | null = null
+    try {
+      const result = await resolveAssignment({
+        subjectType: 'brand_create',
+        subjectId: brand.id,
+        industry: typeof industry === 'string' ? industry : null,
+        region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
+        referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
+        createdBy: 'admin',
+      })
+      assignment = {
+        selectedAgentId: result.selectedAgentId,
+        matchedBy: result.matchedBy,
+        decisionId: result.decisionId,
+      }
+    } catch (assignmentError) {
+      console.error('[POST /api/brands] admin assignment failed:', assignmentError)
+    }
+
+    return NextResponse.json({ ...brand, assignment, subscription: null }, { status: 201 })
+  }
+
   const subscriptionId = typeof body.subscriptionId === 'string' ? body.subscriptionId.trim() : ''
   if (!subscriptionId) {
     return NextResponse.json(

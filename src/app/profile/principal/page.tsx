@@ -10,6 +10,7 @@ import NewAgentKeyModal from '@/components/layout/NewAgentKeyModal'
 
 type DashboardPayload = {
   dashboardRole: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
+  scope?: 'all' | 'mine'
   summary: {
     totalAgents: number
     totalBrands: number
@@ -96,12 +97,14 @@ export default function PrincipalDashboardPage() {
   const [selectedAgent, setSelectedAgent] = useState<AgentDetail | null>(null)
   const [agentModalLoading, setAgentModalLoading] = useState(false)
   const [selectedActionBrandId, setSelectedActionBrandId] = useState('')
+  const [adminScope, setAdminScope] = useState<'all' | 'mine'>('all')
 
   const loadDashboard = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/profile/principal-dashboard')
+      const query = adminScope === 'mine' ? '?scope=mine' : ''
+      const res = await fetch(`/api/profile/principal-dashboard${query}`)
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error || '加载主理人看板失败')
@@ -113,7 +116,7 @@ export default function PrincipalDashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [adminScope])
 
   useEffect(() => {
     void loadDashboard()
@@ -260,11 +263,29 @@ export default function PrincipalDashboardPage() {
         >
           <ArrowLeft className="h-4 w-4" /> 返回首页
         </button>
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white">主理人看板</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            汇总查看主理人的全部 AI Agent、绑定品牌与品牌动作日志
-          </p>
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white">主理人看板</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              汇总查看主理人的全部 AI Agent、绑定品牌与品牌动作日志
+            </p>
+          </div>
+          {data.dashboardRole === 'ADMIN' && (
+            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 text-xs font-bold dark:border-slate-700 dark:bg-slate-900">
+              <button
+                onClick={() => setAdminScope('all')}
+                className={`rounded-lg px-3 py-1.5 ${adminScope === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-indigo-600 dark:text-slate-300'}`}
+              >
+                全系统
+              </button>
+              <button
+                onClick={() => setAdminScope('mine')}
+                className={`rounded-lg px-3 py-1.5 ${adminScope === 'mine' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-indigo-600 dark:text-slate-300'}`}
+              >
+                我的主理人品牌
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

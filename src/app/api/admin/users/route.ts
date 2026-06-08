@@ -29,10 +29,26 @@ export async function GET() {
         chatLink: true,
         createdAt: true,
         permittedAgents: {
-          include: { agent: { select: { id: true, email: true, nickname: true } } }
+          include: {
+            agent: {
+              select: {
+                id: true,
+                email: true,
+                nickname: true,
+                brandMemberships: {
+                  where: { active: true },
+                  select: { brand: { select: { id: true, name: true, status: true } } },
+                },
+              },
+            },
+          }
         },
         assignedToHumans: {
           include: { human: { select: { id: true, email: true, nickname: true } } }
+        },
+        brandMemberships: {
+          where: { active: true },
+          select: { brand: { select: { id: true, name: true, status: true } } },
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -52,23 +68,24 @@ export async function POST(request: Request) {
 
     const { email, type, role: body_role } = await request.json()
     const body = { role: body_role }
-  const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim()
     if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 })
+    const normalizedEmail = String(email).trim().toLowerCase()
+    if (!normalizedEmail) return NextResponse.json({ error: 'Email required' }, { status: 400 })
     
-    const existing = await prisma.user.findUnique({ where: { email } })
+    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
     if (existing) return NextResponse.json({ error: 'User already exists' }, { status: 400 })
 
     const temporaryPassword = crypto.randomBytes(18).toString('base64url')
     const hashedPassword = await bcrypt.hash(temporaryPassword, 12)
     const userType = type === 'AI_AGENT' ? 'AI_AGENT' : 'HUMAN'
 
-    const requestedRole = body.role === 'ADMIN' ? 'ADMIN' : 'USER'
+    const requestedRole = userType === 'HUMAN' && body.role === 'ADMIN' ? 'ADMIN' : 'USER'
     const user = await prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         type: userType,
-        role: email === bootstrapAdminEmail ? 'ADMIN' : requestedRole,
+        role: requestedRole,
       }
     })
 
@@ -76,7 +93,7 @@ export async function POST(request: Request) {
     await prisma.invitation.updateMany({
       where: {
         status: 'PENDING',
-        OR: [{ inviteeEmail: email }, { inviteeUserId: user.id }],
+        OR: [{ inviteeEmail: normalizedEmail }, { inviteeUserId: user.id }],
       },
       data: {
         status: 'REVOKED',
@@ -86,7 +103,7 @@ export async function POST(request: Request) {
     const invitation = await prisma.invitation.create({
       data: {
         inviterId: session.user.id,
-        inviteeEmail: email,
+        inviteeEmail: normalizedEmail,
         inviteeUserId: user.id,
         status: 'PENDING',
         expiresAt,
@@ -98,9 +115,9 @@ export async function POST(request: Request) {
     const baseUrl = process.env.NEXT_PUBLIC_KANBAN_HOST
       || (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai')
     const { link: invitationLink } = generateInvitationLink(
-      email,
+      normalizedEmail,
       temporaryPassword,
-      email.split('@')[0],
+      normalizedEmail.split('@')[0],
       baseUrl,
       {
         invitationId: invitation.id,

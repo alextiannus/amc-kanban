@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
+import { isSystemAdminEmail } from './amcOperator'
 
 function getJwtKey() {
   const secretKey = process.env.JWT_SECRET
@@ -9,8 +10,6 @@ function getJwtKey() {
   }
   return new TextEncoder().encode(secretKey)
 }
-const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim()
-
 type SessionPayload = JWTPayload & {
   user?: {
     id?: string
@@ -71,7 +70,7 @@ export async function getSession(): Promise<Session | null> {
       type: typeof payload.user.type === 'string' ? payload.user.type : 'HUMAN',
     }
 
-    if (bootstrapAdminEmail && normalizedUser.email === bootstrapAdminEmail && normalizedUser.role !== 'ADMIN') {
+    if (isSystemAdminEmail(normalizedUser.email) && normalizedUser.role !== 'ADMIN') {
       return {
         ...payload,
         user: {

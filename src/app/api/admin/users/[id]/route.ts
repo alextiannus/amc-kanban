@@ -74,6 +74,10 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
     }
 
+    if (target.type === 'AI_AGENT' && body.role === 'ADMIN') {
+      return NextResponse.json({ error: 'AI Agent cannot be ADMIN' }, { status: 400 })
+    }
+
     if (target.role === 'ADMIN' && body.role === 'USER') {
       const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } })
       if (adminCount <= 1) {

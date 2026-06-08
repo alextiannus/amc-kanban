@@ -7,13 +7,15 @@ function uniq(values: string[]) {
   return Array.from(new Set(values))
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const userId = session.user.id
   const isAdmin = isAmcOperatorRole(session.user.role)
+  const scope = new URL(request.url).searchParams.get('scope')
+  const adminAsPrincipal = isAdmin && scope === 'mine'
 
   const [ownerLinksCount, legacyOwnerCount] = await Promise.all([
     prisma.brandOwner.count({ where: { userId } }),
@@ -36,14 +38,14 @@ export async function GET() {
 
   let visibleBrandIds: string[] = []
 
-  if (isAdmin) {
+  if (isAdmin && !adminAsPrincipal) {
     const allBrands = await prisma.brand.findMany({
       where: visibleBrandFilter,
       select: { id: true },
     })
     visibleBrandIds = allBrands.map((b) => b.id)
   } else {
-    const [permissions, orgMemberships] = await Promise.all([
+    const [permissions, orgMemberships, ownerLinks, legacyOwnedBrands] = await Promise.all([
       prisma.agentPermission.findMany({
         where: { humanId: userId },
         select: { agentId: true },
@@ -51,6 +53,14 @@ export async function GET() {
       prisma.organizationMember.findMany({
         where: { memberId: userId },
         select: { ownerId: true },
+      }),
+      prisma.brandOwner.findMany({
+        where: { userId, brand: visibleBrandFilter },
+        select: { brandId: true },
+      }),
+      prisma.brand.findMany({
+        where: { ownerId: userId, ...visibleBrandFilter },
+        select: { id: true },
       }),
     ])
 
@@ -88,6 +98,8 @@ export async function GET() {
       : []
 
     visibleBrandIds = uniq([
+      ...ownerLinks.map((l) => l.brandId),
+      ...legacyOwnedBrands.map((b) => b.id),
       ...delegatedBrandLinks.map((l) => l.brandId),
       ...orgBrands.map((b) => b.id),
     ])
@@ -240,6 +252,7 @@ export async function GET() {
 
   return NextResponse.json({
     dashboardRole,
+    scope: adminAsPrincipal ? 'mine' : 'all',
     summary: {
       totalAgents: agents.length,
       totalBrands: brands.length,

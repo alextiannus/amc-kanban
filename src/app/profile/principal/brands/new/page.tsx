@@ -1,6 +1,6 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, CreditCard } from 'lucide-react'
 
@@ -9,8 +9,17 @@ export default function NewPrincipalBrandPage() {
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
   const [ownerEmail, setOwnerEmail] = useState('')
+  const [dashboardRole, setDashboardRole] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
-  const submit = (event: FormEvent) => {
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((res) => res.ok ? res.json() : null)
+      .then((json) => setDashboardRole(json?.dashboardRole || null))
+      .catch(() => setDashboardRole(null))
+  }, [])
+
+  const submit = async (event: FormEvent) => {
     event.preventDefault()
     const brandName = name.trim()
     const brandOwnerEmail = ownerEmail.trim().toLowerCase()
@@ -23,12 +32,37 @@ export default function NewPrincipalBrandPage() {
       return
     }
 
+    const brandLocation = location.trim()
+
+    if (dashboardRole === 'ADMIN') {
+      setSubmitting(true)
+      try {
+        const res = await fetch('/api/brands', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: brandName,
+            location: brandLocation || undefined,
+            ownerEmail: brandOwnerEmail,
+          }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          alert(json.error || '创建品牌失败')
+          return
+        }
+        router.push('/profile/principal')
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
+
     const params = new URLSearchParams({
       newBrandName: brandName,
       newBrandOwnerEmail: brandOwnerEmail,
       returnTo: '/profile/principal',
     })
-    const brandLocation = location.trim()
     if (brandLocation) params.set('newBrandLocation', brandLocation)
     router.push(`/board/subscription?${params.toString()}`)
   }
@@ -81,9 +115,10 @@ export default function NewPrincipalBrandPage() {
 
             <button
               type="submit"
+              disabled={submitting}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700 md:w-auto"
             >
-              <CreditCard className="h-4 w-4" /> 选择订阅套餐
+              <CreditCard className="h-4 w-4" /> {submitting ? '创建中...' : dashboardRole === 'ADMIN' ? '直接创建品牌' : '选择订阅套餐'}
             </button>
           </form>
         </section>

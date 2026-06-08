@@ -3,6 +3,12 @@ type UserRoleLike = {
   role?: string | null
 }
 
+export const SYSTEM_ADMIN_EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase() || 'alextiannus@gmail.com'
+
+export function isSystemAdminEmail(email: string | null | undefined): boolean {
+  return typeof email === 'string' && email.trim().toLowerCase() === SYSTEM_ADMIN_EMAIL
+}
+
 /**
  * Phase 1 role mapping:
  * HUMAN + ADMIN => AMC operator.

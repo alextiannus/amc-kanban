@@ -3,18 +3,20 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { encrypt } from '@/lib/auth'
 import { cookies } from 'next/headers'
+import { SYSTEM_ADMIN_EMAIL, isSystemAdminEmail } from '@/lib/amcOperator'
 
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
-    const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim()
+    const bootstrapAdminEmail = SYSTEM_ADMIN_EMAIL
     const bootstrapAdminPassword = process.env.BOOTSTRAP_ADMIN_INITIAL_PASSWORD
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
 
-    let user = await prisma.user.findUnique({ where: { email } })
+    let user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
 
     const userCount = await prisma.user.count()
     if (userCount === 0) {
-      if (!bootstrapAdminEmail || !bootstrapAdminPassword) {
+      if (!bootstrapAdminPassword) {
         console.error('Bootstrap admin configuration is missing')
         return NextResponse.json(
           { error: 'System is not initialized. Please set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_INITIAL_PASSWORD.' },
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
         }
       })
       // Refetch the user attempting to log in after potential initialization
-      user = await prisma.user.findUnique({ where: { email } })
+      user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
     }
 
     if (!user) {
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
       },
     })
 
-    if (bootstrapAdminEmail && user.email === bootstrapAdminEmail && user.role !== 'ADMIN') {
+    if (isSystemAdminEmail(user.email) && user.role !== 'ADMIN') {
       user = await prisma.user.update({
         where: { id: user.id },
         data: { role: 'ADMIN' }

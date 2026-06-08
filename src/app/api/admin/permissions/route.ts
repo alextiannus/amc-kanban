@@ -9,7 +9,55 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { humanId, agentIds } = await request.json()
+    const { humanId, agentIds, agentId, humanIds } = await request.json()
+
+    if (agentId !== undefined || humanIds !== undefined) {
+      if (!agentId || !Array.isArray(humanIds)) {
+        return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+      }
+
+      const agent = await prisma.user.findUnique({
+        where: { id: agentId },
+        select: { id: true, type: true },
+      })
+      if (!agent || agent.type !== 'AI_AGENT') {
+        return NextResponse.json({ error: 'AI Agent not found' }, { status: 404 })
+      }
+
+      const uniqueHumanIds = Array.from(new Set(humanIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')))
+      if (uniqueHumanIds.length > 0) {
+        const validHumansCount = await prisma.user.count({
+          where: { id: { in: uniqueHumanIds }, type: 'HUMAN' },
+        })
+        if (validHumansCount !== uniqueHumanIds.length) {
+          return NextResponse.json({ error: 'One or more humanIds are invalid' }, { status: 400 })
+        }
+      }
+
+      const [result] = await prisma.$transaction([
+        prisma.agentPermission.deleteMany({ where: { agentId } }),
+        ...(uniqueHumanIds.length > 0 ? [
+          prisma.agentPermission.createMany({
+            data: uniqueHumanIds.map((id) => ({ humanId: id, agentId })),
+            skipDuplicates: true,
+          }),
+        ] : []),
+      ])
+
+      const affectedBrands = await prisma.brandAgent.findMany({
+        where: { agentId, active: true },
+        select: { brand: { select: { id: true, name: true, status: true } } },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      return NextResponse.json({
+        success: true,
+        mode: 'agent_to_principals',
+        removed: result.count,
+        principals: uniqueHumanIds.length,
+        affectedBrands: affectedBrands.map((link) => link.brand),
+      })
+    }
 
     if (!humanId || !Array.isArray(agentIds)) {
       return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
@@ -24,33 +72,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Human user not found' }, { status: 404 })
     }
 
-    if (agentIds.length > 0) {
+    const uniqueAgentIds = Array.from(new Set(agentIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')))
+
+    if (uniqueAgentIds.length > 0) {
       const validAgentsCount = await prisma.user.count({
         where: {
-          id: { in: agentIds },
+          id: { in: uniqueAgentIds },
           type: 'AI_AGENT'
         }
       })
 
-      if (validAgentsCount !== agentIds.length) {
+      if (validAgentsCount !== uniqueAgentIds.length) {
         return NextResponse.json({ error: 'One or more agentIds are invalid' }, { status: 400 })
       }
     }
 
-    await prisma.agentPermission.deleteMany({
-      where: { humanId }
+    await prisma.$transaction([
+      prisma.agentPermission.deleteMany({ where: { humanId } }),
+      ...(uniqueAgentIds.length > 0 ? [
+        prisma.agentPermission.createMany({
+          data: uniqueAgentIds.map(agentId => ({ humanId, agentId })),
+          skipDuplicates: true,
+        }),
+      ] : []),
+    ])
+
+    const affectedBrands = uniqueAgentIds.length
+      ? await prisma.brandAgent.findMany({
+          where: { agentId: { in: uniqueAgentIds }, active: true },
+          select: { brand: { select: { id: true, name: true, status: true } } },
+          orderBy: { createdAt: 'desc' },
+        })
+      : []
+
+    return NextResponse.json({
+      success: true,
+      mode: 'principal_to_agents',
+      agents: uniqueAgentIds.length,
+      affectedBrands: affectedBrands.map((link) => link.brand),
     })
-
-    if (agentIds.length > 0) {
-      await prisma.agentPermission.createMany({
-        data: agentIds.map(agentId => ({
-          humanId,
-          agentId
-        }))
-      })
-    }
-
-    return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
