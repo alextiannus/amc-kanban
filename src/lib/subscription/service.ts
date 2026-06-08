@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { encrypt } from '@/lib/auth'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
+import { findOrCreateBrandOwnerAccount } from '@/lib/brandOwnerAccount'
 import crypto from 'crypto'
 
 function addMonths(date: Date, months: number) {
@@ -91,18 +92,13 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
   }
 
   const normalizedOwnerEmail = input.ownerEmail?.trim().toLowerCase() || null
-  const brandOwner = normalizedOwnerEmail
-    ? await prisma.user.findUnique({
-        where: { email: normalizedOwnerEmail },
-        select: { id: true, type: true },
-      })
-    : null
+  const brandOwner = normalizedOwnerEmail ? await findOrCreateBrandOwnerAccount(normalizedOwnerEmail) : null
 
-  if (normalizedOwnerEmail && (!brandOwner || brandOwner.type !== 'HUMAN')) {
+  if (brandOwner && !brandOwner.ok) {
     return { ok: false as const, reason: 'brand_owner_not_found' as const }
   }
 
-  const brandOwnerId = brandOwner?.id || input.ownerId
+  const brandOwnerId = brandOwner?.ok ? brandOwner.user.id : input.ownerId
 
   const brand = await prisma.$transaction(async (tx) => {
     const created = await tx.brand.create({

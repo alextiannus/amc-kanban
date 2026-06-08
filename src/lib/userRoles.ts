@@ -19,10 +19,6 @@ export function computeEffectiveUserRoles(input: {
   if (explicitRoles.includes('BRAND_OWNER') || ownerCount > 0) roles.add('BRAND_OWNER')
   if (explicitRoles.includes('AMC_PRINCIPAL') || principalCount > 0) roles.add('AMC_PRINCIPAL')
 
-  if (roles.size === 0 && input.systemRole !== 'ADMIN') {
-    roles.add('BRAND_OWNER')
-  }
-
   return Array.from(roles)
 }
 

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
 import { resolveAssignment } from '@/lib/assignmentPool'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
+import { findOrCreateBrandOwnerAccount } from '@/lib/brandOwnerAccount'
 
 // GET /api/brands — list brands for the logged-in user
 // Only return brands that have at least one active AI Agent assigned.
@@ -184,13 +185,13 @@ export async function POST(request: Request) {
   const adminCreate = isAmcOperator(session.user)
   if (adminCreate) {
     const ownerEmail = typeof body.ownerEmail === 'string' ? body.ownerEmail.trim().toLowerCase() : ''
-    const owner = ownerEmail
-      ? await prisma.user.findFirst({ where: { email: ownerEmail, type: 'HUMAN' }, select: { id: true, email: true } })
-      : { id: session.user.id, email: session.user.email || null }
+    const ownerResult = ownerEmail ? await findOrCreateBrandOwnerAccount(ownerEmail) : null
 
-    if (!owner) {
-      return NextResponse.json({ error: 'Brand owner must be an existing HUMAN user' }, { status: 404 })
+    if (ownerResult && !ownerResult.ok) {
+      return NextResponse.json({ error: ownerResult.reason === 'invalid_email' ? 'Brand owner email is invalid' : 'Brand owner email belongs to a non-human account' }, { status: 400 })
     }
+
+    const owner = ownerResult?.ok ? ownerResult.user : { id: session.user.id, email: session.user.email || null }
 
     const brand = await prisma.brand.create({
       data: {

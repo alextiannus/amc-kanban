@@ -121,9 +121,6 @@ export async function POST(request: Request) {
         password: hashedPassword,
         type: userType,
         role: requestedRole,
-        ...(userType === 'HUMAN' && requestedRole === 'USER'
-          ? { businessRoles: { create: { role: 'BRAND_OWNER' } } }
-          : {}),
       }
     })
 
