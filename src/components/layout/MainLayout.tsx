@@ -45,6 +45,11 @@ export default function MainLayout({
 }: MainLayoutProps) {
   const router = useRouter()
   const { theme, resolvedTheme, setTheme } = useTheme()
+  const [principalOpening, setPrincipalOpening] = useState(false)
+
+  useEffect(() => {
+    router.prefetch('/profile/principal')
+  }, [router])
 
   const userRoles = user?.userRoles || (user?.role === 'ADMIN' ? ['ADMIN'] : user?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : user?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : [])
   const canSeeSocialInsight = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL')
@@ -149,11 +154,12 @@ export default function MainLayout({
           )}
           {canSeePrincipalDashboard && (
             <button
-              onClick={() => router.push('/profile/principal')}
-              className="flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50"
+              onClick={() => { setPrincipalOpening(true); router.push('/profile/principal') }}
+              disabled={principalOpening}
+              className="flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 disabled:opacity-70"
               id="nav-principal-dashboard"
             >
-              <LayoutDashboard size={16} /> 主理人看板
+              <LayoutDashboard size={16} /> {principalOpening ? '打开中...' : '主理人看板'}
             </button>
           )}
         </div>

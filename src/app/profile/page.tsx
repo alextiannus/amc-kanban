@@ -35,7 +35,12 @@ type VisibleAgent = {
 export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [visibleAgents, setVisibleAgents] = useState<VisibleAgent[]>([])
+  const [principalOpening, setPrincipalOpening] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    router.prefetch('/profile/principal')
+  }, [router])
 
   const fetchProfile = useCallback(async () => {
     const res = await fetch('/api/profile')
@@ -85,10 +90,11 @@ export default function ProfilePage() {
         <div className="flex items-center gap-3">
           {canManageAgents && (
             <button
-              onClick={() => router.push('/profile/principal')}
-              className="rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-2 text-sm font-semibold"
+              onClick={() => { setPrincipalOpening(true); router.push('/profile/principal') }}
+              disabled={principalOpening}
+              className="rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-2 text-sm font-semibold disabled:opacity-70"
             >
-              主理人看板
+              {principalOpening ? '打开中...' : '主理人看板'}
             </button>
           )}
           <button onClick={() => router.push('/board')} className="text-blue-600 hover:underline dark:text-blue-400">

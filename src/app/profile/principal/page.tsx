@@ -105,7 +105,7 @@ export default function PrincipalDashboardPage() {
     setError(null)
     try {
       const query = adminScope === 'mine' ? '?scope=mine' : ''
-      const res = await fetch(`/api/profile/principal-dashboard${query}`)
+      const res = await fetch(`/api/profile/principal-dashboard${query}`, { cache: 'no-store' })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error || '加载主理人看板失败')
