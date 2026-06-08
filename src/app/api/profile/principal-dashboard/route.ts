@@ -38,16 +38,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const visibleBrandFilter = {
-    status: { not: 'ARCHIVED' as const },
-  }
-
   let visibleBrandIds: string[] = []
   let scopedAgentIds: string[] | null = null
 
   if (isAdmin && !adminAsPrincipal) {
     const allBrands = await prisma.brand.findMany({
-      where: visibleBrandFilter,
       select: { id: true },
     })
     visibleBrandIds = allBrands.map((b) => b.id)
@@ -63,7 +58,6 @@ export async function GET(request: Request) {
           where: {
             active: true,
             agentId: { in: delegatedAgentIds },
-            brand: visibleBrandFilter,
           },
           select: { brandId: true },
         })

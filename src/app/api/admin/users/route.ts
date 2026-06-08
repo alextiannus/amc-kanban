@@ -7,17 +7,6 @@ import { generateInvitationLink } from '@/lib/invitation'
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
-const activeSubscriptionWhere = {
-  status: 'ACTIVE' as const,
-  OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
-}
-
-const visibleOperatedBrandWhere = {
-  status: { not: 'ARCHIVED' as const },
-  subscriptions: { some: activeSubscriptionWhere },
-  brandAgents: { some: { active: true } },
-}
-
 export async function GET() {
   try {
     const session = await getSession()
@@ -48,7 +37,7 @@ export async function GET() {
                 email: true,
                 nickname: true,
                 brandMemberships: {
-                  where: { active: true, brand: visibleOperatedBrandWhere },
+                  where: { active: true },
                   select: { brand: { select: { id: true, name: true, status: true } } },
                 },
               },
@@ -59,11 +48,10 @@ export async function GET() {
           include: { human: { select: { id: true, email: true, nickname: true } } }
         },
         brandMemberships: {
-          where: { active: true, brand: visibleOperatedBrandWhere },
+          where: { active: true },
           select: { brand: { select: { id: true, name: true, status: true } } },
         },
         ownedBrands: {
-          where: { brand: visibleOperatedBrandWhere },
           select: { brand: { select: { id: true, name: true, status: true } } },
         }
       },
@@ -73,7 +61,7 @@ export async function GET() {
     const humanIds = users.filter((user) => user.type === 'HUMAN').map((user) => user.id)
     const legacyOwnedBrands = humanIds.length
       ? await prisma.brand.findMany({
-          where: { ownerId: { in: humanIds }, ...visibleOperatedBrandWhere },
+          where: { ownerId: { in: humanIds } },
           select: { id: true, name: true, status: true, ownerId: true },
         })
       : []
