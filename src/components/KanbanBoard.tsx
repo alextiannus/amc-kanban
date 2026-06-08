@@ -17,9 +17,8 @@ import AgentsWorkflowView from './dashboard/AgentsWorkflowView'
 import GameSettingsDashboard from './dashboard/GameSettingsDashboard'
 import DashboardAssets from './dashboard/DashboardAssets'
 import DraftManagementView from './dashboard/DraftManagementView'
-import ResearchTopicFeedView from './dashboard/ResearchTopicFeedView'
 
-type BoardView = 'agents' | 'archive' | 'dashboard' | 'calendar' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'research'
+type BoardView = 'agents' | 'archive' | 'dashboard' | 'calendar' | 'game' | 'socialInsight' | 'drafts' | 'assets'
 
 interface Brand {
   id: string
@@ -305,10 +304,6 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       ) : currentView === 'assets' ? (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
           <DashboardAssets key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} />
-        </div>
-      ) : currentView === 'research' ? (
-        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
-          <ResearchTopicFeedView key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} brandName={activeBrand?.name} />
         </div>
       ) : (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">

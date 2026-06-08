@@ -4,14 +4,14 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { Store, Calendar, Sun, Moon, Gift, Activity, Bot, LayoutDashboard, FileText, Images, FileSearch } from 'lucide-react'
+import { Store, Calendar, Sun, Moon, Gift, Activity, Bot, LayoutDashboard, FileText, Images } from 'lucide-react'
 import BrandSwitcher, { Brand } from './BrandSwitcher'
 import UserMenu from './UserMenu'
 
 interface MainLayoutProps {
   children: React.ReactNode
-  currentView: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'research'
-  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'research') => void
+  currentView: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets'
+  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets') => void
   brands: Brand[]
   activeBrand: Brand | null
   setActiveBrand: (brand: Brand) => void
@@ -109,17 +109,6 @@ export default function MainLayout({
           >
             <Images size={16} /> 素材库管理
           </button>
-          <button
-            onClick={() => setCurrentView('research')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
-              currentView === 'research'
-                ? 'bg-white dark:bg-slate-700 text-sky-600 dark:text-sky-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-            }`}
-            id="nav-research"
-          >
-            <FileSearch size={16} /> Research
-          </button>
           {canSeeSocialInsight && (
             <button
               onClick={() => setCurrentView('socialInsight')}
@@ -130,7 +119,7 @@ export default function MainLayout({
               }`}
               id="nav-social-insight"
             >
-              <Activity size={16} /> 社媒透视
+              <Activity size={16} /> 数据分析
             </button>
           )}
           <button

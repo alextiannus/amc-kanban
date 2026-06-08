@@ -16,7 +16,7 @@ interface UserMenuProps {
     avatar?: string | null
   } | null
   currentView: string
-  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'research') => void
+  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets') => void
   onShowSettings: () => void
   onShowSystemLog: () => void
   onNewAgentKeyGenerated: (key: string) => void

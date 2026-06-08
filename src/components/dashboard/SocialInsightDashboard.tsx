@@ -5,8 +5,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { 
   TrendingUp, ChevronDown, Heart, Eye, Users, 
   BarChart2, MessageCircle, Activity, FileText, X, ShieldAlert,
-  DollarSign, Percent, Star, RefreshCw
+  DollarSign, Percent, Star, RefreshCw, FileSearch
 } from 'lucide-react'
+import HotTopicsView from './ResearchTopicFeedView'
 
 // ── Colour palette for platforms ────────────────────────────────────────────
 const PLATFORM_COLORS: Record<string, string> = {
@@ -81,7 +82,7 @@ function MetricCard({ label, value, delta, icon, highlight = false, onClick, act
 
 // ── SVG Area Chart for time-series metrics ──────────────────────────────────
 type MetricKey = 'engagement' | 'impressions' | 'reach' | 'likes' | 'engRate' | 'postCount'
-type SocialInsightTab = 'overview' | 'channels' | 'sentiment' | 'roi' | 'competitors'
+type SocialInsightTab = 'overview' | 'channels' | 'sentiment' | 'roi' | 'competitors' | 'hotTopics'
 
 interface InsightSeriesPoint {
   date: string
@@ -600,6 +601,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
           { id: 'sentiment', label: '舆情与口碑', icon: <Star size={14} /> },
           { id: 'roi', label: '到店转化与ROI', icon: <DollarSign size={14} /> },
           { id: 'competitors', label: '竞品对标', icon: <BarChart2 size={14} /> },
+          { id: 'hotTopics', label: 'Hot Topics', icon: <FileSearch size={14} /> },
         ].map(t => (
           <button
             key={t.id}
@@ -616,7 +618,11 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
         ))}
       </div>
 
-      {loading ? (
+      {activeTab === 'hotTopics' ? (
+        <div className="animate-in fade-in duration-300">
+          <HotTopicsView brandId={brandId} brandName={brandName} />
+        </div>
+      ) : loading ? (
         <div className="flex flex-col items-center justify-center py-40 gap-3">
           <div className="w-8 h-8 rounded-full border-3 border-slate-200 border-t-emerald-500 animate-spin" />
           <p className="text-xs text-slate-400 font-bold">获取三方分析数据中...</p>

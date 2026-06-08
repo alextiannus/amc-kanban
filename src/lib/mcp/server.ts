@@ -1380,10 +1380,10 @@ export function createAmcMcpServer(agentApiKey: string) {
     }
   )
 
-  // ── TopicFeed Research tools ───────────────────────────────────────────
+  // ── Hot Topics tools ───────────────────────────────────────────────────
   server.tool(
     'board_list_topics',
-    'List brand TopicFeed research markdown documents. Use before content planning to avoid duplicate research.',
+    'List brand Hot Topics markdown documents. Use before content planning to avoid duplicate research and reuse research-agent findings.',
     {
       brandId: z.string(),
       q: z.string().optional().describe('Search title, summary, markdown, or exact tag.'),
@@ -1405,7 +1405,7 @@ export function createAmcMcpServer(agentApiKey: string) {
 
   server.tool(
     'board_get_topic',
-    'Read one TopicFeed markdown document by ID.',
+    'Read one Hot Topics markdown document by ID.',
     {
       brandId: z.string(),
       topicId: z.string(),
@@ -1425,7 +1425,7 @@ export function createAmcMcpServer(agentApiKey: string) {
 
   server.tool(
     'board_save_topic',
-    'Create or update a TopicFeed markdown research document for a brand.',
+    'Create or update a Hot Topics markdown research document for a brand. Intended for research AMC Agents.',
     {
       brandId: z.string(),
       topicId: z.string().optional().describe('Pass to update an existing topic. Omit to create a new topic.'),
@@ -1453,7 +1453,7 @@ export function createAmcMcpServer(agentApiKey: string) {
 
   server.tool(
     'board_archive_topic',
-    'Archive a TopicFeed research document. This is a soft delete.',
+    'Archive a Hot Topics research document. This is a soft delete.',
     {
       brandId: z.string(),
       topicId: z.string(),

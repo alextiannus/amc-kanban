@@ -309,17 +309,17 @@ Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
 
 该 Markdown 文件包含：品牌基础信息、品牌定义与设计规范、多门店结构、自媒体平台配置，作为你的任务上下文输入。
 
-### 动作 0.6：读取 / 写入 TopicFeed Research（按需执行）
-TopicFeed 用于沉淀选题研究、趋势观察、竞品记录和内容角度，正文统一使用 Markdown 文档格式。
+### 动作 0.6：读取 / 写入 Hot Topics（按需执行）
+Hot Topics 用于沉淀选题研究、趋势观察、竞品记录和内容角度，正文统一使用 Markdown 文档格式。负责 research 的 AMC Agent 通过 API/MCP 写入，其他 AMC Agent 可通过 API/MCP 读取并复用。
 
-读取 topics：
+读取 Hot Topics：
 
 \`\`\`
 GET ${apiBaseUrl}/brands/<BRAND_ID>/topics?q=<keyword>&tag=<tag>
 Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
 \`\`\`
 
-写入 topic：
+写入 Hot Topic：
 
 \`\`\`json
 POST ${apiBaseUrl}/brands/<BRAND_ID>/topics
@@ -334,7 +334,7 @@ Content-Type: application/json
 }
 \`\`\`
 
-更新 topic：
+更新 Hot Topic：
 
 \`\`\`
 PATCH ${apiBaseUrl}/brands/<BRAND_ID>/topics/<TOPIC_ID>
