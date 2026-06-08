@@ -10,6 +10,7 @@ import NewAgentKeyModal from '@/components/layout/NewAgentKeyModal'
 
 type DashboardPayload = {
   dashboardRole: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
+  userRoles?: string[]
   scope?: 'all' | 'mine'
   summary: {
     totalAgents: number

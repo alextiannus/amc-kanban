@@ -13,6 +13,7 @@ export async function GET() {
     select: {
       id: true,
       email: true,
+      type: true,
       role: true,
       nickname: true,
       avatar: true,
@@ -23,23 +24,36 @@ export async function GET() {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  const [ownerCount, legacyOwnerCount] = await Promise.all([
+  const [ownerCount, legacyOwnerCount, principalCount] = await Promise.all([
     prisma.brandOwner.count({
       where: { userId: user.id },
     }),
     prisma.brand.count({
       where: { ownerId: user.id },
     }),
+    prisma.agentPermission.count({
+      where: { humanId: user.id },
+    }),
   ])
+
+  const ownerTotal = ownerCount + legacyOwnerCount
+  const userRoles = user.type === 'AI_AGENT'
+    ? ['AMC_AGENT']
+    : [
+        ...(user.role === 'ADMIN' ? ['ADMIN'] : []),
+        ...(ownerTotal > 0 ? ['BRAND_OWNER'] : []),
+        ...(principalCount > 0 ? ['AMC_PRINCIPAL'] : []),
+      ]
 
   const dashboardRole = user.role === 'ADMIN'
     ? 'ADMIN'
-    : ownerCount > 0 || legacyOwnerCount > 0
+    : ownerTotal > 0
       ? 'BRAND_OWNER'
       : 'BRAND_DIRECTOR'
 
   return NextResponse.json({
     ...user,
     dashboardRole,
+    userRoles,
   })
 }

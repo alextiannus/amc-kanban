@@ -72,6 +72,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     email: string
     role: string
     dashboardRole?: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
+    userRoles?: string[]
     nickname?: string | null
     avatar?: string | null
   } | null>(null)
@@ -87,7 +88,8 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   const [newApiKey, setNewApiKey] = useState<string | null>(null)
   const [showSystemLog, setShowSystemLog] = useState(false)
   const [subscriptionActive, setSubscriptionActive] = useState<boolean | null>(null)
-  const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : user?.role === 'BRAND_OWNER' ? 'BRAND_OWNER' : 'BRAND_DIRECTOR')
+  const userRoles = user?.userRoles || (user?.role === 'ADMIN' ? ['ADMIN'] : user?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : user?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : [])
+  const canAccessAnalytics = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL')
 
   const activeBrandIdRef = useRef<string | undefined>(undefined)
 
@@ -281,7 +283,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
         </div>
       ) : currentView === 'socialInsight' ? (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
-          {(dashboardRole === 'ADMIN' || dashboardRole === 'BRAND_DIRECTOR') && activeBrand ? (
+          {canAccessAnalytics && activeBrand ? (
             <SocialInsightDashboard key={activeBrand.id} brandId={activeBrand.id} brandName={activeBrand.name} />
           ) : !activeBrand ? (
             <div className="flex items-center justify-center h-full text-slate-400 text-sm">请先选择品牌</div>

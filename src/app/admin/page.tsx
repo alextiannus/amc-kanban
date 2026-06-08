@@ -480,8 +480,8 @@ export default function AdminPage() {
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">人类账号角色</label>
                     <select value={role} onChange={e => setRole(e.target.value)} className="w-full border dark:border-slate-700 bg-slate-50 dark:bg-slate-800 dark:text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-                      <option value="USER">USER（普通用户 / AMC 主理人）</option>
-                      <option value="ADMIN">ADMIN（系统管理员）</option>
+                      <option value="USER">USER（无系统管理权限）</option>
+                      <option value="ADMIN">ADMIN（System Admin 权限）</option>
                     </select>
                   </div>
                 )}
@@ -538,7 +538,7 @@ export default function AdminPage() {
                           运营权限
                         </button>
                         <button onClick={() => handleRoleToggle(user)} disabled={!!actionLoading[user.id + '_role']} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition disabled:opacity-50">
-                          {actionLoading[user.id + '_role'] ? '...' : user.role === 'ADMIN' ? '降为 USER' : '升为 ADMIN'}
+                          {actionLoading[user.id + '_role'] ? '...' : user.role === 'ADMIN' ? '移除 System Admin' : '授予 System Admin'}
                         </button>
                         <button onClick={() => handleResetPassword(user)} disabled={!!actionLoading[user.id + '_reset']} title="重置密码" className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition disabled:opacity-50">
                           <RefreshCw size={14} className={actionLoading[user.id + '_reset'] ? 'animate-spin' : ''} />

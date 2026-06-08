@@ -54,7 +54,7 @@ export async function requireAdminAgent(request: Request): Promise<AdminAgentAut
 
   const authorizedAdminIds = adminPermissions.filter((permission) => permission.human.role === 'ADMIN').map((permission) => permission.human.id)
 
-  if (authenticatedAgent.role !== 'ADMIN' && authorizedAdminIds.length === 0) {
+  if (authorizedAdminIds.length === 0) {
     return {
       ok: false,
       response: NextResponse.json({ error: 'Forbidden: admin-capable AI Agent required' }, { status: 403 }),

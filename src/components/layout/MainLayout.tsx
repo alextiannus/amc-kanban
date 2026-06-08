@@ -20,6 +20,7 @@ interface MainLayoutProps {
     email: string
     role: string
     dashboardRole?: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
+    userRoles?: string[]
     nickname?: string | null
     avatar?: string | null
   } | null
@@ -45,10 +46,10 @@ export default function MainLayout({
   const router = useRouter()
   const { theme, resolvedTheme, setTheme } = useTheme()
 
-  const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : user?.role === 'BRAND_OWNER' ? 'BRAND_OWNER' : 'BRAND_DIRECTOR')
-  const canSeeSocialInsight = dashboardRole === 'ADMIN' || dashboardRole === 'BRAND_DIRECTOR'
-  const canSeeAgentsWorkflow = dashboardRole === 'BRAND_OWNER'
-  const canSeePrincipalDashboard = dashboardRole === 'ADMIN' || dashboardRole === 'BRAND_DIRECTOR'
+  const userRoles = user?.userRoles || (user?.role === 'ADMIN' ? ['ADMIN'] : user?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : user?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : [])
+  const canSeeSocialInsight = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL')
+  const canSeeAgentsWorkflow = userRoles.includes('BRAND_OWNER')
+  const canSeePrincipalDashboard = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL')
   const currentTheme = resolvedTheme || theme || 'light'
 
   return (

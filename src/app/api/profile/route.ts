@@ -85,17 +85,28 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    const legacyOwnerCount = await prisma.brand.count({ where: { ownerId: user.id } })
+    const ownerTotal = user.ownedBrands.length + legacyOwnerCount
+    const userRoles = [
+      ...(user.type === 'AI_AGENT' ? ['AMC_AGENT'] : []),
+      ...(user.role === 'ADMIN' && user.type !== 'AI_AGENT' ? ['ADMIN'] : []),
+      ...(user.type === 'HUMAN' && ownerTotal > 0 ? ['BRAND_OWNER'] : []),
+      ...(user.type === 'HUMAN' && user.permittedAgents.length > 0 ? ['AMC_PRINCIPAL'] : []),
+    ]
+
     if (user.role !== 'ADMIN' && user.type === 'HUMAN' && user.permittedAgents.length === 0) {
       return NextResponse.json({
         ...user,
-        dashboardRole: user.ownedBrands.length > 0 ? 'BRAND_OWNER' : 'BRAND_DIRECTOR',
+        dashboardRole: ownerTotal > 0 ? 'BRAND_OWNER' : 'BRAND_DIRECTOR',
+        userRoles,
         permittedAgents: []
       })
     }
 
     return NextResponse.json({
       ...user,
-      dashboardRole: user.role === 'ADMIN' ? 'ADMIN' : user.ownedBrands.length > 0 ? 'BRAND_OWNER' : 'BRAND_DIRECTOR',
+      dashboardRole: user.role === 'ADMIN' ? 'ADMIN' : ownerTotal > 0 ? 'BRAND_OWNER' : 'BRAND_DIRECTOR',
+      userRoles,
     })
   } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

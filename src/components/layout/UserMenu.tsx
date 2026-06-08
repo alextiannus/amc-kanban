@@ -12,6 +12,7 @@ interface UserMenuProps {
     email: string
     role: string
     dashboardRole?: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
+    userRoles?: string[]
     nickname?: string | null
     avatar?: string | null
   } | null
@@ -36,9 +37,12 @@ export default function UserMenu({
   const [copied, setCopied] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-  const dashboardRole = user?.dashboardRole || (user?.role === 'ADMIN' ? 'ADMIN' : user?.role === 'BRAND_OWNER' ? 'BRAND_OWNER' : 'BRAND_DIRECTOR')
-  const isAdmin = dashboardRole === 'ADMIN'
-  const isBrandDirector = dashboardRole === 'BRAND_DIRECTOR'
+  const userRoles = user?.userRoles || (user?.role === 'ADMIN' ? ['ADMIN'] : user?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : user?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : [])
+  const isAdmin = userRoles.includes('ADMIN')
+  const isPrincipal = userRoles.includes('AMC_PRINCIPAL')
+  const roleLabel = userRoles.length > 0
+    ? userRoles.map((roleName) => ({ ADMIN: 'Admin', BRAND_OWNER: 'Brand Owner', AMC_PRINCIPAL: 'AMC Principal', AMC_AGENT: 'AMC Agent' }[roleName] || roleName)).join(' / ')
+    : 'Standard User'
   void onShowSettings
   void onShowSystemLog
   void onNewAgentKeyGenerated
@@ -108,7 +112,7 @@ export default function UserMenu({
           <div className="p-4 border-b border-slate-100/50 dark:border-slate-800">
             <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{user?.nickname || user?.email}</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{user?.email}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{dashboardRole === 'ADMIN' ? 'Admin' : dashboardRole === 'BRAND_OWNER' ? 'Brand Owner（品牌主）' : 'Brand Director（品牌主理人）'}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{roleLabel}</p>
           </div>
           <div className="p-2 space-y-1">
             <button
@@ -127,7 +131,7 @@ export default function UserMenu({
               </button>
             )}
 
-            {(isAdmin || isBrandDirector) && (
+            {(isAdmin || isPrincipal) && (
               <>
                 <button
                   onClick={() => { setShowProfile(false); setCurrentView('archive') }}

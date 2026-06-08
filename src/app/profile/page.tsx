@@ -19,6 +19,7 @@ type ProfileData = {
   role: string
   type: string
   dashboardRole?: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
+  userRoles?: string[]
   introduction?: string | null
   permittedAgents: Array<{ agent: ProfileAgent }>
 }
@@ -42,7 +43,8 @@ export default function ProfilePage() {
       const data = await res.json() as ProfileData
       setProfile(data)
 
-      const canManageAgents = data.dashboardRole === 'ADMIN' || data.dashboardRole === 'BRAND_DIRECTOR'
+      const roles = data.userRoles || (data.dashboardRole === 'ADMIN' ? ['ADMIN'] : data.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : data.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : [])
+      const canManageAgents = roles.includes('ADMIN') || roles.includes('AMC_PRINCIPAL')
       if (canManageAgents) {
         const agentsRes = await fetch('/api/agents')
         if (agentsRes.ok) {
@@ -71,7 +73,8 @@ export default function ProfilePage() {
     })
   }, [fetchProfile])
 
-  const canManageAgents = profile?.dashboardRole === 'ADMIN' || profile?.dashboardRole === 'BRAND_DIRECTOR'
+  const profileRoles = profile?.userRoles || (profile?.dashboardRole === 'ADMIN' ? ['ADMIN'] : profile?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : profile?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : [])
+  const canManageAgents = profileRoles.includes('ADMIN') || profileRoles.includes('AMC_PRINCIPAL')
 
   if (!profile) return <div className="p-8 text-center text-gray-500">Loading profile...</div>
 
@@ -80,7 +83,7 @@ export default function ProfilePage() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Profile</h1>
         <div className="flex items-center gap-3">
-          {(profile.dashboardRole === 'ADMIN' || profile.dashboardRole === 'BRAND_DIRECTOR') && (
+          {canManageAgents && (
             <button
               onClick={() => router.push('/profile/principal')}
               className="rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-3 py-2 text-sm font-semibold"
@@ -113,6 +116,7 @@ export default function ProfilePage() {
           <p><span className="font-medium">Nickname:</span> {profile.nickname || '-'}</p>
           <p><span className="font-medium">Email:</span> {profile.email}</p>
           <p><span className="font-medium">Role:</span> {profile.role}</p>
+          <p><span className="font-medium">User Roles:</span> {profileRoles.length ? profileRoles.join(' / ') : 'STANDARD_USER'}</p>
           <p><span className="font-medium">Account Type:</span> {profile.type}</p>
           {profile.introduction && (
             <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">

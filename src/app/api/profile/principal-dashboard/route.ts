@@ -17,10 +17,17 @@ export async function GET(request: Request) {
   const scope = new URL(request.url).searchParams.get('scope')
   const adminAsPrincipal = isAdmin && scope === 'mine'
 
-  const [ownerLinksCount, legacyOwnerCount] = await Promise.all([
+  const [ownerLinksCount, legacyOwnerCount, principalPermissionCount] = await Promise.all([
     prisma.brandOwner.count({ where: { userId } }),
     prisma.brand.count({ where: { ownerId: userId } }),
+    prisma.agentPermission.count({ where: { humanId: userId } }),
   ])
+
+  const userRoles = [
+    ...(isAdmin ? ['ADMIN'] : []),
+    ...(ownerLinksCount + legacyOwnerCount > 0 ? ['BRAND_OWNER'] : []),
+    ...(principalPermissionCount > 0 ? ['AMC_PRINCIPAL'] : []),
+  ]
 
   const dashboardRole = isAdmin
     ? 'ADMIN'
@@ -28,7 +35,7 @@ export async function GET(request: Request) {
       ? 'BRAND_OWNER'
       : 'BRAND_DIRECTOR'
 
-  if (!isAdmin && dashboardRole !== 'BRAND_DIRECTOR') {
+  if (!isAdmin && principalPermissionCount === 0) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -252,6 +259,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     dashboardRole,
+    userRoles,
     scope: adminAsPrincipal ? 'mine' : 'all',
     summary: {
       totalAgents: agents.length,
