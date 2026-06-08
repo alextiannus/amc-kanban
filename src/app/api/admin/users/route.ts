@@ -15,6 +15,7 @@ const activeSubscriptionWhere = {
 const visibleOperatedBrandWhere = {
   status: { not: 'ARCHIVED' as const },
   subscriptions: { some: activeSubscriptionWhere },
+  brandAgents: { some: { active: true } },
 }
 
 export async function GET() {
@@ -59,11 +60,34 @@ export async function GET() {
         brandMemberships: {
           where: { active: true, brand: visibleOperatedBrandWhere },
           select: { brand: { select: { id: true, name: true, status: true } } },
+        },
+        ownedBrands: {
+          where: { brand: visibleOperatedBrandWhere },
+          select: { brand: { select: { id: true, name: true, status: true } } },
         }
       },
       orderBy: { createdAt: 'desc' }
     })
-    return NextResponse.json(users)
+
+    const humanIds = users.filter((user) => user.type === 'HUMAN').map((user) => user.id)
+    const legacyOwnedBrands = humanIds.length
+      ? await prisma.brand.findMany({
+          where: { ownerId: { in: humanIds }, ...visibleOperatedBrandWhere },
+          select: { id: true, name: true, status: true, ownerId: true },
+        })
+      : []
+    const legacyBrandsByOwner = new Map<string, Array<{ brand: { id: string; name: string; status: string } }>>()
+    for (const brand of legacyOwnedBrands) {
+      if (!brand.ownerId) continue
+      const existing = legacyBrandsByOwner.get(brand.ownerId) || []
+      existing.push({ brand: { id: brand.id, name: brand.name, status: brand.status } })
+      legacyBrandsByOwner.set(brand.ownerId, existing)
+    }
+
+    return NextResponse.json(users.map((user) => ({
+      ...user,
+      legacyOwnedBrands: legacyBrandsByOwner.get(user.id) || [],
+    })))
   } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }

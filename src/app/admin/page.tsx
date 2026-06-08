@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users } from 'lucide-react'
+import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users, Store } from 'lucide-react'
 
 interface UserRecord {
   id: string
@@ -18,6 +18,8 @@ interface UserRecord {
   driveFolder?: string | null
   createdAt: string
   brandMemberships: { brand: { id: string; name: string; status: string } }[]
+  ownedBrands: { brand: { id: string; name: string; status: string } }[]
+  legacyOwnedBrands: { brand: { id: string; name: string; status: string } }[]
   permittedAgents: { agent: { id: string; email: string; nickname: string | null; brandMemberships: { brand: { id: string; name: string; status: string } }[] } }[]
   assignedToHumans: { human: { id: string; email: string; nickname: string | null } }[]
 }
@@ -364,14 +366,21 @@ export default function AdminPage() {
     return Array.from(map.values())
   }
 
+  const uniqueBrandsFromOwnerLinks = (links: Array<{ brand: { id: string; name: string; status: string } }> = []) => {
+    const map = new Map<string, { id: string; name: string; status: string }>()
+    for (const link of links) map.set(link.brand.id, link.brand)
+    return Array.from(map.values())
+  }
+
   const formatBrandNames = (brands: { name: string }[], max = 3) => {
     if (brands.length === 0) return '暂无绑定品牌'
     const head = brands.slice(0, max).map((brand) => brand.name).join('、')
     return brands.length > max ? `${head} 等 ${brands.length} 个品牌` : head
   }
 
-  const RoleBadges = ({ user }: { user: UserRecord }) => {
+  const UserClassificationBadges = ({ user }: { user: UserRecord }) => {
     const isPrincipal = user.type === 'HUMAN' && user.permittedAgents.length > 0
+    const isBrandOwner = user.type === 'HUMAN' && uniqueBrandsFromOwnerLinks([...(user.ownedBrands || []), ...(user.legacyOwnedBrands || [])]).length > 0
     return (
       <>
         {user.role === 'ADMIN' && (
@@ -379,14 +388,19 @@ export default function AdminPage() {
             <Shield size={10} /> System Admin
           </span>
         )}
+        {isBrandOwner && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+            <Store size={10} /> Brand Owner
+          </span>
+        )}
         {isPrincipal && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
             <Users size={10} /> AMC Principal
           </span>
         )}
-        {user.role !== 'ADMIN' && !isPrincipal && (
+        {user.role !== 'ADMIN' && !isBrandOwner && !isPrincipal && (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-            <User size={10} /> USER
+            <User size={10} /> Standard User
           </span>
         )}
       </>
@@ -499,16 +513,22 @@ export default function AdminPage() {
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                   {humans.map(user => {
                     const derivedBrands = uniqueBrandsFromPermittedAgents(user.permittedAgents)
+                    const ownedBrands = uniqueBrandsFromOwnerLinks([...(user.ownedBrands || []), ...(user.legacyOwnedBrands || [])])
                     return (
                     <li key={user.id} className="px-6 py-4 flex items-center gap-3 flex-wrap">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{user.email}</span>
-                          <RoleBadges user={user} />
+                          <UserClassificationBadges user={user} />
                         </div>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          {new Date(user.createdAt).toLocaleDateString('zh-CN')} · {user.permittedAgents.length} 个 Agent · 可见 {derivedBrands.length} 个品牌
+                          {new Date(user.createdAt).toLocaleDateString('zh-CN')} · 拥有 {ownedBrands.length} 个品牌 · 运营 {derivedBrands.length} 个品牌 · {user.permittedAgents.length} 个 Agent
                         </p>
+                        {ownedBrands.length > 0 && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
+                            拥有品牌：{formatBrandNames(ownedBrands)}
+                          </p>
+                        )}
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
                           运营品牌：{formatBrandNames(derivedBrands)}
                         </p>
