@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users, Store } from 'lucide-react'
+import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users, Store, CreditCard } from 'lucide-react'
 
 interface UserRecord {
   id: string
@@ -24,6 +24,22 @@ interface UserRecord {
   permittedAgents: { agent: { id: string; email: string; nickname: string | null; brandMemberships: { brand: { id: string; name: string; status: string } }[] } }[]
   assignedToHumans: { human: { id: string; email: string; nickname: string | null } }[]
 }
+
+interface BrandRecord {
+  id: string
+  name: string
+  location: string | null
+  timezone: string
+  status: string
+  autoPilot: boolean
+  owners: { userId: string; role: string; user: { id: string; email: string; nickname: string | null } }[]
+  brandAgents: { agentId: string; role: string; agent: { id: string; email: string; nickname: string | null } }[]
+  subscriptions: { id: string; planId: string; planName: string; status: string; durationMonths: number; contractStartDate: string | null; contractEndDate: string | null; totalDueUsd: number }[]
+  _count: { actionItems: number; contents: number }
+  updatedAt: string
+}
+
+type AdminTab = 'users' | 'brands' | 'agents' | 'pool'
 
 interface InvitationResult {
   user: { id: string; email: string; type: string }
@@ -69,7 +85,10 @@ interface AssignmentDecision {
 
 export default function AdminPage() {
   const [users, setUsers] = useState<UserRecord[]>([])
+  const [brands, setBrands] = useState<BrandRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [brandsLoading, setBrandsLoading] = useState(true)
+  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('users')
   const router = useRouter()
 
   // Create form
@@ -104,12 +123,38 @@ export default function AdminPage() {
   const [poolDecisions, setPoolDecisions] = useState<AssignmentDecision[]>([])
   const [poolLoading, setPoolLoading] = useState(false)
   const [poolDrafts, setPoolDrafts] = useState<Record<string, { capacity: number; priority: number; industries: string; regions: string }>>({})
+  const [brandDrafts, setBrandDrafts] = useState<Record<string, { name: string; location: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; agentIds: string[] }>>({})
 
   const fetchUsers = async () => {
     setLoading(true)
     const res = await fetch('/api/admin/users')
     if (res.ok) setUsers(await res.json())
     setLoading(false)
+  }
+
+  const fetchBrands = async () => {
+    setBrandsLoading(true)
+    try {
+      const res = await fetch('/api/admin/brands')
+      if (!res.ok) return
+      const data = await res.json() as BrandRecord[]
+      setBrands(data)
+      setBrandDrafts(Object.fromEntries(data.map((brand) => {
+        const subscription = brand.subscriptions[0]
+        return [brand.id, {
+          name: brand.name,
+          location: brand.location || '',
+          status: brand.status,
+          ownerUserId: brand.owners[0]?.userId || '',
+          planId: subscription?.planId || 'essential',
+          subscriptionStatus: subscription?.status || 'ACTIVE',
+          durationMonths: subscription?.durationMonths || 12,
+          agentIds: brand.brandAgents.map((link) => link.agentId),
+        }]
+      })))
+    } finally {
+      setBrandsLoading(false)
+    }
   }
 
   const fetchPoolData = async () => {
@@ -145,6 +190,7 @@ export default function AdminPage() {
   useEffect(() => {
     queueMicrotask(() => {
       void fetchUsers()
+      void fetchBrands()
       void fetchPoolData()
       void fetchDecisionLogs()
     })
@@ -311,6 +357,32 @@ export default function AdminPage() {
     } finally { setActionLoading(p => { const n = { ...p }; delete n[user.id + '_role']; return n }) }
   }
 
+  const saveBusinessRoles = async (user: UserRecord, nextRoles: string[]) => {
+    setActionLoading(p => ({ ...p, [user.id + '_biz']: '1' }))
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessRoles: nextRoles }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(data.error || '更新身份失败')
+        return
+      }
+      await fetchUsers()
+    } finally {
+      setActionLoading(p => { const n = { ...p }; delete n[user.id + '_biz']; return n })
+    }
+  }
+
+  const toggleBusinessRole = (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL') => {
+    const roles = new Set((user.businessRoles || []).map((role) => role.role))
+    if (roles.has(roleName)) roles.delete(roleName)
+    else roles.add(roleName)
+    void saveBusinessRoles(user, Array.from(roles))
+  }
+
   const handleResetPassword = async (user: UserRecord) => {
     if (!confirm(`重置 ${user.email} 的密码？`)) return
     setActionLoading(p => ({ ...p, [user.id + '_reset']: '1' }))
@@ -333,8 +405,46 @@ export default function AdminPage() {
     try {
       const res = await fetch(user.type === 'AI_AGENT' ? `/api/agents/${user.id}` : `/api/admin/users/${user.id}`, { method: 'DELETE' })
       if (res.ok) setUsers(prev => prev.filter(u => u.id !== user.id))
-      else { const d = await res.json(); alert(d.error || '删除失败') }
+      else { const d = await res.json().catch(() => ({})); alert(d.error || '删除失败') }
     } finally { setActionLoading(p => { const n = { ...p }; delete n[user.id + '_del']; return n }) }
+  }
+
+  const updateBrandDraft = (brandId: string, patch: Partial<{ name: string; location: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; agentIds: string[] }>) => {
+    setBrandDrafts(prev => ({
+      ...prev,
+      [brandId]: {
+        name: prev[brandId]?.name || '',
+        location: prev[brandId]?.location || '',
+        status: prev[brandId]?.status || 'ACTIVE',
+        ownerUserId: prev[brandId]?.ownerUserId || '',
+        planId: prev[brandId]?.planId || 'essential',
+        subscriptionStatus: prev[brandId]?.subscriptionStatus || 'ACTIVE',
+        durationMonths: prev[brandId]?.durationMonths || 12,
+        agentIds: prev[brandId]?.agentIds || [],
+        ...patch,
+      },
+    }))
+  }
+
+  const saveBrandDraft = async (brand: BrandRecord) => {
+    const draft = brandDrafts[brand.id]
+    if (!draft) return
+    setActionLoading(p => ({ ...p, [brand.id + '_brand']: '1' }))
+    try {
+      const res = await fetch(`/api/admin/brands/${brand.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(data.error || '保存品牌失败')
+        return
+      }
+      await Promise.all([fetchBrands(), fetchUsers()])
+    } finally {
+      setActionLoading(p => { const n = { ...p }; delete n[brand.id + '_brand']; return n })
+    }
   }
 
   const savePermissions = async () => {
@@ -452,18 +562,34 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white">用户管理</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{humans.length} 个人类用户 · {agents.length} 个 AI Agent</p>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white">Admin Console</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{humans.length} 个人类用户 · {brands.length} 个品牌 · {agents.length} 个 AI Agent</p>
           </div>
           <button onClick={() => router.push('/board')} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
             <ArrowLeft size={16} /> 返回看板
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:grid-cols-4">
+          {([
+            ['users', User, '用户管理'],
+            ['brands', Store, '品牌管理'],
+            ['agents', Bot, 'AI Agent 管理'],
+            ['pool', CreditCard, '分配池'],
+          ] as const).map(([id, Icon, label]) => (
+            <button
+              key={id}
+              onClick={() => setActiveAdminTab(id)}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${activeAdminTab === id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}
+            >
+              <Icon size={15} /> {label}
+            </button>
+          ))}
+        </div>
+
+        {(activeAdminTab === 'users' || activeAdminTab === 'agents') && <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Create Form */}
           <div className="md:col-span-1">
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm sticky top-8">
@@ -500,7 +626,7 @@ export default function AdminPage() {
 
           {/* User Lists */}
           <div className="md:col-span-2 space-y-5">
-            {/* Human Users */}
+            {activeAdminTab === 'users' && (
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
                 <User size={15} className="text-slate-500" />
@@ -539,6 +665,12 @@ export default function AdminPage() {
                         <button onClick={() => { setSelectedHuman(user); setAssignedAgentIds(user.permittedAgents.map(pa => pa.agent.id)) }} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition">
                           运营权限
                         </button>
+                        <button onClick={() => toggleBusinessRole(user, 'BRAND_OWNER')} disabled={!!actionLoading[user.id + '_biz']} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition disabled:opacity-50">
+                          {(user.businessRoles || []).some((item) => item.role === 'BRAND_OWNER') ? '移除 Brand Owner' : '设为 Brand Owner'}
+                        </button>
+                        <button onClick={() => toggleBusinessRole(user, 'AMC_PRINCIPAL')} disabled={!!actionLoading[user.id + '_biz']} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition disabled:opacity-50">
+                          {(user.businessRoles || []).some((item) => item.role === 'AMC_PRINCIPAL') ? '移除 AMC Principal' : '设为 AMC Principal'}
+                        </button>
                         <button onClick={() => handleRoleToggle(user)} disabled={!!actionLoading[user.id + '_role']} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition disabled:opacity-50">
                           {actionLoading[user.id + '_role'] ? '...' : user.role === 'ADMIN' ? '移除 System Admin' : '授予 System Admin'}
                         </button>
@@ -555,8 +687,9 @@ export default function AdminPage() {
                 </ul>
               )}
             </div>
+            )}
 
-            {/* AI Agents */}
+            {activeAdminTab === 'agents' && (
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
                 <Bot size={15} className="text-slate-500" />
@@ -647,10 +780,119 @@ export default function AdminPage() {
                 </ul>
               )}
             </div>
+            )}
           </div>
-        </div>
+        </div>}
 
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        {activeAdminTab === 'brands' && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+              <Store size={15} className="text-slate-500" />
+              <span className="text-sm font-black text-slate-800 dark:text-slate-100">品牌管理</span>
+              <button onClick={fetchBrands} className="ml-auto text-xs font-bold text-blue-600 hover:text-blue-700">刷新</button>
+            </div>
+            {brandsLoading ? (
+              <div className="p-6 text-center text-sm text-slate-400">加载中...</div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {brands.map((brand) => {
+                  const draft = brandDrafts[brand.id]
+                  const subscription = brand.subscriptions[0]
+                  return (
+                    <div key={brand.id} className="p-5 space-y-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-base font-black text-slate-900 dark:text-white">{brand.name}</h2>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">{brand.status}</span>
+                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:bg-blue-950/40 dark:text-blue-300">{subscription?.planName || '未绑定计划'}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-400">Owner: {brand.owners[0]?.user.email || '未设置'} · Agent: {brand.brandAgents.length} · Action: {brand._count.actionItems}</p>
+                        </div>
+                        <button onClick={() => saveBrandDraft(brand)} disabled={!!actionLoading[brand.id + '_brand']} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
+                          <Save size={14} /> {actionLoading[brand.id + '_brand'] ? '保存中...' : '保存品牌'}
+                        </button>
+                      </div>
+
+                      {draft && (
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+                          <label className="space-y-1.5 lg:col-span-2">
+                            <span className="text-xs font-bold text-slate-500">品牌名</span>
+                            <input value={draft.name} onChange={e => updateBrandDraft(brand.id, { name: e.target.value })} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white" />
+                          </label>
+                          <label className="space-y-1.5">
+                            <span className="text-xs font-bold text-slate-500">状态</span>
+                            <select value={draft.status} onChange={e => updateBrandDraft(brand.id, { status: e.target.value })} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white">
+                              <option value="ACTIVE">ACTIVE</option>
+                              <option value="PAUSED">PAUSED</option>
+                              <option value="ARCHIVED">ARCHIVED</option>
+                            </select>
+                          </label>
+                          <label className="space-y-1.5">
+                            <span className="text-xs font-bold text-slate-500">地点</span>
+                            <input value={draft.location} onChange={e => updateBrandDraft(brand.id, { location: e.target.value })} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white" />
+                          </label>
+                          <label className="space-y-1.5 lg:col-span-2">
+                            <span className="text-xs font-bold text-slate-500">Brand Owner</span>
+                            <select value={draft.ownerUserId} onChange={e => updateBrandDraft(brand.id, { ownerUserId: e.target.value })} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white">
+                              <option value="">未设置</option>
+                              {humans.map((human) => <option key={human.id} value={human.id}>{human.nickname || human.email}</option>)}
+                            </select>
+                          </label>
+                          <label className="space-y-1.5">
+                            <span className="text-xs font-bold text-slate-500">Plan</span>
+                            <select value={draft.planId} onChange={e => updateBrandDraft(brand.id, { planId: e.target.value })} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white">
+                              <option value="starter">STARTER</option>
+                              <option value="essential">ESSENTIAL</option>
+                              <option value="advanced">ADVANCED</option>
+                            </select>
+                          </label>
+                          <label className="space-y-1.5">
+                            <span className="text-xs font-bold text-slate-500">Subscription</span>
+                            <select value={draft.subscriptionStatus} onChange={e => updateBrandDraft(brand.id, { subscriptionStatus: e.target.value })} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white">
+                              <option value="ACTIVE">ACTIVE</option>
+                              <option value="PENDING">PENDING</option>
+                              <option value="FAILED">FAILED</option>
+                              <option value="CANCELLED">CANCELLED</option>
+                            </select>
+                          </label>
+                          <label className="space-y-1.5">
+                            <span className="text-xs font-bold text-slate-500">周期</span>
+                            <select value={draft.durationMonths} onChange={e => updateBrandDraft(brand.id, { durationMonths: Number(e.target.value) })} className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white">
+                              <option value={3}>3 months</option>
+                              <option value={6}>6 months</option>
+                              <option value={12}>12 months</option>
+                            </select>
+                          </label>
+                        </div>
+                      )}
+
+                      {draft && (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                          <p className="mb-2 text-xs font-bold text-slate-500">绑定 AI Agent</p>
+                          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                            {agents.map((agent) => (
+                              <label key={`${brand.id}-${agent.id}`} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                <input
+                                  type="checkbox"
+                                  checked={draft.agentIds.includes(agent.id)}
+                                  onChange={() => updateBrandDraft(brand.id, { agentIds: draft.agentIds.includes(agent.id) ? draft.agentIds.filter(id => id !== agent.id) : [...draft.agentIds, agent.id] })}
+                                />
+                                <span className="truncate">{agent.nickname || agent.email}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeAdminTab === 'pool' && <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <h2 className="text-sm font-black text-slate-800 dark:text-slate-100">分配池成员</h2>
             <span className="text-xs text-slate-400">{poolMembers.length} 条</span>
@@ -697,9 +939,9 @@ export default function AdminPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </div>}
 
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        {activeAdminTab === 'pool' && <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
             <h2 className="text-sm font-black text-slate-800 dark:text-slate-100">分配决策日志</h2>
             <button onClick={fetchDecisionLogs} className="text-xs text-blue-600 hover:text-blue-700">刷新</button>
@@ -737,7 +979,7 @@ export default function AdminPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Agent Permission Modal */}

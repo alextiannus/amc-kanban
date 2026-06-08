@@ -23,6 +23,62 @@ export async function PATCH(request: Request, { params }: Params) {
   const target = await prisma.user.findUnique({ where: { id } })
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
+  if (target.type === 'HUMAN' && ('email' in body || 'nickname' in body || Array.isArray(body.businessRoles))) {
+    const data: Prisma.UserUpdateInput = {}
+
+    if ('email' in body) {
+      if (typeof body.email !== 'string' || !body.email.trim()) {
+        return NextResponse.json({ error: 'email is required' }, { status: 400 })
+      }
+      const email = body.email.trim().toLowerCase()
+      const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } })
+      if (existing && existing.id !== id) {
+        return NextResponse.json({ error: 'Email already exists' }, { status: 400 })
+      }
+      data.email = email
+    }
+
+    if ('nickname' in body) {
+      if (body.nickname !== null && typeof body.nickname !== 'string') {
+        return NextResponse.json({ error: 'nickname must be string or null' }, { status: 400 })
+      }
+      data.nickname = typeof body.nickname === 'string' && body.nickname.trim() ? body.nickname.trim() : null
+    }
+
+    const validBusinessRoles = ['BRAND_OWNER', 'AMC_PRINCIPAL'] as const
+    type ValidBusinessRole = (typeof validBusinessRoles)[number]
+    const nextBusinessRoles = Array.isArray(body.businessRoles)
+      ? Array.from(new Set((body.businessRoles as unknown[]).filter((role): role is ValidBusinessRole => typeof role === 'string' && validBusinessRoles.includes(role as ValidBusinessRole))))
+      : null
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const user = Object.keys(data).length
+        ? await tx.user.update({
+            where: { id },
+            data,
+            select: { id: true, email: true, nickname: true, role: true, type: true },
+          })
+        : await tx.user.findUniqueOrThrow({
+            where: { id },
+            select: { id: true, email: true, nickname: true, role: true, type: true },
+          })
+
+      if (nextBusinessRoles) {
+        await tx.userBusinessRole.deleteMany({ where: { userId: id, role: { in: [...validBusinessRoles] } } })
+        if (nextBusinessRoles.length > 0) {
+          await tx.userBusinessRole.createMany({
+            data: nextBusinessRoles.map((role) => ({ userId: id, role })),
+            skipDuplicates: true,
+          })
+        }
+      }
+
+      return user
+    })
+
+    return NextResponse.json({ ok: true, user: updated })
+  }
+
   const agentProfileFields = ['email', 'nickname', 'insights', 'introduction', 'workflow', 'themeColor', 'chatLink', 'driveFolder']
   if (target.type === 'AI_AGENT' && agentProfileFields.some((field) => field in body)) {
     const data: Prisma.UserUpdateInput = {}
