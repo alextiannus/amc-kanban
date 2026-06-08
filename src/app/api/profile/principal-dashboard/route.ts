@@ -43,6 +43,7 @@ export async function GET(request: Request) {
   }
 
   let visibleBrandIds: string[] = []
+  let scopedAgentIds: string[] | null = null
 
   if (isAdmin && !adminAsPrincipal) {
     const allBrands = await prisma.brand.findMany({
@@ -51,26 +52,12 @@ export async function GET(request: Request) {
     })
     visibleBrandIds = allBrands.map((b) => b.id)
   } else {
-    const [permissions, orgMemberships, ownerLinks, legacyOwnedBrands] = await Promise.all([
-      prisma.agentPermission.findMany({
-        where: { humanId: userId },
-        select: { agentId: true },
-      }),
-      prisma.organizationMember.findMany({
-        where: { memberId: userId },
-        select: { ownerId: true },
-      }),
-      prisma.brandOwner.findMany({
-        where: { userId, brand: visibleBrandFilter },
-        select: { brandId: true },
-      }),
-      prisma.brand.findMany({
-        where: { ownerId: userId, ...visibleBrandFilter },
-        select: { id: true },
-      }),
-    ])
-
+    const permissions = await prisma.agentPermission.findMany({
+      where: { humanId: userId },
+      select: { agentId: true },
+    })
     const delegatedAgentIds = permissions.map((p) => p.agentId)
+    scopedAgentIds = delegatedAgentIds
     const delegatedBrandLinks = delegatedAgentIds.length
       ? await prisma.brandAgent.findMany({
           where: {
@@ -82,33 +69,12 @@ export async function GET(request: Request) {
         })
       : []
 
-    const orgOwnerIds = uniq(orgMemberships.map((m) => m.ownerId))
-    const orgBrands = orgOwnerIds.length
-      ? await prisma.brand.findMany({
-          where: {
-            ...visibleBrandFilter,
-            OR: [
-              { ownerId: { in: orgOwnerIds } },
-              {
-                owners: {
-                  some: {
-                    role: 'owner',
-                    userId: { in: orgOwnerIds },
-                  },
-                },
-              },
-            ],
-          },
-          select: { id: true },
-        })
-      : []
+    visibleBrandIds = uniq(delegatedBrandLinks.map((link) => link.brandId))
+  }
 
-    visibleBrandIds = uniq([
-      ...ownerLinks.map((l) => l.brandId),
-      ...legacyOwnedBrands.map((b) => b.id),
-      ...delegatedBrandLinks.map((l) => l.brandId),
-      ...orgBrands.map((b) => b.id),
-    ])
+  const brandAgentWhere = {
+    active: true,
+    ...(scopedAgentIds ? { agentId: { in: scopedAgentIds } } : {}),
   }
 
   const [brands, brandAgentLinks, actionLogs] = await Promise.all([
@@ -135,7 +101,7 @@ export async function GET(request: Request) {
               },
             },
             brandAgents: {
-              where: { active: true },
+              where: brandAgentWhere,
               select: {
                 agentId: true,
                 role: true,
@@ -162,7 +128,7 @@ export async function GET(request: Request) {
       ? prisma.brandAgent.findMany({
           where: {
             brandId: { in: visibleBrandIds },
-            active: true,
+            ...brandAgentWhere,
           },
           select: {
             brandId: true,
@@ -219,7 +185,7 @@ export async function GET(request: Request) {
     boundBrands: Array<{ id: string; name: string; role: string }>
   }> = []
 
-  if (isAdmin) {
+  if (isAdmin && !adminAsPrincipal) {
     const allAgents = await prisma.user.findMany({
       where: { type: 'AI_AGENT' },
       select: {
@@ -242,18 +208,29 @@ export async function GET(request: Request) {
       boundBrands: brandBindingsByAgent.get(agent.id) || [],
     }))
   } else {
-    const seen = new Set<string>()
-    for (const link of brandAgentLinks) {
-      if (seen.has(link.agent.id)) continue
-      seen.add(link.agent.id)
-      agents.push({
-        id: link.agent.id,
-        email: link.agent.email,
-        nickname: link.agent.nickname,
-        isOnline: link.agent.tasksAsAssignee.length > 0,
-        boundBrands: brandBindingsByAgent.get(link.agent.id) || [],
-      })
-    }
+    const scopedAgents = scopedAgentIds?.length
+      ? await prisma.user.findMany({
+          where: { id: { in: scopedAgentIds }, type: 'AI_AGENT' },
+          select: {
+            id: true,
+            email: true,
+            nickname: true,
+            tasksAsAssignee: {
+              where: { status: { in: ['todo', 'in_progress', 'pending'] } },
+              select: { id: true },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+      : []
+
+    agents = scopedAgents.map((agent) => ({
+      id: agent.id,
+      email: agent.email,
+      nickname: agent.nickname,
+      isOnline: agent.tasksAsAssignee.length > 0,
+      boundBrands: brandBindingsByAgent.get(agent.id) || [],
+    }))
   }
 
   return NextResponse.json({

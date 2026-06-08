@@ -69,6 +69,14 @@ export async function POST(request: Request, { params }: Params) {
   const agent = await prisma.user.findFirst({ where: { id: agentId, type: 'AI_AGENT' } })
   if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
 
+  if (session.user.role !== 'ADMIN') {
+    const permission = await prisma.agentPermission.findUnique({
+      where: { humanId_agentId: { humanId: session.user.id, agentId } },
+      select: { id: true },
+    })
+    if (!permission) return NextResponse.json({ error: 'Forbidden: agent is not assigned to this principal' }, { status: 403 })
+  }
+
   const link = await prisma.brandAgent.upsert({
     where: { brandId_agentId: { brandId: id, agentId } },
     create: { brandId: id, agentId, role, active: true },
@@ -97,6 +105,14 @@ export async function DELETE(request: Request, { params }: Params) {
   const url = new URL(request.url)
   const agentId = url.searchParams.get('agentId')
   if (!agentId) return NextResponse.json({ error: 'agentId required' }, { status: 400 })
+
+  if (session.user.role !== 'ADMIN') {
+    const permission = await prisma.agentPermission.findUnique({
+      where: { humanId_agentId: { humanId: session.user.id, agentId } },
+      select: { id: true },
+    })
+    if (!permission) return NextResponse.json({ error: 'Forbidden: agent is not assigned to this principal' }, { status: 403 })
+  }
 
   await prisma.brandAgent.deleteMany({ where: { brandId: id, agentId } })
   return NextResponse.json({ ok: true })
