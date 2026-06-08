@@ -370,16 +370,28 @@ export default function AdminPage() {
     return brands.length > max ? `${head} 等 ${brands.length} 个品牌` : head
   }
 
-  const RoleBadge = ({ role }: { role: string }) =>
-    role === 'ADMIN' ? (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
-        <Shield size={10} /> ADMIN
-      </span>
-    ) : (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-        <User size={10} /> USER
-      </span>
+  const RoleBadges = ({ user }: { user: UserRecord }) => {
+    const isPrincipal = user.type === 'HUMAN' && user.permittedAgents.length > 0
+    return (
+      <>
+        {user.role === 'ADMIN' && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
+            <Shield size={10} /> System Admin
+          </span>
+        )}
+        {isPrincipal && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+            <Users size={10} /> AMC Principal
+          </span>
+        )}
+        {user.role !== 'ADMIN' && !isPrincipal && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+            <User size={10} /> USER
+          </span>
+        )}
+      </>
     )
+  }
 
   const CopyField = ({ label, value, fieldKey }: { label: string; value: string; fieldKey: string }) => (
     <div className="space-y-1.5">
@@ -492,13 +504,13 @@ export default function AdminPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{user.email}</span>
-                          <RoleBadge role={user.role} />
+                          <RoleBadges user={user} />
                         </div>
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           {new Date(user.createdAt).toLocaleDateString('zh-CN')} · {user.permittedAgents.length} 个 Agent · 可见 {derivedBrands.length} 个品牌
                         </p>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">
-                          间接运营品牌：{formatBrandNames(derivedBrands)}
+                          运营品牌：{formatBrandNames(derivedBrands)}
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -712,7 +724,7 @@ export default function AdminPage() {
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800">
             <h2 className="text-base font-black text-slate-900 dark:text-white mb-1">主理人运营权限</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              {selectedHuman.email} · 勾选 Agent 后，该主理人会间接看到这些 Agent 绑定运营的品牌。
+              {selectedHuman.email} · 勾选 Agent 后，该 AMC Principal 会运营这些 Agent 绑定运营的品牌。
             </p>
             <div className="space-y-2 max-h-64 overflow-y-auto mb-5">
               {agents.map(agent => {
@@ -746,7 +758,7 @@ export default function AdminPage() {
             <h2 className="text-base font-black text-slate-900 dark:text-white mb-1">对应 AMC 主理人</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{selectedAgent.nickname || selectedAgent.email}</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              该 Agent 运营品牌：{formatBrandNames(uniqueBrandsFromAgentLinks(selectedAgent.brandMemberships))}。被勾选的主理人会间接成为这些品牌的主理人之一。
+              该 Agent 运营品牌：{formatBrandNames(uniqueBrandsFromAgentLinks(selectedAgent.brandMemberships))}。被勾选的 AMC Principal 会成为这些品牌的运营主理人之一。
             </p>
             <div className="space-y-2 max-h-64 overflow-y-auto mb-5">
               {humans.map(human => (
