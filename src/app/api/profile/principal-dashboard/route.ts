@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { isAmcOperatorRole } from '@/lib/amcOperator'
+import { computeEffectiveUserRoles, getLegacyDashboardRole } from '@/lib/userRoles'
 
 function uniq(values: string[]) {
   return Array.from(new Set(values))
@@ -17,25 +18,23 @@ export async function GET(request: Request) {
   const scope = new URL(request.url).searchParams.get('scope')
   const adminAsPrincipal = isAdmin && scope === 'mine'
 
-  const [ownerLinksCount, legacyOwnerCount, principalPermissionCount] = await Promise.all([
+  const [ownerLinksCount, legacyOwnerCount, principalPermissionCount, explicitRoles] = await Promise.all([
     prisma.brandOwner.count({ where: { userId } }),
     prisma.brand.count({ where: { ownerId: userId } }),
     prisma.agentPermission.count({ where: { humanId: userId } }),
+    prisma.userBusinessRole.findMany({ where: { userId }, select: { role: true } }),
   ])
 
-  const userRoles = [
-    ...(isAdmin ? ['ADMIN'] : []),
-    ...(ownerLinksCount + legacyOwnerCount > 0 ? ['BRAND_OWNER'] : []),
-    ...(principalPermissionCount > 0 ? ['AMC_PRINCIPAL'] : []),
-  ]
+  const userRoles = computeEffectiveUserRoles({
+    userType: session.user.type,
+    systemRole: session.user.role,
+    explicitRoles: explicitRoles.map((role) => role.role),
+    ownerCount: ownerLinksCount + legacyOwnerCount,
+    principalCount: principalPermissionCount,
+  })
+  const dashboardRole = getLegacyDashboardRole(userRoles)
 
-  const dashboardRole = isAdmin
-    ? 'ADMIN'
-    : ownerLinksCount > 0 || legacyOwnerCount > 0
-      ? 'BRAND_OWNER'
-      : 'BRAND_DIRECTOR'
-
-  if (!isAdmin && principalPermissionCount === 0) {
+  if (!isAdmin && !userRoles.includes('AMC_PRINCIPAL')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

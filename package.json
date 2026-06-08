@@ -16,6 +16,7 @@
     "test:api": "node --experimental-strip-types scripts/test-api.mts",
     "test:subscription": "node --experimental-strip-types scripts/test-subscription-pricing.mts && node --experimental-strip-types scripts/test-subscription-workflow.mts",
     "test:subscription-workflow": "node --experimental-strip-types scripts/test-subscription-workflow.mts",
+    "sync:role-roster": "node --experimental-strip-types scripts/sync-user-role-roster.mts",
     "verify:permissions": "node scripts/verify-permissions.mjs",
     "postinstall": "npx prisma generate && npx prisma db push --accept-data-loss"
   },

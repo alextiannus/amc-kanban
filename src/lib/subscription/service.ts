@@ -121,6 +121,12 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       update: { role: 'owner' },
     })
 
+    await tx.userBusinessRole.upsert({
+      where: { userId_role: { userId: brandOwnerId, role: 'BRAND_OWNER' } },
+      create: { userId: brandOwnerId, role: 'BRAND_OWNER' },
+      update: {},
+    })
+
     if (brandOwnerId !== input.ownerId) {
       await tx.brandOwner.upsert({
         where: { brandId_userId: { brandId: created.id, userId: input.ownerId } },

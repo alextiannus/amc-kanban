@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { computeEffectiveUserRoles, getLegacyDashboardRole } from '@/lib/userRoles'
 
 export async function GET() {
   const session = await getSession()
@@ -17,6 +18,7 @@ export async function GET() {
       role: true,
       nickname: true,
       avatar: true,
+      businessRoles: { select: { role: true } },
     }
   })
 
@@ -37,22 +39,18 @@ export async function GET() {
   ])
 
   const ownerTotal = ownerCount + legacyOwnerCount
-  const userRoles = user.type === 'AI_AGENT'
-    ? ['AMC_AGENT']
-    : [
-        ...(user.role === 'ADMIN' ? ['ADMIN'] : []),
-        ...(ownerTotal > 0 ? ['BRAND_OWNER'] : []),
-        ...(principalCount > 0 ? ['AMC_PRINCIPAL'] : []),
-      ]
-
-  const dashboardRole = user.role === 'ADMIN'
-    ? 'ADMIN'
-    : ownerTotal > 0
-      ? 'BRAND_OWNER'
-      : 'BRAND_DIRECTOR'
+  const userRoles = computeEffectiveUserRoles({
+    userType: user.type,
+    systemRole: user.role,
+    explicitRoles: user.businessRoles.map((role) => role.role),
+    ownerCount: ownerTotal,
+    principalCount,
+  })
+  const dashboardRole = getLegacyDashboardRole(userRoles)
 
   return NextResponse.json({
     ...user,
+    businessRoles: undefined,
     dashboardRole,
     userRoles,
   })

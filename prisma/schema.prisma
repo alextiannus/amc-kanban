@@ -38,6 +38,7 @@ model User {
   // 权限映射表（人类用户能看到哪些 AI Agent 的工作）
   permittedAgents  AgentPermission[] @relation("HumanUser")
   assignedToHumans AgentPermission[] @relation("AiAgent")
+  businessRoles  UserBusinessRole[]
   brandMemberships BrandAgent[]      @relation("BrandAgents")
   createdSubscriptions BrandSubscription[]
   comments         Comment[]
@@ -46,6 +47,19 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model UserBusinessRole {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@index([role])
 }
 
 // 组织成员关系：owner 管理组织，member 可查看 owner 的全部品牌

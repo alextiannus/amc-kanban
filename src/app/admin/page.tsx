@@ -17,6 +17,7 @@ interface UserRecord {
   chatLink?: string | null
   driveFolder?: string | null
   createdAt: string
+  businessRoles?: { role: string }[]
   brandMemberships: { brand: { id: string; name: string; status: string } }[]
   ownedBrands: { brand: { id: string; name: string; status: string } }[]
   legacyOwnedBrands: { brand: { id: string; name: string; status: string } }[]
@@ -379,8 +380,9 @@ export default function AdminPage() {
   }
 
   const UserClassificationBadges = ({ user }: { user: UserRecord }) => {
-    const isPrincipal = user.type === 'HUMAN' && user.permittedAgents.length > 0
-    const isBrandOwner = user.type === 'HUMAN' && uniqueBrandsFromOwnerLinks([...(user.ownedBrands || []), ...(user.legacyOwnedBrands || [])]).length > 0
+    const explicitRoles = new Set((user.businessRoles || []).map((role) => role.role))
+    const isPrincipal = user.type === 'HUMAN' && (explicitRoles.has('AMC_PRINCIPAL') || user.permittedAgents.length > 0)
+    const isBrandOwner = user.type === 'HUMAN' && (explicitRoles.has('BRAND_OWNER') || uniqueBrandsFromOwnerLinks([...(user.ownedBrands || []), ...(user.legacyOwnedBrands || [])]).length > 0)
     return (
       <>
         {user.role === 'ADMIN' && (

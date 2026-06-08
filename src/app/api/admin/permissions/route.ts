@@ -41,6 +41,10 @@ export async function POST(request: Request) {
             data: uniqueHumanIds.map((id) => ({ humanId: id, agentId })),
             skipDuplicates: true,
           }),
+          prisma.userBusinessRole.createMany({
+            data: uniqueHumanIds.map((id) => ({ userId: id, role: 'AMC_PRINCIPAL' })),
+            skipDuplicates: true,
+          }),
         ] : []),
       ])
 
@@ -93,6 +97,11 @@ export async function POST(request: Request) {
         prisma.agentPermission.createMany({
           data: uniqueAgentIds.map(agentId => ({ humanId, agentId })),
           skipDuplicates: true,
+        }),
+        prisma.userBusinessRole.upsert({
+          where: { userId_role: { userId: humanId, role: 'AMC_PRINCIPAL' } },
+          create: { userId: humanId, role: 'AMC_PRINCIPAL' },
+          update: {},
         }),
       ] : []),
     ])

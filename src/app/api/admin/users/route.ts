@@ -39,6 +39,7 @@ export async function GET() {
         driveFolder: true,
         chatLink: true,
         createdAt: true,
+        businessRoles: { select: { role: true } },
         permittedAgents: {
           include: {
             agent: {
@@ -120,6 +121,9 @@ export async function POST(request: Request) {
         password: hashedPassword,
         type: userType,
         role: requestedRole,
+        ...(userType === 'HUMAN' && requestedRole === 'USER'
+          ? { businessRoles: { create: { role: 'BRAND_OWNER' } } }
+          : {}),
       }
     })
 

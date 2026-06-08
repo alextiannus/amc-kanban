@@ -207,6 +207,12 @@ export async function POST(request: Request) {
       update: { role: 'owner' },
     })
 
+    await prisma.userBusinessRole.upsert({
+      where: { userId_role: { userId: owner.id, role: 'BRAND_OWNER' } },
+      create: { userId: owner.id, role: 'BRAND_OWNER' },
+      update: {},
+    })
+
     try {
       await ensureBrandWorkspace(brand.id)
     } catch (workspaceError) {
@@ -274,6 +280,12 @@ export async function POST(request: Request) {
     await tx.brandOwner.upsert({
       where: { brandId_userId: { brandId: brand.id, userId: session.user.id } },
       create: { brandId: brand.id, userId: session.user.id },
+      update: {},
+    })
+
+    await tx.userBusinessRole.upsert({
+      where: { userId_role: { userId: session.user.id, role: 'BRAND_OWNER' } },
+      create: { userId: session.user.id, role: 'BRAND_OWNER' },
       update: {},
     })
 

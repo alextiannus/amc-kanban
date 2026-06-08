@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import fs from 'fs/promises'
 import path from 'path'
+import { computeEffectiveUserRoles, getLegacyDashboardRole } from '@/lib/userRoles'
 
 export async function GET() {
   try {
@@ -77,7 +78,8 @@ export async function GET() {
               } 
             } 
           }
-        }
+        },
+        businessRoles: { select: { role: true } },
       }
     })
 
@@ -87,17 +89,20 @@ export async function GET() {
 
     const legacyOwnerCount = await prisma.brand.count({ where: { ownerId: user.id } })
     const ownerTotal = user.ownedBrands.length + legacyOwnerCount
-    const userRoles = [
-      ...(user.type === 'AI_AGENT' ? ['AMC_AGENT'] : []),
-      ...(user.role === 'ADMIN' && user.type !== 'AI_AGENT' ? ['ADMIN'] : []),
-      ...(user.type === 'HUMAN' && ownerTotal > 0 ? ['BRAND_OWNER'] : []),
-      ...(user.type === 'HUMAN' && user.permittedAgents.length > 0 ? ['AMC_PRINCIPAL'] : []),
-    ]
+    const userRoles = computeEffectiveUserRoles({
+      userType: user.type,
+      systemRole: user.role,
+      explicitRoles: user.businessRoles.map((role) => role.role),
+      ownerCount: ownerTotal,
+      principalCount: user.permittedAgents.length,
+    })
+    const dashboardRole = getLegacyDashboardRole(userRoles)
 
     if (user.role !== 'ADMIN' && user.type === 'HUMAN' && user.permittedAgents.length === 0) {
       return NextResponse.json({
         ...user,
-        dashboardRole: ownerTotal > 0 ? 'BRAND_OWNER' : 'BRAND_DIRECTOR',
+        businessRoles: undefined,
+        dashboardRole,
         userRoles,
         permittedAgents: []
       })
@@ -105,7 +110,8 @@ export async function GET() {
 
     return NextResponse.json({
       ...user,
-      dashboardRole: user.role === 'ADMIN' ? 'ADMIN' : ownerTotal > 0 ? 'BRAND_OWNER' : 'BRAND_DIRECTOR',
+      businessRoles: undefined,
+      dashboardRole,
       userRoles,
     })
   } catch {

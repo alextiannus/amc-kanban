@@ -57,6 +57,7 @@ export async function POST(request: Request) {
         nickname: normalizedNickname,
         country: normalizedCountry,
         phone: normalizedPhone,
+        businessRoles: { create: { role: 'BRAND_OWNER' } },
       },
     })
 
