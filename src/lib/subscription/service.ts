@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { encrypt } from '@/lib/auth'
+import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 import crypto from 'crypto'
 
 function addMonths(date: Date, months: number) {
@@ -80,6 +81,12 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       update: { role: 'worker', active: true },
     })
 
+    try {
+      await ensureBrandWorkspace(existingBrand.id)
+    } catch (workspaceError) {
+      console.error('[createBrandForActivatedSubscription] existing workspace init failed:', workspaceError)
+    }
+
     return { ok: true as const, brand: existingBrand, alreadyCreated: true as const, agentId: agentKey.agentId }
   }
 
@@ -136,6 +143,12 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     create: { brandId: brand.id, agentId: agentKey.agentId, role: 'worker', active: true },
     update: { role: 'worker', active: true },
   })
+
+  try {
+    await ensureBrandWorkspace(brand.id)
+  } catch (workspaceError) {
+    console.error('[createBrandForActivatedSubscription] workspace init failed:', workspaceError)
+  }
 
   return { ok: true as const, brand, alreadyCreated: false as const, agentId: agentKey.agentId }
 }

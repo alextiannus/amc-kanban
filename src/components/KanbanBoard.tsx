@@ -15,6 +15,11 @@ import SystemLogModal from './layout/SystemLogModal'
 import NewAgentKeyModal from './layout/NewAgentKeyModal'
 import AgentsWorkflowView from './dashboard/AgentsWorkflowView'
 import GameSettingsDashboard from './dashboard/GameSettingsDashboard'
+import DashboardAssets from './dashboard/DashboardAssets'
+import DraftManagementView from './dashboard/DraftManagementView'
+import ResearchTopicFeedView from './dashboard/ResearchTopicFeedView'
+
+type BoardView = 'agents' | 'archive' | 'dashboard' | 'calendar' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'research'
 
 interface Brand {
   id: string
@@ -50,7 +55,7 @@ function isEffectiveActiveSubscription(subscription?: { status?: string; contrac
   return new Date(subscription.contractEndDate).getTime() > Date.now()
 }
 
-export default function KanbanBoard({ initialView = 'dashboard' }: { initialView?: 'agents' | 'archive' | 'dashboard' | 'calendar' | 'game' | 'socialInsight' }) {
+export default function KanbanBoard({ initialView = 'dashboard' }: { initialView?: BoardView }) {
   const router = useRouter()
   const [tasks, setTasks] = useState<BoardTask[]>([])
   const [activeTab, setActiveTab] = useState('pending')
@@ -74,8 +79,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   const [showSettings, setShowSettings] = useState(false)
   
   // Navigation State
-  const [currentView, setCurrentView] = useState<'agents' | 'archive' | 'dashboard' | 'calendar' | 'game' | 'socialInsight'>(initialView)
-  const [agentsFilter, setAgentsFilter] = useState<'all' | 'online' | 'offline'>('all')
+  const [currentView, setCurrentView] = useState<BoardView>(initialView)
 
   // Brand State — loaded from API
   const [brands, setBrands] = useState<Brand[]>([])
@@ -293,6 +297,18 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 text-sm">请先选择品牌</div>
           )}
+        </div>
+      ) : currentView === 'drafts' ? (
+        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+          <DraftManagementView key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} brandName={activeBrand?.name} />
+        </div>
+      ) : currentView === 'assets' ? (
+        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+          <DashboardAssets key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} />
+        </div>
+      ) : currentView === 'research' ? (
+        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+          <ResearchTopicFeedView key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} brandName={activeBrand?.name} />
         </div>
       ) : (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">

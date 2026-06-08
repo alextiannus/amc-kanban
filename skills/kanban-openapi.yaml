@@ -54,7 +54,7 @@ paths:
     post:
       summary: Create a new task on the Kanban board
       operationId: createTask
-      description: Agents can create tasks for themselves or others to track work.
+      description: Agents create brand-scoped tasks for themselves. brandId is required when an Agent manages multiple brands.
       parameters:
         - name: Authorization
           in: header
@@ -80,6 +80,9 @@ paths:
                 materials:
                   type: string
                   description: Any context, links, or JSON data required to perform the task.
+                brandId:
+                  type: string
+                  description: Brand ID this task belongs to. Required for multi-brand Agents.
                 status:
                   type: string
                   enum: [todo, in_progress, pending, done, void]
@@ -154,6 +157,10 @@ paths:
                   type: string
                 materials:
                   type: string
+                brandId:
+                  type: string
+                  nullable: true
+                  description: Brand ID this task belongs to. Pass null to clear legacy unscoped tasks.
                 assigneeId:
                   type: string
       responses:
@@ -203,6 +210,699 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
+
+  /agent/brand-config:
+    get:
+      summary: List or read brands linked to the current Agent
+      operationId: getAgentBrandConfig
+      description: Startup call. Omit brandId to list all active subscription-backed brands linked to this Agent, then record each id/name as KANBAN_BRAND_IDS and KANBAN_BRAND_LIST. Pass brandId to read one brand config; the server verifies the current Agent has an active BrandAgent link.
+      parameters:
+        - name: brandId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Linked brand list or one brand config
+    patch:
+      summary: Update linked brand profile/config
+      operationId: updateAgentBrandConfig
+      description: Update an existing brand linked to this Agent. brandId is required and the server double-checks the current Agent has an active BrandAgent link before any mutation. Brand creation is disabled for Agents and must happen through dashboard subscription flow.
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [brandId]
+              properties:
+                brandId:
+                  type: string
+                name:
+                  type: string
+                description:
+                  type: string
+                logoUrl:
+                  type: string
+                website:
+                  type: string
+                phone:
+                  type: string
+                address:
+                  type: string
+                location:
+                  type: string
+                timezone:
+                  type: string
+                postfastApiKey:
+                  type: string
+                  description: Sensitive. Prefer human configuration in dashboard when possible.
+                googlePlaceId:
+                  type: string
+                googleApiKey:
+                  type: string
+                  description: Sensitive. Prefer human configuration in dashboard when possible.
+                googleAccountId:
+                  type: string
+                googleLocationId:
+                  type: string
+                googleLocationName:
+                  type: string
+                larkAppId:
+                  type: string
+                larkAppSecret:
+                  type: string
+                  description: Sensitive. Prefer human configuration in dashboard when possible.
+                larkDriveFolderId:
+                  type: string
+                larkBotWebhook:
+                  type: string
+                larkOwnerId:
+                  type: string
+      responses:
+        '200':
+          description: Brand config updated
+    post:
+      summary: Disabled brand creation endpoint
+      operationId: createBrandConfigDisabled
+      description: Agents must not create brands. Returns 402 SUBSCRIPTION_REQUIRED_BEFORE_BRAND_CREATE.
+      responses:
+        '402':
+          description: Brand creation requires dashboard subscription flow
+
+  /brands/{brandId}/profile:
+    get:
+      summary: Read brand Profile Markdown
+      operationId: getBrandProfileMarkdown
+      description: Must be called before brand work, content creation, research, publishing, or customer care.
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: refresh
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ['1', 'true']
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Brand profile markdown
+    patch:
+      summary: Write brand Profile Markdown
+      operationId: updateBrandProfileMarkdown
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [markdown]
+              properties:
+                markdown:
+                  type: string
+      responses:
+        '200':
+          description: Brand profile markdown saved
+
+  /brands/{brandId}/accounts:
+    get:
+      summary: List brand social accounts
+      operationId: listBrandSocialAccounts
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Social account list
+    post:
+      summary: Add a brand social account record
+      operationId: createBrandSocialAccount
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialAccountInput'
+      responses:
+        '201':
+          description: Social account created
+
+  /brands/{brandId}/assets:
+    get:
+      summary: List brand media assets
+      operationId: listBrandAssets
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: folder
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Brand asset list
+    post:
+      summary: Upload media asset to brand asset library
+      operationId: uploadBrandAsset
+      description: Uploads base64 media. Backend selects Huawei OBS, PostFast, Lark, or local fallback.
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssetUploadInput'
+      responses:
+        '200':
+          description: Asset uploaded
+
+  /brands/{brandId}/assets/{assetId}:
+    patch:
+      summary: Update media asset metadata
+      operationId: updateBrandAsset
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                aiCategory:
+                  type: string
+                aiTags:
+                  type: array
+                  items:
+                    type: string
+                aiCaption:
+                  type: string
+                aiReady:
+                  type: boolean
+      responses:
+        '200':
+          description: Asset updated
+    delete:
+      summary: Archive media asset
+      operationId: archiveBrandAsset
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asset archived
+
+  /brands/{brandId}/drafts:
+    get:
+      summary: List brand content drafts
+      operationId: listBrandDrafts
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Draft list
+    post:
+      summary: Create content draft
+      operationId: createBrandDraft
+      description: Create a saved draft. Call submit endpoint when ready.
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftInput'
+      responses:
+        '201':
+          description: Draft created
+
+  /brands/{brandId}/drafts/{draftId}:
+    get:
+      summary: Read one content draft
+      operationId: getBrandDraft
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: draftId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Draft details
+    patch:
+      summary: Update content draft
+      operationId: updateBrandDraft
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: draftId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DraftInput'
+      responses:
+        '200':
+          description: Draft updated
+
+  /brands/{brandId}/drafts/{draftId}/submit:
+    patch:
+      summary: Submit draft for approval or direct delivery
+      operationId: submitBrandDraft
+      description: Auto-pilot brands publish/schedule directly. Boss-approval brands create pending review ActionItem.
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: draftId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+      responses:
+        '200':
+          description: Draft submitted
+
+  /brands/{brandId}/actions:
+    get:
+      summary: List brand action items
+      operationId: listBrandActionItems
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Action item list
+    post:
+      summary: Create brand action item
+      operationId: createBrandActionItem
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionItemInput'
+      responses:
+        '201':
+          description: Action item created
+
+  /brands/{brandId}/posts/publish:
+    post:
+      summary: Publish or schedule content directly
+      operationId: publishBrandPost
+      description: Direct publishing endpoint. If boss approval is required, use Draft submit flow instead.
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishInput'
+      responses:
+        '200':
+          description: Published or scheduled
+
+  /brands/{brandId}/topics:
+    get:
+      summary: List TopicFeed research documents for a brand
+      operationId: listBrandTopicFeeds
+      description: Read markdown research topics, trend observations, competitor notes, and content angles for a brand. AI agents can use this before drafting content.
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [active, archived, all]
+        - name: Authorization
+          in: header
+          required: true
+          description: Bearer token received from your Initialization Instruction
+          schema:
+            type: string
+      responses:
+        '200':
+          description: TopicFeed list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  topics:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TopicFeed'
+    post:
+      summary: Create a TopicFeed markdown research document
+      operationId: createBrandTopicFeed
+      description: Write a markdown research topic for the brand. Use this for research findings, content angles, trend notes, and competitor observations.
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          description: Bearer token received from your Initialization Instruction
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - markdown
+              properties:
+                title:
+                  type: string
+                summary:
+                  type: string
+                  nullable: true
+                tags:
+                  type: array
+                  items:
+                    type: string
+                sourceUrl:
+                  type: string
+                  nullable: true
+                markdown:
+                  type: string
+                  description: Markdown document body.
+      responses:
+        '201':
+          description: TopicFeed created
+
+  /brands/{brandId}/topics/{topicId}:
+    get:
+      summary: Read one TopicFeed markdown document
+      operationId: getBrandTopicFeed
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: topicId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: TopicFeed details
+    patch:
+      summary: Update one TopicFeed markdown document
+      operationId: updateBrandTopicFeed
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: topicId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                summary:
+                  type: string
+                  nullable: true
+                tags:
+                  type: array
+                  items:
+                    type: string
+                sourceUrl:
+                  type: string
+                  nullable: true
+                markdown:
+                  type: string
+                status:
+                  type: string
+                  enum: [active, archived]
+      responses:
+        '200':
+          description: TopicFeed updated
+    delete:
+      summary: Archive one TopicFeed markdown document
+      operationId: archiveBrandTopicFeed
+      parameters:
+        - name: brandId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: topicId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: TopicFeed archived
 
   /analytics/activity:
     get:
@@ -299,10 +999,179 @@ components:
         assigneeId:
           type: string
           nullable: true
+        brandId:
+          type: string
+          nullable: true
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+    TopicFeed:
+      type: object
+      properties:
+        id:
+          type: string
+        brandId:
+          type: string
+        title:
+          type: string
+        markdown:
+          type: string
+        summary:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        sourceUrl:
+          type: string
+          nullable: true
+        status:
+          type: string
+        createdById:
+          type: string
+          nullable: true
+        createdByType:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SocialAccountInput:
+      type: object
+      required:
+        - platformId
+        - handle
+      properties:
+        platformId:
+          type: string
+          description: instagram, tiktok, google, facebook, yelp, etc.
+        handle:
+          type: string
+        displayName:
+          type: string
+        profileUrl:
+          type: string
+        loginUsername:
+          type: string
+        loginPassword:
+          type: string
+          description: Sensitive; dashboard masks this for non-admin users.
+    AssetUploadInput:
+      type: object
+      required:
+        - filename
+        - mimeType
+        - fileBase64
+      properties:
+        filename:
+          type: string
+        mimeType:
+          type: string
+        fileBase64:
+          type: string
+          description: "Base64 file content without data: prefix."
+        folder:
+          type: string
+        aiCategory:
+          type: string
+        aiTags:
+          type: array
+          items:
+            type: string
+        aiCaption:
+          type: string
+    DraftInput:
+      type: object
+      required:
+        - caption
+      properties:
+        caption:
+          type: string
+        captionLang:
+          type: string
+          default: en
+        accountId:
+          type: string
+          nullable: true
+        mediaUrls:
+          type: array
+          items:
+            type: string
+        assetIds:
+          type: array
+          items:
+            type: string
+        hashtags:
+          type: array
+          items:
+            type: string
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          description: Usually draft. Use submit endpoint rather than writing pending_review directly.
+        agentNote:
+          type: string
+    ActionItemInput:
+      type: object
+      required:
+        - type
+        - title
+        - description
+      properties:
+        type:
+          type: string
+          enum: [sentiment_alert, content_draft, content_approval, competitor_alert, performance_update]
+        priority:
+          type: string
+          enum: [low, normal, medium, high, urgent]
+        title:
+          type: string
+        description:
+          type: string
+        accountId:
+          type: string
+        agentId:
+          type: string
+        draftId:
+          type: string
+        payload:
+          type: object
+    PublishInput:
+      type: object
+      required:
+        - platform
+        - caption
+      properties:
+        platform:
+          type: string
+          enum: [instagram, tiktok, xiaohongshu, facebook, youtube, x, linkedin, threads, bluesky, pinterest, snapchat, telegram, google]
+        caption:
+          type: string
+        mediaStorageKeys:
+          type: array
+          items:
+            type: string
+          description: Preferred when using board_upload_media/PostFast signed upload flow.
+        mediaUrls:
+          type: array
+          items:
+            type: string
+        hashtags:
+          type: array
+          items:
+            type: string
+        scheduledAt:
+          type: string
+          format: date-time
+        accountId:
+          type: string
 

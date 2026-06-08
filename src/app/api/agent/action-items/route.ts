@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { eventEmitter } from '@/lib/events'
 import { postfastPublish } from '@/lib/integrations/postfast'
+import { canAgentAccessBrand } from '@/lib/brandAccess'
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -38,9 +39,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'brandId, type, title, description required' }, { status: 400 })
   }
 
-  // Verify brand exists (no ownership check — agent trusts the brand assigned to it)
   const brand = await prisma.brand.findUnique({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+  if (!(await canAgentAccessBrand(brandId, agent.id))) {
+    return NextResponse.json({ error: 'Brand not linked to this agent' }, { status: 403 })
+  }
 
   const isContentApproval = type === 'content_approval' || type === 'content_draft'
 

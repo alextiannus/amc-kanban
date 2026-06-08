@@ -21,17 +21,14 @@ type AgentItem = {
 }
 
 export default function AgentSequenceView({
-  initialFilter = 'all',
   headerAction,
 }: {
-  initialFilter?: 'all' | 'online' | 'offline'
   headerAction?: ReactNode
 }) {
   const [agents, setAgents] = useState<AgentItem[]>([])
   const [expandedAgentIds, setExpandedAgentIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterTab, setFilterTab] = useState<'all' | 'online' | 'offline'>(initialFilter)
   const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null)
 
   const fetchAgents = useCallback(async () => {
@@ -46,9 +43,6 @@ export default function AgentSequenceView({
     }
   }, [])
 
-  useEffect(() => {
-    queueMicrotask(() => setFilterTab(initialFilter))
-  }, [initialFilter])
   useEffect(() => {
     queueMicrotask(() => {
       void fetchAgents()
@@ -73,8 +67,6 @@ export default function AgentSequenceView({
   }
 
   const filteredAgents = agents.filter(agent => {
-    if (filterTab === 'online' && !agent.isOnline) return false
-    if (filterTab === 'offline' && agent.isOnline) return false
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       return (
@@ -109,21 +101,6 @@ export default function AgentSequenceView({
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
             />
-          </div>
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full sm:w-auto">
-            {(['all', 'online', 'offline'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilterTab(f)}
-                className={`flex-1 sm:px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                  filterTab === f
-                    ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                }`}
-              >
-                {f === 'all' ? '全部' : f === 'online' ? '在线' : '离线'}
-              </button>
-            ))}
           </div>
         </div>
       </div>

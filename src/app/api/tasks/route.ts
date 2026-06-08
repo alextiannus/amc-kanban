@@ -4,6 +4,7 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
+import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import type { Prisma } from '@prisma/client'
 
 function normalizeTaskWeight(input: unknown): number {
@@ -24,6 +25,7 @@ type TaskCreateBody = {
   tags?: string[] | string | null
   weight?: number | string | null
   blockerTaskIds?: unknown
+  brandId?: string | null
 }
 
 export async function GET(request: Request) {
@@ -83,6 +85,19 @@ export async function GET(request: Request) {
 
     // Further narrow to a specific brand's agents when brandId is provided
     if (brandId) {
+      if (authenticatedAgent) {
+        const ok = await canSessionAccessBrandProject(brandId, authenticatedAgent.id, 'AI_AGENT', 'USER')
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      } else if (session?.user) {
+        const ok = await canSessionAccessBrandProject(
+          brandId,
+          session.user.id,
+          session.user.type ?? 'HUMAN',
+          session.user.role
+        )
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+
       const brandLinks = await prisma.brandAgent.findMany({
         where: { brandId, active: true },
         select: { agentId: true },
@@ -90,6 +105,7 @@ export async function GET(request: Request) {
       const brandAgentIds = brandLinks.map(l => l.agentId)
 
       if (brandAgentIds.length === 0) return NextResponse.json([])
+      whereClause.brandId = brandId
 
       // Intersect with any existing assigneeId filter
       if (whereClause.assigneeId) {
@@ -184,6 +200,7 @@ export async function POST(request: Request) {
 
     const body = await request.json() as TaskCreateBody
     const { title, description, materials, status, priority, estimatedHours, deadline, tags, weight, blockerTaskIds } = body
+    const brandId = typeof body.brandId === 'string' && body.brandId.trim() ? body.brandId.trim() : null
     let assigneeId = body.assigneeId
 
     if (!title) {
@@ -198,6 +215,24 @@ export async function POST(request: Request) {
       assigneeId = authenticatedAgent.id
     } else if (!assigneeId) {
       return NextResponse.json({ error: 'assigneeId is required' }, { status: 400 })
+    }
+
+    if (authenticatedAgent && !brandId) {
+      const linkedBrandCount = await prisma.brandAgent.count({ where: { agentId: authenticatedAgent.id, active: true } })
+      if (linkedBrandCount > 1) {
+        return NextResponse.json({ error: 'brandId is required when this agent manages multiple brands' }, { status: 400 })
+      }
+    }
+
+    if (brandId) {
+      const actor = authenticatedAgent
+        ? { id: authenticatedAgent.id, type: 'AI_AGENT', role: 'USER' }
+        : session?.user
+          ? { id: session.user.id, type: session.user.type ?? 'HUMAN', role: session.user.role }
+          : null
+      if (!actor || !(await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role))) {
+        return NextResponse.json({ error: 'Forbidden: You do not have access to this brand' }, { status: 403 })
+      }
     }
 
     // Check permissions: Human users can only create tasks for permitted agents
@@ -220,6 +255,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid assigneeId: must be an AI_AGENT' }, { status: 400 })
     }
 
+    if (brandId) {
+      const link = await prisma.brandAgent.findFirst({
+        where: { brandId, agentId: assigneeId, active: true },
+        select: { id: true },
+      })
+      if (!link) {
+        return NextResponse.json({ error: 'assigneeId is not linked to this brand' }, { status: 400 })
+      }
+    }
+
     const validBlockerTaskIds = Array.isArray(blockerTaskIds)
       ? blockerTaskIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')
       : []
@@ -236,6 +281,7 @@ export async function POST(request: Request) {
         estimatedHours: estimatedHours !== undefined && estimatedHours !== null && estimatedHours !== '' ? Number(estimatedHours) : null,
         deadline: deadline ? new Date(deadline) : null,
         tags: Array.isArray(tags) ? tags : typeof tags === 'string' ? tags.split(',').map((tag: string) => tag.trim()).filter(Boolean) : [],
+        brandId,
         dependencies: validBlockerTaskIds.length > 0 ? {
           create: validBlockerTaskIds.map((blockerId: string) => ({
             blockerTaskId: blockerId

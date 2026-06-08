@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { canAgentAccessBrand } from '@/lib/brandAccess'
 
 async function getAgent(request: Request) {
   const auth = request.headers.get('authorization') || ''
@@ -38,9 +39,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'brandId, platformId, handle are required' }, { status: 400 })
   }
 
-  // Verify brand exists (agent has no ownership constraint — brand owner set it up)
   const brand = await prisma.brand.findUnique({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+  if (!(await canAgentAccessBrand(brandId, agent.id))) {
+    return NextResponse.json({ error: 'Brand not linked to this agent' }, { status: 403 })
+  }
 
   const opt = (v: unknown) => (v === undefined ? undefined : v === '' ? null : v)
 

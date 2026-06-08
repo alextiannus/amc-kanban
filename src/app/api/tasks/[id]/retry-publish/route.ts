@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastPublish } from '@/lib/integrations/postfast'
+import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 
 type SessionUser = {
   id: string
@@ -24,16 +25,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (!task) return NextResponse.json({ error: 'Task not found or not in pending status' }, { status: 404 })
 
-  // Derive brand from agent → BrandAgent → Brand
-  const brandAgentLink = task.assigneeId
-    ? await prisma.brandAgent.findFirst({
-        where: { agentId: task.assigneeId, active: true },
-        include: { brand: { select: { id: true, name: true, postfastApiKey: true } } },
+  const brand = task.brandId
+    ? await prisma.brand.findUnique({
+        where: { id: task.brandId },
+        select: { id: true, name: true, postfastApiKey: true },
       })
     : null
 
-  const brand = brandAgentLink?.brand ?? null
-  if (!brand) return NextResponse.json({ error: '无法从任务推导出关联品牌，请确认任务已分配给品牌 AI' }, { status: 400 })
+  if (!brand) return NextResponse.json({ error: '任务缺少明确的品牌 ID，无法安全重试发布' }, { status: 400 })
+
+  const canAccessBrand = await canHumanAccessBrandProject(brand.id, session.user.id, session.user.role)
+  if (!canAccessBrand) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   if (!brand.postfastApiKey) {
     return NextResponse.json({ error: '品牌未配置 PostFast API Key' }, { status: 400 })

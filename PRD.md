@@ -1,304 +1,250 @@
-# AI Marketing Crew 产品需求与技术方案文档 (PRD)
+# AI Marketing Crew 最新产品需求文档 (PRD)
+
+版本日期：2026-06-08
 
 ## 1. 产品定位
 
-### 1.1 产品愿景
-AI Marketing Crew 是一个面向 Human-AI 协同的任务操作系统。系统将 AI Agent 视为一等执行主体，支持其注册、身份识别、任务领取、状态上报与人类协同闭环。
+AI Marketing Crew 是面向本地商家与 AMC 运营团队的 Human-AI 营销协作系统。产品把品牌、订阅、主理人、品牌主、AI Agent、内容草稿、素材库、Research TopicFeed、发布排期、评论反馈与活动获客放在同一个可审计工作台中。
 
-### 1.2 业务目标
-1. 让 AI 与人类在同一看板中协同，任务状态可追踪、可审计。
-2. 通过权限系统实现“人只看被授权的 Agent 任务”。
-3. 通过每个 Agent 独立 API Key 实现机器身份可区分、可治理。
-4. 提供标准化接入规范，支持外部 AI 通过 API 快速接入。
-5. 明确“订阅归属 AI Agent，品牌信息后置补全”的商业流程，避免将品牌创建作为订阅前置条件。
-6. 品牌信息必须完整持久化保存，品牌 profile markdown 与配置文件需要长期存储，供 AI Agent 调用与维护。
-6. 品牌信息需要完整持久化保存，品牌 profile markdown 与配置文件必须作为 AI 调用上下文长期保留。
+系统定位不是替代 Dify。当前产品原则是 **Dify-first**：工作流逻辑、知识库管理与复杂 Agent 编排优先放在 Dify；本系统负责 UI、权限、品牌/订阅数据、Agent 接入、存储、第三方发布与回退集成、审计和人工协同。
 
-### 1.3 目标用户
-1. 管理员：维护用户体系、权限关系与系统初始化。
-2. 人类协作者：查看授权范围内任务并处理 `pending` 阻塞。
-3. AI Agent：自动注册档案、接收任务、回写状态和交付结果。
+## 2. 产品目标
 
-## 2. 角色与权限模型
+1. 让品牌主、AMC 主理人、管理员和 AI Agent 在同一品牌上下文中协作。
+2. 每个品牌必须绑定一个有效订阅套餐；用户可无限添加品牌，每新增品牌都需要购买独立套餐。
+3. 一个 AMC Agent 可以运营多个品牌；每次执行前必须明确目标品牌，不能默认第一个品牌。
+4. 草稿、素材、Research、发布、评论与活动都应沉淀在品牌工作区内，供人类与 AI 持续复用。
+5. 自动驾驶模式下减少人工阻塞，老板审批模式下保留主理人/品牌主确认权。
+6. 让外部 Agent 通过 Skill、OpenAPI、SOP、MCP 或 REST API 快速接入。
+7. 所有关键动作可追踪、可回放、可治理。
 
-### 2.1 用户类型
-1. `HUMAN`：人类用户，可登录 Web 控制台。
-2. `AI_AGENT`：智能体用户，通过 API Key 调用服务端接口。
+## 3. 用户角色
 
-### 2.2 角色
-1. `ADMIN`：全局可见、可管理用户与权限。
-2. `USER`：普通权限，受授权关系约束。
+### 3.1 ADMIN / AMC Operator
 
-### 2.3 授权策略
-1. 授权表为 `AgentPermission(humanId, agentId)`，多对多映射。
-2. `ADMIN` 默认可见所有 Agent。
-3. 普通 HUMAN 若已配置权限，只能访问授权 Agent。
-4. 普通 HUMAN 若尚未配置权限，按“全量可见”回退策略展示（当前实现行为）。
+平台管理员和 AMC 内部运营角色。可管理用户、品牌、订阅、Agent 分配池、权限、日志、凭证与全局配置。管理员在主理人场景中看到的业务看板口径与 AMC 主理人一致。
 
-## 3. 产品信息架构与核心页面
+### 3.2 BRAND_DIRECTOR / AMC 主理人
 
-### 3.1 看板页
-1. 泳道状态：`todo`、`in_progress`、`pending`、`done`、`void`。
-2. 任务卡片支持标题、描述、材料、阻塞输入字段展示。
-3. 点击任务进入详情弹窗进行更新。
+AMC 侧品牌主理人。负责管理多个品牌、绑定或调整 AMC Agent、查看品牌动作日志、处理审批、维护品牌运营质量。
 
-### 3.2 监控大盘
-1. 指标：运行中 Agent 数、离线 Agent 数、待输入任务数、已完成任务数。
-2. 支持与看板状态联动筛选。
+### 3.3 BRAND_OWNER / 品牌主
 
-### 3.3 Agent 名册与档案
-1. 展示 Agent 昵称、工作流、简介、主题色、头像。
-2. 在线状态由任务活跃度推断。
+品牌客户。可查看自己的品牌看板、AI 序列、发布计划、草稿、素材库、Research、活动与订阅状态。AI 序列只展示给品牌主。
 
-### 3.4 管理后台
-1. 用户管理：创建 HUMAN / AI_AGENT。
-2. 权限配置：给 HUMAN 分配可见 Agent 列表。
-3. 返回一次性临时密码用于初次登录（不再使用固定默认密码）。
+### 3.4 AI_AGENT / AMC Agent
 
-### 3.5 用户设置
-1. 个人密码修改。
-2. 看板背景上传与更换。
+通过 API Key、MCP 或 REST API 接入。可读取被绑定品牌，写入任务、草稿、素材、TopicFeed、ActionItem，并按权限执行发布、排期、评论回复等操作。
 
-## 4. 核心业务流程
+## 4. 核心业务对象
 
-### 4.1 Agent 接入流程
-1. Agent 通过 `POST /api/agents/profile` 完成注册或更新。
-2. 新 Agent 首次注册后获取系统分配的个人 `apiKey`。
-3. 后续所有 API 调用必须使用该 key：`Authorization: Bearer <apiKey>`。
+### 4.1 Brand
 
-### 4.2 Agent 执行流程
-1. 拉取任务列表。
-2. 更新任务内容与状态。
-3. 遇阻塞时将状态设为 `pending` 并写入 `requiredInput`。
-4. 人类响应后继续执行并最终标记 `done`。
+品牌是系统核心运营对象。品牌包含基础信息、联系方式、官网、地址、时区、品牌 profile、集成凭证、社媒账号、素材、草稿、Research、活动和订阅关系。
 
-### 4.3 人类协同流程
-1. 人类登录后仅查看授权范围任务。
-2. 处理 `pending` 任务，补充输入并推进状态。
-3. 管理员可随时调整授权关系。
+### 4.2 BrandSubscription
 
-### 4.4 品牌与 Agent 关系
-1. 品牌是 AI Agent 运营和维护的对象，不是订阅归属对象。
-2. 每个品牌都必须保留完整的结构化数据、profile markdown 与配置文件，供 AI Agent 调用。
-3. AI Agent 可以在不同品牌之间切换运营，不受订阅计划绑定到单一品牌的限制。
-4. 品牌资料变更必须可追踪、可回写、可重建。
-5. 品牌的完整数据、markdown 与配置文件，是 AI Agent 工作上下文的一部分，必须保留在系统中。
+每个品牌需要一个订阅套餐。套餐承载品牌运营权益，包括内容运营范围、探店活动、品牌主理人支持和附加服务。品牌创建流程必须由订阅支撑，Agent 不应自行绕过订阅创建品牌。
 
-### 4.5 订阅与初始化流程（Agent 归属）
-1. 订阅对象是 AI Agent 连接身份（Agent Token / API Key），不是品牌实体。
-2. 用户选择订阅计划时，允许品牌信息为空；系统先完成计划与 Agent 身份绑定。
-3. 标准入口 A（新用户订阅入口，推荐）：
-  - 新用户先选择订阅计划。
-  - 系统自动生成对应 AI Agent 账号与连接 Token（API Key）。
-  - 系统自动完成计划与该 Token 绑定，并生成初始化命令。
-4. 标准入口 B（新增 Agent 入口，密钥先行）：
-  - 用户新增 AI Agent（先生成新的连接密钥）。
-  - 用户必须为该新密钥选择订阅计划。
-  - 计划绑定完成后，才允许该新 Agent 进入初始化流程。
-5. Agent 完成品牌梳理后，才将品牌资料写入系统并建立品牌关联。
-6. 初始化完成判定必须同时满足：
-  - 订阅计划已绑定到目标 Agent Token；
-  - 插件安装成功且 Bootstrap Mode 已激活；
-  - 品牌访问与品牌信息回写看板已完成。
+### 4.3 BrandAgent
 
-### 4.6 套餐与 AI Crew 权益映射（Plan Entitlement Matrix）
-为保证“订阅即能力”，每个订阅计划必须映射到 AI Crew 的标准化权益包，至少包含以下三类：
-1. 平台与内容运营能力范围。
-2. 探店活动额度（每月/每周期包含次数或等级）。
-3. 专属品牌主理人支持级别（无/共享/专属）。
+品牌与 Agent 的多对多绑定。一个品牌可由多个 Agent 协作，一个 Agent 也可运营多个品牌。Agent 被软 dismissal 后不硬删除历史数据。
 
-当前标准矩阵（可运营配置化，但口径需一致）：
-1. STARTER
-  - 平台范围：Instagram、Facebook 等英文平台基础运营
-  - 内容能力：全自动图文内容创作与发布
-  - 探店活动：不包含
-  - 专属品牌主理人：不包含（标准支持）
-  - 运营支持：Google Map 优化、评论监控、推广效果报告
-2. ESSENTIAL
-  - 平台范围：Instagram、Facebook、TikTok 英文平台运营
-  - 内容能力：全自动图文内容创作与发布
-  - 探店活动：每月 1 次免费博主探店
-  - 专属品牌主理人：包含（1 对 1）
-  - 运营支持：品牌运营计划、素材库整理、Google Map 优化、评论监控、推广效果报告
-3. ADVANCED
-  - 平台范围：不限数量英文平台基础运营（按已接入渠道）
-  - 内容能力：全自动图文内容创作与发布
-  - 探店活动：每月 1 次免费博主探店 + 每季度 1 次增粉营销活动
-  - 专属品牌主理人：包含（1 对 1）
-  - 运营支持：品牌运营计划、素材库整理、Google Map 优化、评论监控、推广效果报告
+### 4.4 BrandOwner / OrganizationMember
 
-扩展规则：
-1. Token 限制策略暂不作为当前套餐承诺项；在下一阶段 roadmap 完成配额模型、计费规则与审计方案后再上线。
-2. 探店活动与品牌主理人支持为计划权益，不随单次初始化指令丢失。
-3. 多门店运营不再作为独立主套餐，改为 Add-on 按门店加购（建议每新增 1 门店 +USD 200/月）。
+品牌主与品牌的授权关系，以及组织成员对品牌资产的协作访问关系。
 
-## 5. 数据模型设计
+### 4.5 WorkUnit / ActionItem
 
-### 5.1 User
-关键字段：
-1. 身份与认证：`email`、`password`、`type`、`role`、`apiKey`。
-2. Agent 档案：`nickname`、`introduction`、`workflow`、`insights`、`themeColor`、`avatar`、`driveFolder`、`chatLink`。
-3. 说明：订阅计划与 Agent 身份绑定，品牌归属与品牌维护通过 Agent 对品牌的运营关系体现，不作为 User 主键归属。
+WorkUnit 是执行任务；ActionItem 是面向人类的待办、审批、确认或阻塞项。草稿审批、评论回复、人工输入都应能落到 ActionItem。
 
-约束：
-1. `email` 唯一。
-2. `apiKey` 唯一（可空，仅 AI 使用）。
+### 4.6 ContentDraft
 
-### 5.2 WorkUnit
-关键字段：
-1. `title`、`description`、`materials`、`requiredInput`。
-2. `status` 状态机。
-3. `assigneeId` 指向 Agent 用户。
+品牌内容草稿。支持账号选择、正文、标签、素材引用、排期时间、发布状态、Agent 备注、驳回意见、平台 postId 和发布时间。
 
-### 5.3 AgentPermission
-关键字段：
-1. `humanId`、`agentId`。
-2. 唯一约束：`@@unique([humanId, agentId])`。
+状态建议：`draft`、`pending_review`、`approved`、`publishing`、`scheduled`、`published`、`failed`。
 
-## 6. 技术架构方案
+### 4.7 MediaAsset
 
-### 6.1 技术栈
-1. 前端：Next.js App Router + React + Tailwind CSS。
-2. 后端：Next.js Route Handlers。
-3. 数据层：Prisma ORM + PostgreSQL。
-4. 鉴权：JWT（Cookie）+ Agent API Key（Bearer）。
+品牌素材库资产。支持图片/视频上传、文件夹/分类、AI tags、caption、ready 状态、归档和草稿引用。
 
-### 6.2 前端架构
-1. 看板与大盘为主界面，支持轮询刷新。
-2. 管理后台独立路由，提供用户与权限管理。
-3. 通过组件拆分（KanbanBoard、TaskModal、AgentDirectory 等）实现可维护 UI。
+### 4.8 TopicFeed
 
-### 6.3 后端架构
-1. API 采用 REST 风格，按领域分组：`auth`、`tasks`、`agents`、`admin`、`dashboard`、`meta`。
-2. 元信息接口：`/api/meta/openapi`、`/api/meta/sop`、`/api/meta/avatar-guide` 供云端 Agent 拉取规范。
-3. 所有关键写操作要求会话身份或有效 API Key。
+Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown 研究文档，用于沉淀选题、趋势、竞品、用户洞察、内容角度和来源链接。
 
-### 6.4 部署架构
-1. 部署平台：Render。
-2. 构建流程：`npm install` -> `npx prisma db push` -> `npm run build`。
-3. 运行环境变量：`DATABASE_URL`、`JWT_SECRET`、`AI_SINGLE_AGENT_MODE` 等。
+### 4.9 SocialAccount
 
-## 7. 接口设计要点
+品牌已连接或手动补录的社媒/点评账号，包括平台、handle、展示名、授权 token、登录凭证、粉丝与评分快照。
 
-### 7.1 认证
-1. 人类登录：`POST /api/auth/login`，成功后写入 HttpOnly session cookie。
-2. Agent 调用：请求头携带 Bearer API Key。
+### 4.10 GameConfig / GameSession
 
-### 7.2 任务域
-1. `GET /api/tasks`：按身份返回可见任务。
-2. `POST /api/tasks`：创建任务，校验 assignee 合法性。
-3. `GET /api/tasks/:id`：读取任务详情，强制权限判断。
-4. `PATCH /api/tasks/:id`：更新任务字段，限制越权改派。
-5. `PATCH /api/tasks/:id/status`：仅 assignee Agent 或 ADMIN 可改状态。
+店内活动模块配置与参与记录，用于扫码抽奖、评论任务、社媒关注任务和门店获客活动。
 
-### 7.3 Agent 域
-1. `POST /api/agents/profile`：注册/更新 Agent 档案，校验 key 与目标 Agent 一致性。
-2. `GET /api/agents`：返回用户可见 Agent 列表。
-3. `GET/PATCH /api/agents/:id`：查看 Agent 详情、上传头像。
+## 5. 信息架构与模块
 
-### 7.4 管理域
-1. `GET/POST /api/admin/users`：用户管理。
-2. `POST /api/admin/permissions`：保存人类与 Agent 的可见关系。
+### 5.1 品牌主看板
 
-## 8. 安全设计
+品牌运营首页。展示任务、Agent 运行、摘要指标、近期动态、订阅状态和品牌相关工作入口。
 
-### 8.1 身份安全
-1. `JWT_SECRET` 为必需环境变量。
-2. Agent API Key 需从数据库映射到具体 Agent 身份。
-3. 禁止仅凭“Bearer 字符串存在”放行。
+### 5.2 AI 序列
 
-### 8.2 权限安全
-1. 所有任务详情与更新接口必须做资源级授权判断。
-2. Agent 仅可操作自己的任务，管理员可全局操作。
-3. 人类用户按授权映射可见。
+面向品牌主展示。用于查看品牌绑定的 AMC Agent、Agent 说明、初始化 Skill、下载 Skill、复制连接指令。已移除“全部/在线/离线”过滤，仅保留搜索和 Agent 列表。
 
-### 8.3 密码安全
-1. 禁止固定默认密码。
-2. 管理员创建用户返回随机临时密码，仅展示一次。
-3. 密码加密使用 bcrypt，建议成本因子不少于 12。
+### 5.3 主理人看板
 
-### 8.4 文件上传安全
-1. 头像上传限制 MIME 类型与大小（当前头像 5MB 限制已实现）。
-2. 建议背景上传同样增加类型与大小限制。
+面向 ADMIN 和 BRAND_DIRECTOR。支持查看所有负责品牌、编辑品牌名与品牌主信息、删除/添加品牌、修改品牌绑定的 AMC Agent、筛选品牌动作日志。
+
+### 5.4 草稿管理
+
+独立模块。支持创建、编辑、保存、提交草稿，选择发布账号和排期时间，查看引用素材，处理驳回意见。
+
+业务规则：
+
+1. `autoPilot = true`：提交草稿后直接发布或排期。若已存在未发布的 `platformPostId`，更新时先取消旧排期，再用最新草稿重建排期。
+2. `autoPilot = false`：提交草稿进入 `pending_review`，创建审批 ActionItem；只有批准后才发布或排期。
+3. 驳回后草稿回到 `draft` 并保留 `rejectionNote`。
+
+### 5.5 素材库管理
+
+独立模块。支持用户和 AMC Agent 上传、拖拽上传、分类整理、批量移动、标记 ready、归档。上传优先级：Huawei OBS -> PostFast -> Lark -> Local。
+
+### 5.6 Research / TopicFeed
+
+独立模块。支持按品牌创建、读取、搜索、更新、归档 Markdown research topics。AMC Agent 可通过 API 写入和读取 topics，前端提供 markdown 编辑与预览。
+
+### 5.7 发布日历
+
+展示品牌已排期与已发布内容，作为内容运营计划视图。
+
+### 5.8 社媒透视
+
+面向 ADMIN 和 BRAND_DIRECTOR。汇总渠道表现、情绪、ROI、竞品等社媒洞察。
+
+### 5.9 店内活动
+
+配置扫码抽奖、评论任务、社媒关注任务、奖品和海报，用于门店线下获客。
+
+### 5.10 订阅与品牌创建
+
+用户可新增多个品牌。每新增一个品牌必须购买一个品牌订阅套餐；每个套餐绑定一个品牌。品牌创建时系统应初始化品牌 workspace。
+
+### 5.11 Admin 管理后台
+
+管理用户、AI Agent、权限、订阅、品牌凭证、Agent 分配池、审计日志、系统调试。
+
+## 6. 核心流程
+
+### 6.1 品牌新增流程
+
+1. 用户进入新增品牌或订阅流程。
+2. 选择套餐并确认条款。
+3. 支付成功或订阅确认后创建/绑定 BrandSubscription。
+4. 创建品牌记录并绑定 BrandOwner。
+5. 自动初始化品牌 workspace：Huawei OBS 优先，Lark workspace 可选。
+6. 可绑定 AMC Agent，进入运营。
+
+### 6.2 Agent 接入流程
+
+1. 主理人或品牌主生成 Agent Key / 初始化指令。
+2. Agent 读取 Skill、OpenAPI、SOP、Avatar Guide。
+3. Agent 调用 profile 接口更新自身名片。
+4. Agent 查询可运营品牌列表。
+5. 若多品牌且任务未指定品牌，必须询问或将任务置为 pending。
+6. Agent 在目标品牌下执行任务、写入草稿、TopicFeed、素材或发布。
+
+### 6.3 草稿发布流程
+
+1. Agent 或人类创建 ContentDraft。
+2. 选择 SocialAccount 和 scheduledAt。
+3. 提交草稿。
+4. 根据 Brand.autoPilot 决定：直接发布/排期，或进入审批。
+5. 发布成功后记录 platformPostId；排期成功则状态为 `scheduled`。
+6. 修改已排期草稿并重新提交时，取消旧排期并重建。
+
+### 6.4 Research 写入流程
+
+1. Agent 在执行内容或市场研究前读取品牌 profile。
+2. Agent 查询已有 TopicFeed，避免重复研究。
+3. 将新发现以 Markdown 文档写入 TopicFeed。
+4. 人类可在 Research 模块编辑、归档或复用。
+
+### 6.5 素材上传流程
+
+1. 用户或 Agent 选择品牌与文件夹/分类。
+2. 上传文件。
+3. 系统按 Huawei OBS、PostFast、Lark、Local 顺序选择可用存储。
+4. 写入 MediaAsset，供草稿引用。
+
+## 7. 权限与访问控制
+
+1. HUMAN 使用 Cookie session；AI_AGENT 使用 Bearer API Key。
+2. ADMIN 可访问全局管理能力。
+3. BRAND_DIRECTOR 可访问主理人运营视图和负责品牌。
+4. BRAND_OWNER 只能访问自己拥有或组织授权的品牌。
+5. AI_AGENT 只能访问 active BrandAgent 绑定的品牌。
+6. 品牌级接口必须统一使用 `canSessionAccessBrandProject` / `canHumanAccessBrandProject` / `canAgentAccessBrand` 等资源级校验。
+
+## 8. 集成与存储策略
+
+### 8.1 Huawei OBS
+
+用于生产品牌 workspace、素材与草稿快照存储。生产环境变量：
+
+1. `HUAWEI_OBS_ACCESS_KEY_ID`
+2. `HUAWEI_OBS_SECRET_ACCESS_KEY`
+3. `HUAWEI_OBS_BUCKET`
+4. `HUAWEI_OBS_ENDPOINT`
+5. `HUAWEI_OBS_REGION`
+6. `HUAWEI_OBS_PUBLIC_BASE_URL`
+
+### 8.2 PostFast
+
+用于社媒发布、排期、取消 scheduled post、媒体上传和部分点评回复能力。当前更新 scheduled post 的策略是取消旧 post 后重建。
+
+### 8.3 Google Business Profile
+
+用于 OAuth、评论读取/回复和 GBP local post 直连发布路径。
+
+### 8.4 Lark
+
+用于可选 workspace、通知和文件上传回退。
+
+### 8.5 Stripe
+
+用于订阅支付和 webhook 确认。
+
+### 8.6 Dify
+
+作为工作流和知识库中心。本系统不把复杂业务编排迁移到 proxy 层；proxy 只做传输、集成和 fallback。
 
 ## 9. 非功能需求
 
-### 9.1 性能
-1. 看板支持秒级刷新（当前 5 秒轮询）。
-2. 大盘统计查询需在可接受时间内完成。
+1. 可追踪：任务、审批、发布、Research、素材变化应可被审计或复盘。
+2. 可恢复：外部存储初始化失败不应阻塞品牌创建，但必须记录错误。
+3. 可扩展：API Services 按领域拆分，便于未来迁移到独立服务。
+4. 安全：密钥只通过环境变量或受控凭证字段保存，不写入代码和文档。
+5. 多品牌安全：Agent 不得跨品牌混用资料、账号、草稿或素材。
+6. 构建稳定：Next.js、Prisma 与 route handlers 必须通过 `npx tsc --noEmit` 和 `npm run build`。
 
-### 9.2 可观测性
-1. 关键接口错误需输出日志。
-2. 生产建议接入集中日志与告警。
+## 10. 当前验收标准
 
-### 9.3 可维护性
-1. 数据模型与接口契约通过 OpenAPI 文档化。
-2. 关键策略通过环境变量控制（如单 Agent 模式开关）。
+1. 品牌主可新增多个品牌，每个品牌绑定独立订阅。
+2. 品牌创建后初始化 workspace，并可上传素材。
+3. AI 序列仅品牌主可见，主理人和 admin 使用主理人看板。
+4. 主理人可编辑品牌、品牌主信息、品牌绑定 Agent，并按品牌筛选动作日志。
+5. Agent 可运营多个品牌，Skill 明确多品牌边界。
+6. 草稿管理支持自动驾驶直接发布/排期与老板审批模式。
+7. 素材库管理支持上传、分类、整理和被草稿引用。
+8. Research 模块支持 TopicFeed markdown 写入、读取、搜索和归档。
+9. API metadata 暴露 OpenAPI、SOP 和 Skill，便于 Agent 接入。
+10. TypeScript 与生产构建通过。
 
-## 10. 配置与环境策略
+## 11. 近期 Roadmap
 
-### 10.1 本地开发
-1. 建议本地使用 PostgreSQL，与生产一致。
-2. 使用 `.env.local` 管理本地数据库连接，不入库。
-
-### 10.2 生产环境
-1. `DATABASE_URL` 由 Render 注入。
-2. `JWT_SECRET` 由平台生成或手动配置。
-3. `AI_SINGLE_AGENT_MODE` 可按阶段开启/关闭。
-
-## 11. 当前版本验收标准
-
-1. AI Agent 能完成注册并获得可持续使用的个人 API Key。
-2. 任务增删改查遵守角色与资源级权限控制。
-3. 管理员可创建用户并分配可见 Agent 权限。
-4. 看板与大盘可实时反映任务推进状态。
-5. 生产部署在 Render 可完成构建、迁移、启动。
-6. 支持“先选计划后生成 Token”与“先生成 Token 后绑定计划”两条路径，且均不要求订阅前提供品牌信息。
-7. 系统可基于订阅计划正确计算并展示 AI Crew 权益（探店额度、品牌主理人支持级别、运营能力范围）。
-
-## 12. 演进路线图
-
-### 12.1 近期
-1. 为背景上传补齐大小与 MIME 校验。
-2. 提升密码策略与修改密码最小长度要求。
-3. 统一 API 输入校验（推荐引入 Zod）。
-4. 设计 Token 限制机制（配额模型、超额策略、计费与审计），作为下一阶段能力上线前置项。
-
-### 12.2 中期
-1. 从轮询升级到 SSE/WebSocket 实时推送。
-2. 引入任务操作审计日志（TaskLog）。
-3. 增加接口限流与异常访问防护。
-
-### 12.3 长期
-1. 支持多 Agent 编排（DAG）。
-2. 建设 Agent 绩效分析看板（耗时、阻塞率、完结率）。
-
-## 13. 本地生活业务与口碑营销闭环系统 (Local Brand Marketing & Closed-Loop)
-
-为了赋能本地生活品牌（如餐饮、零售、美业等实体门店），系统扩充了以下专门针对线下到线上（O2O）闭环及自动口碑治理的业务场景：
-
-### 13.1 差评拦截与私下意见化解通道
-- **业务逻辑**: 在桌贴扫码入口或 H5 转盘页面上提供显眼的“意见反馈/吐槽直通老板”通道。如果顾客在就餐或体验中感到不满，引导其在平台内部提交负面反馈，而非直接前往 Google Maps 等公共平台。
-- **系统流程**:
-  1. 顾客提交吐槽或建议，系统生成内部 ActionItem。
-  2. 触发 Lark 机器人向商家/店长发送高优先级消息，附带顾客联系方式。
-  3. 系统自动向该顾客派发一张“致歉补偿代金券”（如免费菜品或折扣），在顾客将差评公之于众之前拦截负面情绪，提升私下调解成功率。
-
-### 13.2 聚餐社交裂变拉客机制
-- **业务逻辑**: 结合本地生活常见的多人社交聚餐场景，通过优惠意图促使用户拉同桌好友共同加入。
-- **系统流程**:
-  1. **多人同桌解锁**: 扫码页面检测本桌扫码人数。达到设定值（如3人同桌扫码）时，自动解锁全桌大额赠品或折扣券。
-  2. **裂变带人副券**: 用户抽中奖品时，自动产生必须“双人同行”或“分享第二人使用”才能激活核销的联合卡券，驱动新客带入与客单价提升。
-
-### 13.3 闲时动态卡券引流方案
-- **业务逻辑**: 均衡实体门店的忙闲时段流量，提高工作日低谷期的桌效与资源利用率。
-- **系统流程**:
-  1. 商家可在后台配置卡券的可用时段（如限周一至周四 14:00-17:30 可用）。
-  2. 系统通过智能转盘和优惠券引擎下发该闲时券，吸引对价格敏感的空闲时段流量，避免在周末黄金时段摊薄利润。
-
-### 13.4 自动智能客户关怀 (让 AI 真正做“苦力活”)
-- **痛点**: 写差评回复很痛苦，老板没时间天天盯着 Google Maps，导致回复不及时，流失客户。
-- **功能**:
-  - **24/7 差评自动挽回**: 当系统监控到有低星评论 (1-3 星) 时，直连 Google 商家接口的 AI 代理会在 5 分钟内快速回复，并在回复中自动附带一个“AMC 私人补偿链接”。顾客点击链接输入电话后，自动派发电子补偿券。
-  - **好评极速秒回**: 对 5 星好评进行 2 分钟内秒回。(注意：Google 的 SEO 排名算法中，商家回复评价的响应速度是一个极高权重的排名信号，秒回能直接提升店铺在 Google 搜索 “grilled fish near me” 时的曝光排名)。
-- **价值**: 帮老板节省人工客服精力，同时利用极速回复提升 Google Maps 的自然曝光流量。
+1. 将 TopicFeed 接入 Dify dataset 或同步任务，形成品牌研究知识库。
+2. 为草稿、素材、TopicFeed 增加更细粒度审计日志。
+3. 增加 PostFast scheduled post 原生 update 能力，如果第三方 API 支持。
+4. 扩展素材库文件夹模型，替代当前逻辑分类字符串。
+5. 增加 API rate limit、Agent 调用配额与滥用保护。
+6. 完善活动模块数据分析与转化归因。
+7. 将 API Services 中高耦合集成抽成独立 service 层，减少 route handler 复杂度。

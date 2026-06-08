@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
+import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 export async function PATCH(
   request: Request,
@@ -45,6 +46,21 @@ export async function PATCH(
 
     if (!isAuthorized) {
       return NextResponse.json({ error: 'Forbidden: Only task assignee or admin can update status' }, { status: 403 })
+    }
+
+    if (task.brandId) {
+      if (agent) {
+        const ok = await canSessionAccessBrandProject(task.brandId, agent.id, 'AI_AGENT', 'USER')
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      } else if (session?.user) {
+        const ok = await canSessionAccessBrandProject(
+          task.brandId,
+          session.user.id,
+          session.user.type ?? 'HUMAN',
+          session.user.role
+        )
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     if (status === 'in_progress' && apiKey) {

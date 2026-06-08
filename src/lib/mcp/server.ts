@@ -60,7 +60,7 @@ async function requireActiveBrandLink(brandId: string, agentId: string) {
 }
 
 async function requireOwnedTask(taskId: string, agentId: string) {
-  return prisma.workUnit.findFirst({ where: { id: taskId, assigneeId: agentId }, select: { id: true, assigneeId: true } })
+  return prisma.workUnit.findFirst({ where: { id: taskId, assigneeId: agentId }, select: { id: true, assigneeId: true, brandId: true } })
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -373,12 +373,13 @@ export function createAmcMcpServer(agentApiKey: string) {
       if (status) where.status = status
       if (assignedToMe) where.assigneeId = agent.id
       if (!assignedToMe) where.assigneeId = agent.id
+      if (brandId) where.brandId = brandId
 
       const tasks = await prisma.workUnit.findMany({
         where,
         take: limit ?? 20,
         orderBy: { createdAt: 'desc' },
-        select: { id: true, title: true, description: true, status: true, priority: true, weight: true, assigneeId: true, createdAt: true },
+        select: { id: true, brandId: true, title: true, description: true, status: true, priority: true, weight: true, assigneeId: true, createdAt: true },
       })
       return { content: [{ type: 'text' as const, text: JSON.stringify(tasks, null, 2) }] }
     }
@@ -395,11 +396,22 @@ export function createAmcMcpServer(agentApiKey: string) {
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
       weight: z.number().int().optional().describe('1 = light, 3 = normal, 5 = heavy'),
       requiredInput: z.string().optional().describe('What human input is needed when status is pending.'),
-      deadline: z.string().describe('ISO 8601 deadline e.g. 2026-05-21T12:00:00Z'),
+      deadline: z.string().optional().describe('ISO 8601 deadline e.g. 2026-05-21T12:00:00Z'),
+      brandId: z.string().optional().describe('Brand ID. Required when this agent manages multiple brands.'),
     },
-    async ({ title, description, status, priority, weight, requiredInput, deadline }) => {
+    async ({ title, description, status, priority, weight, requiredInput, deadline, brandId }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      if (brandId) {
+        const link = await requireActiveBrandLink(brandId, agent.id)
+        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      } else {
+        const linkedBrandCount = await prisma.brandAgent.count({ where: { agentId: agent.id, active: true } })
+        if (linkedBrandCount > 1) {
+          return { content: [{ type: 'text' as const, text: 'Error: brandId is required when this agent manages multiple brands' }], isError: true }
+        }
+      }
 
       let parsedDeadline: Date | undefined
       if (deadline) {
@@ -420,9 +432,10 @@ export function createAmcMcpServer(agentApiKey: string) {
           requiredInput: requiredInput || null,
           deadline: parsedDeadline,
           assigneeId: agent.id,
+          brandId: brandId || null,
         },
       })
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, taskId: task.id, title: task.title, deadline: task.deadline }) }] }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, taskId: task.id, brandId: task.brandId, title: task.title, deadline: task.deadline }) }] }
     }
   )
 
@@ -438,6 +451,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
       requiredInput: z.string().nullable().optional().describe('Set when pending; pass null/empty to clear.'),
       deadline: z.string().nullable().optional().describe('ISO 8601 deadline. Pass null to clear.'),
+      brandId: z.string().nullable().optional().describe('Brand ID to assign this task to. Pass null to clear.'),
     },
     async ({ taskId, ...fields }) => {
       const agent = await resolveAgent()
@@ -446,6 +460,12 @@ export function createAmcMcpServer(agentApiKey: string) {
       const existingTask = await requireOwnedTask(taskId, agent.id)
       if (!existingTask) return { content: [{ type: 'text' as const, text: 'Error: Task not found' }], isError: true }
       if (existingTask.assigneeId !== agent.id) return { content: [{ type: 'text' as const, text: 'Error: Task not assigned to this agent' }], isError: true }
+
+      const requestedBrandId = fields.brandId === undefined ? existingTask.brandId : fields.brandId
+      if (requestedBrandId) {
+        const link = await requireActiveBrandLink(requestedBrandId, agent.id)
+        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      }
 
       const updateData: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(fields)) {
@@ -470,8 +490,14 @@ export function createAmcMcpServer(agentApiKey: string) {
         if (ri === null || ri === '') updateData.requiredInput = null
       }
 
+      if (updateData.brandId !== undefined) {
+        const nextBrandId = updateData.brandId
+        delete updateData.brandId
+        updateData.brand = nextBrandId ? { connect: { id: String(nextBrandId) } } : { disconnect: true }
+      }
+
       const task = await prisma.workUnit.update({ where: { id: taskId }, data: updateData })
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, taskId: task.id, status: task.status, deadline: task.deadline }) }] }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, taskId: task.id, brandId: task.brandId, status: task.status, deadline: task.deadline }) }] }
     }
   )
 
@@ -495,6 +521,9 @@ export function createAmcMcpServer(agentApiKey: string) {
     async ({ brandId, platformId, handle, displayName, profileUrl, loginUsername, loginPassword }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const account = await prisma.socialAccount.upsert({
         where: { brandId_platformId_handle: { brandId, platformId, handle } },
@@ -520,6 +549,9 @@ export function createAmcMcpServer(agentApiKey: string) {
     async ({ brandId, type, priority, title, description }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const item = await prisma.actionItem.create({
         data: { brandId, type, priority: priority || 'medium', title, description, status: 'pending', agentId: agent.id },
@@ -1345,6 +1377,330 @@ export function createAmcMcpServer(agentApiKey: string) {
       await prisma.brand.update({ where: { id: brandId }, data: { larkDriveFolderId: result.folderToken } })
 
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, folderToken: result.folderToken, folderUrl: result.folderUrl }) }] }
+    }
+  )
+
+  // ── TopicFeed Research tools ───────────────────────────────────────────
+  server.tool(
+    'board_list_topics',
+    'List brand TopicFeed research markdown documents. Use before content planning to avoid duplicate research.',
+    {
+      brandId: z.string(),
+      q: z.string().optional().describe('Search title, summary, markdown, or exact tag.'),
+      tag: z.string().optional().describe('Filter by one tag, with or without #.'),
+      status: z.enum(['active', 'archived', 'all']).optional().default('active'),
+      limit: z.number().int().min(1).max(100).optional().default(50),
+    },
+    async ({ brandId, q, tag, status, limit }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const { listTopicFeeds } = await import('@/lib/topicFeed')
+      const topics = await listTopicFeeds({ brandId, q, tag, status, limit })
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: topics.length, topics }, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'board_get_topic',
+    'Read one TopicFeed markdown document by ID.',
+    {
+      brandId: z.string(),
+      topicId: z.string(),
+    },
+    async ({ brandId, topicId }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const { getTopicFeed } = await import('@/lib/topicFeed')
+      const topic = await getTopicFeed(brandId, topicId)
+      if (!topic) return { content: [{ type: 'text' as const, text: 'Error: Topic not found' }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, topic }, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'board_save_topic',
+    'Create or update a TopicFeed markdown research document for a brand.',
+    {
+      brandId: z.string(),
+      topicId: z.string().optional().describe('Pass to update an existing topic. Omit to create a new topic.'),
+      title: z.string().describe('Topic title'),
+      markdown: z.string().describe('Markdown research document body'),
+      summary: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      sourceUrl: z.string().optional(),
+    },
+    async ({ brandId, topicId, title, markdown, summary, tags, sourceUrl }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const { createTopicFeed, updateTopicFeed } = await import('@/lib/topicFeed')
+      const result = topicId
+        ? await updateTopicFeed({ brandId, topicId, title, markdown, summary, tags, sourceUrl, status: 'active' })
+        : await createTopicFeed({ brandId, title, markdown, summary, tags, sourceUrl, createdById: agent.id, createdByType: 'AI_AGENT' })
+
+      if (!result.ok) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, topic: result.topic }, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'board_archive_topic',
+    'Archive a TopicFeed research document. This is a soft delete.',
+    {
+      brandId: z.string(),
+      topicId: z.string(),
+    },
+    async ({ brandId, topicId }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const { archiveTopicFeed } = await import('@/lib/topicFeed')
+      const result = await archiveTopicFeed(brandId, topicId)
+      if (!result.ok) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, topic: result.topic }, null, 2) }] }
+    }
+  )
+
+  // ── Draft workflow tools ───────────────────────────────────────────────
+  server.tool(
+    'board_list_drafts',
+    'List content drafts for a brand. Use status filters to find pending, scheduled, failed, or draft items.',
+    {
+      brandId: z.string(),
+      status: z.string().optional().describe('draft, pending_review, scheduled, published, failed, etc.'),
+      q: z.string().optional().describe('Search caption or exact hashtag.'),
+      limit: z.number().int().min(1).max(100).optional().default(50),
+    },
+    async ({ brandId, status, q, limit }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const drafts = await prisma.contentDraft.findMany({
+        where: {
+          brandId,
+          ...(status ? { status } : {}),
+          ...(q ? { OR: [{ caption: { contains: q, mode: 'insensitive' } }, { hashtags: { has: q } }] } : {}),
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: limit ?? 50,
+        select: {
+          id: true, caption: true, hashtags: true, scheduledAt: true, status: true, accountId: true,
+          agentNote: true, rejectionNote: true, platformPostId: true, publishedAt: true, updatedAt: true,
+          account: { select: { id: true, platformId: true, handle: true, displayName: true } },
+          assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
+        },
+      })
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: drafts.length, drafts }, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'board_save_draft',
+    'Create or update a brand content draft. Save first, then call board_submit_draft when ready.',
+    {
+      brandId: z.string(),
+      draftId: z.string().optional().describe('Pass to update an existing draft. Omit to create a new draft.'),
+      caption: z.string(),
+      hashtags: z.array(z.string()).optional(),
+      accountId: z.string().optional(),
+      scheduledAt: z.string().optional().describe('ISO 8601 UTC datetime. Omit or empty for immediate publish on submit.'),
+      mediaUrls: z.array(z.string()).optional(),
+      assetIds: z.array(z.string()).optional().describe('MediaAsset IDs to attach to this draft.'),
+      agentNote: z.string().optional(),
+      captionLang: z.string().optional().default('en'),
+    },
+    async ({ brandId, draftId, caption, hashtags, accountId, scheduledAt, mediaUrls, assetIds, agentNote, captionLang }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!caption.trim()) return { content: [{ type: 'text' as const, text: 'Error: caption is required' }], isError: true }
+
+      const parsedScheduledAt = scheduledAt ? new Date(scheduledAt) : null
+      if (scheduledAt && Number.isNaN(parsedScheduledAt?.getTime())) {
+        return { content: [{ type: 'text' as const, text: 'Error: scheduledAt must be an ISO 8601 datetime' }], isError: true }
+      }
+
+      const draft = await prisma.$transaction(async (tx) => {
+        const saved = draftId
+          ? await tx.contentDraft.update({
+              where: { id: draftId },
+              data: {
+                caption: caption.trim(),
+                hashtags: hashtags ?? [],
+                accountId: accountId || null,
+                scheduledAt: parsedScheduledAt,
+                mediaUrls: mediaUrls ?? [],
+                agentNote: agentNote ?? null,
+                captionLang: captionLang || 'en',
+                status: 'draft',
+                rejectionNote: null,
+              },
+              select: { id: true },
+            })
+          : await tx.contentDraft.create({
+              data: {
+                brandId,
+                caption: caption.trim(),
+                hashtags: hashtags ?? [],
+                accountId: accountId || null,
+                scheduledAt: parsedScheduledAt,
+                mediaUrls: mediaUrls ?? [],
+                agentNote: agentNote ?? null,
+                captionLang: captionLang || 'en',
+                status: 'draft',
+                agentId: agent.id,
+              },
+              select: { id: true },
+            })
+
+        if (assetIds) {
+          await tx.contentAssetRef.deleteMany({ where: { draftId: saved.id } })
+          if (assetIds.length > 0) {
+            const validAssets = await tx.mediaAsset.findMany({ where: { brandId, id: { in: assetIds } }, select: { id: true } })
+            await Promise.all(validAssets.map((asset, order) => tx.contentAssetRef.create({ data: { draftId: saved.id, assetId: asset.id, order } })))
+          }
+        }
+
+        return tx.contentDraft.findUniqueOrThrow({
+          where: { id: saved.id },
+          include: { account: { select: { id: true, platformId: true, handle: true, displayName: true } }, assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
+        })
+      })
+
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, draft }, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'board_submit_draft',
+    'Submit a saved draft. Auto-pilot brands publish/schedule directly; boss-approval brands create a pending review ActionItem.',
+    {
+      brandId: z.string(),
+      draftId: z.string(),
+      note: z.string().optional(),
+    },
+    async ({ brandId, draftId, note }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const { submitDraftForDelivery } = await import('@/lib/draftSubmission')
+      const result = await submitDraftForDelivery({ brandId, draftId, actorId: agent.id, note: note || null })
+      if (!result.ok) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
+    }
+  )
+
+  // ── Asset library tools ────────────────────────────────────────────────
+  server.tool(
+    'board_list_assets',
+    'List brand media assets from the board asset library.',
+    {
+      brandId: z.string(),
+      q: z.string().optional(),
+      folder: z.string().optional().describe('Maps to aiCategory/folder.'),
+      readyOnly: z.boolean().optional(),
+      limit: z.number().int().min(1).max(100).optional().default(50),
+    },
+    async ({ brandId, q, folder, readyOnly, limit }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const assets = await prisma.mediaAsset.findMany({
+        where: {
+          brandId,
+          ...(readyOnly ? { aiReady: true } : {}),
+          ...(folder ? { aiCategory: folder } : {}),
+          ...(q ? { OR: [{ filename: { contains: q, mode: 'insensitive' } }, { aiCaption: { contains: q, mode: 'insensitive' } }, { aiTags: { has: q } }] } : {}),
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: limit ?? 50,
+      })
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: assets.length, assets }, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'board_upload_asset',
+    'Upload an asset into the board asset library. Uses Huawei OBS when configured and local fallback otherwise.',
+    {
+      brandId: z.string(),
+      filename: z.string(),
+      mimeType: z.string(),
+      fileBase64: z.string().describe('Base64 content without data: prefix.'),
+      folder: z.string().optional(),
+      aiTags: z.array(z.string()).optional(),
+      aiCaption: z.string().optional(),
+    },
+    async ({ brandId, filename, mimeType, fileBase64, folder, aiTags, aiCaption }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const fileBuffer = Buffer.from(fileBase64, 'base64')
+      const category = folder || '素材库'
+      const { getHuaweiObsConfig, makeBrandAssetKey, uploadHuaweiObsObject } = await import('@/lib/integrations/huaweiObs')
+      const obsConfig = getHuaweiObsConfig()
+
+      let assetUrl: string
+      let storageEngine: string
+      let storageKey: string | undefined
+
+      if (obsConfig) {
+        const key = makeBrandAssetKey({ brandId, folder: category, filename })
+        const uploadResult = await uploadHuaweiObsObject({ key, body: fileBuffer, contentType: mimeType })
+        if (!uploadResult.ok) return { content: [{ type: 'text' as const, text: `Error: ${uploadResult.error || 'Huawei OBS upload failed'}` }], isError: true }
+        assetUrl = uploadResult.url
+        storageEngine = 'huawei_obs'
+        storageKey = uploadResult.key
+      } else {
+        const { mkdir, writeFile } = await import('node:fs/promises')
+        const { join: joinPath, extname, basename } = await import('node:path')
+        const ext = extname(filename)
+        const base = basename(filename, ext).replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'asset'
+        const safeName = `${base}-${Date.now()}${ext || ''}`
+        const relativeDir = joinPath('uploads', 'brand-assets', brandId)
+        const absoluteDir = joinPath(process.cwd(), 'public', relativeDir)
+        await mkdir(absoluteDir, { recursive: true })
+        await writeFile(joinPath(absoluteDir, safeName), fileBuffer)
+        assetUrl = `/${relativeDir.replace(/\\/g, '/')}/${safeName}`
+        storageEngine = 'local'
+      }
+
+      const asset = await prisma.mediaAsset.create({
+        data: {
+          brandId,
+          url: assetUrl,
+          filename,
+          mimeType,
+          sizeBytes: fileBuffer.length,
+          aiTags: aiTags ?? [],
+          aiCategory: category,
+          aiCaption: aiCaption || null,
+          aiReady: true,
+          uploadedBy: agent.id,
+          sourceType: storageEngine,
+        },
+      })
+
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, assetId: asset.id, assetUrl, storageEngine, storageKey, asset }, null, 2) }] }
     }
   )
 

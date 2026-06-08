@@ -91,6 +91,10 @@ async function resetFixtures() {
     },
   })
 
+  await prisma.brand.deleteMany({
+    where: { name: { startsWith: fixturePrefix } },
+  })
+
   if (existingIds.length > 0) {
     await prisma.agentPermission.deleteMany({
       where: {
@@ -166,12 +170,54 @@ async function seedFixtures() {
     ],
   })
 
+  const [brandA, brandASecondary, brandOnlyB, sharedBrand] = await prisma.$transaction([
+    prisma.brand.create({
+      data: {
+        name: `${fixturePrefix} Brand A`,
+        timezone: 'Asia/Singapore',
+        status: 'ACTIVE',
+      },
+    }),
+    prisma.brand.create({
+      data: {
+        name: `${fixturePrefix} Brand A Secondary`,
+        timezone: 'Asia/Singapore',
+        status: 'ACTIVE',
+      },
+    }),
+    prisma.brand.create({
+      data: {
+        name: `${fixturePrefix} Brand Only B`,
+        timezone: 'Asia/Singapore',
+        status: 'ACTIVE',
+      },
+    }),
+    prisma.brand.create({
+      data: {
+        name: `${fixturePrefix} Shared Brand`,
+        timezone: 'Asia/Singapore',
+        status: 'ACTIVE',
+      },
+    }),
+  ])
+
+  await prisma.brandAgent.createMany({
+    data: [
+      { brandId: brandA.id, agentId: agentA.id, active: true, role: 'worker' },
+      { brandId: brandASecondary.id, agentId: agentA.id, active: true, role: 'worker' },
+      { brandId: brandOnlyB.id, agentId: agentB.id, active: true, role: 'worker' },
+      { brandId: sharedBrand.id, agentId: agentA.id, active: true, role: 'worker' },
+      { brandId: sharedBrand.id, agentId: agentB.id, active: true, role: 'worker' },
+    ],
+  })
+
   const [taskA, taskB] = await prisma.$transaction([
     prisma.workUnit.create({
       data: {
         title: `${fixturePrefix} Agent A Task`,
         status: 'todo',
         assigneeId: agentA.id,
+        brandId: brandA.id,
       },
     }),
     prisma.workUnit.create({
@@ -179,11 +225,12 @@ async function seedFixtures() {
         title: `${fixturePrefix} Agent B Task`,
         status: 'todo',
         assigneeId: agentB.id,
+        brandId: brandOnlyB.id,
       },
     }),
   ])
 
-  return { humanA, humanB, agentA, agentB, taskA, taskB }
+  return { humanA, humanB, agentA, agentB, brandA, brandASecondary, brandOnlyB, sharedBrand, taskA, taskB }
 }
 
 function authHeaders(options = {}) {
@@ -208,7 +255,7 @@ function authHeaders(options = {}) {
 
 async function main() {
   console.log(`Seeding permission fixtures against ${baseUrl}`)
-  const { humanA, agentA, agentB, taskA, taskB } = await seedFixtures()
+  const { humanA, agentA, agentB, brandA, brandASecondary, brandOnlyB, sharedBrand, taskA, taskB } = await seedFixtures()
   const humanACookie = await login(fixtures.humanA.email, fixtures.humanA.password)
 
   console.log('Checking: Human A sees only Agent A and no apiKey in list response')
@@ -327,6 +374,110 @@ async function main() {
     })
 
     expect(response.status === 403, `Expected Agent A status update for Agent B to be 403, got ${response.status}`)
+  }
+
+  console.log('Checking: Agent A cannot read config for a brand it is not linked to')
+  {
+    const { response } = await requestJson(`/api/agent/brand-config?brandId=${brandOnlyB.id}`, {
+      headers: authHeaders({ apiKey: fixtures.agentA.apiKey }),
+    })
+
+    expect(response.status === 403, `Expected Agent A brand-config read for unlinked brand to be 403, got ${response.status}`)
+  }
+
+  console.log('Checking: Agent A cannot update config for a brand it is not linked to')
+  {
+    const { response } = await requestJson('/api/agent/brand-config', {
+      method: 'PATCH',
+      headers: authHeaders({ apiKey: fixtures.agentA.apiKey, json: true }),
+      body: JSON.stringify({ brandId: brandOnlyB.id, description: 'blocked update' }),
+    })
+
+    expect(response.status === 403, `Expected Agent A brand-config update for unlinked brand to be 403, got ${response.status}`)
+  }
+
+  console.log('Checking: Agent A cannot upsert accounts for a brand it is not linked to')
+  {
+    const { response } = await requestJson('/api/agent/accounts', {
+      method: 'PATCH',
+      headers: authHeaders({ apiKey: fixtures.agentA.apiKey, json: true }),
+      body: JSON.stringify({ brandId: brandOnlyB.id, platformId: 'instagram', handle: '@blocked' }),
+    })
+
+    expect(response.status === 403, `Expected Agent A account upsert for unlinked brand to be 403, got ${response.status}`)
+  }
+
+  console.log('Checking: Agent A cannot create action items for a brand it is not linked to')
+  {
+    const { response } = await requestJson('/api/agent/action-items', {
+      method: 'POST',
+      headers: authHeaders({ apiKey: fixtures.agentA.apiKey, json: true }),
+      body: JSON.stringify({
+        brandId: brandOnlyB.id,
+        type: 'competitor_alert',
+        title: `${fixturePrefix} blocked action`,
+        description: 'blocked action item',
+      }),
+    })
+
+    expect(response.status === 403, `Expected Agent A action item for unlinked brand to be 403, got ${response.status}`)
+  }
+
+  console.log('Checking: Agent A can read config for a co-managed brand')
+  {
+    const { response, data } = await requestJson(`/api/agent/brand-config?brandId=${sharedBrand.id}`, {
+      headers: authHeaders({ apiKey: fixtures.agentA.apiKey }),
+    })
+
+    expect(response.ok, `Expected Agent A brand-config read for shared brand to succeed, got ${response.status}`)
+    expect(data.id === sharedBrand.id, `Expected shared brand payload, got ${JSON.stringify(data)}`)
+  }
+
+  console.log('Checking: multi-brand Agent A must specify brandId when creating own task')
+  {
+    const { response } = await requestJson('/api/tasks', {
+      method: 'POST',
+      headers: authHeaders({ apiKey: fixtures.agentA.apiKey, json: true }),
+      body: JSON.stringify({ title: `${fixturePrefix} missing brandId` }),
+    })
+
+    expect(response.status === 400, `Expected multi-brand Agent A task without brandId to be 400, got ${response.status}`)
+  }
+
+  console.log('Checking: Agent A can create and query brand-scoped tasks for Brand A')
+  {
+    const { response, data } = await requestJson('/api/tasks', {
+      method: 'POST',
+      headers: authHeaders({ apiKey: fixtures.agentA.apiKey, json: true }),
+      body: JSON.stringify({ title: `${fixturePrefix} Agent A Brand Task`, brandId: brandA.id }),
+    })
+
+    expect(response.ok, `Expected Agent A brand task create success, got ${response.status}: ${JSON.stringify(data)}`)
+    expect(data.brandId === brandA.id, `Expected created task brandId ${brandA.id}, got ${data.brandId}`)
+
+    const filtered = await requestJson(`/api/tasks?brandId=${brandA.id}`, {
+      headers: authHeaders({ apiKey: fixtures.agentA.apiKey }),
+    })
+    expect(filtered.response.ok, `Expected Agent A Brand A task list success, got ${filtered.response.status}`)
+    expect(Array.isArray(filtered.data), 'Expected Brand A task list to be an array')
+    expect(filtered.data.length >= 1, 'Expected at least one Brand A task')
+    expect(filtered.data.every((task) => task.brandId === brandA.id), 'Expected all Brand A task results to carry Brand A brandId')
+
+    const emptySecondary = await requestJson(`/api/tasks?brandId=${brandASecondary.id}`, {
+      headers: authHeaders({ apiKey: fixtures.agentA.apiKey }),
+    })
+    expect(emptySecondary.response.ok, `Expected Agent A Brand A Secondary task list success, got ${emptySecondary.response.status}`)
+    expect(Array.isArray(emptySecondary.data), 'Expected Brand A Secondary task list to be an array')
+    expect(emptySecondary.data.length === 0, `Expected no Brand A Secondary tasks, got ${emptySecondary.data.length}`)
+  }
+
+  console.log('Checking: Agent A cannot query tasks for a brand it is not linked to')
+  {
+    const { response } = await requestJson(`/api/tasks?brandId=${brandOnlyB.id}`, {
+      headers: authHeaders({ apiKey: fixtures.agentA.apiKey }),
+    })
+
+    expect(response.status === 403, `Expected Agent A unlinked-brand task list to be 403, got ${response.status}`)
   }
 
   console.log('Permission verification passed')

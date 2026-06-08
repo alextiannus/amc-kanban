@@ -72,29 +72,32 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [assets, setAssets] = useState<DashboardAsset[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [targetFolder, setTargetFolder] = useState('素材库')
+  const [moveFolder, setMoveFolder] = useState('')
+
+  const loadAssets = async (cancelled = false) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const query = new URLSearchParams()
+      if (brandId) query.set('brandId', brandId)
+      const url = query.toString() ? `/api/dashboard/assets?${query.toString()}` : '/api/dashboard/assets'
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('load failed')
+      const data = await res.json()
+      if (!cancelled) setAssets(data.assets || [])
+    } catch {
+      if (!cancelled) setError('素材库加载失败')
+    } finally {
+      if (!cancelled) setLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
 
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const query = new URLSearchParams()
-        if (brandId) query.set('brandId', brandId)
-        const url = query.toString() ? `/api/dashboard/assets?${query.toString()}` : '/api/dashboard/assets'
-        const res = await fetch(url)
-        if (!res.ok) throw new Error('load failed')
-        const data = await res.json()
-        if (!cancelled) setAssets(data.assets || [])
-      } catch {
-        if (!cancelled) setError('素材库加载失败')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    load()
+    void loadAssets(cancelled)
     return () => { cancelled = true }
   }, [brandId])
 
@@ -116,6 +119,73 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     ...cat,
     count: cat.id === 'all' ? assets.length : assets.filter(asset => toCategory(asset) === cat.id).length,
   }))
+  const dynamicFolders = Array.from(new Set(assets.map((asset) => toCategory(asset)).filter(Boolean)))
+  const folderOptions = Array.from(new Set(['素材库', '菜品', '环境', '活动', 'UGC', '待整理', ...dynamicFolders]))
+
+  const uploadFiles = async (files: FileList | File[]) => {
+    if (!brandId) {
+      setError('请先选择品牌再上传素材')
+      return
+    }
+    const fileList = Array.from(files)
+    if (fileList.length === 0) return
+
+    setUploading(true)
+    setError(null)
+    try {
+      for (const file of fileList) {
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => {
+            const value = String(reader.result || '')
+            resolve(value.includes(',') ? value.split(',').pop() || '' : value)
+          }
+          reader.onerror = () => reject(new Error('read failed'))
+          reader.readAsDataURL(file)
+        })
+
+        const res = await fetch(`/api/brands/${brandId}/assets/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: file.name,
+            mimeType: file.type || 'application/octet-stream',
+            fileBase64,
+            folder: targetFolder,
+            aiCategory: targetFolder,
+            aiTags: [targetFolder],
+          }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(json.error || '素材上传失败')
+      }
+      await loadAssets()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '素材上传失败')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const moveSelected = async () => {
+    if (!brandId || selected.length === 0 || !moveFolder.trim()) return
+    setUploading(true)
+    setError(null)
+    try {
+      await Promise.all(selected.map((assetId) => fetch(`/api/brands/${brandId}/assets/${assetId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: moveFolder.trim(), aiCategory: moveFolder.trim() }),
+      })))
+      setSelected([])
+      setMoveFolder('')
+      await loadAssets()
+    } catch {
+      setError('移动素材失败')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto pb-36 space-y-6">
@@ -132,9 +202,16 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               <Sparkles className="w-4 h-4" /> AI 生成帖子 ({selected.length})
             </button>
           )}
-          <label className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-sm shadow-emerald-500/20">
-            <Upload className="w-4 h-4" /> 投喂素材
-            <input type="file" multiple accept="image/*,video/*" className="hidden" />
+          <select
+            value={targetFolder}
+            onChange={(event) => setTargetFolder(event.target.value)}
+            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 outline-none"
+          >
+            {folderOptions.map((folder) => <option key={folder} value={folder}>{folder}</option>)}
+          </select>
+          <label className={`flex items-center gap-2 text-white text-sm font-bold px-4 py-2 rounded-xl transition-colors cursor-pointer shadow-sm shadow-emerald-500/20 ${uploading || !brandId ? 'bg-slate-400 cursor-not-allowed' : 'bg-emerald-500 hover:bg-emerald-600'}`}>
+            <Upload className="w-4 h-4" /> {uploading ? '上传中...' : '投喂素材'}
+            <input type="file" multiple accept="image/*,video/*" className="hidden" disabled={uploading || !brandId} onChange={(event) => { if (event.target.files) void uploadFiles(event.target.files); event.currentTarget.value = '' }} />
           </label>
         </div>
       </div>
@@ -143,7 +220,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false) }}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); void uploadFiles(e.dataTransfer.files) }}
         className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer
           ${dragOver ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/10' : 'border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-slate-50 dark:hover:bg-slate-800/30'}`}
       >
@@ -193,6 +270,13 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 rounded-xl px-4 py-3 flex items-center justify-between">
           <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">已选择 {selected.length} 张素材</span>
           <div className="flex items-center gap-2">
+            <input
+              value={moveFolder}
+              onChange={(event) => setMoveFolder(event.target.value)}
+              placeholder="移动到子文件夹"
+              className="w-36 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 outline-none dark:border-indigo-800 dark:bg-slate-950 dark:text-indigo-300"
+            />
+            <button disabled={!moveFolder.trim() || uploading} onClick={moveSelected} className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50">移动</button>
             <button className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline" onClick={() => setSelected([])}>取消选择</button>
             <button className="flex items-center gap-1.5 text-xs font-bold bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg transition-colors">
               <Sparkles className="w-3.5 h-3.5" /> 用于生成

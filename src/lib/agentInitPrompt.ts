@@ -92,12 +92,13 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
   return [
     '【AMC 账号初始化指令】',
     '将本指令完整粘贴给 AI Agent，即可完成 AMC 接入初始化。',
-    '注意：初始化阶段禁止执行任何品牌读取、品牌授权校验、品牌资料写入。',
+    '注意：初始化阶段必须读取当前 Agent 可运营品牌列表并记录品牌 ID；禁止写入品牌资料或伪造 brandId。',
     '',
     '【标准执行流程（必须按顺序完成）】',
     '1) 使用 REST API 完成 Agent 接入与身份鉴权。',
-    '2) 仅执行 Agent 身份鉴权验证，初始化阶段到此结束。',
-    '3) 初始化阶段不依赖任何插件桥接层。',
+    '2) 鉴权成功后立即调用品牌列表接口，记录当前 Agent 负责运营的品牌 id/name 对照表。',
+    '3) 初始化阶段不写品牌资料；后续任何品牌修改、发布、草稿、素材、任务操作都必须携带已确认的 brandId。',
+    '4) 初始化阶段不依赖任何插件桥接层。',
     `生成时间：${generatedAt}`,
     '',
     '═══════════════════════════════════════',
@@ -142,8 +143,13 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '      Authorization: Bearer $KANBAN_AGENT_API_KEY',
     '      → 期望：200，返回 agent 信息',
     '      步骤 2 — 若步骤 1 返回 401/403，报告系统侧鉴权异常并停止初始化。',
-    '- [ ] 向用户明确回报 REST API 验证结果（成功 / 失败 + 步骤编号 + HTTP 状态码）。',
-    '- [ ] 仅当“REST API 接入配置完成 + Agent 身份验证成功”两项都完成，才可向用户报告“初始化完成”。',
+    '      步骤 3 — 鉴权成功后查询当前 Agent 负责运营的品牌：',
+    `      GET ${apiBaseUrl}/agent/brand-config`,
+    '      Authorization: Bearer $KANBAN_AGENT_API_KEY',
+    '      → 期望：200，返回数组。必须记录每个品牌的 id/name/timezone/status，保存为 KANBAN_BRAND_IDS 与 KANBAN_BRAND_LIST。',
+    '      步骤 4 — 若返回空数组，初始化进入阻塞：请人类先购买订阅、创建品牌并绑定本 Agent。',
+    '- [ ] 向用户明确回报 REST API 验证结果与可运营品牌数量；列出品牌名称和 id，方便后续确认目标品牌。',
+    '- [ ] 仅当“REST API 接入配置完成 + Agent 身份验证成功 + 可运营品牌列表已读取并记录”三项都完成，才可向用户报告“初始化完成”。',
     '',
     '## Step 6：Onboarding 前准备（品牌访问技能）',
     '- [ ] 安装或更新 amc plugin（git-plugin-amc）：',
@@ -167,7 +173,7 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
   const apiBaseUrl = params?.apiBaseUrl || '<KANBAN_API_BASE_URL>'
   const baseHost = apiBaseUrl.replace(/\/api\/?$/, '')
 
-  return `【AMC Skill：AI Marketing Crew 看板协作规范 v2】
+  return `【AMC Skill：AI Marketing Crew 看板协作规范 v4】
 
 本 Skill 为 AMC 工作流操作规范，可由品牌主随时推送给 AI Agent 以更新规则。
 不含启动凭证和品牌上下文——这些信息由订阅时生成的「AMC 账号初始化指令」提供。
@@ -175,13 +181,15 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 > **凭证规则**
 > - 本 Skill 不内置密钥；始终使用最新「AMC 账号初始化指令」中的 KANBAN_BASE_URL 与 KANBAN_AGENT_API_KEY。
 > - Base URL：${apiBaseUrl}
-> - 若收到新的「AMC 账号初始化指令」，其中的 Agent API Key 和 Brand ID 优先级高于本 Skill 中的值，必须以新指令为准并覆盖配置。
+> - 若收到新的「AMC 账号初始化指令」，其中的 Agent API Key 和可运营品牌列表优先级高于本 Skill 中的值，必须以新指令/接口查询结果为准并覆盖配置。
 > - 不要自行生成新密钥，除非品牌主明确要求轮换。
 > - 鉴权失败（401/403）时，联系品牌主获取最新初始化指令，用新密钥重试。
 
 ### 核心约束：统一通过看板能力执行
 - 你不需要也不应感知底层供应商（例如 PostFast、Google、Lark）的实现细节。
 - 所有发布、素材上传、评论回复、通知都必须通过 AI Marketing Crew 看板统一能力完成。
+- 品牌创建必须由人类在看板购买订阅后完成。每个品牌对应一个有效订阅套餐；Agent 不可通过 API 自行创建品牌。
+- 一个 Agent 可以运营多个品牌。每次执行品牌任务前，必须先确定本次任务的目标品牌；如果可运营品牌超过 1 个且任务未指定品牌，先向人类确认，不要默认使用第一个品牌。
 - 集成密钥仅保存在看板后台品牌配置中：
   - 可由人类在看板设置中配置；
   - 也可由你通过 REST API 写入品牌配置；
@@ -199,12 +207,14 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 - 相关 Task 已创建并进入正确状态（todo/in_progress/pending/done/void）。
 
 ### 动作 0：创建 / 更新 Brand Profile（品牌资料缺失、变更或访谈后必须执行）
-仅当品牌资料尚未建立或需要更新时，调用以下 REST 接口（brandId 使用初始化指令中提供的值）。
+仅当目标品牌资料尚未建立或需要更新时，调用以下 REST 接口（brandId 使用任务指定品牌，或从可运营品牌列表中确认后的目标品牌）。
 品牌访问必须通过 amc plugin 执行 onboarding-flow，不要求手动连接看板。
 执行顺序必须是：
 1) 先访问品牌设置与 profile，读取已有信息；
-2) 再把你已确认的信息回写看板；
-3) 仅在仍有阻塞字段时，向用户索要“最小必要字段”。
+2) 若没有任何可访问品牌，停止初始化并要求人类主理人在看板购买订阅、创建品牌、绑定本 Agent；
+3) 若可访问品牌超过 1 个，按任务标题、用户指令、品牌名或看板记录确定目标品牌；仍无法判断时，先向人类确认目标品牌；
+4) 再把你已确认的信息回写到目标品牌；
+5) 仅在仍有阻塞字段时，向用户索要“最小必要字段”。
 
 Brand Profile 回写标准：
 - onboarding-flow 访谈得到的有效信息必须完整回写，不得只写品牌名。
@@ -217,12 +227,23 @@ Brand Profile 回写标准：
 - 完整上下文必须通过 \`PATCH /brands/<BRAND_ID>/profile\` 的 \`markdown\` 字段写入。
 - 执行内容任务前，始终通过 \`GET /brands/<BRAND_ID>/profile?refresh=1\` 预读最新 Markdown。
 
-这三步对应 onboarding 定义：
+这几步对应 onboarding 定义：
 - 初始化准备完成（REST API 接入配置完成 + Agent 身份验证成功）
 - 品牌访问完成（已读取品牌设定）
 - 看板回写完成（品牌信息与账号配置已更新）
 
-只有三步都完成，才可标记“品牌 onboarding 完成”。
+品牌创建边界：
+- 不调用 \`POST /agent/brand-config\` 创建品牌。
+- 如果 \`GET /agent/brand-config\` 返回空数组或创建接口返回 402 / \`SUBSCRIPTION_REQUIRED_BEFORE_BRAND_CREATE\`，说明还没有有效订阅品牌。记录阻塞状态，并请人类在看板订阅流程中添加品牌。
+- 不伪造 brandId，不绕过订阅流程。
+
+多品牌运营边界：
+- \`GET /agent/brand-config\` 返回的是当前 Agent 可运营品牌列表，不是单一品牌。
+- 任何 PATCH / profile / publish / task 操作都必须携带本次目标 \`brandId\`。
+- 可运营品牌超过 1 个且任务未指定品牌时，先确认目标品牌，或将任务置为 pending 并列出可选品牌。
+- 不要把一个品牌的资料、凭证、账号或内容发布到另一个品牌。
+
+只有目标品牌已确认、品牌设定已读取、必要信息已回写到正确品牌后，才可标记“品牌 onboarding 完成”。
 
 初始化阶段行为约束：
 - 不要一次性向用户索要完整品牌故事、定位、卖点、服务理念等长表单。
@@ -288,6 +309,38 @@ Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
 
 该 Markdown 文件包含：品牌基础信息、品牌定义与设计规范、多门店结构、自媒体平台配置，作为你的任务上下文输入。
 
+### 动作 0.6：读取 / 写入 TopicFeed Research（按需执行）
+TopicFeed 用于沉淀选题研究、趋势观察、竞品记录和内容角度，正文统一使用 Markdown 文档格式。
+
+读取 topics：
+
+\`\`\`
+GET ${apiBaseUrl}/brands/<BRAND_ID>/topics?q=<keyword>&tag=<tag>
+Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
+\`\`\`
+
+写入 topic：
+
+\`\`\`json
+POST ${apiBaseUrl}/brands/<BRAND_ID>/topics
+Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
+Content-Type: application/json
+{
+  "title": "Weekend brunch content angles",
+  "summary": "本周末 brunch 推广可用的本地趋势与内容角度。",
+  "tags": ["brunch", "local-trend", "content-angle"],
+  "sourceUrl": "https://example.com/source",
+  "markdown": "# Weekend brunch content angles\\n\\n## Findings\\n- ...\\n\\n## Content Angles\\n- ..."
+}
+\`\`\`
+
+更新 topic：
+
+\`\`\`
+PATCH ${apiBaseUrl}/brands/<BRAND_ID>/topics/<TOPIC_ID>
+Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
+\`\`\`
+
 ### 动作 1：加载规范与任务分类
 请先读取以下在线资源：
 - API 规范：GET ${baseHost}/api/meta/openapi
@@ -305,7 +358,8 @@ Authorization: Bearer <KANBAN_AGENT_API_KEY_FROM_INIT>
 必须把完整 Key 写入 AMC Skill 配置文件并持久化保存（不可只写占位符或截断值）：
 1. KANBAN_BASE_URL
 2. KANBAN_AGENT_API_KEY
-3. KANBAN_BRAND_ID
+3. KANBAN_BRAND_IDS（可运营品牌 ID 列表）
+4. KANBAN_BRAND_LIST（可运营品牌名称与 ID 对照表）
 
 保存要求：
 - Key 必须为完整原始值，不可掩码（如 \`sk-****\`）或省略中段。

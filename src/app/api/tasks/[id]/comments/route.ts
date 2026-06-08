@@ -4,6 +4,7 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
+import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 async function canHumanAccessTask(humanId: string, assigneeId: string | null) {
   const permissions = await prisma.agentPermission.findMany({
@@ -38,7 +39,7 @@ export async function GET(
 
     const task = await prisma.workUnit.findUnique({
       where: { id },
-      select: { assigneeId: true }
+      select: { assigneeId: true, brandId: true }
     })
 
     if (!task) {
@@ -57,6 +58,24 @@ export async function GET(
 
     if (!isAuthorized) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (task.brandId) {
+      if (apiKey) {
+        const authenticatedAgent = await getAgentFromApiKey(apiKey)
+        const ok = authenticatedAgent
+          ? await canSessionAccessBrandProject(task.brandId, authenticatedAgent.id, 'AI_AGENT', 'USER')
+          : false
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      } else if (session?.user) {
+        const ok = await canSessionAccessBrandProject(
+          task.brandId,
+          session.user.id,
+          session.user.type ?? 'HUMAN',
+          session.user.role
+        )
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     const comments = await prisma.comment.findMany({
@@ -109,7 +128,7 @@ export async function POST(
 
     const task = await prisma.workUnit.findUnique({
       where: { id },
-      select: { assigneeId: true }
+      select: { assigneeId: true, brandId: true }
     })
 
     if (!task) {
@@ -132,6 +151,21 @@ export async function POST(
 
     if (!isAuthorized) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (task.brandId) {
+      if (authenticatedAgent) {
+        const ok = await canSessionAccessBrandProject(task.brandId, authenticatedAgent.id, 'AI_AGENT', 'USER')
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      } else if (session?.user) {
+        const ok = await canSessionAccessBrandProject(
+          task.brandId,
+          session.user.id,
+          session.user.type ?? 'HUMAN',
+          session.user.role
+        )
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
     }
 
     const body = await request.json()

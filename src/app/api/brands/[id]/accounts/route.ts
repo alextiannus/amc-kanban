@@ -9,6 +9,31 @@ function maskPw(pw: string | null) {
   return pw ? `••••••${pw.slice(-2)}` : null
 }
 
+export async function GET(_request: Request, { params }: Params) {
+  const session = await getSession()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id: brandId } = await params
+  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  const accounts = await prisma.socialAccount.findMany({
+    where: { brandId },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      platformId: true,
+      handle: true,
+      displayName: true,
+      autoPilot: true,
+      profileUrl: true,
+    },
+  })
+
+  return NextResponse.json({ accounts })
+}
+
 // POST /api/brands/[id]/accounts — connect a new social account
 export async function POST(request: Request, { params }: Params) {
   const session = await getSession()

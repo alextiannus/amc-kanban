@@ -4,6 +4,7 @@ import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER } from '@/lib/integrat
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
+import { canAgentAccessBrand } from '@/lib/brandAccess'
 
 type BrandWithCredentials = {
   postfastApiKey: string | null
@@ -102,6 +103,9 @@ export async function GET(request: Request) {
   })
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+  if (!(await canAgentAccessBrand(brandId, agent.id))) {
+    return NextResponse.json({ error: 'Brand not linked to this agent' }, { status: 403 })
+  }
 
   return NextResponse.json(toPublicBrand(brand))
 }
@@ -161,6 +165,9 @@ export async function PATCH(request: Request) {
 
   const brand = await prisma.brand.findUnique({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+  if (!(await canAgentAccessBrand(brandId, agent.id))) {
+    return NextResponse.json({ error: 'Brand not linked to this agent' }, { status: 403 })
+  }
 
   // Whitelist: which fields an Agent is allowed to write
   const AGENT_WRITABLE_PROFILE = ['name', 'description', 'logoUrl', 'website', 'phone', 'address', 'location', 'timezone'] as const
@@ -189,13 +196,6 @@ export async function PATCH(request: Request) {
       larkAppId: true, larkAppSecret: true, larkParentFolderToken: true, larkDriveFolderId: true,
       googleAccountId: true, googleLocationId: true, googleLocationName: true,
     },
-  })
-
-  // Auto-register agent to this brand (MCP self-registration)
-  await prisma.brandAgent.upsert({
-    where: { brandId_agentId: { brandId, agentId: agent.id } },
-    create: { brandId, agentId: agent.id, role: 'worker', active: true },
-    update: { active: true },
   })
 
   // Auto-create Lark workspace folder if brand has Lark creds but no workspace yet

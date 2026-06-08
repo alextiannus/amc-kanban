@@ -32,6 +32,9 @@ Open http://localhost:3000 in your browser.
 - App metadata and title: src/app/layout.tsx
 - Main board header branding: src/components/KanbanBoard.tsx
 - Brand logo asset: public/amc-dashboard-logo.svg
+- Latest product PRD: PRD.md
+- API service map: docs/API_SERVICES.md
+- AMC Agent connectivity guide: docs/AGENT_CONNECTIVITY.md
 
 ## Notes
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Bot, KeyRound, Plus, RefreshCw, Settings, X } from 'lucide-react'
+import { ArrowLeft, Bot, Download, KeyRound, Plus, RefreshCw, Settings, X } from 'lucide-react'
 import AgentDetailPanel from '@/components/AgentDetailPanel'
 import AgentSequenceView from '@/components/AgentSequenceView'
 import AvatarImage from '@/components/AvatarImage'
@@ -95,6 +95,7 @@ export default function PrincipalDashboardPage() {
   const [agentSelections, setAgentSelections] = useState<Record<string, string>>({})
   const [selectedAgent, setSelectedAgent] = useState<AgentDetail | null>(null)
   const [agentModalLoading, setAgentModalLoading] = useState(false)
+  const [selectedActionBrandId, setSelectedActionBrandId] = useState('')
 
   const loadDashboard = useCallback(async () => {
     setLoading(true)
@@ -139,6 +140,10 @@ export default function PrincipalDashboardPage() {
   if (!data) {
     return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-8 text-sm text-slate-500 dark:text-slate-400">暂无数据</div>
   }
+
+  const filteredActionLogs = selectedActionBrandId
+    ? data.actionLogs.filter((log) => log.brandId === selectedActionBrandId)
+    : data.actionLogs
 
   const createAgentKey = async () => {
     try {
@@ -281,12 +286,21 @@ export default function PrincipalDashboardPage() {
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
         <AgentSequenceView
           headerAction={(
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <button
             onClick={createAgentKey}
-            className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700"
           >
             <KeyRound className="h-4 w-4" /> 新增 AMC Agent
           </button>
+          <a
+            href="/api/meta/sop?download=1"
+            download="agent-instructions.md"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-300"
+          >
+            <Download className="h-4 w-4" /> 下载 Skill
+          </a>
+          </div>
           )}
         />
       </section>
@@ -402,9 +416,29 @@ export default function PrincipalDashboardPage() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-        <h2 className="text-lg font-black text-slate-900 dark:text-slate-50 mb-4">品牌动作日志（最近）</h2>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-black text-slate-900 dark:text-slate-50">品牌动作日志（最近）</h2>
+            <p className="mt-1 text-xs text-slate-400">当前显示 {filteredActionLogs.length} 条</p>
+          </div>
+          <select
+            value={selectedActionBrandId}
+            onChange={(event) => setSelectedActionBrandId(event.target.value)}
+            className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-indigo-400 sm:w-64"
+            aria-label="按品牌筛选动作日志"
+          >
+            <option value="">全部品牌</option>
+            {data.brands.map((brand) => (
+              <option key={brand.id} value={brand.id}>{brand.name}</option>
+            ))}
+          </select>
+        </div>
         <div className="space-y-2">
-          {data.actionLogs.map((log) => (
+          {filteredActionLogs.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-6 text-center text-sm text-slate-400">
+              当前品牌暂无动作日志
+            </div>
+          ) : filteredActionLogs.map((log) => (
             <div key={log.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3">
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">

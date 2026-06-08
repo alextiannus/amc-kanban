@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
 import { resolveAssignment } from '@/lib/assignmentPool'
+import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 
 // GET /api/brands — list brands for the logged-in user
 // Only return brands that have at least one active AI Agent assigned.
@@ -244,6 +245,12 @@ export async function POST(request: Request) {
   const { brand, boundSubscription } = creation
 
   let assignment: { selectedAgentId: string | null; matchedBy: string | null; decisionId: string | null } | null = null
+  try {
+    await ensureBrandWorkspace(brand.id)
+  } catch (workspaceError) {
+    console.error('[POST /api/brands] workspace init failed:', workspaceError)
+  }
+
   try {
     const result = await resolveAssignment({
       subjectType: 'brand_create',

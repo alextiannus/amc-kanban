@@ -77,6 +77,8 @@ model WorkUnit {
   tags           String[]  @default([])
   assigneeId     String?
   assignee       User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  brandId        String?
+  brand          Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
   
   // Relations for task dependencies (self-relation join table)
   dependencies   TaskDependency[] @relation("BlockedTask") // Blocker tasks that block this task
@@ -87,6 +89,9 @@ model WorkUnit {
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  @@index([brandId])
+  @@index([assigneeId, brandId])
 }
 
 model AuditLog {
@@ -271,9 +276,11 @@ model Brand {
   larkOwnerId            String?
 
   owners      BrandOwner[]
+  tasks       WorkUnit[]
   accounts    SocialAccount[]
   contents    ContentDraft[]
   assets      MediaAsset[]
+  topicFeeds  TopicFeed[]
   actionItems ActionItem[]
   conversions ConversionEvent[]
   brandAgents BrandAgent[]
@@ -432,6 +439,26 @@ model MediaAsset {
 
   @@index([brandId, aiReady])
   @@index([brandId, aiCategory])
+}
+
+model TopicFeed {
+  id            String   @id @default(cuid())
+  brandId       String
+  brand         Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  title         String
+  markdown      String
+  summary       String?
+  tags          String[] @default([])
+  sourceUrl     String?
+  status        String   @default("active")
+  createdById   String?
+  createdByType String   @default("SYSTEM")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([brandId, updatedAt])
+  @@index([brandId, status])
 }
 
 model ContentAssetRef {

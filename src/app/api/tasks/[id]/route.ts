@@ -5,6 +5,7 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { eventEmitter } from '@/lib/events'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
+import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 async function canHumanAccessTask(humanId: string, assigneeId: string | null) {
   const permissions = await prisma.agentPermission.findMany({
@@ -99,6 +100,24 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    if (task.brandId) {
+      if (apiKey) {
+        const authenticatedAgent = await getAgentFromApiKey(apiKey)
+        const ok = authenticatedAgent
+          ? await canSessionAccessBrandProject(task.brandId, authenticatedAgent.id, 'AI_AGENT', 'USER')
+          : false
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      } else if (session?.user) {
+        const ok = await canSessionAccessBrandProject(
+          task.brandId,
+          session.user.id,
+          session.user.type ?? 'HUMAN',
+          session.user.role
+        )
+        if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
     const taskWithAvatar = {
       ...task,
       assignee: task.assignee ? withResolvedAvatar(task.assignee) : null,
@@ -150,6 +169,23 @@ export async function PATCH(
 
     const body = await request.json()
     const { title, description, materials, assigneeId, priority, estimatedHours, deadline, tags, weight, status, blockerTaskIds } = body
+    const nextBrandId = body.brandId === undefined
+      ? undefined
+      : typeof body.brandId === 'string' && body.brandId.trim()
+        ? body.brandId.trim()
+        : null
+
+    const effectiveBrandId = nextBrandId === undefined ? existingTask.brandId : nextBrandId
+    if (effectiveBrandId) {
+      const actor = authenticatedAgent
+        ? { id: authenticatedAgent.id, type: 'AI_AGENT', role: 'USER' }
+        : session?.user
+          ? { id: session.user.id, type: session.user.type ?? 'HUMAN', role: session.user.role }
+          : null
+      if (!actor || !(await canSessionAccessBrandProject(effectiveBrandId, actor.id, actor.type, actor.role))) {
+        return NextResponse.json({ error: 'Forbidden: You do not have access to this brand' }, { status: 403 })
+      }
+    }
 
     if (weight !== undefined) {
       return NextResponse.json({ error: 'Forbidden: task weight is immutable after creation' }, { status: 400 })
@@ -181,6 +217,17 @@ export async function PATCH(
 
       if (!assignee || assignee.type !== 'AI_AGENT') {
         return NextResponse.json({ error: 'Invalid assigneeId: must be an AI_AGENT' }, { status: 400 })
+      }
+    }
+
+    const effectiveAssigneeId = assigneeId === undefined ? existingTask.assigneeId : assigneeId
+    if (effectiveBrandId && effectiveAssigneeId) {
+      const link = await prisma.brandAgent.findFirst({
+        where: { brandId: effectiveBrandId, agentId: effectiveAssigneeId, active: true },
+        select: { id: true },
+      })
+      if (!link) {
+        return NextResponse.json({ error: 'assigneeId is not linked to this brand' }, { status: 400 })
       }
     }
 
@@ -231,6 +278,9 @@ export async function PATCH(
     if (estimatedHours !== undefined) data.estimatedHours = estimatedHours !== null && estimatedHours !== '' ? Number(estimatedHours) : null
     if (deadline !== undefined) data.deadline = deadline ? new Date(deadline) : null
     if (tags !== undefined) data.tags = Array.isArray(tags) ? tags : typeof tags === 'string' ? tags.split(',').map((tag: string) => tag.trim()).filter(Boolean) : []
+    if (nextBrandId !== undefined) {
+      data.brand = nextBrandId ? { connect: { id: nextBrandId } } : { disconnect: true }
+    }
 
     const updatedTask = await prisma.workUnit.update({
       where: { id },
