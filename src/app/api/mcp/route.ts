@@ -17,7 +17,7 @@
  */
 
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
-import { createAmcMcpServer, getAgentFromKey } from '@/lib/mcp/server'
+import { createAmcMcpServer, getAgentFromKey } from '@/lib/partner/mcp/server'
 
 export const dynamic = 'force-dynamic'
 

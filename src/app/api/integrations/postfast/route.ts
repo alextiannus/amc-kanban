@@ -15,7 +15,7 @@
 
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { getAgentFromKey } from '@/lib/mcp/server'
+import { getAgentFromKey } from '@/lib/partner/mcp/server'
 import { prisma } from '@/lib/prisma'
 import {
   postfastTestConnection,
