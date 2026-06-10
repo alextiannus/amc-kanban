@@ -674,6 +674,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                         </div>
                       )}
 
+                      {/* Top-Right: Used Count Badge */}
+                      <div className="absolute top-2 right-2 z-10 bg-slate-950/70 dark:bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full select-none">
+                        {asset.usedCount}
+                      </div>
+
                       {/* Top-Left: Checkbox hover overlay */}
                       <div
                         onClick={(e) => toggleSelect(asset.id, e)}
@@ -700,12 +705,6 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                             {relativeDate(asset.lastUsedAt || asset.createdAt)}
                           </span>
                         )}
-                      </div>
-                      
-                      <div className="flex items-center gap-1.5">
-                        <span className="bg-slate-100 dark:bg-slate-850 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-bold">
-                          {asset.usedCount}
-                        </span>
                       </div>
                     </div>
                   </div>
