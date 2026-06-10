@@ -1,0 +1,510 @@
+# PRD: Marketing Media Lab / 营销素材知识库
+
+版本日期：2026-06-10
+
+## 1. 产品定位
+
+Marketing Media Lab 是 AI Marketing Crew 的品牌级 **营销素材知识库**。它不是传统“文件夹式素材库”，而是把图片、视频、UGC、菜单图、门店环境、活动素材等资源沉淀为可被 AI 理解、检索、复用和追踪表现的营销知识资产。
+
+核心定位：
+
+1. 素材不按固定文件夹组织，而按 **语义标签、营销用途、发布历史和效果反馈** 组织。
+2. 每个素材都应回答：这是什么、适合什么内容、用过没有、在哪些平台用过、效果如何、是否适合再次使用。
+3. AI 生成帖子时不再随机挑素材，而是根据品牌上下文、发布目标、平台、近期使用记录和历史表现推荐最合适的素材。
+
+## 2. 产品目标
+
+1. 让品牌素材从“文件存储”升级为“营销知识库”。
+2. 通过 AI 自动打标、描述、推荐用途，降低人工整理成本。
+3. 支持一个素材拥有多个 tag，避免文件夹单归属限制。
+4. 记录素材在不同帖子、平台和场景中的使用历史。
+5. 为内容生成、排期、复盘提供可追踪的素材上下文。
+6. 后续通过表现数据反哺 AI 素材推荐，形成素材复用闭环。
+
+## 3. 核心用户
+
+### 3.1 品牌主 / Brand Owner
+
+查看和上传品牌素材，理解哪些素材已经用过、哪些素材适合接下来推广，避免重复发布。
+
+### 3.2 AMC 主理人 / Brand Director
+
+管理多个品牌素材资产，确认 AI 打标结果，挑选高质量素材用于内容生产和运营计划。
+
+### 3.3 AI Agent
+
+读取素材 tags、AI caption、推荐用途、发布历史和效果数据，用于生成帖子、挑选素材、避免重复使用和提出素材补充建议。
+
+### 3.4 Admin
+
+管理全局素材能力、存储 provider、标签体系、权限、审计和异常处理。
+
+## 4. 核心概念
+
+### 4.1 MediaAsset / 素材资产
+
+品牌维度的原始素材文件，包括图片、视频、音频或其他可用于营销内容的资源。
+
+建议能力：
+
+1. 支持上传、拖拽上传、批量上传。
+2. 支持图片、视频预览。
+3. 支持 AI caption、AI tags、人工 tags。
+4. 支持归档，不建议物理删除。
+5. 支持记录使用次数、最近使用时间和关联帖子。
+
+### 4.2 AssetTag / 素材标签
+
+素材组织的核心。标签可由 AI、用户、系统或导入流程生成。
+
+标签示例：
+
+1. 内容对象：`#牛排`、`#甜品`、`#门店环境`、`#客户反馈`
+2. 场景：`#晚餐`、`#周末`、`#节日活动`、`#新品上市`
+3. 风格：`#高端感`、`#温馨`、`#热闹`、`#适合小红书`
+4. 平台：`#Instagram`、`#小红书`、`#Facebook`
+5. 状态：`#未使用`、`#高表现`、`#近期已用`、`#AI待确认`
+
+### 4.3 MarketingUseCase / 营销用途
+
+AI 对素材适用场景的判断，比普通 tag 更接近营销策略。
+
+示例：
+
+1. 新品介绍
+2. 节日促销
+3. 周末预订提醒
+4. 门店氛围展示
+5. 客户评价转发
+6. 限时套餐推广
+7. 品牌故事
+
+### 4.4 ContentAssetRef / 发布引用记录
+
+记录某个素材被哪条内容草稿或已发布帖子使用过。
+
+用途：
+
+1. 避免短期重复使用。
+2. 让 AI 知道素材历史上下文。
+3. 支持素材详情中展示发布记录。
+4. 支持后续关联表现数据。
+
+### 4.5 PerformanceSignal / 表现反馈
+
+素材被发布后的效果信号，用于判断素材是否值得复用。
+
+示例：
+
+1. 点赞、评论、收藏、分享。
+2. 点击、预约、转化。
+3. 评论关键词。
+4. 相对品牌均值提升。
+5. AI 总结：高表现、一般、避免复用。
+
+## 5. 页面信息架构
+
+页面主标题建议：
+
+**营销素材知识库**
+
+副标题建议：
+
+**AI 自动理解素材内容、沉淀标签与发布记录，帮你复用高表现素材。**
+
+整体布局：
+
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ 营销素材知识库  [搜索素材/标签/帖子/品牌...] [上传] [AI打标] │
+├───────────────┬──────────────────────────────────┬───────────┤
+│ 快捷视图       │ Tag 筛选: #菜品 #新品 #晚餐 #UGC  │ 详情面板   │
+│ 全部素材       │          #节日 #小红书 #未使用     │           │
+│ 最近上传       │                                  │ 预览大图   │
+│ 最近使用       │ 排序: 最近上传 / 最近使用 / 使用次数 │ AI描述     │
+│ 未使用素材     ├──────────────────────────────────┤ Tags      │
+│ 高表现素材     │ □  □  □  □  □                    │ 推荐用途   │
+│ AI待确认       │ □  □  □  □  □                    │ 发布记录   │
+│ 近期已用       │                                  │ 效果反馈   │
+│ 已归档         │                                  │ [用于生成] │
+│               │                                  │ [编辑标签] │
+│ Tags           │                                  │ [归档]     │
+│ #菜品          │                                  │           │
+│ #环境          │                                  │           │
+│ #节日活动      │                                  │           │
+│ #客户反馈      │                                  │           │
+└───────────────┴──────────────────────────────────┴───────────┘
+```
+
+## 6. 核心视图
+
+### 6.1 快捷视图
+
+左侧固定快捷入口：
+
+1. 全部素材
+2. 最近上传
+3. 最近使用
+4. 未使用素材
+5. 高表现素材
+6. AI 待确认
+7. 近期已用
+8. 已发布过
+9. 已归档
+
+### 6.2 Tag 浏览区
+
+左侧下方展示品牌常用 tags。点击 tag 后进入筛选状态，不是进入文件夹。
+
+规则：
+
+1. 一个素材可拥有多个 tags。
+2. 多个 tag 筛选默认使用 AND 逻辑，可切换 OR。
+3. 系统 tags 可自动生成，如 `#未使用`、`#近期已用`、`#高表现`。
+4. AI tags 默认带置信度和待确认状态。
+
+### 6.3 主素材网格
+
+素材卡片展示：
+
+```text
+[缩略图]
+招牌牛排晚餐照
+#菜品 #牛排 #晚餐 #高端感
+AI就绪 · 已用 3 次 · 最近用于 6/8 Instagram
+```
+
+卡片字段：
+
+1. 图片/视频缩略图。
+2. AI caption 或文件名。
+3. 前 3-4 个核心 tags。
+4. AI ready 状态。
+5. 使用次数。
+6. 最近使用平台和日期。
+7. 多选 checkbox。
+
+### 6.4 顶部工具栏
+
+功能：
+
+1. 全局搜索：文件名、AI caption、tag、帖子标题、平台、品牌。
+2. 上传素材。
+3. AI 打标。
+4. 导入外部素材。
+5. 过滤 chips：图片、视频、未使用、AI 待确认、已发布过、高表现。
+6. 排序：最近上传、最近使用、使用次数、表现最好。
+
+### 6.5 批量操作条
+
+选中多个素材后显示：
+
+1. 添加 tags。
+2. 移除 tags。
+3. AI 重新打标。
+4. 标记为 AI 已确认。
+5. 用于生成帖子。
+6. 归档。
+
+不再提供“移动到文件夹”，改为“添加/移除标签”。
+
+### 6.6 右侧详情面板
+
+点击单个素材后打开详情抽屉。
+
+内容结构：
+
+1. 大图/视频预览。
+2. AI 理解：caption、内容对象、场景、风格。
+3. Tags：AI tags、人工 tags、系统 tags。
+4. 推荐用途：新品介绍、节日活动、晚餐推广等。
+5. 发布记录：使用过的帖子、平台、发布时间、caption 摘要。
+6. 效果反馈：点赞、评论、收藏、转化、相对均值。
+7. AI 建议：是否适合近期复用、适合哪个平台、是否重复过高。
+8. 操作：用于生成帖子、编辑标签、归档、复制 URL。
+
+示例：
+
+```text
+素材理解
+- AI 描述：一道摆盘精致的招牌牛排，适合晚餐推广
+- Tags：#菜品 #牛排 #晚餐 #高端感 #适合Instagram
+- 推荐用途：新品介绍、晚餐套餐、周末预订提醒
+
+使用历史
+- 2026/06/08 Instagram：Father's Day Dinner Special
+- 2026/05/26 小红书：纽约必吃牛排馆
+- 已使用 3 次，近 14 天使用 1 次
+
+效果反馈
+- 平均点赞高于品牌均值 28%
+- 评论中多次提到 "looks amazing"
+- AI 建议：可继续用于周末晚餐转化帖，但避免本周再次发 Instagram
+```
+
+## 7. AI 打标与知识沉淀
+
+### 7.1 自动打标
+
+上传后 AI 自动生成：
+
+1. AI caption。
+2. 内容 tags。
+3. 场景 tags。
+4. 风格 tags。
+5. 推荐平台 tags。
+6. 推荐营销用途。
+7. 置信度。
+
+### 7.2 待确认机制
+
+AI tags 初始状态为待确认。用户可：
+
+1. 单个确认。
+2. 批量确认。
+3. 编辑后确认。
+4. 拒绝某个 tag。
+
+### 7.3 用于生成帖子
+
+当用户选择素材生成帖子时，传给 AI 的上下文应包含：
+
+1. 素材 URL。
+2. AI caption。
+3. tags。
+4. 推荐用途。
+5. 近期使用记录。
+6. 平台历史表现。
+7. 重复使用风险。
+
+AI 生成内容时应优先考虑：
+
+1. 当前营销目标。
+2. 平台适配性。
+3. 是否近期已用。
+4. 历史表现。
+5. 与其他已选素材的互补性。
+
+## 8. 数据模型建议
+
+### 8.1 MediaAsset
+
+保留现有字段，并建议逐步增强：
+
+```text
+MediaAsset
+- id
+- brandId
+- url
+- filename
+- mimeType
+- sizeBytes
+- width
+- height
+- duration
+- thumbnailUrl
+- blurHash / thumbHash
+- checksum
+- aiCaption
+- aiReady
+- usedCount
+- lastUsedAt
+- sourceType
+- storageKey
+- archivedAt
+- uploadedBy
+- createdAt
+- updatedAt
+```
+
+现有 `aiCategory` 可作为兼容字段保留，但不再作为主要组织方式。
+
+### 8.2 AssetTag
+
+```text
+AssetTag
+- id
+- brandId
+- name
+- normalizedName
+- type: ai | manual | system
+- color
+- usageCount
+- createdAt
+- updatedAt
+```
+
+约束：
+
+1. 同一品牌下 `normalizedName` 唯一。
+2. 系统 tags 不允许普通用户删除。
+
+### 8.3 MediaAssetTag
+
+```text
+MediaAssetTag
+- id
+- assetId
+- tagId
+- source: ai | user | import | system
+- confidence
+- status: pending | confirmed | rejected
+- createdBy
+- createdAt
+- updatedAt
+```
+
+### 8.4 AssetUseCase
+
+```text
+AssetUseCase
+- id
+- assetId
+- useCase
+- confidence
+- source: ai | user
+- status: pending | confirmed | rejected
+- createdAt
+- updatedAt
+```
+
+### 8.5 ContentAssetRef
+
+增强现有素材引用表：
+
+```text
+ContentAssetRef
+- id
+- contentId
+- assetId
+- platform
+- usageContext
+- captionSnapshot
+- publishedAt
+- createdAt
+```
+
+### 8.6 AssetPerformanceSnapshot
+
+后续新增：
+
+```text
+AssetPerformanceSnapshot
+- id
+- assetId
+- contentId
+- platform
+- likes
+- comments
+- saves
+- shares
+- clicks
+- conversions
+- capturedAt
+- aiSummary
+```
+
+## 9. API 能力建议
+
+### 9.1 素材查询
+
+支持服务端分页、搜索、排序和 tag 筛选：
+
+```text
+GET /api/dashboard/assets
+  ?brandId=
+  &q=
+  &tags=
+  &tagMode=and|or
+  &mimeType=image|video
+  &view=unused|recent|published|archived|ai_pending|high_performing
+  &sort=createdAt|lastUsedAt|usedCount|performance
+  &cursor=
+  &limit=
+```
+
+### 9.2 Tag 管理
+
+```text
+GET    /api/brands/:brandId/asset-tags
+POST   /api/brands/:brandId/asset-tags
+PATCH  /api/brands/:brandId/asset-tags/:tagId
+DELETE /api/brands/:brandId/asset-tags/:tagId
+```
+
+### 9.3 素材 Tag 绑定
+
+```text
+POST   /api/brands/:brandId/assets/:assetId/tags
+DELETE /api/brands/:brandId/assets/:assetId/tags/:tagId
+POST   /api/brands/:brandId/assets/bulk-tags
+```
+
+### 9.4 AI 打标
+
+```text
+POST /api/brands/:brandId/assets/:assetId/ai-tag
+POST /api/brands/:brandId/assets/bulk-ai-tag
+```
+
+### 9.5 发布记录
+
+```text
+GET /api/brands/:brandId/assets/:assetId/usage
+```
+
+## 10. 实现优先级
+
+### Phase 1: Tag-first 基础能力
+
+1. 新增 `AssetTag` 和 `MediaAssetTag`。
+2. 将前端“文件夹”改为 tags。
+3. 支持手动添加/移除 tags。
+4. Dashboard 查询支持 tag 筛选。
+5. 素材卡片展示 tags 和使用次数。
+
+### Phase 2: 营销素材详情面板
+
+1. 新增右侧详情抽屉。
+2. 展示 AI caption、tags、推荐用途。
+3. 展示发布记录和关联帖子。
+4. 支持从详情面板“用于生成帖子”。
+
+### Phase 3: AI 打标工作流
+
+1. 上传后自动打标。
+2. 支持批量 AI 打标。
+3. 支持 AI tags 待确认。
+4. 支持人工确认、编辑、拒绝 tags。
+
+### Phase 4: 发布历史与重复使用控制
+
+1. 增强 `ContentAssetRef`。
+2. 生成帖子时传入素材使用历史。
+3. 对近期重复使用素材给出提醒。
+4. 支持“未使用素材”“近期已用”“已发布过”等快捷视图。
+
+### Phase 5: 表现反馈闭环
+
+1. 接入社媒表现数据。
+2. 新增素材表现快照。
+3. 生成“高表现素材”视图。
+4. AI 根据历史表现推荐素材。
+
+## 11. 产品原则
+
+1. **Tag-first，不再 folder-first**：素材可以多归属，筛选应支持组合。
+2. **AI 可解释**：AI 为什么推荐某个素材，需要基于 tags、用途、历史和效果。
+3. **历史可追踪**：每次素材用于帖子都要留下引用记录。
+4. **避免重复**：AI 生成内容时必须知道近期使用历史。
+5. **人工可校正**：AI tags 必须可确认、编辑、拒绝。
+6. **面向营销复用**：页面核心不是文件管理，而是帮助用户找到“现在最适合发什么素材”。
+
+## 12. 成功指标
+
+1. 素材上传后自动生成 tags 的覆盖率。
+2. 用户确认 AI tags 的比例。
+3. 内容生成时使用知识库素材的比例。
+4. 重复使用高频素材导致的人工修改次数下降。
+5. 高表现素材复用率提升。
+6. 从进入素材库到选中素材用于生成帖子的平均时间下降。
