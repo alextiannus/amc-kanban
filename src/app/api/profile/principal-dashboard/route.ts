@@ -228,6 +228,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
+    viewerUserId: userId,
     dashboardRole,
     userRoles,
     scope: adminAsPrincipal ? 'mine' : 'all',

@@ -112,6 +112,17 @@ async function findOwnerBrand(ownerId: string, brandId?: string | null) {
   })
 }
 
+async function canOwnerAccessBrand(ownerId: string, brandId: string) {
+  const owned = await prisma.brand.findFirst({
+    where: {
+      id: brandId,
+      OR: [{ ownerId }, { owners: { some: { userId: ownerId } } }],
+    },
+    select: { id: true },
+  })
+  return Boolean(owned)
+}
+
 export async function GET(request: Request) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -126,7 +137,11 @@ export async function GET(request: Request) {
     : null
 
   if (scopedBrandId && !scopedBrand) {
-    return NextResponse.json({ error: 'Brand not found or no access' }, { status: 404 })
+    const exists = await prisma.brand.findUnique({ where: { id: scopedBrandId }, select: { id: true } })
+    if (exists) {
+      return NextResponse.json({ error: 'Forbidden: only brand owners can manage subscription for this brand' }, { status: 403 })
+    }
+    return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
   }
 
   const latestWhere = scopedBrandId
@@ -347,9 +362,11 @@ export async function POST(request: Request) {
   }
 
   if (brandId) {
-    const brand = await findOwnerBrand(session.user.id, brandId)
-    if (!brand) {
-      return NextResponse.json({ error: 'Brand not found or no access' }, { status: 404 })
+    const exists = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } })
+    if (!exists) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+    const hasOwnerAccess = await canOwnerAccessBrand(session.user.id, brandId)
+    if (!hasOwnerAccess) {
+      return NextResponse.json({ error: 'Forbidden: only brand owners can manage subscription for this brand' }, { status: 403 })
     }
   }
 

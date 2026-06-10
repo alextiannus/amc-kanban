@@ -80,6 +80,7 @@ export default function ProfilePage() {
 
   const profileRoles = profile?.userRoles || (profile?.dashboardRole === 'ADMIN' ? ['ADMIN'] : profile?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : profile?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : [])
   const canManageAgents = profileRoles.includes('ADMIN') || profileRoles.includes('AMC_PRINCIPAL')
+  const canAccessConnectGuide = profileRoles.includes('ADMIN') || profileRoles.includes('BRAND_OWNER')
 
   if (!profile) return <div className="p-8 text-center text-gray-500">Loading profile...</div>
 
@@ -88,6 +89,14 @@ export default function ProfilePage() {
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Profile</h1>
         <div className="flex items-center gap-3">
+          {canAccessConnectGuide && (
+            <button
+              onClick={() => router.push('/connect')}
+              className="rounded-lg bg-cyan-600 text-white px-3 py-2 text-sm font-semibold hover:bg-cyan-700"
+            >
+              连接指南
+            </button>
+          )}
           {canManageAgents && (
             <button
               onClick={() => { setPrincipalOpening(true); router.push('/profile/principal') }}

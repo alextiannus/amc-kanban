@@ -61,17 +61,15 @@ export default function MainLayout({
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex flex-col font-sans transition-colors duration-300">
       <div className="relative flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
         
-        {/* Logo */}
+        {/* Left Section: Brand Switcher (Stitch-inspired UX) */}
         <div className="flex items-center gap-3 shrink-0">
-          <img
-            src="/logo.svg"
-            alt="AMC logo"
-            className="h-16 md:h-20 w-auto"
-          />
+          {brands.length > 0 && activeBrand && (
+            <BrandSwitcher brands={brands} activeBrand={activeBrand} setActiveBrand={setActiveBrand} />
+          )}
         </div>
 
         {/* Top Navigation Menu */}
-        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mx-auto overflow-x-auto max-w-full">
+        <div className="hidden lg:flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mx-auto overflow-x-auto max-w-full">
           <button
             onClick={() => setCurrentView('dashboard')}
             className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
@@ -164,12 +162,8 @@ export default function MainLayout({
           )}
         </div>
 
-        {/* Brand Switcher */}
-        <div className="flex-1 flex justify-end w-full lg:w-auto items-center gap-2">
-          {brands.length > 0 && (
-            <BrandSwitcher brands={brands} activeBrand={activeBrand} setActiveBrand={setActiveBrand} />
-          )}
-        </div>
+        {/* Spacer to align center menu */}
+        <div className="flex-1 hidden lg:block" />
 
         {/* Toolbar controls (Theme & User menu) */}
         <div className="absolute right-4 top-8 z-40 flex items-center gap-2 lg:static lg:right-auto lg:top-auto">
@@ -193,7 +187,68 @@ export default function MainLayout({
       </div>
 
       {/* View Contents */}
-      {children}
+      <div className="flex-1 pb-20 lg:pb-0">
+        {children}
+      </div>
+
+      {/* Sticky Bottom Navigation Bar for Mobile */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-around shadow-[0_-4px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_-4px_12px_rgba(0,0,0,0.2)]">
+        <button
+          onClick={() => setCurrentView('dashboard')}
+          className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-extrabold transition-colors duration-300 ${
+            currentView === 'dashboard'
+              ? 'text-blue-600 dark:text-blue-400'
+              : 'text-slate-400 hover:text-slate-650 dark:hover:text-slate-305'
+          }`}
+        >
+          <Store size={18} />
+          <span>看板</span>
+        </button>
+        <button
+          onClick={() => setCurrentView('calendar')}
+          className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-extrabold transition-colors duration-300 ${
+            currentView === 'calendar'
+              ? 'text-indigo-600 dark:text-indigo-400'
+              : 'text-slate-400 hover:text-slate-650 dark:hover:text-slate-305'
+          }`}
+        >
+          <Calendar size={18} />
+          <span>日历</span>
+        </button>
+        <button
+          onClick={() => setCurrentView('drafts')}
+          className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-extrabold transition-colors duration-300 ${
+            currentView === 'drafts'
+              ? 'text-amber-600 dark:text-amber-400'
+              : 'text-slate-400 hover:text-slate-650 dark:hover:text-slate-305'
+          }`}
+        >
+          <FileText size={18} />
+          <span>草稿</span>
+        </button>
+        <button
+          onClick={() => setCurrentView('assets')}
+          className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-extrabold transition-colors duration-300 ${
+            currentView === 'assets'
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : 'text-slate-400 hover:text-slate-650 dark:hover:text-slate-305'
+          }`}
+        >
+          <Images size={18} />
+          <span>素材</span>
+        </button>
+        <button
+          onClick={() => setCurrentView('game')}
+          className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-extrabold transition-colors duration-300 ${
+            currentView === 'game'
+              ? 'text-blue-600 dark:text-blue-400'
+              : 'text-slate-400 hover:text-slate-650 dark:hover:text-slate-305'
+          }`}
+        >
+          <Gift size={18} />
+          <span>活动</span>
+        </button>
+      </div>
     </div>
   )
 }
