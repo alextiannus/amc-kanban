@@ -354,6 +354,7 @@ export async function POST(request: Request) {
   const brandId = rawBrandId || null
   const pendingBrandName = String(body.pendingBrandName ?? '').trim()
   const pendingBrandLocation = String(body.pendingBrandLocation ?? '').trim()
+  const pendingBrandAddress = String(body.pendingBrandAddress ?? '').trim()
   const pendingBrandOwnerEmail = String(body.pendingBrandOwnerEmail ?? '').trim().toLowerCase()
   const pendingBrandTimezone = String(body.timezone ?? '').trim() || 'America/New_York'
 
@@ -432,6 +433,7 @@ export async function POST(request: Request) {
           location: pendingBrandLocation || null,
           ownerEmail: pendingBrandOwnerEmail || null,
           timezone: pendingBrandTimezone,
+          address: pendingBrandAddress || null,
         })
       : null
     if (pendingBrandName && !createdBrand?.ok) {
@@ -481,6 +483,7 @@ export async function POST(request: Request) {
   const pendingBrandParams = new URLSearchParams()
   if (pendingBrandName) pendingBrandParams.set('newBrandName', pendingBrandName)
   if (pendingBrandLocation) pendingBrandParams.set('newBrandLocation', pendingBrandLocation)
+  if (pendingBrandAddress) pendingBrandParams.set('newBrandAddress', pendingBrandAddress)
   if (pendingBrandOwnerEmail) pendingBrandParams.set('newBrandOwnerEmail', pendingBrandOwnerEmail)
   if (returnTo) pendingBrandParams.set('returnTo', returnTo)
   const pendingBrandQuery = pendingBrandParams.toString() ? `&${pendingBrandParams.toString()}` : ''
@@ -516,6 +519,7 @@ export async function POST(request: Request) {
       pendingBrandLocation,
       pendingBrandOwnerEmail,
       pendingBrandTimezone,
+      pendingBrandAddress,
     },
   })
 

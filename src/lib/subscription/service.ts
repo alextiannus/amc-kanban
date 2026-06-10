@@ -46,6 +46,7 @@ type CreateBrandForSubscriptionInput = {
   location?: string | null
   ownerEmail?: string | null
   timezone?: string | null
+  address?: string | null
 }
 
 export async function createBrandForActivatedSubscription(input: CreateBrandForSubscriptionInput) {
@@ -107,6 +108,7 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
         name,
         location: input.location?.trim() || null,
         timezone: input.timezone || 'America/New_York',
+        address: input.address?.trim() || null,
         status: 'ACTIVE',
       },
     })

@@ -2,8 +2,38 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, CheckCircle2, Copy, CreditCard, Loader2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Copy,
+  CreditCard,
+  Loader2,
+  Sparkles,
+  User,
+  Users,
+  PenTool,
+  Search,
+  UserCheck,
+  Compass,
+  MessageSquare,
+  Headphones,
+  ShieldCheck,
+  Check,
+  AlertCircle,
+  HelpCircle,
+  Building,
+  MapPin,
+  Clock,
+  Mail,
+  ChevronRight,
+  Info,
+  Calendar,
+  Layers,
+  ChevronLeft,
+  Lock
+} from 'lucide-react'
 import { buildLaunchInstruction } from '@/lib/agentInitPrompt'
+import { calculatePricing } from '@/lib/subscription/catalog'
 
 const AI_CREW_CREATION_DURATION_MS = 30_000
 
@@ -16,6 +46,11 @@ type Plan = {
   promoMonthlyUsd?: number
   description: string
   includes: string[]
+  teamConfig: string
+  suitableFor: string
+  services: string[]
+  baseline: string
+  commissionNote?: string
 }
 
 type Addon = {
@@ -149,6 +184,43 @@ export default function BrandSubscriptionPage() {
   const [agentCreationMode, setAgentCreationMode] = useState<AgentCreationMode>('create')
   const instructionCardRef = useRef<HTMLElement | null>(null)
 
+  const success = searchParams?.get('success') === '1'
+  const canceled = searchParams?.get('canceled') === '1'
+  const checkoutSessionId = searchParams?.get('sid') || ''
+  const subscriptionId = searchParams?.get('sub') || ''
+  const queryBrandId = searchParams?.get('brandId') || ''
+  const pendingBrandName = (searchParams?.get('newBrandName') || '').trim()
+  const pendingBrandLocation = (searchParams?.get('newBrandLocation') || '').trim()
+  const pendingBrandAddress = (searchParams?.get('newBrandAddress') || '').trim()
+  const pendingBrandOwnerEmail = (searchParams?.get('newBrandOwnerEmail') || '').trim()
+  const returnToRaw = searchParams?.get('returnTo') || ''
+  const returnTo = returnToRaw.startsWith('/') ? returnToRaw : ''
+  const routeBrandId = typeof params?.brandId === 'string' ? params.brandId : ''
+  const effectiveBrandId = routeBrandId || queryBrandId
+  const subscriptionApiPath = effectiveBrandId
+    ? `/api/subscription?brandId=${encodeURIComponent(effectiveBrandId)}`
+    : '/api/subscription'
+
+  // Step state: 1 for brand/store onboarding setup, 2 for plan choosing and payment
+  // If managing an existing brand, start straight at Step 2
+  const [step, setStep] = useState<1 | 2>(effectiveBrandId ? 2 : 1)
+
+  // Onboarding Brand Form states
+  const [brandName, setBrandName] = useState(pendingBrandName || '')
+  const [brandLocation, setBrandLocation] = useState(pendingBrandLocation || '')
+  const [brandTimezone, setBrandTimezone] = useState(
+    typeof window !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Singapore' : 'Asia/Singapore'
+  )
+  const [brandOwnerEmail, setBrandOwnerEmail] = useState(pendingBrandOwnerEmail || '')
+
+  // Onboarding Store Form states (Optional)
+  const [storeName, setStoreName] = useState('')
+  const [storeAddress, setStoreAddress] = useState(pendingBrandAddress || '')
+  const [storeTimezone, setStoreTimezone] = useState(
+    typeof window !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Singapore' : 'Asia/Singapore'
+  )
+  const [storeGoogleMaps, setStoreGoogleMaps] = useState('')
+
   const scrollToInstructionCard = () => {
     window.setTimeout(() => {
       instructionCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -168,22 +240,6 @@ export default function BrandSubscriptionPage() {
         : '订阅计划已激活。正在为你创建 AI 员工，请稍候...'
     )
   }
-
-  const success = searchParams?.get('success') === '1'
-  const canceled = searchParams?.get('canceled') === '1'
-  const checkoutSessionId = searchParams?.get('sid') || ''
-  const subscriptionId = searchParams?.get('sub') || ''
-  const queryBrandId = searchParams?.get('brandId') || ''
-  const pendingBrandName = (searchParams?.get('newBrandName') || '').trim()
-  const pendingBrandLocation = (searchParams?.get('newBrandLocation') || '').trim()
-  const pendingBrandOwnerEmail = (searchParams?.get('newBrandOwnerEmail') || '').trim()
-  const returnToRaw = searchParams?.get('returnTo') || ''
-  const returnTo = returnToRaw.startsWith('/') ? returnToRaw : ''
-  const routeBrandId = typeof params?.brandId === 'string' ? params.brandId : ''
-  const effectiveBrandId = routeBrandId || queryBrandId
-  const subscriptionApiPath = effectiveBrandId
-    ? `/api/subscription?brandId=${encodeURIComponent(effectiveBrandId)}`
-    : '/api/subscription'
 
   useEffect(() => {
     const load = async () => {
@@ -208,6 +264,12 @@ export default function BrandSubscriptionPage() {
     }
     load()
   }, [subscriptionApiPath])
+
+  useEffect(() => {
+    if (data?.instructionContext?.user?.email && !brandOwnerEmail) {
+      setBrandOwnerEmail(data.instructionContext.user.email)
+    }
+  }, [data, brandOwnerEmail])
 
   useEffect(() => {
     const confirmPayment = async () => {
@@ -332,15 +394,16 @@ export default function BrandSubscriptionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           brandId: effectiveBrandId || undefined,
-          pendingBrandName: pendingBrandName || undefined,
-          pendingBrandLocation: pendingBrandLocation || undefined,
-          pendingBrandOwnerEmail: pendingBrandOwnerEmail || undefined,
+          pendingBrandName: effectiveBrandId ? undefined : brandName.trim() || undefined,
+          pendingBrandLocation: effectiveBrandId ? undefined : brandLocation.trim() || undefined,
+          pendingBrandAddress: effectiveBrandId ? undefined : storeAddress.trim() || undefined,
+          pendingBrandOwnerEmail: effectiveBrandId ? undefined : brandOwnerEmail.trim().toLowerCase() || undefined,
           returnTo: returnTo || undefined,
           planId: selectedPlan.id,
           durationMonths,
           addonIds,
           paymentMode,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          timezone: brandTimezone,
           agreedToTerms,
           termsVersion: data.termsVersion,
         }),
@@ -376,111 +439,556 @@ export default function BrandSubscriptionPage() {
     }
   }
 
+  // Real-time Pricing Summary Calculator
+  const pricingSummary = useMemo(() => {
+    if (!data || !selectedPlan) return null
+    try {
+      return calculatePricing(planId, durationMonths, addonIds)
+    } catch {
+      return null
+    }
+  }, [data, selectedPlan, planId, durationMonths, addonIds])
+
+  // Stepper Header
+  const renderStepper = () => {
+    // If we're modifying an existing brand subscription, do not display step 1.
+    if (effectiveBrandId) return null
+
+    return (
+      <div className="flex justify-between items-center max-w-xl mx-auto mb-10 pt-4 px-4">
+        <div className="flex flex-col items-center gap-2">
+          <button
+            onClick={() => setStep(1)}
+            disabled={step === 1}
+            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${
+              step === 1
+                ? 'bg-indigo-600 text-white ring-4 ring-indigo-100 dark:ring-indigo-950/50'
+                : 'bg-emerald-500 hover:bg-emerald-600 text-white cursor-pointer'
+            }`}
+          >
+            {step > 1 ? <Check size={16} /> : '1'}
+          </button>
+          <span className={`text-xs font-bold ${step === 1 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}`}>品牌与门店配置</span>
+        </div>
+        <div className="flex-1 h-0.5 mx-4 bg-slate-200 dark:bg-slate-800" />
+        <div className="flex flex-col items-center gap-2">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 ${
+            step === 2
+              ? 'bg-indigo-600 text-white ring-4 ring-indigo-100 dark:ring-indigo-950/50'
+              : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+          }`}>
+            2
+          </div>
+          <span className={`text-xs font-bold ${step === 2 ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}`}>选择套餐与支付</span>
+        </div>
+        <div className="flex-1 h-0.5 mx-4 bg-slate-200 dark:bg-slate-800" />
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+            3
+          </div>
+          <span className="text-xs font-bold text-slate-400 dark:text-slate-500">AI 团队激活部署</span>
+        </div>
+      </div>
+    )
+  }
+
+  // AI Crew Roster Configuration definitions
+  const crewRoles = [
+    {
+      name: 'AI 内容创作官',
+      desc: '负责全平台内容的策划、创作与发布。图文、短视频、营销活动帖子，每月持续产出，风格统一，从不缺席。',
+      icon: PenTool,
+      activeIn: ['starter', 'essential', 'advanced'],
+      color: 'from-blue-500/20 to-indigo-500/20 text-indigo-600 dark:text-indigo-400',
+    },
+    {
+      name: 'AI 市场调研官',
+      desc: '实时监控各平台评论、评分变化与竞品动态，将市场信号转化为可执行的运营建议，让你的团队始终掌握先机。',
+      icon: Search,
+      activeIn: ['starter', 'essential', 'advanced'],
+      color: 'from-cyan-500/20 to-blue-500/20 text-cyan-600 dark:text-cyan-400',
+    },
+    {
+      name: '品牌主理人',
+      desc: '你的专属人工对接人。负责统筹AI团队的日常工作，确保所有内容和策略符合你的品牌方向，是你与AI团队之间的桥梁。',
+      icon: UserCheck,
+      activeIn: ['starter', 'essential', 'advanced'],
+      color: 'from-emerald-500/20 to-teal-500/20 text-emerald-600 dark:text-emerald-400',
+    },
+    {
+      name: 'AI 品牌策略师',
+      desc: '负责目标客群定位、差异化卖点提炼与品牌调性确立，制定每月营销主题与团购转化方案，驱动品牌从“被看见”到“被记住”。',
+      icon: Compass,
+      activeIn: ['essential', 'advanced'],
+      color: 'from-purple-500/20 to-violet-500/20 text-purple-600 dark:text-purple-400',
+    },
+    {
+      name: 'AI 私域运营官',
+      desc: '搭建并运营你的专属顾客社群（WhatsApp / 微信群），将一次性到店客人转化为长期忠实顾客，让每一分获客成本产生复利。',
+      icon: MessageSquare,
+      activeIn: ['advanced'],
+      color: 'from-amber-500/20 to-orange-500/20 text-amber-600 dark:text-amber-400',
+    },
+    {
+      name: 'AI 客服',
+      desc: '全平台评论回复、差评处理与粉丝互动，工作日24小时响应，维护口碑，培养顾客好感。',
+      icon: Headphones,
+      activeIn: ['advanced'],
+      color: 'from-rose-500/20 to-pink-500/20 text-rose-600 dark:text-rose-400',
+    },
+  ]
+
+  const isStep1Valid = brandName.trim() !== '' && brandLocation.trim() !== '' && brandOwnerEmail.trim() !== ''
+
+  const commonTimezones = [
+    { value: 'Asia/Singapore', label: '新加坡时区 (UTC+8) - Asia/Singapore' },
+    { value: 'Asia/Shanghai', label: '北京时区 (UTC+8) - Asia/Shanghai' },
+    { value: 'Asia/Hong_Kong', label: '香港时区 (UTC+8) - Asia/Hong_Kong' },
+    { value: 'America/New_York', label: '纽约时区 (UTC-5) - America/New_York' },
+    { value: 'America/Los_Angeles', label: '洛杉矶时区 (UTC-8) - America/Los_Angeles' },
+    { value: 'Europe/London', label: '伦敦时区 (UTC+0) - Europe/London' },
+    { value: 'Australia/Sydney', label: '悉尼时区 (UTC+11) - Australia/Sydney' }
+  ]
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
       </div>
     )
   }
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-sm text-rose-600">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-sm text-rose-600 font-bold">
         {error || 'Failed to load subscription module'}
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 text-slate-900 dark:text-slate-100">
+    <div className="min-h-screen bg-[#f7f9fb] dark:bg-slate-950 p-4 md:p-8 text-slate-900 dark:text-slate-100 font-sans antialiased">
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:p-6 shadow-sm">
-          <div className="space-y-3">
+        
+        {/* Navigation Bar */}
+        <div className="rounded-2xl border border-slate-200/60 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => router.push('/board')}
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+              onClick={() => {
+                if (step === 2 && !effectiveBrandId) {
+                  setStep(1)
+                } else {
+                  router.push('/board')
+                }
+              }}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             >
-              <ArrowLeft size={14} /> 返回首页，打开品牌主看板
+              <ArrowLeft size={16} className="text-slate-600 dark:text-slate-300" />
             </button>
-            <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">AI Marketing Crew (AMC) Plan</h1>
-            <p className="max-w-3xl text-sm md:text-base text-slate-600 dark:text-slate-300 leading-7">
-              {pendingBrandName
-                ? `为新品牌「${pendingBrandName}」购买订阅套餐。支付成功后系统会创建品牌并自动绑定该套餐。`
-                : '为品牌提供持续的 AI 营销执行能力，一站式覆盖内容策划、发布协同与运营闭环。'}
-            </p>
+            <div>
+              <span className="text-xs font-black tracking-widest text-indigo-600 dark:text-indigo-400 uppercase">AI Marketing Crew</span>
+              <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">
+                {step === 1 ? '新品牌入驻与设置' : '选择团队订阅套餐'}
+              </h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {data.brand && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">
+                <Building size={12} /> {data.brand.name}
+              </span>
+            )}
           </div>
         </div>
 
+        {/* Horizontal Progress Stepper */}
+        {renderStepper()}
+
+        {/* Global Notices */}
         {confirming && (
-          <div className="rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-200 px-4 py-3 text-sm font-medium">
-            正在确认支付结果，请稍候...
+          <div className="rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 px-5 py-4 text-sm font-semibold flex items-center gap-2 shadow-sm">
+            <Loader2 className="w-4 h-4 animate-spin text-amber-500" /> 正在确认您的支付结果，请稍候...
           </div>
         )}
 
         {canceled && (
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 px-4 py-3 text-sm font-medium shadow-sm">
-            您已取消本次支付，订单保留为待支付状态，可重新发起支付。
+          <div className="rounded-2xl border border-rose-200 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 px-5 py-4 text-sm font-semibold flex items-center gap-2 shadow-sm animate-pulse">
+            <AlertCircle size={16} className="text-rose-500 shrink-0" />
+            您已取消本次支付。订单已保留为待支付状态，您可以重新发起。
           </div>
         )}
 
+        {error && (
+          <div className="rounded-2xl border border-rose-200 dark:border-rose-900/40 bg-rose-50/50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 px-5 py-4 text-sm font-semibold flex items-center gap-2 shadow-sm">
+            <AlertCircle size={16} className="text-rose-500 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        {/* Active subscription instructions box */}
         {((success || isEffectiveActiveSubscription(data.latestSubscription)) && instructionText && (!activationJustCompleted || agentCreationDone)) && (
-          <section ref={instructionCardRef} className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 p-4 md:p-5 shadow-sm">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-200">
-                <CheckCircle2 size={16} /> {(data.brand?.name || '当前账号')} · 当前订阅已生效：{data.latestSubscription?.planName || '套餐已生效'}
+          <section ref={instructionCardRef} className="rounded-2xl border border-emerald-200 dark:border-emerald-900/30 bg-emerald-50/30 dark:bg-emerald-950/20 p-5 md:p-6 shadow-sm">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-2 text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                  <CheckCircle2 size={18} className="text-emerald-500" /> 
+                  「{data.brand?.name || '当前账号'}」的订阅已生效：{data.latestSubscription?.planName || 'AI 营销团队上岗中'}
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">您的专属 AI 营销团队已就绪，请复制下方初始化指令并进行接入。</p>
               </div>
               <button
                 onClick={copyInstruction}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 text-xs font-bold transition-all shadow-md active:scale-95"
               >
-                <Copy size={14} /> {copiedInstruction ? '已复制初始化指令' : '复制 Agent 初始化指令'}
+                <Copy size={14} /> {copiedInstruction ? '已复制指令！' : '复制 Agent 初始化指令'}
               </button>
             </div>
           </section>
         )}
 
-        {error && (
-          <div className="rounded-2xl border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-200 px-4 py-3 text-sm font-medium">
-            {error}
+        {/* MAIN BODY CONTENT COMPONENT STACK */}
+        
+        {/* STEP 1: BRAND AND STORE CONFIGURATION */}
+        {step === 1 && !effectiveBrandId && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Form Section */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Brand Profile Fields */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <User size={18} className="text-indigo-600 dark:text-indigo-400" /> 新品牌基本信息
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    配置您要推广的新品牌信息。AI 团队将根据这些数据定制专属的品牌语言与风格。
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      品牌名称 <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={brandName}
+                        onChange={(e) => setBrandName(e.target.value)}
+                        placeholder="例如：大渔铁板烧 / Little Shanghai"
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      品牌所在地 <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={brandLocation}
+                      onChange={(e) => setBrandLocation(e.target.value)}
+                      placeholder="例如：新加坡 / Singapore"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      品牌时区 <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={brandTimezone}
+                      onChange={(e) => {
+                        setBrandTimezone(e.target.value)
+                        setStoreTimezone(e.target.value)
+                      }}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 appearance-none"
+                    >
+                      {commonTimezones.map((tz) => (
+                        <option key={tz.value} value={tz.value}>
+                          {tz.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      主理人联络邮箱 <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={brandOwnerEmail}
+                      onChange={(e) => setBrandOwnerEmail(e.target.value)}
+                      placeholder="owner@example.com"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Store Profile Fields (Optional) */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Building size={18} className="text-indigo-600 dark:text-indigo-400" /> 主门店配置 (选填)
+                  </h2>
+                  <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                    可稍后设置
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  如果您目前有正在运营的实体店铺，配置该选项将能让 AI 市场调研官为您监控 Google Maps 评分与平台口碑。
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      门店名称 (Outlet Name)
+                    </label>
+                    <input
+                      type="text"
+                      value={storeName}
+                      onChange={(e) => setStoreName(e.target.value)}
+                      placeholder="例如：乌节路旗舰店 / Orchard Road Outlet"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      门店具体地址
+                    </label>
+                    <input
+                      type="text"
+                      value={storeAddress}
+                      onChange={(e) => setStoreAddress(e.target.value)}
+                      placeholder="例如：350 Orchard Rd, Singapore 238868"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      门店时区
+                    </label>
+                    <select
+                      value={storeTimezone}
+                      onChange={(e) => setStoreTimezone(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 appearance-none"
+                    >
+                      {commonTimezones.map((tz) => (
+                        <option key={tz.value} value={tz.value}>
+                          {tz.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      谷歌商家地图链接 (Google Maps Link)
+                    </label>
+                    <input
+                      type="url"
+                      value={storeGoogleMaps}
+                      onChange={(e) => setStoreGoogleMaps(e.target.value)}
+                      placeholder="https://maps.google.com/?cid=..."
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Bar */}
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  onClick={() => router.push('/board')}
+                  className="text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                >
+                  返回看板
+                </button>
+                <div className="flex flex-col items-end gap-2">
+                  <button
+                    onClick={() => {
+                      if (isStep1Valid) {
+                        setStep(2)
+                      }
+                    }}
+                    disabled={!isStep1Valid}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 disabled:from-slate-200 disabled:to-slate-200 dark:disabled:from-slate-800 dark:disabled:to-slate-800 text-white disabled:text-slate-400 dark:disabled:text-slate-600 px-6 py-3 text-sm font-black transition-all shadow-md cursor-pointer disabled:cursor-not-allowed active:scale-95"
+                  >
+                    下一步：选择订阅计划 <ChevronRight size={16} />
+                  </button>
+                  {!isStep1Valid && (
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                      * 请填写品牌名称、所在地与联络邮箱以继续。
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar Promo Section */}
+            <div className="space-y-6">
+              <div className="rounded-3xl border border-indigo-100 dark:border-indigo-950 bg-gradient-to-br from-indigo-50/50 via-white to-white dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 p-6 shadow-sm space-y-6">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Sparkles size={16} className="text-indigo-600" /> AI Marketing Crew
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 font-bold leading-relaxed">
+                    订阅即上岗，全托管你的自媒体增长。
+                  </p>
+                </div>
+
+                <div className="space-y-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed border-t border-slate-100 dark:border-slate-800 pt-4">
+                  <p>
+                    AMC 是一支专为本地生活商家打造的 AI 营销团队。
+                  </p>
+                  <p>
+                    <strong className="text-indigo-600 dark:text-indigo-400">AMC 不是工具软件，不是模板。</strong>
+                    您无需花费时间学习复杂的系统操作或繁琐的配置。
+                  </p>
+                  <p>
+                    内容策划、评论监控、竞品情报、私域运营等任务全部由 AI 营销小组成员分工协同执行，并由真人品牌主理人作为人工纽带为您统筹把关。
+                  </p>
+                  <p className="font-bold text-slate-800 dark:text-slate-200">
+                    “ 你只管做菜，增长交给我们。 ”
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/20 p-4 border border-indigo-100/50 dark:border-indigo-900/30 text-[11px] text-slate-600 dark:text-slate-400">
+                  <p className="font-bold text-indigo-800 dark:text-indigo-300">💡 为什么需要配置时区？</p>
+                  <p className="mt-1">
+                    AI 团队将根据您的时区来规划每日内容发布策略、达人联络配合以及工作日的客服响应周期，以确保达到最佳的本地社群互动率。
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-6">
-          <div className="space-y-6">
-            <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-5">
+        {/* STEP 2: PLANS AND PAYMENT DETAILS */}
+        {step === 2 && (
+          <div className="space-y-8">
+            
+            {/* Branding Hero Intro Banner */}
+            <div className="relative rounded-3xl overflow-hidden border border-indigo-200/50 dark:border-indigo-950 bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 p-6 md:p-8 text-white shadow-lg">
+              <div className="absolute right-0 top-0 w-1/3 h-full opacity-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-300 via-indigo-900 to-transparent pointer-events-none" />
+              <div className="relative z-10 space-y-3 max-w-4xl">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-black text-indigo-300 uppercase tracking-widest">
+                  ★ AI Marketing Crew
+                </span>
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight leading-tight">
+                  订阅即上岗，全托管你的自媒体增长
+                </h2>
+                <p className="text-xs md:text-sm text-indigo-200 leading-relaxed font-medium">
+                  AI Marketing Crew 是一支专为本地生活商家打造的 AI 营销团队。
+                  AMC不是工具，不是模板，不是需要你学习操作的软件，而是一支真正代你干活的团队 (The Crew) —— 内容创作、品牌策略、市场调研、私域运营、客户服务，全部由 AI 员工高效分工执行，并由真人品牌主理人统筹把关。你只管做菜，增长交给我们。
+                </p>
+              </div>
+            </div>
+
+            {/* AI Team Roster Grid (The Crew Members) */}
+            <section className="space-y-4">
+              <div>
+                <h3 className="text-sm font-black tracking-widest text-slate-700 dark:text-slate-300 uppercase flex items-center gap-2">
+                  <Users size={16} className="text-indigo-600" /> 1) 您的专属 AI 营销团队成员
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  您的套餐配置将包含以下 AI 岗位成员，分工协助，从不缺席。当前选择套餐已激活的 AI 成员将亮起。
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                {crewRoles.map((role) => {
+                  const isActive = role.activeIn.includes(planId)
+                  const RoleIcon = role.icon
+                  return (
+                    <div
+                      key={role.name}
+                      className={`rounded-2xl border p-4 transition-all duration-300 flex flex-col justify-between shadow-sm relative overflow-hidden ${
+                        isActive
+                          ? 'border-indigo-500/30 bg-white dark:bg-slate-900 ring-2 ring-indigo-500/10'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20 opacity-55'
+                      }`}
+                    >
+                      <div className="space-y-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br ${role.color}`}>
+                          <RoleIcon size={18} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="text-xs font-black text-slate-900 dark:text-white">{role.name}</h4>
+                            {!isActive && <Lock size={10} className="text-slate-400" />}
+                          </div>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal mt-1">
+                            {role.desc}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800/60 mt-3 flex items-center justify-between text-[10px] font-bold">
+                        <span className={isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}>
+                          {isActive ? '已上岗 Onboarded' : '未解锁'}
+                        </span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+
+            {/* Choose Package & Billing Period Selector */}
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200">1) AI Marketing Crew (AMC) Plan</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">订阅 AMC 后即可获得持续的 AI 营销协作能力。</p>
+                  <h3 className="text-sm font-black tracking-widest text-slate-700 dark:text-slate-300 uppercase flex items-center gap-2">
+                    <Layers size={16} className="text-indigo-600" /> 2) 选择团队配置与套餐
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    订阅支持随时升级，所有套餐均提供中英双语服务，专为海外本地生活商家打造。
+                  </p>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">* Prices in USD, excluding tax</p>
+                
+                {/* Duration Toggle */}
+                <div className="flex justify-center">
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-800/80 p-1">
+                    <button
+                      onClick={() => setDurationMonths(3)}
+                      className={`rounded-full px-5 py-2 text-xs font-bold transition-all ${
+                        billingCycle === 'quarterly'
+                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      季度订阅
+                    </button>
+                    <button
+                      onClick={() => setDurationMonths(12)}
+                      className={`relative rounded-full px-5 py-2 text-xs font-bold transition-all ${
+                        billingCycle === 'yearly'
+                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      年度订阅
+                      <span className="absolute -top-2 -right-3 rounded-full bg-amber-400 px-1.5 py-0.5 text-[8px] font-black text-white leading-none shadow-sm uppercase">
+                        -10%
+                      </span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <div className="mb-6 flex justify-center">
-                <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-1.5">
-                  <button
-                    onClick={() => setDurationMonths(3)}
-                    className={`rounded-full px-6 py-2 text-sm font-bold transition ${
-                      billingCycle === 'quarterly' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    季度订阅
-                  </button>
-                  <button
-                    onClick={() => setDurationMonths(12)}
-                    className={`relative rounded-full px-6 py-2 text-sm font-bold transition ${
-                      billingCycle === 'yearly' ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    年度订阅
-                    <span className="absolute -top-2.5 -right-2.5 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-black text-white leading-none shadow-sm">-10%</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto -mx-1 px-1">
-              <div className="mx-auto flex w-full max-w-[1120px] gap-5 pb-1">
+              {/* Package cards list */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {data.plans.map((p) => {
                   const isSelected = planId === p.id
                   const isCurrentPlan = currentPlanId === p.id
@@ -489,288 +997,490 @@ export default function BrandSubscriptionPage() {
                   const cycleMonthly = billingCycle === 'yearly' ? Math.round(baseMonthly * 0.9) : baseMonthly
                   const cycleTotal = cycleMonthly * (billingCycle === 'yearly' ? 12 : 3)
 
+                  // Render active crew icons for this specific plan in cards
+                  const activeRolesPills = crewRoles.filter((r) => r.activeIn.includes(p.id))
+
                   return (
                     <button
                       key={p.id}
                       onClick={() => setPlanId(p.id)}
-                      className={`group relative min-w-[380px] max-w-[380px] flex-1 overflow-hidden text-left rounded-2xl border p-0 shadow-sm transition-colors ${
+                      className={`group relative text-left rounded-2xl border transition-all flex flex-col justify-between overflow-hidden shadow-sm ${
                         isSelected
-                          ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/20'
+                          ? 'border-indigo-600 bg-indigo-50/20 dark:bg-indigo-950/10 shadow-md ring-2 ring-indigo-600/10'
                           : isCurrentPlan
-                            ? 'border-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/20'
-                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
+                            ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/10 shadow-md'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
-                      <div className={`px-4 py-2 text-center text-[11px] font-black tracking-[0.15em] ${
+                      {/* Top Header Tag */}
+                      <div className={`px-4 py-1.5 text-center text-[10px] font-black tracking-widest uppercase ${
                         isSelected
-                          ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white'
+                          ? 'bg-indigo-600 text-white'
                           : isCurrentPlan
                             ? 'bg-emerald-500 text-white'
-                          : isRecommended
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300'
-                      }`}>
-                        {isSelected ? '当前选择' : isCurrentPlan ? '当前套餐' : isRecommended ? '推荐' : '可选'}
-                      </div>
-                      <div className="p-5">
-                        <div className="mb-3 flex items-start justify-between gap-2">
-                          <div>
-                            <h3 className="text-2xl font-black text-slate-900 dark:text-white">{p.name}</h3>
-                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 leading-6">{p.description}</p>
-                          </div>
-                        </div>
-
-                        <div className="mb-4">
-                          <div className="flex items-end gap-2">
-                            <span className="text-5xl font-black leading-none text-slate-900 dark:text-white">${cycleMonthly}</span>
-                            <span className="pb-1 text-sm font-semibold text-slate-700 dark:text-slate-300">/ month</span>
-                          </div>
-                          {billingCycle === 'yearly' && (
-                            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400 font-semibold">年付 USD ${cycleTotal} · 已享 9 折</p>
-                          )}
-                          {billingCycle === 'quarterly' && (
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">季度付 USD ${cycleTotal} / 3 个月</p>
-                          )}
-                        </div>
-
-                        <div className={`mb-4 rounded-xl px-4 py-2.5 text-center text-sm font-bold transition ${
-                          isSelected
-                            ? 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-200'
                             : isRecommended
-                              ? 'bg-blue-600 text-white'
-                              : 'border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900'
-                        }`}>
-                          {isSelected ? '已选择' : '选择此套餐'}
+                              ? 'bg-slate-900 text-white dark:bg-slate-800'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {isSelected ? '当前选择 (Selected)' : isCurrentPlan ? '当前在使用' : isRecommended ? '最佳性价比 (Recommended)' : '团队配置套餐'}
+                      </div>
+
+                      <div className="p-5 flex-1 flex flex-col justify-between space-y-5">
+                        
+                        {/* Name and Slogan */}
+                        <div className="space-y-1">
+                          <h4 className="text-xl font-black text-slate-900 dark:text-white">{p.name}</h4>
+                          <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold">{p.description}</p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{p.suitableFor}</p>
                         </div>
 
-                        <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
-                          {p.includes.map((item) => (
-                            <li key={item} className="flex gap-2">
-                              <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        {/* Pricing */}
+                        <div className="border-t border-slate-100 dark:border-slate-800/50 pt-4">
+                          <div className="flex items-end gap-1.5">
+                            <span className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+                              ${cycleMonthly}
+                            </span>
+                            <span className="pb-1 text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                              / 月 (USD)
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                            {billingCycle === 'yearly' 
+                              ? `年付 $${cycleTotal} / 12 个月 (省 $${Math.round(baseMonthly * 1.2 * 10)} USD)` 
+                              : `季度付 $${cycleTotal} / 3 个月`}
+                          </p>
+                        </div>
+
+                        {/* Onboarded Staff List Icons */}
+                        <div className="border-t border-slate-100 dark:border-slate-800/50 pt-4 space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                            上岗团队配置 ({activeRolesPills.length} 位成员):
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {activeRolesPills.map((role) => (
+                              <span 
+                                key={role.name}
+                                className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[9px] font-bold text-slate-600 dark:text-slate-300"
+                              >
+                                <span className="w-1 h-1 rounded-full bg-indigo-500" />
+                                {role.name.replace('AI ', '')}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Services List Bullet Points */}
+                        <div className="border-t border-slate-100 dark:border-slate-800/50 pt-4 space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                            服务内容：
+                          </p>
+                          <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+                            {p.services.map((item) => (
+                              <li key={item} className="flex items-start gap-2 leading-relaxed">
+                                <CheckCircle2 size={13} className="text-indigo-500 shrink-0 mt-0.5" />
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Commission Note */}
+                        {p.commissionNote && (
+                          <div className="rounded-xl bg-amber-50/60 dark:bg-amber-950/20 p-3 border border-amber-100 dark:border-amber-900/30 text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
+                            <span className="font-black text-amber-600 dark:text-amber-400 uppercase tracking-wide flex items-center gap-1 mb-1">
+                              💰 佣金分成说明 (Commission Terms):
+                            </span>
+                            {p.commissionNote}
+                          </div>
+                        )}
+
+                        {/* Baseline Results reference card */}
+                        {p.baseline && (
+                          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/40 p-3 border border-slate-200/40 dark:border-slate-800/50 mt-4 text-[10px] leading-relaxed text-slate-600 dark:text-slate-400">
+                            <span className="font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wide flex items-center gap-1 mb-1">
+                              🎯 成果参考 (Results Baseline):
+                            </span>
+                            {p.baseline}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Select state button */}
+                      <div className="p-5 pt-0 mt-auto w-full">
+                        <div className={`w-full py-2.5 rounded-xl text-center text-xs font-black transition-all ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 group-hover:bg-slate-100 dark:group-hover:bg-slate-800'
+                        }`}>
+                          {isSelected ? '已选择 (Selected)' : '选择此团队配置'}
+                        </div>
                       </div>
                     </button>
                   )
                 })}
               </div>
-              </div>
             </section>
 
-            <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-              <div className="mb-4 flex items-end justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200">2) 增值服务</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">可按月或按次选择额外服务。</p>
-                </div>
+            {/* Addons Grid */}
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+              <div>
+                <h3 className="text-sm font-black tracking-widest text-slate-700 dark:text-slate-300 uppercase flex items-center gap-2">
+                  <Sparkles size={16} className="text-indigo-600" /> 3) 增值增效加购服务
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  根据店铺特定的营销节点，可选择按月代运营或单次执行的服务。
+                </p>
               </div>
 
-              <div className="space-y-5">
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-xs font-black tracking-[0.18em] text-slate-500 dark:text-slate-300">按月加购</h3>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">Recurring</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {monthlyAddons.map((a) => (
-                      <label
-                        key={a.id}
-                        className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 ${
-                          addonIds.includes(a.id)
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
-                            : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Monthly Addons */}
+                {monthlyAddons.map((a) => {
+                  const isChecked = addonIds.includes(a.id)
+                  return (
+                    <label
+                      key={a.id}
+                      className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 flex flex-col justify-between ${
+                        isChecked
+                          ? 'border-indigo-600 bg-indigo-50/20 dark:bg-indigo-950/10 shadow-sm ring-2 ring-indigo-600/10'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/10 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-black text-slate-950 dark:text-white leading-snug">{a.name}</p>
                           <input
                             type="checkbox"
-                            checked={addonIds.includes(a.id)}
+                            checked={isChecked}
                             onChange={() => toggleAddon(a.id)}
-                            className="mt-1 accent-cyan-400"
+                            className="mt-0.5 accent-indigo-600 w-4 h-4 cursor-pointer"
                           />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-3">
-                              <p className="text-sm font-bold text-slate-900 dark:text-white">{a.name}</p>
-                              <p className="text-xs font-black text-blue-700 dark:text-blue-300 whitespace-nowrap">+USD {a.usd}/mo</p>
-                            </div>
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{a.description}</p>
-                            <ul className="mt-2 space-y-1">
-                              {a.details.slice(0, 2).map((d) => (
-                                <li key={d} className="text-[11px] text-slate-500 dark:text-slate-400">• {d}</li>
-                              ))}
-                            </ul>
-                          </div>
                         </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">{a.description}</p>
+                        <ul className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-slate-800/40">
+                          {a.details.map((d) => (
+                            <li key={d} className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">• {d}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="pt-3 text-right">
+                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">+${a.usd} / 月</span>
+                      </div>
+                    </label>
+                  )
+                })}
 
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-xs font-black tracking-[0.18em] text-slate-500 dark:text-slate-300">按次服务</h3>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">Single payment</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {oneTimeAddonItems.map((a) => (
-                      <label
-                        key={a.id}
-                        className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 ${
-                          addonIds.includes(a.id)
-                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20'
-                            : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
+                {/* One Time Addons */}
+                {oneTimeAddonItems.map((a) => {
+                  const isChecked = addonIds.includes(a.id)
+                  return (
+                    <label
+                      key={a.id}
+                      className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 flex flex-col justify-between ${
+                        isChecked
+                          ? 'border-indigo-600 bg-indigo-50/20 dark:bg-indigo-950/10 shadow-sm ring-2 ring-indigo-600/10'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/10 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-black text-slate-950 dark:text-white leading-snug">{a.name}</p>
                           <input
                             type="checkbox"
-                            checked={addonIds.includes(a.id)}
+                            checked={isChecked}
                             onChange={() => toggleAddon(a.id)}
-                            className="mt-1 accent-indigo-400"
+                            className="mt-0.5 accent-indigo-600 w-4 h-4 cursor-pointer"
                           />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-3">
-                              <p className="text-sm font-bold text-slate-900 dark:text-white">{a.name}</p>
-                              <p className="text-xs font-black text-blue-700 dark:text-blue-300 whitespace-nowrap">USD {a.usd} one-time</p>
-                            </div>
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{a.description}</p>
-                            <ul className="mt-2 space-y-1">
-                              {a.details.slice(0, 2).map((d) => (
-                                <li key={d} className="text-[11px] text-slate-500 dark:text-slate-400">• {d}</li>
-                              ))}
-                            </ul>
-                          </div>
                         </div>
-                      </label>
-                    ))}
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">{a.description}</p>
+                        <ul className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-slate-800/40">
+                          {a.details.map((d) => (
+                            <li key={d} className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">• {d}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="pt-3 text-right">
+                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">${a.usd} / 单次</span>
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+            </section>
+
+            {/* Split Grid: Left side details check, Right side Billing receipt summary calculator */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Payment Mode & User Agreement */}
+              <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+                <div>
+                  <h3 className="text-sm font-black tracking-widest text-slate-700 dark:text-slate-300 uppercase flex items-center gap-2">
+                    <CreditCard size={16} className="text-indigo-600" /> 4) 支付与激活方式
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    新加坡本地商家可直接使用本地 Billing 账单激活；非本地商家支持 Stripe 在线国际借记卡。
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setPaymentMode('ONLINE')}
+                    className={`rounded-2xl border p-4 text-left transition-all ${
+                      paymentMode === 'ONLINE'
+                        ? 'border-indigo-600 bg-indigo-50/20 dark:bg-indigo-950/10 shadow-sm ring-2 ring-indigo-600/10'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <p className="text-sm font-black text-slate-950 dark:text-white">在线支付 / International Card</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">跳转至 Stripe 安全网关付款，支持 Visa / MasterCard 等，付款后系统自动创建品牌与 AI。</p>
+                  </button>
+
+                  <button
+                    onClick={() => setPaymentMode('BILLING')}
+                    className={`rounded-2xl border p-4 text-left transition-all ${
+                      paymentMode === 'BILLING'
+                        ? 'border-emerald-600 bg-emerald-50/20 dark:bg-emerald-950/10 shadow-sm ring-2 ring-emerald-600/10'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-black text-slate-950 dark:text-white">账单模式 / SG local Billing 🇸🇬</p>
+                      <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[8px] font-bold text-white uppercase leading-none shadow-sm">
+                        推荐
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">确认账单后视为付款，后台团队将线下提供发票支票。订阅将立即可用。</p>
+                  </button>
+                </div>
+
+                {/* Terms and Agreement */}
+                <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{data.termsNotice}</p>
+                    <button
+                      onClick={() => setShowTerms(true)}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+                    >
+                      阅读完整协议全文
+                    </button>
                   </div>
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={agreedToTerms}
+                      onChange={(e) => setAgreedToTerms(e.target.checked)}
+                      className="mt-0.5 accent-indigo-600 w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+                      我已仔细阅读并同意 《{data.termsTitle}》 ({data.termsVersion}) 全部条款内容
+                    </span>
+                  </label>
+                </div>
+
+                {/* Confirm Active Button Bar */}
+                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
+                  {!effectiveBrandId ? (
+                    <button
+                      onClick={() => setStep(1)}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                    >
+                      <ChevronLeft size={14} /> 返回上一步修改品牌信息
+                    </button>
+                  ) : (
+                    <div />
+                  )}
+
+                  <button
+                    onClick={startCheckout}
+                    disabled={(paymentMode === 'ONLINE' && !data.paymentEnabled) || submitting || confirming || !agreedToTerms}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3 text-sm font-black transition-all shadow-md active:scale-95"
+                  >
+                    {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                    {paymentMode === 'ONLINE' ? '发起 Stripe 在线安全支付' : submitting ? '正在为您配置 AI 团队上岗...' : '确认并激活 AMC 订阅计划'}
+                  </button>
+                </div>
+
+                {activationNotice && (
+                  <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/30 bg-emerald-50/30 dark:bg-emerald-950/20 px-4 py-3 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    {activationNotice}
+                  </div>
+                )}
+              </div>
+
+              {/* Dynamic Invoice Breakdown Card */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-6">
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black tracking-widest text-slate-400 dark:text-slate-500 uppercase">
+                    实时账单明细 / Invoice Summary
+                  </h4>
+                  
+                  {selectedPlan && pricingSummary ? (
+                    <div className="space-y-3.5 text-xs">
+                      
+                      {/* Plan Row */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-slate-900 dark:text-white">AMC {selectedPlan.name}</p>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                            基础套餐价: ${pricingSummary.monthlyBaseUsd} / 月
+                          </p>
+                        </div>
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          ${pricingSummary.monthlyBaseUsd * pricingSummary.durationMonths}
+                        </span>
+                      </div>
+
+                      {/* Addon details in breakdown */}
+                      {addonIds.length > 0 && (
+                        <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3">
+                          <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+                            加购服务明细:
+                          </p>
+                          {addonIds.map((id) => {
+                            const add = data.addons.find((a) => a.id === id)
+                            if (!add) return null
+                            const totalAddon = add.pricing === 'monthly' ? add.usd * durationMonths : add.usd
+                            return (
+                              <div key={id} className="flex items-start justify-between text-[11px]">
+                                <div>
+                                  <p className="font-medium text-slate-600 dark:text-slate-400">{add.name}</p>
+                                  <p className="text-[9px] text-slate-400">
+                                    {add.pricing === 'monthly' ? `按月 recurring: $${add.usd} × ${durationMonths}月` : '按次一次性结算'}
+                                  </p>
+                                </div>
+                                <span className="font-bold text-slate-800 dark:text-slate-200">
+                                  ${totalAddon}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+
+                      {/* contract duration details */}
+                      <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-1">
+                        <div className="flex justify-between text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                          <span>合同签约周期:</span>
+                          <span>{durationMonths} 个月 ({billingCycle === 'yearly' ? '年付' : '季付'})</span>
+                        </div>
+                        {pricingSummary.discountPercent > 0 && (
+                          <div className="flex justify-between text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                            <span>签约折扣 (-{pricingSummary.discountPercent}%):</span>
+                            <span>- ${pricingSummary.discountUsd}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Total Pay summary box */}
+                      <div className="border-t border-dashed border-slate-200 dark:border-slate-700 pt-4 flex items-end justify-between">
+                        <div>
+                          <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black">实付总额 / Total Due</p>
+                          <p className="text-[9px] text-slate-400">Prices in USD, excl. tax</p>
+                        </div>
+                        <span className="text-3xl font-black text-indigo-600 dark:text-indigo-400 leading-none">
+                          ${pricingSummary.totalDueUsd}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-slate-400">请选择您的订阅计划</div>
+                  )}
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/40 p-3.5 border border-slate-100 dark:border-slate-800/60 text-[10px] text-slate-500 space-y-2 leading-relaxed">
+                  <p className="font-bold text-slate-700 dark:text-slate-300">📌 订阅后如何创建 AI 角色？</p>
+                  <p>
+                    支付完成后，系统将在后台自动部署分配专属的 API 身份，生成包含您时区、品牌、门店配置的工作上下文指令。您可以把指令导入客户端即可让 Crew 自动上岗代为管理内容、策略与口碑监控。
+                  </p>
                 </div>
               </div>
-            </section>
+            </div>
 
-            <section className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
-              <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200 mb-3">3) 支付方式</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                <button
-                  onClick={() => setPaymentMode('ONLINE')}
-                  className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${paymentMode === 'ONLINE' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                >
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">在线支付</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">立即跳转支付，支付成功后自动激活订阅。</p>
-                </button>
-                <button
-                  onClick={() => setPaymentMode('BILLING')}
-                  className={`rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${paymentMode === 'BILLING' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                >
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">账单模式 🇸🇬</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">新加坡本地用户适用。确认账单后视为已付款，订阅立即激活。</p>
-                </button>
-              </div>
-
-              <h2 className="text-sm font-black tracking-[0.18em] text-slate-700 dark:text-slate-200 mb-3">用户协议</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{data.termsNotice}</p>
-              <button
-                onClick={() => setShowTerms(true)}
-                className="text-sm font-bold text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200"
-              >
-                查看完整用户协议
-              </button>
-              <label className="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-                <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-0.5 accent-cyan-400" />
-                <span>我已阅读并同意 {data.termsTitle}（{data.termsVersion}）</span>
-              </label>
-
-              <button
-                onClick={startCheckout}
-                disabled={(paymentMode === 'ONLINE' && !data.paymentEnabled) || submitting || confirming || !agreedToTerms}
-                className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
-              >
-                {submitting ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
-                {paymentMode === 'ONLINE' ? '立即在线支付' : submitting ? '正在激活订阅计划...' : '确认并激活订阅计划'}
-              </button>
-
-              {activationNotice && (
-                <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm font-medium text-emerald-700 dark:text-emerald-200">
-                  {activationNotice}
-                </div>
-              )}
-            </section>
           </div>
-        </div>
+        )}
+
       </div>
 
+      {/* MODAL SHEET: FULL TERMS SCREEN */}
       {showTerms && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-black text-slate-900 dark:text-white">{data.termsTitle}</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{data.termsVersion}</p>
+                <h3 className="text-base font-black text-slate-900 dark:text-white leading-none">{data.termsTitle}</h3>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5 block font-bold uppercase tracking-wider">
+                  版本: {data.termsVersion}
+                </span>
               </div>
-              <button onClick={() => setShowTerms(false)} className="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">关闭</button>
+              <button
+                onClick={() => setShowTerms(false)}
+                className="text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
+              >
+                关闭
+              </button>
             </div>
-            <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 p-4">
-                <pre className="whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-200 leading-relaxed font-sans">{data.termsFullText}</pre>
+            <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar">
+              <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-4 md:p-5">
+                <pre className="whitespace-pre-wrap text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-sans font-medium">{data.termsFullText}</pre>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800">{data.termsNotice}</p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 pt-3 border-t border-slate-100 dark:border-slate-800 leading-relaxed">{data.termsNotice}</p>
             </div>
           </div>
         </div>
       )}
 
+      {/* PROGRESS MODAL: AI CREW GENERATION TIMER */}
       {showAgentCreationModal && (
-        <div className="fixed inset-0 z-[70] bg-slate-950/65 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-slate-200/70 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                {agentCreationMode === 'update' ? '正在更新你的 AI 员工使命' : '正在创建你的 AI 员工'}
+        <div className="fixed inset-0 z-[70] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-xl rounded-3xl border border-slate-200/50 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl p-6 md:p-8 space-y-6">
+            <div className="space-y-2">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Sparkles className="text-indigo-600 animate-pulse" />
+                {agentCreationMode === 'update' ? '正在重载您的 AI 营销小组使命' : '正在为您激活专属 AI 营销小组成员'}
               </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-300 mt-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
                 {agentCreationMode === 'update'
-                  ? '正在同步新的订阅计划、工作边界与执行重点。'
-                  : '正在生成连接身份、初始化工作档案并准备接入环境。'}
+                  ? '正在同步最新的套餐权限、门店工作重点与品牌执行策略...'
+                  : '正在分配安全连接密钥（API API Key）、初始化背景档案并装载执行环境...'}
               </p>
             </div>
 
-            <div className="px-6 py-6 space-y-5">
+            <div className="space-y-2">
               <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 transition-all duration-300"
+                  className="h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-emerald-500 transition-all duration-300"
                   style={{ width: `${agentCreationProgress}%` }}
                 />
               </div>
-              <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-300">
-                <span>创建进度</span>
+              <div className="flex items-center justify-between text-xs font-bold text-slate-500">
+                <span>部署进度</span>
                 <span>{agentCreationProgress}%</span>
               </div>
+            </div>
 
-              <div className="space-y-2 text-sm">
-                <p className={`${agentCreationProgress >= 20 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {agentCreationProgress >= 20 ? '✓' : '•'} {agentCreationMode === 'update' ? '同步新的套餐权限与目标范围' : '分配 AI 员工连接身份（API Key）'}
-                </p>
-                <p className={`${agentCreationProgress >= 50 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {agentCreationProgress >= 50 ? '✓' : '•'} {agentCreationMode === 'update' ? '重载协作档案与执行策略' : '初始化协作档案与基础权限'}
-                </p>
-                <p className={`${agentCreationProgress >= 80 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {agentCreationProgress >= 80 ? '✓' : '•'} {agentCreationMode === 'update' ? '刷新初始化指令与接入流程' : '预热接入流程并准备初始化指令'}
-                </p>
-                <p className={`${agentCreationProgress >= 100 ? 'text-emerald-600 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                  {agentCreationProgress >= 100 ? '✓' : '•'} {agentCreationMode === 'update' ? '完成，可按新使命继续执行' : '完成，可开始连接平台'}
-                </p>
-              </div>
-
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {agentCreationDone
-                  ? 'AI 员工创建完成，正在打开初始化入口...'
-                  : '预计耗时约 30 秒，请勿关闭当前页面。'}
+            <div className="space-y-2 text-xs border-t border-slate-100 dark:border-slate-800 pt-4">
+              <p className={`flex items-center gap-2 ${agentCreationProgress >= 20 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                {agentCreationProgress >= 20 ? '✓' : '•'} {agentCreationMode === 'update' ? '已读取新套餐权限与目标设定' : '已分配专属 AI 员工 API 身份令牌'}
+              </p>
+              <p className={`flex items-center gap-2 ${agentCreationProgress >= 50 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                {agentCreationProgress >= 50 ? '✓' : '•'} {agentCreationMode === 'update' ? '已刷新品牌与门店运营上下文环境' : '已初始化并挂载主门店运营档案'}
+              </p>
+              <p className={`flex items-center gap-2 ${agentCreationProgress >= 80 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                {agentCreationProgress >= 80 ? '✓' : '•'} {agentCreationMode === 'update' ? '已重新打包 AI 初始化连接指令' : '已预备生成 AI 员工初始化连接指令'}
+              </p>
+              <p className={`flex items-center gap-2 ${agentCreationProgress >= 100 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                {agentCreationProgress >= 100 ? '✓' : '•'} {agentCreationMode === 'update' ? 'AI 员工重部署全部完成！' : 'AI 员工团队已全部就绪并准备上岗！'}
               </p>
             </div>
+
+            <p className="text-[10px] text-slate-400 text-center">
+              {agentCreationDone
+                ? '重定向至激活结果，正在开启连接入口...'
+                : '预计耗时约 30 秒，请勿关闭或刷新该页面。'}
+            </p>
           </div>
         </div>
       )}
+
     </div>
   )
 }

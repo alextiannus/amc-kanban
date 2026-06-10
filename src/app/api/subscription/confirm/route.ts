@@ -50,6 +50,9 @@ export async function POST(request: Request) {
   const pendingBrandLocation = typeof checkout.metadata?.pendingBrandLocation === 'string'
     ? checkout.metadata.pendingBrandLocation.trim()
     : ''
+  const pendingBrandAddress = typeof checkout.metadata?.pendingBrandAddress === 'string'
+    ? checkout.metadata.pendingBrandAddress.trim()
+    : ''
   const pendingBrandOwnerEmail = typeof checkout.metadata?.pendingBrandOwnerEmail === 'string'
     ? checkout.metadata.pendingBrandOwnerEmail.trim().toLowerCase()
     : ''
@@ -65,6 +68,7 @@ export async function POST(request: Request) {
         location: pendingBrandLocation || null,
         ownerEmail: pendingBrandOwnerEmail || null,
         timezone: pendingBrandTimezone || null,
+        address: pendingBrandAddress || null,
       })
     : null
   if (pendingBrandName && !createdBrand?.ok) {
