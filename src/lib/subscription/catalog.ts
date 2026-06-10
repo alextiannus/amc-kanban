@@ -47,18 +47,18 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'starter',
     name: '自媒体基础运营',
     monthlyUsd: 600,
-    description: '“消灭宣传真空”',
+    description: '消灭宣传真空',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · 品牌主理人',
     suitableFor: '新开业商家，或海外本地平台处于真空状态、无法持续更新的商家',
     services: [
-      '1. 账号代注册与信息完善（Google Maps / Facebook / Instagram / TikTok）',
-      '2. 账号统一化风格设计（按品牌特点定制）',
-      '3. 建立素材库',
-      '4. 每月 30 条图文内容创作与发布，不限平台数量',
-      '5. Google Maps 评分优化',
-      '6. 账号运营月报',
-      '7. 评论监控（不含回复）',
-      '8. 每月组织 1 次粉丝探店，包含手机素材拍摄'
+      '账号代注册与信息完善（Google Maps / Facebook / Instagram / TikTok）',
+      '账号统一化风格设计（按品牌特点定制）',
+      '建立素材库',
+      '每月 30 条图文内容创作与发布，不限平台数量',
+      'Google Maps 评分优化',
+      '账号运营月报',
+      '评论监控（不含回复）',
+      '每月组织 1 次粉丝探店，包含手机素材拍摄'
     ],
     baseline: '开通后 60 天内各平台商家信息完整展示，持续更新有质量的内容。',
     includes: [
@@ -80,29 +80,29 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'essential',
     name: '品牌建设版',
     monthlyUsd: 1600,
-    description: '“从基础展示到品牌建设”',
+    description: '从基础展示到品牌建设',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
     suitableFor: '希望确立品牌策略、全平台覆盖目标客群，通过达人推广与转化活动积极拉新唤醒老顾客的商家',
     services: [
-      '1. Tier 1 全部服务内容',
-      '2. 品牌策略制定（目标客群定位、差异化卖点提炼、品牌调性确立）',
-      '3. 中英双语品牌话术模板与视觉风格策划',
-      '4. 拓展至中文平台（小红书 / 大众点评海外版），实现英文+中文全平台覆盖',
-      '5. 每月 8 条视频内容制作与发布',
-      '6. 每月营销主题策划（节日活动、新品推广、季节限定等）',
-      '7. 团购套餐 / 到店转化活动设计与上线',
-      '8. 每季度达人探店 2-4 次（达人费用已包含在服务费内）',
-      '9. 全平台评论回复，工作日 24 小时内响应',
-      '10. 差评处理与口碑危机应对',
-      '11. 粉丝互动运营（私信回复、互动话题发布、点赞维护）',
-      '12. 品牌月报（含评分趋势、口碑关键词、粉丝画像分析）'
+      '基础运营全部服务内容',
+      '品牌策略制定（目标客群定位、差异化卖点提炼、品牌调性确立）',
+      '中英双语品牌话术模板与视觉风格策划',
+      '拓展至中文平台（小红书 / 大众点评海外版），实现英文+中文全平台覆盖',
+      '每月 8 条视频内容制作与发布',
+      '每月营销主题策划（节日活动、新品推广、季节限定等）',
+      '团购套餐 / 到店转化活动设计与上线',
+      '每季度达人探店 2-4 次（达人费用已含在服务费内）',
+      '全平台评论回复，工作日 24 小时内响应',
+      '差评处理与口碑危机应对',
+      '粉丝互动运营（私信回复、互动话题发布、点赞维护）',
+      '品牌月报（含评分趋势、口碑关键词、粉丝画像分析）'
     ],
     baseline: '合约期 6 个月内 Google Maps 平均评分提升 0.3 分以上；中英双平台持续内容更新；团购活动上线后到店量可见增长。',
     includes: [
       '团队配置：AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
       '适合：希望确立品牌策略、全平台覆盖目标客群，通过达人推广与活动拉新唤醒老客的商家',
       '服务内容：',
-      '1. Tier 1 全部服务内容',
+      '1. 基础运营全部服务内容',
       '2. 品牌策略制定（目标客群定位、差异化卖点提炼、品牌调性确立）',
       '3. 中英双语品牌话术模板与视觉风格策划',
       '4. 拓展至中文平台（小红书 / 大众点评海外版），实现中英双语全平台覆盖',
@@ -114,25 +114,25 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '10. 差评处理与口碑危机应对',
       '11. 粉丝互动运营（私信回复、互动话题发布、点赞维护）',
       '12. 品牌月报（含评分趋势、口碑关键词、粉丝画像分析）',
-      '成果参考：成果参考：合约期 6 个月内 Google Maps 平均评分提升 0.3 分以上；中英双平台持续内容更新；团购活动上线后到店量可见增长。'
+      '成果参考：合约期 6 个月内 Google Maps 平均评分提升 0.3 分以上；中英双平台持续内容更新；团购活动上线后到店量可见增长。'
     ],
   },
   {
     id: 'advanced',
     name: '流量扩张版',
     monthlyUsd: 2600,
-    description: '“把品牌势能转化为持续营收，建立忠诚客户群体”',
+    description: '把品牌势能转化为持续营收，建立忠诚客户群体',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · AI 私域运营官 · AI 客服 · 品牌主理人',
     suitableFor: '品牌与口碑已建立，希望通过付费投流放大曝光、高质量达人深度种草、私域沉淀顾客资产，系统提升全链路转化率的商家',
     services: [
-      '1. Tier 2 全部服务内容',
-      '2. 多平台付费广告管理（Facebook Ads / Google Ads / 平台推流），含素材制作与受众定向',
-      '3. 每月广告效果复盘与投放策略优化',
-      '4. 达人质量升级：优先匹配本地行业头部博主及高影响力 KOL（粉丝量、互动率双重筛选）',
-      '5. 私域顾客社群搭建（WhatsApp / 微信群）及持续运营',
-      '6. 销售转化全链路追踪（曝光 → 点击 → 到店 → 复购）',
-      '7. 转化率优化建议（活动设计、菜单呈现、钩子策略）',
-      '8. 品牌战略分析与竞品情报月报'
+      '品牌建设全部内容',
+      '投流管理，含素材制作与受众定向',
+      '每月广告效果复盘与投放策略优化',
+      '达人质量升级：优先匹配本地行业头部博主及高影响力 KOL（粉丝量、互动率双重筛选）',
+      '私域顾客社群搭建（WhatsApp / 微信群）及持续运营',
+      '销售转化全链路追踪（曝光 → 点击 → 到店 → 复购）',
+      '转化率优化建议（活动设计、菜单呈现、钩子策略）',
+      '品牌战略分析与竞品情报月报'
     ],
     commissionNote: '广告平台消耗费用由商家独立承担；佣金分成比例按合约约定，适用于服务方主导的线上渠道带来的销售额',
     baseline: '广告稳定投放后线上引流到店量明显提升；私域社群建立后复购率可见增长；高质量 KOL 内容带来精准新客转化；全链路数据每月可查。',
@@ -140,8 +140,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '团队配置：AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · AI 私域运营官 · AI 客服 · 品牌主理人',
       '适合：品牌与口碑已建立，希望付费投流放大曝光、高质量达人种草、私域沉淀提升转化率的商家',
       '服务内容：',
-      '1. Tier 2 全部服务内容',
-      '2. 多平台付费广告管理（Facebook Ads / Google Ads / 平台推流），含素材与定向',
+      '1. 品牌建设全部内容',
+      '2. 投流管理，含素材制作与受众定向',
       '3. 每月广告效果复盘与投放策略优化',
       '4. 达人质量升级：优先匹配本地行业头部博主及高影响力 KOL',
       '5. 私域顾客社群搭建（WhatsApp / 微信群）及持续运营',
@@ -196,9 +196,10 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     label: '团队配置',
     values: {
       starter: 'AI 内容创作官 · AI 市场调研官 · 品牌主理人',
+      secondary: '', // not used, placeholder or just key values matching PlanId
       essential: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
       advanced: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · AI 私域运营官 · AI 客服 · 品牌主理人',
-    },
+    } as any,
   },
   {
     key: 'frequency',
@@ -206,7 +207,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     values: {
       starter: '每月 30 条图文内容',
       essential: '每月 30 条图文 + 8 条视频内容',
-      advanced: '每月 30 条图文 + 8 条视频 + 投流素材与定向创意',
+      advanced: '每月 30 条图文 + 8 条视频 +投流素材与定向创意',
     },
   },
   {
@@ -224,7 +225,12 @@ export const ALLOWED_DURATIONS = [3, 6, 12] as const
 
 export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.01'
 
-export function calculatePricing(planId: string, durationMonths: number, addonIds: string[]): PricingSummary {
+export function calculatePricing(
+  planId: string,
+  durationMonths: number,
+  addonIds: string[],
+  addonQuantities?: Record<string, number>
+): PricingSummary {
   const plan = SUBSCRIPTION_PLANS.find((p) => p.id === planId)
   if (!plan) throw new Error('Invalid plan')
   if (!ALLOWED_DURATIONS.includes(durationMonths as (typeof ALLOWED_DURATIONS)[number])) {
@@ -238,8 +244,18 @@ export function calculatePricing(planId: string, durationMonths: number, addonId
     .filter((v): v is AddonItem => Boolean(v))
 
   const billedMonths = durationMonths
-  const recurringAddonsUsd = selectedAddons.filter((a) => a.pricing === 'monthly').reduce((sum, a) => sum + a.usd, 0)
-  const oneTimeAddonsUsd = selectedAddons.filter((a) => a.pricing === 'one_time').reduce((sum, a) => sum + a.usd, 0)
+  const recurringAddonsUsd = selectedAddons
+    .filter((a) => a.pricing === 'monthly')
+    .reduce((sum, a) => {
+      const qty = addonQuantities?.[a.id] ?? (a.id === 'multi_store' ? 0 : 1)
+      return sum + a.usd * qty
+    }, 0)
+  const oneTimeAddonsUsd = selectedAddons
+    .filter((a) => a.pricing === 'one_time')
+    .reduce((sum, a) => {
+      const qty = addonQuantities?.[a.id] ?? 1
+      return sum + a.usd * qty
+    }, 0)
   const monthlyBaseUsd = plan.promoMonthlyUsd ?? plan.monthlyUsd
   const recurringSubtotalUsd = (monthlyBaseUsd + recurringAddonsUsd) * durationMonths
   const discountPercent = durationMonths === 12 ? 10 : 0

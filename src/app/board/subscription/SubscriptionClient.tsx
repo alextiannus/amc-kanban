@@ -368,8 +368,36 @@ export default function BrandSubscriptionPage() {
     })
   }, [data?.instructionContext])
 
+  const [multiStoreQty, setMultiStoreQty] = useState<number>(0)
+
   const toggleAddon = (id: string) => {
-    setAddonIds((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]))
+    setAddonIds((prev) => {
+      const exists = prev.includes(id)
+      if (id === 'multi_store') {
+        if (exists) {
+          setMultiStoreQty(0)
+          return prev.filter((v) => v !== id)
+        } else {
+          setMultiStoreQty(1)
+          return [...prev, id]
+        }
+      }
+      return exists ? prev.filter((v) => v !== id) : [...prev, id]
+    })
+  }
+
+  const handleMultiStoreQtyChange = (q: number) => {
+    const qty = Math.max(0, q)
+    setMultiStoreQty(qty)
+    setAddonIds((prev) => {
+      const exists = prev.includes('multi_store')
+      if (qty > 0 && !exists) {
+        return [...prev, 'multi_store']
+      } else if (qty === 0 && exists) {
+        return prev.filter((v) => v !== 'multi_store')
+      }
+      return prev
+    })
   }
 
   const copyInstruction = async () => {
@@ -402,6 +430,7 @@ export default function BrandSubscriptionPage() {
           planId: selectedPlan.id,
           durationMonths,
           addonIds,
+          addonQuantities: { multi_store: multiStoreQty },
           paymentMode,
           timezone: brandTimezone,
           agreedToTerms,
@@ -443,11 +472,11 @@ export default function BrandSubscriptionPage() {
   const pricingSummary = useMemo(() => {
     if (!data || !selectedPlan) return null
     try {
-      return calculatePricing(planId, durationMonths, addonIds)
+      return calculatePricing(planId, durationMonths, addonIds, { multi_store: multiStoreQty })
     } catch {
       return null
     }
-  }, [data, selectedPlan, planId, durationMonths, addonIds])
+  }, [data, selectedPlan, planId, durationMonths, addonIds, multiStoreQty])
 
   // Stepper Header
   const renderStepper = () => {
@@ -1137,8 +1166,9 @@ export default function BrandSubscriptionPage() {
                 {monthlyAddons.map((a) => {
                   const isChecked = addonIds.includes(a.id)
                   return (
-                    <label
+                    <div
                       key={a.id}
+                      onClick={() => toggleAddon(a.id)}
                       className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 flex flex-col justify-between ${
                         isChecked
                           ? 'border-indigo-600 bg-indigo-50/20 dark:bg-indigo-950/10 shadow-sm ring-2 ring-indigo-600/10'
@@ -1151,11 +1181,29 @@ export default function BrandSubscriptionPage() {
                           <input
                             type="checkbox"
                             checked={isChecked}
-                            onChange={() => toggleAddon(a.id)}
+                            onChange={(e) => {
+                              e.stopPropagation()
+                              toggleAddon(a.id)
+                            }}
+                            onClick={(e) => e.stopPropagation()}
                             className="mt-0.5 accent-indigo-600 w-4 h-4 cursor-pointer"
                           />
                         </div>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">{a.description}</p>
+                        
+                        {a.id === 'multi_store' && (
+                          <div className="flex items-center gap-3 mt-2 mb-2" onClick={(e) => e.stopPropagation()}>
+                            <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">增加门店数量</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={multiStoreQty}
+                              onChange={(e) => handleMultiStoreQtyChange(parseInt(e.target.value) || 0)}
+                              className="w-20 px-2 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs focus:ring-1 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white"
+                            />
+                          </div>
+                        )}
+
                         <ul className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-slate-800/40">
                           {a.details.map((d) => (
                             <li key={d} className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">• {d}</li>
@@ -1163,9 +1211,14 @@ export default function BrandSubscriptionPage() {
                         </ul>
                       </div>
                       <div className="pt-3 text-right">
-                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">+${a.usd} / 月</span>
+                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
+                          {a.id === 'multi_store'
+                            ? `+$${a.usd} / 每个新增门店`
+                            : `+$${a.usd} / 月`
+                          }
+                        </span>
                       </div>
-                    </label>
+                    </div>
                   )
                 })}
 
@@ -1173,8 +1226,9 @@ export default function BrandSubscriptionPage() {
                 {oneTimeAddonItems.map((a) => {
                   const isChecked = addonIds.includes(a.id)
                   return (
-                    <label
+                    <div
                       key={a.id}
+                      onClick={() => toggleAddon(a.id)}
                       className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 flex flex-col justify-between ${
                         isChecked
                           ? 'border-indigo-600 bg-indigo-50/20 dark:bg-indigo-950/10 shadow-sm ring-2 ring-indigo-600/10'
@@ -1187,7 +1241,11 @@ export default function BrandSubscriptionPage() {
                           <input
                             type="checkbox"
                             checked={isChecked}
-                            onChange={() => toggleAddon(a.id)}
+                            onChange={(e) => {
+                              e.stopPropagation()
+                              toggleAddon(a.id)
+                            }}
+                            onClick={(e) => e.stopPropagation()}
                             className="mt-0.5 accent-indigo-600 w-4 h-4 cursor-pointer"
                           />
                         </div>
@@ -1201,7 +1259,7 @@ export default function BrandSubscriptionPage() {
                       <div className="pt-3 text-right">
                         <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">${a.usd} / 单次</span>
                       </div>
-                    </label>
+                    </div>
                   )
                 })}
               </div>
@@ -1338,13 +1396,16 @@ export default function BrandSubscriptionPage() {
                           {addonIds.map((id) => {
                             const add = data.addons.find((a) => a.id === id)
                             if (!add) return null
-                            const totalAddon = add.pricing === 'monthly' ? add.usd * durationMonths : add.usd
+                            const qty = id === 'multi_store' ? multiStoreQty : 1
+                            const totalAddon = add.pricing === 'monthly' ? add.usd * durationMonths * qty : add.usd * qty
                             return (
                               <div key={id} className="flex items-start justify-between text-[11px]">
                                 <div>
                                   <p className="font-medium text-slate-600 dark:text-slate-400">{add.name}</p>
                                   <p className="text-[9px] text-slate-400">
-                                    {add.pricing === 'monthly' ? `按月 recurring: $${add.usd} × ${durationMonths}月` : '按次一次性结算'}
+                                    {add.pricing === 'monthly'
+                                      ? `按月 recurring: $${add.usd} × ${durationMonths}月${id === 'multi_store' ? ` × ${qty}店` : ''}`
+                                      : `按次一次性结算${id === 'multi_store' ? ` × ${qty}` : ''}`}
                                   </p>
                                 </div>
                                 <span className="font-bold text-slate-800 dark:text-slate-200">

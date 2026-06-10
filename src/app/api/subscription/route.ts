@@ -396,8 +396,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Invalid addonIds: ${invalidAddonIds.join(', ')}` }, { status: 400 })
   }
 
-  const summary = calculatePricing(planId, durationMonths, uniqueAddonIds)
-  const selectedAddons = SUBSCRIPTION_ADDONS.filter((a) => uniqueAddonIds.includes(a.id))
+  const addonQuantities: Record<string, number> = {}
+  if (body.addonQuantities && typeof body.addonQuantities === 'object') {
+    for (const [key, val] of Object.entries(body.addonQuantities)) {
+      const num = Number(val)
+      if (!isNaN(num) && num >= 0) {
+        addonQuantities[key] = num
+      }
+    }
+  }
+
+  const summary = calculatePricing(planId, durationMonths, uniqueAddonIds, addonQuantities)
+  const selectedAddons = SUBSCRIPTION_ADDONS.filter((a) => uniqueAddonIds.includes(a.id)).map((addon) => ({
+    ...addon,
+    quantity: addon.id === 'multi_store' ? (addonQuantities['multi_store'] ?? 0) : 1,
+  }))
 
   const pending = await prisma.brandSubscription.create({
     data: {
@@ -520,6 +533,7 @@ export async function POST(request: Request) {
       pendingBrandOwnerEmail,
       pendingBrandTimezone,
       pendingBrandAddress,
+      multiStoreQty: String(addonQuantities['multi_store'] ?? 0),
     },
   })
 
