@@ -100,7 +100,7 @@ export default function MainLayout({
             }`}
             id="nav-drafts"
           >
-            <FileText size={16} /> 草稿管理
+            <FileText size={16} /> Post 中文 发布内容
           </button>
           <button
             onClick={() => setCurrentView('assets')}
@@ -224,7 +224,7 @@ export default function MainLayout({
           }`}
         >
           <FileText size={18} />
-          <span>草稿</span>
+          <span>Post发布</span>
         </button>
         <button
           onClick={() => setCurrentView('assets')}

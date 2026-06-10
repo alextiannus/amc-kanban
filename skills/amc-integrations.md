@@ -107,7 +107,7 @@ Content-Type: application/json
 }
 ```
 
-### 4.6 草稿管理
+### 4.6 Post 中文 发布内容
 
 - `board_list_drafts`：读取草稿。
 - `board_save_draft`：创建或更新草稿。保存后再提交。

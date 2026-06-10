@@ -77,7 +77,7 @@ AI Marketing Crew 提供两种接入方式，**推荐使用 MCP**：
 - `board_upload_media` — 上传媒体素材文件到看板素材库
 - `board_list_published_content` / `board_delete_scheduled_content` — 查看或取消已排期内容
 
-**草稿管理**
+**Post 中文 发布内容**
 - `board_list_drafts` — 查看品牌草稿
 - `board_save_draft` — 创建或更新草稿
 - `board_submit_draft` — 提交草稿；自动驾驶直接发布/排期，老板审批模式进入审核
