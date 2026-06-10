@@ -674,11 +674,6 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                         </div>
                       )}
 
-                      {/* Top-Right: Used Count Badge */}
-                      <div className="absolute top-2 right-2 z-10 bg-slate-950/70 dark:bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full select-none">
-                        {asset.usedCount}
-                      </div>
-
                       {/* Top-Left: Checkbox hover overlay */}
                       <div
                         onClick={(e) => toggleSelect(asset.id, e)}
@@ -694,21 +689,22 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                     </div>
 
                     {/* Card Footer Detail */}
-                    <div className="p-3.5 flex-1 flex flex-col justify-between">
+                    <div className="px-3 py-2 bg-white dark:bg-slate-900 flex items-center justify-between border-t border-slate-100/60 dark:border-slate-800/60 text-[10px] select-none">
                       <div>
-                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
-                          {asset.aiCaption || asset.filename || '未命名素材'}
-                        </h4>
+                        {isVideo ? (
+                          <span className="text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
+                            <Video className="w-2.5 h-2.5" /> 视频
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-medium">
+                            {relativeDate(asset.lastUsedAt || asset.createdAt)}
+                          </span>
+                        )}
                       </div>
                       
-                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-50 dark:border-slate-800/60">
-                        {/* Status chip */}
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${statusColor}`}>
-                          {statusLabel}
-                        </span>
-                        
-                        <span className="text-[10px] text-slate-400 font-medium">
-                          {relativeDate(asset.lastUsedAt || asset.createdAt)}
+                      <div className="flex items-center gap-1.5">
+                        <span className="bg-slate-100 dark:bg-slate-850 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full font-bold">
+                          {asset.usedCount}
                         </span>
                       </div>
                     </div>
