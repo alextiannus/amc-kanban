@@ -90,6 +90,7 @@ interface DashboardAssetsProps {
 }
 
 export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
+  const simulationEnabled = process.env.NODE_ENV !== 'production'
   const [activeCategory, setActiveCategory] = useState('all')
   const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos'>('all')
   const [search, setSearch] = useState('')
@@ -214,33 +215,51 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
   const activeAsset = assets.find(a => a.id === activeAssetId) || filtered[0] || assets[0]
 
-  // Start Bulk Tagging simulation
-  const startBulkTagging = () => {
+  // Batch mark pending assets as ready by syncing to backend.
+  const startBulkTagging = async () => {
+    if (!brandId) {
+      setError('请先选择品牌')
+      return
+    }
+    const pendingIds = assets.filter(a => !a.aiReady).map(a => a.id)
+    if (pendingIds.length === 0) {
+      setBulkTagProgress(100)
+      return
+    }
+
     setBulkTaggingActive(true)
     setBulkTagProgress(0)
-    const interval = setInterval(() => {
-      setBulkTagProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          // Update local assets to all have aiReady: true and fresh tags
-          setAssets(prevAssets =>
-            prevAssets.map(a => ({
-              ...a,
-              aiReady: true,
-              aiTags: Array.from(new Set([...a.aiTags, 'AI智能打标', '餐饮营销'])),
-              aiCaption: a.aiCaption || `AI 自动识别：精美${a.brandName}素材`
-            }))
-          )
-          setTimeout(() => setBulkTaggingActive(false), 800)
-          return 100
+    setError(null)
+
+    let completed = 0
+    try {
+      for (const assetId of pendingIds) {
+        const res = await fetch(`/api/brands/${brandId}/assets/${assetId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ aiReady: true }),
+        })
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}))
+          throw new Error(json.error || '批量确认失败')
         }
-        return prev + 10
-      })
-    }, 150)
+        completed += 1
+        setBulkTagProgress(Math.round((completed / pendingIds.length) * 100))
+      }
+      await loadAssets()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '批量确认失败')
+    } finally {
+      setBulkTaggingActive(false)
+    }
   }
 
   // Start Single/Batch Video Generation
   const handleStartVideoGen = (asset: DashboardAsset) => {
+    if (!simulationEnabled) {
+      setError('图生视频为下一期开发计划，当前环境暂未开放。')
+      return
+    }
     setVideoGenAsset(asset)
     setVideoGenProgress(0)
     setVideoGenStep(0)
@@ -266,6 +285,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
   // Save generated video simulation
   const handleSaveGeneratedVideo = async () => {
+    if (!simulationEnabled) {
+      setError('生产环境已禁用演示图生视频，请上传真实视频素材。')
+      return
+    }
     if (!videoGenAsset || !brandId) return
     setUploading(true)
     try {
@@ -829,7 +852,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                   使用排期排程
                 </h4>
                 <button
-                  onClick={() => alert('已将所选素材标记到日历中，待设置具体推广时间！')}
+                  onClick={() => setError('请在日历/草稿模块设置真实发布排期。')}
                   className="w-full py-2.5 border border-indigo-100 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all flex items-center justify-center gap-2"
                 >
                   <Calendar className="w-4 h-4" />
@@ -845,10 +868,12 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                   const firstSelected = assets.find(a => selected.includes(a.id))
                   if (firstSelected) handleStartVideoGen(firstSelected)
                 }}
-                className="w-full mb-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transition-all border border-slate-200/50 dark:border-slate-700"
+                className="w-full mb-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transition-all border border-slate-200/50 dark:border-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                title={simulationEnabled ? '批量图生视频' : '下一期开发计划'}
+                disabled={!simulationEnabled}
               >
                 <Video className="w-4 h-4 text-indigo-500" />
-                <span>批量图生视频</span>
+                <span>{simulationEnabled ? '批量图生视频' : '批量图生视频（下一期）'}</span>
               </button>
 
               <button
@@ -862,7 +887,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             </div>
           </div>
         ) : activeAsset ? (
-          
+
           /* DRAWER: SINGLE ASSET INSIGHT MODE */
           <div className="flex flex-col h-full overflow-hidden">
             <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/30">
@@ -954,35 +979,22 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 </div>
               </div>
 
-              {/* Performance Predictor */}
+              {/* Performance Summary (real data only) */}
               <div className="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-2xl border border-indigo-100/60 dark:border-indigo-900/30">
                 <div className="flex items-center gap-2 mb-3">
                   <BarChart2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <h4 className="text-xs font-black text-indigo-900 dark:text-indigo-300">AI 转化表现预测</h4>
+                  <h4 className="text-xs font-black text-indigo-900 dark:text-indigo-300">素材表现概览</h4>
                 </div>
-                
-                <div className="space-y-3">
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400">高点击潜力</span>
-                      <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                        {Math.abs(activeAsset.id.charCodeAt(0) * 7) % 25 + 72}%
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-200/60 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-indigo-500 rounded-full"
-                        style={{ width: `${Math.abs(activeAsset.id.charCodeAt(0) * 7) % 25 + 72}%` }}
-                      ></div>
-                    </div>
-                  </div>
 
-                  <div className="flex items-start gap-2 text-[10px] bg-white/80 dark:bg-slate-900 p-2.5 rounded-lg border border-indigo-100/50 dark:border-indigo-900/30 text-slate-500 dark:text-slate-400">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                    <span className="leading-normal">
-                      受众疲劳提示：该素材色调与上一条爆款相似。建议搭配节日/福利等反差文案推广。
-                    </span>
-                  </div>
+                <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                  <p>累计使用次数：{activeAsset.usedCount}</p>
+                  <p>最近一次使用：{activeAsset.lastUsedAt ? relativeDate(activeAsset.lastUsedAt) : '暂无记录'}</p>
+                  {!activeAsset.aiReady && (
+                    <div className="flex items-start gap-2 text-[11px] bg-white/80 dark:bg-slate-900 p-2.5 rounded-lg border border-indigo-100/50 dark:border-indigo-900/30 text-slate-500 dark:text-slate-400">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                      <span className="leading-normal">该素材尚未确认入库，建议先完成标签确认与分组。</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -993,36 +1005,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 </h4>
                 
                 {activeAsset.usedCount > 0 ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-xs">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-pink-500 to-rose-500 flex items-center justify-center text-white text-[10px] font-black">
-                          IG
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold">Instagram 动态</p>
-                          <p className="text-[9px] text-slate-400">2026-05-12</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded">
-                        2.4k 互动
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-xs">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-full bg-red-600 flex items-center justify-center text-white text-[10px] font-black">
-                          RED
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold">小红书图文</p>
-                          <p className="text-[9px] text-slate-400">2026-05-10</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded">
-                        1.8k 赞藏
-                      </span>
-                    </div>
+                  <div className="space-y-2 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-xs text-xs text-slate-600 dark:text-slate-300">
+                    <p>累计发布次数：{activeAsset.usedCount}</p>
+                    <p>最近使用时间：{activeAsset.lastUsedAt ? relativeDate(activeAsset.lastUsedAt) : '暂无记录'}</p>
+                    <p className="text-[11px] text-slate-400">渠道明细将在接入发布平台回流后展示。</p>
                   </div>
                 ) : (
                   <p className="text-xs text-slate-400 dark:text-slate-500 italic">该素材尚未发布至任何平台</p>
@@ -1034,14 +1020,16 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
               <button
                 onClick={() => handleStartVideoGen(activeAsset)}
-                className="w-full bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 mb-2 active:scale-[0.98] transition-all border border-slate-200/50 dark:border-slate-700"
+                className="w-full bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 mb-2 active:scale-[0.98] transition-all border border-slate-200/50 dark:border-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                title={simulationEnabled ? '图生视频' : '下一期开发计划'}
+                disabled={!simulationEnabled}
               >
                 <Sparkles className="w-4 h-4 text-indigo-500" />
-                <span>图生视频</span>
+                <span>{simulationEnabled ? '图生视频' : '图生视频（下一期）'}</span>
               </button>
 
               <button
-                onClick={() => alert('已生成小红书及朋友圈推文草稿，请移步“草稿管理”查看！')}
+                onClick={() => setError('请前往草稿管理模块创建并关联素材生成推文。')}
                 className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 py-2.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
               >
                 <Plus className="w-4 h-4" />
@@ -1059,7 +1047,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       </aside>
 
       {/* 4. IMAGE-TO-VIDEO GENERATOR MODAL */}
-      {videoGenAsset && (
+      {simulationEnabled && videoGenAsset && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden max-w-4xl w-full border border-slate-100 dark:border-slate-800 shadow-2xl flex flex-col md:flex-row relative animate-in zoom-in-95 duration-200">
             

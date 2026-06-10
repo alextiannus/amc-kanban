@@ -25,3 +25,19 @@ services:
         sync: false
       - key: BOOTSTRAP_ADMIN_INITIAL_PASSWORD
         sync: false
+      - key: HUAWEI_OBS_ACCESS_KEY_ID
+        sync: false
+      - key: HUAWEI_OBS_SECRET_ACCESS_KEY
+        sync: false
+      - key: HUAWEI_OBS_BUCKET
+        sync: false
+      - key: HUAWEI_OBS_ENDPOINT
+        sync: false
+      - key: HUAWEI_OBS_REGION
+        sync: false
+      - key: HUAWEI_OBS_PUBLIC_BASE_URL
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: FRONTEND_ORIGINS
+        sync: false

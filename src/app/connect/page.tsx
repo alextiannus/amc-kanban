@@ -12,11 +12,277 @@ type ProfileData = {
 
 const baseUrl = 'https://amc-kanban.immedi.ai'
 
+interface OperationItem {
+  id: string
+  action: string
+  actionCn: string
+  mcpName: string
+  mcpParams: string
+  restMethod?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  restUrl?: string
+  restParams?: string
+  desc: string
+  payloadExample: string
+}
+
+const ASSET_OPERATIONS: OperationItem[] = [
+  {
+    id: 'list_assets',
+    action: 'List Assets',
+    actionCn: '获取素材列表',
+    mcpName: 'board_list_assets',
+    mcpParams: 'brandId, q?, folder?, readyOnly?, limit?',
+    restMethod: 'GET',
+    restUrl: '/api/brands/[id]/assets',
+    restParams: 'q?, folder?',
+    desc: 'List brand media assets uploaded to the asset library, with optional filtering by categories, ready status, or text search.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "folder": "素材库",
+  "readyOnly": true
+}`
+  },
+  {
+    id: 'upload_asset',
+    action: 'Upload Asset',
+    actionCn: '上传素材',
+    mcpName: 'board_upload_asset',
+    mcpParams: 'brandId, filename, mimeType, fileBase64, folder?, aiTags?, aiCaption?',
+    restMethod: 'POST',
+    restUrl: '/api/brands/[id]/assets',
+    restParams: 'filename, mimeType, fileBase64, folder?, aiTags?, aiCaption?',
+    desc: 'Upload a base64 encoded media asset directly into the brand\'s library. The backend selects appropriate storage automatically.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "filename": "promo-banner.png",
+  "mimeType": "image/png",
+  "fileBase64": "iVBORw0KGgoAAAANS...",
+  "folder": "素材库",
+  "aiTags": ["promo", "summer"],
+  "aiCaption": "Summer Promotion Banner"
+}`
+  },
+  {
+    id: 'get_asset',
+    action: 'Get Asset Details',
+    actionCn: '读取单张素材',
+    mcpName: 'board_get_asset',
+    mcpParams: 'brandId, assetId',
+    restMethod: 'GET',
+    restUrl: '/api/brands/[id]/assets/[assetId]',
+    desc: 'Retrieve metadata details and public/storage URL of a specific media asset from the brand\'s asset library by ID.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "assetId": "asset_id_here"
+}`
+  },
+  {
+    id: 'update_asset',
+    action: 'Update Asset',
+    actionCn: '更新素材属性',
+    mcpName: 'board_update_asset',
+    mcpParams: 'brandId, assetId, filename?, folder?, aiCaption?, aiTags?, aiReady?',
+    restMethod: 'PATCH',
+    restUrl: '/api/brands/[id]/assets/[assetId]',
+    restParams: 'filename?, folder?, aiCaption?, aiTags?, aiReady?',
+    desc: 'Update specific properties of a brand media asset, such as renaming it, changing its category, tags, or ready status.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "assetId": "asset_id_here",
+  "aiReady": true,
+  "folder": "已发布素材"
+}`
+  },
+  {
+    id: 'delete_asset',
+    action: 'Archive Asset',
+    actionCn: '下架/归档素材',
+    mcpName: 'board_delete_asset',
+    mcpParams: 'brandId, assetId',
+    restMethod: 'DELETE',
+    restUrl: '/api/brands/[id]/assets/[assetId]',
+    desc: 'Soft-delete (archive) a brand media asset by setting its folder to \'archived\' and ready status to false.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "assetId": "asset_id_here"
+}`
+  }
+]
+
+const DRAFT_OPERATIONS: OperationItem[] = [
+  {
+    id: 'list_drafts',
+    action: 'List Drafts',
+    actionCn: '草稿列表',
+    mcpName: 'board_list_drafts',
+    mcpParams: 'brandId, status?, q?, limit?',
+    restMethod: 'GET',
+    restUrl: '/api/brands/[id]/drafts',
+    restParams: 'status?, q?',
+    desc: 'List content drafts for a brand. Use status filters (draft, pending_review, scheduled, published, failed) or keyword search.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "status": "draft"
+}`
+  },
+  {
+    id: 'save_draft',
+    action: 'Create/Update Draft',
+    actionCn: '保存/更新草稿',
+    mcpName: 'board_save_draft',
+    mcpParams: 'brandId, draftId?, caption?, hashtags?, accountId?, scheduledAt?, mediaUrls?, assetIds?, agentNote?, captionLang?',
+    restMethod: 'POST',
+    restUrl: '/api/brands/[id]/drafts or PATCH /api/brands/[id]/drafts/[draftId]',
+    restParams: 'caption?, hashtags?, accountId?, scheduledAt?, mediaUrls?, assetIds?, agentNote?, captionLang?',
+    desc: 'Create or update a content draft. Supports partial updates: if draftId is passed, omitted fields are preserved (e.g. to modify only scheduledAt).',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "draftId": "draft_id_here",
+  "scheduledAt": "2026-06-15T09:00:00Z",
+  "agentNote": "Scheduled for Monday morning peak traffic."
+}`
+  },
+  {
+    id: 'get_draft',
+    action: 'Get Draft Details',
+    actionCn: '读取单篇草稿',
+    mcpName: 'board_get_draft',
+    mcpParams: 'brandId, draftId',
+    restMethod: 'GET',
+    restUrl: '/api/brands/[id]/drafts/[draftId]',
+    desc: 'Retrieve full details of a specific content draft, including associated social account and linked media asset records.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "draftId": "draft_id_here"
+}`
+  },
+  {
+    id: 'submit_draft',
+    action: 'Submit/Publish Draft',
+    actionCn: '提交发布排期',
+    mcpName: 'board_submit_draft',
+    mcpParams: 'brandId, draftId, note?',
+    restMethod: 'PATCH',
+    restUrl: '/api/brands/[id]/drafts/[draftId]/submit',
+    restParams: 'note?',
+    desc: 'Submit a draft. Auto-pilot brands will publish or schedule directly. Boss-approval brands create a pending review action item.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "draftId": "draft_id_here",
+  "note": "Submitting for review."
+}`
+  },
+  {
+    id: 'delete_draft',
+    action: 'Delete Draft',
+    actionCn: '删除/取消草稿',
+    mcpName: 'board_delete_draft',
+    mcpParams: 'brandId, draftId',
+    desc: 'Delete a draft from the database. If it is scheduled but not yet published, the scheduling on the PostFast backend is canceled first.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "draftId": "draft_id_here"
+}`
+  }
+]
+
+const CORE_OPERATIONS: OperationItem[] = [
+  {
+    id: 'get_brand_config',
+    action: 'Get Brand Settings',
+    actionCn: '获取品牌配置',
+    mcpName: 'get_brand_config',
+    mcpParams: 'brandId?',
+    restMethod: 'GET',
+    restUrl: '/api/agent/brand-config',
+    restParams: 'brandId?',
+    desc: 'Retrieve brand profile details and linked social channels for linked brands.',
+    payloadExample: `{
+  "brandId": "brand_id_here"
+}`
+  },
+  {
+    id: 'get_brand_profile_md',
+    action: 'Get Brand Profile MD',
+    actionCn: '读取品牌详情 Markdown',
+    mcpName: 'get_brand_profile_markdown',
+    mcpParams: 'brandId, refresh?',
+    restMethod: 'GET',
+    restUrl: '/api/brands/[id]/profile',
+    restParams: 'refresh?',
+    desc: 'Read brand context profile markdown (basics, positioning, platform configurations) for AI context pre-read.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "refresh": true
+}`
+  },
+  {
+    id: 'update_brand_config',
+    action: 'Update Brand Settings',
+    actionCn: '更新品牌配置',
+    mcpName: 'update_brand_config',
+    mcpParams: 'brandId, name?, description?, website?, location?, timezone?, postfastApiKey?, larkAppId?, larkAppSecret?, ...',
+    restMethod: 'PATCH',
+    restUrl: '/api/agent/brand-config',
+    desc: 'Modify brand configuration or update integration credentials (like Lark Drive folder or PostFast API keys).',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "description": "Updated brand tagline and positioning details."
+}`
+  },
+  {
+    id: 'list_tasks',
+    action: 'List Kanban Tasks',
+    actionCn: '获取任务列表',
+    mcpName: 'list_tasks',
+    mcpParams: 'brandId?, status?, assignedToMe?, limit?',
+    desc: 'Query Kanban work units assigned to the agent or filtered by brand/status.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "status": "todo",
+  "assignedToMe": true
+}`
+  },
+  {
+    id: 'create_task',
+    action: 'Create Kanban Task',
+    actionCn: '创建看板任务',
+    mcpName: 'create_task',
+    mcpParams: 'title, description?, status?, priority?, weight?, requiredInput?, deadline?, brandId?',
+    restMethod: 'POST',
+    restUrl: '/api/tasks',
+    desc: 'Log action items, draft notifications, or other deliverables on the Kanban board.',
+    payloadExample: `{
+  "title": "Analyze competitor summer designs",
+  "brandId": "brand_id_here",
+  "status": "todo",
+  "priority": "high"
+}`
+  },
+  {
+    id: 'update_task',
+    action: 'Update Kanban Task',
+    actionCn: '更新看板任务',
+    mcpName: 'update_task',
+    mcpParams: 'taskId, title?, description?, status?, priority?, requiredInput?, deadline?, brandId?',
+    restMethod: 'PATCH',
+    restUrl: '/api/tasks/[id]',
+    desc: 'Modify status (todo/in_progress/pending/done), record logs, or request human input on blockages.',
+    payloadExample: `{
+  "taskId": "task_id_here",
+  "status": "pending",
+  "requiredInput": "Please provide the latest brand guidelines PDF."
+}`
+  }
+]
+
 export default function ConnectPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [allowed, setAllowed] = useState(false)
   const [copiedMcp, setCopiedMcp] = useState(false)
+  const [activeCategory, setActiveCategory] = useState<'assets' | 'drafts' | 'core'>('assets')
+  const [expandedOperation, setExpandedOperation] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
@@ -146,7 +412,7 @@ export default function ConnectPage() {
           <div className="mt-4 flex items-center gap-3">
             <button
               onClick={copyMcpConfig}
-              className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-bold text-white hover:bg-cyan-700"
+              className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-bold text-white hover:bg-cyan-700 cursor-pointer"
             >
               {copiedMcp ? 'Copied' : 'Copy MCP Config'}
             </button>
@@ -163,7 +429,151 @@ export default function ConnectPage() {
         </section>
 
         <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-          <h2 className="text-2xl font-semibold">3. Skill/SOP Metadata</h2>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl font-semibold">3. Capabilities Catalog (接口与操作目录)</h2>
+              <p className="mt-1 text-sm text-slate-300">
+                Detailed listing of supported brand operations. Toggle between categories and click any action to view parameter schemas and payload examples.
+              </p>
+            </div>
+            {/* Category tabs */}
+            <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800 self-start">
+              <button
+                onClick={() => { setActiveCategory('assets'); setExpandedOperation(null) }}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                  activeCategory === 'assets'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/20 shadow'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent cursor-pointer'
+                }`}
+              >
+                素材库 (Assets)
+              </button>
+              <button
+                onClick={() => { setActiveCategory('drafts'); setExpandedOperation(null) }}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                  activeCategory === 'drafts'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/20 shadow'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent cursor-pointer'
+                }`}
+              >
+                内容草稿与排期 (Drafts)
+              </button>
+              <button
+                onClick={() => { setActiveCategory('core'); setExpandedOperation(null) }}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                  activeCategory === 'core'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/20 shadow'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent cursor-pointer'
+                }`}
+              >
+                核心任务与配置 (Core)
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {(activeCategory === 'assets' ? ASSET_OPERATIONS : activeCategory === 'drafts' ? DRAFT_OPERATIONS : CORE_OPERATIONS).map((op) => {
+              const isExpanded = expandedOperation === op.id
+              return (
+                <div
+                  key={op.id}
+                  className={`group rounded-xl border transition-all duration-200 ${
+                    isExpanded
+                      ? 'border-cyan-500/40 bg-slate-950/60 shadow-lg shadow-cyan-950/20'
+                      : 'border-slate-800/80 bg-slate-900/30 hover:border-slate-700/80 hover:bg-slate-900/60'
+                  }`}
+                >
+                  {/* Collapsible Header */}
+                  <div
+                    onClick={() => setExpandedOperation(isExpanded ? null : op.id)}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 cursor-pointer select-none"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-950 text-xs font-bold text-slate-400 group-hover:border-slate-600 group-hover:text-slate-200">
+                        {isExpanded ? '−' : '+'}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-slate-100">{op.actionCn}</span>
+                          <span className="text-xs text-slate-400">({op.action})</span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400 line-clamp-1 group-hover:text-slate-300 transition-colors">
+                          {op.desc}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap sm:self-center">
+                      <div className="rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 border border-emerald-500/20">
+                        MCP: {op.mcpName}
+                      </div>
+                      {op.restMethod && op.restUrl && (
+                        <div className="rounded bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-400 border border-sky-500/20 flex items-center gap-1">
+                          <span className="font-bold">{op.restMethod}</span>
+                          <span className="font-mono text-slate-300">{op.restUrl}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Collapsible Body */}
+                  {isExpanded && (
+                    <div className="border-t border-slate-800/80 p-4 bg-slate-950/40 space-y-4">
+                      <div>
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Function Description</h4>
+                        <p className="mt-1 text-sm text-slate-300">{op.desc}</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">MCP Parameter Signature</h4>
+                          <div className="rounded-lg bg-slate-950 p-2.5 border border-slate-800 font-mono text-xs text-cyan-300 overflow-x-auto">
+                            {op.mcpName}(<span className="text-slate-300">{op.mcpParams}</span>)
+                          </div>
+                        </div>
+
+                        {op.restMethod && op.restUrl && (
+                          <div>
+                            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">REST API Signature</h4>
+                            <div className="rounded-lg bg-slate-950 p-2.5 border border-slate-800 font-mono text-xs overflow-x-auto flex items-center gap-1.5">
+                              <span className="rounded bg-sky-500/20 px-1 text-sky-300 font-bold">{op.restMethod}</span>
+                              <span className="text-slate-300">{op.restUrl}</span>
+                              {op.restParams && (
+                                <span className="text-slate-400">? {op.restParams}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Example Payload (JSON)</h4>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation()
+                              try {
+                                await navigator.clipboard.writeText(op.payloadExample)
+                              } catch {}
+                            }}
+                            className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold underline cursor-pointer"
+                          >
+                            Copy Example
+                          </button>
+                        </div>
+                        <div className="rounded-lg bg-slate-950 p-3 border border-slate-800 font-mono text-xs text-slate-300 overflow-x-auto">
+                          <pre>{op.payloadExample}</pre>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+          <h2 className="text-2xl font-semibold">4. Skill/SOP Metadata</h2>
           <p className="mt-2 text-slate-300">
             Use these endpoints to bootstrap agent behavior, execution constraints, and integration context.
           </p>

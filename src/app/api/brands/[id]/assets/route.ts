@@ -5,8 +5,9 @@
  * 
  * This endpoint handles file uploads to the brand's asset library.
  * The backend automatically selects the appropriate storage:
- * - Lark Drive (if configured)
+ * - Huawei OBS (required in production)
  * - PostFast media storage (if configured)
+ * - Lark Drive (if configured)
  * - Local storage (fallback)
  * 
  * Returns a public asset URL for use in posts, emails, etc.
@@ -98,6 +99,8 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   try {
+    const isProduction = process.env.NODE_ENV === 'production'
+
     // ═══════════════════════════════════════════════════════════════════════════
     // Storage Backend Selection Logic
     // ═══════════════════════════════════════════════════════════════════════════
@@ -138,6 +141,16 @@ export async function POST(request: Request, { params }: Params) {
         asset,
         uploadedAt: new Date().toISOString(),
       })
+    }
+
+    // In production we require real cloud storage and never fall back to local files.
+    if (isProduction) {
+      return NextResponse.json(
+        {
+          error: 'OSS is not configured. Configure HUAWEI_OBS_* (or OBS_*) variables for production uploads.',
+        },
+        { status: 503 }
+      )
     }
 
     if (brand.postfastApiKey) {
