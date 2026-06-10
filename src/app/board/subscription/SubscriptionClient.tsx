@@ -158,6 +158,148 @@ function isEffectiveActiveSubscription(subscription?: { status?: string; contrac
   return new Date(subscription.contractEndDate).getTime() > Date.now()
 }
 
+function WebGLBackground() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const canvasEl = canvas
+
+    let animationFrameId: number
+    const gl = (canvasEl.getContext('webgl') || canvasEl.getContext('experimental-webgl')) as any
+    if (!gl) return
+
+    const vs = `
+      attribute vec2 a_position;
+      varying vec2 v_texCoord;
+      void main() {
+        v_texCoord = a_position * 0.5 + 0.5;
+        gl_Position = vec4(a_position, 0.0, 1.0);
+      }
+    `
+    const fs = `
+      precision highp float;
+      varying vec2 v_texCoord;
+      uniform float u_time;
+      uniform vec2 u_resolution;
+
+      void main() {
+          vec2 uv = v_texCoord;
+          
+          // Create a sophisticated, slow-moving atmospheric glow
+          // Using Digital Employee Console Primary Indigo #4648d4
+          vec3 primaryColor = vec3(0.275, 0.282, 0.831); 
+          // Surface Bright #f7f9fb
+          vec3 bgColor = vec3(0.969, 0.976, 0.984);
+          // Subtle secondary accent
+          vec3 accentColor = vec3(0.376, 0.388, 0.933);
+          
+          float t = u_time * 0.15;
+          
+          // Smooth noise/flow pattern
+          float n = sin(uv.x * 3.0 + t) * 0.5 + 0.5;
+          n += cos(uv.y * 2.0 - t * 1.2) * 0.4;
+          n += sin((uv.x - uv.y) * 2.5 + t * 0.7) * 0.3;
+          
+          // Map to a very subtle, high-end "aura" effect
+          float mask = smoothstep(0.3, 0.7, n * 0.4);
+          vec3 finalColor = mix(bgColor, primaryColor, mask * 0.12);
+          
+          // Add a secondary shifting highlight for depth
+          float highlight = sin(t + uv.x * 4.0 + uv.y * 2.0) * 0.5 + 0.5;
+          finalColor = mix(finalColor, accentColor, highlight * 0.05);
+          
+          // Vignette for focus
+          float dist = distance(uv, vec2(0.5));
+          finalColor *= 1.0 - smoothstep(0.5, 1.5, dist) * 0.1;
+          
+          gl_FragColor = vec4(finalColor, 1.0);
+      }
+    `
+
+    function syncSize() {
+      const w = canvasEl.clientWidth || 1280
+      const h = canvasEl.clientHeight || 720
+      if (canvasEl.width !== w || canvasEl.height !== h) {
+        canvasEl.width = w
+        canvasEl.height = h
+        gl.viewport(0, 0, w, h)
+      }
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncSize()
+    })
+    resizeObserver.observe(canvasEl)
+    syncSize()
+
+    function compileShader(type: number, src: string) {
+      const s = gl.createShader(type)
+      if (!s) return null
+      gl.shaderSource(s, src)
+      gl.compileShader(s)
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(s))
+        gl.deleteShader(s)
+        return null
+      }
+      return s
+    }
+
+    const vsShader = compileShader(gl.VERTEX_SHADER, vs)
+    const fsShader = compileShader(gl.FRAGMENT_SHADER, fs)
+    if (!vsShader || !fsShader) return
+
+    const prog = gl.createProgram()
+    if (!prog) return
+    gl.attachShader(prog, vsShader)
+    gl.attachShader(prog, fsShader)
+    gl.linkProgram(prog)
+
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error('Program link error:', gl.getProgramInfoLog(prog))
+      return
+    }
+
+    gl.useProgram(prog)
+
+    const buf = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf)
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW)
+
+    const pos = gl.getAttribLocation(prog, 'a_position')
+    gl.enableVertexAttribArray(pos)
+    gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0)
+
+    const uTime = gl.getUniformLocation(prog, 'u_time')
+    const uRes = gl.getUniformLocation(prog, 'u_resolution')
+
+    function render(t: number) {
+      gl.viewport(0, 0, canvasEl.width, canvasEl.height)
+      if (uTime) gl.uniform1f(uTime, t * 0.001)
+      if (uRes) gl.uniform2f(uRes, canvasEl.width, canvasEl.height)
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+      animationFrameId = requestAnimationFrame(render)
+    }
+
+    animationFrameId = requestAnimationFrame(render)
+
+    return () => {
+      cancelAnimationFrame(animationFrameId)
+      resizeObserver.disconnect()
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full block z-0"
+      style={{ display: 'block' }}
+    />
+  )
+}
+
 export default function BrandSubscriptionPage() {
   const router = useRouter()
   const params = useParams<{ brandId?: string }>()
@@ -907,22 +1049,28 @@ export default function BrandSubscriptionPage() {
         {step === 2 && (
           <div className="space-y-8">
             
-            {/* Branding Hero Intro Banner */}
-            <div className="relative rounded-3xl overflow-hidden border border-indigo-200/50 dark:border-indigo-950 bg-gradient-to-r from-indigo-900 via-indigo-950 to-slate-900 p-6 md:p-8 text-white shadow-lg">
-              <div className="absolute right-0 top-0 w-1/3 h-full opacity-10 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-300 via-indigo-900 to-transparent pointer-events-none" />
-              <div className="relative z-10 space-y-3 max-w-4xl">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-black text-indigo-300 uppercase tracking-widest">
-                  ★ AI Marketing Crew
-                </span>
-                <h2 className="text-2xl md:text-3xl font-black tracking-tight leading-tight">
-                  订阅即上岗，全托管你的自媒体增长
-                </h2>
-                <p className="text-xs md:text-sm text-indigo-200 leading-relaxed font-medium">
-                  AI Marketing Crew 是一支专为本地生活商家打造的 AI 营销团队。
-                  AMC不是工具，不是模板，不是需要你学习操作的软件，而是一支真正代你干活的团队 (The Crew) —— 内容创作、品牌策略、市场调研、私域运营、客户服务，全部由 AI 员工高效分工执行，并由真人品牌主理人统筹把关。你只管做菜，增长交给我们。
-                </p>
+            {/* Branding Hero Intro Banner with WebGL Background and Glassmorphism */}
+            <section className="relative overflow-hidden rounded-3xl border border-slate-200/60 dark:border-slate-800 bg-[#f7f9fb] dark:bg-slate-950 shadow-lg min-h-[480px] flex items-center">
+              <WebGLBackground />
+              
+              {/* Hero Content with Glassmorphism */}
+              <div className="relative z-10 w-full h-full p-6 md:p-12 lg:p-20">
+                <div className="glass ai-presence-bg p-8 md:p-16 max-w-4xl rounded-2xl border border-white/60 dark:border-slate-800/60 shadow-2xl overflow-hidden">
+                  <div className="relative">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-6">
+                      ★ AI Marketing Crew
+                    </span>
+                    <h2 className="font-sans font-black text-[32px] md:text-5xl text-indigo-600 dark:text-indigo-400 mb-6 reveal-text delay-reveal-1 leading-tight tracking-tight">
+                      订阅即上岗，全托管你的自媒体增长
+                    </h2>
+                    <div className="w-16 h-1 bg-indigo-500/20 rounded-full mb-6 reveal-text delay-reveal-1"></div>
+                    <p className="font-sans text-sm md:text-lg text-slate-700 dark:text-slate-300 leading-relaxed reveal-text delay-reveal-2 max-w-2xl">
+                      不再只是单一的工具。AI Marketing Crew (AMC) 为您提供一支完整的、全天候待命的数字营销团队。从内容创作、市场洞察到客户维护，我们的“数字员工”像真实人类一样协作，并在真人主理人的统筹把关下，帮助您的店铺在数字化浪潮中实现持续增长。你只管做菜，增长交给我们。
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
+            </section>
 
             {/* AI Team Roster Grid (The Crew Members) */}
             <section className="space-y-4">
@@ -1213,7 +1361,7 @@ export default function BrandSubscriptionPage() {
                       <div className="pt-3 text-right">
                         <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
                           {a.id === 'multi_store'
-                            ? `+$${a.usd} / 每个新增门店`
+                            ? `每个新增门店$${a.usd}`
                             : `+$${a.usd} / 月`
                           }
                         </span>
@@ -1257,7 +1405,16 @@ export default function BrandSubscriptionPage() {
                         </ul>
                       </div>
                       <div className="pt-3 text-right">
-                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">${a.usd} / 单次</span>
+                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
+                          {a.id === 'onsite_photo'
+                            ? `+$${a.usd} / 次 (含后期)`
+                            : a.id === 'influencer_visit'
+                              ? `+$${a.usd} / 季 (保曝光)`
+                              : a.id === 'dianping_ops'
+                                ? `+$${a.usd} / 年`
+                                : `+$${a.usd} / 单次`
+                          }
+                        </span>
                       </div>
                     </div>
                   )
@@ -1403,9 +1560,11 @@ export default function BrandSubscriptionPage() {
                                 <div>
                                   <p className="font-medium text-slate-600 dark:text-slate-400">{add.name}</p>
                                   <p className="text-[9px] text-slate-400">
-                                    {add.pricing === 'monthly'
-                                      ? `按月 recurring: $${add.usd} × ${durationMonths}月${id === 'multi_store' ? ` × ${qty}店` : ''}`
-                                      : `按次一次性结算${id === 'multi_store' ? ` × ${qty}` : ''}`}
+                                    {add.id === 'dianping_ops'
+                                      ? `按年计费 (一次性): $${add.usd} / 年`
+                                      : add.pricing === 'monthly'
+                                        ? `按月 recurring: $${add.usd} × ${durationMonths}月${id === 'multi_store' ? ` × ${qty}店` : ''}`
+                                        : `按次一次性结算`}
                                   </p>
                                 </div>
                                 <span className="font-bold text-slate-800 dark:text-slate-200">
