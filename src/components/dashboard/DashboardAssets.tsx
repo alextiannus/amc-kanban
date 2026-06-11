@@ -569,7 +569,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           {/* Grid Layout */}
           {filtered.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 pb-20">
-              {filtered.map((asset) => {
+              {filtered.map((asset, i) => {
                 const isSelected = selected.includes(asset.id)
                 const isActive = activeAssetId === asset.id
                 const previewable = isPreviewable(asset)
