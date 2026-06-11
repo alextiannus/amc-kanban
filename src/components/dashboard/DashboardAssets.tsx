@@ -801,8 +801,18 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               {/* Asset Preview Thumbnail card */}
               <div className="rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 shadow-sm">
                 <div className="aspect-[4/3] w-full bg-slate-200 dark:bg-slate-800 relative flex items-center justify-center">
-                  <img src={activeAsset.url} alt="detail asset" className="w-full h-full object-cover" />
-                  {activeAsset.mimeType.startsWith('video/') && (
+                  {isPreviewable(activeAsset) ? (
+                    <img src={activeAsset.url} alt="detail asset" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center">
+                      {activeAsset.mimeType.startsWith('video/') ? (
+                        <Video className="w-12 h-12 text-slate-400" />
+                      ) : (
+                        <ImageIcon className="w-12 h-12 text-slate-400" />
+                      )}
+                    </div>
+                  )}
+                  {activeAsset.mimeType.startsWith('video/') && isPreviewable(activeAsset) && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                       <Play className="w-8 h-8 text-white fill-white" />
                     </div>
