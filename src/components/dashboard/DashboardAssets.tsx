@@ -1,15 +1,13 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import {
   Search,
   Upload,
   Image as ImageIcon,
   Video,
-  Tag,
   Check,
   Sparkles,
-  Filter,
   X,
   Grid,
   Clock,
@@ -20,11 +18,7 @@ import {
   Calendar,
   BarChart2,
   AlertTriangle,
-  Users,
   Play,
-  Settings,
-  ChevronDown,
-  CheckCircle2,
   RefreshCw
 } from 'lucide-react'
 
@@ -90,7 +84,6 @@ interface DashboardAssetsProps {
 }
 
 export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
-  const simulationEnabled = process.env.NODE_ENV !== 'production'
   const [activeCategory, setActiveCategory] = useState('all')
   const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos'>('all')
   const [search, setSearch] = useState('')
@@ -104,28 +97,23 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [targetFolder, setTargetFolder] = useState('素材库')
   const [moveFolder, setMoveFolder] = useState('')
 
-  // Tag confirmation state edits
-  const [editingAssetId, setEditingAssetId] = useState<string | null>(null)
-  const [editFilename, setEditFilename] = useState('')
-  const [editCaption, setEditCaption] = useState('')
+
 
   // Bulk Tagging simulator state
   const [bulkTaggingActive, setBulkTaggingActive] = useState(false)
   const [bulkTagProgress, setBulkTagProgress] = useState(0)
 
-  // Image-to-Video Simulator State
-  const [videoGenAsset, setVideoGenAsset] = useState<DashboardAsset | null>(null)
-  const [videoGenProgress, setVideoGenProgress] = useState(0)
-  const [videoGenStep, setVideoGenStep] = useState(0)
-  const [videoGenFinished, setVideoGenFinished] = useState(false)
+
 
   // Batch Tags Input
   const [batchTagsText, setBatchTagsText] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const loadAssets = async (cancelled = false) => {
-    setLoading(true)
+  const loadAssets = useCallback(async (cancelled = false) => {
+    Promise.resolve().then(() => {
+      if (!cancelled) setLoading(true)
+    })
     setError(null)
     try {
       const query = new URLSearchParams()
@@ -147,13 +135,18 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     } finally {
       if (!cancelled) setLoading(false)
     }
-  }
+  }, [brandId])
 
   useEffect(() => {
     let cancelled = false
-    void loadAssets(cancelled)
-    return () => { cancelled = true }
-  }, [brandId])
+    const timer = setTimeout(() => {
+      void loadAssets(cancelled)
+    }, 0)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [loadAssets])
 
   const toggleSelect = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
@@ -254,74 +247,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     }
   }
 
-  // Start Single/Batch Video Generation
-  const handleStartVideoGen = (asset: DashboardAsset) => {
-    if (!simulationEnabled) {
-      setError('图生视频为下一期开发计划，当前环境暂未开放。')
-      return
-    }
-    setVideoGenAsset(asset)
-    setVideoGenProgress(0)
-    setVideoGenStep(0)
-    setVideoGenFinished(false)
 
-    const interval = setInterval(() => {
-      setVideoGenProgress(prev => {
-        const next = prev + 4
-        if (next >= 100) {
-          clearInterval(interval)
-          setVideoGenFinished(true)
-          return 100
-        }
-        // Step text updater
-        if (next < 25) setVideoGenStep(0)
-        else if (next < 50) setVideoGenStep(1)
-        else if (next < 75) setVideoGenStep(2)
-        else setVideoGenStep(3)
-        return next
-      })
-    }, 120)
-  }
-
-  // Save generated video simulation
-  const handleSaveGeneratedVideo = async () => {
-    if (!simulationEnabled) {
-      setError('生产环境已禁用演示图生视频，请上传真实视频素材。')
-      return
-    }
-    if (!videoGenAsset || !brandId) return
-    setUploading(true)
-    try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      const newVideoAsset: DashboardAsset = {
-        id: `mock-video-${Date.now()}`,
-        brandId,
-        brandName: videoGenAsset.brandName,
-        url: videoGenAsset.url, // reuse url for preview animation
-        filename: `${videoGenAsset.filename?.split('.')[0] || 'generated'}_motion.mp4`,
-        mimeType: 'video/mp4',
-        aiTags: [...videoGenAsset.aiTags, 'AI图生视频', '动态视觉'],
-        aiCategory: videoGenAsset.aiCategory || 'food',
-        aiCaption: `AI 动态视频：由 “${videoGenAsset.aiCaption || '静态素材'}” 图生视频生成，动态光影饱满。`,
-        aiReady: true,
-        usedCount: 0,
-        lastUsedAt: null,
-        sourceType: 'AI_GENERATED',
-        createdAt: new Date().toISOString()
-      }
-
-      setAssets(prev => [newVideoAsset, ...prev])
-      setVideoGenAsset(null)
-      setSelected([])
-      alert('动态视频已成功保存至素材库！')
-    } catch {
-      setError('保存视频失败')
-    } finally {
-      setUploading(false)
-    }
-  }
 
   const uploadFiles = async (files: FileList | File[]) => {
     if (!brandId) {
@@ -415,7 +341,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       await Promise.all(selected.map((assetId) => {
         const original = assets.find(a => a.id === assetId)
         const combinedTags = Array.from(new Set([...(original?.aiTags || []), ...newTags]))
-        const payload: Record<string, any> = { aiTags: combinedTags, aiReady: true }
+        const payload: Record<string, unknown> = { aiTags: combinedTags, aiReady: true }
         if (moveFolder.trim()) {
           payload.folder = moveFolder.trim()
           payload.aiCategory = moveFolder.trim()
@@ -643,22 +569,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           {/* Grid Layout */}
           {filtered.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 pb-20">
-              {filtered.map((asset, i) => {
+              {filtered.map((asset) => {
                 const isSelected = selected.includes(asset.id)
                 const isActive = activeAssetId === asset.id
                 const previewable = isPreviewable(asset)
                 const isVideo = asset.mimeType.startsWith('video/')
-                
-                // Determine Status Badge styles
-                let statusColor = 'text-amber-600 bg-amber-50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/30'
-                let statusLabel = 'Pending'
-                if (asset.sourceType === 'UGC' || asset.aiTags.includes('UGC')) {
-                  statusColor = 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900/30'
-                  statusLabel = 'UGC'
-                } else if (asset.aiReady) {
-                  statusColor = 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30'
-                  statusLabel = 'Approved'
-                }
 
                 return (
                   <div
@@ -716,20 +631,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                       </div>
                     </div>
 
-                    {/* Card Footer Detail */}
-                    <div className="px-3 py-2 bg-white dark:bg-slate-900 flex items-center justify-between border-t border-slate-100/60 dark:border-slate-800/60 text-[10px] select-none">
-                      <div>
-                        {isVideo ? (
-                          <span className="text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
-                            <Video className="w-2.5 h-2.5" /> 视频
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 font-medium">
-                            {relativeDate(asset.lastUsedAt || asset.createdAt)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+
                   </div>
                 )
               })}
@@ -863,18 +765,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
             {/* Bottom actions container */}
             <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-              <button
-                onClick={() => {
-                  const firstSelected = assets.find(a => selected.includes(a.id))
-                  if (firstSelected) handleStartVideoGen(firstSelected)
-                }}
-                className="w-full mb-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 active:scale-98 transition-all border border-slate-200/50 dark:border-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                title={simulationEnabled ? '批量图生视频' : '下一期开发计划'}
-                disabled={!simulationEnabled}
-              >
-                <Video className="w-4 h-4 text-indigo-500" />
-                <span>{simulationEnabled ? '批量图生视频' : '批量图生视频（下一期）'}</span>
-              </button>
+
 
               <button
                 onClick={applyBatchChanges}
@@ -1018,15 +909,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
             {/* Bottom CTAs */}
             <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-              <button
-                onClick={() => handleStartVideoGen(activeAsset)}
-                className="w-full bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 mb-2 active:scale-[0.98] transition-all border border-slate-200/50 dark:border-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                title={simulationEnabled ? '图生视频' : '下一期开发计划'}
-                disabled={!simulationEnabled}
-              >
-                <Sparkles className="w-4 h-4 text-indigo-500" />
-                <span>{simulationEnabled ? '图生视频' : '图生视频（下一期）'}</span>
-              </button>
+
 
               <button
                 onClick={() => setError('请前往 发布内容（Post） 模块创建并关联素材生成推文。')}
@@ -1046,169 +929,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         )}
       </aside>
 
-      {/* 4. IMAGE-TO-VIDEO GENERATOR MODAL */}
-      {simulationEnabled && videoGenAsset && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden max-w-4xl w-full border border-slate-100 dark:border-slate-800 shadow-2xl flex flex-col md:flex-row relative animate-in zoom-in-95 duration-200">
-            
-            {/* Close button */}
-            {!uploading && (
-              <button
-                onClick={() => setVideoGenAsset(null)}
-                className="absolute top-4 right-4 z-10 p-2 bg-slate-950/40 hover:bg-slate-950/60 rounded-full text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
 
-            {/* Left: Input Image */}
-            <div className="md:w-1/2 bg-slate-100 dark:bg-slate-950 p-6 flex flex-col justify-between border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-800">
-              <div>
-                <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 bg-slate-200 dark:bg-slate-850 px-2 py-0.5 rounded-full">
-                  输入静态图像
-                </span>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white mt-2">
-                  {videoGenAsset.filename || '素材图片'}
-                </h3>
-              </div>
-
-              <div className="aspect-square rounded-2xl overflow-hidden border border-slate-200/50 dark:border-slate-800 bg-slate-200 dark:bg-slate-900 my-4 shadow-sm">
-                <img src={videoGenAsset.url} alt="Original input" className="w-full h-full object-cover" />
-              </div>
-
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                画面主体: {videoGenAsset.aiCaption || '未分类美食主体'}
-              </p>
-            </div>
-
-            {/* Right: Generation Screen / Video Preview */}
-            <div className="md:w-1/2 p-6 flex flex-col justify-between bg-white dark:bg-slate-900">
-              {!videoGenFinished ? (
-                /* Processing screen */
-                <div className="flex-1 flex flex-col items-center justify-center py-12">
-                  <div className="relative w-24 h-24 mb-6">
-                    {/* Glowing rotating circle */}
-                    <div className="absolute inset-0 rounded-full border-4 border-indigo-100 dark:border-indigo-950/40 border-t-indigo-500 animate-spin"></div>
-                    <div className="absolute inset-2 bg-indigo-50 dark:bg-indigo-950/20 rounded-full flex items-center justify-center text-indigo-500 animate-pulse">
-                      <Sparkles className="w-8 h-8" />
-                    </div>
-                  </div>
-                  
-                  <h4 className="text-md font-bold text-slate-900 dark:text-white">AI 智能视频生成中</h4>
-                  <div className="w-64 bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden mt-4 shadow-inner">
-                    <div
-                      className="bg-indigo-500 h-full transition-all duration-150"
-                      style={{ width: `${videoGenProgress}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-xs text-slate-400 mt-2 font-mono">{videoGenProgress}%</span>
-
-                  {/* Processing steps list */}
-                  <div className="mt-6 space-y-2 text-left w-64">
-                    {[
-                      '分析画面光影与物体轮廓',
-                      '插值计算 3D 深度场与动作流',
-                      '生成时间一致性动态帧',
-                      '渲染高精度 4K H.264 视频'
-                    ].map((stepText, idx) => {
-                      const isActive = videoGenStep === idx
-                      const isDone = videoGenStep > idx
-                      return (
-                        <div
-                          key={stepText}
-                          className={`flex items-center gap-2 text-xs transition-colors ${isActive ? 'text-indigo-500 font-bold' : isDone ? 'text-emerald-500 font-medium' : 'text-slate-400'}`}
-                        >
-                          <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${isActive ? 'bg-indigo-500 text-white animate-pulse' : isDone ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
-                            {isDone ? '✓' : idx + 1}
-                          </div>
-                          <span>{stepText}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : (
-                /* Finished generated preview */
-                <div className="flex-1 flex flex-col justify-between h-full">
-                  <div>
-                    <span className="text-[10px] uppercase font-black tracking-wider text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded-full">
-                      已生成动态视频
-                    </span>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mt-2">
-                      {videoGenAsset.filename?.split('.')[0]}_motion.mp4
-                    </h3>
-                  </div>
-
-                  {/* Generated Cinematic simulated player */}
-                  <div className="aspect-square rounded-2xl overflow-hidden border-2 border-indigo-500 bg-slate-950 my-4 shadow-lg shadow-indigo-500/10 relative group">
-                    <img
-                      src={videoGenAsset.url}
-                      alt="cinematic video render"
-                      className="w-full h-full object-cover scale-100 origin-center animate-pan-zoom"
-                      style={{
-                        animation: 'panZoom 8s ease-in-out infinite'
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent flex flex-col justify-between p-3.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <div className="self-end bg-indigo-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm">
-                        <Sparkles className="w-2.5 h-2.5" /> AI 运动增强
-                      </div>
-                      
-                      {/* Control bar */}
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center text-slate-900 cursor-pointer">
-                          <Play className="w-3.5 h-3.5 fill-slate-900 text-slate-900 ml-0.5" />
-                        </div>
-                        {/* Mock timeline progress scrubber */}
-                        <div className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
-                          <div className="h-full bg-indigo-500 w-1/3 animate-[pulse_2s_infinite]"></div>
-                        </div>
-                        <span className="text-[10px] text-white font-mono">0:04</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-400 leading-normal mb-4">
-                    💡 **AI 渲染报告**：采用时间流网格与深度视差算法。画面中烟雾和液体高光平滑流动，循环衔接优异。
-                  </p>
-
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      onClick={() => setVideoGenAsset(null)}
-                      className="flex-1 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 rounded-xl text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
-                    >
-                      重新生成
-                    </button>
-                    <button
-                      onClick={handleSaveGeneratedVideo}
-                      disabled={uploading}
-                      className="flex-1 py-2.5 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{uploading ? '保存中...' : '保存至素材库'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* Embedded Ken Burns effect CSS */}
-      <style>{`
-        @keyframes panZoom {
-          0% { transform: scale(1) translate(0, 0); }
-          25% { transform: scale(1.1) translate(-1%, 1%); }
-          50% { transform: scale(1.15) translate(1%, -1%); }
-          75% { transform: scale(1.08) translate(-1%, -1%); }
-          100% { transform: scale(1) translate(0, 0); }
-        }
-        .animate-pan-zoom {
-          animation: panZoom 8s ease-in-out infinite;
-        }
-      `}</style>
 
     </div>
   )
