@@ -94,7 +94,7 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 
 面向 ADMIN 和 BRAND_DIRECTOR。支持查看所有负责品牌、编辑品牌名与品牌主信息、删除/添加品牌、修改品牌绑定的 AMC Agent、筛选品牌动作日志。
 
-### 5.4 Post 中文 发布内容
+### 5.4 发布内容（Post）
 
 独立模块。支持创建、编辑、保存、提交草稿，选择发布账号和排期时间，查看引用素材，处理驳回意见。
 
@@ -104,7 +104,7 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 2. `autoPilot = false`：提交草稿进入 `pending_review`，创建审批 ActionItem；只有批准后才发布或排期。
 3. 驳回后草稿回到 `draft` 并保留 `rejectionNote`。
 
-### 5.5 素材库管理
+### 5.5 素材库
 
 独立模块。支持用户和 AMC Agent 上传、拖拽上传、分类整理、批量移动、标记 ready、归档。上传优先级：Huawei OBS -> PostFast -> Lark -> Local。
 
@@ -233,8 +233,8 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 3. AI 序列仅品牌主可见，主理人和 admin 使用主理人看板。
 4. 主理人可编辑品牌、品牌主信息、品牌绑定 Agent，并按品牌筛选动作日志。
 5. Agent 可运营多个品牌，Skill 明确多品牌边界。
-6. Post 中文 发布内容支持自动驾驶直接发布/排期与老板审批模式。
-7. 素材库管理支持上传、分类、整理和被草稿引用。
+6. 发布内容（Post）支持自动驾驶直接发布/排期与老板审批模式。
+7. 素材库支持上传、分类、整理和被草稿引用。
 8. Research 模块支持 TopicFeed markdown 写入、读取、搜索和归档。
 9. API metadata 暴露 OpenAPI、SOP 和 Skill，便于 Agent 接入。
 10. TypeScript 与生产构建通过。

@@ -374,7 +374,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
               <Layers3 className="h-4 w-4" /> Draft calendar
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500 dark:bg-slate-800 dark:text-slate-300">{brandName || '当前品牌'}</span>
             </div>
-            <h2 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">Post 中文 发布内容</h2>
+            <h2 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">发布内容（Post）</h2>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

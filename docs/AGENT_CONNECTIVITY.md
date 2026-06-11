@@ -221,7 +221,7 @@ Authorization: Bearer <AGENT_API_KEY>
 
 写入素材建议优先使用 MCP `board_upload_media`。REST 上传接口也存在，但 Agent runtime 处理二进制/大文件时更容易出错。
 
-### 6.6 Post 中文 发布内容
+### 6.6 发布内容（Post）
 
 创建草稿：
 

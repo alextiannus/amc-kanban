@@ -1029,7 +1029,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               </button>
 
               <button
-                onClick={() => setError('请前往 Post 中文 发布内容 模块创建并关联素材生成推文。')}
+                onClick={() => setError('请前往 发布内容（Post） 模块创建并关联素材生成推文。')}
                 className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 py-2.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
               >
                 <Plus className="w-4 h-4" />

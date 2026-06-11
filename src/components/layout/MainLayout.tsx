@@ -100,7 +100,7 @@ export default function MainLayout({
             }`}
             id="nav-drafts"
           >
-            <FileText size={16} /> Post 中文 发布内容
+            <FileText size={16} /> 发布内容（Post）
           </button>
           <button
             onClick={() => setCurrentView('assets')}
@@ -111,7 +111,7 @@ export default function MainLayout({
             }`}
             id="nav-assets"
           >
-            <Images size={16} /> 素材库管理
+            <Images size={16} /> 素材库
           </button>
           {canSeeSocialInsight && (
             <button
@@ -224,7 +224,7 @@ export default function MainLayout({
           }`}
         >
           <FileText size={18} />
-          <span>Post发布</span>
+          <span>发布内容</span>
         </button>
         <button
           onClick={() => setCurrentView('assets')}
