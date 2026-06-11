@@ -38,6 +38,8 @@ type Brand = {
 
 type DashboardPayload = {
   viewerUserId: string
+  dashboardRole?: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
+  userRoles?: string[]
   agents: Array<Agent & { isOnline: boolean; boundBrands: Array<{ id: string; name: string; role: string }> }>
   brands: Brand[]
 }
@@ -58,8 +60,10 @@ export default function ManagePrincipalBrandPage() {
   const brand = useMemo(() => data?.brands.find((item) => item.id === brandId) || null, [brandId, data?.brands])
   const canManageSubscription = useMemo(() => {
     if (!brand || !data?.viewerUserId) return false
+    if (data.dashboardRole === 'ADMIN' || data.userRoles?.includes('ADMIN')) return true
+    if (data.dashboardRole === 'BRAND_DIRECTOR' || data.userRoles?.includes('AMC_PRINCIPAL')) return true
     return brand.owners.some((owner) => owner.userId === data.viewerUserId)
-  }, [brand, data?.viewerUserId])
+  }, [brand, data])
   const currentOwner = brand?.owners[0]
   const availableAgents = useMemo(() => {
     const bound = new Set(brand?.brandAgents.map((link) => link.agentId) || [])

@@ -20,6 +20,7 @@ import {
 } from '@/lib/subscription/workflow'
 import { readBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 import { createBrandForActivatedSubscription, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
+import { computeEffectiveUserRoles } from '@/lib/userRoles'
 import Stripe from 'stripe'
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
@@ -123,6 +124,51 @@ async function canOwnerAccessBrand(ownerId: string, brandId: string) {
   return Boolean(owned)
 }
 
+async function findBrandForSubscription(brandId: string) {
+  return prisma.brand.findUnique({
+    where: { id: brandId },
+    select: {
+      id: true,
+      name: true,
+      location: true,
+      timezone: true,
+      website: true,
+      phone: true,
+      address: true,
+      accounts: {
+        select: {
+          platformId: true,
+          handle: true,
+          displayName: true,
+          profileUrl: true,
+        },
+        orderBy: [{ platformId: 'asc' }, { handle: 'asc' }],
+      },
+    },
+  })
+}
+
+async function canUserManageSubscription(userId: string, systemRole: string | null | undefined, brandId: string): Promise<boolean> {
+  if (systemRole === 'ADMIN') return true
+
+  const [explicitRoles, principalCount] = await Promise.all([
+    prisma.userBusinessRole.findMany({ where: { userId }, select: { role: true } }),
+    prisma.agentPermission.count({ where: { humanId: userId } }),
+  ])
+  const userRoles = computeEffectiveUserRoles({
+    userType: 'HUMAN',
+    systemRole,
+    explicitRoles: explicitRoles.map(r => r.role),
+    principalCount,
+  })
+  if (userRoles.includes('AMC_PRINCIPAL')) return true
+
+  const isOwner = await canOwnerAccessBrand(userId, brandId)
+  if (isOwner) return true
+
+  return false
+}
+
 export async function GET(request: Request) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -133,19 +179,22 @@ export async function GET(request: Request) {
   const scopedBrandId = typeof queryBrandId === 'string' && queryBrandId.trim() ? queryBrandId.trim() : null
 
   const scopedBrand = scopedBrandId
-    ? await findOwnerBrand(session.user.id, scopedBrandId)
+    ? await findBrandForSubscription(scopedBrandId)
     : null
 
   if (scopedBrandId && !scopedBrand) {
-    const exists = await prisma.brand.findUnique({ where: { id: scopedBrandId }, select: { id: true } })
-    if (exists) {
-      return NextResponse.json({ error: 'Forbidden: only brand owners can manage subscription for this brand' }, { status: 403 })
-    }
     return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
   }
 
+  if (scopedBrandId) {
+    const hasAccess = await canUserManageSubscription(session.user.id, session.user.role, scopedBrandId)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Forbidden: you do not have permission to manage subscription for this brand' }, { status: 403 })
+    }
+  }
+
   const latestWhere = scopedBrandId
-    ? { createdById: session.user.id, brandId: scopedBrandId }
+    ? { brandId: scopedBrandId }
     : { createdById: session.user.id }
 
   const user = await prisma.user.findUnique({
@@ -365,9 +414,9 @@ export async function POST(request: Request) {
   if (brandId) {
     const exists = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } })
     if (!exists) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-    const hasOwnerAccess = await canOwnerAccessBrand(session.user.id, brandId)
-    if (!hasOwnerAccess) {
-      return NextResponse.json({ error: 'Forbidden: only brand owners can manage subscription for this brand' }, { status: 403 })
+    const hasAccess = await canUserManageSubscription(session.user.id, session.user.role, brandId)
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Forbidden: you do not have permission to manage subscription for this brand' }, { status: 403 })
     }
   }
 
