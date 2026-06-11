@@ -123,7 +123,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       if (!res.ok) throw new Error('load failed')
       const data = await res.json()
       if (!cancelled) {
-        const loadedAssets = data.assets || []
+        const loadedAssets = (data.assets || []).filter(isPreviewable)
         setAssets(loadedAssets)
         // Auto-select first asset for Single AI Insight
         if (loadedAssets.length > 0) {
