@@ -431,28 +431,32 @@ Authorization: Bearer <agentApiKey>
 
 ## 8a. 内容创作与发布规范工作流（必读）
 
-你必须严格遵守以下 6 点内容创作与发布的工作流程规范：
+你必须严格遵守以下 7 点内容创作与发布的工作流程规范：
 
 1. **计划上板 (To Do)**：
    - 凡是计划要做但尚未开始的帖子创作或发布任务，必须第一时间写入看板的 **To Do** 状态（`status: "todo"`）。
    - 写入时确保任务标题为：`[{品牌}] {平台} - {日期} {内容概述}`，并在任务中指明预期的发布时间等信息。
    - **注意**：To Do 中的任务是公开的，可能由其他 Agent 领取并协作完成。
-2. **草稿创作与素材检查**：
+2. **账号获取与创作风格适配**：
+   - **必须获取账号**：在开始创作任何内容前，你**必须**首先调用 `board_list_social_accounts` 获取该品牌下绑定的所有社交平台账号。**绝对不允许在未获取账号的情况下直接进行内容创作或创建草稿。**
+   - **风格适配**：获取账号后，你需要根据每个账号的平台属性（如 Instagram, XiaoHongShu, Google Business Profile 等）和账号定位调整创作风格（如：小红书多图多 Emoji 活泼，Instagram 强调视觉与标签，Google 强调专业与本地商家信息）。
+   - **草稿创建规范**：禁止在没有指定账号的情况下创建草稿。在通过 API 或 MCP 工具 `board_save_draft` 创建内容草稿时，**必须传入 `accountId`**。
+3. **草稿创作与素材检查**：
    - **缺少素材**：在准备帖子内容时，如发现缺少关键发布素材（如文案、配图、视频等），必须立即将该任务的状态修改为 **Require Input**（即 `status: "pending"`），并在 `requiredInput` 字段中详细、明确地写明所缺少的资料以向品牌主理人索取。
    - **素材完整**：如果素材完整，必须使用 **Lark doc**（飞书/Lark文档）创作内容草稿，并将 **Lark doc 共享链接 (sharing url)** 放入任务详情中（必须将共享链接权限设置为**“点击链接者都可以编辑”**）。
-3. **自动驾驶模式下的发布 (auto-pilot = true)**：
+4. **自动驾驶模式下的发布 (auto-pilot = true)**：
   - 如果品牌的 `autoPilot` 标志为 `true`，直接调用 `publish` 接口（MCP 工具 `publish`）发布或排期帖子。
    - **排期/提交成功 (schedule succeeded)**：将任务状态设置为 **In Progress**（`status: "in_progress"`），并更新此发布结果（如平台 Post ID、排期发布时间）到任务详情中。
    - **排期/提交失败 (schedule failed)**：将任务状态设置为 **Require Input**（即 `status: "pending"`），并根据接口返回的错误信息，在 `requiredInput` 字段中写清楚需要请求的协助。
-4. **人工审批模式下的发布 (auto-pilot = false)**：
+5. **人工审批模式下的发布 (auto-pilot = false)**：
    - 如果品牌的 `autoPilot` 标志为 `false`，生成任务后，先将任务状态设置为 **Require Input**（即 `status: "pending"`），并在 `requiredInput` 中写明“等待品牌主理人审核草稿链接”。
    - 在收到审核通过（approval）的结果后，**才允许调用 `publish` 接口**发布或排期帖子，并根据结果更新状态：
      - **排期/提交成功 (schedule succeeded)**：将任务状态设置为 **In Progress**（`status: "in_progress"`），并将排期结果更新到任务详情中。
      - **排期/提交失败 (schedule failed)**：将任务状态设置为 **Require Input**（即 `status: "pending"`），并根据返回的错误信息，在 `requiredInput` 字段中写清楚需要请求的协助。
-5. **确认真实发布成功后置为 Done**：
+6. **确认真实发布成功后置为 Done**：
    - 提交成功/排期成功仅代表排期操作成功，**并不等于真正发布成功**。你必须持续跟进，直到确认帖子在目标社媒平台已**真实发布成功**（例如排期时间已到，且平台成功渲染出该帖子）。
    - 确认真实发布成功后，更新真实发布的帖子链接 (post url) 到任务结果（materials 或 description）中，并将任务状态更新为 **Done**（`status: "done"`）。
-6. **取消与异常 (Void)**：
+7. **取消与异常 (Void)**：
    - 中途如有任何取消（例如主理人取消、项目废弃等）或无法继续的情况，必须调用 `update_task` 将该任务状态更新为 **Void**（`status: "void"`）。
 
 ---
@@ -687,12 +691,13 @@ Authorization: Bearer <agentApiKey>
 
 1. `get_brand_config`
 2. `get_brand_profile_markdown`
-3. `board_list_topics`
-4. `board_list_assets`
-5. `board_save_draft`
-6. `board_submit_draft`
-7. `update_task`
-8. 必要时 `lark_notify`
+3. `board_list_social_accounts`（**必须执行，以获取不同平台账号进行风格适配**）
+4. `board_list_topics`
+5. `board_list_assets`
+6. `board_save_draft`（**必须传入有效的 `accountId`，禁止无账号创建草稿**）
+7. `board_submit_draft`
+8. `update_task`
+9. 必要时 `lark_notify`
 
 ### 13.2 Research 沉淀
 

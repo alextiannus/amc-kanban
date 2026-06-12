@@ -1514,7 +1514,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       draftId: z.string().optional().describe('Pass to update an existing draft. Omit to create a new draft.'),
       caption: z.string().optional().describe('Caption body. Required when creating a new draft.'),
       hashtags: z.array(z.string()).optional(),
-      accountId: z.string().optional(),
+      accountId: z.string().optional().describe('Platform account ID. Required when creating a new draft.'),
       scheduledAt: z.string().optional().describe('ISO 8601 UTC datetime. Omit or empty for immediate publish on submit.'),
       mediaUrls: z.array(z.string()).optional(),
       assetIds: z.array(z.string()).optional().describe('MediaAsset IDs to attach to this draft.'),
@@ -1527,8 +1527,13 @@ export function createAmcMcpServer(agentApiKey: string) {
       const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
-      if (!draftId && (!caption || !caption.trim())) {
-        return { content: [{ type: 'text' as const, text: 'Error: caption is required when creating a new draft' }], isError: true }
+      if (!draftId) {
+        if (!caption || !caption.trim()) {
+          return { content: [{ type: 'text' as const, text: 'Error: caption is required when creating a new draft' }], isError: true }
+        }
+        if (!accountId) {
+          return { content: [{ type: 'text' as const, text: 'Error: accountId is required when creating a new draft' }], isError: true }
+        }
       }
 
       const parsedScheduledAt = scheduledAt ? new Date(scheduledAt) : null

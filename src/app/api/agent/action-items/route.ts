@@ -79,11 +79,19 @@ export async function POST(request: Request) {
 
   // If agent includes draft content (draftData), create the draft first
   if (draftData && isContentApproval) {
+    const caption = typeof draftData.caption === 'string' ? draftData.caption.trim() : ''
+    if (!caption) {
+      return NextResponse.json({ error: 'draftData.caption is required and cannot be empty' }, { status: 400 })
+    }
+    if (!accountId) {
+      return NextResponse.json({ error: 'accountId is required for content approval drafts' }, { status: 400 })
+    }
+
     const draft = await prisma.contentDraft.create({
       data: {
         brandId,
         accountId: accountId || null,
-        caption: draftData.caption || '',
+        caption,
         captionLang: draftData.captionLang || 'en',
         mediaUrls: draftData.mediaUrls || [],
         hashtags: draftData.hashtags || [],

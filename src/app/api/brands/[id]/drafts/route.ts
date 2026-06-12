@@ -90,6 +90,9 @@ export async function POST(request: Request, { params }: Params) {
   const caption = typeof body.caption === 'string' ? body.caption.trim() : ''
   if (!caption) return NextResponse.json({ error: 'caption is required' }, { status: 400 })
 
+  const accountId = typeof body.accountId === 'string' && body.accountId ? body.accountId : ''
+  if (!accountId) return NextResponse.json({ error: 'accountId is required' }, { status: 400 })
+
   const assetIds = normalizeStringArray(body.assetIds)
   const status = typeof body.status === 'string' ? body.status : 'draft'
   const scheduledAt = typeof body.scheduledAt === 'string' && body.scheduledAt ? new Date(body.scheduledAt) : null
@@ -98,7 +101,7 @@ export async function POST(request: Request, { params }: Params) {
     const created = await tx.contentDraft.create({
       data: {
         brandId,
-        accountId: typeof body.accountId === 'string' && body.accountId ? body.accountId : null,
+        accountId,
         caption,
         captionLang: typeof body.captionLang === 'string' && body.captionLang ? body.captionLang : 'en',
         mediaUrls: normalizeStringArray(body.mediaUrls),
