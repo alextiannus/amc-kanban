@@ -2,12 +2,13 @@ import { readFile } from 'fs/promises'
 import path from 'path'
 import { NextResponse } from 'next/server'
 
-export type PartnerSkillId = 'amc-integrations'
+export type PartnerSkillId = 'amc-integrations' | 'agent-instructions'
 
 export async function readPartnerSkill(skillId: PartnerSkillId): Promise<string> {
   switch (skillId) {
     case 'amc-integrations':
-      return readFile(path.join(/*turbopackIgnore: true*/ process.cwd(), 'skills', 'amc-integrations.md'), 'utf-8')
+    case 'agent-instructions':
+      return readFile(path.join(/*turbopackIgnore: true*/ process.cwd(), 'skills', 'agent-instructions.md'), 'utf-8')
   }
 }
 
