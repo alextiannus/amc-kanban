@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Bot } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
 
 const markdownComponents = {
   a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} target="_blank" rel="noopener noreferrer" />,
@@ -19,14 +18,6 @@ export type AgentDetailPanelAgent = {
 
 export default function AgentDetailPanel({ agent }: { agent: AgentDetailPanelAgent }) {
   const [copiedKey, setCopiedKey] = useState(false)
-  const [copiedCommand, setCopiedCommand] = useState(false)
-
-  const getCopyCommand = (apiKey: string | null = null) => {
-    const hostFromEnv = process.env.NEXT_PUBLIC_KANBAN_HOST
-    const hostFromWindow = typeof window !== 'undefined' ? window.location.origin : null
-    const baseHost = hostFromEnv || hostFromWindow || 'https://amc-kanban.immedi.ai'
-    return buildAgentInitPrompt({ apiKey, apiBaseUrl: `${baseHost}/api` })
-  }
 
   return (
     <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-5 animate-in fade-in slide-in-from-top-2">
@@ -53,17 +44,6 @@ export default function AgentDetailPanel({ agent }: { agent: AgentDetailPanelAge
                 {copiedKey ? '已复制 Key' : '复制 Key'}
               </button>
             </div>
-            <button
-              onClick={(event) => {
-                event.stopPropagation()
-                navigator.clipboard.writeText(getCopyCommand(agent.apiKey ?? null))
-                setCopiedCommand(true)
-                setTimeout(() => setCopiedCommand(false), 2000)
-              }}
-              className="w-full px-3 py-2 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 mt-1"
-            >
-              📜 {copiedCommand ? 'Skill 已复制' : '一键复制完整初始化 Skill'}
-            </button>
           </div>
         </div>
       )}

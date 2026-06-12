@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Bot, Download, KeyRound, Plus, RefreshCw, Settings, X } from 'lucide-react'
+import { ArrowLeft, Bot, ExternalLink, KeyRound, Plus, RefreshCw, Settings, X } from 'lucide-react'
 import AgentDetailPanel from '@/components/AgentDetailPanel'
 import AgentSequenceView from '@/components/AgentSequenceView'
 import AvatarImage from '@/components/AvatarImage'
@@ -316,11 +316,12 @@ export default function PrincipalDashboardPage() {
                   <KeyRound className="h-4 w-4" /> 新增 AMC Agent
                 </button>
                 <a
-                  href="/api/meta/sop?download=1"
-                  download="agent-instructions.md"
+                  href="/connect"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-300"
                 >
-                  <Download className="h-4 w-4" /> 下载 Skill
+                  <ExternalLink className="h-4 w-4" /> 查看 AI 连接方式
                 </a>
               </div>
             )}

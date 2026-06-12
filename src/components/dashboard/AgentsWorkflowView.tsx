@@ -1,6 +1,6 @@
 'use client'
 
-import { Bot, Sparkles, Store, KeyRound, ArrowRight, Download } from 'lucide-react'
+import { Bot, Sparkles, Store, KeyRound, ArrowRight, ExternalLink } from 'lucide-react'
 import AgentSequenceView from '../AgentSequenceView'
 
 export const COLUMNS = [
@@ -70,11 +70,12 @@ export default function AgentsWorkflowView({
                 <KeyRound className="h-4 w-4" /> 新增 AMC Agent
               </button>
               <a
-                href="/api/meta/sop?download=1"
-                download="agent-instructions.md"
+                href="/connect"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-950 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 shadow-sm transition-colors hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-300"
               >
-                <Download className="h-4 w-4" /> 下载 Skill
+                <ExternalLink className="h-4 w-4" /> 查看 AI 连接方式
               </a>
             </div>
           </div>

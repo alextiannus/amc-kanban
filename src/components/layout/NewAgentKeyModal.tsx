@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
-import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
 
 interface NewAgentKeyModalProps {
   newApiKey: string
@@ -10,15 +9,7 @@ interface NewAgentKeyModalProps {
 }
 
 export default function NewAgentKeyModal({ newApiKey, onClose }: NewAgentKeyModalProps) {
-  const [copied, setCopied] = useState(false)
   const [keyCopied, setKeyCopied] = useState(false)
-
-  const getCopyCommand = (apiKey: string | null = null) => {
-    const hostFromEnv = process.env.NEXT_PUBLIC_KANBAN_HOST
-    const hostFromWindow = typeof window !== 'undefined' ? window.location.origin : null
-    const baseHost = hostFromEnv || hostFromWindow || 'https://amc-kanban.immedi.ai'
-    return buildAgentInitPrompt({ apiKey, apiBaseUrl: `${baseHost}/api` })
-  }
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -29,13 +20,11 @@ export default function NewAgentKeyModal({ newApiKey, onClose }: NewAgentKeyModa
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 mb-6">
           <p className="text-xs font-bold text-amber-800 dark:text-amber-400 mb-2">⚠️ 唯一显示机会</p>
           <p className="text-xs text-amber-700 dark:text-amber-500">
-            系统已为您预注册了新的 AI 身份。你有两种接入方式：<br/>
-            <b>方式一：</b> 单独复制 Key 填入底层 MCP 配置（推荐，最稳定）。<br/>
-            <b>方式二：</b> 一键复制包含 Key 的完整 Skill 正文发给 AI，让它动态携带。
+            系统已为您预注册了新的 AI 身份。请复制下方的独立 API Key 并妥善保存。您可以在 AI 连接设置中配置该密钥，配合 MCP 服务使用。
           </p>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-8">
           <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">🔑 独立 API Key</label>
           <div className="relative">
             <input 
@@ -54,28 +43,6 @@ export default function NewAgentKeyModal({ newApiKey, onClose }: NewAgentKeyModa
               title="Copy API Key"
             >
               {keyCopied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
-            </button>
-          </div>
-        </div>
-
-        <div className="mb-8">
-          <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">📜 包含 Key 的完整 Skill 正文</label>
-          <div className="relative">
-            <textarea 
-              readOnly 
-              value={getCopyCommand(newApiKey)} 
-              className="w-full h-40 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 pr-12 text-slate-800 dark:text-slate-100 font-mono text-xs shadow-inner resize-none focus:outline-none" 
-            />
-            <button 
-              onClick={() => {
-                navigator.clipboard.writeText(getCopyCommand(newApiKey));
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="absolute right-2 top-2 p-1.5 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-emerald-500 transition-colors"
-              title="Copy Full Command"
-            >
-              {copied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
             </button>
           </div>
         </div>
