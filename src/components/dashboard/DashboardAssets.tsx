@@ -408,6 +408,33 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     }
   }
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement
+      if (activeEl) {
+        const tagName = activeEl.tagName.toUpperCase()
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || activeEl.hasAttribute('contenteditable')) {
+          return
+        }
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selected.length > 0) {
+          e.preventDefault()
+          void handleBatchDeleteAssets()
+        } else if (activeAssetId) {
+          e.preventDefault()
+          void handleDeleteAsset(activeAssetId)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [selected, activeAssetId, brandId, assets, handleDeleteAsset, handleBatchDeleteAssets])
+
   return (
     <div className="flex h-full w-full overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans relative">
       
@@ -825,7 +852,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 className="w-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
               >
                 <Trash2 className="w-4 h-4" />
-                <span>批量删除素材</span>
+                <span>批量删除素材 (Delete 键)</span>
               </button>
             </div>
           </div>
@@ -984,7 +1011,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 className="w-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
                 <Trash2 className="w-4 h-4" />
-                <span>删除素材</span>
+                <span>删除素材 (Delete 键)</span>
               </button>
             </div>
           </div>
