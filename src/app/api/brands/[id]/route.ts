@@ -342,12 +342,25 @@ export async function DELETE(_request: Request, { params }: Params) {
   if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
-
   const existing = await prisma.brand.findUnique({ where: { id } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (existing.status === 'ARCHIVED') {
     return NextResponse.json({ ok: true, alreadyArchived: true })
+  }
+
+  const activeSub = await prisma.brandSubscription.findFirst({
+    where: {
+      brandId: id,
+      status: 'ACTIVE',
+      OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+    },
+  })
+  if (activeSub) {
+    return NextResponse.json(
+      { error: 'Cannot archive a brand with an active subscription. Please cancel or wait for the subscription to expire first.' },
+      { status: 400 }
+    )
   }
 
   const archived = await prisma.$transaction(async (tx) => {
