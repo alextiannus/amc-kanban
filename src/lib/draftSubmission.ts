@@ -38,6 +38,14 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     },
   })
   if (!draft) return { ok: false as const, status: 404, error: 'Draft not found' }
+  
+  if (!draft.caption || !draft.caption.trim()) {
+    return { ok: false as const, status: 400, error: '草稿正文不能为空。' }
+  }
+
+  if (!draft.accountId) {
+    return { ok: false as const, status: 400, error: '请先为草稿选择发布账号（确定发布平台）。' }
+  }
 
   if (!brand.autoPilot && !input.forcePublish) {
     const updated = await prisma.$transaction(async (tx) => {

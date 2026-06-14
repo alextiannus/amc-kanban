@@ -286,6 +286,15 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
   const saveDraft = async (nextStatus?: string): Promise<DraftItem | null> => {
     if (!brandId) return null
+    const trimmedCaption = caption.trim()
+    if (!trimmedCaption) {
+      setError('草稿正文不能为空')
+      return null
+    }
+    if (!accountId) {
+      setError('请选择发布账号（确定发布平台）')
+      return null
+    }
     setSaving(true)
     setError(null)
     try {
@@ -294,7 +303,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
         method: selectedDraft ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          caption,
+          caption: trimmedCaption,
           hashtags: parseTags(hashtags),
           accountId,
           scheduledAt: fromDateTimeLocal(scheduledAt),
@@ -532,7 +541,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
             </div>
 
             <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-800">
-              <button disabled={saving || !caption.trim()} onClick={() => { void saveDraft('draft') }} className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">保存</button>
+              <button disabled={saving || !caption.trim() || !accountId} onClick={() => { void saveDraft('draft') }} className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">保存</button>
               <button disabled={saving || !caption.trim() || !accountId} onClick={submitDraft} className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-50"><Send className="h-4 w-4" /> 提交草稿</button>
               {selectedDraft?.status === 'pending_review' && (
                 <>

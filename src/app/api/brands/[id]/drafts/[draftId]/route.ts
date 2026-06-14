@@ -72,6 +72,21 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
+  
+  if (body.caption !== undefined) {
+    const trimmedCaption = typeof body.caption === 'string' ? body.caption.trim() : ''
+    if (!trimmedCaption) {
+      return NextResponse.json({ error: 'caption cannot be empty' }, { status: 400 })
+    }
+  }
+
+  if (body.accountId !== undefined) {
+    const accountIdVal = typeof body.accountId === 'string' ? body.accountId.trim() : ''
+    if (!accountIdVal) {
+      return NextResponse.json({ error: 'accountId is required (platform must be determined)' }, { status: 400 })
+    }
+  }
+
   const assetIds = Array.isArray(body.assetIds) ? normalizeStringArray(body.assetIds) : null
   const nextStatus = typeof body.status === 'string' ? body.status : undefined
 
@@ -81,7 +96,7 @@ export async function PATCH(request: Request, { params }: Params) {
       data: {
         caption: typeof body.caption === 'string' ? body.caption.trim() : undefined,
         captionLang: typeof body.captionLang === 'string' ? body.captionLang : undefined,
-        accountId: typeof body.accountId === 'string' ? body.accountId || null : undefined,
+        accountId: typeof body.accountId === 'string' ? body.accountId : undefined,
         mediaUrls: Array.isArray(body.mediaUrls) ? normalizeStringArray(body.mediaUrls) : undefined,
         hashtags: Array.isArray(body.hashtags) ? normalizeStringArray(body.hashtags) : undefined,
         scheduledAt: typeof body.scheduledAt === 'string' ? (body.scheduledAt ? new Date(body.scheduledAt) : null) : undefined,

@@ -655,6 +655,124 @@ async function runTests() {
   console.log('WorkUnit status after manual approve (immediate):', workUnitManualImmediate.status)
   assert.equal(workUnitManualImmediate.status, 'done', 'Approved immediate post must transition WorkUnit to done')
 
+  // ── 8. Testing Draft Creation & Update Validations (Empty content/platform checks) ──
+  console.log('\n--- 8. Testing Draft Creation & Update Validations ---')
+
+  const instagramAccountForVal = await prisma.socialAccount.findFirst({
+    where: { brandId: brand.id, platformId: 'instagram' }
+  })
+  assert.ok(instagramAccountForVal)
+
+  const tiktokAccountForVal = await prisma.socialAccount.findFirst({
+    where: { brandId: brand.id, platformId: 'tiktok' }
+  })
+  assert.ok(tiktokAccountForVal)
+
+  // Verify POST /api/brands/[id]/drafts rejects empty caption
+  const postEmptyCaptionRes = await fetch(`${BASE_URL}/api/brands/${brand.id}/drafts`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${AGENT_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      caption: '   ',
+      accountId: instagramAccountForVal.id,
+    })
+  })
+  console.log('POST Empty Caption Status:', postEmptyCaptionRes.status)
+  assert.equal(postEmptyCaptionRes.status, 400)
+  const postEmptyCaptionData = await postEmptyCaptionRes.json().catch(() => ({}))
+  assert.equal(postEmptyCaptionData.error, 'caption is required')
+
+  // Verify POST /api/brands/[id]/drafts rejects empty accountId
+  const postEmptyAccountRes = await fetch(`${BASE_URL}/api/brands/${brand.id}/drafts`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${AGENT_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      caption: 'Valid Caption',
+      accountId: '',
+    })
+  })
+  console.log('POST Empty Account ID Status:', postEmptyAccountRes.status)
+  assert.equal(postEmptyAccountRes.status, 400)
+  const postEmptyAccountData = await postEmptyAccountRes.json().catch(() => ({}))
+  assert.equal(postEmptyAccountData.error, 'accountId is required')
+
+  // Create a valid draft to test PATCH updates
+  const postValidRes = await fetch(`${BASE_URL}/api/brands/${brand.id}/drafts`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${AGENT_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      caption: 'Valid Initial Caption',
+      accountId: instagramAccountForVal.id,
+    })
+  })
+  console.log('POST Valid Draft Status:', postValidRes.status)
+  assert.equal(postValidRes.status, 201)
+  const postValidData = await postValidRes.json().catch(() => ({}))
+  assert.ok(postValidData.draft?.id)
+  const testDraftId = postValidData.draft.id
+
+  // Verify PATCH /api/brands/[id]/drafts/[draftId] rejects empty caption
+  const patchEmptyCaptionRes = await fetch(`${BASE_URL}/api/brands/${brand.id}/drafts/${testDraftId}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${AGENT_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      caption: '   ',
+    })
+  })
+  console.log('PATCH Empty Caption Status:', patchEmptyCaptionRes.status)
+  assert.equal(patchEmptyCaptionRes.status, 400)
+  const patchEmptyCaptionData = await patchEmptyCaptionRes.json().catch(() => ({}))
+  assert.equal(patchEmptyCaptionData.error, 'caption cannot be empty')
+
+  // Verify PATCH /api/brands/[id]/drafts/[draftId] rejects empty accountId
+  const patchEmptyAccountRes = await fetch(`${BASE_URL}/api/brands/${brand.id}/drafts/${testDraftId}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${AGENT_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      accountId: '',
+    })
+  })
+  console.log('PATCH Empty Account ID Status:', patchEmptyAccountRes.status)
+  assert.equal(patchEmptyAccountRes.status, 400)
+  const patchEmptyAccountData = await patchEmptyAccountRes.json().catch(() => ({}))
+  assert.equal(patchEmptyAccountData.error, 'accountId is required (platform must be determined)')
+
+  // Verify PATCH /api/brands/[id]/drafts/[draftId] allows valid update
+  const patchValidRes = await fetch(`${BASE_URL}/api/brands/${brand.id}/drafts/${testDraftId}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${AGENT_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      caption: 'Valid Updated Caption',
+      accountId: tiktokAccountForVal.id,
+    })
+  })
+  console.log('PATCH Valid Status:', patchValidRes.status)
+  assert.equal(patchValidRes.status, 200)
+  const patchValidData = await patchValidRes.json().catch(() => ({}))
+  assert.equal(patchValidData.draft.caption, 'Valid Updated Caption')
+  assert.equal(patchValidData.draft.accountId, tiktokAccountForVal.id)
+
+  // Cleanup draft created for testing validation
+  await prisma.contentDraft.delete({ where: { id: testDraftId } })
+
   // Clean up and restore brand configurations
   await prisma.brand.update({
     where: { id: brand.id },

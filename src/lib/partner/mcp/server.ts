@@ -1527,6 +1527,13 @@ export function createAmcMcpServer(agentApiKey: string) {
       const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
+      if (caption !== undefined && (!caption || !caption.trim())) {
+        return { content: [{ type: 'text' as const, text: 'Error: caption cannot be empty' }], isError: true }
+      }
+      if (accountId !== undefined && (!accountId || !accountId.trim())) {
+        return { content: [{ type: 'text' as const, text: 'Error: accountId is required (platform must be determined)' }], isError: true }
+      }
+
       if (!draftId) {
         if (!caption || !caption.trim()) {
           return { content: [{ type: 'text' as const, text: 'Error: caption is required when creating a new draft' }], isError: true }
@@ -1556,7 +1563,7 @@ export function createAmcMcpServer(agentApiKey: string) {
           }
           if (caption !== undefined) updateData.caption = caption.trim()
           if (captionLang !== undefined) updateData.captionLang = captionLang
-          if (accountId !== undefined) updateData.accountId = accountId || null
+          if (accountId !== undefined) updateData.accountId = accountId
           if (scheduledAt !== undefined) updateData.scheduledAt = parsedScheduledAt
           if (hashtags !== undefined) updateData.hashtags = hashtags
           if (mediaUrls !== undefined) updateData.mediaUrls = mediaUrls
