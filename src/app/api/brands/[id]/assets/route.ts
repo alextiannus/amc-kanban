@@ -27,8 +27,9 @@ type Params = { params: Promise<{ id: string }> }
 
 interface UploadAssetRequest {
   filename: string      // original filename with extension
-  mimeType: string      // e.g., 'image/jpeg', 'video/mp4'
-  fileBase64: string    // base64-encoded file data (no 'data:' prefix)
+  mimeType?: string      // e.g., 'image/jpeg', 'video/mp4'
+  fileBase64?: string    // base64-encoded file data (no 'data:' prefix)
+  imageUrl?: string     // optional direct URL to download
   folder?: string
   aiCategory?: string
   aiTags?: string[]
@@ -89,13 +90,45 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const body: UploadAssetRequest = await request.json()
-  const { filename, mimeType, fileBase64 } = body
+  const { filename, mimeType, fileBase64, imageUrl } = body
 
-  if (!filename || !mimeType || !fileBase64) {
+  if (!filename) {
     return NextResponse.json(
-      { error: 'filename, mimeType, and fileBase64 are required' },
+      { error: 'filename is required' },
       { status: 400 }
     )
+  }
+
+  if (!fileBase64 && !imageUrl) {
+    return NextResponse.json(
+      { error: 'Either fileBase64 or imageUrl must be provided' },
+      { status: 400 }
+    )
+  }
+
+  let fileBuffer: Buffer
+  let resolvedMimeType = mimeType
+
+  if (fileBase64) {
+    fileBuffer = Buffer.from(fileBase64, 'base64')
+    resolvedMimeType = resolvedMimeType || 'application/octet-stream'
+  } else {
+    try {
+      const res = await fetch(imageUrl!)
+      if (!res.ok) {
+        return NextResponse.json(
+          { error: `Failed to fetch image from URL: HTTP ${res.status}` },
+          { status: 400 }
+        )
+      }
+      fileBuffer = Buffer.from(await res.arrayBuffer())
+      resolvedMimeType = resolvedMimeType || res.headers.get('content-type') || 'application/octet-stream'
+    } catch (err: any) {
+      return NextResponse.json(
+        { error: `Exception downloading image: ${err?.message || err}` },
+        { status: 400 }
+      )
+    }
   }
 
   try {
@@ -108,9 +141,8 @@ export async function POST(request: Request, { params }: Params) {
 
     const obsConfig = getHuaweiObsConfig()
     if (obsConfig) {
-      const fileBuffer = Buffer.from(fileBase64, 'base64')
       const key = makeBrandAssetKey({ brandId, folder: body.folder || body.aiCategory || '素材库', filename })
-      const uploadResult = await uploadHuaweiObsObject({ key, body: fileBuffer, contentType: mimeType })
+      const uploadResult = await uploadHuaweiObsObject({ key, body: fileBuffer, contentType: resolvedMimeType })
 
       if (!uploadResult.ok) {
         return NextResponse.json({ error: uploadResult.error || 'Huawei OBS upload failed' }, { status: 400 })
@@ -121,7 +153,7 @@ export async function POST(request: Request, { params }: Params) {
           brandId,
           url: uploadResult.url,
           filename,
-          mimeType,
+          mimeType: resolvedMimeType,
           sizeBytes: fileBuffer.length,
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
           aiCategory: body.folder || body.aiCategory || '素材库',
@@ -159,9 +191,9 @@ export async function POST(request: Request, { params }: Params) {
       // 2. Upload the file to that URL
 
       // Step 1: Get signed upload URL
-      const sizeBytes = Math.ceil((fileBase64.length * 3) / 4) // base64 to bytes
+      const sizeBytes = fileBuffer.length
       const slotResult = await postfastGetSignedUploadUrls(brand.postfastApiKey, [
-        { filename, mimeType, sizeBytes }
+        { filename, mimeType: resolvedMimeType, sizeBytes }
       ])
 
       if (!slotResult.success || !slotResult.slots.length) {
@@ -175,8 +207,7 @@ export async function POST(request: Request, { params }: Params) {
       const slot = slotResult.slots[0]
 
       // Step 2: Upload file using signed URL
-      const fileBuffer = Buffer.from(fileBase64, 'base64')
-      const uploadResult = await postfastUploadFile(slot.uploadUrl, fileBuffer, mimeType)
+      const uploadResult = await postfastUploadFile(slot.uploadUrl, fileBuffer, resolvedMimeType)
 
       if (!uploadResult.success) {
         console.error(`[Assets] PostFast file upload failed for brand ${brandId}:`, uploadResult.error)
@@ -191,7 +222,7 @@ export async function POST(request: Request, { params }: Params) {
           brandId,
           url: slot.storageKey || slot.fileToken || filename,
           filename,
-          mimeType,
+          mimeType: resolvedMimeType,
           sizeBytes,
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
           aiCategory: body.folder || body.aiCategory || '素材库',
@@ -216,13 +247,12 @@ export async function POST(request: Request, { params }: Params) {
     // ═══════════════════════════════════════════════════════════════════════════
     // Lark Drive Upload
     if (brand.larkAppId && brand.larkAppSecret && brand.larkDriveFolderId) {
-      const fileBuffer = Buffer.from(fileBase64, 'base64')
       const uploadResult = await uploadToLarkDrive({
         appId: brand.larkAppId,
         appSecret: brand.larkAppSecret,
         folderId: brand.larkDriveFolderId,
         filename,
-        mimeType,
+        mimeType: resolvedMimeType,
         fileBuffer,
       })
 
@@ -235,7 +265,7 @@ export async function POST(request: Request, { params }: Params) {
           brandId,
           url: uploadResult.downloadUrl || uploadResult.fileToken,
           filename,
-          mimeType,
+          mimeType: resolvedMimeType,
           sizeBytes: fileBuffer.length,
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
           aiCategory: body.folder || body.aiCategory || '素材库',
@@ -258,7 +288,6 @@ export async function POST(request: Request, { params }: Params) {
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Local fallback for Phase 1 development and brands without OSS credentials.
-    const fileBuffer = Buffer.from(fileBase64, 'base64')
     const safeName = sanitizeFilename(filename)
     const relativeDir = path.join('uploads', 'brand-assets', brandId)
     const absoluteDir = path.join(process.cwd(), 'public', relativeDir)
@@ -271,7 +300,7 @@ export async function POST(request: Request, { params }: Params) {
         brandId,
         url: assetUrl,
         filename,
-        mimeType,
+        mimeType: resolvedMimeType,
         sizeBytes: fileBuffer.length,
         aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
         aiCategory: body.folder || body.aiCategory || '素材库',

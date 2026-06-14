@@ -47,19 +47,18 @@ const ASSET_OPERATIONS: OperationItem[] = [
     action: 'Upload Asset',
     actionCn: '上传素材',
     mcpName: 'board_upload_asset',
-    mcpParams: 'brandId, filename, mimeType, fileBase64, folder?, aiTags?, aiCaption?',
+    mcpParams: 'brandId, filename, fileBase64?, imageUrl?, mimeType?, folder?, aiTags?, aiCaption?',
     restMethod: 'POST',
     restUrl: '/api/brands/[id]/assets',
-    restParams: 'filename, mimeType, fileBase64, folder?, aiTags?, aiCaption?',
-    desc: 'Upload a base64 encoded media asset directly into the brand\'s library. The backend selects appropriate storage automatically.',
+    restParams: 'filename, fileBase64?, imageUrl?, mimeType?, folder?, aiTags?, aiCaption?',
+    desc: 'Upload a media asset (e.g. image) into the brand\'s library. Provide either a base64 encoded string OR a direct imageUrl to download. The backend resolves storage automatically.',
     payloadExample: `{
   "brandId": "brand_id_here",
-  "filename": "promo-banner.png",
-  "mimeType": "image/png",
-  "fileBase64": "iVBORw0KGgoAAAANS...",
+  "filename": "ziwei-kaoyu.jpg",
+  "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/.../Grilled_Fish.jpg",
   "folder": "素材库",
-  "aiTags": ["promo", "summer"],
-  "aiCaption": "Summer Promotion Banner"
+  "aiTags": ["烤鱼", "美食"],
+  "aiCaption": "Chinese Grilled Fish"
 }`
   },
   {

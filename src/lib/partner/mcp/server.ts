@@ -1666,23 +1666,46 @@ export function createAmcMcpServer(agentApiKey: string) {
 
   server.tool(
     'board_upload_asset',
-    'Upload an asset into the board asset library. Production requires Huawei OBS; development can use local fallback.',
+    'Upload an asset into the board asset library by providing base64 data OR a direct image URL. Production requires Huawei OBS; development can use local fallback.',
     {
       brandId: z.string(),
       filename: z.string(),
-      mimeType: z.string(),
-      fileBase64: z.string().describe('Base64 content without data: prefix.'),
+      mimeType: z.string().optional().describe('Optional MIME type of the file. If omitted with imageUrl, it is resolved from the server response headers.'),
+      fileBase64: z.string().optional().describe('Base64 content without data: prefix.'),
+      imageUrl: z.string().optional().describe('Direct URL of the image/asset to download.'),
       folder: z.string().optional(),
       aiTags: z.array(z.string()).optional(),
       aiCaption: z.string().optional(),
     },
-    async ({ brandId, filename, mimeType, fileBase64, folder, aiTags, aiCaption }) => {
+    async ({ brandId, filename, mimeType, fileBase64, imageUrl, folder, aiTags, aiCaption }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
-      const fileBuffer = Buffer.from(fileBase64, 'base64')
+      if (!fileBase64 && !imageUrl) {
+        return { content: [{ type: 'text' as const, text: 'Error: Either fileBase64 or imageUrl must be provided' }], isError: true }
+      }
+
+      let fileBuffer: Buffer
+      let resolvedMimeType = mimeType
+
+      if (fileBase64) {
+        fileBuffer = Buffer.from(fileBase64, 'base64')
+        resolvedMimeType = resolvedMimeType || 'application/octet-stream'
+      } else {
+        try {
+          const res = await fetch(imageUrl!)
+          if (!res.ok) {
+            return { content: [{ type: 'text' as const, text: `Error: Failed to fetch image from URL: HTTP ${res.status}` }], isError: true }
+          }
+          fileBuffer = Buffer.from(await res.arrayBuffer())
+          resolvedMimeType = resolvedMimeType || res.headers.get('content-type') || 'application/octet-stream'
+        } catch (err: any) {
+          return { content: [{ type: 'text' as const, text: `Error: Exception downloading image: ${err?.message || err}` }], isError: true }
+        }
+      }
+
       const category = folder || '素材库'
       const { getHuaweiObsConfig, makeBrandAssetKey, uploadHuaweiObsObject } = await import('@/lib/integrations/huaweiObs')
       const obsConfig = getHuaweiObsConfig()
@@ -1694,7 +1717,7 @@ export function createAmcMcpServer(agentApiKey: string) {
 
       if (obsConfig) {
         const key = makeBrandAssetKey({ brandId, folder: category, filename })
-        const uploadResult = await uploadHuaweiObsObject({ key, body: fileBuffer, contentType: mimeType })
+        const uploadResult = await uploadHuaweiObsObject({ key, body: fileBuffer, contentType: resolvedMimeType })
         if (!uploadResult.ok) return { content: [{ type: 'text' as const, text: `Error: ${uploadResult.error || 'Huawei OBS upload failed'}` }], isError: true }
         assetUrl = uploadResult.url
         storageEngine = 'huawei_obs'
@@ -1726,7 +1749,7 @@ export function createAmcMcpServer(agentApiKey: string) {
           brandId,
           url: assetUrl,
           filename,
-          mimeType,
+          mimeType: resolvedMimeType,
           sizeBytes: fileBuffer.length,
           aiTags: aiTags ?? [],
           aiCategory: category,
