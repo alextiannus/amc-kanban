@@ -19,7 +19,8 @@ import {
   BarChart2,
   AlertTriangle,
   Play,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from 'lucide-react'
 
 // Category definitions
@@ -358,6 +359,50 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       await loadAssets()
     } catch {
       setError('批量更新素材失败')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleDeleteAsset = async (assetId: string) => {
+    if (!brandId) return
+    if (!window.confirm('确定要永久删除该素材吗？此操作无法撤销。')) return
+
+    setError(null)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/assets/${assetId}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '删除素材失败')
+
+      setSelected(prev => prev.filter(id => id !== assetId))
+      if (activeAssetId === assetId) {
+        setActiveAssetId(null)
+      }
+      await loadAssets()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '删除素材失败')
+    }
+  }
+
+  const handleBatchDeleteAssets = async () => {
+    if (!brandId || selected.length === 0) return
+    if (!window.confirm(`确定要永久删除这 ${selected.length} 个素材吗？此操作无法撤销。`)) return
+
+    setUploading(true)
+    setError(null)
+    try {
+      await Promise.all(selected.map((assetId) => {
+        return fetch(`/api/brands/${brandId}/assets/${assetId}`, {
+          method: 'DELETE',
+        })
+      }))
+      setSelected([])
+      setActiveAssetId(null)
+      await loadAssets()
+    } catch {
+      setError('批量删除素材失败')
     } finally {
       setUploading(false)
     }
@@ -764,9 +809,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             </div>
 
             {/* Bottom actions container */}
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-
-
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex flex-col gap-2">
               <button
                 onClick={applyBatchChanges}
                 disabled={uploading}
@@ -774,6 +817,15 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               >
                 <Check className="w-4 h-4" />
                 <span>{uploading ? '提交中...' : '应用更改'}</span>
+              </button>
+
+              <button
+                onClick={handleBatchDeleteAssets}
+                disabled={uploading || selected.length === 0}
+                className="w-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>批量删除素材</span>
               </button>
             </div>
           </div>
@@ -918,15 +970,21 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             </div>
 
             {/* Bottom CTAs */}
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-
-
+            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex flex-col gap-2">
               <button
                 onClick={() => setError('请前往 发布内容（Post） 模块创建并关联素材生成推文。')}
                 className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 py-2.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
               >
                 <Plus className="w-4 h-4" />
                 <span>生成新推文</span>
+              </button>
+
+              <button
+                onClick={() => handleDeleteAsset(activeAsset.id)}
+                className="w-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>删除素材</span>
               </button>
             </div>
           </div>

@@ -49,9 +49,24 @@ export async function DELETE(request: Request, { params }: Params) {
   const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const asset = await prisma.mediaAsset.findFirst({ where: { id: assetId, brandId }, select: { id: true } })
+  const asset = await prisma.mediaAsset.findFirst({
+    where: { id: assetId, brandId },
+    select: { id: true, url: true, sourceType: true }
+  })
   if (!asset) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await prisma.mediaAsset.update({ where: { id: assetId }, data: { aiCategory: 'archived', aiReady: false } })
+  // If local storage, delete the local file on disk to save space
+  if (asset.sourceType === 'local' && asset.url.startsWith('/uploads/')) {
+    try {
+      const { unlink } = await import('fs/promises')
+      const path = await import('path')
+      const absolutePath = path.join(process.cwd(), 'public', asset.url)
+      await unlink(absolutePath)
+    } catch (err) {
+      console.error('[Assets] Failed to delete local file from disk:', err)
+    }
+  }
+
+  await prisma.mediaAsset.delete({ where: { id: assetId } })
   return NextResponse.json({ ok: true })
 }

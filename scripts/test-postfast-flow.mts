@@ -323,6 +323,28 @@ async function runTests() {
   assert.ok(uploadData.assetId.length > 10, 'assetId should be a DB record id')
   assert.equal(uploadData.storageKey, 'mock_s3_key_for_test.jpg', 'storageKey should reflect PostFast storage key')
 
+  // 3b. Test DELETE /api/brands/[id]/assets/[assetId]
+  console.log('\n--- 3b. Testing REST API DELETE /assets/[assetId] ---')
+  const deleteRes = await fetch(`${BASE_URL}/api/brands/${brand.id}/assets/${uploadData.assetId}`, {
+    method: 'DELETE',
+    headers,
+  })
+
+  console.log('Delete Status:', deleteRes.status)
+  const deleteData = await deleteRes.json()
+  console.log('Delete Data:', JSON.stringify(deleteData, null, 2))
+  assert.equal(deleteRes.status, 200, 'Delete endpoint should return 200')
+  assert.equal(deleteData.ok, true)
+
+  // Verify deleted asset is no longer accessible via list API
+  const listAfterDeleteRes = await fetch(`${BASE_URL}/api/brands/${brand.id}/assets`, {
+    method: 'GET',
+    headers,
+  })
+  const listAfterDeleteData = await listAfterDeleteRes.json()
+  const existsAfterDelete = (listAfterDeleteData.assets || []).some((a: any) => a.id === uploadData.assetId)
+  assert.ok(!existsAfterDelete, 'Deleted asset should no longer exist in the brand assets list')
+
   let mcpAvailable = true
 
   // 4. Test MCP server Tool: board_publish_content

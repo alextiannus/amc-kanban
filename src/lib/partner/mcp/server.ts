@@ -1799,7 +1799,7 @@ export function createAmcMcpServer(agentApiKey: string) {
 
   server.tool(
     'board_delete_asset',
-    'Soft-delete (archive) a brand media asset by setting its folder to \'archived\' and ready status to false.',
+    'Delete a brand media asset completely from the database and disk storage.',
     {
       brandId: z.string(),
       assetId: z.string(),
@@ -1810,18 +1810,29 @@ export function createAmcMcpServer(agentApiKey: string) {
       const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
-      const existing = await prisma.mediaAsset.findFirst({
+      const asset = await prisma.mediaAsset.findFirst({
         where: { id: assetId, brandId },
-        select: { id: true },
+        select: { id: true, url: true, sourceType: true },
       })
-      if (!existing) return { content: [{ type: 'text' as const, text: 'Error: Asset not found' }], isError: true }
+      if (!asset) return { content: [{ type: 'text' as const, text: 'Error: Asset not found' }], isError: true }
 
-      await prisma.mediaAsset.update({
+      // If local storage, delete local file from disk
+      if (asset.sourceType === 'local' && asset.url.startsWith('/uploads/')) {
+        try {
+          const { unlink } = await import('node:fs/promises')
+          const { join } = await import('node:path')
+          const absolutePath = join(process.cwd(), 'public', asset.url)
+          await unlink(absolutePath)
+        } catch (err) {
+          console.error('[MCP board_delete_asset] Failed to delete local file from disk:', err)
+        }
+      }
+
+      await prisma.mediaAsset.delete({
         where: { id: assetId },
-        data: { aiCategory: 'archived', aiReady: false },
       })
 
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, archived: true, assetId }) }] }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, deleted: true, assetId }) }] }
     }
   )
 
