@@ -3,8 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { User as UserIcon, Copy, Check, Settings, Shield, Inbox, LogOut } from 'lucide-react'
-import { buildAgentInitPrompt } from '@/lib/agentInitPrompt'
+import { User as UserIcon, BookOpen, Settings, Shield, Inbox, LogOut } from 'lucide-react'
 
 interface UserMenuProps {
   user: {
@@ -34,7 +33,6 @@ export default function UserMenu({
   onTasksCleared,
 }: UserMenuProps) {
   const [showProfile, setShowProfile] = useState(false)
-  const [copied, setCopied] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const userRoles = user?.userRoles || (user?.role === 'ADMIN' ? ['ADMIN'] : user?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : user?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : [])
@@ -67,19 +65,6 @@ export default function UserMenu({
     } catch (e) {
       console.error('[UserMenu] logout error', e)
     }
-  }
-
-  const getCopyCommand = (apiKey: string | null = null) => {
-    const hostFromEnv = process.env.NEXT_PUBLIC_KANBAN_HOST
-    const hostFromWindow = typeof window !== 'undefined' ? window.location.origin : null
-    const baseHost = hostFromEnv || hostFromWindow || 'https://amc-kanban.immedi.ai'
-    return buildAgentInitPrompt({ apiKey, apiBaseUrl: `${baseHost}/api` })
-  }
-
-  const handleCopy = (key: string | null = null) => {
-    navigator.clipboard.writeText(getCopyCommand(key))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
   }
 
   const handleOpenSettingsCenter = () => {
@@ -147,10 +132,10 @@ export default function UserMenu({
             )}
 
             <button
-              onClick={() => { setShowProfile(false); handleCopy() }}
+              onClick={() => { setShowProfile(false); router.push('/connect') }}
               className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors"
             >
-              {copied ? <Check size={16} /> : <Copy size={16} />} 复制 Skill 正文
+              <BookOpen size={16} /> 查看MCP和Skills
             </button>
 
             <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>

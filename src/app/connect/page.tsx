@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { buildAmcSkillText, buildLaunchInstruction } from '../../lib/agentInitPrompt'
 
 type ProfileData = {
   type: string
@@ -282,6 +283,38 @@ export default function ConnectPage() {
   const [copiedMcp, setCopiedMcp] = useState(false)
   const [activeCategory, setActiveCategory] = useState<'assets' | 'drafts' | 'core'>('assets')
   const [expandedOperation, setExpandedOperation] = useState<string | null>(null)
+  const [skillTab, setSkillTab] = useState<'onboarding' | 'skill'>('onboarding')
+  const [copiedSkill, setCopiedSkill] = useState(false)
+
+  const amcSkillText = useMemo(() => {
+    const hostFromWindow = typeof window !== 'undefined' ? window.location.origin : 'https://amc-kanban.immedi.ai'
+    return buildAmcSkillText({ apiBaseUrl: `${hostFromWindow}/api` })
+  }, [])
+
+  const onboardingPrompt = useMemo(() => {
+    const hostFromWindow = typeof window !== 'undefined' ? window.location.origin : 'https://amc-kanban.immedi.ai'
+    const mockContext = {
+      subscription: { planId: 'essential', planName: 'Essential Plan', platforms: 'Xiaohongshu, Instagram' },
+      user: { id: 'usr_id_here', email: 'owner@example.com', role: 'BRAND_OWNER', nickname: 'Brand Owner', timezone: 'Asia/Singapore' },
+      brand: { id: 'brand_id_here', name: 'Example Brand Name', location: 'Singapore', timezone: 'Asia/Singapore', website: 'https://example.com', phone: null, address: null },
+      stores: [],
+      socialAccounts: [],
+      ownedBrands: [],
+      agent: { id: 'agent_id_here', apiKey: '<YOUR_AGENT_API_KEY>' }
+    }
+    return buildLaunchInstruction({ context: mockContext, apiBaseUrl: `${hostFromWindow}/api` })
+  }, [])
+
+  const copySkillText = async () => {
+    try {
+      const textToCopy = skillTab === 'onboarding' ? onboardingPrompt : amcSkillText
+      await navigator.clipboard.writeText(textToCopy)
+      setCopiedSkill(true)
+      window.setTimeout(() => setCopiedSkill(false), 1800)
+    } catch {
+      setCopiedSkill(false)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -428,9 +461,56 @@ export default function ConnectPage() {
         </section>
 
         <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+            <h2 className="text-2xl font-semibold">3. Onboarding & SOP Skills (AI 接入与规范正文)</h2>
+            <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800">
+              <button
+                onClick={() => setSkillTab('onboarding')}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                  skillTab === 'onboarding'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/20 shadow'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent cursor-pointer'
+                }`}
+              >
+                初始化指令 (Onboarding)
+              </button>
+              <button
+                onClick={() => setSkillTab('skill')}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                  skillTab === 'skill'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/20 shadow'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent cursor-pointer'
+                }`}
+              >
+                协作规范 (Skill SOP)
+              </button>
+            </div>
+          </div>
+          <p className="text-sm text-slate-300">
+            {skillTab === 'onboarding' 
+              ? '将此指令完整复制并发送给您的 AI Agent，用于引导其配置 KANBAN_BASE_URL 环境变量并初始化 REST/MCP 客户端。'
+              : '将此规范作为 Custom Instruction 或 Skill 提示词导入您的 AI Agent，以规范其与 AMC 看板系统的操作和协作流程。'}
+          </p>
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              onClick={copySkillText}
+              className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-bold text-white hover:bg-cyan-700 cursor-pointer"
+            >
+              {copiedSkill ? '已复制 (Copied!)' : '一键复制正文 (Copy Prompt)'}
+            </button>
+            <span className="text-xs text-slate-400">
+              {skillTab === 'onboarding' ? '包含环境配置、API 根端点和初始化任务列表。' : '包含 Agent 核心协作约束、日常工作 SOP 及 MCP 工具定义。'}
+            </span>
+          </div>
+          <div className="mt-4 max-h-[300px] overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-4 font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap select-all">
+            {skillTab === 'onboarding' ? onboardingPrompt : amcSkillText}
+          </div>
+        </section>
+
+        <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
-              <h2 className="text-2xl font-semibold">3. Capabilities Catalog (接口与操作目录)</h2>
+              <h2 className="text-2xl font-semibold">4. Capabilities Catalog (接口与操作目录)</h2>
               <p className="mt-1 text-sm text-slate-300">
                 Detailed listing of supported brand operations. Toggle between categories and click any action to view parameter schemas and payload examples.
               </p>
@@ -572,7 +652,7 @@ export default function ConnectPage() {
         </section>
 
         <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-          <h2 className="text-2xl font-semibold">4. Skill/SOP Metadata</h2>
+          <h2 className="text-2xl font-semibold">5. Skill/SOP Metadata</h2>
           <p className="mt-2 text-slate-300">
             Use these endpoints to bootstrap agent behavior, execution constraints, and integration context.
           </p>
