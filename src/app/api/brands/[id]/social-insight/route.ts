@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { postfastGetAnalytics, postfastFetchAccounts } from '@/lib/integrations/postfast'
@@ -271,12 +271,34 @@ async function fetchRealGoogleReviews(brand: {
 // ── Main GET handler ─────────────────────────────────────────────────────────
 export async function GET(req: Request, { params }: Params) {
   const session = await getSession()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const apiKey = extractApiKey(req)
+  const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
+
+  if (!session?.user && !apiKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (apiKey && !authenticatedAgent) {
+    return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+  }
 
   const { id } = await params
-  const ok = await canSessionAccessBrandProject(
-    id, session.user.id, session.user.type ?? 'HUMAN', session.user.role
-  )
+
+  let userId: string
+  let userType: string
+  let userRole: string
+
+  if (session?.user) {
+    userId = session.user.id
+    userType = session.user.type ?? 'HUMAN'
+    userRole = session.user.role
+  } else {
+    userId = authenticatedAgent!.id
+    userType = 'AI_AGENT'
+    userRole = 'USER'
+  }
+
+  const ok = await canSessionAccessBrandProject(id, userId, userType, userRole)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const url = new URL(req.url)

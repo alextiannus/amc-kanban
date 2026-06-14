@@ -1,111 +1,102 @@
 # AI Marketing Crew Skill
+**Version:** 2.0  
 
-> 本 Skill 面向 AI Marketing Crew 的任务、品牌配置、Lark 云盘与社媒发布工作流。
+> 本 Skill 面向 AI Marketing Crew 的看板协作、品牌配置、本地化文档/记忆存储与社媒发布工作流。
 
-## 目标
+## 核心目标
 
-当 Agent 需要把工作发到看板、配置品牌、上传素材到 Lark 云盘、或者把内容发布到 PostFast 时，必须优先使用 AI Marketing Crew 的 MCP 工具或 REST API，而不是在本地排队等待人工同步。
+当 Agent 需要同步工作至看板、配置品牌、读写每日记忆、或提交帖子排期时，必须优先使用 AI Marketing Crew 的 MCP 工具或 REST API，且遵循 zero local cache 原则实时调用。
 
-## 必做流程
+## 日常工作流
 
-1. 先获取或创建品牌。
-2. 立即写入品牌配置。
-3. 如品牌已配置 Lark App ID / Secret，先创建 Lark 工作区文件夹，再上传素材。
-4. 需要发布时，先上传素材，再调用 PostFast 发布工具。
-5. 所有可追踪工作都要同步到看板任务。
+1. **Daily Startup**: 每日 07:00 启动前，调用 `read_daily_memory(brandId, days=3)` 读取前三天日志并生成当日策略上下文。
+2. **Onboarding**: 
+   - 调用 `get_brand_subscription` 解析 `included_services` 订阅列表设定具体执行目标。
+   - Onboarding 问卷、素材补充审核等交互均创建 `require_input` 类型任务上载至看板，取代任何主动推送通知。
+3. **Daily Cycle**: 
+   - 图文/视频草稿提交必须通过 `board_save_draft` 绑定具体账号的 `accountId`。
+   - 每日回采分析数据（`get_social_insights`、`get_brand_analytics`）及评论，并通过 `write_daily_memory` 写入 memory 日志中。
+   - 每周日生成月度/周度报告存入 `save_local_document` 并 `sync_to_kanban` 同步看板。
 
-## 安装说明
+---
 
-在支持插件管理器的环境中，使用：
+## 核心 API 字典
 
-```bash
-npm plugins install git-plugin-amc
-```
-
-## 看板配置
-
-### 获取品牌
-
+### 1. 订阅服务
 ```http
-GET /api/agent/brand-config
+GET /api/brands/[brandId]/subscription
 Authorization: Bearer <AGENT_API_KEY>
 ```
+返回：包含 `plan_name`, `included_services`[], `monthly_content_quota`, `platform_coverage`[] 等的详情。
 
-### 创建品牌
-
+### 2. 批量创建任务
 ```http
-POST /api/agent/brand-config
-Authorization: Bearer <AGENT_API_KEY>
-Content-Type: application/json
-
-{
-  "name": "品牌名称",
-  "location": "城市, 国家",
-  "timezone": "Asia/Singapore"
-}
-```
-
-### 更新品牌配置
-
-```http
-PATCH /api/agent/brand-config
+POST /api/tasks
 Authorization: Bearer <AGENT_API_KEY>
 Content-Type: application/json
 
 {
   "brandId": "<BRAND_ID>",
-  "name": "品牌名称",
-  "description": "品牌介绍",
-  "location": "城市, 国家",
-  "timezone": "Asia/Singapore",
-  "website": "https://...",
-  "phone": "+1 xxx-xxxx",
-  "address": "完整地址",
-  "postfastApiKey": "<POSTFAST_KEY>",
-  "googlePlaceId": "<GOOGLE_PLACE_ID>",
-  "googleApiKey": "<GOOGLE_API_KEY>",
-  "larkAppId": "<LARK_APP_ID>",
-  "larkAppSecret": "<LARK_APP_SECRET>",
-  "larkParentFolderToken": "<LARK_PARENT_FOLDER_TOKEN>",
-  "larkDriveFolderId": "<LARK_DRIVE_FOLDER_ID>",
-  "larkBotWebhook": "<LARK_BOT_WEBHOOK_URL>",
-  "larkOwnerId": "<LARK_OWNER_ID>"
+  "tasks": [
+    { "title": "任务标题", "status": "todo", "deadline": "2026-06-20T12:00:00Z" }
+  ]
 }
 ```
 
-## Lark 云盘工作流
+### 3. 创建 Require Input 任务
+```http
+POST /api/tasks
+Authorization: Bearer <AGENT_API_KEY>
+Content-Type: application/json
 
-1. 如果品牌还没有 `larkDriveFolderId`，先调用 `lark_create_workspace`。
-2. 取得 `folderToken` 后，回写到品牌配置。
-3. 上传素材时使用 `lark_upload_file`。
-4. 上传成功后，把文件同步进看板素材库。
-
-### 创建工作区
-
-```json
-{ "brandId": "<BRAND_ID>", "parentFolderToken": "<可选>" }
-```
-
-### 上传文件
-
-```json
 {
   "brandId": "<BRAND_ID>",
-  "filename": "banner.jpg",
-  "mimeType": "image/jpeg",
-  "fileBase64": "<BASE64>"
+  "title": "需要主理人确认品牌语气",
+  "description": "详细说明所缺少的内容",
+  "type": "require_input",
+  "priority": "high"
 }
 ```
 
-## 发布工作流
+### 4. 读写本地文档与日常记忆
+- **保存文档**
+```http
+POST /api/brands/[brandId]/documents
+{
+  "filename": "weekly_report_2026-W24.md",
+  "docType": "weekly_report",
+  "content": "# Weekly Report..."
+}
+```
+- **同步至看板**
+```http
+POST /api/brands/[brandId]/documents/[docId]/sync
+{
+  "summary": "周报摘要内容"
+}
+```
+- **写每日记忆**
+```http
+POST /api/brands/[brandId]/memory
+{
+  "date": "2026-06-14",
+  "content": "# Daily Memory..."
+}
+```
+- **读每日记忆**
+```http
+GET /api/brands/[brandId]/memory?days=3
+```
 
-1. 先调用 `postfast_upload_media` 上传内容素材。
-2. 再调用 `postfast_publish` 进行排期或发布。
-3. 最后用 `update_task` 把任务状态改成 `done`，并在描述里写明发布结果。
+### 5. 抓取与分析接口
+- **获取 Places 详情**: `GET /api/integrations/google/places?placeId=`
+- **获取社交主页分析**: `GET /api/integrations/social/public-profile?platform=&handle=`
+- **获取同品类基准**: `GET /api/analytics/benchmarks?category=&location=`
+- **更新自学习 Insights**: `PATCH /api/agent/insights` (Body: `{ "insights": "..." }`)
+
+---
 
 ## 任务纪律
-
-- 任何可追踪工作都必须上板。
-- 阻塞时切到 `pending`，并写清楚 `requiredInput`。
-- 完成后切到 `done` 并保留结果摘要。
-- 不要把任务停留在本地队列里等待“后续同步”。
+- 任务必须带 `deadline` (新加坡时间)。
+- 阻塞时设置 status 为 `pending`，并把 requiredInput 填入任务。
+- 旧版 Lark 云盘及通知方法已废弃，不要在工作中调用。

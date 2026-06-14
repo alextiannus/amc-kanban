@@ -1889,5 +1889,567 @@ export function createAmcMcpServer(agentApiKey: string) {
     }
   )
 
+  // ── v2.0 Onboarding & Skill Tools ────────────────────────────────────────
+
+  server.tool(
+    'get_brand_subscription',
+    'Get brand subscription details and included services.',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+    },
+    async ({ brandId }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const subscription = await prisma.brandSubscription.findFirst({
+        where: {
+          brandId,
+          status: 'ACTIVE',
+          OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      if (!subscription) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              plan_name: 'NONE',
+              included_services: [],
+              monthly_content_quota: 0,
+              platform_coverage: [],
+              reply_sla: 'none',
+              ad_management: false,
+              kol_management: false,
+              autopilot_eligible: false,
+              status: 'EXPIRED'
+            }, null, 2)
+          }]
+        }
+      }
+
+      const { SUBSCRIPTION_PLANS } = await import('@/lib/subscription/catalog')
+      const planId = subscription.planId
+      const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId)
+      const included_services = plan?.services ?? []
+      const monthly_content_quota = planId === 'starter' ? 30 : 38
+      
+      let platform_coverage: string[] = []
+      if (planId === 'starter') platform_coverage = ['Instagram', 'Facebook', 'TikTok']
+      else if (planId === 'essential') platform_coverage = ['Instagram', 'Facebook', 'TikTok', 'Xiaohongshu', 'Dianping']
+      else if (planId === 'advanced') platform_coverage = ['Instagram', 'Facebook', 'TikTok', 'Xiaohongshu', 'Dianping', 'WhatsApp', 'WeChat', 'Ads']
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            plan_name: plan?.name || subscription.planName,
+            included_services,
+            monthly_content_quota,
+            platform_coverage,
+            reply_sla: planId === 'starter' ? 'none' : '24h',
+            ad_management: planId === 'advanced',
+            kol_management: planId !== 'starter',
+            autopilot_eligible: true,
+            contract_start: subscription.contractStartDate?.toISOString() ?? null,
+            contract_end: subscription.contractEndDate?.toISOString() ?? null,
+            status: subscription.status
+          }, null, 2)
+        }]
+      }
+    }
+  )
+
+  server.tool(
+    'create_tasks',
+    'Batch create Kanban tasks.',
+    {
+      brandId: z.string().describe('Brand ID to assign the tasks to.'),
+      tasks: z.array(z.object({
+        title: z.string().describe('Action-oriented title'),
+        description: z.string().optional().describe('Details / content draft'),
+        status: z.enum(['todo', 'in_progress', 'pending', 'void']).optional().default('todo'),
+        priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
+        weight: z.number().int().optional().default(3),
+        requiredInput: z.string().optional().describe('Required human input if pending'),
+        deadline: z.string().optional().describe('ISO 8601 deadline string'),
+        type: z.string().optional().describe('Set "require_input" to automatically format as input-required task'),
+        attachments: z.array(z.string()).optional()
+      })).describe('Array of tasks to create')
+    },
+    async ({ brandId, tasks }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const createdTasks = []
+      for (const t of tasks) {
+        let statusVal = t.status || 'todo'
+        let reqInputVal = t.requiredInput || null
+        let tagsList: string[] = []
+
+        if (t.type === 'require_input') {
+          statusVal = 'pending'
+          reqInputVal = t.description || t.title || ''
+          if (t.attachments && t.attachments.length > 0) {
+            reqInputVal += `\n\nAttachments:\n` + t.attachments.join('\n')
+          }
+          tagsList.push('require_input')
+        }
+
+        const task = await prisma.workUnit.create({
+          data: {
+            title: t.title,
+            description: t.description || null,
+            status: statusVal,
+            priority: t.priority || 'medium',
+            weight: [1, 3, 5].includes(t.weight ?? 0) ? t.weight! : 3,
+            requiredInput: reqInputVal,
+            deadline: t.deadline ? new Date(t.deadline) : null,
+            brandId,
+            assigneeId: agent.id,
+            tags: tagsList
+          }
+        })
+        createdTasks.push(task)
+      }
+
+      const { eventEmitter } = await import('@/lib/events')
+      eventEmitter.emit('board_update')
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ ok: true, count: createdTasks.length, tasks: createdTasks.map(t => ({ id: t.id, title: t.title, status: t.status })) }, null, 2)
+        }]
+      }
+    }
+  )
+
+  server.tool(
+    'get_brand_analytics',
+    'Get brand historical analytics (likes, comments, engagement, time-series).',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+      from: z.string().optional().describe('ISO date string (from)'),
+      to: z.string().optional().describe('ISO date string (to)'),
+      platform: z.string().optional().describe('Filter platform e.g. instagram, tiktok'),
+    },
+    async ({ brandId, from, to, platform }) => {
+      const { GET: handleGetAnalytics } = await import('@/app/api/brands/[id]/analytics/route')
+      
+      const url = new URL(`http://localhost/api/brands/${brandId}/analytics`)
+      if (from) url.searchParams.set('from', from)
+      if (to) url.searchParams.set('to', to)
+      if (platform) url.searchParams.set('platform', platform)
+      
+      const req = new Request(url.toString(), {
+        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+      })
+      
+      const response = await handleGetAnalytics(req, { params: Promise.resolve({ id: brandId }) })
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to fetch analytics'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_social_insights',
+    'Get live brand social insights (sentiment, keywords, conversions, trends, top posts).',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+      from: z.string().optional().describe('ISO date string (from)'),
+      to: z.string().optional().describe('ISO date string (to)'),
+      platform: z.string().optional().describe('Filter platform e.g. instagram, tiktok'),
+    },
+    async ({ brandId, from, to, platform }) => {
+      const { GET: handleGetSocialInsight } = await import('@/app/api/brands/[id]/social-insight/route')
+      
+      const url = new URL(`http://localhost/api/brands/${brandId}/social-insight`)
+      if (from) url.searchParams.set('from', from)
+      if (to) url.searchParams.set('to', to)
+      if (platform) url.searchParams.set('platform', platform)
+      
+      const req = new Request(url.toString(), {
+        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+      })
+      
+      const response = await handleGetSocialInsight(req, { params: Promise.resolve({ id: brandId }) })
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to fetch social insights'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_brand_reviews',
+    'Fetch the latest Google Maps / GBP reviews for a brand.',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+      limit: z.number().int().min(1).max(50).optional().default(10),
+    },
+    async ({ brandId, limit }) => {
+      const { GET: handleGetReviews } = await import('@/app/api/brands/[id]/reviews/route')
+      
+      const url = new URL(`http://localhost/api/brands/${brandId}/reviews`)
+      url.searchParams.set('limit', String(limit))
+      
+      const req = new Request(url.toString(), {
+        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+      })
+      
+      const response = await handleGetReviews(req, { params: Promise.resolve({ id: brandId }) })
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to fetch reviews'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'list_brand_assets',
+    'List brand media assets from the board asset library.',
+    {
+      brandId: z.string(),
+      q: z.string().optional(),
+      folder: z.string().optional().describe('Maps to aiCategory/folder.'),
+      readyOnly: z.boolean().optional(),
+      limit: z.number().int().min(1).max(100).optional().default(50),
+    },
+    async ({ brandId, q, folder, readyOnly, limit }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      const assets = await prisma.mediaAsset.findMany({
+        where: {
+          brandId,
+          ...(readyOnly ? { aiReady: true } : {}),
+          ...(folder ? { aiCategory: folder } : {}),
+          ...(q ? { OR: [{ filename: { contains: q, mode: 'insensitive' } }, { aiCaption: { contains: q, mode: 'insensitive' } }, { aiTags: { has: q } }] } : {}),
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: limit ?? 50,
+      })
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: assets.length, assets }, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'save_agent_insights',
+    'Save agent self-learning insights.',
+    {
+      insights: z.string().describe('The markdown content of the self-learning insights.'),
+    },
+    async ({ insights }) => {
+      const { PATCH: handlePatchAgentInsights } = await import('@/app/api/agent/insights/route')
+      
+      const req = new Request('http://localhost/api/agent/insights', {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${agentApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ insights })
+      })
+      
+      const response = await handlePatchAgentInsights(req)
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to save insights'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'create_require_input_task',
+    'Create a task on Kanban that requires human input or review.',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+      title: z.string().describe('Concise task title explaining what input/review is needed.'),
+      description: z.string().describe('Details or questions for the human. Markdown supported.'),
+      priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
+      attachments: z.array(z.string()).optional().describe('URLs or paths of relevant assets.')
+    },
+    async ({ brandId, title, description, priority, attachments }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      let reqInputVal = description || title
+      if (attachments && attachments.length > 0) {
+        reqInputVal += `\n\nAttachments:\n` + attachments.join('\n')
+      }
+
+      const task = await prisma.workUnit.create({
+        data: {
+          title,
+          description,
+          status: 'pending',
+          priority: priority || 'medium',
+          weight: 3,
+          requiredInput: reqInputVal,
+          brandId,
+          assigneeId: agent.id,
+          tags: ['require_input']
+        }
+      })
+
+      const { writeAuditLog, actorFromContext } = await import('@/lib/audit')
+      await writeAuditLog({
+        actor: actorFromContext(null, agent),
+        action: 'TASK_CREATED',
+        resourceId: task.id,
+        newValue: task,
+        metadata: { source: 'create_require_input_task' }
+      })
+
+      const { eventEmitter } = await import('@/lib/events')
+      eventEmitter.emit('board_update')
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ ok: true, taskId: task.id, status: task.status, tags: task.tags }, null, 2)
+        }]
+      }
+    }
+  )
+
+  server.tool(
+    'save_local_document',
+    'Save a marketing report or strategy document locally as a Markdown file.',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+      filename: z.string().describe('File name with extension e.g. "weekly_report_2026-W24.md"'),
+      docType: z.enum(['weekly_report', 'monthly_report', 'strategy_plan', 'daily_memory', 'other']).describe('Type of document'),
+      content: z.string().describe('Markdown text content of the document.')
+    },
+    async ({ brandId, filename, docType, content }) => {
+      const { POST: handlePostDoc } = await import('@/app/api/brands/[id]/documents/route')
+      
+      const req = new Request(`http://localhost/api/brands/${brandId}/documents`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${agentApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ filename, docType, content })
+      })
+      
+      const response = await handlePostDoc(req, { params: Promise.resolve({ id: brandId }) })
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to save document'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'sync_to_kanban',
+    'Synchronize a local document to the Kanban board as a completed task.',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+      docId: z.string().describe('Document ID returned by save_local_document.'),
+      summary: z.string().optional().describe('Short summary to show in the task details.')
+    },
+    async ({ brandId, docId, summary }) => {
+      const { POST: handleSyncDoc } = await import('@/app/api/brands/[id]/documents/[docId]/sync/route')
+      
+      const req = new Request(`http://localhost/api/brands/${brandId}/documents/${docId}/sync`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${agentApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ summary })
+      })
+      
+      const response = await handleSyncDoc(req, { params: Promise.resolve({ id: brandId, docId }) })
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to sync document'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'write_daily_memory',
+    'Save daily memory markdown file for a brand.',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+      date: z.string().describe('Date in YYYY-MM-DD format.'),
+      content: z.string().describe('Markdown text containing daily records.')
+    },
+    async ({ brandId, date, content }) => {
+      const { POST: handlePostMemory } = await import('@/app/api/brands/[id]/memory/route')
+      
+      const req = new Request(`http://localhost/api/brands/${brandId}/memory`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${agentApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ date, content })
+      })
+      
+      const response = await handlePostMemory(req, { params: Promise.resolve({ id: brandId }) })
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to write memory'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'read_daily_memory',
+    'Read daily memory markdown files for a brand.',
+    {
+      brandId: z.string().describe('Brand ID linked to this agent.'),
+      days: z.number().int().optional().describe('Number of recent days to read. Default 3.'),
+      date: z.string().optional().describe('Specific date YYYY-MM-DD to read.'),
+    },
+    async ({ brandId, days, date }) => {
+      const { GET: handleGetMemory } = await import('@/app/api/brands/[id]/memory/route')
+      
+      const url = new URL(`http://localhost/api/brands/${brandId}/memory`)
+      if (days) url.searchParams.set('days', String(days))
+      if (date) url.searchParams.set('date', date)
+      
+      const req = new Request(url.toString(), {
+        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+      })
+      
+      const response = await handleGetMemory(req, { params: Promise.resolve({ id: brandId }) })
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to read memory'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'get_platform_benchmarks',
+    'Get platform-level benchmarks by category and location.',
+    {
+      category: z.string().describe('Brand business category e.g. chinese_restaurant'),
+      location: z.string().describe('Brand city / location e.g. Singapore'),
+      platform: z.string().optional().describe('Filter by platform e.g. instagram'),
+    },
+    async ({ category, location, platform }) => {
+      const { GET: handleGetBenchmarks } = await import('@/app/api/analytics/benchmarks/route')
+      
+      const url = new URL(`http://localhost/api/analytics/benchmarks`)
+      url.searchParams.set('category', category)
+      url.searchParams.set('location', location)
+      if (platform) url.searchParams.set('platform', platform)
+      
+      const req = new Request(url.toString(), {
+        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+      })
+      
+      const response = await handleGetBenchmarks(req)
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to fetch benchmarks'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'google_get_place_info',
+    'Get Google Place profile details for a brand location.',
+    {
+      placeId: z.string().describe('Google Place ID'),
+    },
+    async ({ placeId }) => {
+      const { GET: handleGetPlaces } = await import('@/app/api/integrations/google/places/route')
+      
+      const url = new URL(`http://localhost/api/integrations/google/places`)
+      url.searchParams.set('placeId', placeId)
+      
+      const req = new Request(url.toString(), {
+        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+      })
+      
+      const response = await handleGetPlaces(req)
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to fetch place details'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'fetch_public_social_profile',
+    'Fetch public social media profile stats (followers, posts, engagement).',
+    {
+      platform: z.enum(['instagram', 'facebook']).describe('Social platform'),
+      handle: z.string().describe('Public handle / profile username'),
+    },
+    async ({ platform, handle }) => {
+      const { GET: handleGetProfile } = await import('@/app/api/integrations/social/public-profile/route')
+      
+      const url = new URL(`http://localhost/api/integrations/social/public-profile`)
+      url.searchParams.set('platform', platform)
+      url.searchParams.set('handle', handle)
+      
+      const req = new Request(url.toString(), {
+        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+      })
+      
+      const response = await handleGetProfile(req)
+      const data = await response.json()
+      
+      if (response.status >= 400) {
+        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to fetch public profile'}` }], isError: true }
+      }
+      
+      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
   return server
 }

@@ -6,7 +6,7 @@
 
 AI Marketing Crew 是面向本地商家与 AMC 运营团队的 Human-AI 营销协作系统。产品把品牌、订阅、主理人、品牌主、AI Agent、内容草稿、素材库、Research TopicFeed、发布排期、评论反馈与活动获客放在同一个可审计工作台中。
 
-系统定位不是替代 Dify。当前产品原则是 **Dify-first**：工作流逻辑、知识库管理与复杂 Agent 编排优先放在 Dify；本系统负责 UI、权限、品牌/订阅数据、Agent 接入、存储、第三方发布与回退集成、审计和人工协同。
+系统定位不是替代 Dify。当前产品原则是 **Dify-first**：工作流逻辑、知识库管理与复杂 Agent 编排优先放在 Dify；本系统负责 UI、权限、品牌/订阅数据、Agent 接入、本地化文件与工作记忆系统存储、第三方发布与回退集成、审计和人工协同。2.0 架构全面弃用了对 Lark 通知的日常主动推送以及 Lark Drive 存储的依赖，统一使用本地文件系统和看板阻塞式待办来进行异步人机协作。
 
 ## 2. 产品目标
 
@@ -126,7 +126,7 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 
 ### 5.10 订阅与品牌创建
 
-用户可新增多个品牌。每新增一个品牌必须购买一个品牌订阅套餐；每个套餐绑定一个品牌。品牌创建时系统应初始化品牌 workspace。
+用户可新增多个品牌。每新增一个品牌必须购买一个品牌订阅套餐；每个套餐绑定一个品牌。品牌创建时系统应初始化品牌 workspace 本地存储与工作记忆目录（不再依赖 Lark Workspace 目录）。
 
 ### 5.11 Admin 管理后台
 
@@ -140,13 +140,13 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 2. 选择套餐并确认条款。
 3. 支付成功或订阅确认后创建/绑定 BrandSubscription。
 4. 创建品牌记录并绑定 BrandOwner。
-5. 自动初始化品牌 workspace：Huawei OBS 优先，Lark workspace 可选。
+5. 自动初始化品牌本地存储与记忆文件夹（替代旧版 Lark 共享目录）。
 6. 可绑定 AMC Agent，进入运营。
 
 ### 6.2 Agent 接入流程
 
 1. 主理人或品牌主生成 Agent Key / 初始化指令。
-2. Agent 读取 Skill、OpenAPI、SOP、Avatar Guide。
+2. Agent 读取 Skill、OpenAPI、SOP（统一从 docs/AGENT_CONNECTIVITY.md 获取）、Avatar Guide。
 3. Agent 调用 profile 接口更新自身名片。
 4. Agent 查询可运营品牌列表。
 5. 若多品牌且任务未指定品牌，必须询问或将任务置为 pending。
@@ -207,7 +207,7 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 
 ### 8.4 Lark
 
-用于可选 workspace、通知和文件上传回退。
+Lark 相关的通知卡片推送、云盘文件夹创建及文件上传工具接口在 2.0 架构中已被废弃。Agent 严禁在日常流中主动调用 Lark 接口，统一转用本地文件存储服务（`save_local_document`）和看板挂起任务（`create_require_input_task`）实现人机交互与文档共享。
 
 ### 8.5 Stripe
 
@@ -236,7 +236,7 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 6. 发布内容（Post）支持自动驾驶直接发布/排期与老板审批模式。
 7. 素材库支持上传、分类、整理和被草稿引用。
 8. Research 模块支持 TopicFeed markdown 写入、读取、搜索和归档。
-9. API metadata 暴露 OpenAPI、SOP 和 Skill，便于 Agent 接入。
+9. API metadata 暴露 OpenAPI、SOP (统一由 docs/AGENT_CONNECTIVITY.md 提供) 和 Skill，便于 Agent 唯一接入。
 10. TypeScript 与生产构建通过。
 
 ## 11. 近期 Roadmap

@@ -198,122 +198,147 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
-    const body = await request.json() as TaskCreateBody
-    const { title, description, materials, status, priority, estimatedHours, deadline, tags, weight, blockerTaskIds } = body
-    const brandId = typeof body.brandId === 'string' && body.brandId.trim() ? body.brandId.trim() : null
-    let assigneeId = body.assigneeId
+    const rawBody = await request.json()
+    const isArrayBody = Array.isArray(rawBody)
+    const isTasksArray = rawBody && Array.isArray(rawBody.tasks)
+    
+    const tasksInput = isArrayBody ? rawBody : (isTasksArray ? rawBody.tasks : [rawBody])
+    const batchBrandId = (!isArrayBody && rawBody && typeof rawBody.brandId === 'string') ? rawBody.brandId.trim() : null
 
-    if (!title) {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 })
-    }
+    const createdTasks = []
 
-    // If authenticated as Agent via API key, check if assigneeId is set and matches
-    if (authenticatedAgent) {
-      if (assigneeId !== undefined && assigneeId !== authenticatedAgent.id) {
-        return NextResponse.json({ error: 'Forbidden: Agents can only assign tasks to themselves' }, { status: 403 })
+    for (const taskItem of tasksInput) {
+      const { title, description, materials, status, priority, estimatedHours, deadline, tags, weight, blockerTaskIds, type, requiredInput, attachments } = taskItem
+      const brandId = taskItem.brandId ? String(taskItem.brandId).trim() : batchBrandId
+      let assigneeId = taskItem.assigneeId
+
+      if (!title) {
+        return NextResponse.json({ error: 'Title is required for all tasks' }, { status: 400 })
       }
-      assigneeId = authenticatedAgent.id
-    } else if (!assigneeId) {
-      return NextResponse.json({ error: 'assigneeId is required' }, { status: 400 })
-    }
 
-    if (authenticatedAgent && !brandId) {
-      const linkedBrandCount = await prisma.brandAgent.count({ where: { agentId: authenticatedAgent.id, active: true } })
-      if (linkedBrandCount > 1) {
-        return NextResponse.json({ error: 'brandId is required when this agent manages multiple brands' }, { status: 400 })
+      if (authenticatedAgent) {
+        if (assigneeId !== undefined && assigneeId !== authenticatedAgent.id) {
+          return NextResponse.json({ error: 'Forbidden: Agents can only assign tasks to themselves' }, { status: 403 })
+        }
+        assigneeId = authenticatedAgent.id
+      } else if (!assigneeId) {
+        return NextResponse.json({ error: 'assigneeId is required' }, { status: 400 })
       }
-    }
 
-    if (brandId) {
-      const actor = authenticatedAgent
-        ? { id: authenticatedAgent.id, type: 'AI_AGENT', role: 'USER' }
-        : session?.user
-          ? { id: session.user.id, type: session.user.type ?? 'HUMAN', role: session.user.role }
-          : null
-      if (!actor || !(await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role))) {
-        return NextResponse.json({ error: 'Forbidden: You do not have access to this brand' }, { status: 403 })
+      if (authenticatedAgent && !brandId) {
+        const linkedBrandCount = await prisma.brandAgent.count({ where: { agentId: authenticatedAgent.id, active: true } })
+        if (linkedBrandCount > 1) {
+          return NextResponse.json({ error: 'brandId is required when this agent manages multiple brands' }, { status: 400 })
+        }
       }
-    }
 
-    // Check permissions: Human users can only create tasks for permitted agents
-    if (session?.user && session.user.role !== 'ADMIN') {
-      const permissions = await prisma.agentPermission.findMany({
-        where: { humanId: session.user.id, agentId: assigneeId }
+      if (brandId) {
+        const actor = authenticatedAgent
+          ? { id: authenticatedAgent.id, type: 'AI_AGENT', role: 'USER' }
+          : session?.user
+            ? { id: session.user.id, type: session.user.type ?? 'HUMAN', role: session.user.role }
+            : null
+        if (!actor || !(await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role))) {
+          return NextResponse.json({ error: 'Forbidden: You do not have access to this brand' }, { status: 403 })
+        }
+      }
+
+      if (session?.user && session.user.role !== 'ADMIN') {
+        const permissions = await prisma.agentPermission.findMany({
+          where: { humanId: session.user.id, agentId: assigneeId }
+        })
+        if (permissions.length === 0) {
+          return NextResponse.json({ error: 'Forbidden: You do not have permission to assign tasks to this agent' }, { status: 403 })
+        }
+      }
+
+      const assignee = await prisma.user.findUnique({
+        where: { id: assigneeId },
+        select: { id: true, type: true }
       })
-      if (permissions.length === 0) {
-        return NextResponse.json({ error: 'Forbidden: You do not have permission to assign tasks to this agent' }, { status: 403 })
+
+      if (!assignee || assignee.type !== 'AI_AGENT') {
+        return NextResponse.json({ error: 'Invalid assigneeId: must be an AI_AGENT' }, { status: 400 })
       }
-    }
 
-    // Verify assignee exists and is an AI_AGENT
-    const assignee = await prisma.user.findUnique({
-      where: { id: assigneeId },
-      select: { id: true, type: true }
-    })
-
-    if (!assignee || assignee.type !== 'AI_AGENT') {
-      return NextResponse.json({ error: 'Invalid assigneeId: must be an AI_AGENT' }, { status: 400 })
-    }
-
-    if (brandId) {
-      const link = await prisma.brandAgent.findFirst({
-        where: { brandId, agentId: assigneeId, active: true },
-        select: { id: true },
-      })
-      if (!link) {
-        return NextResponse.json({ error: 'assigneeId is not linked to this brand' }, { status: 400 })
+      if (brandId) {
+        const link = await prisma.brandAgent.findFirst({
+          where: { brandId, agentId: assigneeId, active: true },
+          select: { id: true },
+        })
+        if (!link) {
+          return NextResponse.json({ error: 'assigneeId is not linked to this brand' }, { status: 400 })
+        }
       }
-    }
 
-    const validBlockerTaskIds = Array.isArray(blockerTaskIds)
-      ? blockerTaskIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')
-      : []
+      let statusVal = status || 'todo'
+      let reqInputVal = requiredInput || null
+      let tagsList = Array.isArray(tags) ? tags : typeof tags === 'string' ? tags.split(',').map((tag: string) => tag.trim()).filter(Boolean) : []
 
-    const newTask = await prisma.workUnit.create({
-      data: {
-        title,
-        description,
-        materials,
-        status: status || 'todo',
-        weight: normalizeTaskWeight(weight),
-        assigneeId,
-        priority: priority || 'medium',
-        estimatedHours: estimatedHours !== undefined && estimatedHours !== null && estimatedHours !== '' ? Number(estimatedHours) : null,
-        deadline: deadline ? new Date(deadline) : null,
-        tags: Array.isArray(tags) ? tags : typeof tags === 'string' ? tags.split(',').map((tag: string) => tag.trim()).filter(Boolean) : [],
-        brandId,
-        dependencies: validBlockerTaskIds.length > 0 ? {
-          create: validBlockerTaskIds.map((blockerId: string) => ({
-            blockerTaskId: blockerId
-          }))
-        } : undefined
-      },
-      include: {
-        dependencies: {
-          include: {
-            blockerTask: {
-              select: {
-                id: true,
-                title: true,
-                status: true
+      if (type === 'require_input' || rawBody?.type === 'require_input') {
+        statusVal = 'pending'
+        reqInputVal = description || title || ''
+        if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+          reqInputVal += `\n\nAttachments:\n` + attachments.join('\n')
+        }
+        if (!tagsList.includes('require_input')) {
+          tagsList.push('require_input')
+        }
+      }
+
+      const validBlockerTaskIds = Array.isArray(blockerTaskIds)
+        ? blockerTaskIds.filter((id): id is string => typeof id === 'string' && id.trim() !== '')
+        : []
+
+      const newTask = await prisma.workUnit.create({
+        data: {
+          title,
+          description,
+          materials,
+          status: statusVal,
+          weight: normalizeTaskWeight(weight),
+          assigneeId,
+          priority: priority || 'medium',
+          estimatedHours: estimatedHours !== undefined && estimatedHours !== null && estimatedHours !== '' ? Number(estimatedHours) : null,
+          deadline: deadline ? new Date(deadline) : null,
+          tags: tagsList,
+          brandId,
+          requiredInput: reqInputVal,
+          dependencies: validBlockerTaskIds.length > 0 ? {
+            create: validBlockerTaskIds.map((blockerId: string) => ({
+              blockerTaskId: blockerId
+            }))
+          } : undefined
+        },
+        include: {
+          dependencies: {
+            include: {
+              blockerTask: {
+                select: {
+                  id: true,
+                  title: true,
+                  status: true
+                }
               }
             }
           }
         }
-      }
-    })
+      })
 
-    await writeAuditLog({
-      actor: actorFromContext(session?.user, authenticatedAgent),
-      action: 'TASK_CREATED',
-      resourceId: newTask.id,
-      newValue: newTask,
-      metadata: { source: apiKey ? 'api' : 'web' }
-    })
+      await writeAuditLog({
+        actor: actorFromContext(session?.user, authenticatedAgent),
+        action: 'TASK_CREATED',
+        resourceId: newTask.id,
+        newValue: newTask,
+        metadata: { source: apiKey ? 'api' : 'web' }
+      })
+
+      createdTasks.push(newTask)
+    }
 
     eventEmitter.emit('board_update')
 
-    return NextResponse.json(newTask)
+    return NextResponse.json(isArrayBody || isTasksArray ? createdTasks : createdTasks[0])
   } catch (error) {
     console.error('Error creating task:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

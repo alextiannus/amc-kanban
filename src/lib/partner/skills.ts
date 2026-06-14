@@ -8,7 +8,7 @@ export async function readPartnerSkill(skillId: PartnerSkillId): Promise<string>
   switch (skillId) {
     case 'amc-integrations':
     case 'agent-instructions':
-      return readFile(path.join(/*turbopackIgnore: true*/ process.cwd(), 'skills', 'agent-instructions.md'), 'utf-8')
+      return readFile(path.join(/*turbopackIgnore: true*/ process.cwd(), 'docs', 'AGENT_CONNECTIVITY.md'), 'utf-8')
   }
 }
 

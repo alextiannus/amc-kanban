@@ -44,3 +44,7 @@ next-env.d.ts
 
 /src/generated/prisma
 /public/uploads/ugc/
+/public/uploads/brand-profiles/
+/documents/
+/memory/
+

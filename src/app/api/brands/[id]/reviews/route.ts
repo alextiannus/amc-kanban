@@ -3,21 +3,14 @@
  * 
  * Route: GET /api/brands/[id]/reviews — fetch reviews from all platforms
  *        POST /api/brands/[id]/reviews/reply — reply to a review
- * 
- * This endpoint abstracts reviews from multiple sources:
- * - Google Business reviews (via PostFast or Google API)
- * - Yelp reviews
- * - Other rating platforms
- * 
- * The backend automatically detects where reviews come from and selects
- * the appropriate reply mechanism.
  */
 
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastReplyReview } from '@/lib/integrations/postfast'
-import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { fetchGoogleGBPReviews, fetchGoogleReviews, getGoogleAccessToken, replyGoogleGBPReview } from '@/lib/integrations/google'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -31,13 +24,35 @@ interface ReplyRequest {
 // Fetch reviews from all configured platforms
 export async function GET(request: Request, { params }: Params) {
   const session = await getSession()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const apiKey = extractApiKey(request)
+  const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
+
+  if (!session?.user && !apiKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (apiKey && !authenticatedAgent) {
+    return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+  }
 
   const { id: brandId } = await params
-  if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  let userId: string
+  let userType: string
+  let userRole: string
+
+  if (session?.user) {
+    userId = session.user.id
+    userType = session.user.type ?? 'HUMAN'
+    userRole = session.user.role
+  } else {
+    userId = authenticatedAgent!.id
+    userType = 'AI_AGENT'
+    userRole = 'USER'
   }
+
+  const ok = await canSessionAccessBrandProject(brandId, userId, userType, userRole)
+  if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const brand = await prisma.brand.findFirst({
     where: { id: brandId },
@@ -45,6 +60,10 @@ export async function GET(request: Request, { params }: Params) {
       postfastApiKey: true,
       googleApiKey: true,
       googlePlaceId: true,
+      googleRefreshToken: true,
+      googleAccountId: true,
+      googleLocationId: true,
+      googlePreferOAuth: true,
     }
   })
 
@@ -52,26 +71,36 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
   }
 
-  try {
-    const allReviews: unknown[] = []
+  const url = new URL(request.url)
+  const limit = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : 10
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Fetch from PostFast (covers Google Business via PostFast, Yelp, etc.)
-    // ═══════════════════════════════════════════════════════════════════════════
-    if (brand.postfastApiKey) {
-      // TODO: Implement postfastGetReviews function
-      // This would fetch reviews from PostFast API
-      // const pfReviews = await postfastGetReviews(brand.postfastApiKey)
-      // allReviews.push(...pfReviews)
+  try {
+    let allReviews: any[] = []
+
+    // 1. Google Business Profile OAuth2 Flow (Preferred)
+    if (brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId) {
+      try {
+        const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
+        const result = await fetchGoogleGBPReviews(brand.googleAccountId || 'primary', brand.googleLocationId, accessToken)
+        if (!result.error && result.reviews) {
+          allReviews = result.reviews.slice(0, limit)
+        }
+      } catch (e) {
+        console.error('[API Reviews] GBP OAuth flow reviews fetch failed:', e)
+      }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Fetch from Google API directly (future)
-    // ═══════════════════════════════════════════════════════════════════════════
-    // if (brand.googleApiKey && brand.googlePlaceId) {
-    //   const googleReviews = await getGooglePlaceReviews(...)
-    //   allReviews.push(...googleReviews)
-    // }
+    // 2. Google Places API Key Flow (Fallback)
+    if (allReviews.length === 0 && brand.googlePlaceId && brand.googleApiKey) {
+      try {
+        const result = await fetchGoogleReviews(brand.googlePlaceId, brand.googleApiKey)
+        if (!result.error && result.reviews) {
+          allReviews = result.reviews.slice(0, limit)
+        }
+      } catch (e) {
+        console.error('[API Reviews] Places API reviews fetch failed:', e)
+      }
+    }
 
     return NextResponse.json({
       ok: true,
@@ -82,10 +111,7 @@ export async function GET(request: Request, { params }: Params) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch reviews'
     console.error(`[Reviews] Failed to fetch reviews for brand ${brandId}:`, error)
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
@@ -93,20 +119,44 @@ export async function GET(request: Request, { params }: Params) {
 // Reply to a customer review
 export async function POST(request: Request, { params }: Params) {
   const session = await getSession()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const apiKey = extractApiKey(request)
+  const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
+
+  if (!session?.user && !apiKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (apiKey && !authenticatedAgent) {
+    return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+  }
 
   const { id: brandId } = await params
-  if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  let userId: string
+  let userType: string
+  let userRole: string
+
+  if (session?.user) {
+    userId = session.user.id
+    userType = session.user.type ?? 'HUMAN'
+    userRole = session.user.role
+  } else {
+    userId = authenticatedAgent!.id
+    userType = 'AI_AGENT'
+    userRole = 'USER'
   }
+
+  const ok = await canSessionAccessBrandProject(brandId, userId, userType, userRole)
+  if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const brand = await prisma.brand.findFirst({
     where: { id: brandId },
     select: {
       postfastApiKey: true,
-      googleApiKey: true,
-      googlePlaceId: true,
+      googleRefreshToken: true,
+      googleAccountId: true,
+      googleLocationId: true,
+      googlePreferOAuth: true,
     }
   })
 
@@ -125,14 +175,34 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   try {
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Backend Selection Logic
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Try to use the specified platform, or auto-detect
-    const detectedPlatform = (platform || 'google') as 'google' | 'yelp' // PostFast currently supports these
+    const detectedPlatform = (platform || 'google').toLowerCase() as 'google' | 'yelp'
+
+    // Direct Google GBP OAuth reply if configured
+    if (detectedPlatform === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId) {
+      try {
+        const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
+        const result = await replyGoogleGBPReview({
+          accountId: brand.googleAccountId || 'primary',
+          locationId: brand.googleLocationId,
+          reviewId,
+          replyText,
+          accessToken,
+        })
+        if (result.success) {
+          return NextResponse.json({
+            ok: true,
+            reviewId,
+            platform: detectedPlatform,
+            replied: true,
+            via: 'direct_oauth',
+          })
+        }
+      } catch (e) {
+        console.error('[API Reviews] Google OAuth reply failed, falling back to PostFast...', e)
+      }
+    }
 
     if (brand.postfastApiKey) {
-      // PostFast handles replies for Google, Yelp, and other platforms
       const result = await postfastReplyReview({
         apiKey: brand.postfastApiKey,
         platform: detectedPlatform,
@@ -141,7 +211,6 @@ export async function POST(request: Request, { params }: Params) {
       })
 
       if (!result.success) {
-        console.error(`[Reviews] PostFast reply failed for brand ${brandId}:`, result.error)
         return NextResponse.json(
           { error: result.error || 'Failed to post reply' },
           { status: 400 }
@@ -157,13 +226,6 @@ export async function POST(request: Request, { params }: Params) {
       })
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Future: Direct Platform APIs
-    // if (detectedPlatform === 'google' && brand.googleApiKey && brand.googlePlaceId) {
-    //   return replyViaGoogleAPI(...)
-    // }
-    // ═══════════════════════════════════════════════════════════════════════════
-
     return NextResponse.json(
       {
         error: 'No review reply backend configured for this brand',
@@ -174,14 +236,7 @@ export async function POST(request: Request, { params }: Params) {
 
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Reply failed'
-    const details = error instanceof Error && 'code' in error ? String((error as { code?: unknown }).code ?? '') : undefined
     console.error(`[Reviews] Unexpected error for brand ${brandId}:`, error)
-    return NextResponse.json(
-      {
-        error: message,
-        details: details || undefined,
-      },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
