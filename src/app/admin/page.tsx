@@ -560,7 +560,26 @@ export default function AdminPage() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
+    <div className="admin-page min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8">
+      <style>{`
+        /* Force text colors to be black in light mode */
+        html:not(.dark) .admin-page,
+        html:not(.dark) .admin-page input,
+        html:not(.dark) .admin-page select,
+        html:not(.dark) .admin-page textarea {
+          color: #000000;
+        }
+        html:not(.dark) .admin-page .text-slate-900,
+        html:not(.dark) .admin-page .text-slate-800,
+        html:not(.dark) .admin-page .text-slate-700,
+        html:not(.dark) .admin-page .text-slate-600,
+        html:not(.dark) .admin-page .text-slate-500 {
+          color: #000000 !important;
+        }
+        html:not(.dark) .admin-page .text-slate-400 {
+          color: rgba(0, 0, 0, 0.6) !important;
+        }
+      `}</style>
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
