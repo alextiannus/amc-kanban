@@ -131,7 +131,19 @@ export function createAmcMcpServer(agentApiKey: string) {
       }
 
       const links = await prisma.brandAgent.findMany({
-        where: { agentId: agent.id, active: true },
+        where: {
+          agentId: agent.id,
+          active: true,
+          brand: {
+            status: { not: 'ARCHIVED' },
+            subscriptions: {
+              some: {
+                status: 'ACTIVE',
+                OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+              },
+            },
+          },
+        },
         include: {
           brand: {
             select: {
