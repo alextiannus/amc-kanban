@@ -5,7 +5,7 @@
 该中心直接入口置于用户个人 Profile 下拉菜单中，包含四个主要学习板块：
 *   **Q&A (常见问答)**：快速解答用户对 AI 机制、防风控、费用与审核方面的疑问。
 *   **AMC Manual (主理人手册)**：以步骤指南引导人类主理人如何高效配置、指派和训练 Agent。
-*   **Skill Market (Skill 市场)**：展示可供品牌选用的 AI 技能插槽，直观展现 Agent 能力地图。
+*   **Skill Hub (技能中心)**：展示可供品牌选用的 AI 技能插槽，直观展现 Agent 能力地图。
 *   **AMC School (AMC 学院)**：进阶实操课程（如 Zero Local Cache 机制、O2O 运营流量闭环玩法）。
 
 ---
@@ -14,7 +14,7 @@
 为了与 AMC 系统的现有视觉风格（Sleek Dark Mode, 渐变色, 玻璃态卡片）保持一致，本页面设计如下：
 *   **路由**：`/learn`
 *   **头部**：高对比度的渐变标题 `ACM 学习中心`，配有 `GraduationCap`（毕业帽）或 `Sparkles` 图标。
-*   **导航模式**：顶部或左侧使用 Tab 切换（Q&A、运营手册、Skill 市场、进阶学院）。
+*   **导航模式**：顶部或左侧使用 Tab 切换（Q&A、运营手册、技能中心、进阶学院）。
 *   **设计元素**：
     *   玻璃拟态卡片 (Glassmorphism backdrop-blur)。
     *   亮色细边框 (indigo/purple/emerald)。
@@ -40,7 +40,7 @@
 *   **第三步：人机交互指令协同 (Resume)**
     当 AI 遇到无法决断的事项（如优惠券链接失效、信息缺失）时，会把任务设为 `pending` 并创建 `require_input` 任务上板。主理人只需在看板卡片评论区回复修改意见，或直接修改文案，点击 “一键 Resume”，AI 即可无缝承接继续运行。
 
-### 板块 3: Skill Market (Skill 市场)
+### 板块 3: Skill Hub (技能中心)
 展示 ACM 当前支持启用的 AI 能力包目录：
 *   **📝 社交内容创作官 (Social Content Writer)**
     *   *能力*：识别产品图自动生成多语言推文草稿；自动解析热门小红书排版与 Hashtag。

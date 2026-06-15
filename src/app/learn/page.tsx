@@ -39,8 +39,8 @@ export default function LearnPage() {
   const [manualSearch, setManualSearch] = useState('')
   const [openManualSection, setOpenManualSection] = useState<string | null>('part2')
   
-  // Skill Market Toggles
-  const [skillCategory, setSkillCategory] = useState<'all' | 'content' | 'platform' | 'campaign' | 'ai'>('all')
+  // Skill Hub Toggles
+  const [skillCategory, setSkillCategory] = useState<'all' | 'marketing' | 'content' | 'self-improvement' | 'other'>('all')
   const [installedSkills, setInstalledSkills] = useState<string[]>(['social-writer', 'review-defender', 'analytics-logger'])
 
   // School Curriculum Category States
@@ -187,7 +187,7 @@ export default function LearnPage() {
     })
   }, [qaCategory, qaSearch])
 
-  // Skill Market Data
+  // Skill Hub Data
   const skills = [
     {
       id: 'social-writer',
@@ -201,7 +201,7 @@ export default function LearnPage() {
     },
     {
       id: 'review-defender',
-      category: 'platform',
+      category: 'marketing',
       title: '本地口碑守护者 (GBP & Review Defender)',
       desc: '24小时监控 Google Maps / 美团商家评价。5星好评由 AI 极速秒回以提升搜索引擎权重；低分差评私下拦截并生成看板预警，自动分发关怀优惠券。',
       icon: '⭐',
@@ -211,7 +211,7 @@ export default function LearnPage() {
     },
     {
       id: 'trend-hunter',
-      category: 'platform',
+      category: 'marketing',
       title: '同城热点观察哨 (Local Trend Hunter)',
       desc: '每日两次扫描同城本地生活热门话题及竞品曝光，自动为创作线索提供本地化 Hook。',
       icon: '🔎',
@@ -221,7 +221,7 @@ export default function LearnPage() {
     },
     {
       id: 'analytics-logger',
-      category: 'ai',
+      category: 'self-improvement',
       title: '数据巡检与记忆日志 (Analytics & Memory Logger)',
       desc: '周日自动拉取 PostFast / Lark 运营数据，整理成周报文档写入品牌 Memory 并回流看板。',
       icon: '🪵',
@@ -251,7 +251,7 @@ export default function LearnPage() {
     },
     {
       id: 'voucher-converter',
-      category: 'campaign',
+      category: 'marketing',
       title: '团购转化与卡券推广包',
       desc: '针对各大平台或本地卡券上线的推广活动。AI 自动在社交媒体生成带卡券倒计时和“限时抢购”引流推文。',
       icon: '🏷️',
@@ -317,7 +317,7 @@ export default function LearnPage() {
           {[
             { id: 'qa', label: '❓ 常见问题 (Q&A)', desc: '快速解答操作与发布疑问' },
             { id: 'manual', label: '📋 使用手册 (Manual)', desc: '标准协作 SOP 与系统说明' },
-            { id: 'skills', label: '🛒 技能市场 (Market)', desc: '品牌 AI 员工专项扩展包' },
+            { id: 'skills', label: '🛒 技能中心 (Skill Hub)', desc: '精选营销与内容创作技能包' },
             { id: 'school', label: '🎓 AMC 学院 (School)', desc: '流量提效与本地营销知识' }
           ].map(tab => (
             <button
@@ -687,7 +687,7 @@ export default function LearnPage() {
             </div>
           )}
 
-          {/* 3. Skill Market Tab */}
+          {/* 3. Skill Hub Tab */}
           {activeTab === 'skills' && (
             <div className="space-y-6 animate-in fade-in duration-200">
               
@@ -695,10 +695,10 @@ export default function LearnPage() {
               <div className="flex flex-wrap gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800/80 max-w-fit">
                 {[
                   { id: 'all', label: '全部技能' },
-                  { id: 'content', label: '内容创作' },
-                  { id: 'platform', label: '平台运营' },
-                  { id: 'campaign', label: '活动营销' },
-                  { id: 'ai', label: 'AI 能力扩展' }
+                  { id: 'marketing', label: '营销推广 (Marketing)' },
+                  { id: 'content', label: '内容创作 (Content Writing)' },
+                  { id: 'self-improvement', label: '自我优化 (Self-Improvement)' },
+                  { id: 'other', label: '其它常用 (Other Useful)' }
                 ].map(cat => (
                   <button
                     key={cat.id}
