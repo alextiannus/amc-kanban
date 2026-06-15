@@ -106,8 +106,10 @@ export default function BrandKanbanLane({ brandId }: { brandId: string }) {
                 >
                   {col.title}
                   <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full ${
-                      isActive ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold transition-colors ${
+                      col.id === 'pending' && count > 0
+                        ? (isActive ? 'bg-white text-red-600' : 'bg-red-500 text-white shadow-sm shadow-red-500/20')
+                        : (isActive ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300')
                     }`}
                   >
                     {count}
