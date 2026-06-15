@@ -104,8 +104,6 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [bulkTaggingActive, setBulkTaggingActive] = useState(false)
   const [bulkTagProgress, setBulkTagProgress] = useState(0)
 
-
-
   // Batch Tags Input
   const [batchTagsText, setBatchTagsText] = useState('')
 
@@ -148,6 +146,35 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       clearTimeout(timer)
     }
   }, [loadAssets])
+
+  const markForSchedule = async (assetIds: string | string[]) => {
+    if (!brandId) return
+    const ids = Array.isArray(assetIds) ? assetIds : [assetIds]
+    if (ids.length === 0) return
+
+    setUploading(true)
+    setError(null)
+    try {
+      await Promise.all(ids.map(async (assetId) => {
+        const original = assets.find(a => a.id === assetId)
+        const currentTags = original?.aiTags || []
+        const combinedTags = Array.from(new Set([...currentTags, '排期发布']))
+        const res = await fetch(`/api/brands/${brandId}/assets/${assetId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ aiTags: combinedTags, aiReady: true }),
+        })
+        if (!res.ok) throw new Error('Update failed')
+      }))
+      setSelected([])
+      await loadAssets()
+      alert('已成功将素材标记为“排期发布”，AI 将读取并自动处理！')
+    } catch {
+      setError('标记为排期发布失败')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const toggleSelect = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
@@ -826,11 +853,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                   使用排期排程
                 </h4>
                 <button
-                  onClick={() => setError('请在日历/草稿模块设置真实发布排期。')}
+                  onClick={() => markForSchedule(selected)}
                   className="w-full py-2.5 border border-indigo-100 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all flex items-center justify-center gap-2"
                 >
                   <Calendar className="w-4 h-4" />
-                  <span>标记为排期使用</span>
+                  <span>标记为排期发布</span>
                 </button>
               </div>
             </div>
@@ -999,11 +1026,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             {/* Bottom CTAs */}
             <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex flex-col gap-2">
               <button
-                onClick={() => setError('请前往 发布内容（Post） 模块创建并关联素材生成推文。')}
+                onClick={() => markForSchedule(activeAsset.id)}
                 className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 py-2.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
               >
-                <Plus className="w-4 h-4" />
-                <span>生成新推文</span>
+                <Calendar className="w-4 h-4" />
+                <span>标记为排期发布</span>
               </button>
 
               <button

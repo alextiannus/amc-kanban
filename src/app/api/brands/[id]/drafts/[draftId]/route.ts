@@ -110,9 +110,17 @@ export async function PATCH(request: Request, { params }: Params) {
     if (assetIds) {
       await tx.contentAssetRef.deleteMany({ where: { draftId } })
       if (assetIds.length > 0) {
-        const validAssets = await tx.mediaAsset.findMany({ where: { id: { in: assetIds }, brandId }, select: { id: true } })
+        const validAssets = await tx.mediaAsset.findMany({ where: { id: { in: assetIds }, brandId }, select: { id: true, aiTags: true } })
         await Promise.all(validAssets.map((asset, index) => tx.contentAssetRef.create({
           data: { draftId, assetId: asset.id, order: index },
+        })))
+        await Promise.all(validAssets.map((asset) => tx.mediaAsset.update({
+          where: { id: asset.id },
+          data: {
+            usedCount: { increment: 1 },
+            lastUsedAt: new Date(),
+            aiTags: asset.aiTags.filter((t) => t !== '排期发布'),
+          },
         })))
       }
     }
