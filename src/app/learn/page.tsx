@@ -59,63 +59,119 @@ export default function LearnPage() {
       id: 'q2',
       category: 'accounts',
       q: 'PostFast OAuth 授权的正确步骤是什么？',
-      a: '第一步：在看板聊天框向 AI 发送指令“帮我生成 PostFast 账号绑定链接”；第二步：点击 AI 返回的专属链接，在 PostFast 页面中选择对应渠道授权；第三步：授权完毕后，返回 AMC 控制台刷新或重新保存配置，账号即自动同步出现。具体步骤详见使用手册 SOP-001。',
+      a: '步骤一：在看板聊天框向 AI 发送指令“帮我生成 PostFast 账号绑定链接”；步骤二：点击 AI 返回的专属链接，在 PostFast 页面中选择对应渠道授权；步骤三：授权完毕后，返回 AMC 控制台刷新或重新保存配置，账号即自动同步出现。具体步骤详见使用手册 SOP-001。',
       tag: '账号与接入'
     },
     {
       id: 'q3',
       category: 'accounts',
-      q: '目前系统支持哪些社交媒体平台？',
+      q: '支持哪些社交平台？',
       a: '目前系统全面支持小红书、Instagram、Facebook、TikTok、Google Business Profile (GBP)、Yelp 等主流平台账号的发布管理、数据监控或评论回复。',
       tag: '账号与接入'
     },
     {
       id: 'q4',
-      category: 'posts',
-      q: 'AMC 多久发布一次内容？如何排期？',
-      a: 'AI 员工会根据您在设置中配置的“每日发帖容量上限”以及素材库中打上“排期发布”标签的素材，自动进行推文排版和日历排程。通常在各社交平台的流量高峰时间段（如上午 9:00 或下午 18:00）由 AI 触发自动发送。',
-      tag: '内容发布'
+      category: 'accounts',
+      q: '账号断连了怎么办？',
+      a: '如果由于 OAuth 令牌过期导致账号断开连接，您只需前往“集成配置”页面，在对应账号后点击“重新授权”，按照提示完成 PostFast 重新授权即可。详见 SOP-002。',
+      tag: '账号与接入'
     },
     {
       id: 'q5',
       category: 'posts',
-      q: '我需要人工审核每一条发帖内容吗？',
-      a: '这完全取决于您的发布模式。在“老板审批”模式下，AI 创作的每一篇草稿都会以 pending_review 状态死锁在看板上，生成 require_input 任务，必须由主理人手动确认；在“自动驾驶”模式下，AI 员工会在文案符合品牌调性阈值后自动排期发布。',
+      q: 'AMC 多久发布一次内容？',
+      a: 'AI 员工会根据您在设置中配置的“每日发帖容量上限”以及素材库中打上“排期发布”标签的素材，自动进行推文排版和日历排程。通常在各社交平台的流量高峰时间段由 AI 触发自动发送。',
       tag: '内容发布'
     },
     {
       id: 'q6',
       category: 'posts',
-      q: '内容发布失败了该怎么处理？',
-      a: '可在看板上点击查看失败的任务卡片以获取详细报错日志。最常见的原因是社交账号的 OAuth 令牌过期导致断连，请执行 SOP-002 重新授权后，在任务卡片上点击“重试发布”即可重新排队发送。',
+      q: '我需要审核每一条内容吗？',
+      a: '这完全取决于您的发布模式。在“老板审批”模式下，AI 创作的每一篇草稿都会以 pending_review 状态死锁在看板上，生成 require_input 任务，必须由主理人手动确认；在“自动驾驶”模式下，AI 员工会在文案符合品牌调性阈值后自动排期发布。',
       tag: '内容发布'
     },
     {
       id: 'q7',
-      category: 'influencers',
-      q: '套餐里包含达人探店，具体的协同流程是怎样的？',
-      a: 'AMC 采用人机协同工作流：AI 员工在后台扫描筛选同城合适达人并撰写邀请 Brief (require_input)；主理人确认名单后，使用 AI 准备好的文案模板，通过品牌 WhatsApp/微信等渠道直接给达人发送私信邀约，并安排探店出品及现场核销。',
-      tag: '达人探店'
+      category: 'posts',
+      q: '如何修改已排期的内容？',
+      a: '您可以在看板或内容日历中找到已排期的内容卡片，点击进入详情页，可直接修改文案、图片或调整发布时间，保存后系统会自动同步更新。',
+      tag: '内容发布'
     },
     {
       id: 'q8',
-      category: 'influencers',
-      q: '达人的费用如何进行结算？',
-      a: '主理人需根据 AI 达人卡片中提供的合作预算（或免费置换资源说明），在探店现场或按商定条件直接向达人转账/付现。达人探店产生的合作费用最终会按季度包含在您的 AMC 订阅套餐核算内。',
-      tag: '达人探店'
+      category: 'posts',
+      q: '发布失败了怎么处理？',
+      a: '可在看板上点击查看失败的任务卡片以获取详细报错日志。最常见的原因是社交账号的 OAuth 令牌过期导致断连，请执行 SOP-002 重新授权后，在任务卡片上点击“重试发布”即可重新排队发送。',
+      tag: '内容发布'
     },
     {
       id: 'q9',
-      category: 'billing',
-      q: '三个订阅套餐的核心区别是什么？如何中途升级？',
-      a: 'Essential（基础版）仅提供核心发帖与看板协作；Growth（增长版）新增了自动处理 Google Review / 同城趋势监控及达人管理功能；Scale（规模版）额外支持多门店管理、深度品牌 Memory 自动巡检和定制化 AI 能力。如需中途升级，可进入设置中心 ➜ 订阅计划中进行升级。',
-      tag: '订阅与账单'
+      category: 'influencers',
+      q: '达人探店/合作，谁来负责执行？',
+      a: '为了确保品牌定位与现场配合的绝对掌控，达人合作与到店体验由主理人在线下完全自主发起和安排（包括达人筛选、沟通邀约、现场接待以及费用结算）。AMC 的 AI 虚拟员工不参与达人的评估筛选，仅在预设的推广节点在看板上自动生成 require_input 状态的任务卡片，向您收集现场拍摄的照片或视频素材。',
+      tag: '达人探店'
     },
     {
       id: 'q10',
+      category: 'influencers',
+      q: 'AMC 协助筛选达人吗？',
+      a: 'AMC 系统不负责达人筛选、甄别与外联邀约。该决策权和执行过程完全交给主理人，主理人可结合本地趋势自主挑选最契合品牌的达人伙伴。在达人产出素材后，您可以直接将照片或视频上传至看板任务，由 AI 协助内容排版。',
+      tag: '达人探店'
+    },
+    {
+      id: 'q11',
+      category: 'influencers',
+      q: '达人费用如何结算？',
+      a: '所有的合作形式（如免费产品置换或付现合作）及费用结算完全由主理人与达人在线下直接商定和执行。AMC 订阅套餐仅覆盖系统功能使用、AI Agent 运营编排及自动化发布，不包含支付给达人的合作费用。',
+      tag: '达人探店'
+    },
+    {
+      id: 'q12',
+      category: 'influencers',
+      q: '探店素材如何上传与发布？',
+      a: '当看板上出现标红的 Require Input 达人探店素材上传任务时，点击卡片并将收集的高清图片与短视频素材上传。点击 Resume 确认后，AI 虚拟员工将自动进行小红书/Instagram 等多平台推文编写、Hashtags 匹配与排期发布。',
+      tag: '达人探店'
+    },
+    {
+      id: 'q13',
+      category: 'billing',
+      q: '三个套餐的核心区别是什么？',
+      a: 'Essential（基础版）仅提供核心发帖与看板协作；Growth（增长版）新增了自动处理 Google Review / 同城趋势监控及支持探店素材收集发布功能；Scale（规模版）额外支持多门店管理、深度品牌 Memory 自动巡检和定制化 AI 能力。',
+      tag: '订阅与账单'
+    },
+    {
+      id: 'q14',
+      category: 'billing',
+      q: '中途升级套餐如何操作？',
+      a: '您可以在任意时间进入设置中心 ➜ 订阅计划中点击升级。系统会自动按当前账期剩余天数折算费用，并立即解锁高级功能。',
+      tag: '订阅与账单'
+    },
+    {
+      id: 'q15',
+      category: 'billing',
+      q: '创始会员优惠如何申请？',
+      a: '如果您是受邀参与测试的创始会员，可在支付页面输入您的专属激活码，或联系 AMC 客服进行人工审核并申请续费折扣。',
+      tag: '订阅与账单'
+    },
+    {
+      id: 'q16',
       category: 'reports',
-      q: '月度绩效报告包含哪些数据？多久更新？',
-      a: '月度报告汇总了各平台的总触达（Reach）、总互动率（Engagement Rate）、粉丝净增长、Google 评分变化、以及排名前 5 的爆款贴文。数据每天晚上自动从 API 中读取缓存更新，并在每月月初自动汇编成月度 Summary。',
+      q: '月度报告包含哪些数据？',
+      a: '月度报告汇总了各平台的总触达（Reach）、总互动率（Engagement Rate）、粉丝净增长、Google 评分变化、以及排名前 5 的爆款贴文。',
+      tag: '数据与报告'
+    },
+    {
+      id: 'q17',
+      category: 'reports',
+      q: '如何查看单条内容的表现？',
+      a: '在主控面板的“数据报告”区域或“已发布”任务卡片中，点击具体的推文，即可查看其在对应平台上的实时点赞、分享、评论 and 曝光数据。',
+      tag: '数据与报告'
+    },
+    {
+      id: 'q18',
+      category: 'reports',
+      q: '数据多久更新一次？',
+      a: '系统通过 PostFast 及各大平台的 API 接口，每日晚上自动拉取并更新前一日的最新互动与曝光数据。',
       tag: '数据与报告'
     }
   ]
@@ -147,7 +203,7 @@ export default function LearnPage() {
       id: 'review-defender',
       category: 'platform',
       title: '本地口碑守护者 (GBP & Review Defender)',
-      desc: '24小时监控 Google Maps / 美团商家评价。5星好评由 AI 极速秒回以拉包搜索权重；低分差评私下拦截并生成看板预警，自动派发游戏预留补偿券。',
+      desc: '24小时监控 Google Maps / 美团商家评价。5星好评由 AI 极速秒回以提升搜索引擎权重；低分差评私下拦截并生成看板预警，自动分发关怀优惠券。',
       icon: '⭐',
       rating: '5.0',
       installs: '940+',
@@ -184,20 +240,20 @@ export default function LearnPage() {
       features: ['节日文案库', '智能推荐发布节奏', '节日特定模板']
     },
     {
-      id: 'dining-photos',
+      id: 'product-photos',
       category: 'content',
-      title: '产品摄影风格优化插件',
-      desc: '支持通过 AI 滤镜算法与构图优化方案，使产品宣传图具备“日式清新”、“港式市井烟火气”等高质感社交平台格调。',
+      title: '产品摄影与视觉优化插件',
+      desc: '支持通过 AI 滤镜算法与排版优化方案，使产品宣传图具备“日式清新”、“现代简约”、“高端质感”等高社交属性格调。',
       icon: '📸',
       rating: '4.6',
       installs: '190+',
-      features: ['风格化调色建议', '排版布局模版', '构图线框指导']
+      features: ['风格化调色建议', '排版布局模版', '构图视觉指导']
     },
     {
       id: 'voucher-converter',
       category: 'campaign',
       title: '团购转化与卡券推广包',
-      desc: '针对美团/大众点评/本地卡券上线的推广活动。AI 自动在社交媒体生成带卡券倒计时和“首批尝鲜”抢购的引流推文。',
+      desc: '针对各大平台或本地卡券上线的推广活动。AI 自动在社交媒体生成带卡券倒计时和“限时抢购”引流推文。',
       icon: '🏷️',
       rating: '4.8',
       installs: '540+',
@@ -219,12 +275,12 @@ export default function LearnPage() {
 
   // School Calendar Data
   const calendarEvents = [
-    { date: '1月-2月', event: '农历华人新年 (Chinese New Year)', tip: '提前15天开始上线捞鱼、年夜饭预订、团圆套餐推广。AI 建议：结合小红书喜庆排版发布捞鱼视频。' },
-    { date: '4月-5月', event: '开斋节 (Hari Raya Puasa)', tip: '适合推出合家欢套餐和清真友好菜品提示。AI 建议：在 Instagram 强调多元化本地社区聚餐故事。' },
-    { date: '6月', event: '端午节 (Dragon Boat Festival)', tip: '主推传统/创新粽子礼盒、预售倒计时。AI 建议：在看板上传包粽子视频素材由 AI 自动剪辑生成预热脚本。' },
-    { date: '8月9日', event: '新加坡国庆节 (National Day)', tip: '全岛爱国狂欢日，主推国庆红白主题甜品、买一送一或 $58.00 国庆专属限定双人套餐。' },
-    { date: '9月-10月', event: '中秋节 (Mid-Autumn Festival)', tip: '主推月饼礼盒定制送礼、博饼中秋活动。AI 建议：提前20天开启小红书种草预售。' },
-    { date: '12月25日', event: '圣诞节 (Christmas)', tip: '西方传统大节。主推火鸡套餐、圣诞聚会包房预订。AI 建议：主打高质感西式打卡、暖色调氛围感。' }
+    { date: '1月-2月', event: '农历华人新年 (Chinese New Year)', tip: '提前15天开始上线新年限定礼盒、新春大促推广。AI 建议：结合小红书喜庆排版发布礼盒开箱与主打产品种草视频。' },
+    { date: '4月-5月', event: '开斋节 (Hari Raya Puasa)', tip: '适合推出节日限定礼包和多元化本地社区故事推广。AI 建议：在 Instagram 强调本地化社区互动与温情故事。' },
+    { date: '6月', event: '端午节 (Dragon Boat Festival)', tip: '主推端午限定款产品、预售倒计时。AI 建议：在看板上传产品制作或包装过程视频素材，由 AI 自动剪辑生成预热脚本。' },
+    { date: '8月9日', event: '新加坡国庆节 (National Day)', tip: '全岛爱国狂欢日，主推国庆红白主题产品、限时买一送一或国庆专属折扣活动推广。' },
+    { date: '9月-10月', event: '中秋节 (Mid-Autumn Festival)', tip: '主推中秋联名/限定礼盒定制送礼活动。AI 建议：提前20天开启小红书种草预售。' },
+    { date: '12月25日', event: '圣诞节 (Christmas)', tip: '西方传统大节。主推圣诞限定礼品包、年终大促活动。AI 建议: 主打高质感节日氛围、暖色调视觉风格。' }
   ]
 
   return (
@@ -410,22 +466,32 @@ export default function LearnPage() {
                 {/* Part 1 */}
                 {openManualSection === 'part1' && (
                   <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 1：系统概览与人机协作</h2>
+                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 1：系统概览与角色分工</h2>
                     
                     <div className="space-y-4 text-slate-350 text-sm leading-relaxed">
                       <div>
-                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.1 AMC 是什么？</h3>
-                        <p>AMC（AI Marketing Crew）是您专属的 AI 社交媒体营销团队，包含文案编写、达人配对、口碑监控等虚拟员工。AI 虚拟员工负责做方案、找资料、产出内容，而人类主理人仅需在看板上进行审核，保障终审权完全受控。</p>
+                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.1 AMC 是什么</h3>
+                        <p>AMC（AI Marketing Crew）是您专属的 AI 社交媒体营销团队，包含文案编写、达人配对、口碑监控等虚拟员工。AI 虚拟员工负责做方案、找资料、产出内容，而人类主理人负责进行审核与把控，保障终审权完全受控。</p>
                       </div>
 
                       <div className="h-px bg-slate-800/50 my-2" />
 
                       <div>
-                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.2 主理人看板区域说明</h3>
+                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.2 看板介绍</h3>
                         <ul className="list-disc pl-5 space-y-1.5 mt-2">
-                          <li><strong className="text-slate-200">AI 序列</strong>：展示目前在线为您品牌服务的 Agent，可一键切换老板审批模式与自动驾驶模式。</li>
-                          <li><strong className="text-slate-200">待处理事项 / 任务泳道</strong>：当 AI 遇到素材缺失、链接失效或差评预警时，会在 **Require Input** 状态下死锁挂起，此时您在看板上会看到标红的任务提示，主理人在此栏中回复修改意见，AI 即可恢复运行。</li>
-                          <li><strong className="text-slate-250">集成配置</strong>：输入对接的 API 授权密钥和飞书 Workspace 配置，确保数据实时畅通。</li>
+                          <li><strong className="text-slate-200">各功能区说明</strong>：内容看板展示已发布和排期中的内容；社媒账号提供接入状态；数据报告展示关键效果指标；配置中心用于接入外部 API 密钥。</li>
+                          <li><strong className="text-slate-200">Require Input 任务说明</strong>：当 AI 遇到素材缺失、链接失效或差评预警时，会在 **Require Input** 状态下死锁挂起，此时您在看板上会看到明显的任务卡片，输入反馈意见即可推进 AI 运行。当该栏目有待审核任务时，该栏目的任务数量角标将自动变成醒目的红色。</li>
+                          <li><strong className="text-slate-200">通知机制</strong>：当有需要您确认的任务或账号断连时，系统会通过微信/飞书或浏览器推送实时通知。</li>
+                        </ul>
+                      </div>
+
+                      <div className="h-px bg-slate-800/50 my-2" />
+
+                      <div>
+                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.3 账号权限说明</h3>
+                        <ul className="list-disc pl-5 space-y-1.5 mt-2">
+                          <li><strong className="text-slate-200">主理人账号 vs AI Agent 账号</strong>：主理人拥有终审权与最高配置权限；AI Agent 拥有在被授权的范围内进行内容创作、数据拉取和辅助互动的操作权限。</li>
+                          <li><strong className="text-slate-200">多门店 / 多品牌管理</strong>：支持在一个 AMC 账户下无缝切换和配置多个不同的品牌资产或门店，由独立的 AI 虚拟员工组提供个性化营销服务。</li>
                         </ul>
                       </div>
                     </div>
@@ -435,23 +501,28 @@ export default function LearnPage() {
                 {/* Part 2 */}
                 {openManualSection === 'part2' && (
                   <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 2：社媒账号接入 SOP</h2>
+                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 2：账号接入操作</h2>
                     
                     {/* SOP-001 */}
                     <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-5 space-y-3 relative overflow-hidden">
                       <div className="absolute top-0 right-0 rounded-bl-lg bg-indigo-600 px-2 py-0.5 text-[9px] font-bold text-white uppercase">SOP-001</div>
-                      <h3 className="font-bold text-base text-slate-100">通过 PostFast OAuth 接入发布渠道</h3>
-                      <p className="text-xs text-slate-400">适用场景：首次接入 Instagram、Facebook、TikTok、小红书等平台账号用于内容发布排程。</p>
+                      <h3 className="font-bold text-base text-slate-100">通过 PostFast OAuth 接入社媒账号</h3>
+                      <p className="text-xs text-slate-400">适用场景：首次接入 Instagram、Facebook、TikTok、小红书等平台账号用于发布和排期。</p>
                       <div className="h-px bg-indigo-500/10 my-2" />
                       <div className="space-y-3 text-sm text-slate-300">
                         <p><strong className="text-indigo-400">前提条件</strong>：已在 AMC **“配置”**（集成配置）中填写并保存了您的 **PostFast API Key**。</p>
                         <ol className="list-decimal pl-5 space-y-2 text-xs leading-relaxed">
-                          <li><strong>获取授权链接</strong>：直接在看板上向 AI 虚拟员工发送消息，如 `“帮我生成 PostFast 账号绑定链接”`，AI 助手将自动调用 MCP 接口返回您的专属绑定 URL。或者直接登录您的 PostFast 后台。</li>
-                          <li><strong>执行授权</strong>：点击获取的链接，进入 PostFast 页面，选择对应的社媒平台，登录并完成官方 OAuth 授权连接。</li>
-                          <li><strong>触发同步</strong>：完成绑定后返回 AMC 控制台，点击右上角 **“配置”** 并点击 **“保存配置”**，绑定的账号及粉丝数据将自动同步呈现在主页“账号资产配置”网格中。</li>
+                          <li><strong>获取授权链接</strong>：
+                            <ul className="list-disc pl-4 mt-1 space-y-1">
+                              <li><span className="text-indigo-400">方法一（推荐）</span>：直接在看板上向 AI 虚拟员工发送消息，如 <code>“帮我生成 PostFast 账号绑定链接”</code>，AI 助手将自动调用 MCP 接口返回您的专属绑定 URL。</li>
+                              <li><span className="text-indigo-400">方法二</span>：直接登录您的 PostFast 后台控制台。</li>
+                            </ul>
+                          </li>
+                          <li><strong>执行授权</strong>：点击获取的链接或在 PostFast 后台选择对应的社媒平台完成 OAuth 官方授权绑定。</li>
+                          <li><strong>触发同步</strong>：完成绑定后返回 AMC 控制台，点击右上角 **“配置”** 并点击 **“保存配置”**（或直接刷新网页），绑定的账号及粉丝数据将自动同步呈现在主页“账号资产配置”网格中。</li>
                         </ol>
                         <div className="rounded bg-slate-950 p-2.5 text-[11px] text-amber-300/95 border border-amber-500/10">
-                          ⚠️ 注意：主页上的 “+ 添加新账号” 仅用于手动输入账号密码以供本地自动化运行脚本及爬虫数据获取，无法通过 PostFast 进行 API 自动发布。
+                          ⚠️ 注意：手动添加账号（通过主页“添加新账号”填写用户名密码）不能用于 PostFast 的 API 自动内容发布，仅供本地自动化运行脚本及爬虫使用。
                         </div>
                       </div>
                     </div>
@@ -460,12 +531,12 @@ export default function LearnPage() {
                     <div className="rounded-xl border border-slate-850 bg-slate-900/30 p-5 space-y-3 relative">
                       <div className="absolute top-0 right-0 rounded-bl-lg bg-slate-800 px-2 py-0.5 text-[9px] font-bold text-slate-400 uppercase">SOP-002</div>
                       <h3 className="font-bold text-base text-slate-100">社媒账号断连重新授权</h3>
-                      <p className="text-xs text-slate-450">触发条件：账号状态显示"断连"或内容发布失败。</p>
+                      <p className="text-xs text-slate-455">触发条件：账号状态显示"断连"或内容发布失败。</p>
                       <div className="h-px bg-slate-800/30 my-2" />
                       <ol className="list-decimal pl-5 space-y-2 text-xs text-slate-350 leading-relaxed">
-                        <li>进入配置中心，找到标记为断开状态的账号。</li>
-                        <li>点击该账号旁边的“重新授权”按钮，浏览器将重新跳转至 PostFast 授权授权页面。</li>
-                        <li>重新完成 OAuth 授权，确认返回 AMC 后状态显示为“已连接”。</li>
+                        <li>进入配置中心，找到断连账号。</li>
+                        <li>点击“重新授权” ➜ 重新完成 PostFast OAuth 流程。</li>
+                        <li>确认状态恢复为“已连接”。</li>
                       </ol>
                     </div>
                   </div>
@@ -483,8 +554,8 @@ export default function LearnPage() {
                       <p className="text-xs text-slate-450">执行频率：每月第一个工作日提交本月大方向（如有特定新品）。</p>
                       <div className="h-px bg-slate-800/30 my-2" />
                       <ol className="list-decimal pl-5 space-y-2 text-xs text-slate-350 leading-relaxed">
-                        <li>打开看板，向 AI 员工发送你的本月营销需求（如“本月推出烤鱼新品，需要小红书主推”）。</li>
-                        <li>AI 自动创建 Brief 行动卡片，并提取相关新品、价格以及要强调的方向。</li>
+                        <li>打开看板，向 AI 员工发送你的本月营销需求（如“本月推出新季主推款产品，需要小红书主推”）。</li>
+                        <li>AI 自动创建 Brief 行动卡片，并提取相关产品、价格以及要强调的方向。</li>
                         <li>AMC 在 24 小时内确认并根据此 Brief 自动生成发布日历计划。</li>
                       </ol>
                     </div>
@@ -524,7 +595,7 @@ export default function LearnPage() {
                       <div className="h-px bg-slate-800/30 my-2" />
                       <ul className="list-disc pl-5 space-y-2 text-xs text-slate-350 leading-relaxed">
                         <li><strong>触达总次数 (Reach)</strong>：您的发帖被总计看到的人次，是品牌曝光的底盘。</li>
-                        <li><strong>互动率 (Engagement Rate)</strong>：目标需大于 3% 以上，代表文案和配图对同城食客/买家极具吸引力。</li>
+                        <li><strong>互动率 (Engagement Rate)</strong>：目标需大于 3% 以上，代表文案和配图对同城消费者/买家极具吸引力。</li>
                         <li><strong>谷歌地图/ Yelp 评分监控</strong>：关注评分涨幅，五星好评是否有序回写以拉升搜索引擎权重。</li>
                       </ul>
                     </div>
@@ -539,23 +610,32 @@ export default function LearnPage() {
                     {/* SOP-007 */}
                     <div className="rounded-xl border border-slate-850 bg-slate-900/30 p-5 space-y-3 relative">
                       <div className="absolute top-0 right-0 rounded-bl-lg bg-slate-800 px-2 py-0.5 text-[9px] font-bold text-slate-400 uppercase">SOP-007</div>
-                      <h3 className="font-bold text-base text-slate-100">达人探店合作闭环流程</h3>
-                      <p className="text-xs text-slate-450">适用于 Growth（增长版）或 Scale（规模版）套餐，季度自动派发候选额度。</p>
+                      <h3 className="font-bold text-base text-slate-100">达人探店与素材收集流程</h3>
+                      <p className="text-xs text-slate-455">适用场景：主理人自主安排达人到店体验，AI Agent 负责生成任务以收集推广素材。</p>
                       <div className="h-px bg-slate-800/30 my-2" />
                       <div className="space-y-3 text-xs text-slate-350">
-                        <p className="font-semibold text-slate-200">🤖 AI 员工负责的环节 (全自动)：</p>
+                        <p className="font-semibold text-slate-200">🤖 AMC AI Agent 负责（协作配合）：</p>
                         <ul className="list-disc pl-5 space-y-1">
-                          <li>每日扫描筛选并输出同城餐饮/探店达人列表（包含粉丝数、以往带货表现及互动率）。</li>
-                          <li>为品牌量身设计适合该达人的探店 Brief（必拍清单、平台 Hashtags 要求）。</li>
-                          <li>生成邀约沟通的对话私信文案模板。</li>
+                          <li><strong>自动发起任务</strong>：在预设的推广节点，在看板上自动生成 <strong>Require Input</strong> 状态的素材收集任务卡片。</li>
+                          <li><strong>内容创作与发布</strong>：当主理人上传完探店素材并确认后，AI 自动进行文案排版、Hashtag 匹配，并排期发布。</li>
                         </ul>
                         
-                        <p className="font-semibold text-slate-200 mt-2">👤 人类主理人负责的步骤 (人工操作)：</p>
+                        <p className="font-semibold text-slate-200 mt-2">👤 主理人负责（完全自主安排）：</p>
                         <ol className="list-decimal pl-5 space-y-1.5">
-                          <li><strong>审核人选</strong>：在看板卡片上预览达人名单，点击批准确认或替换为备选达人。</li>
-                          <li><strong>私信外联</strong>：复制 AI 准备好的个性化外联消息模板，通过官方 WhatsApp/社媒私信发给达人。</li>
-                          <li><strong>探店当天接待</strong>：安排达人预约到店，出餐要快，前台提供 AMC 专属故事介绍话术。</li>
-                          <li><strong>核销与返点</strong>：通过套餐核算报表，向达人线下支付现金或转账（达人发帖后，AI 将在后台自动捕获数据并汇总报告）。</li>
+                          <li><strong>步骤 1：达人筛选与沟通</strong>：主理人根据品牌调性，在线下自行寻找达人、沟通合作机制（如产品免费体验、置换等）并确认到店时间。</li>
+                          <li><strong>步骤 2：到店接待与体验</strong>：
+                            <ul className="list-disc pl-4 mt-0.5 space-y-1">
+                              <li>提前准备好店内的特色/主推产品。</li>
+                              <li>安排优先体验与周到接待，可向达人做口头品牌背景/故事介绍。</li>
+                            </ul>
+                          </li>
+                          <li><strong>步骤 3：收集并上传素材</strong>：
+                            <ul className="list-disc pl-4 mt-0.5 space-y-1">
+                              <li>向达人索取拍摄好的照片或视频素材。</li>
+                              <li>打开看板上标红的 <strong>Require Input</strong> 探店任务卡片，将高清素材上传并保存。</li>
+                              <li>点击 <strong>Resume</strong> 推进任务，AI 虚拟员工将立即开始创作。</li>
+                            </ul>
+                          </li>
                         </ol>
                       </div>
                     </div>
@@ -578,19 +658,24 @@ export default function LearnPage() {
                         </thead>
                         <tbody className="divide-y divide-slate-800/50">
                           <tr>
-                            <td className="p-3 font-bold">内容发布显示“已失败”</td>
-                            <td className="p-3">社媒平台 OAuth 令牌失效断连</td>
-                            <td className="p-3 text-slate-400">去集成配置，对断连账号点击“重新授权”以刷新 token，然后对任务点击“重试”</td>
+                            <td className="p-3 font-bold">内容没有按时发布</td>
+                            <td className="p-3">账号断连</td>
+                            <td className="p-3 text-slate-400">执行 SOP-002，对断连账号点击“重新授权”以刷新 token，确认状态恢复为“已连接”</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">看板几天没有出现新草稿任务</td>
-                            <td className="p-3">未提交本月营销 Brief 需求</td>
-                            <td className="p-3 text-slate-400">参考 SOP-003，向 AI 发送你本月的要求；或者检查素材库中是否标记了“排期发布”标签</td>
+                            <td className="p-3 font-bold">看板没有新任务</td>
+                            <td className="p-3">当月 Brief 未提交</td>
+                            <td className="p-3 text-slate-400">执行 SOP-003，点击“新建 Brief”提交本月产品及促销活动；或者检查素材库中是否标记了“排期发布”标签</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">小红书/美团评价回复有延迟</td>
-                            <td className="p-3">前台浏览器插件（Extension）连接中断</td>
-                            <td className="p-3 text-slate-400">确保在您的前台发帖电脑中打开了 Chrome 开发者扩展并加载了 chrome-extension 目录</td>
+                            <td className="p-3 font-bold">达人内容与品牌不符</td>
+                            <td className="p-3">Brief 说明不够具体</td>
+                            <td className="p-3 text-slate-400">联系 AMC 客服或更新达人 Brief 模板中的必拍内容与话题要求</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">月度报告数据异常</td>
+                            <td className="p-3">账号数据同步延迟</td>
+                            <td className="p-3 text-slate-400">等待 24 小时后刷新；如数据仍未更新请联系 AMC 团队处理</td>
                           </tr>
                         </tbody>
                       </table>
@@ -732,7 +817,7 @@ export default function LearnPage() {
                       {[
                         { title: '课程 01：为什么同城实体店需要精细的社媒运营？', duration: '12m', progress: 100, desc: '餐饮/零售行业的同城获客漏斗核心逻辑。' },
                         { title: '课程 02：新加坡平台玩法全解析', duration: '20m', progress: 100, desc: 'Instagram, TikTok, 小红书, Google Maps 流量特点。' },
-                        { title: '课程 03：如何使用手机拍出高质感产品图', duration: '15m', progress: 50, desc: '日常光线、摆盘构图与成片调色教学。' },
+                        { title: '课程 03：如何使用手机拍出高质感产品图', duration: '15m', progress: 50, desc: '日常光线、产品构图与成片调色教学。' },
                         { title: '课程 04：AI Marketing Crew 与主理人的黄金协作', duration: '18m', progress: 0, desc: '解锁看板协作、要求输入与自动驾驶参数配置。' }
                       ].map((course, idx) => (
                         <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-2 hover:border-slate-700 transition duration-200 flex flex-col justify-between">
@@ -766,10 +851,10 @@ export default function LearnPage() {
                     <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-widest mb-3 px-1">进阶高级运营课程</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {[
-                        { title: '课程 05：剖析 Instagram 最新算法与流量分发机制', duration: '25m', desc: '算法如何推送 Reels 视频，哪些标签能精准定位同城人群。' },
-                        { title: '课程 06：零本地缓存架构 (Zero Local Cache) 实操细节', duration: '15m', desc: '理解为什么 AI 必须通过实时接口（MCP/REST）获取最新看板数据。' },
-                        { title: '课程 07：达人探店外联邀约与预算把控', duration: '22m', desc: '如何利用 AI 准备的 Brief 和邀约文案，实现 90% 的意向到达率。' },
-                        { title: '课程 08：用 Google Maps 评论回写与星级裂变新客到店', duration: '30m', desc: '全天候自动化差评拦截和好评模板生成，最大化搜索引擎权重。' }
+                        { title: '课程 05：剖析 Instagram 最新算法与同城流量分发机制', duration: '25m', desc: '算法如何推送 Reels 视频，哪些标签能精准定位同城人群。' },
+                        { title: '课程 06：如何写出让本地消费者产生强烈购买欲的文案', duration: '15m', desc: '掌握同城文案的痛点与吸睛钩子（Hooks），让您的产品文案极具吸引力与高转化率。' },
+                        { title: '课程 07：达人合作外联邀约与预算把控', duration: '22m', desc: '如何利用 AI 准备的 Brief 和邀约文案，实现 90% 的意向合作率。' },
+                        { title: '课程 08：用 Google Maps 评论回写与星级裂变引流新客', duration: '30m', desc: '全天候自动化差评拦截和好评模板生成，最大化搜索引擎权重。' }
                       ].map((course, idx) => (
                         <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-2 hover:border-slate-700 transition duration-200 flex flex-col justify-between">
                           <div className="space-y-1.5">
@@ -797,9 +882,9 @@ export default function LearnPage() {
               {schoolCategory === 'cases' && (
                 <div className="grid grid-cols-1 gap-4">
                   {[
-                    { title: 'Case 1: 一家新加坡新开中餐厅 3 个月小红书自然涨粉 2,000 完整路径', desc: '通过每日捕获同城热搜词并输出针对性美食笔记，配合本地达人第一波置换。内容展现真实烟火气，实现引流闭环。' },
-                    { title: 'Case 2: 精细化单条 Instagram Reels 短视频直接为包厢引流 50 桌预订复盘', desc: '拆解短视频的前 3 秒黄金 Hooks 设定，配合文案中卡券二维码的扫码返点闭环设计。' },
-                    { title: 'Case 3: 差评危机应对自救：如何利用 AI 评论守护让门店在 6 个月内从 3.8 分攀升至 4.6 分', desc: '利用 Google Maps / 美团商户接口，实现 24 小时低分预警人工私下赔付，以及向五星好评自动回复答谢拉升搜索。' }
+                    { title: 'Case 1: 一家新加坡独立设计师品牌 3 个月小红书自然涨粉 2,000 完整路径', desc: '通过每日捕获同城热度词并输出针对性产品穿搭/种草笔记，配合本地达人第一波置换。内容展现高质感生活方式，实现销售闭环。' },
+                    { title: 'Case 2: 精细化单条 Instagram Reels 短视频直接引流 500+ 笔产品订单复盘', desc: '拆解短视频的前 3 秒黄金 Hooks 设定，配合文案中限时优惠券及一键跳转下单的闭环设计。' },
+                    { title: 'Case 3: 差评与售后危机应对：如何利用 AI 评论守护让品牌评分在 6 个月内从 3.8 分攀升至 4.7 分', desc: '利用 Google Maps 及各大商户接口，实现 24 小时低分预警、关怀补偿，以及向五星好评自动回复答谢拉升搜索权重。' }
                   ].map((c, idx) => (
                     <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 space-y-2">
                       <div className="flex items-center gap-2 text-indigo-400">

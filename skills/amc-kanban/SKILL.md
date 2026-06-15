@@ -13,6 +13,7 @@
 2. **Onboarding**: 
    - 调用 `get_brand_subscription` 解析 `included_services` 订阅列表设定具体执行目标。
    - Onboarding 问卷、素材补充审核等交互均创建 `require_input` 类型任务上载至看板，取代任何主动推送通知。
+   - **达人探店与合作分工**：达人探店工作完全交给主理人线下安排（包括筛选探店人员、邀约沟通、到店体验等）。Agent 绝对不参与筛选或外联，只需在预设推广节点生成 `require_input` 挂起任务提出素材需求即可（触发条件是当月该探店任务未被记录完成，或者创作时缺少必要的图片/视频素材）。当主理人上传素材并确认后，Agent 执行文案与排期发布。
 3. **Daily Cycle**: 
    - 图文/视频草稿提交必须通过 `board_save_draft` 绑定具体账号的 `accountId`。
    - 每日回采分析数据（`get_social_insights`、`get_brand_analytics`）及评论，并通过 `write_daily_memory` 写入 memory 日志中。
