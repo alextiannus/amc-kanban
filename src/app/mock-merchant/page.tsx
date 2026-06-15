@@ -110,7 +110,7 @@ export default function MockMerchantPage() {
 
     const defaultReply = review.rating <= 3
       ? `非常抱歉给您带来不好的就餐体验。我是本店的店长，已将您反映的意见传达给服务组整改。我们为您提供了一份专属心意补偿，请前往查看：http://localhost:3000/game/${selectedBrandId}`
-      : '非常感谢您对我们门店和菜品的支持！期待您的下次光临。'
+      : '非常感谢您对我们门店和产品的支持！期待您的下次光临。'
 
     setTriggeringReviewId(review.id)
     setAlertInfo(null)

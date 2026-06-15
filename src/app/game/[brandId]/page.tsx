@@ -74,7 +74,7 @@ export default function GameH5Page() {
       spin: '开始抽奖 (5积分)',
       spinning: '正在抽奖...',
       noPoints: '积分不足，完成下方任务获得积分',
-      uploadPhotos: '📷 店内环境/菜品美图分享',
+      uploadPhotos: '📷 店内环境/产品美图分享',
       uploadPhotosSub: '成功上传 3 张店内照片即可获得 5 个积分',
       submitReview: '⭐ 社媒平台发表好评',
       submitReviewSub: '在 Google Maps/小红书/Instagram 发布好评或标记并上传凭证图片获得 5 个积分',
@@ -149,7 +149,7 @@ export default function GameH5Page() {
 
   // Copy-paste Text recommendation (Standard & AI-generated options)
   const defaultRecommendedCopy = lang === 'zh'
-    ? '非常棒的体验！店里环境很好，服务态度也超级赞，饮品/菜品非常美味，强烈推荐！'
+    ? '非常棒的体验！店里环境很好，服务态度也超级赞，服务/产品非常优质，强烈推荐！'
     : 'Great experience! Friendly staff, cozy vibes, and amazing drinks. Highly recommend this place!'
 
   const aiRecommendedCopy = lang === 'zh'

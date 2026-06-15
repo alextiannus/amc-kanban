@@ -26,7 +26,7 @@ import {
 // Category definitions
 const CATEGORY_META = [
   { id: 'all', label: '全部', color: 'text-slate-500 bg-slate-100 dark:bg-slate-800' },
-  { id: 'food', label: '菜品', color: 'text-orange-500 bg-orange-50 dark:bg-orange-900/20' },
+  { id: 'food', label: '产品', color: 'text-orange-500 bg-orange-50 dark:bg-orange-900/20' },
   { id: 'interior', label: '店内环境', color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
   { id: 'event', label: '活动/节日', color: 'text-purple-500 bg-purple-50 dark:bg-purple-900/20' },
   { id: 'review', label: '客户反馈', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' },
@@ -59,7 +59,12 @@ interface DashboardAsset {
 }
 
 function toCategory(asset: DashboardAsset) {
-  return asset.aiCategory || 'raw'
+  const cat = asset.aiCategory || 'raw'
+  if (cat === 'food' || cat === '菜品' || cat === '产品') return 'food'
+  if (cat === 'interior' || cat === '环境' || cat === '店内环境') return 'interior'
+  if (cat === 'event' || cat === '活动' || cat === '活动/节日') return 'event'
+  if (cat === 'review' || cat === '反馈' || cat === '客户反馈') return 'review'
+  return cat
 }
 
 function isPreviewable(asset: DashboardAsset) {
@@ -86,7 +91,7 @@ interface DashboardAssetsProps {
 
 export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [activeCategory, setActiveCategory] = useState('all')
-  const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos'>('all')
+  const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos' | 'scheduled'>('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null)
@@ -155,17 +160,12 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     setUploading(true)
     setError(null)
     try {
-      await Promise.all(ids.map(async (assetId) => {
-        const original = assets.find(a => a.id === assetId)
-        const currentTags = original?.aiTags || []
-        const combinedTags = Array.from(new Set([...currentTags, '排期发布']))
-        const res = await fetch(`/api/brands/${brandId}/assets/${assetId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ aiTags: combinedTags, aiReady: true }),
-        })
-        if (!res.ok) throw new Error('Update failed')
-      }))
+      const res = await fetch(`/api/brands/${brandId}/assets`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetIds: ids, appendTags: ['排期发布'], aiReady: true }),
+      })
+      if (!res.ok) throw new Error('Update failed')
       setSelected([])
       await loadAssets()
       alert('已成功将素材标记为“排期发布”，AI 将读取并自动处理！')
@@ -207,6 +207,8 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       if (!a.mimeType.startsWith('image/')) return false
     } else if (viewFilter === 'videos') {
       if (!a.mimeType.startsWith('video/')) return false
+    } else if (viewFilter === 'scheduled') {
+      if (!a.aiTags.includes('排期发布')) return false
     }
 
     // 2. Category tag filter
@@ -233,6 +235,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const countAiPending = assets.filter(a => !a.aiReady).length
   const countImages = assets.filter(a => a.mimeType.startsWith('image/')).length
   const countVideos = assets.filter(a => a.mimeType.startsWith('video/')).length
+  const countScheduled = assets.filter(a => a.aiTags.includes('排期发布')).length
 
   const activeAsset = assets.find(a => a.id === activeAssetId) || filtered[0] || assets[0]
 
@@ -525,6 +528,17 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countAiPending}</span>
             </button>
 
+            <button
+              onClick={() => setViewFilter('scheduled')}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${viewFilter === 'scheduled' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              <div className="flex items-center gap-3">
+                <Calendar className="w-4 h-4" />
+                <span>排期发布</span>
+              </div>
+              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countScheduled}</span>
+            </button>
+
             <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-2 mx-3"></div>
 
             <button
@@ -650,7 +664,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none hover:bg-slate-50 transition-all"
           >
             <option value="素材库">根目录 (素材库)</option>
-            <option value="菜品">菜品目录</option>
+            <option value="产品">产品目录</option>
             <option value="环境">环境目录</option>
             <option value="活动">活动目录</option>
           </select>
@@ -690,9 +704,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                         />
                       ) : previewable && isVideo ? (
                         <div className="relative w-full h-full">
-                          <img
-                            src={asset.url}
-                            alt="video thumbnail"
+                          <video
+                            src={`${asset.url}#t=0.1`}
+                            preload="metadata"
+                            muted
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                           <div className="absolute inset-0 flex items-center justify-center bg-black/25">
@@ -908,7 +923,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               <div className="rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 shadow-sm">
                 <div className="aspect-[4/3] w-full bg-slate-200 dark:bg-slate-800 relative flex items-center justify-center">
                   {isPreviewable(activeAsset) ? (
-                    <img src={activeAsset.url} alt="detail asset" className="w-full h-full object-cover" />
+                    activeAsset.mimeType.startsWith('video/') ? (
+                      <video src={`${activeAsset.url}#t=0.1`} preload="metadata" muted className="w-full h-full object-cover" />
+                    ) : (
+                      <img src={activeAsset.url} alt="detail asset" className="w-full h-full object-cover" />
+                    )
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center">
                       {activeAsset.mimeType.startsWith('video/') ? (

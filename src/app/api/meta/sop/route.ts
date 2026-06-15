@@ -4,7 +4,7 @@ import path from 'path'
 
 export async function GET(request: Request) {
   try {
-    const filePath = path.join(process.cwd(), 'docs', 'AGENT_CONNECTIVITY.md')
+    const filePath = path.join(process.cwd(), 'skills', 'amc-kanban', 'SKILL.md')
     const content = await readFile(filePath, 'utf-8')
     const shouldDownload = new URL(request.url).searchParams.get('download') === '1'
     const headers: Record<string, string> = {
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       'Access-Control-Allow-Origin': '*',
     }
     if (shouldDownload) {
-      headers['Content-Disposition'] = 'attachment; filename="AGENT_CONNECTIVITY.md"'
+      headers['Content-Disposition'] = 'attachment; filename="SKILL.md"'
     }
 
     return new NextResponse(content, {
@@ -20,6 +20,6 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error('Error serving SOP endpoint:', error)
-    return NextResponse.json({ error: 'Failed to load SOP specification' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to load AMC Agent Skill specification' }, { status: 500 })
   }
 }

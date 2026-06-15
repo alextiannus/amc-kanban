@@ -122,14 +122,19 @@ export async function POST(request: Request, { params }: Params) {
       await Promise.all(validAssets.map((asset, index) => tx.contentAssetRef.create({
         data: { draftId: created.id, assetId: asset.id, order: index },
       })))
-      await Promise.all(validAssets.map((asset) => tx.mediaAsset.update({
-        where: { id: asset.id },
-        data: {
-          usedCount: { increment: 1 },
-          lastUsedAt: new Date(),
-          aiTags: asset.aiTags.filter((t) => t !== '排期发布'),
-        },
-      })))
+      
+      // Sort asset IDs to avoid deadlocks under concurrent transactions
+      const sortedAssets = [...validAssets].sort((a, b) => a.id.localeCompare(b.id))
+      for (const asset of sortedAssets) {
+        await tx.mediaAsset.update({
+          where: { id: asset.id },
+          data: {
+            usedCount: { increment: 1 },
+            lastUsedAt: new Date(),
+            aiTags: asset.aiTags.filter((t) => t !== '排期发布'),
+          },
+        })
+      }
     }
 
     if (status === 'pending_review') {

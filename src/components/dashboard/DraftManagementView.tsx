@@ -572,7 +572,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                         return (
                           <div key={assetId} className="relative aspect-square rounded-lg border border-slate-200 bg-slate-100 overflow-hidden dark:border-slate-800 dark:bg-slate-900 group shadow-sm">
                             {isVid ? (
-                              <video src={asset.url} className="h-full w-full object-cover" muted />
+                              <video src={`${asset.url}#t=0.1`} preload="metadata" className="h-full w-full object-cover" muted />
                             ) : (
                               <img src={asset.url} className="h-full w-full object-cover" alt="" />
                             )}
@@ -666,7 +666,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                             }`}
                           >
                             {isVid ? (
-                              <video src={asset.url} className="h-full w-full object-cover" muted />
+                              <video src={`${asset.url}#t=0.1`} preload="metadata" className="h-full w-full object-cover" muted />
                             ) : (
                               <img src={asset.url} className="h-full w-full object-cover" alt="" />
                             )}

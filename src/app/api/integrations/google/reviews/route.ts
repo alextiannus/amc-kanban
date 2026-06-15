@@ -32,7 +32,7 @@ async function generateReviewReply(
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
     if (rating >= 4) {
-      return `非常感谢 ${reviewer} 对我们【${brandName}】的支持和五星好评！我们会继续努力提供更美味的菜品和优质的服务，期待您的再次光临！`
+      return `非常感谢 ${reviewer} 对我们【${brandName}】的支持和五星好评！我们会继续努力提供更优质的产品和服务，期待您的再次光临！`
     } else {
       const linkText = compensationLink ? ` 请点击链接领取我们的诚意补偿：${compensationLink}` : ''
       return `您好 ${reviewer}，非常抱歉这次消费没能让您满意。我们非常重视您的反馈，已经安排门店进行整改。${linkText} 期待能为您提供更好的体验。`
@@ -47,7 +47,7 @@ async function generateReviewReply(
 客户评论内容："${comment || '（未写评论，仅给出了星级）'}"
 ${
   rating >= 4
-    ? `这是一条好评。请用热情的语气感谢顾客，并针对评论中提到的具体菜品或细节进行回应，邀请他们再次光临。`
+    ? `这是一条好评。请用热情的语气感谢顾客，并针对评论中提到的具体产品或细节进行回应，邀请他们再次光临。`
     : `这是一条差评或中评。请以诚恳、抱歉的语气致歉，说明我们非常重视，并表示已经反馈给后厨/服务团队整改。`
 }
 ${

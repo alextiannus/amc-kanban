@@ -53,7 +53,7 @@ const faqData: FaqItem[] = [
   {
     category: 'security',
     question: '我是餐饮/零售门店的老板，我们团队精力有限，怎么把控 AI 自动生成的自媒体文案？',
-    answer: '您完全不需要担心。AMC 拥有“主理人终审锁”机制。AI 助手根据您的产品、菜品和本地热门话题写好发帖草稿后，任务会挂起并以看板卡片的形式呈现。品牌主理人或店长觉得没问题，点一下“审核通过”一键解锁，系统才会安全模拟把帖子发出去。AI 24小时不知疲倦地工作，配合主理人的专业把关审核，完美保障品牌调性，绝对不会擅自做主乱说话。'
+    answer: '您完全不需要担心。AMC 拥有“主理人终审锁”机制。AI 助手根据您的产品和本地热门话题写好发帖草稿后，任务会挂起并以看板卡片的形式呈现。品牌主理人或店长觉得没问题，点一下“审核通过”一键解锁，系统才会安全模拟把帖子发出去。AI 24小时不知疲倦地工作，配合主理人的专业把关审核，完美保障品牌调性，绝对不会擅自做主乱说话。'
   },
   {
     category: 'security',
@@ -494,7 +494,7 @@ export default function PitchDeckPage() {
                                     <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-[10px] font-mono font-black text-indigo-400 shrink-0">主理人</div>
                                     <div className="flex-1 space-y-1">
                                       <div className="text-[10px] text-slate-500 font-bold">品牌主理人 15:40</div>
-                                      <p className="text-[10px] text-slate-200 leading-relaxed font-normal">“这段菜品文案描述稍微调整了优惠折扣，已在卡片中直接修改，请一键 Resume 自动同步发布。”</p>
+                                      <p className="text-[10px] text-slate-200 leading-relaxed font-normal">“这段产品文案描述稍微调整了优惠折扣，已在卡片中直接修改，请一键 Resume 自动同步发布。”</p>
                                     </div>
                                   </div>
                                 </>

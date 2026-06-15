@@ -390,3 +390,82 @@ export async function GET(request: Request, { params }: Params) {
   const folders = Array.from(new Set(assets.map((asset) => asset.aiCategory || '素材库')))
   return NextResponse.json({ assets, folders })
 }
+
+// PATCH /api/brands/[id]/assets
+// Bulk update assets (tags, category, aiReady status)
+export async function PATCH(request: Request, { params }: Params) {
+  const session = await getSession()
+  const apiKey = extractApiKey(request)
+  const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
+
+  if (!session?.user && !apiKey) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (apiKey && !authenticatedAgent) {
+    return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
+  }
+
+  let user = session?.user
+  if (apiKey && authenticatedAgent) {
+    user = {
+      id: authenticatedAgent.id,
+      email: authenticatedAgent.email,
+      type: authenticatedAgent.type,
+      role: 'USER',
+    }
+  }
+
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { id: brandId } = await params
+  const ok = await canSessionAccessBrandProject(brandId, user.id, user.type ?? 'HUMAN', user.role)
+  if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const body = await request.json().catch(() => ({}))
+  const assetIds = body.assetIds
+  const aiTags = body.aiTags
+  const appendTags = body.appendTags
+  const aiReady = body.aiReady
+
+  if (!Array.isArray(assetIds) || assetIds.length === 0) {
+    return NextResponse.json({ error: 'assetIds must be a non-empty array' }, { status: 400 })
+  }
+
+  if (Array.isArray(appendTags) && appendTags.length > 0) {
+    const assets = await prisma.mediaAsset.findMany({
+      where: { id: { in: assetIds }, brandId },
+      select: { id: true, aiTags: true }
+    })
+    
+    // Process sequentially to avoid deadlocks under high concurrency
+    await prisma.$transaction(
+      assets.map(asset => {
+        const merged = Array.from(new Set([...asset.aiTags, ...appendTags]))
+        return prisma.mediaAsset.update({
+          where: { id: asset.id },
+          data: {
+            aiTags: merged,
+            ...(aiReady !== undefined ? { aiReady } : {})
+          }
+        })
+      })
+    )
+  } else {
+    const dataToUpdate: any = {}
+    if (aiTags !== undefined) dataToUpdate.aiTags = aiTags
+    if (aiReady !== undefined) dataToUpdate.aiReady = aiReady
+
+    await prisma.mediaAsset.updateMany({
+      where: {
+        id: { in: assetIds },
+        brandId,
+      },
+      data: dataToUpdate,
+    })
+  }
+
+  return NextResponse.json({ ok: true, updatedCount: assetIds.length })
+}
