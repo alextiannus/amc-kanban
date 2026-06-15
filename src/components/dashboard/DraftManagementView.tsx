@@ -19,7 +19,17 @@ import {
   Tag,
   Users,
   X,
+  Play,
+  Video,
+  Link,
+  Loader2,
 } from 'lucide-react'
+
+function isVideoUrl(url: string): boolean {
+  if (!url) return false
+  const path = url.split('?')[0]
+  return /\.(mp4|mov|avi|webm|ogg|m4v|3gp)(?:\?.*)?$/i.test(path)
+}
 
 type DraftItem = {
   id: string
@@ -179,6 +189,10 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const [reviewNote, setReviewNote] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  const [brandAssets, setBrandAssets] = useState<Array<{ id: string; url: string; filename?: string | null; mimeType: string }>>([])
+  const [mediaUrlsInput, setMediaUrlsInput] = useState('')
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([])
+
   const selectedDraft = useMemo(() => drafts.find((draft) => draft.id === selectedId) || null, [drafts, selectedId])
 
   const loadDrafts = async () => {
@@ -208,8 +222,20 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     }
   }
 
+  const loadBrandAssets = async () => {
+    if (!brandId) return
+    try {
+      const res = await fetch(`/api/brands/${brandId}/assets`)
+      const json = await res.json().catch(() => ({}))
+      if (res.ok) setBrandAssets(json.assets || [])
+    } catch {
+      setBrandAssets([])
+    }
+  }
+
   useEffect(() => {
     void loadDrafts()
+    void loadBrandAssets()
   }, [brandId])
 
   useEffect(() => {
@@ -223,6 +249,8 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       setAccountId('')
       setScheduledAt('')
       setAgentNote('')
+      setMediaUrlsInput('')
+      setSelectedAssetIds([])
       return
     }
     setCaption(selectedDraft.caption)
@@ -230,6 +258,8 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setAccountId(selectedDraft.accountId || selectedDraft.account?.id || '')
     setScheduledAt(toDateTimeLocal(selectedDraft.scheduledAt))
     setAgentNote(selectedDraft.agentNote || '')
+    setMediaUrlsInput((selectedDraft.mediaUrls || []).join(', '))
+    setSelectedAssetIds((selectedDraft.assetRefs || []).map((ref) => ref.asset.id))
     setReviewNote('')
   }, [selectedDraft?.id])
 
@@ -281,6 +311,8 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setAccountId('')
     setScheduledAt('')
     setAgentNote('')
+    setMediaUrlsInput('')
+    setSelectedAssetIds([])
     setReviewNote('')
   }
 
@@ -297,6 +329,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     }
     setSaving(true)
     setError(null)
+    const mediaUrls = mediaUrlsInput.split(',').map((url) => url.trim()).filter(Boolean)
     try {
       const endpoint = selectedDraft ? `/api/brands/${brandId}/drafts/${selectedDraft.id}` : `/api/brands/${brandId}/drafts`
       const res = await fetch(endpoint, {
@@ -309,6 +342,8 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
           scheduledAt: fromDateTimeLocal(scheduledAt),
           agentNote,
           status: nextStatus || selectedDraft?.status || 'draft',
+          mediaUrls,
+          assetIds: selectedAssetIds,
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -515,16 +550,143 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 className="min-h-20 w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
 
-              {selectedDraft?.assetRefs.length ? (
-                <div className="rounded-md bg-slate-50 p-3 dark:bg-slate-950">
-                  <p className="mb-2 text-xs font-black text-slate-500 dark:text-slate-400">已引用素材</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedDraft.assetRefs.map((ref) => (
-                      <span key={ref.id} className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-300">{ref.asset.filename || truncateMiddle(ref.asset.id)}</span>
-                    ))}
-                  </div>
+              {/* Media & Assets Section */}
+              <div className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-black text-slate-800 dark:text-slate-200">媒体与素材</h4>
+                  <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    已选: {selectedAssetIds.length + mediaUrlsInput.split(',').map((u) => u.trim()).filter(Boolean).length}
+                  </span>
                 </div>
-              ) : null}
+
+                {/* 1. Preview of currently selected/attached media */}
+                {(selectedAssetIds.length > 0 || mediaUrlsInput.trim()) && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-slate-400">已附加媒体预览</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {/* Selected Assets */}
+                      {selectedAssetIds.map((assetId) => {
+                        const asset = brandAssets.find((a) => a.id === assetId)
+                        if (!asset) return null
+                        const isVid = asset.mimeType.startsWith('video/')
+                        return (
+                          <div key={assetId} className="relative aspect-square rounded-lg border border-slate-200 bg-slate-100 overflow-hidden dark:border-slate-800 dark:bg-slate-900 group shadow-sm">
+                            {isVid ? (
+                              <video src={asset.url} className="h-full w-full object-cover" muted />
+                            ) : (
+                              <img src={asset.url} className="h-full w-full object-cover" alt="" />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAssetIds((prev) => prev.filter((id) => id !== assetId))}
+                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-600 p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                            {isVid && (
+                              <div className="absolute bottom-1 right-1 bg-black/50 p-0.5 rounded">
+                                <Play className="h-3 w-3 text-white fill-white" />
+                              </div>
+                            )}
+                            <div className="absolute bottom-1 left-1 bg-emerald-500/80 px-1 rounded text-[8px] font-black text-white">素材库</div>
+                          </div>
+                        )
+                      })}
+                      {/* Manual URLs */}
+                      {mediaUrlsInput.split(',').map((u) => u.trim()).filter(Boolean).map((url, idx) => {
+                        const isVid = isVideoUrl(url)
+                        return (
+                          <div key={`manual-${idx}`} className="relative aspect-square rounded-lg border border-slate-200 bg-slate-100 overflow-hidden dark:border-slate-800 dark:bg-slate-900 group shadow-sm">
+                            {isVid ? (
+                              <video src={url} className="h-full w-full object-cover" muted />
+                            ) : (
+                              <img src={url} className="h-full w-full object-cover" alt="" />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const urls = mediaUrlsInput.split(',').map((u) => u.trim()).filter(Boolean)
+                                urls.splice(idx, 1)
+                                setMediaUrlsInput(urls.join(', '))
+                              }}
+                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-600 p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                            {isVid && (
+                              <div className="absolute bottom-1 right-1 bg-black/50 p-0.5 rounded">
+                                <Play className="h-3 w-3 text-white fill-white" />
+                              </div>
+                            )}
+                            <div className="absolute bottom-1 left-1 bg-blue-500/80 px-1 rounded text-[8px] font-black text-white">外链</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Direct media URL input */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">手动附加媒体 URL (用逗号分隔)</label>
+                  <input
+                    value={mediaUrlsInput}
+                    onChange={(event) => setMediaUrlsInput(event.target.value)}
+                    placeholder="https://example.com/image.jpg, https://example.com/video.mp4"
+                    className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </div>
+
+                {/* 3. Browse brand assets */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">从品牌素材库中选择</label>
+                  {brandAssets.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center dark:border-slate-800">
+                      <p className="text-xs text-slate-400">品牌素材库中暂无素材</p>
+                      <p className="mt-1 text-[10px] text-slate-300">请前往“素材”面板上传图片或视频</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2 bg-white dark:bg-slate-950">
+                      {brandAssets.map((asset) => {
+                        const isSelected = selectedAssetIds.includes(asset.id)
+                        const isVid = asset.mimeType.startsWith('video/')
+                        return (
+                          <button
+                            key={asset.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAssetIds((prev) =>
+                                prev.includes(asset.id)
+                                  ? prev.filter((id) => id !== asset.id)
+                                  : [...prev, asset.id]
+                              )
+                            }}
+                            className={`relative aspect-square rounded-md overflow-hidden border-2 bg-slate-100 dark:bg-slate-900 transition-all ${
+                              isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-transparent hover:border-slate-300'
+                            }`}
+                          >
+                            {isVid ? (
+                              <video src={asset.url} className="h-full w-full object-cover" muted />
+                            ) : (
+                              <img src={asset.url} className="h-full w-full object-cover" alt="" />
+                            )}
+                            {isVid && (
+                              <div className="absolute bottom-1 right-1 bg-black/50 p-0.5 rounded">
+                                <Play className="h-2.5 w-2.5 text-white fill-white" />
+                              </div>
+                            )}
+                            {isSelected && (
+                              <div className="absolute top-1 right-1 bg-emerald-500 rounded-full p-0.5 shadow-sm">
+                                <Check className="h-2.5 w-2.5 text-white stroke-[3px]" />
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {selectedDraft?.status === 'pending_review' && (
                 <textarea
@@ -596,9 +758,17 @@ function DraftCard({ draft, compact, selectMode, selected, onOpen }: { draft: Dr
       {media.length > 0 ? (
         <div className={`grid gap-1 bg-slate-100 p-1 dark:bg-slate-950 ${media.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
           {media.map((url, index) => (
-            <div key={`${url}-${index}`} className={`overflow-hidden rounded bg-slate-200 dark:bg-slate-800 ${compact ? 'aspect-[4/3]' : 'aspect-square'}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="h-full w-full object-cover" />
+            <div key={`${url}-${index}`} className={`overflow-hidden rounded bg-slate-200 dark:bg-slate-800 relative ${compact ? 'aspect-[4/3]' : 'aspect-square'}`}>
+              {isVideoUrl(url) ? (
+                <>
+                  <video src={url} className="h-full w-full object-cover" muted />
+                  <div className="absolute bottom-1 right-1 bg-black/50 p-1 rounded">
+                    <Play className="h-3 w-3 text-white fill-white" />
+                  </div>
+                </>
+              ) : (
+                <img src={url} alt="" className="h-full w-full object-cover" />
+              )}
             </div>
           ))}
         </div>

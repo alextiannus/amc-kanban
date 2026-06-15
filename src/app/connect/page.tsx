@@ -280,6 +280,7 @@ export default function ConnectPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [allowed, setAllowed] = useState(false)
+  const [isPublicOnly, setIsPublicOnly] = useState(false)
   const [copiedMcp, setCopiedMcp] = useState(false)
   const [activeCategory, setActiveCategory] = useState<'assets' | 'drafts' | 'core'>('assets')
   const [expandedOperation, setExpandedOperation] = useState<string | null>(null)
@@ -322,7 +323,11 @@ export default function ConnectPage() {
       try {
         const res = await fetch('/api/profile')
         if (!res.ok) {
-          router.replace('/')
+          if (active) {
+            setAllowed(true)
+            setIsPublicOnly(true)
+            setLoading(false)
+          }
           return
         }
         const data = await res.json() as ProfileData
@@ -338,10 +343,13 @@ export default function ConnectPage() {
 
         const canAccess = data.type === 'HUMAN' && (roles.includes('ADMIN') || roles.includes('BRAND_OWNER'))
         if (!active) return
-        setAllowed(canAccess)
+        setAllowed(true)
+        setIsPublicOnly(!canAccess)
       } catch {
-        if (active) router.replace('/')
-        return
+        if (active) {
+          setAllowed(true)
+          setIsPublicOnly(true)
+        }
       } finally {
         if (active) setLoading(false)
       }
@@ -399,6 +407,17 @@ export default function ConnectPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-5xl px-6 py-12">
+        {isPublicOnly && (
+          <div className="mb-8 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-200">
+            <h3 className="font-semibold flex items-center gap-2 text-sm sm:text-base">
+              ⚠️ Public View (AI-Agent Friendly Mode / 访客接入模式)
+            </h3>
+            <p className="mt-1 text-xs text-amber-300/90 leading-relaxed">
+              您当前正在以公开访客身份访问 AMC 接入指南。下方显示的所有 API 密钥与品牌 context ID 均为通用占位符。
+              若要获取您真实的 API 密钥与定制化 SOP 指令，请登录 AMC 看板后台。
+            </p>
+          </div>
+        )}
         <header className="mb-10">
           <div className="inline-block rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300">
             Owner-Only Integration Guide
@@ -652,7 +671,7 @@ export default function ConnectPage() {
         </section>
 
         <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-          <h2 className="text-2xl font-semibold">5. Skill/SOP Metadata</h2>
+          <h2 className="text-2xl font-semibold">5. Skill/SOP Metadata (技能与 SOP 元数据)</h2>
           <p className="mt-2 text-slate-300">
             Use these endpoints to bootstrap agent behavior, execution constraints, and integration context.
           </p>

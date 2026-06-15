@@ -32,17 +32,30 @@ export interface AnalyticsPost {
 // Each adapter returns a list of AnalyticsPost from its own API.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function fetchPostfastPosts(apiKey: string, from: Date, to: Date): Promise<{ posts: AnalyticsPost[]; error?: string }> {
+async function fetchPostfastPosts(apiKey: string, from: Date, to: Date, brandId: string): Promise<{ posts: AnalyticsPost[]; error?: string }> {
   try {
     // Use the dedicated analytics endpoint — the only correct way to get engagement metrics.
     // Metrics are returned as strings (bigint) and must be parseInt'd.
     // Supports server-side date filtering via startDate/endDate.
-    const [analyticsResult, accountsResult] = await Promise.all([
+    const [analyticsResult, accountsResult, dbDrafts] = await Promise.all([
       postfastGetAnalytics(apiKey, {
         startDate: from.toISOString(),
         endDate: to.toISOString(),
       }),
       postfastFetchAccounts(apiKey),
+      prisma.contentDraft.findMany({
+        where: {
+          brandId,
+          platformPostId: { not: null },
+        },
+        include: {
+          assetRefs: {
+            include: {
+              asset: true,
+            },
+          },
+        },
+      }),
     ])
 
     if (!analyticsResult.success) {
@@ -51,6 +64,18 @@ async function fetchPostfastPosts(apiKey: string, from: Date, to: Date): Promise
     }
 
     console.log(`[Analytics] PostFast analytics returned ${analyticsResult.posts.length} published posts`)
+
+    // Build a map of platformPostId -> { mediaUrls, hashtags } for enrichment
+    const draftMap = new Map<string, { mediaUrls: string[]; hashtags: string[] }>()
+    for (const d of dbDrafts) {
+      if (d.platformPostId) {
+        const assetUrls = d.assetRefs.map((ref) => ref.asset.url).filter((url): url is string => Boolean(url))
+        draftMap.set(d.platformPostId, {
+          mediaUrls: [...d.mediaUrls, ...assetUrls].filter(Boolean),
+          hashtags: d.hashtags || [],
+        })
+      }
+    }
 
     // Build a map of socialMediaId → platformId for label enrichment
     const accountMap = new Map(
@@ -70,6 +95,10 @@ async function fetchPostfastPosts(apiKey: string, from: Date, to: Date): Promise
       const platform = account?.platformId ?? 'unknown'
       const handle   = account?.handle ?? account?.displayName ?? ''
 
+      const dbMatch = p.platformPostId ? draftMap.get(p.platformPostId) : null
+      const mediaUrls = dbMatch?.mediaUrls ?? []
+      const hashtags = dbMatch?.hashtags ?? []
+
       return {
         id: `pf_${p.id}`,
         source: 'postfast',
@@ -78,10 +107,10 @@ async function fetchPostfastPosts(apiKey: string, from: Date, to: Date): Promise
         caption: p.content,
         postUrl: null,
         publishedAt: p.publishedAt,
-        contentType: detectContentType(p.content, [], []),
+        contentType: detectContentType(p.content, mediaUrls, hashtags),
         status: 'published',
-        hashtags: [],
-        mediaUrls: [],
+        hashtags,
+        mediaUrls,
         scheduledAt: null,
         likes,
         comments,
@@ -206,7 +235,7 @@ export async function GET(req: Request, { params }: Params) {
   // ── Fetch from all configured channels in parallel ────────────────────────
   const [pfResult, internalDrafts] = await Promise.all([
     brand.postfastApiKey
-      ? fetchPostfastPosts(brand.postfastApiKey, from, to)
+      ? fetchPostfastPosts(brand.postfastApiKey, from, to, id)
       : Promise.resolve({ posts: [] as AnalyticsPost[], error: 'no API key configured' }),
     fetchInternalDrafts(id, from, to, platformFilter),
     // Future: add more channel adapters here

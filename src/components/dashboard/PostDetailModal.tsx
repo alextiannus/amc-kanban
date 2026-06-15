@@ -1,7 +1,13 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 import React from 'react'
-import { X, Heart, MessageCircle, Eye, Share2, ExternalLink, Calendar, Tag } from 'lucide-react'
+import { X, Heart, MessageCircle, Eye, Share2, ExternalLink, Calendar, Tag, Play } from 'lucide-react'
+
+function isVideoUrl(url: string): boolean {
+  if (!url) return false
+  const path = url.split('?')[0]
+  return /\.(mp4|mov|avi|webm|ogg|m4v|3gp)(?:\?.*)?$/i.test(path)
+}
 
 const STATUS_COLORS: Record<string, string> = {
   published: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -119,8 +125,17 @@ export default function PostDetailModal({ post, onClose }: Props) {
               <div className="flex gap-2 flex-wrap">
                 {mediaUrls.slice(0, 4).map((u: string, i: number) => (
                   <a key={i} href={u} target="_blank" rel="noopener noreferrer"
-                    className="w-16 h-16 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
-                    <img src={u} alt="" className="w-full h-full object-cover" onError={e => ((e.target as HTMLImageElement).style.display='none')} />
+                    className="w-16 h-16 rounded-xl overflow-hidden border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-center relative group">
+                    {isVideoUrl(u) ? (
+                      <>
+                        <video src={u} className="w-full h-full object-cover" muted />
+                        <div className="absolute inset-0 bg-black/25 flex items-center justify-center opacity-70 group-hover:opacity-90 transition-opacity">
+                          <Play className="w-4 h-4 text-white fill-white" />
+                        </div>
+                      </>
+                    ) : (
+                      <img src={u} alt="" className="w-full h-full object-cover" onError={e => ((e.target as HTMLImageElement).style.display='none')} />
+                    )}
                   </a>
                 ))}
               </div>
