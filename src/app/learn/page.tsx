@@ -579,7 +579,7 @@ export default function LearnPage() {
                       <p className="text-xs text-slate-450">执行频率：每月第一个工作日提交本月大方向（如有特定新品）。</p>
                       <div className="h-px bg-slate-800/30 my-2" />
                       <ol className="list-decimal pl-5 space-y-2 text-xs text-slate-350 leading-relaxed">
-                        <li>打开看板，向 AI 员工发送你的本月营销需求（如“本月推出新季主推款产品，需要小红书主推”）。</li>
+                        <li>向 AI 员工发送你的本月营销需求（如“本月推出新季主推款产品，需要小红书主推”）。</li>
                         <li>AI 自动创建 Brief 行动卡片，并提取相关产品、价格以及要强调的方向。</li>
                         <li>AMC 在 24 小时内确认并根据此 Brief 自动生成发布日历计划。</li>
                       </ol>
