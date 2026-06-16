@@ -440,7 +440,7 @@ export default function LearnPage() {
               <div className="md:col-span-4 space-y-2">
                 <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest px-3">手册章节目录</p>
                 {[
-                  { id: 'part1', label: 'Part 1：系统概览与角色分工' },
+                  { id: 'part1', label: 'Part 1：系统概览与工作循环' },
                   { id: 'part2', label: 'Part 2：账号接入操作 (SOP)' },
                   { id: 'part3', label: 'Part 3：日常内容协作 (SOP)' },
                   { id: 'part4', label: 'Part 4：达人探店流程 (SOP)' },
@@ -466,18 +466,43 @@ export default function LearnPage() {
                 {/* Part 1 */}
                 {openManualSection === 'part1' && (
                   <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 1：系统概览与角色分工</h2>
+                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 1：系统概览与工作循环</h2>
                     
                     <div className="space-y-4 text-slate-350 text-sm leading-relaxed">
                       <div>
                         <h3 className="font-bold text-slate-200 text-base mb-1.5">1.1 AMC 是什么</h3>
-                        <p>AMC（AI Marketing Crew）是您专属的 AI 社交媒体营销团队，包含文案编写、达人配对、口碑监控等虚拟员工。AI 虚拟员工负责做方案、找资料、产出内容，而人类主理人负责进行审核与把控，保障终审权完全受控。</p>
+                        <p>AMC（AI Marketing Crew）是一个整体的 AI 营销团队，而非简单的一个工具。团队由 <strong>AMC Agent</strong>（AI 虚拟员工）和 <strong>AMC 品牌主理人</strong>（人工对接人）共同组成。您无需区分哪件事是 AI 做的、哪件事是人工做的——对您来说，这是一个整体的营销支撑团队。在 AMC 团队中，主理人与 AMC Agent 是紧密合作的同事，共同为您服务。您只需要关注：提出需求、审核关键决策、以及在达人探店当天做好现场接待。</p>
                       </div>
 
                       <div className="h-px bg-slate-800/50 my-2" />
 
                       <div>
-                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.2 看板介绍</h3>
+                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.2 与 AMC 团队的标准工作循环</h3>
+                        <p>AMC 的工作以月为单位持续循环开展。在一个新品牌开工后，工作循环如下：</p>
+                        <div className="my-3 rounded-xl bg-slate-900/60 p-4 border border-slate-800 text-xs text-indigo-300 font-mono space-y-1">
+                          <p>新品牌开工</p>
+                          <p>  ↓</p>
+                          <p><strong>1. 策略讨论</strong> ➜ AMC 品牌主理人与你沟通品牌定位、目标客群与内容方向</p>
+                          <p>  ↓</p>
+                          <p><strong>2. 素材整理</strong> ➜ 你提供菜品照片、品牌故事或活动信息，AMC 进行整理与补充</p>
+                          <p>  ↓</p>
+                          <p><strong>3. 内容生产</strong> ➜ AMC Agent 开始制作草稿，需要你确认时生成 require_input 任务</p>
+                          <p>  ↓</p>
+                          <p><strong>4. 排期发布</strong> ➜ 确认通过后自动进入发布排期，按计划自动发布到各平台</p>
+                          <p>  ↓</p>
+                          <p><strong>5. 数据复盘</strong> ➜ 与同事（AMC Agent）一起检视发布效果，查看数据报告；AMC Agent 自动更新对品牌的理解并调优策略</p>
+                          <p>  ↓</p>
+                          <p><strong>6. 下一轮优化</strong> ➜ 根据复盘数据调整内容方向，工作循环继续</p>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2">
+                          💡 提示：AMC Agent 会在合作中不断积累对您品牌的认知（记录在品牌记忆文件中），合作时间越长，生成的内容和策略就越精准，越不需要您进行频繁干预。
+                        </p>
+                      </div>
+
+                      <div className="h-px bg-slate-800/50 my-2" />
+
+                      <div>
+                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.3 看板介绍</h3>
                         <ul className="list-disc pl-5 space-y-1.5 mt-2">
                           <li><strong className="text-slate-200">各功能区说明</strong>：内容看板展示已发布和排期中的内容；社媒账号提供接入状态；数据报告展示关键效果指标；配置中心用于接入外部 API 密钥。</li>
                           <li><strong className="text-slate-200">Require Input 任务说明</strong>：当 AI 遇到素材缺失、链接失效或差评预警时，会在 **Require Input** 状态下死锁挂起，此时您在看板上会看到明显的任务卡片，输入反馈意见即可推进 AI 运行。当该栏目有待审核任务时，该栏目的任务数量角标将自动变成醒目的红色。</li>
@@ -488,9 +513,9 @@ export default function LearnPage() {
                       <div className="h-px bg-slate-800/50 my-2" />
 
                       <div>
-                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.3 账号权限说明</h3>
+                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.4 账号权限说明</h3>
                         <ul className="list-disc pl-5 space-y-1.5 mt-2">
-                          <li><strong className="text-slate-200">主理人账号 vs AI Agent 账号</strong>：主理人拥有终审权与最高配置权限；AI Agent 拥有在被授权的范围内进行内容创作、数据拉取和辅助互动的操作权限。</li>
+                          <li><strong className="text-slate-200">客户账号 vs AMC 团队账号的权限区别</strong>：主理人拥有终审权与最高配置权限；AMC 团队账号拥有在被授权的范围内进行内容创作、数据拉取和辅助互动的操作权限。</li>
                           <li><strong className="text-slate-200">多门店 / 多品牌管理</strong>：支持在一个 AMC 账户下无缝切换和配置多个不同的品牌资产或门店，由独立的 AI 虚拟员工组提供个性化营销服务。</li>
                         </ul>
                       </div>
