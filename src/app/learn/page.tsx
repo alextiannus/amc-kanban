@@ -470,32 +470,32 @@ export default function LearnPage() {
                     
                     <div className="space-y-4 text-slate-350 text-sm leading-relaxed">
                       <div>
-                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.1 AMC 是什么</h3>
-                        <p>AMC（AI Marketing Crew）是一个整体的 AI 营销团队，而非简单的一个工具。团队由 <strong>AMC Agent</strong>（AI 虚拟员工）和 <strong>AMC 品牌主理人</strong>（人工对接人）共同组成。您无需区分哪件事是 AI 做的、哪件事是人工做的——对您来说，这是一个整体的营销支撑团队。在 AMC 团队中，主理人与 AMC Agent 是紧密合作的同事，共同为您服务。您只需要关注：提出需求、审核关键决策、以及在达人探店当天做好现场接待。</p>
+                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.1 AMC 是什么与角色定位</h3>
+                        <p>AMC（AI Marketing Crew）是一个整体的智能营销团队，包含 **AMC Agent**（AI 智能体同事）与 **AMC 主理人**（人类经理）。在 AMC 中，Agent 与主理人都是团队不可分割的一员，彼此是<strong>紧密协作的工作同事关系</strong>。作为主理人，您应该将 AMC Agent 视作和您一起奋斗的同事：由 Agent 负责海量数据抓取、创意发散、内容草稿生成和自动化发布，而您作为主理人负责全局的方向指导、人脉与线下运营落地，并牢牢把控终审权。你们各司其职，共同对品牌的最终营销效果负责。</p>
                       </div>
 
                       <div className="h-px bg-slate-800/50 my-2" />
 
                       <div>
-                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.2 与 AMC 团队的标准工作循环</h3>
-                        <p>AMC 的工作以月为单位持续循环开展。在一个新品牌开工后，工作循环如下：</p>
+                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.2 与 AMC Agent 同事的工作循环</h3>
+                        <p>在一个新品牌开工之后，主理人将 AMC Agent 视作同事，按照以下标准循环展开人机协作：</p>
                         <div className="my-3 rounded-xl bg-slate-900/60 p-4 border border-slate-800 text-xs text-indigo-300 font-mono space-y-1">
                           <p>新品牌开工</p>
                           <p>  ↓</p>
-                          <p><strong>1. 策略讨论</strong> ➜ AMC 品牌主理人与你沟通品牌定位、目标客群与内容方向</p>
+                          <p><strong>1. 讨论策略</strong> ➜ 开工后主理人首先与 AMC Agent 讨论品牌的定位、目标客群及主打策略</p>
                           <p>  ↓</p>
-                          <p><strong>2. 素材整理</strong> ➜ 你提供菜品照片、品牌故事或活动信息，AMC 进行整理与补充</p>
+                          <p><strong>2. 整理素材</strong> ➜ 根据讨论的策略，主理人收集并整理品牌素材（如图片、视频、基本文案信息）并提供给 Agent</p>
                           <p>  ↓</p>
-                          <p><strong>3. 内容生产</strong> ➜ AMC Agent 开始制作草稿，需要你确认时生成 require_input 任务</p>
+                          <p><strong>3. 制作草稿</strong> ➜ AMC Agent 依据策略和素材开始生成内容草稿，若需要确认则自动生成 Require Input 任务</p>
                           <p>  ↓</p>
-                          <p><strong>4. 排期发布</strong> ➜ 确认通过后自动进入发布排期，按计划自动发布到各平台</p>
+                          <p><strong>4. 排期发布</strong> ➜ 草稿通过主理人审核后进入排期，由系统/Agent 自动发布到各大社交媒体平台</p>
                           <p>  ↓</p>
-                          <p><strong>5. 数据复盘</strong> ➜ 与同事（AMC Agent）一起检视发布效果，查看数据报告；AMC Agent 自动更新对品牌的理解并调优策略</p>
+                          <p><strong>5. 检验结果</strong> ➜ 帖子发布后，主理人与 AMC Agent 共同检视发布效果，查看数据分析报告</p>
                           <p>  ↓</p>
-                          <p><strong>6. 下一轮优化</strong> ➜ 根据复盘数据调整内容方向，工作循环继续</p>
+                          <p><strong>6. 策略优化</strong> ➜ 根据检验结果复盘，调优下一阶段的内容方向，并重新回到步骤 1 讨论下一轮策略，持续循环</p>
                         </div>
                         <p className="text-xs text-slate-400 mt-2">
-                          💡 提示：AMC Agent 会在合作中不断积累对您品牌的认知（记录在品牌记忆文件中），合作时间越长，生成的内容和策略就越精准，越不需要您进行频繁干预。
+                          💡 提示：在每次循环中，<strong>AMC Agent 会不断更新对品牌的理解并进行策略调优</strong>（其学习成果会持续积累在品牌的专属记忆 profile 中）。随着你们对品牌的不断运营，Agent 产出的方案和内容会越来越懂你的心意。
                         </p>
                       </div>
 
