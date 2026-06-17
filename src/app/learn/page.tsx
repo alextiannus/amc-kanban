@@ -473,7 +473,7 @@ export default function LearnPage() {
                     </p>
 
                     <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
-                      <img src="/phase0.webp" alt="Phase 0: 签约与分配" fetchpriority="high" className="max-w-full h-auto rounded-lg" />
+                      <img src="/phase0.webp" alt="Phase 0: 签约与分配" fetchPriority="high" className="max-w-full h-auto rounded-lg" />
                     </div>
 
                     <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
