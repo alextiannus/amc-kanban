@@ -50,7 +50,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     where: draftIdFromMaterials
       ? { id: draftIdFromMaterials, brandId: brand.id }
       : { brandId: brand.id, status: { in: ['draft', 'publishing'] } },
-    include: { account: { select: { platformId: true, handle: true } } },
+    include: {
+      account: { select: { platformId: true, handle: true } },
+      assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
+    },
     orderBy: { createdAt: 'desc' },
   })
 
@@ -83,12 +86,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: { status: 'publishing', agentNote: null },
   })
 
+  const combinedMediaUrls = Array.from(new Set([
+    ...(draft.mediaUrls || []),
+    ...(draft.assetRefs || []).map((ref) => ref.asset.url),
+  ].filter(Boolean)))
+
   // Attempt publish
   const publish = await postfastPublish({
     apiKey: brand.postfastApiKey,
     platform: platformName,
     caption: draft.caption,
-    mediaUrls: draft.mediaUrls,
+    mediaUrls: combinedMediaUrls,
     hashtags: draft.hashtags,
     scheduledAt: draft.scheduledAt?.toISOString(),
   })

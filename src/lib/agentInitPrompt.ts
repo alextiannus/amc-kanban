@@ -175,9 +175,9 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 - \`get_brand_config\`
 - \`get_brand_subscription\`
 - \`get_brand_profile_markdown\` / \`update_brand_profile_markdown\`
-- \`list_tasks\` / \`create_tasks\` / \`update_task\` / \`create_require_input_task\`
-- \`board_list_social_accounts\` / \`board_save_draft\` / \`board_submit_draft\` / \`publish\`
-- \`list_brand_assets\` / \`board_upload_asset\`
+- \`list_tasks\` / \`create_tasks\` / \`update_task\` / \`delete_task\` / \`board_delete_task\` / \`create_require_input_task\`
+- \`board_list_social_accounts\` / \`board_save_draft\` / \`board_submit_draft\` / \`board_delete_draft\` / \`publish\` / \`board_delete_scheduled_content\`
+- \`list_brand_assets\` / \`board_upload_asset\` / \`board_delete_asset\`
 - \`get_brand_reviews\` / \`board_reply_review\` / \`execute_brand_action\`
 - \`save_local_document\` / \`sync_to_kanban\`
 - \`write_daily_memory\` / \`read_daily_memory\`

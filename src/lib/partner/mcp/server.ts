@@ -513,6 +513,27 @@ export function createAmcMcpServer(agentApiKey: string) {
     }
   )
 
+  // ── delete_task ─────────────────────────────────────────────────────────
+  const deleteTaskSchema = {
+    taskId: z.string().describe('The ID of the task to delete'),
+  }
+  const deleteTaskHandler = async ({ taskId }: { taskId: string }) => {
+    const agent = await resolveAgent()
+    if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+    const existingTask = await requireOwnedTask(taskId, agent.id)
+    if (!existingTask) return { content: [{ type: 'text' as const, text: 'Error: Task not found or not assigned to this agent' }], isError: true }
+
+    await prisma.workUnit.delete({
+      where: { id: taskId },
+    })
+
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, deleted: true, taskId }) }] }
+  }
+
+  server.tool('board_delete_task', 'Delete a work unit task assigned to this agent.', deleteTaskSchema, deleteTaskHandler)
+  server.tool('delete_task', '[Compatibility alias] Use board_delete_task.', deleteTaskSchema, deleteTaskHandler)
+
   // ── update_accounts ─────────────────────────────────────────────────────
   server.tool(
     'update_accounts',

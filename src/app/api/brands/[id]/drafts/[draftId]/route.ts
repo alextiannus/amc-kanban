@@ -165,3 +165,30 @@ export async function PATCH(request: Request, { params }: Params) {
 
   return NextResponse.json({ ok: true, draft })
 }
+
+export async function DELETE(request: Request, { params }: Params) {
+  const { id: brandId, draftId } = await params
+  const actor = await ensureAccess(request, brandId)
+  if (!actor) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const draft = await prisma.contentDraft.findFirst({ where: { id: draftId, brandId } })
+  if (!draft) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // If scheduled, try to cancel first
+  if (draft.platformPostId && !draft.publishedAt) {
+    const brand = await prisma.brand.findUnique({
+      where: { id: brandId },
+      select: { postfastApiKey: true }
+    })
+    if (brand?.postfastApiKey) {
+      const { postfastDeletePost } = await import('@/lib/integrations/postfast')
+      const cancelResult = await postfastDeletePost(brand.postfastApiKey, draft.platformPostId)
+      if (!cancelResult.success) {
+        return NextResponse.json({ error: `Failed to cancel scheduled post on board backend — ${cancelResult.error}` }, { status: 400 })
+      }
+    }
+  }
+
+  await prisma.contentDraft.delete({ where: { id: draftId } })
+  return NextResponse.json({ ok: true, deleted: true, draftId })
+}

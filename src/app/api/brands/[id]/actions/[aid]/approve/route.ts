@@ -38,7 +38,14 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const item = await prisma.actionItem.findFirst({
     where: { id: aid, brandId },
-    include: { draft: true, account: true },
+    include: {
+      draft: {
+        include: {
+          assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } }
+        }
+      },
+      account: true,
+    },
   })
   if (!item) return NextResponse.json({ error: 'Action item not found' }, { status: 404 })
   if (item.status !== 'pending') return NextResponse.json({ error: 'Already resolved' }, { status: 409 })
@@ -105,6 +112,11 @@ export async function PATCH(request: Request, { params }: Params) {
       ;(async () => {
         let result: { success: boolean; postId?: string; url?: string; error?: string }
 
+        const combinedMediaUrls = Array.from(new Set([
+          ...(draft.mediaUrls || []),
+          ...(draft.assetRefs || []).map((ref) => ref.asset.url),
+        ].filter(Boolean)))
+
         if (isDirectGoogle) {
           try {
             const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
@@ -128,7 +140,7 @@ export async function PATCH(request: Request, { params }: Params) {
               accountId: googleAccountId,
               locationId: googleLocationId,
               caption: draft.caption,
-              mediaUrls: draft.mediaUrls,
+              mediaUrls: combinedMediaUrls,
               accessToken,
             })
           } catch (e: unknown) {
@@ -140,7 +152,7 @@ export async function PATCH(request: Request, { params }: Params) {
             apiKey: brand.postfastApiKey!,
             platform: platformName!,
             caption: draft.caption,
-            mediaUrls: draft.mediaUrls,
+            mediaUrls: combinedMediaUrls,
             hashtags: draft.hashtags,
             scheduledAt: draft.scheduledAt?.toISOString(),
           })

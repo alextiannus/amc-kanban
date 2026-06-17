@@ -444,22 +444,42 @@ function detectMediaType(keyOrUrl: string): 'IMAGE' | 'VIDEO' {
 }
 
 async function uploadPublicUrlToPostfast(apiKey: string, url: string): Promise<string> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  let fileBuffer: Buffer
+  let mimeType = 'image/jpeg'
+  let filename = 'file.jpg'
 
-  const arrayBuffer = await res.arrayBuffer()
-  const fileBuffer = Buffer.from(arrayBuffer)
+  if (url.startsWith('/') || !url.startsWith('http')) {
+    const { readFile } = await import('node:fs/promises')
+    const { join } = await import('node:path')
+    const path = await import('node:path')
+    const absolutePath = join(process.cwd(), 'public', url.split('?')[0])
+    fileBuffer = await readFile(absolutePath)
+    
+    const ext = path.extname(absolutePath).toLowerCase()
+    filename = path.basename(absolutePath)
+    if (ext === '.png') mimeType = 'image/png'
+    else if (ext === '.gif') mimeType = 'image/gif'
+    else if (ext === '.webp') mimeType = 'image/webp'
+    else if (ext === '.mp4') mimeType = 'video/mp4'
+    else if (ext === '.mov') mimeType = 'video/quicktime'
+  } else {
+    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-  let mimeType = res.headers.get('content-type') || 'image/jpeg'
-  mimeType = mimeType.split(';')[0].trim()
+    const arrayBuffer = await res.arrayBuffer()
+    fileBuffer = Buffer.from(arrayBuffer)
 
-  const urlParts = url.split('/')
-  let filename = urlParts[urlParts.length - 1].split('?')[0] || 'file'
-  if (!filename.includes('.')) {
-    if (mimeType.startsWith('image/png')) filename += '.png'
-    else if (mimeType.startsWith('image/gif')) filename += '.gif'
-    else if (mimeType.startsWith('video/mp4')) filename += '.mp4'
-    else filename += '.jpg'
+    mimeType = res.headers.get('content-type') || 'image/jpeg'
+    mimeType = mimeType.split(';')[0].trim()
+
+    const urlParts = url.split('/')
+    filename = urlParts[urlParts.length - 1].split('?')[0] || 'file'
+    if (!filename.includes('.')) {
+      if (mimeType.startsWith('image/png')) filename += '.png'
+      else if (mimeType.startsWith('image/gif')) filename += '.gif'
+      else if (mimeType.startsWith('video/mp4')) filename += '.mp4'
+      else filename += '.jpg'
+    }
   }
 
   const signedResult = await postfastGetSignedUploadUrls(apiKey, [{
@@ -553,6 +573,11 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
 
   if (input.mediaUrls && input.mediaUrls.length > 0) {
     for (const url of input.mediaUrls) {
+      if (!url.startsWith('http') && !url.startsWith('/')) {
+        // If it's already a storage key/token (doesn't start with http or /), treat it as a mediaStorageKey directly
+        mediaKeys.push(url)
+        continue
+      }
       try {
         const storageKey = await uploadPublicUrlToPostfast(input.apiKey, url)
         mediaKeys.push(storageKey)

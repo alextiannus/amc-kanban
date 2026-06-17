@@ -317,3 +317,59 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession()
+    const apiKey = extractApiKey(request)
+
+    if (!session?.user && !apiKey) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id } = await params
+    const existingTask = await prisma.workUnit.findUnique({ where: { id } })
+
+    if (!existingTask) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+    }
+
+    const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
+
+    let isAuthorized = false
+    if (session?.user.role === 'ADMIN') {
+      isAuthorized = true
+    } else if (authenticatedAgent) {
+      isAuthorized = authenticatedAgent.id === existingTask.assigneeId
+    } else if (session?.user.id) {
+      isAuthorized = await canHumanAccessTask(session.user.id, existingTask.assigneeId ?? null)
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    await prisma.workUnit.delete({
+      where: { id },
+    })
+
+    await writeAuditLog({
+      actor: actorFromContext(session?.user, authenticatedAgent),
+      action: 'TASK_DELETED',
+      resourceId: existingTask.id,
+      oldValue: existingTask,
+      newValue: null,
+      metadata: { source: apiKey ? 'api' : 'web' }
+    })
+
+    eventEmitter.emit('board_update')
+
+    return NextResponse.json({ ok: true, deleted: true, id })
+  } catch (error) {
+    console.error('Task detail DELETE error:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}

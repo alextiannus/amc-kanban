@@ -95,6 +95,12 @@ GET /api/brands/[brandId]/memory?days=3
 - **获取同品类基准**: `GET /api/analytics/benchmarks?category=&location=`
 - **更新自学习 Insights**: `PATCH /api/agent/insights` (Body: `{ "insights": "..." }`)
 
+### 6. 删除接口与 MCP 工具
+- **删除任务 (Task)**: `DELETE /api/tasks/[taskId]` 或使用 MCP `board_delete_task` / `delete_task`
+- **删除草稿 (Draft)**: `DELETE /api/brands/[brandId]/drafts/[draftId]` 或使用 MCP `board_delete_draft` (已排期内容会自动在 PostFast 取消发布)
+- **删除资产 (Asset)**: MCP `board_delete_asset`
+- **删除已排期帖 (Scheduled Post)**: MCP `board_delete_scheduled_content`
+
 ---
 
 ## 任务纪律
