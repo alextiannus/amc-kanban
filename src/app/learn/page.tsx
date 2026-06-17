@@ -715,52 +715,153 @@ export default function LearnPage() {
                   </div>
                 )}
 
-                {/* Part 4 */}
-                {openManualSection === 'part4' && (
+                {/* Phase 3 */}
+                {openManualSection === 'p3' && (
                   <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 4：达人探店 SOP</h2>
-                    
-                    {/* SOP-007 */}
-                    <div className="rounded-xl border border-slate-850 bg-slate-900/30 p-5 space-y-3 relative">
-                      <div className="absolute top-0 right-0 rounded-bl-lg bg-slate-800 px-2 py-0.5 text-[9px] font-bold text-slate-400 uppercase">SOP-007</div>
-                      <h3 className="font-bold text-base text-slate-100">达人探店与素材收集流程</h3>
-                      <p className="text-xs text-slate-455">适用场景：主理人自主安排达人到店体验，AI Agent 负责生成任务以收集推广素材。</p>
-                      <div className="h-px bg-slate-800/30 my-2" />
-                      <div className="space-y-3 text-xs text-slate-350">
-                        <p className="font-semibold text-slate-200">🤖 AMC AI Agent 负责（协作配合）：</p>
-                        <ul className="list-disc pl-5 space-y-1">
-                          <li><strong>自动发起任务</strong>：在预设的推广节点，在看板上自动生成 <strong>Require Input</strong> 状态的素材收集任务卡片。</li>
-                          <li><strong>内容创作与发布</strong>：当主理人上传完探店素材并确认后，AI 自动进行文案排版、Hashtag 匹配，并排期发布。</li>
-                        </ul>
-                        
-                        <p className="font-semibold text-slate-200 mt-2">👤 主理人负责（完全自主安排）：</p>
-                        <ol className="list-decimal pl-5 space-y-1.5">
-                          <li><strong>步骤 1：达人筛选与沟通</strong>：主理人根据品牌调性，在线下自行寻找达人、沟通合作机制（如产品免费体验、置换等）并确认到店时间。</li>
-                          <li><strong>步骤 2：到店接待与体验</strong>：
-                            <ul className="list-disc pl-4 mt-0.5 space-y-1">
-                              <li>提前准备好店内的特色/主推产品。</li>
-                              <li>安排优先体验与周到接待，可向达人做口头品牌背景/故事介绍。</li>
-                            </ul>
-                          </li>
-                          <li><strong>步骤 3：收集并上传素材</strong>：
-                            <ul className="list-disc pl-4 mt-0.5 space-y-1">
-                              <li>向达人索取拍摄好的照片或视频素材。</li>
-                              <li>打开看板上标红的 <strong>Require Input</strong> 探店任务卡片，将高清素材上传并保存。</li>
-                              <li>点击 <strong>Resume</strong> 推进任务，AI 虚拟员工将立即开始创作。</li>
-                            </ul>
-                          </li>
-                        </ol>
-                      </div>
+                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Phase 3：口碑与评价管理</h2>
+                    <p className="text-slate-350 text-sm leading-relaxed">
+                      AI Agent 与品牌主理人对用户反馈进行 24h 监控与自动回复，维护商家的线上口碑与搜索引擎权重。
+                    </p>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
+                      <img src="/phase3.png" alt="Phase 3: 口碑与评价管理" className="max-w-full h-auto rounded-lg" />
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
+                      <table className="w-full text-xs text-slate-300 text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-900 border-b border-slate-800">
+                            <th className="p-3 font-bold text-slate-200 w-16">步骤</th>
+                            <th className="p-3 font-bold text-slate-200 w-32">执行者</th>
+                            <th className="p-3 font-bold text-slate-200">说明</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          <tr>
+                            <td className="p-3 font-bold">1. 拉取评论</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
+                            <td className="p-3 text-slate-300">每日 20:00 自动抓取各个平台（如 Google Maps 等）最新的消费者评论与评分。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">2. 分类处理</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
+                            <td className="p-3 text-slate-300">根据星级评分分类：好评（≥4星）自动礼貌感谢；中评/差评（≤3星）则拟定道歉信并给出解决方案。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">3. 自动回复</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
+                            <td className="p-3 text-slate-300">在托管渠道（如 Google Maps）于 24 小时内全自动调用接口回写回复，拉升口碑响应速度。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">4. 异常升级</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent ➜ 主理人</td>
+                            <td className="p-3 text-slate-300">遇到账号凭证断连或突发恶性差评舆情危机时，自动在看板创建标红卡片通知主理人人工介入。</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
 
-                {/* Part 5 */}
-                {openManualSection === 'part5' && (
+                {/* Phase 4 */}
+                {openManualSection === 'p4' && (
                   <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 5：常见故障自查排除</h2>
-                    
-                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
+                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Phase 4：达人探店协作 (SOP)</h2>
+                    <p className="text-slate-350 text-sm leading-relaxed">
+                      达人探店是由主理人在线下自主组织和执行，AI 负责辅助素材收集与发布追踪，二者有机联动。
+                    </p>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
+                      <img src="/phase4.png" alt="Phase 4: 达人探店" className="max-w-full h-auto rounded-lg" />
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
+                      <table className="w-full text-xs text-slate-300 text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-900 border-b border-slate-800">
+                            <th className="p-3 font-bold text-slate-200 w-16">角色</th>
+                            <th className="p-3 font-bold text-slate-200 w-32">执行方</th>
+                            <th className="p-3 font-bold text-slate-200">具体协作职责</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          <tr>
+                            <td className="p-3 font-bold">发起任务</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
+                            <td className="p-3 text-slate-300">自动在推广节点发起 Require Input 状态的探店素材收集任务卡片。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">外联接待</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人 & 商家</td>
+                            <td className="p-3 text-slate-300">主理人进行达人筛选、沟通邀约和确认时间；商家在到店当天做好周到接待（优先出品并介绍品牌故事）。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">素材追踪</td>
+                            <td className="p-3 text-indigo-400 font-semibold">主理人 ➜ Agent</td>
+                            <td className="p-3 text-slate-300">主理人收集高清图片/视频上传至卡片；AI Agent 编写推文发布，并将发布数据追踪归档入月度报告。</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* SOP-007 */}
+                    <div className="rounded-xl border border-slate-850 bg-slate-900/30 p-5 space-y-3 relative">
+                      <div className="absolute top-0 right-0 rounded-bl-lg bg-slate-800 px-2 py-0.5 text-[9px] font-bold text-slate-400 uppercase">SOP-007</div>
+                      <h3 className="font-bold text-base text-slate-100">达人探店与素材收集细节</h3>
+                      <p className="text-xs text-slate-455">说明：配合线下探店，主理人将达人优质图片/短视频归档入素材库，由 AI 推进下一步。</p>
+                      <div className="h-px bg-slate-800/30 my-2" />
+                      <ol className="list-decimal pl-5 space-y-2 text-xs text-slate-350 leading-relaxed">
+                        <li><strong>探店准备</strong>：主理人在商家确认到店计划后，从探店群筛选达人，确认探店时间，并向商家提供接待 Brief。</li>
+                        <li><strong>收集高清素材</strong>：拍摄完成后，主理人向达人收集原图 and 视频，上传至看板卡片。</li>
+                        <li><strong>点击一键 Resume</strong>：在看板卡片内确认素材就位，点击 <strong>“Resume”</strong>，AI 将立即启动内容排版发布循环，并在发布后邀请商家查看。</li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
+
+                {/* Phase 5 */}
+                {openManualSection === 'p5' && (
+                  <div className="space-y-6">
+                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Phase 5：月度复盘与自查</h2>
+                    <p className="text-slate-350 text-sm leading-relaxed">
+                      月度工作效果汇总并对 AI 进行持续记忆调优。同时，主理人可参考下方自查排除表解决日常运行中的异常。
+                    </p>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
+                      <img src="/phase5.png" alt="Phase 5: 月度复盘与优化" className="max-w-full h-auto rounded-lg" />
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
+                      <table className="w-full text-xs text-slate-300 text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-900 border-b border-slate-800">
+                            <th className="p-3 font-bold text-slate-200 w-16">步骤</th>
+                            <th className="p-3 font-bold text-slate-200 w-32">执行者</th>
+                            <th className="p-3 font-bold text-slate-200">说明</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          <tr>
+                            <td className="p-3 font-bold">1. 数据汇总</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
+                            <td className="p-3 text-slate-300">自动汇总上月各渠道触达量、互动率、粉丝净增长、Google Maps 评分并写入看板数据库。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">2. 报告解读</td>
+                            <td className="p-3 text-indigo-400 font-semibold">主理人 ↔ 商家</td>
+                            <td className="p-3 text-slate-300">主理人向商家解读上月运营成效，沟通下月新品/活动等特定安排，收集商家反馈。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">3. 认知更新</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
+                            <td className="p-3 text-slate-300">主理人将反馈记录同步回写给 AI（Memory），AI 更新品牌档案与长期记忆，实现持续调优。</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <h3 className="text-base font-bold text-slate-200 mt-6 pt-4 border-t border-slate-800/50">🛠️ 常见故障自查排除</h3>
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-2">
                       <table className="w-full text-xs text-slate-300 text-left border-collapse">
                         <thead>
                           <tr className="bg-slate-900 border-b border-slate-800">
@@ -792,6 +893,26 @@ export default function LearnPage() {
                           </tr>
                         </tbody>
                       </table>
+                    </div>
+
+                    <h3 className="text-base font-bold text-slate-200 mt-6 pt-4 border-t border-slate-800/50">🔗 跨阶段支撑与协作共识</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                      <div className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 space-y-2">
+                        <h4 className="font-bold text-xs text-indigo-400">📢 跨阶段支撑机制</h4>
+                        <ul className="list-disc pl-4 space-y-1 text-xs text-slate-300">
+                          <li>看板任务遵循 `todo → in_progress → pending(require_input) → done` 周期。</li>
+                          <li>所有工作均以 `brandId` 隔离，严禁多品牌交叉。</li>
+                          <li>接口错误重试不超过 2 次，超限自动挂起转人工跟进。</li>
+                        </ul>
+                      </div>
+                      <div className="p-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 space-y-2">
+                        <h4 className="font-bold text-xs text-indigo-400">🤝 已确认协作共识</h4>
+                        <ul className="list-disc pl-4 space-y-1 text-xs text-slate-300">
+                          <li>行业访谈模板固定在 AMC 学院，持续迭代。</li>
+                          <li>评论自动回复语气在 Phase 1 品牌访谈确立并载入 AI 档案。</li>
+                          <li>月度复盘会议纪要由主理人同步录入 AI 记忆库。</li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 )}
