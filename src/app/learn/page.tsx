@@ -473,7 +473,7 @@ export default function LearnPage() {
                     </p>
 
                     <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
-                      <img src="/phase0.png" alt="Phase 0: 签约与分配" className="max-w-full h-auto rounded-lg" />
+                      <img src="/phase0.webp" alt="Phase 0: 签约与分配" fetchpriority="high" className="max-w-full h-auto rounded-lg" />
                     </div>
 
                     <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
@@ -528,7 +528,7 @@ export default function LearnPage() {
                     </p>
 
                     <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
-                      <img src="/phase1.png" alt="Phase 1: 新品牌上线" className="max-w-full h-auto rounded-lg" />
+                      <img src="/phase1.webp" alt="Phase 1: 新品牌上线" loading="lazy" className="max-w-full h-auto rounded-lg" />
                     </div>
 
                     <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
@@ -635,7 +635,7 @@ export default function LearnPage() {
                     </p>
 
                     <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
-                      <img src="/phase2.png" alt="Phase 2: 日常内容生产循环" className="max-w-full h-auto rounded-lg" />
+                      <img src="/phase2.webp" alt="Phase 2: 日常内容生产循环" loading="lazy" className="max-w-full h-auto rounded-lg" />
                     </div>
 
                     <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
@@ -724,7 +724,7 @@ export default function LearnPage() {
                     </p>
 
                     <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
-                      <img src="/phase3.png" alt="Phase 3: 口碑与评价管理" className="max-w-full h-auto rounded-lg" />
+                      <img src="/phase3.webp" alt="Phase 3: 口碑与评价管理" loading="lazy" className="max-w-full h-auto rounded-lg" />
                     </div>
 
                     <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
@@ -772,7 +772,7 @@ export default function LearnPage() {
                     </p>
 
                     <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
-                      <img src="/phase4.png" alt="Phase 4: 达人探店" className="max-w-full h-auto rounded-lg" />
+                      <img src="/phase4.webp" alt="Phase 4: 达人探店" loading="lazy" className="max-w-full h-auto rounded-lg" />
                     </div>
 
                     <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
@@ -828,7 +828,7 @@ export default function LearnPage() {
                     </p>
 
                     <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
-                      <img src="/phase5.png" alt="Phase 5: 月度复盘与优化" className="max-w-full h-auto rounded-lg" />
+                      <img src="/phase5.webp" alt="Phase 5: 月度复盘与优化" loading="lazy" className="max-w-full h-auto rounded-lg" />
                     </div>
 
                     <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
