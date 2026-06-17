@@ -37,7 +37,7 @@ export default function LearnPage() {
 
   // Manual Chapter States
   const [manualSearch, setManualSearch] = useState('')
-  const [openManualSection, setOpenManualSection] = useState<string | null>('part2')
+  const [openManualSection, setOpenManualSection] = useState<string | null>('p0')
   
   // Skill Hub Toggles
   const [skillCategory, setSkillCategory] = useState<'all' | 'marketing' | 'content' | 'self-improvement' | 'other'>('all')
@@ -440,11 +440,12 @@ export default function LearnPage() {
               <div className="md:col-span-4 space-y-2">
                 <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest px-3">手册章节目录</p>
                 {[
-                  { id: 'part1', label: 'Part 1：系统概览与工作循环' },
-                  { id: 'part2', label: 'Part 2：账号接入操作 (SOP)' },
-                  { id: 'part3', label: 'Part 3：日常内容协作 (SOP)' },
-                  { id: 'part4', label: 'Part 4：达人探店流程 (SOP)' },
-                  { id: 'part5', label: 'Part 5：常见故障自查' }
+                  { id: 'p0', label: 'Phase 0：签约与分配' },
+                  { id: 'p1', label: 'Phase 1：品牌上线 (Onboarding)' },
+                  { id: 'p2', label: 'Phase 2：日常内容生产 (SOP)' },
+                  { id: 'p3', label: 'Phase 3：口碑与评价管理' },
+                  { id: 'p4', label: 'Phase 4：达人探店协作 (SOP)' },
+                  { id: 'p5', label: 'Phase 5：月度复盘与自查' }
                 ].map(chap => (
                   <button
                     key={chap.id}
@@ -463,71 +464,129 @@ export default function LearnPage() {
               {/* Right Content View */}
               <div className="md:col-span-8 space-y-6">
                 
-                {/* Part 1 */}
-                {openManualSection === 'part1' && (
+                {/* Phase 0 */}
+                {openManualSection === 'p0' && (
                   <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 1：系统概览与工作循环</h2>
-                    
-                    <div className="space-y-4 text-slate-350 text-sm leading-relaxed">
-                      <div>
-                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.1 AMC 是什么与角色定位</h3>
-                        <p>AMC（AI Marketing Crew）是一个整体的智能营销团队，包含 **AMC Agent**（AI 智能体同事）与 **AMC 主理人**（人类经理）。在 AMC 中，Agent 与主理人都是团队不可分割的一员，彼此是<strong>紧密协作的工作同事关系</strong>。作为主理人，您应该将 AMC Agent 视作和您一起奋斗的同事：由 Agent 负责海量数据抓取、创意发散、内容草稿生成和自动化发布，而您作为主理人负责全局的方向指导、人脉与线下运营落地，并牢牢把控终审权。你们各司其职，共同对品牌的最终营销效果负责。</p>
-                      </div>
+                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Phase 0：签约与分配</h2>
+                    <p className="text-slate-350 text-sm leading-relaxed">
+                      本阶段负责商家的前期入驻、自助付款、系统分配 AI 虚拟员工与品牌主理人的联动机制。
+                    </p>
 
-                      <div className="h-px bg-slate-800/50 my-2" />
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
+                      <img src="/phase0.png" alt="Phase 0: 签约与分配" className="max-w-full h-auto rounded-lg" />
+                    </div>
 
-                      <div>
-                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.2 与 AMC Agent 同事的工作循环</h3>
-                        <p>在一个新品牌开工之后，主理人将 AMC Agent 视作同事，按照以下标准循环展开人机协作：</p>
-                        <div className="my-3 rounded-xl bg-slate-900/60 p-4 border border-slate-800 text-xs text-indigo-300 font-mono space-y-1">
-                          <p>新品牌开工</p>
-                          <p>  ↓</p>
-                          <p><strong>1. 讨论策略</strong> ➜ 开工后主理人首先与 AMC Agent 讨论品牌的定位、目标客群及主打策略</p>
-                          <p>  ↓</p>
-                          <p><strong>2. 整理素材</strong> ➜ 根据讨论的策略，主理人收集并整理品牌素材（如图片、视频、基本文案信息）并提供给 Agent</p>
-                          <p>  ↓</p>
-                          <p><strong>3. 制作草稿</strong> ➜ AMC Agent 依据策略和素材开始生成内容草稿，若需要确认则自动生成 Require Input 任务</p>
-                          <p>  ↓</p>
-                          <p><strong>4. 排期发布</strong> ➜ 草稿通过主理人审核后进入排期，由系统/Agent 自动发布到各大社交媒体平台</p>
-                          <p>  ↓</p>
-                          <p><strong>5. 检验结果</strong> ➜ 帖子发布后，主理人与 AMC Agent 共同检视发布效果，查看数据分析报告</p>
-                          <p>  ↓</p>
-                          <p><strong>6. 策略优化</strong> ➜ 根据检验结果复盘，调优下一阶段的内容方向，并重新回到步骤 1 讨论下一轮策略，持续循环</p>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-2">
-                          💡 提示：在每次循环中，<strong>AMC Agent 会不断更新对品牌的理解并进行策略调优</strong>（其学习成果会持续积累在品牌的专属记忆 profile 中）。随着你们对品牌的不断运营，Agent 产出的方案和内容会越来越懂你的心意。
-                        </p>
-                      </div>
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
+                      <table className="w-full text-xs text-slate-300 text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-900 border-b border-slate-800">
+                            <th className="p-3 font-bold text-slate-200 w-16">步骤</th>
+                            <th className="p-3 font-bold text-slate-200 w-32">执行者</th>
+                            <th className="p-3 font-bold text-slate-200">说明</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          <tr>
+                            <td className="p-3 font-bold">1</td>
+                            <td className="p-3 text-indigo-400 font-semibold">商家</td>
+                            <td className="p-3 text-slate-300">自助注册账号，选定 Essential / Growth / Scale 套餐，完成付款。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">2</td>
+                            <td className="p-3 text-indigo-400 font-semibold">系统</td>
+                            <td className="p-3 text-slate-300">按 Agent+主理人 配对池，自动指派一个 AMC Agent 负责该品牌。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">3</td>
+                            <td className="p-3 text-indigo-400 font-semibold">系统</td>
+                            <td className="p-3 text-slate-300">每个 AMC Agent 都固定搭档一位专属品牌主理人，Agent 一旦分配，对应主理人自动同步接入该品牌。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">4</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC 品牌主理人</td>
+                            <td className="p-3 text-slate-300">在收到新品牌分配通知后，主动联系商家，启动 onboarding 流程。</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
 
-                      <div className="h-px bg-slate-800/50 my-2" />
-
-                      <div>
-                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.3 看板介绍</h3>
-                        <ul className="list-disc pl-5 space-y-1.5 mt-2">
-                          <li><strong className="text-slate-200">各功能区说明</strong>：内容看板展示已发布和排期中的内容；社媒账号提供接入状态；数据报告展示关键效果指标；配置中心用于接入外部 API 密钥。</li>
-                          <li><strong className="text-slate-200">Require Input 任务说明</strong>：当 AI 遇到素材缺失、链接失效或差评预警时，会在 **Require Input** 状态下死锁挂起，此时您在看板上会看到明显的任务卡片，输入反馈意见即可推进 AI 运行。当该栏目有待审核任务时，该栏目的任务数量角标将自动变成醒目的红色。</li>
-                          <li><strong className="text-slate-200">通知机制</strong>：当有需要您确认的任务或账号断连时，系统会通过微信/飞书或浏览器推送实时通知。</li>
-                        </ul>
-                      </div>
-
-                      <div className="h-px bg-slate-800/50 my-2" />
-
-                      <div>
-                        <h3 className="font-bold text-slate-200 text-base mb-1.5">1.4 账号权限说明</h3>
-                        <ul className="list-disc pl-5 space-y-1.5 mt-2">
-                          <li><strong className="text-slate-200">客户账号 vs AMC 团队账号的权限区别</strong>：主理人拥有终审权与最高配置权限；AMC 团队账号拥有在被授权的范围内进行内容创作、数据拉取和辅助互动的操作权限。</li>
-                          <li><strong className="text-slate-200">多门店 / 多品牌管理</strong>：支持在一个 AMC 账户下无缝切换和配置多个不同的品牌资产或门店，由独立的 AI 虚拟员工组提供个性化营销服务。</li>
-                        </ul>
-                      </div>
+                    <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 space-y-2">
+                      <h4 className="font-bold text-sm text-indigo-400">💡 Agent-主理人配对机制</h4>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        AMC 内部以「一个 Agent + 一位专属主理人」为协作单元长期搭档运作，而非一位主理人零散对接多个独立 Agent。这可以保证主理人对所负责 Agent 的工作风格、品牌组合有持续、深入的掌控。
+                      </p>
                     </div>
                   </div>
                 )}
 
-                {/* Part 2 */}
-                {openManualSection === 'part2' && (
+                {/* Phase 1 */}
+                {openManualSection === 'p1' && (
                   <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 2：账号接入操作</h2>
-                    
+                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Phase 1：新品牌上线 (Onboarding)</h2>
+                    <p className="text-slate-350 text-sm leading-relaxed">
+                      在新商家入驻的 1-2 周内，品牌主理人将配合商家进行全面的账号绑定与资料初始化，AI Agent 负责制定策略基准与长篇品牌档案描述。
+                    </p>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
+                      <img src="/phase1.png" alt="Phase 1: 新品牌上线" className="max-w-full h-auto rounded-lg" />
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
+                      <table className="w-full text-xs text-slate-300 text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-900 border-b border-slate-800">
+                            <th className="p-3 font-bold text-slate-200 w-16">步骤</th>
+                            <th className="p-3 font-bold text-slate-200 w-32">执行者</th>
+                            <th className="p-3 font-bold text-slate-200">说明</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          <tr>
+                            <td className="p-3 font-bold">1</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人 ↔ 商家</td>
+                            <td className="p-3 text-slate-300">品牌访谈：了解品牌故事、定位、目标客群、主打产品、视觉调性偏好。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">2</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人 + 商家</td>
+                            <td className="p-3 text-slate-300">社媒账号接入：通过 PostFast OAuth Connect Link 完成 Instagram/Facebook/TikTok/小红书等官方授权。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">3</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人</td>
+                            <td className="p-3 text-slate-300">Google Maps 信息完善：认领商家地址，完善营业信息。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">4</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
+                            <td className="p-3 text-slate-300">品牌档案初始化：调用接口查询绑定品牌列表 ➜ 撰写深度介绍（≥200字，融合访谈信息）➜ 写入官网/电话/地址/时区 ➜ 自动创建 Lark Drive 共享目录。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">5</td>
+                            <td className="p-3 text-indigo-400 font-semibold">商家</td>
+                            <td className="p-3 text-slate-300">初始素材提交：提供菜单照片、Logo、品牌故事文档等基础素材。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">6</td>
+                            <td className="p-3 text-indigo-400 font-semibold">主理人 / Agent</td>
+                            <td className="p-3 text-slate-300">素材入库：上传素材至素材库，打标签（包含 AI 自动生成的描述/标签）。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">7</td>
+                            <td className="p-3 text-indigo-400 font-semibold">Agent + 主理人</td>
+                            <td className="p-3 text-slate-300">首月策略制定（Tier2+）：竞品分析（前3名竞争对手）、目标客群画像、双语平台策略、品牌话术与视觉指南 ➜ 与商家确认后定稿。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">8</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
+                            <td className="p-3 text-slate-300">首月内容日历草拟：生成首月内容排期草案 ➜ 提交主理人/商家确认。</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="h-px bg-slate-800/50 my-2" />
+
                     {/* SOP-001 */}
                     <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-5 space-y-3 relative overflow-hidden">
                       <div className="absolute top-0 right-0 rounded-bl-lg bg-indigo-600 px-2 py-0.5 text-[9px] font-bold text-white uppercase">SOP-001</div>
@@ -552,30 +611,10 @@ export default function LearnPage() {
                       </div>
                     </div>
 
-                    {/* SOP-002 */}
-                    <div className="rounded-xl border border-slate-850 bg-slate-900/30 p-5 space-y-3 relative">
-                      <div className="absolute top-0 right-0 rounded-bl-lg bg-slate-800 px-2 py-0.5 text-[9px] font-bold text-slate-400 uppercase">SOP-002</div>
-                      <h3 className="font-bold text-base text-slate-100">社媒账号断连重新授权</h3>
-                      <p className="text-xs text-slate-455">触发条件：账号状态显示"断连"或内容发布失败。</p>
-                      <div className="h-px bg-slate-800/30 my-2" />
-                      <ol className="list-decimal pl-5 space-y-2 text-xs text-slate-350 leading-relaxed">
-                        <li>进入配置中心，找到断连账号。</li>
-                        <li>点击“重新授权” ➜ 重新完成 PostFast OAuth 流程。</li>
-                        <li>确认状态恢复为“已连接”。</li>
-                      </ol>
-                    </div>
-                  </div>
-                )}
-
-                {/* Part 3 */}
-                {openManualSection === 'part3' && (
-                  <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Part 3：日常协作 SOP</h2>
-                    
                     {/* SOP-003 */}
                     <div className="rounded-xl border border-slate-850 bg-slate-900/30 p-5 space-y-3 relative">
                       <div className="absolute top-0 right-0 rounded-bl-lg bg-slate-800 px-2 py-0.5 text-[9px] font-bold text-slate-400 uppercase">SOP-003</div>
-                      <h3 className="font-bold text-base text-slate-100">月度 Brief 提交流程</h3>
+                      <h3 className="font-bold text-base text-slate-100">月度 Brief 提交流程与初始化</h3>
                       <p className="text-xs text-slate-450">执行频率：每月第一个工作日提交本月大方向（如有特定新品）。</p>
                       <div className="h-px bg-slate-800/30 my-2" />
                       <ol className="list-decimal pl-5 space-y-2 text-xs text-slate-350 leading-relaxed">
@@ -583,6 +622,69 @@ export default function LearnPage() {
                         <li>AI 自动创建 Brief 行动卡片，并提取相关产品、价格以及要强调的方向。</li>
                         <li>AMC 在 24 小时内确认并根据此 Brief 自动生成发布日历计划。</li>
                       </ol>
+                    </div>
+                  </div>
+                )}
+
+                {/* Phase 2 */}
+                {openManualSection === 'p2' && (
+                  <div className="space-y-6">
+                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Phase 2：日常内容生产循环</h2>
+                    <p className="text-slate-350 text-sm leading-relaxed">
+                      日常运营循环，主要通过自动化算法触发与人工终审机制双轨推进，保证内容生产的效率与调性合规。
+                    </p>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
+                      <img src="/phase2.png" alt="Phase 2: 日常内容生产循环" className="max-w-full h-auto rounded-lg" />
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
+                      <table className="w-full text-xs text-slate-300 text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-900 border-b border-slate-800">
+                            <th className="p-3 font-bold text-slate-200 w-16">步骤</th>
+                            <th className="p-3 font-bold text-slate-200 w-32">执行者</th>
+                            <th className="p-3 font-bold text-slate-200">说明</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                          <tr>
+                            <td className="p-3 font-bold">1. 素材上传</td>
+                            <td className="p-3 text-indigo-400 font-semibold">商家 / 主理人</td>
+                            <td className="p-3 text-slate-300">商家与主理人周度提供高质量的图片和视频素材，并安排探店补充素材库。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">2. 草稿生成</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
+                            <td className="p-3 text-slate-300">AI 每日扫描素材库中标记有“排期发布”的素材，自动进行文案排版与草稿生成，任务置于 pending 状态挂起（触发终审锁）。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">3. 终审锁</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人 / 商家</td>
+                            <td className="p-3 text-slate-300">审核看板中标红的 **Require Input** 卡片草稿。批准 ➜ 进入排期发布队列；修改 ➜ 提交修改意见，AI 重新生成。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">4. 发布执行</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent / 主理人</td>
+                            <td className="p-3 text-slate-300">正常账号通过 PostFast API 自动发送；高风控社媒渠道由系统生成 Require Input 指示，由主理人手动进行发布以规避封号风险。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">5. 真实发布验证</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
+                            <td className="p-3 text-slate-300">排期到达后，Agent 自动验证贴文是否真实上线，拉取回填线上 Post URL，将任务归档并置为 done。主理人 review 并邀请商家查看。</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 space-y-2">
+                      <h4 className="font-bold text-sm text-indigo-400">🤖 自动驾驶与人机协同参数</h4>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        当系统开启 <strong>自动驾驶模式 (autoPilot = true)</strong> 时，AI 在检测到文案质量符合基准后可直接进行接口排期发布；而当 <strong>autoPilot = false</strong> 时，所有内容发布任务都将在 pending_review 状态死锁挂起，必须由人类点击通过。
+                      </p>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        <strong>手动写草稿</strong>：品牌主理人也可直接通过看板调用 <code>board_save_draft</code> 手动撰写/上传自定义草稿（如临时特定优惠通知、重大新闻等），并通过 <code>board_submit_draft</code> 提交，状态机和审批流程与 AI 生成草稿完全一致。
+                      </p>
                     </div>
 
                     {/* SOP-004 */}
@@ -598,24 +700,10 @@ export default function LearnPage() {
                       </ul>
                     </div>
 
-                    {/* SOP-005 */}
-                    <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-5 space-y-3 relative">
-                      <div className="absolute top-0 right-0 rounded-bl-lg bg-indigo-600 px-2 py-0.5 text-[9px] font-bold text-white uppercase">SOP-005</div>
-                      <h3 className="font-bold text-base text-slate-100">内容草稿审核与人机协同</h3>
-                      <p className="text-xs text-indigo-400/90 font-medium">界面提示：当看板 "Require Input" 状态有挂起任务时，该栏目的统计角标将自动显现为醒目的红色。</p>
-                      <div className="h-px bg-indigo-500/10 my-2" />
-                      <ol className="list-decimal pl-5 space-y-2 text-xs text-slate-300 leading-relaxed">
-                        <li><strong>观察红标</strong>：打开看板主页，注意查看带有红色提示的 **Require Input** 状态任务栏。</li>
-                        <li><strong>预览草稿</strong>：点击草稿卡片，在预览中查看 AI 员工自动排版的图文、Hashtag 以及排期时间。</li>
-                        <li><strong>执行动作</strong>：选择 <strong>批准发布</strong> ➜ 任务进入自动排期队列；选择 <strong>提交修改</strong> ➜ 输入你的反馈意见并保存。</li>
-                        <li><strong>恢复运行 (Resume)</strong>：主理人修改完文案或提供反馈后，在看板上点击一键 <strong>“Resume”</strong>，AI 将立即获取最新修改成果并无缝恢复发帖流程。</li>
-                      </ol>
-                    </div>
-
                     {/* SOP-006 */}
                     <div className="rounded-xl border border-slate-850 bg-slate-900/30 p-5 space-y-3 relative">
                       <div className="absolute top-0 right-0 rounded-bl-lg bg-slate-800 px-2 py-0.5 text-[9px] font-bold text-slate-400 uppercase">SOP-006</div>
-                      <h3 className="font-bold text-base text-slate-100">月度报告核心数据监控</h3>
+                      <h3 className="font-bold text-base text-slate-100">数据指标监控</h3>
                       <p className="text-xs text-slate-450">数据监控：掌握核心指标，调整下月运营策略。</p>
                       <div className="h-px bg-slate-800/30 my-2" />
                       <ul className="list-disc pl-5 space-y-2 text-xs text-slate-350 leading-relaxed">

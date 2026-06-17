@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { ExternalLink, FileSearch, RefreshCw, Search, Tag } from 'lucide-react'
 
 type HotTopicItem = {
@@ -32,7 +32,7 @@ export default function HotTopicsView({ brandId, brandName }: { brandId?: string
   const selectedTopic = useMemo(() => topics.find((topic) => topic.id === selectedId) || topics[0] || null, [topics, selectedId])
   const tags = useMemo(() => Array.from(new Set(topics.flatMap((topic) => topic.tags))).sort(), [topics])
 
-  const loadTopics = async () => {
+  const loadTopics = useCallback(async () => {
     if (!brandId) return
     setLoading(true)
     setError(null)
@@ -51,11 +51,14 @@ export default function HotTopicsView({ brandId, brandName }: { brandId?: string
     } finally {
       setLoading(false)
     }
-  }
+  }, [brandId, q, tag])
 
   useEffect(() => {
-    void loadTopics()
-  }, [brandId, tag])
+    const timer = setTimeout(() => {
+      void loadTopics()
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [loadTopics])
 
   if (!brandId) return <div className="p-8 text-sm text-slate-400">请先选择品牌</div>
 

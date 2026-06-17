@@ -81,6 +81,29 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   // Navigation State
   const [currentView, setCurrentView] = useState<BoardView>(initialView)
 
+  useEffect(() => {
+    if (initialView === 'dashboard') {
+      try {
+        const savedView = window.localStorage.getItem('amc.currentView') as BoardView | null
+        if (savedView && ['agents', 'archive', 'dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets'].includes(savedView)) {
+          setTimeout(() => {
+            setCurrentView(savedView)
+          }, 0)
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+  }, [initialView])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('amc.currentView', currentView)
+    } catch (e) {
+      console.error(e)
+    }
+  }, [currentView])
+
   // Brand State — loaded from API
   const [brands, setBrands] = useState<Brand[]>([])
   const [activeBrand, setActiveBrand] = useState<Brand | null>(null)
@@ -97,6 +120,11 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     activeBrandIdRef.current = activeBrand?.id
     if (activeBrand?.id) {
       document.body.setAttribute('data-active-brand-id', activeBrand.id)
+      try {
+        window.localStorage.setItem('dashboard.activeBrandId', activeBrand.id)
+      } catch (e) {
+        console.error(e)
+      }
     } else {
       document.body.removeAttribute('data-active-brand-id')
     }
@@ -108,7 +136,16 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       if (res.ok) {
         const list: Brand[] = await res.json()
         setBrands(list)
-        if (list.length > 0) setActiveBrand(prev => prev ?? list[0])
+        if (list.length > 0) {
+          let savedBrandId: string | null = null
+          try {
+            savedBrandId = window.localStorage.getItem('dashboard.activeBrandId')
+          } catch (e) {
+            console.error(e)
+          }
+          const savedBrand = list.find(b => b.id === savedBrandId)
+          setActiveBrand(prev => prev ?? savedBrand ?? list[0])
+        }
       }
     } catch (e) {
       console.error('[KanbanBoard] fetchBrands error', e)

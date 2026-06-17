@@ -62,7 +62,11 @@ export default function PostDetailModal({ post, onClose }: Props) {
   const platformColor = PLATFORM_COLORS[platformKey] ?? '#6366f1'
   const ctColor = CT_COLORS[contentTypeKey] ?? '#6366f1'
   const statusCls = STATUS_COLORS[statusKey] ?? STATUS_COLORS.draft
-  const pubDate = new Date(post.publishedAt ?? Date.now()).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const pubDate = post.publishedAt
+    ? new Date(post.publishedAt).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : post.scheduledAt
+      ? `预计发布: ${new Date(post.scheduledAt).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+      : '未发布'
   const interactions = (post.likes ?? 0) + (post.comments ?? 0) + (post.shares ?? 0)
   const hashtags = post.hashtags ?? []
   const mediaUrls = post.mediaUrls ?? []

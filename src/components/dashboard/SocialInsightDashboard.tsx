@@ -971,7 +971,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                       </div>
                       <p className="text-xs text-slate-550 dark:text-slate-400 leading-relaxed">{r.text}</p>
                       <div className="flex justify-between items-center mt-3 border-t border-slate-100/50 dark:border-slate-800/50 pt-2 text-[9px] font-bold text-slate-400">
-                        <span>谷歌商户中心 · {new Date(r.createdAt ?? Date.now()).toLocaleDateString('zh-CN')}</span>
+                        <span>谷歌商户中心 · {r.createdAt ? new Date(r.createdAt).toLocaleDateString('zh-CN') : '—'}</span>
                         <span className={`px-2 py-0.5 rounded ${r.replyStatus === 'replied' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500 animate-pulse'}`}>
                           {r.replyStatus === 'replied' ? 'AI已回复' : '待处理'}
                         </span>

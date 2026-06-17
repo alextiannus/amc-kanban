@@ -1776,8 +1776,8 @@ export function createAmcMcpServer(agentApiKey: string) {
           }
           fileBuffer = Buffer.from(await res.arrayBuffer())
           resolvedMimeType = resolvedMimeType || res.headers.get('content-type') || 'application/octet-stream'
-        } catch (err: any) {
-          return { content: [{ type: 'text' as const, text: `Error: Exception downloading image: ${err?.message || err}` }], isError: true }
+        } catch (err) {
+          return { content: [{ type: 'text' as const, text: `Error: Exception downloading image: ${errorMessage(err, 'Exception downloading image')}` }], isError: true }
         }
       }
 
@@ -2108,7 +2108,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       for (const t of tasks) {
         let statusVal = t.status || 'todo'
         let reqInputVal = t.requiredInput || null
-        let tagsList: string[] = []
+        const tagsList: string[] = []
 
         if (t.type === 'require_input') {
           statusVal = 'pending'

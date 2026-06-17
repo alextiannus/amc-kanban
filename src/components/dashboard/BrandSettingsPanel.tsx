@@ -342,9 +342,9 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
               </details>
             </div>
           </Section>
+          {/* Temporarily hidden Lark and Chrome Extension integrations
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-          {/* Lark */}
           <Section label="飞书（素材存储 + 通知）" badge={<StatusBadge ok={status.lark} />}>
             {larkFolderUrl && (
               <a
@@ -364,7 +364,6 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
           </Section>
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-          {/* Chrome Extension */}
           <Section label="Chrome 浏览器插件 (美团/点评自动化)" badge={<StatusBadge ok={status.extension} />}>
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-3">
               <p className="text-xs text-slate-650 dark:text-slate-350 leading-relaxed font-medium">
@@ -387,6 +386,7 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
               </div>
             </div>
           </Section>
+          */}
         </div>
 
         {/* Footer */}

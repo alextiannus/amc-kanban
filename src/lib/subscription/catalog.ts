@@ -192,10 +192,9 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     label: '团队配置',
     values: {
       starter: 'AI 内容创作官 · AI 市场调研官 · 品牌主理人',
-      secondary: '', // not used, placeholder or just key values matching PlanId
       essential: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
       advanced: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · AI 私域运营官 · AI 客服 · 品牌主理人',
-    } as any,
+    },
   },
   {
     key: 'frequency',

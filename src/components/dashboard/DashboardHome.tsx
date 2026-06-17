@@ -875,12 +875,14 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
           <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <BarChart2 className="w-4 h-4" /> 账号资产配置
           </h3>
+          {/* Temporarily hidden for view-only mode
           <button
             onClick={() => setShowAddAccount(true)}
             className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-100 dark:border-emerald-800/50 px-3 py-1.5 rounded-xl transition-all"
           >
             <span className="text-base leading-none font-black">+</span> 添加新账号
           </button>
+          */}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {connectedAccounts.map(acc => (
