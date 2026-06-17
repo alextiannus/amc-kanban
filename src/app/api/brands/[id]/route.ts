@@ -128,6 +128,44 @@ export async function GET(_req: Request, { params }: Params) {
             },
           })
         }
+
+        // Prune stale accounts: delete any account that is not in the PostFast synced accounts list,
+        // unless it's a direct Google Business Profile account.
+        const postfastPlatformHandles = pfResult.accounts.map(acc => ({
+          platformId: acc.platformId,
+          handle: acc.handle
+        }))
+
+        const dbAccounts = await prisma.socialAccount.findMany({
+          where: { brandId: id },
+          select: { id: true, platformId: true, handle: true }
+        })
+
+        const brandInfo = await prisma.brand.findUnique({
+          where: { id },
+          select: { googlePreferOAuth: true, googleRefreshToken: true, googleLocationId: true }
+        })
+
+        const isDirectGoogleConfigured = brandInfo?.googlePreferOAuth && brandInfo?.googleRefreshToken && brandInfo?.googleLocationId
+
+        const accountsToDelete = dbAccounts.filter(dbAcc => {
+          if (dbAcc.platformId === 'google' && isDirectGoogleConfigured) {
+            return false
+          }
+          const isMatched = postfastPlatformHandles.some(pfAcc => 
+            pfAcc.platformId.toLowerCase() === dbAcc.platformId.toLowerCase() &&
+            pfAcc.handle.toLowerCase() === dbAcc.handle.toLowerCase()
+          )
+          return !isMatched
+        })
+
+        if (accountsToDelete.length > 0) {
+          const idsToDelete = accountsToDelete.map(a => a.id)
+          await prisma.socialAccount.deleteMany({
+            where: { id: { in: idsToDelete } }
+          })
+          console.log(`[Sync] Deleted ${accountsToDelete.length} stale social accounts for brand ${id}:`, accountsToDelete.map(a => `${a.platformId}:${a.handle}`))
+        }
       } else {
         postfastSync = { ok: false, error: pfResult.error }
       }
