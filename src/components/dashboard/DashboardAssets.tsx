@@ -372,30 +372,80 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     setError(null)
     try {
       for (const file of fileList) {
-        const fileBase64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => {
-            const value = String(reader.result || '')
-            resolve(value.includes(',') ? value.split(',').pop() || '' : value)
-          }
-          reader.onerror = () => reject(new Error('read failed'))
-          reader.readAsDataURL(file)
-        })
+        const filename = file.name
+        const mimeType = file.type || 'application/octet-stream'
 
-        const res = await fetch(`/api/brands/${brandId}/assets/upload`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            fileBase64,
-            folder: targetFolder,
-            aiCategory: targetFolder === '素材库' ? 'raw' : targetFolder,
-            aiTags: [targetFolder, '待确认'],
-          }),
-        })
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(json.error || '素材上传失败')
+        // 1. Request presigned upload URL from backend
+        const presignRes = await fetch(
+          `/api/brands/${brandId}/assets/presign-upload?filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}&folder=${encodeURIComponent(targetFolder)}`
+        )
+        const presignData = await presignRes.json().catch(() => ({}))
+        
+        if (!presignRes.ok) {
+          throw new Error(presignData.error || '获取上传凭证失败')
+        }
+
+        if (presignData.useDirectApi) {
+          // Fallback to local Base64 upload route (e.g. in dev environment)
+          const fileBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => {
+              const value = String(reader.result || '')
+              resolve(value.includes(',') ? value.split(',').pop() || '' : value)
+            }
+            reader.onerror = () => reject(new Error('read failed'))
+            reader.readAsDataURL(file)
+          })
+
+          const res = await fetch(`/api/brands/${brandId}/assets/upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              mimeType,
+              fileBase64,
+              folder: targetFolder,
+              aiCategory: targetFolder === '素材库' ? 'raw' : targetFolder,
+              aiTags: [targetFolder, '待确认'],
+            }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json.error || '素材上传失败')
+        } else {
+          // 2. Perform direct binary upload to Huawei OBS pre-signed PUT URL
+          const uploadHeaders: Record<string, string> = {
+            'Content-Type': mimeType,
+          }
+          
+          const uploadRes = await fetch(presignData.uploadUrl, {
+            method: 'PUT',
+            headers: uploadHeaders,
+            body: file, // Directly send the raw binary File/Blob
+          })
+
+          if (!uploadRes.ok) {
+            throw new Error(`直接上传到存储服务失败 (HTTP ${uploadRes.status})`)
+          }
+
+          // 3. Confirm the upload with the backend to write the record in database
+          const confirmRes = await fetch(`/api/brands/${brandId}/assets/confirm-upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              mimeType,
+              sizeBytes: file.size,
+              url: presignData.assetUrl,
+              key: presignData.key,
+              folder: targetFolder,
+              aiTags: [targetFolder, '待确认'],
+            }),
+          })
+          const confirmData = await confirmRes.json().catch(() => ({}))
+          if (!confirmRes.ok) {
+            throw new Error(confirmData.error || '确认素材入库失败')
+          }
+        }
       }
       await loadAssets()
     } catch (e) {

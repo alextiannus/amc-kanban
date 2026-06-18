@@ -167,3 +167,69 @@ export async function persistDraftSnapshotToObs(input: { brandId: string; draftI
     cacheControl: 'no-cache',
   })
 }
+
+export function getHuaweiObsPresignedPutUrl(input: {
+  key: string
+  contentType: string
+  expiresInSeconds?: number
+}): { uploadUrl: string; publicUrl: string; headers: Record<string, string> } | null {
+  const config = getHuaweiObsConfig()
+  if (!config) return null
+
+  const expiresIn = input.expiresInSeconds || 900 // 15 mins
+  const now = new Date()
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '')
+  const dateStamp = amzDate.slice(0, 8)
+  const host = `${config.bucket}.${config.endpoint}`
+  const objectPath = `/${encodeObjectKey(input.key)}`
+
+  const signedHeaders = 'content-type;host'
+  const credentialScope = `${dateStamp}/${config.region}/s3/aws4_request`
+
+  const queryParams: Record<string, string> = {
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': `${config.accessKeyId}/${credentialScope}`,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': String(expiresIn),
+    'X-Amz-SignedHeaders': signedHeaders,
+  }
+
+  const canonicalQueryString = Object.keys(queryParams)
+    .sort()
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
+    .join('&')
+
+  const canonicalHeaders = `content-type:${input.contentType.trim()}\nhost:${host.trim()}\n`
+
+  const canonicalRequest = [
+    'PUT',
+    objectPath,
+    canonicalQueryString,
+    canonicalHeaders,
+    signedHeaders,
+    'UNSIGNED-PAYLOAD',
+  ].join('\n')
+
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    sha256Hex(canonicalRequest),
+  ].join('\n')
+
+  const signature = crypto
+    .createHmac('sha256', signingKey(config.secretAccessKey, dateStamp, config.region))
+    .update(stringToSign)
+    .digest('hex')
+
+  const uploadUrl = `https://${host}${objectPath}?${canonicalQueryString}&X-Amz-Signature=${signature}`
+
+  return {
+    uploadUrl,
+    publicUrl: `${config.publicBaseUrl}/${encodeObjectKey(input.key)}`,
+    headers: {
+      'Content-Type': input.contentType,
+    },
+  }
+}
+
