@@ -102,6 +102,78 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [uploading, setUploading] = useState(false)
   const [targetFolder, setTargetFolder] = useState('素材库')
   const [moveFolder, setMoveFolder] = useState('')
+  const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动'])
+  const [selectedFolder, setSelectedFolder] = useState<string>('素材库')
+
+  const loadFolders = useCallback(async () => {
+    if (!brandId) return
+    try {
+      const res = await fetch(`/api/brands/${brandId}/folders`)
+      if (res.ok) {
+        const data = await res.json()
+        const folderNames = data.folders.map((f: any) => f.name)
+        setFolders(['素材库', ...folderNames])
+      }
+    } catch (err) {
+      console.error('Failed to load folders:', err)
+    }
+  }, [brandId])
+
+  const handleCreateFolder = async () => {
+    if (!brandId) return
+    const name = window.prompt('请输入新文件夹名称：')
+    if (!name || !name.trim()) return
+
+    const folderName = name.trim()
+    if (folders.includes(folderName)) {
+      alert('文件夹已存在')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/brands/${brandId}/folders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: folderName }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error || '创建文件夹失败')
+      }
+      await loadFolders()
+      setSelectedFolder(folderName)
+    } catch (err: any) {
+      alert(err.message || '创建文件夹失败')
+    }
+  }
+
+  const handleDeleteFolder = async (folderName: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!brandId) return
+    if (['素材库', '产品', '环境', '活动'].includes(folderName)) {
+      alert('系统默认文件夹不可删除')
+      return
+    }
+
+    if (!window.confirm(`确定要删除文件夹 “${folderName}” 吗？\n删除文件夹后，其中的素材将自动移至 “素材库” 根目录。`)) return
+
+    try {
+      const res = await fetch(`/api/brands/${brandId}/folders?name=${encodeURIComponent(folderName)}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error || '删除文件夹失败')
+      }
+      await loadFolders()
+      if (selectedFolder === folderName) {
+        setSelectedFolder('素材库')
+      }
+      await loadAssets()
+    } catch (err: any) {
+      alert(err.message || '删除文件夹失败')
+    }
+  }
 
 
 
@@ -134,12 +206,15 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           setActiveAssetId(loadedAssets[0].id)
         }
       }
+      if (!cancelled) {
+        await loadFolders()
+      }
     } catch {
       if (!cancelled) setError('素材库加载失败')
     } finally {
       if (!cancelled) setLoading(false)
     }
-  }, [brandId])
+  }, [brandId, loadFolders])
 
   useEffect(() => {
     let cancelled = false
@@ -192,6 +267,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
   // Filter logic
   const filtered = assets.filter(a => {
+    // Folder filter
+    const folderMatch = selectedFolder === '素材库'
+      ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw')
+      : a.aiCategory === selectedFolder
+    if (!folderMatch) return false
     // 1. Sidebar views filter
     if (viewFilter === 'recent') {
       const sevenDaysAgo = new Date()
@@ -565,6 +645,45 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           </nav>
         </div>
 
+        <div className="mb-6 border-t border-slate-100 dark:border-slate-800 pt-4">
+          <h3 className="px-3 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span>文件夹</span>
+            <Plus
+              className="w-3.5 h-3.5 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+              onClick={handleCreateFolder}
+            />
+          </h3>
+          <nav className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+            {folders.map(f => {
+              const isSelected = selectedFolder === f
+              const count = assets.filter(a => f === '素材库' ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw') : a.aiCategory === f).length
+              const isDeletable = !['素材库', '产品', '环境', '活动'].includes(f)
+
+              return (
+                <button
+                  key={f}
+                  onClick={() => setSelectedFolder(f)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all group ${isSelected ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                >
+                  <div className="flex items-center gap-3 truncate">
+                    <span className="shrink-0 text-md">📁</span>
+                    <span className="truncate">{f}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{count}</span>
+                    {isDeletable && (
+                      <X
+                        className="w-3 h-3 text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shrink-0"
+                        onClick={(e) => handleDeleteFolder(f, e)}
+                      />
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </nav>
+        </div>
+
         <div className="flex-1 overflow-y-auto min-h-0 pt-2 border-t border-slate-100 dark:border-slate-800">
           <h3 className="px-3 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 flex items-center justify-between">
             <span>标签浏览</span>
@@ -661,12 +780,13 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           <select
             value={targetFolder}
             onChange={(e) => setTargetFolder(e.target.value)}
-            className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none hover:bg-slate-50 transition-all"
+            className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none hover:bg-slate-50 transition-all cursor-pointer"
           >
-            <option value="素材库">根目录 (素材库)</option>
-            <option value="产品">产品目录</option>
-            <option value="环境">环境目录</option>
-            <option value="活动">活动目录</option>
+            {folders.map(f => (
+              <option key={f} value={f}>
+                {f === '素材库' ? '根目录 (素材库)' : `${f} 目录`}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -853,13 +973,18 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                   移动分类文件夹
                 </h4>
-                <input
-                  type="text"
+                <select
                   value={moveFolder}
                   onChange={(e) => setMoveFolder(e.target.value)}
-                  placeholder="输入目标文件夹名称"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100"
-                />
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 cursor-pointer"
+                >
+                  <option value="">选择目标文件夹...</option>
+                  {folders.map(f => (
+                    <option key={f} value={f}>
+                      {f === '素材库' ? '根目录 (素材库)' : f}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Set usage plan */}
@@ -956,6 +1081,40 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                     {activeAsset.aiCaption || 'AI 尚未生成图析描述。可以点击批量打标来分析。'}
                   </p>
                 </div>
+              </div>
+
+              {/* Folder selection for single asset */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  分类文件夹
+                </h4>
+                <select
+                  value={activeAsset.aiCategory || '素材库'}
+                  onChange={async (e) => {
+                    const nextFolder = e.target.value
+                    setAssets(prev => prev.map(a => a.id === activeAsset.id ? { ...a, aiCategory: nextFolder } : a))
+                    if (!brandId) return
+                    try {
+                      const res = await fetch(`/api/brands/${brandId}/assets/${activeAsset.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ folder: nextFolder }),
+                      })
+                      if (!res.ok) throw new Error('Failed to update folder')
+                      await loadAssets()
+                    } catch (err) {
+                      console.error(err)
+                      alert('修改文件夹失败')
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-100 cursor-pointer"
+                >
+                  {folders.map(f => (
+                    <option key={f} value={f}>
+                      {f === '素材库' ? '根目录 (素材库)' : f}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Tag confirmations */}

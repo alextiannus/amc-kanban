@@ -301,6 +301,7 @@ model Brand {
   subscriptions BrandSubscription[]
   gameConfig  GameConfig?
   gameSessions GameSession[]
+  folders      BrandFolder[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -658,5 +659,17 @@ model SchoolItem {
   tip       String?  // Tip/suggestion (for CALENDAR)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model BrandFolder {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, name])
+  @@index([brandId])
 }
 

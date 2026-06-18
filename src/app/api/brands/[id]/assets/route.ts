@@ -387,7 +387,14 @@ export async function GET(request: Request, { params }: Params) {
     take: 200,
   })
 
-  const folders = Array.from(new Set(assets.map((asset) => asset.aiCategory || '素材库')))
+  const dbFolders = await prisma.brandFolder.findMany({
+    where: { brandId },
+    select: { name: true }
+  })
+  const dbFolderNames = dbFolders.map(f => f.name)
+  const assetFolderNames = assets.map(asset => asset.aiCategory || '素材库')
+  const baseFolders = dbFolderNames.length > 0 ? dbFolderNames : ['产品', '环境', '活动']
+  const folders = Array.from(new Set(['素材库', ...baseFolders, ...assetFolderNames]))
   return NextResponse.json({ assets, folders })
 }
 
