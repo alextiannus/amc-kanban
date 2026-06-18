@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import {
   GraduationCap,
@@ -46,135 +46,20 @@ export default function LearnPage() {
   // School Curriculum Category States
   const [schoolCategory, setSchoolCategory] = useState<'courses' | 'cases' | 'calendar'>('courses')
 
-  // FAQ Wording Drafts
-  const faqs = [
-    {
-      id: 'q1',
-      category: 'accounts',
-      q: '为什么手动添加的账号无法用于内容发布？',
-      a: '手动添加账号（填写账号密码）仅用于本地前台自动化运行脚本及数据爬取使用（例如模拟前台自然点击以规避风控，安全免封）。要使 AI 虚拟员工能够自动发帖和进行日历排程，必须在集成配置中填入您的 PostFast API Key，并通过官方 OAuth 流程授权绑定。',
-      tag: '账号与接入'
-    },
-    {
-      id: 'q2',
-      category: 'accounts',
-      q: 'PostFast OAuth 授权的正确步骤是什么？',
-      a: '步骤一：在看板聊天框向 AI 发送指令“帮我生成 PostFast 账号绑定链接”；步骤二：点击 AI 返回的专属链接，在 PostFast 页面中选择对应渠道授权；步骤三：授权完毕后，返回 AMC 控制台刷新或重新保存配置，账号即自动同步出现。具体步骤详见使用手册 SOP-001。',
-      tag: '账号与接入'
-    },
-    {
-      id: 'q3',
-      category: 'accounts',
-      q: '支持哪些社交平台？',
-      a: '目前系统全面支持小红书、Instagram、Facebook、TikTok、Google Business Profile (GBP)、Yelp 等主流平台账号的发布管理、数据监控或评论回复。',
-      tag: '账号与接入'
-    },
-    {
-      id: 'q4',
-      category: 'accounts',
-      q: '账号断连了怎么办？',
-      a: '如果由于 OAuth 令牌过期导致账号断开连接，您只需前往“集成配置”页面，在对应账号后点击“重新授权”，按照提示完成 PostFast 重新授权即可。详见 SOP-002。',
-      tag: '账号与接入'
-    },
-    {
-      id: 'q5',
-      category: 'posts',
-      q: 'AMC 多久发布一次内容？',
-      a: 'AI 员工会根据您在设置中配置的“每日发帖容量上限”以及素材库中打上“排期发布”标签的素材，自动进行推文排版和日历排程。通常在各社交平台的流量高峰时间段由 AI 触发自动发送。',
-      tag: '内容发布'
-    },
-    {
-      id: 'q6',
-      category: 'posts',
-      q: '我需要审核每一条内容吗？',
-      a: '这完全取决于您的发布模式。在“老板审批”模式下，AI 创作的每一篇草稿都会以 pending_review 状态死锁在看板上，生成 require_input 任务，必须由主理人手动确认；在“自动驾驶”模式下，AI 员工会在文案符合品牌调性阈值后自动排期发布。',
-      tag: '内容发布'
-    },
-    {
-      id: 'q7',
-      category: 'posts',
-      q: '如何修改已排期的内容？',
-      a: '您可以在看板或内容日历中找到已排期的内容卡片，点击进入详情页，可直接修改文案、图片或调整发布时间，保存后系统会自动同步更新。',
-      tag: '内容发布'
-    },
-    {
-      id: 'q8',
-      category: 'posts',
-      q: '发布失败了怎么处理？',
-      a: '可在看板上点击查看失败的任务卡片以获取详细报错日志。最常见的原因是社交账号的 OAuth 令牌过期导致断连，请执行 SOP-002 重新授权后，在任务卡片上点击“重试发布”即可重新排队发送。',
-      tag: '内容发布'
-    },
-    {
-      id: 'q9',
-      category: 'influencers',
-      q: '达人探店/合作，谁来负责执行？',
-      a: '为了确保品牌定位与现场配合的绝对掌控，达人合作与到店体验由主理人在线下完全自主发起和安排（包括达人筛选、沟通邀约、现场接待以及费用结算）。AMC 的 AI 虚拟员工不参与达人的评估筛选，仅在预设的推广节点在看板上自动生成 require_input 状态的任务卡片，向您收集现场拍摄的照片或视频素材。',
-      tag: '达人探店'
-    },
-    {
-      id: 'q10',
-      category: 'influencers',
-      q: 'AMC 协助筛选达人吗？',
-      a: 'AMC 系统不负责达人筛选、甄别与外联邀约。该决策权和执行过程完全交给主理人，主理人可结合本地趋势自主挑选最契合品牌的达人伙伴。在达人产出素材后，您可以直接将照片或视频上传至看板任务，由 AI 协助内容排版。',
-      tag: '达人探店'
-    },
-    {
-      id: 'q11',
-      category: 'influencers',
-      q: '达人费用如何结算？',
-      a: '所有的合作形式（如免费产品置换或付现合作）及费用结算完全由主理人与达人在线下直接商定和执行。AMC 订阅套餐仅覆盖系统功能使用、AI Agent 运营编排及自动化发布，不包含支付给达人的合作费用。',
-      tag: '达人探店'
-    },
-    {
-      id: 'q12',
-      category: 'influencers',
-      q: '探店素材如何上传与发布？',
-      a: '当看板上出现标红的 Require Input 达人探店素材上传任务时，点击卡片并将收集的高清图片与短视频素材上传。点击 Resume 确认后，AI 虚拟员工将自动进行小红书/Instagram 等多平台推文编写、Hashtags 匹配与排期发布。',
-      tag: '达人探店'
-    },
-    {
-      id: 'q13',
-      category: 'billing',
-      q: '三个套餐的核心区别是什么？',
-      a: 'Essential（基础版）仅提供核心发帖与看板协作；Growth（增长版）新增了自动处理 Google Review / 同城趋势监控及支持探店素材收集发布功能；Scale（规模版）额外支持多门店管理、深度品牌 Memory 自动巡检和定制化 AI 能力。',
-      tag: '订阅与账单'
-    },
-    {
-      id: 'q14',
-      category: 'billing',
-      q: '中途升级套餐如何操作？',
-      a: '您可以在任意时间进入设置中心 ➜ 订阅计划中点击升级。系统会自动按当前账期剩余天数折算费用，并立即解锁高级功能。',
-      tag: '订阅与账单'
-    },
-    {
-      id: 'q15',
-      category: 'billing',
-      q: '创始会员优惠如何申请？',
-      a: '如果您是受邀参与测试的创始会员，可在支付页面输入您的专属激活码，或联系 AMC 客服进行人工审核并申请续费折扣。',
-      tag: '订阅与账单'
-    },
-    {
-      id: 'q16',
-      category: 'reports',
-      q: '月度报告包含哪些数据？',
-      a: '月度报告汇总了各平台的总触达（Reach）、总互动率（Engagement Rate）、粉丝净增长、Google 评分变化、以及排名前 5 的爆款贴文。',
-      tag: '数据与报告'
-    },
-    {
-      id: 'q17',
-      category: 'reports',
-      q: '如何查看单条内容的表现？',
-      a: '在主控面板的“数据报告”区域或“已发布”任务卡片中，点击具体的推文，即可查看其在对应平台上的实时点赞、分享、评论 and 曝光数据。',
-      tag: '数据与报告'
-    },
-    {
-      id: 'q18',
-      category: 'reports',
-      q: '数据多久更新一次？',
-      a: '系统通过 PostFast 及各大平台的 API 接口，每日晚上自动拉取并更新前一日的最新互动与曝光数据。',
-      tag: '数据与报告'
-    }
-  ]
+  const [faqs, setFaqs] = useState<any[]>([])
+  const [schoolItems, setSchoolItems] = useState<any[]>([])
+
+  useEffect(() => {
+    fetch('/api/learn/faq')
+      .then(res => res.json())
+      .then(data => setFaqs(data))
+      .catch(err => console.error('Failed to load faqs:', err))
+
+    fetch('/api/learn/school')
+      .then(res => res.json())
+      .then(data => setSchoolItems(data))
+      .catch(err => console.error('Failed to load school items:', err))
+  }, [])
 
   // Filtered FAQs based on category + search
   const filteredFaqs = useMemo(() => {
@@ -185,7 +70,7 @@ export default function LearnPage() {
         faq.a.toLowerCase().includes(qaSearch.toLowerCase())
       return matchCat && matchSearch
     })
-  }, [qaCategory, qaSearch])
+  }, [faqs, qaCategory, qaSearch])
 
   // Skill Hub Data
   const skills = [
@@ -273,15 +158,22 @@ export default function LearnPage() {
     }
   }
 
-  // School Calendar Data
-  const calendarEvents = [
-    { date: '1月-2月', event: '农历华人新年 (Chinese New Year)', tip: '提前15天开始上线新年限定礼盒、新春大促推广。AI 建议：结合小红书喜庆排版发布礼盒开箱与主打产品种草视频。' },
-    { date: '4月-5月', event: '开斋节 (Hari Raya Puasa)', tip: '适合推出节日限定礼包和多元化本地社区故事推广。AI 建议：在 Instagram 强调本地化社区互动与温情故事。' },
-    { date: '6月', event: '端午节 (Dragon Boat Festival)', tip: '主推端午限定款产品、预售倒计时。AI 建议：在看板上传产品制作或包装过程视频素材，由 AI 自动剪辑生成预热脚本。' },
-    { date: '8月9日', event: '新加坡国庆节 (National Day)', tip: '全岛爱国狂欢日，主推国庆红白主题产品、限时买一送一或国庆专属折扣活动推广。' },
-    { date: '9月-10月', event: '中秋节 (Mid-Autumn Festival)', tip: '主推中秋联名/限定礼盒定制送礼活动。AI 建议：提前20天开启小红书种草预售。' },
-    { date: '12月25日', event: '圣诞节 (Christmas)', tip: '西方传统大节。主推圣诞限定礼品包、年终大促活动。AI 建议: 主打高质感节日氛围、暖色调视觉风格。' }
-  ]
+  // School Data parsed from schoolItems state
+  const entryCourses = useMemo(() => {
+    return schoolItems.filter(item => item.type === 'COURSE' && item.level === 'entry')
+  }, [schoolItems])
+
+  const advancedCourses = useMemo(() => {
+    return schoolItems.filter(item => item.type === 'COURSE' && item.level === 'advanced')
+  }, [schoolItems])
+
+  const casesList = useMemo(() => {
+    return schoolItems.filter(item => item.type === 'CASE')
+  }, [schoolItems])
+
+  const calendarEvents = useMemo(() => {
+    return schoolItems.filter(item => item.type === 'CALENDAR')
+  }, [schoolItems])
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 font-sans">
@@ -1047,66 +939,71 @@ export default function LearnPage() {
                   {/* Category: Entry Level */}
                   <div>
                     <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-widest mb-3 px-1">入门级基础课程</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[
-                        { title: '课程 01：为什么同城实体店需要精细的社媒运营？', duration: '12m', progress: 100, desc: '餐饮/零售行业的同城获客漏斗核心逻辑。' },
-                        { title: '课程 02：新加坡平台玩法全解析', duration: '20m', progress: 100, desc: 'Instagram, TikTok, 小红书, Google Maps 流量特点。' },
-                        { title: '课程 03：如何使用手机拍出高质感产品图', duration: '15m', progress: 50, desc: '日常光线、产品构图与成片调色教学。' },
-                        { title: '课程 04：AI Marketing Crew 与主理人的黄金协作', duration: '18m', progress: 0, desc: '解锁看板协作、要求输入与自动驾驶参数配置。' }
-                      ].map((course, idx) => (
-                        <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-2 hover:border-slate-700 transition duration-200 flex flex-col justify-between">
-                          <div className="space-y-1.5">
-                            <h4 className="font-bold text-sm text-slate-100 flex items-start gap-2">
-                              <PlayCircle size={15} className="text-indigo-400 shrink-0 mt-0.5" />
-                              <span>{course.title}</span>
-                            </h4>
-                            <p className="text-xs text-slate-400 leading-relaxed">{course.desc}</p>
-                          </div>
-                          
-                          <div className="flex items-center justify-between gap-4 text-[10px] text-slate-500 font-bold border-t border-slate-800/60 pt-2.5 mt-2">
-                            <span className="flex items-center gap-1"><Clock size={11} /> {course.duration}</span>
-                            <div className="flex items-center gap-2">
-                              <span>已学: {course.progress}%</span>
-                              <div className="w-16 h-1 rounded-full bg-slate-800 overflow-hidden">
-                                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${course.progress}%` }}></div>
+                    {entryCourses.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {entryCourses.map((course, idx) => {
+                          const progress = course.progress !== undefined ? course.progress : (idx === 0 ? 100 : idx === 1 ? 100 : idx === 2 ? 50 : 0);
+                          return (
+                            <div key={course.id || idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-2 hover:border-slate-700 transition duration-200 flex flex-col justify-between">
+                              <div className="space-y-1.5">
+                                <h4 className="font-bold text-sm text-slate-100 flex items-start gap-2">
+                                  <PlayCircle size={15} className="text-indigo-400 shrink-0 mt-0.5" />
+                                  <span>{course.title}</span>
+                                </h4>
+                                <p className="text-xs text-slate-400 leading-relaxed">{course.desc}</p>
+                              </div>
+                              
+                              <div className="flex items-center justify-between gap-4 text-[10px] text-slate-500 font-bold border-t border-slate-800/60 pt-2.5 mt-2">
+                                <span className="flex items-center gap-1"><Clock size={11} /> {course.duration}</span>
+                                <div className="flex items-center gap-2">
+                                  <span>已学: {progress}%</span>
+                                  <div className="w-16 h-1 rounded-full bg-slate-800 overflow-hidden">
+                                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${progress}%` }}></div>
+                                  </div>
+                                </div>
+                                <button className="text-indigo-400 hover:text-indigo-300 underline font-extrabold cursor-pointer">
+                                  {progress === 100 ? '温习课程' : progress > 0 ? '继续学习' : '开始学习'}
+                                </button>
                               </div>
                             </div>
-                            <button className="text-indigo-400 hover:text-indigo-300 underline font-extrabold cursor-pointer">
-                              {course.progress === 100 ? '温习课程' : course.progress > 0 ? '继续学习' : '开始学习'}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="py-12 text-center text-slate-500 text-xs border border-slate-800/60 bg-slate-900/20 rounded-xl">
+                        暂无入门级基础课程
+                      </div>
+                    )}
                   </div>
 
                   {/* Category: Advanced Level */}
                   <div>
                     <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-widest mb-3 px-1">进阶高级运营课程</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[
-                        { title: '课程 05：剖析 Instagram 最新算法与同城流量分发机制', duration: '25m', desc: '算法如何推送 Reels 视频，哪些标签能精准定位同城人群。' },
-                        { title: '课程 06：如何写出让本地消费者产生强烈购买欲的文案', duration: '15m', desc: '掌握同城文案的痛点与吸睛钩子（Hooks），让您的产品文案极具吸引力与高转化率。' },
-                        { title: '课程 07：达人合作外联邀约与预算把控', duration: '22m', desc: '如何利用 AI 准备的 Brief 和邀约文案，实现 90% 的意向合作率。' },
-                        { title: '课程 08：用 Google Maps 评论回写与星级裂变引流新客', duration: '30m', desc: '全天候自动化差评拦截和好评模板生成，最大化搜索引擎权重。' }
-                      ].map((course, idx) => (
-                        <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-2 hover:border-slate-700 transition duration-200 flex flex-col justify-between">
-                          <div className="space-y-1.5">
-                            <h4 className="font-bold text-sm text-slate-100 flex items-start gap-2">
-                              <PlayCircle size={15} className="text-indigo-400 shrink-0 mt-0.5" />
-                              <span>{course.title}</span>
-                            </h4>
-                            <p className="text-xs text-slate-400 leading-relaxed">{course.desc}</p>
+                    {advancedCourses.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {advancedCourses.map((course, idx) => (
+                          <div key={course.id || idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-2 hover:border-slate-700 transition duration-200 flex flex-col justify-between">
+                            <div className="space-y-1.5">
+                              <h4 className="font-bold text-sm text-slate-100 flex items-start gap-2">
+                                <PlayCircle size={15} className="text-indigo-400 shrink-0 mt-0.5" />
+                                <span>{course.title}</span>
+                              </h4>
+                              <p className="text-xs text-slate-400 leading-relaxed">{course.desc}</p>
+                            </div>
+                            
+                            <div className="flex items-center justify-between gap-4 text-[10px] text-slate-500 font-bold border-t border-slate-800/60 pt-2.5 mt-2">
+                              <span className="flex items-center gap-1"><Clock size={11} /> {course.duration}</span>
+                              <span className="text-slate-600">未学习</span>
+                              <button className="text-indigo-400 hover:text-indigo-300 underline font-extrabold cursor-pointer">开始学习</button>
+                            </div>
                           </div>
-                          
-                          <div className="flex items-center justify-between gap-4 text-[10px] text-slate-500 font-bold border-t border-slate-800/60 pt-2.5 mt-2">
-                            <span className="flex items-center gap-1"><Clock size={11} /> {course.duration}</span>
-                            <span className="text-slate-600">未学习</span>
-                            <button className="text-indigo-400 hover:text-indigo-300 underline font-extrabold cursor-pointer">开始学习</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-12 text-center text-slate-500 text-xs border border-slate-800/60 bg-slate-900/20 rounded-xl">
+                        暂无进阶高级运营课程
+                      </div>
+                    )}
                   </div>
 
                 </div>
@@ -1115,20 +1012,22 @@ export default function LearnPage() {
               {/* Cases tab */}
               {schoolCategory === 'cases' && (
                 <div className="grid grid-cols-1 gap-4">
-                  {[
-                    { title: 'Case 1: 一家新加坡独立设计师品牌 3 个月小红书自然涨粉 2,000 完整路径', desc: '通过每日捕获同城热度词并输出针对性产品穿搭/种草笔记，配合本地达人第一波置换。内容展现高质感生活方式，实现销售闭环。' },
-                    { title: 'Case 2: 精细化单条 Instagram Reels 短视频直接引流 500+ 笔产品订单复盘', desc: '拆解短视频的前 3 秒黄金 Hooks 设定，配合文案中限时优惠券及一键跳转下单的闭环设计。' },
-                    { title: 'Case 3: 差评与售后危机应对：如何利用 AI 评论守护让品牌评分在 6 个月内从 3.8 分攀升至 4.7 分', desc: '利用 Google Maps 及各大商户接口，实现 24 小时低分预警、关怀补偿，以及向五星好评自动回复答谢拉升搜索权重。' }
-                  ].map((c, idx) => (
-                    <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 space-y-2">
-                      <div className="flex items-center gap-2 text-indigo-400">
-                        <TrendingUp size={16} />
-                        <h4 className="font-bold text-slate-100 text-sm sm:text-base">{c.title}</h4>
+                  {casesList.length > 0 ? (
+                    casesList.map((c, idx) => (
+                      <div key={c.id || idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 space-y-2">
+                        <div className="flex items-center gap-2 text-indigo-400">
+                          <TrendingUp size={16} />
+                          <h4 className="font-bold text-slate-100 text-sm sm:text-base">{c.title}</h4>
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-350 leading-relaxed">{c.desc}</p>
+                        <button className="text-xs font-bold text-indigo-400 hover:underline pt-1.5 cursor-pointer block">阅读案例全文 →</button>
                       </div>
-                      <p className="text-xs sm:text-sm text-slate-350 leading-relaxed">{c.desc}</p>
-                      <button className="text-xs font-bold text-indigo-400 hover:underline pt-1.5 cursor-pointer block">阅读案例全文 →</button>
+                    ))
+                  ) : (
+                    <div className="py-20 text-center text-slate-500 text-xs border border-slate-800/60 bg-slate-900/20 rounded-xl">
+                      暂无经典案例复盘
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
 
@@ -1140,17 +1039,23 @@ export default function LearnPage() {
                   </div>
 
                   <div className="space-y-3">
-                    {calendarEvents.map((cal, idx) => (
-                      <div key={idx} className="rounded-xl border border-slate-800 bg-slate-900/20 p-4 flex flex-col sm:flex-row items-start gap-4">
-                        <div className="sm:w-32 font-black text-indigo-400 text-sm flex-shrink-0">
-                          {cal.date}
+                    {calendarEvents.length > 0 ? (
+                      calendarEvents.map((cal, idx) => (
+                        <div key={cal.id || idx} className="rounded-xl border border-slate-800 bg-slate-900/20 p-4 flex flex-col sm:flex-row items-start gap-4">
+                          <div className="sm:w-32 font-black text-indigo-400 text-sm flex-shrink-0">
+                            {cal.date}
+                          </div>
+                          <div className="space-y-1 leading-relaxed">
+                            <h4 className="font-bold text-slate-100 text-xs sm:text-sm">{cal.event}</h4>
+                            <p className="text-slate-400 text-xs">{cal.tip}</p>
+                          </div>
                         </div>
-                        <div className="space-y-1 leading-relaxed">
-                          <h4 className="font-bold text-slate-100 text-xs sm:text-sm">{cal.event}</h4>
-                          <p className="text-slate-400 text-xs">{cal.tip}</p>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="py-20 text-center text-slate-500 text-xs border border-slate-800/60 bg-slate-900/20 rounded-xl">
+                        暂无新加坡营销日历数据
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               )}

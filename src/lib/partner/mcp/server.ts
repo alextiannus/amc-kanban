@@ -2567,5 +2567,152 @@ export function createAmcMcpServer(agentApiKey: string) {
     }
   )
 
+  // ── list_faqs ────────────────────────────────────────────────────────────
+  server.tool(
+    'list_faqs',
+    'List all FAQ / Q&A items in the AMC Learning Center.',
+    {},
+    async () => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      try {
+        const { GET } = await import('@/app/api/learn/faq/route')
+        const response = await GET()
+        const data = await response.json()
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+      } catch (error) {
+        return { content: [{ type: 'text' as const, text: `Error: ${errorMessage(error, 'Failed to list FAQs')}` }], isError: true }
+      }
+    }
+  )
+
+  // ── add_faq ─────────────────────────────────────────────────────────────
+  server.tool(
+    'add_faq',
+    'Add a new Q&A item to the AMC Learning Center FAQ list.',
+    {
+      category: z.enum(['accounts', 'posts', 'influencers', 'billing', 'reports']).describe('FAQ category'),
+      q: z.string().describe('The question'),
+      a: z.string().describe('The answer'),
+      tag: z.string().describe('A tag label for the FAQ'),
+    },
+    async ({ category, q, a, tag }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      try {
+        const faq = await prisma.faqItem.create({
+          data: { category, q, a, tag }
+        })
+        return { content: [{ type: 'text' as const, text: JSON.stringify(faq, null, 2) }] }
+      } catch (error) {
+        return { content: [{ type: 'text' as const, text: `Error: ${errorMessage(error, 'Failed to add FAQ')}` }], isError: true }
+      }
+    }
+  )
+
+  // ── delete_faq ──────────────────────────────────────────────────────────
+  server.tool(
+    'delete_faq',
+    'Delete a Q&A item from the AMC Learning Center FAQ list.',
+    {
+      id: z.string().describe('The FAQ item ID to delete'),
+    },
+    async ({ id }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      try {
+        await prisma.faqItem.delete({
+          where: { id }
+        })
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, deletedId: id }) }] }
+      } catch (error) {
+        return { content: [{ type: 'text' as const, text: `Error: ${errorMessage(error, 'Failed to delete FAQ')}` }], isError: true }
+      }
+    }
+  )
+
+  // ── list_school_items ───────────────────────────────────────────────────
+  server.tool(
+    'list_school_items',
+    'List all AMC School items (courses, cases, and calendar events).',
+    {},
+    async () => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      try {
+        const { GET } = await import('@/app/api/learn/school/route')
+        const response = await GET()
+        const data = await response.json()
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+      } catch (error) {
+        return { content: [{ type: 'text' as const, text: `Error: ${errorMessage(error, 'Failed to list school items')}` }], isError: true }
+      }
+    }
+  )
+
+  // ── add_school_item ──────────────────────────────────────────────────────
+  server.tool(
+    'add_school_item',
+    'Add a new Course, Case, or Calendar Event to the AMC School.',
+    {
+      type: z.enum(['COURSE', 'CASE', 'CALENDAR']).describe('The school item type'),
+      title: z.string().optional().describe('Title of the item (applicable to COURSE or CASE)'),
+      desc: z.string().optional().describe('Description of the item (applicable to COURSE or CASE)'),
+      duration: z.string().optional().describe('Duration of the course e.g. "15m" (applicable to COURSE)'),
+      level: z.enum(['entry', 'advanced']).optional().describe('Level of the course (applicable to COURSE)'),
+      date: z.string().optional().describe('Date / month range e.g. "6月" (applicable to CALENDAR)'),
+      event: z.string().optional().describe('Event name (applicable to CALENDAR)'),
+      tip: z.string().optional().describe('Marketing tip / suggestion (applicable to CALENDAR)'),
+    },
+    async (input) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      try {
+        const item = await prisma.schoolItem.create({
+          data: {
+            type: input.type,
+            title: input.title || null,
+            desc: input.desc || null,
+            duration: input.duration || null,
+            level: input.level || null,
+            date: input.date || null,
+            event: input.event || null,
+            tip: input.tip || null
+          }
+        })
+        return { content: [{ type: 'text' as const, text: JSON.stringify(item, null, 2) }] }
+      } catch (error) {
+        return { content: [{ type: 'text' as const, text: `Error: ${errorMessage(error, 'Failed to add school item')}` }], isError: true }
+      }
+    }
+  )
+
+  // ── delete_school_item ───────────────────────────────────────────────────
+  server.tool(
+    'delete_school_item',
+    'Delete a School item (Course, Case, or Calendar Event) by its ID.',
+    {
+      id: z.string().describe('The School item ID to delete'),
+    },
+    async ({ id }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      try {
+        await prisma.schoolItem.delete({
+          where: { id }
+        })
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ success: true, deletedId: id }) }] }
+      } catch (error) {
+        return { content: [{ type: 'text' as const, text: `Error: ${errorMessage(error, 'Failed to delete school item')}` }], isError: true }
+      }
+    }
+  )
+
   return server
 }

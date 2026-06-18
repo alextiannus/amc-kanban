@@ -635,3 +635,28 @@ model Comment {
   @@index([taskId])
   @@index([authorId])
 }
+
+model FaqItem {
+  id        String   @id @default(cuid())
+  category  String   // accounts | posts | influencers | billing | reports
+  q         String   // Question
+  a         String   // Answer
+  tag       String   // Tag label
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SchoolItem {
+  id        String   @id @default(cuid())
+  type      String   // COURSE | CASE | CALENDAR
+  title     String?  // Title (for COURSE/CASE)
+  desc      String?  // Description (for COURSE/CASE)
+  duration  String?  // Duration e.g. "12m" (for COURSE)
+  level     String?  // entry | advanced (for COURSE)
+  date      String?  // Date/period e.g. "1月-2月" (for CALENDAR)
+  event     String?  // Event name (for CALENDAR)
+  tip       String?  // Tip/suggestion (for CALENDAR)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
