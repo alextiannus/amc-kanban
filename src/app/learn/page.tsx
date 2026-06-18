@@ -2,6 +2,8 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import {
   GraduationCap,
   HelpCircle,
@@ -24,7 +26,8 @@ import {
   ExternalLink,
   Search,
   Star,
-  TrendingUp
+  TrendingUp,
+  Trash2
 } from 'lucide-react'
 
 export default function LearnPage() {
@@ -45,9 +48,46 @@ export default function LearnPage() {
 
   // School Curriculum Category States
   const [schoolCategory, setSchoolCategory] = useState<'courses' | 'cases' | 'calendar'>('courses')
+  const [selectedArticle, setSelectedArticle] = useState<any | null>(null)
 
   const [faqs, setFaqs] = useState<any[]>([])
   const [schoolItems, setSchoolItems] = useState<any[]>([])
+
+  const handleDeleteFaq = async (id: string) => {
+    if (!confirm('确定要删除这条 Q&A 吗？')) return
+    try {
+      const res = await fetch(`/api/learn/faq?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        setFaqs(prev => prev.filter(f => f.id !== id))
+        if (openFaq === id) setOpenFaq(null)
+      } else {
+        alert('删除失败，请稍后重试')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('发生错误，请稍后重试')
+    }
+  }
+
+  const handleDeleteArticle = async (id: string) => {
+    if (!confirm('确定要删除这篇学习资料吗？')) return
+    try {
+      const res = await fetch(`/api/learn/school?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        setSchoolItems(prev => prev.filter(item => item.id !== id))
+        if (selectedArticle?.id === id) setSelectedArticle(null)
+      } else {
+        alert('删除失败，请稍后重试')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('发生错误，请稍后重试')
+    }
+  }
 
   useEffect(() => {
     fetch('/api/learn/faq')
@@ -175,6 +215,10 @@ export default function LearnPage() {
     return schoolItems.filter(item => item.type === 'CALENDAR')
   }, [schoolItems])
 
+  const articlesList = useMemo(() => {
+    return schoolItems.filter(item => item.type === 'ARTICLE')
+  }, [schoolItems])
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 font-sans">
       <div className="mx-auto max-w-5xl px-6 py-12">
@@ -210,7 +254,7 @@ export default function LearnPage() {
             { id: 'qa', label: '❓ 常见问题 (Q&A)', desc: '快速解答操作与发布疑问' },
             { id: 'manual', label: '📋 使用手册 (Manual)', desc: '标准协作 SOP 与系统说明' },
             { id: 'skills', label: '🛒 技能中心 (Skill Hub)', desc: '精选营销与内容创作技能包' },
-            { id: 'school', label: '🎓 AMC 学院 (School)', desc: '流量提效与本地营销知识' }
+            { id: 'school', label: '📱 自媒体运营', desc: '分享与阅读自媒体运营资料' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -308,8 +352,18 @@ export default function LearnPage() {
                         </div>
 
                         {isOpen && (
-                          <div className="border-t border-slate-800/80 p-5 bg-slate-950/50 rounded-b-xl text-slate-350 text-sm leading-relaxed whitespace-pre-wrap">
-                            {faq.a}
+                          <div className="border-t border-slate-800/80 p-5 bg-slate-950/50 rounded-b-xl space-y-4">
+                            <div className="text-slate-350 text-sm leading-relaxed whitespace-pre-wrap">
+                              {faq.a}
+                            </div>
+                            <div className="flex justify-end border-t border-slate-800/30 pt-3">
+                              <button
+                                onClick={() => handleDeleteFaq(faq.id)}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={13} /> 删除此问题
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -907,159 +961,105 @@ export default function LearnPage() {
             </div>
           )}
 
-          {/* 4. AMC School Tab */}
+          {/* 4. Self-Media Operations Tab */}
           {activeTab === 'school' && (
             <div className="space-y-6 animate-in fade-in duration-200">
-              
-              {/* Category buttons */}
-              <div className="flex bg-slate-900/60 p-1 rounded-xl border border-slate-800/80 max-w-fit mb-4">
-                {[
-                  { id: 'courses', label: '📖 培训课程' },
-                  { id: 'cases', label: '📈 经典案例复盘' },
-                  { id: 'calendar', label: '🗓️ 新加坡营销日历' }
-                ].map(cat => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setSchoolCategory(cat.id as typeof schoolCategory)}
-                    className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                      schoolCategory === cat.id
-                        ? 'bg-indigo-600 text-white shadow'
-                        : 'text-slate-400 hover:text-slate-200 cursor-pointer'
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
-              </div>
+              <div className="space-y-6">
+                <div className="rounded-xl border border-slate-850 bg-slate-900/40 p-4 text-xs sm:text-sm text-slate-400 leading-relaxed">
+                  💡 **自媒体运营资料中心**：支持 Agent 以 Markdown 格式上传运营指南与案例，供 AMC 主理人和 Agent 共享学习。
+                </div>
 
-              {/* Courses list */}
-              {schoolCategory === 'courses' && (
-                <div className="space-y-6">
-                  
-                  {/* Category: Entry Level */}
-                  <div>
-                    <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-widest mb-3 px-1">入门级基础课程</h3>
-                    {entryCourses.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {entryCourses.map((course, idx) => {
-                          const progress = course.progress !== undefined ? course.progress : (idx === 0 ? 100 : idx === 1 ? 100 : idx === 2 ? 50 : 0);
-                          return (
-                            <div key={course.id || idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-2 hover:border-slate-700 transition duration-200 flex flex-col justify-between">
-                              <div className="space-y-1.5">
-                                <h4 className="font-bold text-sm text-slate-100 flex items-start gap-2">
-                                  <PlayCircle size={15} className="text-indigo-400 shrink-0 mt-0.5" />
-                                  <span>{course.title}</span>
-                                </h4>
-                                <p className="text-xs text-slate-400 leading-relaxed">{course.desc}</p>
-                              </div>
-                              
-                              <div className="flex items-center justify-between gap-4 text-[10px] text-slate-500 font-bold border-t border-slate-800/60 pt-2.5 mt-2">
-                                <span className="flex items-center gap-1"><Clock size={11} /> {course.duration}</span>
-                                <div className="flex items-center gap-2">
-                                  <span>已学: {progress}%</span>
-                                  <div className="w-16 h-1 rounded-full bg-slate-800 overflow-hidden">
-                                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${progress}%` }}></div>
-                                  </div>
-                                </div>
-                                <button className="text-indigo-400 hover:text-indigo-300 underline font-extrabold cursor-pointer">
-                                  {progress === 100 ? '温习课程' : progress > 0 ? '继续学习' : '开始学习'}
+                {selectedArticle ? (
+                  /* Detailed Article View */
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6 sm:p-8 space-y-6 shadow-xl relative backdrop-blur-md">
+                    <button
+                      onClick={() => setSelectedArticle(null)}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-350 transition-colors cursor-pointer"
+                    >
+                      ← 返回资料列表
+                    </button>
+                    
+                    <div className="space-y-3 border-b border-slate-800/60 pb-6">
+                      <h2 className="text-xl sm:text-2xl font-extrabold text-slate-100 leading-tight">
+                        {selectedArticle.title}
+                      </h2>
+                      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-[11px] text-slate-400">
+                        <div className="flex items-center gap-4">
+                          <span className="flex items-center gap-1.5 font-bold text-indigo-405">
+                            🤖 上传 Agent: {selectedArticle.author?.nickname || selectedArticle.author?.email || 'AMC Agent'}
+                          </span>
+                          <span>发布时间: {new Date(selectedArticle.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteArticle(selectedArticle.id)}
+                          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={12} /> 删除此文章
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {selectedArticle.markdown || '*此文章暂无 Markdown 内容*'}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                ) : (
+                  /* Articles List View */
+                  <div className="grid grid-cols-1 gap-4">
+                    {articlesList.length > 0 ? (
+                      articlesList.map((article, idx) => (
+                        <div
+                          key={article.id || idx}
+                          className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 flex flex-col justify-between hover:border-indigo-500/30 hover:bg-slate-900/45 transition-all duration-300 shadow-sm"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-start justify-between gap-4">
+                              <h4 className="font-extrabold text-slate-100 text-sm sm:text-base leading-snug">
+                                {article.title}
+                              </h4>
+                              <span className="rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-400 border border-indigo-500/20 uppercase shrink-0">
+                                Markdown
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
+                              {article.desc || '暂无文章简介'}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-4 text-[10px] text-slate-500 border-t border-slate-805/60 pt-3.5 mt-4">
+                            <div className="flex items-center gap-1.5 font-bold text-indigo-405">
+                              <span>🤖 Agent: {article.author?.nickname || article.author?.email || 'AMC Agent'}</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span>{new Date(article.createdAt).toLocaleDateString()}</span>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => setSelectedArticle(article)}
+                                  className="text-xs font-extrabold text-indigo-400 hover:text-indigo-350 underline cursor-pointer"
+                                >
+                                  阅读全文 →
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteArticle(article.id)}
+                                  className="text-xs font-extrabold text-rose-400 hover:text-rose-350 underline cursor-pointer"
+                                >
+                                  删除
                                 </button>
                               </div>
                             </div>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <div className="py-12 text-center text-slate-500 text-xs border border-slate-800/60 bg-slate-900/20 rounded-xl">
-                        暂无入门级基础课程
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Category: Advanced Level */}
-                  <div>
-                    <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-widest mb-3 px-1">进阶高级运营课程</h3>
-                    {advancedCourses.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {advancedCourses.map((course, idx) => (
-                          <div key={course.id || idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-4 space-y-2 hover:border-slate-700 transition duration-200 flex flex-col justify-between">
-                            <div className="space-y-1.5">
-                              <h4 className="font-bold text-sm text-slate-100 flex items-start gap-2">
-                                <PlayCircle size={15} className="text-indigo-400 shrink-0 mt-0.5" />
-                                <span>{course.title}</span>
-                              </h4>
-                              <p className="text-xs text-slate-400 leading-relaxed">{course.desc}</p>
-                            </div>
-                            
-                            <div className="flex items-center justify-between gap-4 text-[10px] text-slate-500 font-bold border-t border-slate-800/60 pt-2.5 mt-2">
-                              <span className="flex items-center gap-1"><Clock size={11} /> {course.duration}</span>
-                              <span className="text-slate-600">未学习</span>
-                              <button className="text-indigo-400 hover:text-indigo-300 underline font-extrabold cursor-pointer">开始学习</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="py-12 text-center text-slate-500 text-xs border border-slate-800/60 bg-slate-900/20 rounded-xl">
-                        暂无进阶高级运营课程
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              )}
-
-              {/* Cases tab */}
-              {schoolCategory === 'cases' && (
-                <div className="grid grid-cols-1 gap-4">
-                  {casesList.length > 0 ? (
-                    casesList.map((c, idx) => (
-                      <div key={c.id || idx} className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 space-y-2">
-                        <div className="flex items-center gap-2 text-indigo-400">
-                          <TrendingUp size={16} />
-                          <h4 className="font-bold text-slate-100 text-sm sm:text-base">{c.title}</h4>
-                        </div>
-                        <p className="text-xs sm:text-sm text-slate-350 leading-relaxed">{c.desc}</p>
-                        <button className="text-xs font-bold text-indigo-400 hover:underline pt-1.5 cursor-pointer block">阅读案例全文 →</button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="py-20 text-center text-slate-500 text-xs border border-slate-800/60 bg-slate-900/20 rounded-xl">
-                      暂无经典案例复盘
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Calendar tab */}
-              {schoolCategory === 'calendar' && (
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-slate-850 bg-slate-900/40 p-4 text-xs text-slate-400 leading-relaxed">
-                    💡 **小贴士**：新加坡全年的重点营销节点。AI 虚拟员工会根据以下日历表自动提前 10–20 天提示您准备物料，并在您的内容发布排期中提供相应的主题模板与本地化推文。
-                  </div>
-
-                  <div className="space-y-3">
-                    {calendarEvents.length > 0 ? (
-                      calendarEvents.map((cal, idx) => (
-                        <div key={cal.id || idx} className="rounded-xl border border-slate-800 bg-slate-900/20 p-4 flex flex-col sm:flex-row items-start gap-4">
-                          <div className="sm:w-32 font-black text-indigo-400 text-sm flex-shrink-0">
-                            {cal.date}
-                          </div>
-                          <div className="space-y-1 leading-relaxed">
-                            <h4 className="font-bold text-slate-100 text-xs sm:text-sm">{cal.event}</h4>
-                            <p className="text-slate-400 text-xs">{cal.tip}</p>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <div className="py-20 text-center text-slate-500 text-xs border border-slate-800/60 bg-slate-900/20 rounded-xl">
-                        暂无新加坡营销日历数据
+                      <div className="py-20 text-center text-slate-550 text-xs border border-slate-805/60 bg-slate-900/20 rounded-xl">
+                        暂无 Agent 学习资料，可通过 MCP/API 接口以 Markdown 格式上传。
                       </div>
                     )}
                   </div>
-                </div>
-              )}
-
+                )}
+              </div>
             </div>
           )}
 

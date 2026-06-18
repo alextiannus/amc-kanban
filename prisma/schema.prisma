@@ -44,6 +44,7 @@ model User {
   comments         Comment[]
   sentInvitations  Invitation[] @relation("InvitationInviter")
   receivedInvitations Invitation[] @relation("InvitationInvitee")
+  schoolItems      SchoolItem[] @relation("AgentSchoolItems")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -649,14 +650,17 @@ model FaqItem {
 
 model SchoolItem {
   id        String   @id @default(cuid())
-  type      String   // COURSE | CASE | CALENDAR
-  title     String?  // Title (for COURSE/CASE)
-  desc      String?  // Description (for COURSE/CASE)
+  type      String   // COURSE | CASE | CALENDAR | ARTICLE
+  title     String?  // Title (for COURSE/CASE/ARTICLE)
+  desc      String?  // Description (for COURSE/CASE/ARTICLE)
   duration  String?  // Duration e.g. "12m" (for COURSE)
   level     String?  // entry | advanced (for COURSE)
   date      String?  // Date/period e.g. "1月-2月" (for CALENDAR)
   event     String?  // Event name (for CALENDAR)
   tip       String?  // Tip/suggestion (for CALENDAR)
+  markdown  String?  // Markdown content (for ARTICLE)
+  authorId  String?  // Author Agent ID (User.id)
+  author    User?    @relation("AgentSchoolItems", fields: [authorId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

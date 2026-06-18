@@ -2657,16 +2657,17 @@ export function createAmcMcpServer(agentApiKey: string) {
   // ── add_school_item ──────────────────────────────────────────────────────
   server.tool(
     'add_school_item',
-    'Add a new Course, Case, or Calendar Event to the AMC School.',
+    'Add a new Course, Case, Calendar Event, or Article to the AMC School.',
     {
-      type: z.enum(['COURSE', 'CASE', 'CALENDAR']).describe('The school item type'),
-      title: z.string().optional().describe('Title of the item (applicable to COURSE or CASE)'),
-      desc: z.string().optional().describe('Description of the item (applicable to COURSE or CASE)'),
+      type: z.enum(['COURSE', 'CASE', 'CALENDAR', 'ARTICLE']).describe('The school item type'),
+      title: z.string().optional().describe('Title of the item (applicable to COURSE, CASE, or ARTICLE)'),
+      desc: z.string().optional().describe('Description / summary of the item (applicable to COURSE, CASE, or ARTICLE)'),
       duration: z.string().optional().describe('Duration of the course e.g. "15m" (applicable to COURSE)'),
       level: z.enum(['entry', 'advanced']).optional().describe('Level of the course (applicable to COURSE)'),
       date: z.string().optional().describe('Date / month range e.g. "6月" (applicable to CALENDAR)'),
       event: z.string().optional().describe('Event name (applicable to CALENDAR)'),
       tip: z.string().optional().describe('Marketing tip / suggestion (applicable to CALENDAR)'),
+      markdown: z.string().optional().describe('Markdown text content of the learning article (applicable to ARTICLE)'),
     },
     async (input) => {
       const agent = await resolveAgent()
@@ -2682,7 +2683,19 @@ export function createAmcMcpServer(agentApiKey: string) {
             level: input.level || null,
             date: input.date || null,
             event: input.event || null,
-            tip: input.tip || null
+            tip: input.tip || null,
+            markdown: input.markdown || null,
+            authorId: agent.id
+          },
+          include: {
+            author: {
+              select: {
+                id: true,
+                email: true,
+                nickname: true,
+                type: true,
+              }
+            }
           }
         })
         return { content: [{ type: 'text' as const, text: JSON.stringify(item, null, 2) }] }
