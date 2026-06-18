@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     }
 
     let resolvedAuthorId = authorId || null
-    if (!resolvedAuthorId && auth.user && auth.user.type === 'AI_AGENT') {
+    if (!resolvedAuthorId && auth.user) {
       resolvedAuthorId = auth.user.id
     }
 
@@ -141,6 +141,21 @@ export async function DELETE(request: Request) {
 
     if (!id) {
       return NextResponse.json({ error: 'Missing required parameter: id' }, { status: 400 })
+    }
+
+    const item = await prisma.schoolItem.findUnique({
+      where: { id }
+    })
+
+    if (!item) {
+      return NextResponse.json({ error: 'Item not found' }, { status: 404 })
+    }
+
+    const isAdmin = auth.user?.role === 'ADMIN'
+    const isAuthor = item.authorId && item.authorId === auth.user?.id
+
+    if (!isAdmin && !isAuthor) {
+      return NextResponse.json({ error: 'Forbidden: Only the author or an admin can delete this article' }, { status: 403 })
     }
 
     await prisma.schoolItem.delete({

@@ -27,7 +27,8 @@ import {
   Search,
   Star,
   TrendingUp,
-  Trash2
+  Trash2,
+  Share2
 } from 'lucide-react'
 
 export default function LearnPage() {
@@ -47,11 +48,13 @@ export default function LearnPage() {
   const [installedSkills, setInstalledSkills] = useState<string[]>(['social-writer', 'review-defender', 'analytics-logger'])
 
   // School Curriculum Category States
-  const [schoolCategory, setSchoolCategory] = useState<'courses' | 'cases' | 'calendar'>('courses')
+  const [schoolCategory, setSchoolCategory] = useState<'courses' | 'cases' | 'calendar' | 'articles'>('courses')
   const [selectedArticle, setSelectedArticle] = useState<any | null>(null)
 
   const [faqs, setFaqs] = useState<any[]>([])
   const [schoolItems, setSchoolItems] = useState<any[]>([])
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState<any | null>(null)
 
   const handleDeleteFaq = async (id: string) => {
     if (!confirm('确定要删除这条 Q&A 吗？')) return
@@ -81,13 +84,51 @@ export default function LearnPage() {
         setSchoolItems(prev => prev.filter(item => item.id !== id))
         if (selectedArticle?.id === id) setSelectedArticle(null)
       } else {
-        alert('删除失败，请稍后重试')
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || '删除失败，请稍后重试')
       }
     } catch (err) {
       console.error(err)
       alert('发生错误，请稍后重试')
     }
   }
+
+  const handleShareArticle = (articleId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    if (typeof window !== 'undefined') {
+      const shareUrl = `${window.location.origin}${window.location.pathname}?tab=school&articleId=${articleId}`
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        setCopiedId(articleId)
+        setTimeout(() => setCopiedId(null), 2000)
+      }).catch(err => {
+        console.error('Failed to copy share link: ', err)
+      })
+    }
+  }
+
+  const canDeleteArticle = (article: any) => {
+    if (!currentUser) return false
+    if (currentUser.role === 'ADMIN') return true
+    return article.authorId === currentUser.id
+  }
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && schoolItems.length > 0) {
+      const params = new URLSearchParams(window.location.search)
+      const tabParam = params.get('tab')
+      const articleIdParam = params.get('articleId')
+      if (tabParam === 'school') {
+        setActiveTab('school')
+        setSchoolCategory('articles')
+      }
+      if (articleIdParam) {
+        const found = schoolItems.find(item => item.id === articleIdParam)
+        if (found) {
+          setSelectedArticle(found)
+        }
+      }
+    }
+  }, [schoolItems])
 
   useEffect(() => {
     fetch('/api/learn/faq')
@@ -99,6 +140,14 @@ export default function LearnPage() {
       .then(res => res.json())
       .then(data => setSchoolItems(data))
       .catch(err => console.error('Failed to load school items:', err))
+
+    fetch('/api/auth/me')
+      .then(res => {
+        if (res.ok) return res.json()
+        return null
+      })
+      .then(data => setCurrentUser(data))
+      .catch(err => console.error('Failed to load user:', err))
   }, [])
 
   // Filtered FAQs based on category + search
@@ -990,12 +1039,22 @@ export default function LearnPage() {
                           </span>
                           <span>发布时间: {new Date(selectedArticle.createdAt).toLocaleDateString()}</span>
                         </div>
-                        <button
-                          onClick={() => handleDeleteArticle(selectedArticle.id)}
-                          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={12} /> 删除此文章
-                        </button>
+                        <div className="flex items-center gap-4">
+                          <button
+                            onClick={(e) => handleShareArticle(selectedArticle.id, e)}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-400 hover:text-indigo-350 transition-colors cursor-pointer"
+                          >
+                            <Share2 size={12} /> {copiedId === selectedArticle.id ? '链接已复制！' : '转发分享'}
+                          </button>
+                          {canDeleteArticle(selectedArticle) && (
+                            <button
+                              onClick={() => handleDeleteArticle(selectedArticle.id)}
+                              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={12} /> 删除此文章
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -1042,11 +1101,19 @@ export default function LearnPage() {
                                   阅读全文 →
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteArticle(article.id)}
-                                  className="text-xs font-extrabold text-rose-400 hover:text-rose-350 underline cursor-pointer"
+                                  onClick={(e) => handleShareArticle(article.id, e)}
+                                  className="text-xs font-extrabold text-indigo-400 hover:text-indigo-350 underline cursor-pointer"
                                 >
-                                  删除
+                                  {copiedId === article.id ? '已复制' : '分享'}
                                 </button>
+                                {canDeleteArticle(article) && (
+                                  <button
+                                    onClick={() => handleDeleteArticle(article.id)}
+                                    className="text-xs font-extrabold text-rose-400 hover:text-rose-350 underline cursor-pointer"
+                                  >
+                                    删除
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
