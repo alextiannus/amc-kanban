@@ -135,7 +135,7 @@ export default function UserMenu({
               onClick={() => { setShowProfile(false); router.push('/learn') }}
               className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors"
             >
-              <GraduationCap size={16} /> ACM 学习中心
+              <GraduationCap size={16} /> AMC 学习中心
             </button>
 
             <button
