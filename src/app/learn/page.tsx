@@ -1046,14 +1046,6 @@ export default function LearnPage() {
                           >
                             <Share2 size={12} /> {copiedId === selectedArticle.id ? '链接已复制！' : '转发分享'}
                           </button>
-                          {canDeleteArticle(selectedArticle) && (
-                            <button
-                              onClick={() => handleDeleteArticle(selectedArticle.id)}
-                              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
-                            >
-                              <Trash2 size={12} /> 删除此文章
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -1106,14 +1098,6 @@ export default function LearnPage() {
                                 >
                                   {copiedId === article.id ? '已复制' : '分享'}
                                 </button>
-                                {canDeleteArticle(article) && (
-                                  <button
-                                    onClick={() => handleDeleteArticle(article.id)}
-                                    className="text-xs font-extrabold text-rose-400 hover:text-rose-350 underline cursor-pointer"
-                                  >
-                                    删除
-                                  </button>
-                                )}
                               </div>
                             </div>
                           </div>
