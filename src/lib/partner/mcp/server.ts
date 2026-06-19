@@ -876,29 +876,69 @@ export function createAmcMcpServer(agentApiKey: string) {
 
   const replyReviewSchema = {
     brandId: z.string(),
-    platform: z.enum(['google', 'yelp']).describe('Review platform'),
+    platform: z.enum(['google', 'yelp', 'instagram', 'tiktok', 'xiaohongshu', 'dianping', 'meituan']).describe('Review platform'),
     reviewId: z.string().describe('Review ID from review listing API or source system'),
     replyText: z.string().describe('Reply message to post publicly'),
   }
-  const replyReviewHandler = async ({ brandId, platform, reviewId, replyText }: { brandId: string; platform: 'google' | 'yelp'; reviewId: string; replyText: string }) => {
+  const replyReviewHandler = async ({ 
+    brandId, 
+    platform, 
+    reviewId, 
+    replyText 
+  }: { 
+    brandId: string; 
+    platform: 'google' | 'yelp' | 'instagram' | 'tiktok' | 'xiaohongshu' | 'dianping' | 'meituan'; 
+    reviewId: string; 
+    replyText: string 
+  }) => {
     const agent = await resolveAgent()
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
     const link = await requireBrandAgentLink(brandId, agent.id)
     if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
+    if (['instagram', 'tiktok', 'xiaohongshu', 'dianping', 'meituan'].includes(platform)) {
+      try {
+        const { sendExtensionCommand } = await import('@/lib/integrations/extensionBridge')
+        
+        writeAuditLog({
+          actor: actorFromContext(null, agent),
+          action: 'EXTENSION_CMD_SEND',
+          resourceId: brandId,
+          resourceType: 'ExtensionBridge',
+          reason: `AI 代理通过社媒/国内平台自动回复 (平台: ${platform}, 评论 ID: ${reviewId})。`,
+        }).catch(console.error)
+
+        const result = await sendExtensionCommand(brandId, 'domestic_reply_review', {
+          platform,
+          reviewId,
+          replyText,
+        })
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, platform, reviewId, replied: true, result }) }] }
+      } catch (e: unknown) {
+        writeAuditLog({
+          actor: actorFromContext(null, agent),
+          action: 'EXTENSION_CMD_ERR',
+          resourceId: brandId,
+          resourceType: 'ExtensionBridge',
+          reason: `AI 代理通过社媒/国内平台自动回复失败 (评论 ID: ${reviewId})。错误: ${errorMessage(e, String(e))}`,
+        }).catch(console.error)
+        return { content: [{ type: 'text' as const, text: `Error (Extension Bridge): ${errorMessage(e, String(e))}` }], isError: true }
+      }
+    }
+
     const { key } = await getBrandPostfastKey(brandId)
     if (!key) return { content: [{ type: 'text' as const, text: 'Error: Review backend not configured for this brand.' }], isError: true }
 
     const { postfastReplyReview } = await import('@/lib/integrations/postfast')
-    const result = await postfastReplyReview({ apiKey: key, platform, reviewId, replyText })
+    const result = await postfastReplyReview({ apiKey: key, platform: platform as 'google' | 'yelp', reviewId, replyText })
 
     if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
     return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, platform, replied: true }) }] }
   }
 
   server.tool('board_reply_review', 'Reply to a review through board backend using stored brand config.', replyReviewSchema, replyReviewHandler)
-  server.tool('reply_review', '[Compatibility alias] Use board_reply_review (google/yelp).', replyReviewSchema, replyReviewHandler)
+  server.tool('reply_review', '[Compatibility alias] Use board_reply_review.', replyReviewSchema, replyReviewHandler)
   server.tool('postfast_reply_review', '[Deprecated alias] Use board_reply_review.', replyReviewSchema, replyReviewHandler)
 
   // ── google_get_reviews ──────────────────────────────────────────────────
@@ -1152,8 +1192,36 @@ export function createAmcMcpServer(agentApiKey: string) {
           const result = await postfastReplyReview({ apiKey: brand.postfastApiKey, platform: 'yelp', reviewId, replyText })
           if (!result.success) return { content: [{ type: 'text' as const, text: `Error (PostFast API): ${result.error}` }], isError: true }
           return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, via: 'postfast' }) }] }
+        } else if (['instagram', 'tiktok', 'xiaohongshu', 'dianping', 'meituan'].includes(normalizedPlatform)) {
+          try {
+            const { sendExtensionCommand } = await import('@/lib/integrations/extensionBridge')
+            
+            writeAuditLog({
+              actor: actorFromContext(null, agent),
+              action: 'EXTENSION_CMD_SEND',
+              resourceId: brandId,
+              resourceType: 'ExtensionBridge',
+              reason: `AI 代理通过社媒/国内平台自动回复 (平台: ${normalizedPlatform}, 评论 ID: ${reviewId})。`,
+            }).catch(console.error)
+
+            const result = await sendExtensionCommand(brandId, 'domestic_reply_review', {
+              platform: normalizedPlatform,
+              reviewId,
+              replyText,
+            })
+            return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, result }) }] }
+          } catch (e: unknown) {
+            writeAuditLog({
+              actor: actorFromContext(null, agent),
+              action: 'EXTENSION_CMD_ERR',
+              resourceId: brandId,
+              resourceType: 'ExtensionBridge',
+              reason: `AI 代理通过社媒/国内平台自动回复失败 (评论 ID: ${reviewId})。错误: ${errorMessage(e, String(e))}`,
+            }).catch(console.error)
+            return { content: [{ type: 'text' as const, text: `Error (Extension Bridge): ${errorMessage(e, String(e))}` }], isError: true }
+          }
         } else {
-          return { content: [{ type: 'text' as const, text: `Error: Platform "${platform}" not supported for standard reply_review. Use domestic_reply_review.` }], isError: true }
+          return { content: [{ type: 'text' as const, text: `Error: Platform "${platform}" not supported for reply_review.` }], isError: true }
         }
       }
 

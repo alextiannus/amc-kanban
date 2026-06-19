@@ -49,17 +49,20 @@ async function handleExecuteAction(action, payload) {
     throw new Error('reviewId and replyText are required for review replies.');
   }
 
-  // Look for Dianping, Meituan, or localhost mock pages for testing
+  // Look for Dianping, Meituan, Instagram, TikTok, Xiaohongshu, or localhost mock pages for testing
   const queryUrls = [
     '*://*.dianping.com/*',
     '*://*.meituan.com/*',
+    '*://*.instagram.com/*',
+    '*://*.tiktok.com/*',
+    '*://*.xiaohongshu.com/*',
     '*://localhost/*',
     '*://127.0.0.1/*'
   ];
 
   const tabs = await chrome.tabs.query({ url: queryUrls });
   if (tabs.length === 0) {
-    throw new Error('Merchant dashboard (dianping.com, meituan.com, or localhost) is not open in any browser tab. Please open and log in first.');
+    throw new Error('Target platform merchant page (dianping.com, meituan.com, instagram.com, tiktok.com, xiaohongshu.com, or localhost) is not open in any browser tab. Please open and log in first.');
   }
 
   // Choose the first matching tab
@@ -87,11 +90,11 @@ async function handleExecuteAction(action, payload) {
  */
 function runDomesticReplyInPage(reviewId, replyText) {
   console.log(`[AMC Automation] Injecting reply for review ID ${reviewId}: "${replyText}"`);
+  const hostname = window.location.hostname;
 
   // 1. Mock Testing Logic (for localhost developer pages)
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
     console.log('[AMC Automation] Running on localhost mock platform');
-    // If mock input elements are present, fill them
     const mockInput = document.getElementById('mock-reply-input') || document.querySelector('[data-test-reply-input]');
     const mockSubmit = document.getElementById('mock-reply-submit') || document.querySelector('[data-test-reply-submit]');
     if (mockInput && mockSubmit) {
@@ -103,18 +106,112 @@ function runDomesticReplyInPage(reviewId, replyText) {
     return { success: true, platform: 'mock_simulated', reviewId };
   }
 
-  // 2. Real Dianping / Meituan Merchant Page Automation
-  // Search for the reply button/input associated with reviewId in Dianping page
-  // (Dianping merchant dashboard uses structures like .review-item, [data-review-id], etc.)
+  // 2. Platform-specific Automation
+  
+  // ── Xiaohongshu (RED) Creator Platform ───────────────────────────────
+  if (hostname.includes('xiaohongshu.com')) {
+    console.log('[AMC Automation] Running Xiaohongshu automation');
+    const commentEl = document.querySelector(`[data-comment-id="${reviewId}"]`) || 
+                      document.querySelector(`#comment-${reviewId}`) || 
+                      document.querySelector('.comment-item') || 
+                      document.body;
+
+    const textarea = commentEl.querySelector('textarea') || 
+                     commentEl.querySelector('input') || 
+                     document.querySelector('textarea') || 
+                     document.querySelector('[placeholder*="输入回复"]') ||
+                     document.querySelector('.reply-input');
+
+    if (!textarea) {
+      return { success: false, error: 'Could not locate Xiaohongshu reply input textarea.' };
+    }
+
+    textarea.value = replyText;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const sendBtn = commentEl.querySelector('.publish-btn') || 
+                    commentEl.querySelector('.send-btn') || 
+                    document.querySelector('.reply-submit') || 
+                    document.querySelector('.submit-btn') ||
+                    document.querySelector('button');
+
+    if (!sendBtn) {
+      return { success: false, error: 'Could not locate Xiaohongshu reply submit button.' };
+    }
+
+    sendBtn.click();
+    return { success: true, platform: 'xiaohongshu', reviewId };
+  }
+
+  // ── Instagram Automation ─────────────────────────────────────────────
+  if (hostname.includes('instagram.com')) {
+    console.log('[AMC Automation] Running Instagram automation');
+    const textarea = document.querySelector('textarea[placeholder*="comment"]') || 
+                     document.querySelector('textarea[placeholder*="评论"]') || 
+                     document.querySelector('textarea') ||
+                     document.querySelector('form textarea');
+
+    if (!textarea) {
+      return { success: false, error: 'Could not locate Instagram comment input textarea.' };
+    }
+
+    textarea.focus();
+    textarea.value = replyText;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const submitBtn = document.querySelector('form button[type="submit"]') || 
+                      document.querySelector('button[type="submit"]') ||
+                      document.querySelector('form button');
+
+    if (!submitBtn) {
+      return { success: false, error: 'Could not locate Instagram comment submit button.' };
+    }
+
+    submitBtn.click();
+    return { success: true, platform: 'instagram', reviewId };
+  }
+
+  // ── TikTok Automation ────────────────────────────────────────────────
+  if (hostname.includes('tiktok.com')) {
+    console.log('[AMC Automation] Running TikTok automation');
+    const textarea = document.querySelector('[placeholder*="reply"]') || 
+                     document.querySelector('[placeholder*="回复"]') || 
+                     document.querySelector('textarea') ||
+                     document.querySelector('.comment-reply-input');
+
+    if (!textarea) {
+      return { success: false, error: 'Could not locate TikTok reply input textarea.' };
+    }
+
+    textarea.value = replyText;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const submitBtn = document.querySelector('.reply-btn') || 
+                      document.querySelector('.publish-btn') || 
+                      document.querySelector('button[type="submit"]') ||
+                      document.querySelector('button');
+
+    if (!submitBtn) {
+      return { success: false, error: 'Could not locate TikTok reply submit button.' };
+    }
+
+    submitBtn.click();
+    return { success: true, platform: 'tiktok', reviewId };
+  }
+
+  // ── Dianping / Meituan / Generic Fallback Automation ──────────────────
+  console.log('[AMC Automation] Running Dianping/Meituan/Fallback automation');
   const reviewElement = document.querySelector(`[data-review-id="${reviewId}"]`) || 
                         document.querySelector(`#review-${reviewId}`) || 
-                        document.body; // Fallback to body to search inputs generally
+                        document.body;
 
   if (!reviewElement) {
     return { success: false, error: `Review element for ID ${reviewId} could not be located on the page.` };
   }
 
-  // Find the text input or textarea
   const textarea = reviewElement.querySelector('textarea') || 
                    reviewElement.querySelector('input[type="text"]') || 
                    document.querySelector('.reply-textarea') || 
@@ -124,12 +221,10 @@ function runDomesticReplyInPage(reviewId, replyText) {
     return { success: false, error: 'Could not locate the reply textarea input.' };
   }
 
-  // Simulate typing (setting value + dispatching events so React/Vue models update)
   textarea.value = replyText;
   textarea.dispatchEvent(new Event('input', { bubbles: true }));
   textarea.dispatchEvent(new Event('change', { bubbles: true }));
 
-  // Find the submit button
   const submitButton = reviewElement.querySelector('button[type="submit"]') || 
                        reviewElement.querySelector('.btn-reply-submit') || 
                        document.querySelector('.reply-submit-btn') || 
@@ -139,7 +234,6 @@ function runDomesticReplyInPage(reviewId, replyText) {
     return { success: false, error: 'Could not locate the reply submit button.' };
   }
 
-  // Click the submit button
   submitButton.click();
   console.log('[AMC Automation] Reply submitted successfully!');
 

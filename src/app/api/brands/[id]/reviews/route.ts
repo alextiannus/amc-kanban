@@ -175,7 +175,59 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   try {
-    const detectedPlatform = (platform || 'google').toLowerCase() as 'google' | 'yelp'
+    const detectedPlatform = (platform || 'google').toLowerCase()
+
+    if (['instagram', 'tiktok', 'xiaohongshu', 'dianping', 'meituan'].includes(detectedPlatform)) {
+      try {
+        const { sendExtensionCommand } = await import('@/lib/integrations/extensionBridge')
+        const { writeAuditLog } = await import('@/lib/audit')
+
+        const auditActor = userType === 'AI_AGENT'
+          ? { type: 'AI_AGENT' as const, id: userId, name: 'AI Marketing Agent' }
+          : { type: 'HUMAN' as const, id: userId, email: session?.user?.email || 'user' }
+
+        writeAuditLog({
+          actor: auditActor,
+          action: 'EXTENSION_CMD_SEND',
+          resourceId: brandId,
+          resourceType: 'ExtensionBridge',
+          reason: `用户/代理触发社媒/国内平台自动回复 (平台: ${detectedPlatform}, 评论 ID: ${reviewId})。`,
+        }).catch(console.error)
+
+        const result = await sendExtensionCommand(brandId, 'domestic_reply_review', {
+          platform: detectedPlatform,
+          reviewId,
+          replyText,
+        })
+
+        return NextResponse.json({
+          ok: true,
+          reviewId,
+          platform: detectedPlatform,
+          replied: true,
+          via: 'extension_bridge',
+          result,
+        })
+      } catch (e: unknown) {
+        const { writeAuditLog } = await import('@/lib/audit')
+        const auditActor = userType === 'AI_AGENT'
+          ? { type: 'AI_AGENT' as const, id: userId, name: 'AI Marketing Agent' }
+          : { type: 'HUMAN' as const, id: userId, email: session?.user?.email || 'user' }
+
+        writeAuditLog({
+          actor: auditActor,
+          action: 'EXTENSION_CMD_ERR',
+          resourceId: brandId,
+          resourceType: 'ExtensionBridge',
+          reason: `触发社媒/国内平台自动回复失败 (评论 ID: ${reviewId})。错误: ${e instanceof Error ? e.message : String(e)}`,
+        }).catch(console.error)
+
+        return NextResponse.json(
+          { error: e instanceof Error ? e.message : String(e) },
+          { status: 502 }
+        )
+      }
+    }
 
     // Direct Google GBP OAuth reply if configured
     if (detectedPlatform === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId) {
@@ -205,7 +257,7 @@ export async function POST(request: Request, { params }: Params) {
     if (brand.postfastApiKey) {
       const result = await postfastReplyReview({
         apiKey: brand.postfastApiKey,
-        platform: detectedPlatform,
+        platform: detectedPlatform as 'google' | 'yelp',
         reviewId,
         replyText,
       })

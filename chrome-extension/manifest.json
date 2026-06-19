@@ -13,7 +13,10 @@
     "*://localhost/*",
     "*://127.0.0.1/*",
     "*://*.dianping.com/*",
-    "*://*.meituan.com/*"
+    "*://*.meituan.com/*",
+    "*://*.instagram.com/*",
+    "*://*.tiktok.com/*",
+    "*://*.xiaohongshu.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -23,7 +26,8 @@
       "matches": [
         "*://localhost/*",
         "*://127.0.0.1/*",
-        "*://*.render.com/*"
+        "*://*.render.com/*",
+        "*://*.immedi.ai/*"
       ],
       "js": ["content_amc.js"],
       "run_at": "document_end"
