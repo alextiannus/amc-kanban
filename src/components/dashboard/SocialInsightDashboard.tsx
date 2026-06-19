@@ -114,6 +114,7 @@ interface SocialPost {
   shares: number
   impressions: number
   engRate?: number | string | null
+  postUrl?: string | null
 }
 
 interface SocialAccount {
@@ -133,6 +134,8 @@ interface ReviewItem {
   text?: string | null
   createdAt?: string | Date
   replyStatus?: 'replied' | 'pending' | string
+  replyText?: string | null
+  accountHandle?: string | null
 }
 
 type SentimentKeyword = {
@@ -970,10 +973,21 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                         </div>
                       </div>
                       <p className="text-xs text-slate-550 dark:text-slate-400 leading-relaxed">{r.text}</p>
+                      
+                      {r.replyText && (
+                        <div className="mt-2.5 p-2.5 bg-white/60 dark:bg-slate-800/40 rounded-xl border border-slate-100/50 dark:border-slate-800/50 text-[11px] text-slate-500 dark:text-slate-400">
+                          <span className="font-extrabold text-emerald-600 dark:text-emerald-400">回复: </span>
+                          <span className="italic">&ldquo;{r.replyText}&rdquo;</span>
+                        </div>
+                      )}
+
                       <div className="flex justify-between items-center mt-3 border-t border-slate-100/50 dark:border-slate-800/50 pt-2 text-[9px] font-bold text-slate-400">
-                        <span>谷歌商户中心 · {r.createdAt ? new Date(r.createdAt).toLocaleDateString('zh-CN') : '—'}</span>
-                        <span className={`px-2 py-0.5 rounded ${r.replyStatus === 'replied' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500 animate-pulse'}`}>
-                          {r.replyStatus === 'replied' ? 'AI已回复' : '待处理'}
+                        <span>谷歌商户中心 {r.accountHandle ? `(${r.accountHandle})` : ''} · {r.createdAt ? new Date(r.createdAt).toLocaleDateString('zh-CN') : '—'}</span>
+                        <span 
+                          className={`px-2 py-0.5 rounded ${r.replyStatus === 'replied' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}
+                          title={r.replyStatus === 'replied' ? undefined : 'AI 自动回复仅在开启自动驾驶且完成 Google GBP OAuth/PostFast 账号配置时生效。若未配置，请前往 Google 平台人工回复。'}
+                        >
+                          {r.replyStatus === 'replied' ? (r.replyText ? '🤖 AI已回复' : '✅ 已回复') : '✍️ 需人工回复'}
                         </span>
                       </div>
                     </div>
@@ -1238,6 +1252,17 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                 <span className="font-black text-emerald-500">{selectedPost.engRate}%</span>
               </div>
             </div>
+
+            {selectedPost.postUrl && (
+              <a
+                href={selectedPost.postUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-1.5 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-xs font-black transition-all shadow-sm shadow-blue-500/20 mt-2 hover:shadow-md"
+              >
+                🔗 跳转至社交平台查看原贴
+              </a>
+            )}
           </div>
         </div>
       )}

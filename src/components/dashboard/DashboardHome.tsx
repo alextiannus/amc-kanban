@@ -46,6 +46,12 @@ interface DashboardActionItem {
   type?: string | null
   title?: string | null
   description?: string | null
+  accountId?: string | null
+  account?: {
+    platformId: string
+    handle: string
+  } | null
+  payload?: any
 }
 
 interface DashboardAccount {
@@ -982,30 +988,71 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
       </div>
 
       {/* ── Pending Action Items (豆腐块) ────────────────────────────── */}
-      {pendingItems.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-500" /> 待处理事项
-            </h3>
-            <span className="text-[10px] font-black text-white bg-amber-500 px-2.5 py-0.5 rounded-full">{pendingItems.length} NEW</span>
-          </div>
-          <div className="space-y-3">
-            {pendingItems.map(item => (
-              <ActionCard
-                key={item.id}
-                id={item.id}
-                type={toCardType(item.type, item.priority)}
-                platform={item.type ?? 'unknown'}
-                title={item.title ?? 'Untitled action'}
-                description={item.description ?? ''}
-                onApprove={approve}
-                onReject={reject}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+      {(() => {
+        const getActionItemPlatformLabel = (item: DashboardActionItem) => {
+          if (item.account) {
+            const platformName = item.account.platformId.toUpperCase() === 'GOOGLE' ? 'GOOGLE MAPS' : item.account.platformId.toUpperCase()
+            return `${platformName} (${item.account.handle})`
+          }
+
+          let payload = item.payload
+          if (typeof payload === 'string') {
+            try {
+              payload = JSON.parse(payload)
+            } catch {
+              payload = null
+            }
+          }
+
+          const pl = payload && typeof payload === 'object' ? payload : null
+          const plPlatform = pl?.platform === 'google_maps' ? 'GOOGLE MAPS' : (pl?.platform?.toUpperCase() || null)
+          const itemType = String(item.type ?? '').toLowerCase()
+
+          if (plPlatform) {
+            const googleAccount = apiAccounts.find(a => normalizeDashboardPlatformId(a.platformId) === 'google')
+            if (googleAccount) {
+              return `${plPlatform} (${googleAccount.handle})`
+            }
+            return `${plPlatform} (${activeBrand?.name || 'Google Maps'})`
+          }
+
+          if (itemType === 'sentiment_alert' || itemType === 'apify_review') {
+            const googleAccount = apiAccounts.find(a => normalizeDashboardPlatformId(a.platformId) === 'google')
+            if (googleAccount) {
+              return `GOOGLE MAPS (${googleAccount.handle})`
+            }
+            return `GOOGLE MAPS (${activeBrand?.name || 'Google Maps'})`
+          }
+
+          return item.type?.toUpperCase() ?? 'UNKNOWN'
+        }
+
+        return pendingItems.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-500" /> 待处理事项
+              </h3>
+              <span className="text-[10px] font-black text-white bg-amber-500 px-2.5 py-0.5 rounded-full">{pendingItems.length} NEW</span>
+            </div>
+            <div className="space-y-3">
+              {pendingItems.map(item => (
+                <ActionCard
+                  key={item.id}
+                  id={item.id}
+                  type={toCardType(item.type, item.priority)}
+                  platform={getActionItemPlatformLabel(item)}
+                  title={item.title ?? 'Untitled action'}
+                  description={item.description ?? ''}
+                  payload={item.payload}
+                  onApprove={approve}
+                  onReject={reject}
+                />
+              ))}
+            </div>
+          </section>
+        )
+      })()}
 
       {/* ── AI 活动战报 — 品牌泳道工作看板 ──────────────────────────── */}
       <section>

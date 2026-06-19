@@ -251,6 +251,10 @@ export async function POST(req: Request, { params }: Params) {
       })
     )
 
+    const googleAccount = brand.accounts.find(
+      a => ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(a.platformId.toLowerCase())
+    )
+
     const newReviews = googleResult.reviews.filter(r => {
       const hash = `${r.reviewerName}:${r.text.slice(0, 40)}`
       return !existingHashes.has(hash)
@@ -260,6 +264,7 @@ export async function POST(req: Request, { params }: Params) {
       await prisma.actionItem.createMany({
         data: newReviews.map(r => ({
           brandId: id,
+          accountId: googleAccount?.id || null,
           type: 'apify_review',
           priority: r.rating <= 2 ? 'high' : 'normal',
           title: `Apify: ${r.rating}★ 评论 — ${r.reviewerName}`,

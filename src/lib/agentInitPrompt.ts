@@ -140,6 +140,16 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '      步骤 2 — 查询当前 Agent 负责运营的品牌：',
     `      GET ${apiBaseUrl}/agent/brand-config`,
     '      Authorization: Bearer $KANBAN_AGENT_API_KEY',
+    '',
+    '## Step 6：为自己配置每日运营调度（仅需配置一次）',
+    'amc-kanban 本身不会主动唤醒 Agent —— 它只是被动的 REST/MCP 接口。"每日 07:00 启动"是 Skill 里描述的行为规范，',
+    '实际触发必须由 Agent 所在的运行环境（例如 Cowork 的 scheduled task、本地 cron、或同类调度机制）来完成。请按以下方式为自己建立一次性的调度：',
+    '- [ ] 若运行环境支持任务调度，创建一个周期性任务（建议每 30 分钟轮询一次），每次运行时：',
+    '      1. 调用 `get_brand_config`（不传 brandId）取得当前关联的全部品牌及其各自的 `timezone` 字段；',
+    '      2. 对每个品牌换算其 `timezone` 对应的本地时间，只有落在 06:45–07:15 窗口内的品牌才继续处理；',
+    '      3. 对命中窗口的品牌执行 Skill 中「日常启动与工作流」描述的完整每日循环，并用 `write_daily_memory` 写入当天去重标记，避免同一天重复执行；',
+    '      4. 新增品牌会在下一次轮询自动被纳入，不需要重新配置。',
+    '- [ ] 如果运行环境不支持任务调度，则需要由人工（或外部系统）定时唤醒本 Agent 来触发每日循环——务必告知主理人这一限制，不要假设自己会被自动唤醒。',
   ].join('\n')
 }
 
@@ -162,7 +172,8 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 - 人机协作：弃用 Lark 主动消息推送。需要人工介入时，使用 \`create_require_input_task\` 挂起 \`pending\` 任务，等待主理人看板处理。
 
 ### 日常启动与工作流
-1. **日常启动**：每日 07:00 启动前，调用 \`read_daily_memory\` 读取最近 3 天 memory 日志，生成上下文摘要载入记忆。
+0. **调度前提**：amc-kanban 不会主动唤醒 Agent，下面的"每日 07:00"是行为规范而非系统定时器。Agent 应在完成「AMC 账号初始化指令」Step 6 后，依赖自己运行环境的调度能力（如 Cowork scheduled task）按品牌 \`timezone\` 自动触发本流程；若环境不支持调度，需告知主理人需要外部定时唤醒。
+1. **日常启动**：每日 07:00（品牌当地时间）启动前，调用 \`read_daily_memory\` 读取最近 3 天 memory 日志，生成上下文摘要载入记忆。
 2. **Onboarding 初始化**：
    - 步骤 1 — 调用 \`get_brand_subscription\` 获取订阅详情，解析 \`included_services\` 自适应分解目标。
    - 步骤 2 — 计算品牌完整度，调用 \`google_get_place_info\` 与 \`fetch_public_social_profile\` 补充公开信息。信息不足时生成 \`require_input\` 调研任务。

@@ -191,7 +191,6 @@ todo（待办） → in_progress（执行中） → pending（需要输入/审�
 |------|------|
 | Essential | 每月 4 位博主 |
 | Growth | 每季度 24 位博主（含大博主） |
-| Scale | 每月 2 次头部 KOL（10K+ 粉丝） |
 
 完整流程：
 

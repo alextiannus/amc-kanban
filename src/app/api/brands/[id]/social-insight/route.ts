@@ -366,7 +366,16 @@ export async function GET(req: Request, { params }: Params) {
     }),
     prisma.actionItem.findMany({
       where: { brandId: id, type: { in: ['sentiment_alert', 'apify_review'] } },
-      select: { id: true, title: true, description: true, payload: true, createdAt: true, status: true, type: true },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        payload: true,
+        createdAt: true,
+        status: true,
+        type: true,
+        account: { select: { handle: true, displayName: true } }
+      },
       orderBy: { createdAt: 'desc' },
       take: 100,
     }),
@@ -673,19 +682,25 @@ export async function GET(req: Request, { params }: Params) {
   const realKeywords = extractKeywordsFromTexts(reviewTexts)
 
   // ── Build review feed (DB + Google, no duplicates) ───────────────────────
+  const googleAccount = accounts.find(a => ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(a.platformId.toLowerCase()))
+  const googleAccountHandle = googleAccount ? (googleAccount.displayName || googleAccount.handle) : null
+
   const dbReviews = sentimentAlerts.map((item) => {
     const pl = item.payload && typeof item.payload === 'object'
-      ? (item.payload as { platform?: unknown; reviewerName?: unknown; rating?: unknown; reviewText?: unknown })
+      ? (item.payload as { platform?: unknown; reviewerName?: unknown; rating?: unknown; reviewText?: unknown; replyText?: unknown })
       : null
+    const hasReply = !!(pl?.replyText) || item.status === 'resolved' || item.status === 'approved' || item.status === 'auto_resolved'
     return {
       id: item.id,
       platform: typeof pl?.platform === 'string' ? pl.platform : 'google',
       reviewerName: typeof pl?.reviewerName === 'string' ? pl.reviewerName : '匿名顾客',
       rating: typeof pl?.rating === 'number' ? pl.rating : 2,
       text: typeof pl?.reviewText === 'string' ? pl.reviewText : (item.description ?? ''),
-      replyStatus: item.status === 'resolved' ? 'replied' : 'pending',
+      replyStatus: hasReply ? 'replied' : 'pending',
+      replyText: typeof pl?.replyText === 'string' ? pl.replyText : undefined,
       createdAt: item.createdAt.toISOString(),
       source: 'db',
+      accountHandle: (item as any).account?.displayName || (item as any).account?.handle || googleAccountHandle,
     }
   })
 
@@ -696,8 +711,10 @@ export async function GET(req: Request, { params }: Params) {
     rating: r.rating,
     text: r.text,
     replyStatus: r.replyText ? 'replied' : 'pending',
+    replyText: r.replyText,
     createdAt: r.createTime,
     source: 'google',
+    accountHandle: googleAccountHandle,
   }))
 
   // Apify Google Maps cached review feed
@@ -708,8 +725,10 @@ export async function GET(req: Request, { params }: Params) {
     rating: r.rating ?? 3,
     text: r.text ?? '',
     replyStatus: r.replyText ? 'replied' : 'pending',
+    replyText: r.replyText,
     createdAt: r.publishedAt ?? new Date().toISOString(),
     source: 'apify',
+    accountHandle: googleAccountHandle,
   }))
 
   // Merge all review sources, most recent first, cap at 50

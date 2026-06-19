@@ -376,9 +376,15 @@ export async function POST(request: Request) {
         ? `收到 Google【${review.rating}★ 差评】已由 AI 自动响应`
         : `收到 Google【${review.rating}★ 差评】需立即回复`
 
+      const googleAccount = await prisma.socialAccount.findFirst({
+        where: { brandId, platformId: { in: ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'] } },
+        select: { id: true }
+      })
+
       const item = await prisma.actionItem.create({
         data: {
           brandId,
+          accountId: googleAccount?.id || null,
           type: 'sentiment_alert',
           priority: review.rating <= 2 ? 'urgent' : 'high',
           title: itemTitle,
