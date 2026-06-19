@@ -1,0 +1,157 @@
+import { chromium } from 'playwright';
+import path from 'path';
+import fs from 'fs';
+
+async function run() {
+  const pathToExtension = path.resolve('chrome-extension');
+  const userDataDir = path.resolve('node_modules/.cache/playwright-user-data');
+
+  console.log('Cleaning up old user data directory...');
+  try {
+    fs.rmSync(userDataDir, { recursive: true, force: true });
+  } catch (e) {
+    console.warn('Failed to delete old userDataDir:', e);
+  }
+
+  console.log('Launching browser with Chrome Extension...');
+  let browserContext;
+  try {
+    browserContext = await chromium.launchPersistentContext(userDataDir, {
+      headless: false, // Must be false for extensions to load
+      args: [
+        `--disable-extensions-except=${pathToExtension}`,
+        `--load-extension=${pathToExtension}`,
+        '--headless=new', // Modern headless mode that supports extensions
+        '--no-sandbox',
+        '--disable-setuid-sandbox'
+      ],
+    });
+  } catch (err) {
+    console.error('Failed to launch browser with extension:', err);
+    process.exit(1);
+  }
+
+  try {
+    // Page 1: Login and go to Dashboard board view
+    const boardPage = await browserContext.newPage();
+    
+    // Log console & errors
+    boardPage.on('console', msg => console.log('PAGE LOG:', msg.text()));
+    boardPage.on('pageerror', err => console.error('PAGE ERROR:', err.stack || err.message || err));
+    
+    console.log('Navigating to login page...');
+    await boardPage.goto('http://127.0.0.1:3000/');
+    
+    // Wait for React hydration
+    await boardPage.waitForTimeout(3000);
+    
+    // Fill credentials
+    await boardPage.fill('#email', 'admin@example.com');
+    await boardPage.fill('#password', 'password123');
+    
+    // Tiny delay before submit
+    await boardPage.waitForTimeout(500);
+    console.log('Submitting login...');
+    await boardPage.click('button[type="submit"]');
+
+    // Wait for board navigation
+    console.log('Waiting for board page to load...');
+    try {
+      await boardPage.waitForURL('**/board', { timeout: 45000 });
+    } catch (err) {
+      console.error('waitForURL timed out! Current URL is:', boardPage.url());
+      const screenshotPath = path.resolve('scratch/login_failed.png');
+      try {
+        await boardPage.screenshot({ path: screenshotPath });
+        console.log(`Saved screenshot to ${screenshotPath}`);
+      } catch (scre) {
+        console.error('Failed to take screenshot:', scre);
+      }
+      try {
+        const errorEl = await boardPage.$('.text-red-500');
+        if (errorEl) {
+          console.log('Login error displayed on page:', await errorEl.innerText());
+        } else {
+          console.log('No error element (.text-red-500) found on login page.');
+        }
+      } catch (er) {
+        console.error('Failed to get error element:', er);
+      }
+      try {
+        const bodyHtml = await boardPage.innerHTML('body');
+        console.log('--- PAGE HTML CONTENT ---');
+        console.log(bodyHtml.substring(0, 3000));
+        console.log('-------------------------');
+      } catch (htmle) {
+        console.error('Failed to get page HTML:', htmle);
+      }
+      throw err;
+    }
+    console.log('Board loaded! Checking data-active-brand-id on body...');
+    
+    // Wait for the attribute to be present
+    let brandId = null;
+    for (let i = 0; i < 20; i++) {
+      brandId = await boardPage.evaluate(() => document.body.getAttribute('data-active-brand-id'));
+      if (brandId) break;
+      await new Promise(r => setTimeout(r, 500));
+    }
+    
+    if (!brandId) {
+      throw new Error('data-active-brand-id was not set on document.body on the board page');
+    }
+    console.log(`Active brand ID resolved from DOM: ${brandId}`);
+
+    // Page 2: Open mock merchant page
+    const merchantPage = await browserContext.newPage();
+    console.log('Navigating to Mock Merchant page...');
+    await merchantPage.goto('http://127.0.0.1:3000/mock-merchant');
+    await merchantPage.waitForSelector('#review-rev_dp_01', { timeout: 5000 });
+    console.log('Mock Merchant page loaded successfully.');
+
+    // Wait 3 seconds to make sure SSE connection registers
+    console.log('Waiting for SSE connection to stabilize...');
+    await new Promise(r => setTimeout(r, 3000));
+
+    // Trigger AI response test for the first review
+    console.log('Triggering AI response test for review rev_dp_01...');
+    const triggerBtn = await merchantPage.$('#review-rev_dp_01 .reply-trigger-btn');
+    if (!triggerBtn) {
+      throw new Error('Could not find AI automatic response trigger button on mock merchant page');
+    }
+    await triggerBtn.click();
+
+    // Verify that the reply is successfully simulated and submitted
+    console.log('Waiting for the extension to inject and submit the reply...');
+    
+    // The review rev_dp_01 container should update to show "已由 插件/AI 自动发表回复"
+    let success = false;
+    for (let i = 0; i < 30; i++) {
+      const text = await merchantPage.innerText('#review-rev_dp_01');
+      if (text.includes('已由 插件/AI 自动发表回复')) {
+        success = true;
+        console.log('Verification Success: Review text contains "已由 插件/AI 自动发表回复"!');
+        
+        // Print the actual reply text injected by the extension
+        console.log('Injected reply message content:');
+        console.log(text.substring(text.indexOf('已由 插件/AI 自动发表回复')));
+        break;
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    if (!success) {
+      throw new Error('Automation failed: Reply was not injected/submitted within timeout.');
+    }
+
+    console.log('✨ All e2e extension tests passed successfully! ✨');
+  } catch (error) {
+    console.error('Test execution failed:', error);
+    process.exit(1);
+  } finally {
+    console.log('Closing browser...');
+    await browserContext.close();
+  }
+}
+
+run();

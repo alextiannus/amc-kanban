@@ -44,7 +44,7 @@ async function handleExecuteAction(action, payload) {
     throw new Error(`Unsupported extension action: ${action}`);
   }
 
-  const { reviewId, replyText } = payload;
+  const { reviewId, replyText, platform } = payload;
   if (!reviewId || !replyText) {
     throw new Error('reviewId and replyText are required for review replies.');
   }
@@ -65,8 +65,36 @@ async function handleExecuteAction(action, payload) {
     throw new Error('Target platform merchant page (dianping.com, meituan.com, instagram.com, tiktok.com, xiaohongshu.com, or localhost) is not open in any browser tab. Please open and log in first.');
   }
 
-  // Choose the first matching tab
-  const targetTab = tabs[0];
+  // Choose the best matching tab
+  let targetTab = null;
+
+  // 1. Try to find a tab matching our mock merchant simulator
+  targetTab = tabs.find(t => t.url && t.url.includes('mock-merchant'));
+
+  // 2. If not found, try to find a tab matching the specific platform domain
+  if (!targetTab && platform) {
+    targetTab = tabs.find(t => {
+      if (!t.url) return false;
+      const url = t.url.toLowerCase();
+      if (platform === 'dianping' && url.includes('dianping.com')) return true;
+      if (platform === 'meituan' && url.includes('meituan.com')) return true;
+      if (platform === 'instagram' && url.includes('instagram.com')) return true;
+      if (platform === 'tiktok' && url.includes('tiktok.com')) return true;
+      if (platform === 'xiaohongshu' && url.includes('xiaohongshu.com')) return true;
+      return false;
+    });
+  }
+
+  // 3. Fallback to the first tab that is NOT the dashboard /board page
+  if (!targetTab) {
+    targetTab = tabs.find(t => t.url && !t.url.includes('/board'));
+  }
+
+  // 4. Ultimate fallback to the first tab in the list
+  if (!targetTab) {
+    targetTab = tabs[0];
+  }
+
   console.log(`[AMC SW] Found target tab for automation: ${targetTab.url} (ID: ${targetTab.id})`);
 
   // Execute the reply automation script inside the target tab context
@@ -103,7 +131,7 @@ function runDomesticReplyInPage(reviewId, replyText) {
       mockSubmit.click();
       return { success: true, platform: 'mock', reviewId };
     }
-    return { success: true, platform: 'mock_simulated', reviewId };
+    console.log('[AMC Automation] No custom mock-reply-input found, falling through to generic DOM automation...');
   }
 
   // 2. Platform-specific Automation

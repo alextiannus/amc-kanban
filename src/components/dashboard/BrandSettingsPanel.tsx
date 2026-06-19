@@ -342,7 +342,8 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
               </details>
             </div>
           </Section>
-          {/* Temporarily hidden Lark and Chrome Extension integrations
+          {/* Temporarily hidden Lark integrations */}
+          {/*
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
           <Section label="飞书（素材存储 + 通知）" badge={<StatusBadge ok={status.lark} />}>
@@ -362,31 +363,49 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
             )}
             {LARK_FIELDS.filter(f => f.key !== 'larkDriveFolderId').map(f => <Field key={f.key} f={f} />)}
           </Section>
+          */}
+
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-          <Section label="Chrome 浏览器插件 (美团/点评自动化)" badge={<StatusBadge ok={status.extension} />}>
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-3">
+          <Section label="Chrome 浏览器插件 (社媒与本地生活自动化)" badge={<StatusBadge ok={status.extension} />}>
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-4">
               <p className="text-xs text-slate-650 dark:text-slate-350 leading-relaxed font-medium">
-                由于美团、大众点评等国内本地生活平台无开放接口，且存在严格的安全风控，系统使用 <strong>浏览器插件桥接技术</strong>。
+                由于小红书、美团、大众点评、Instagram、TikTok 等平台接口限制极严，系统支持通过 <strong>AMC 浏览器助理插件</strong> 在前端安全执行自动回复与数据采集。
               </p>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                <p className="font-extrabold text-slate-600 dark:text-slate-300">使用说明：</p>
-                <p>1. 请在 Chrome 浏览器中加载项目根目录下的 <code className="font-mono text-blue-600 dark:text-blue-400">chrome-extension</code> 文件夹（打开开发者模式 ➜ 加载已解压的扩展程序）。</p>
-                <p>2. 安装完成后，只要您打开此 AI Marketing Crew 看板页面，插件就会自动与后台建立安全连接。</p>
-                <p>3. 同时，在同一浏览器窗口中打开美团或点评的商家后台页面并保持登录，AI 即可通过插件执行自动回复。</p>
-                <p className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 font-bold text-indigo-600 dark:text-indigo-400">测试工具：</p>
+
+              <div className="flex gap-2">
                 <a
-                  href="/mock-merchant"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-450 hover:underline font-bold"
+                  href="/api/integrations/extension/download"
+                  download="amc-assistant-extension.zip"
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm shadow-blue-500/20 hover:scale-[1.01] active:scale-[0.99]"
                 >
-                  打开大众点评/美团模拟商家中心 ➜
+                  📥 下载浏览器助手插件 (ZIP)
                 </a>
+              </div>
+
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 space-y-2 bg-white dark:bg-slate-900 p-3.5 rounded-xl border border-slate-150 dark:border-slate-800">
+                <p className="font-extrabold text-slate-650 dark:text-slate-300">安装及使用说明：</p>
+                <div className="space-y-1.5 leading-normal">
+                  <p>1. 点击上方按钮下载并解压得到 <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded font-mono text-[10px]">chrome-extension</code> 文件夹。</p>
+                  <p>2. 在 Chrome 浏览器地址栏中输入并打开：<code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded font-mono text-[10px]">chrome://extensions/</code></p>
+                  <p>3. 开启右上角的 <strong>“开发者模式” (Developer mode)</strong>。</p>
+                  <p>4. 点击左上角的 <strong>“加载已解压的扩展程序” (Load unpacked)</strong>，选择该文件夹完成安装。</p>
+                  <p>5. 只要此看板页面处于打开状态，您在同一浏览器窗口中保持对应商户后台登录，AI 即可为您自动操作回复。</p>
+                </div>
+                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="font-bold text-indigo-650 dark:text-indigo-400">本地联调与测试：</span>
+                  <a
+                    href="/mock-merchant"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-450 hover:underline font-extrabold"
+                  >
+                    模拟商户中心 ➜
+                  </a>
+                </div>
               </div>
             </div>
           </Section>
-          */}
         </div>
 
         {/* Footer */}

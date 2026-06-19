@@ -35,6 +35,7 @@ Open http://localhost:3000 in your browser.
 - Latest product PRD: PRD.md
 - API service map: docs/API_SERVICES.md
 - AMC Agent connectivity guide: docs/AGENT_CONNECTIVITY.md
+- Chrome Extension installation & E2E guide: [chrome-extension/README.md](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/chrome-extension/README.md)
 
 ## Notes
 
