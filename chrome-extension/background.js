@@ -137,7 +137,7 @@ function runDomesticReplyInPage(reviewId, replyText) {
   // 2. Platform-specific Automation
   
   // ── Xiaohongshu (RED) Creator Platform ───────────────────────────────
-  if (hostname.includes('xiaohongshu.com')) {
+  if (hostname.includes('xiaohongshu.com') || window.location.pathname.includes('/mock-merchant/xiaohongshu')) {
     console.log('[AMC Automation] Running Xiaohongshu automation');
     const commentEl = document.querySelector(`[data-comment-id="${reviewId}"]`) || 
                       document.querySelector(`#comment-${reviewId}`) || 
@@ -173,7 +173,7 @@ function runDomesticReplyInPage(reviewId, replyText) {
   }
 
   // ── Instagram Automation ─────────────────────────────────────────────
-  if (hostname.includes('instagram.com')) {
+  if (hostname.includes('instagram.com') || window.location.pathname.includes('/mock-merchant/instagram')) {
     console.log('[AMC Automation] Running Instagram automation');
     const textarea = document.querySelector('textarea[placeholder*="comment"]') || 
                      document.querySelector('textarea[placeholder*="评论"]') || 
@@ -202,7 +202,7 @@ function runDomesticReplyInPage(reviewId, replyText) {
   }
 
   // ── TikTok Automation ────────────────────────────────────────────────
-  if (hostname.includes('tiktok.com')) {
+  if (hostname.includes('tiktok.com') || window.location.pathname.includes('/mock-merchant/tiktok')) {
     console.log('[AMC Automation] Running TikTok automation');
     const textarea = document.querySelector('[placeholder*="reply"]') || 
                      document.querySelector('[placeholder*="回复"]') || 

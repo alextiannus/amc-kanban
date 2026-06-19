@@ -104,47 +104,55 @@ async function run() {
 
     // Page 2: Open mock merchant page
     const merchantPage = await browserContext.newPage();
-    console.log('Navigating to Mock Merchant page...');
-    await merchantPage.goto('http://127.0.0.1:3000/mock-merchant');
-    await merchantPage.waitForSelector('#review-rev_dp_01', { timeout: 5000 });
-    console.log('Mock Merchant page loaded successfully.');
 
-    // Wait 3 seconds to make sure SSE connection registers
-    console.log('Waiting for SSE connection to stabilize...');
-    await new Promise(r => setTimeout(r, 3000));
+    const platformsToTest = [
+      { name: 'dianping', reviewId: 'rev_dp_01' },
+      { name: 'meituan', reviewId: 'rev_mt_02' },
+      { name: 'xiaohongshu', reviewId: 'rev_xhs_03' },
+      { name: 'instagram', reviewId: 'rev_ig_04' },
+      { name: 'tiktok', reviewId: 'rev_tt_05' },
+    ];
 
-    // Trigger AI response test for the first review
-    console.log('Triggering AI response test for review rev_dp_01...');
-    const triggerBtn = await merchantPage.$('#review-rev_dp_01 .reply-trigger-btn');
-    if (!triggerBtn) {
-      throw new Error('Could not find AI automatic response trigger button on mock merchant page');
-    }
-    await triggerBtn.click();
+    for (const pf of platformsToTest) {
+      console.log(`\n--------------------------------------------`);
+      console.log(`🚀 Testing platform: ${pf.name.toUpperCase()} (Review ID: ${pf.reviewId})`);
+      console.log(`--------------------------------------------`);
 
-    // Verify that the reply is successfully simulated and submitted
-    console.log('Waiting for the extension to inject and submit the reply...');
-    
-    // The review rev_dp_01 container should update to show "已由 插件/AI 自动发表回复"
-    let success = false;
-    for (let i = 0; i < 30; i++) {
-      const text = await merchantPage.innerText('#review-rev_dp_01');
-      if (text.includes('已由 插件/AI 自动发表回复')) {
-        success = true;
-        console.log('Verification Success: Review text contains "已由 插件/AI 自动发表回复"!');
-        
-        // Print the actual reply text injected by the extension
-        console.log('Injected reply message content:');
-        console.log(text.substring(text.indexOf('已由 插件/AI 自动发表回复')));
-        break;
+      console.log(`Navigating to /mock-merchant/${pf.name}...`);
+      await merchantPage.goto(`http://127.0.0.1:3000/mock-merchant/${pf.name}`);
+      await merchantPage.waitForSelector(`#review-${pf.reviewId}`, { timeout: 10000 });
+
+      // Wait for page hydration and stability
+      await merchantPage.waitForTimeout(2000);
+
+      // Trigger AI response test
+      console.log(`Triggering AI response test for ${pf.reviewId}...`);
+      const triggerBtn = await merchantPage.$(`#review-${pf.reviewId} .reply-trigger-btn`);
+      if (!triggerBtn) {
+        throw new Error(`Could not find trigger button on /mock-merchant/${pf.name}`);
       }
-      await new Promise(r => setTimeout(r, 1000));
+      await triggerBtn.click();
+
+      // Verify that the reply is successfully simulated and submitted
+      console.log('Waiting for the extension to inject and submit the reply...');
+      
+      let success = false;
+      for (let i = 0; i < 20; i++) {
+        const text = await merchantPage.innerText(`#review-${pf.reviewId}`);
+        if (text.includes('已由 插件/AI 自动发表回复')) {
+          success = true;
+          console.log(`✅ Success: Injected reply detected for ${pf.name}!`);
+          break;
+        }
+        await merchantPage.waitForTimeout(1000);
+      }
+
+      if (!success) {
+        throw new Error(`Automation failed for platform ${pf.name}: Reply was not injected/submitted.`);
+      }
     }
 
-    if (!success) {
-      throw new Error('Automation failed: Reply was not injected/submitted within timeout.');
-    }
-
-    console.log('✨ All e2e extension tests passed successfully! ✨');
+    console.log('\n✨ All E2E extension integration tests passed successfully across all 5 platforms! ✨');
   } catch (error) {
     console.error('Test execution failed:', error);
     process.exit(1);
