@@ -56,7 +56,7 @@ AMC 侧品牌主理人。负责管理多个品牌、绑定或调整 AMC Agent、
 
 ### 4.5 WorkUnit / ActionItem
 
-WorkUnit 是执行任务；ActionItem 是面向人类的待办、审批、确认或阻塞项。草稿审批、评论回复、人工输入都应能落到 ActionItem。
+WorkUnit 是执行任务；ActionItem 是面向人类的待办、审批、确认或阻塞项。草稿审批、差评或非 autopilot 状态下评论的人工审核回复、由于订阅配额不足或到期需催促素材与安排探店活动等，均使用 `require_input` 类型的 ActionItem 挂起，等待主理人或品牌主处理。
 
 ### 4.6 ContentDraft
 
@@ -175,6 +175,20 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 3. 系统按 Huawei OBS、PostFast、Lark、Local 顺序选择可用存储。
 4. 写入 MediaAsset，供草稿引用。
 
+### 6.6 Agent 定期轮询与订阅履约流程
+
+由于本系统采用被动 REST/MCP API 架构，不包含主动唤醒 Agent 的服务器端定时器，Agent 必须在其所在运行环境配置定期轮询（建议每 30 分钟轮询一次）。在每次轮询被唤醒时，针对所有关联品牌，Agent 需执行以下自动化任务以履行对应的订阅套餐承诺：
+
+1. **评论自动处理流程（口碑承诺）**：
+   - 自动查询未处理评论。比对订阅包权益（Starter 仅监控；Essential/Advanced 需在 24h 内回复）。
+   - 在 `autoPilot = true` 且授权正常时，AI 自动生成符合品牌风格的回复并调用接口回复；若为非自动驾驶状态或收到低星（≤2星）差评，立即创建 `require_input` 挂起任务等待主理人介入。
+2. **内容发布自检流程（发帖承诺）**：
+   - 定期检查待发布任务和内容草稿，若发布时间已到且通过了审核（或处于自动驾驶模式 `autoPilot = true`），调用发布接口执行社媒分发，成功后回填真实 URL 并流转任务状态至 `done`。
+3. **素材及探店承诺保障流程（素材与探店承诺）**：
+   - 获取订阅的详细权益及配额（如 Starter 每月 30 篇发帖、4 次探店；Essential 每季度 24 次探店等）。
+   - 比对素材库中 ready 状态 of the 素材储备。若素材不足以支撑当月发帖配额，或者本月承诺的博主探店仍未开展时，**主动在看板创建 `require_input` 任务**，标注为 `[订阅承诺] 需要补充素材 / 安排达人探店活动`。
+   - 在任务描述中详细列出所需的拍摄画面要求或博主探店策划大纲，督促主理人确认或安排线下配合。
+
 ## 7. 权限与访问控制
 
 1. HUMAN 使用 Cookie session；AI_AGENT 使用 Bearer API Key。
@@ -237,7 +251,8 @@ Lark 相关的通知卡片推送、云盘文件夹创建及文件上传工具接
 7. 素材库支持上传、分类、整理和被草稿引用。
 8. Research 模块支持 TopicFeed markdown 写入、读取、搜索和归档。
 9. API metadata 暴露 OpenAPI、SOP (统一由 docs/AGENT_CONNECTIVITY.md 提供) 和 Skill，便于 Agent 唯一接入。
-10. TypeScript 与生产构建通过。
+10. Agent 支持自动化定期轮询（建议每 30 分钟一次），在轮询中自动处理评论回复、检查并执行发布、根据订阅包承诺检查并主动挂起素材与探店 `require_input` 任务。
+11. TypeScript 与生产构建通过。
 
 ## 11. 近期 Roadmap
 
