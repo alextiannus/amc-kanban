@@ -109,10 +109,10 @@ body {
 
 /* Obsidian Theme login backdrop and custom card styles */
 .obsidian-card {
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 @keyframes auroraMove {
@@ -130,7 +130,7 @@ body {
   height: 600px;
   top: -15%;
   left: -15%;
-  background: radial-gradient(circle, rgba(79, 70, 229, 0.18) 0%, rgba(79, 70, 229, 0) 70%);
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.08) 0%, rgba(79, 70, 229, 0) 70%);
   filter: blur(80px);
   animation: auroraMove 20s infinite alternate ease-in-out;
   pointer-events: none;
@@ -142,7 +142,7 @@ body {
   height: 600px;
   bottom: -15%;
   right: -15%;
-  background: radial-gradient(circle, rgba(147, 51, 234, 0.18) 0%, rgba(147, 51, 234, 0) 70%);
+  background: radial-gradient(circle, rgba(147, 51, 234, 0.08) 0%, rgba(147, 51, 234, 0) 70%);
   filter: blur(80px);
   animation: auroraMove 25s infinite alternate-reverse ease-in-out;
   pointer-events: none;
@@ -172,15 +172,15 @@ body {
   width: 4px;
 }
 .terminal-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(0, 0, 0, 0.02);
   border-radius: 99px;
 }
 .terminal-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 99px;
 }
 .terminal-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.25);
 }
 
 

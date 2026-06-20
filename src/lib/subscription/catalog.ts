@@ -12,6 +12,8 @@ export interface SubscriptionPlan {
   services: string[]
   baseline: string
   commissionNote?: string
+  /** false = 软下架：仍可被既有逻辑（按 id 查找/历史订阅）引用，但新签约选择页不展示 */
+  visible?: boolean
 }
 
 export interface AddonItem {
@@ -53,12 +55,12 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     services: [
       '账号代注册与信息完善（Google Maps / Facebook / Instagram / TikTok）',
       '账号统一化风格设计（按品牌特点定制）',
-      '建立素材库',
-      '每月 30 条图文内容创作与发布，不限平台数量',
+      '建立品牌营销素材库',
+      '每月 30-36 条图文内容创作与发布，不限平台数量',
       'Google Maps 评分优化',
-      '账号运营月报',
+      '账号运营数据分析报表',
       '评论监控（不含回复）',
-      '每月安排 4 位博主探店，手机拍摄，内容发布协调（博主费用含在服务费内）'
+      '每月安排不少于 4 位博主探店，素材拍摄，内容发布协调（博主费用含在服务费内）'
     ],
     baseline: '开通后 60 天内各平台商家信息完整展示，持续更新有质量的内容。',
     includes: [
@@ -67,18 +69,19 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '服务内容：',
       '1. 账号代注册与信息完善（Google Maps / Facebook / Instagram / TikTok）',
       '2. 账号统一化风格设计（按品牌特点定制）',
-      '3. 建立素材库',
-      '4. 每月 30 条图文内容创作与发布，不限平台数量',
+      '3. 建立品牌营销素材库',
+      '4. 每月 30-36 条图文内容创作与发布，不限平台数量',
       '5. Google Maps 评分优化',
-      '6. 账号运营月报',
+      '6. 账号运营数据分析报表',
       '7. 评论监控（不含回复）',
-      '8. 每月安排 4 位博主探店，手机拍摄，内容发布协调（博主费用含在服务费内）'
+      '8. 每月安排不少于 4 位博主探店，素材拍摄，内容发布协调（博主费用含在服务费内）'
     ],
   },
   {
     id: 'essential',
     name: '品牌建设版',
-    monthlyUsd: 1800,
+    monthlyUsd: 3600,
+    promoMonthlyUsd: 2400,
     description: '从基础展示到品牌建设',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
     suitableFor: '希望确立品牌策略、明确目标客群，通过全平台覆盖、视频内容与大规模博主推广积极拉新，并通过团购等转化设计唤醒老顾客的商家',
@@ -107,6 +110,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     id: 'advanced',
     name: '流量扩张版',
     monthlyUsd: 3600,
+    // 软下架（2026-06-20）：不再作为独立订阅档位展示给新签约商家，内容拆解为可加购包（定价待定，由商家自行决定是否加购）。
+    // 既有订阅、按 id 查找的历史逻辑（POST 校验、admin 手动设置）仍然有效，不受影响。
+    visible: false,
     description: '把品牌势能转化为持续营收，建立忠诚客户群体',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · AI 私域运营官 · AI 客服 · 品牌主理人',
     suitableFor: '已有线上基础，希望通过付费投流快速放大曝光、头部 KOL 精准种草、私域沉淀顾客资产，系统提升全链路转化率的商家',
@@ -121,7 +127,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     baseline: '广告稳定投放后线上引流到店量明显提升；私域社群建立后复购率可见增长；高质量 KOL 内容带来精准新客转化；全链路数据每月可查。',
     includes: [
       '团队配置：AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · AI 私域运营官 · AI 客服 · 品牌主理人',
-      '适合：已有线上基础，希望通过付费投流快速放大曝光、头部 KOL 精准种草、私域沉淀顾客资产，系统提升全链路转化率 of the merchant', // Wait, let's keep it matching the new prompt
+      '适合：已有线上基础，希望通过付费投流快速放大曝光、头部 KOL 精准种草、私域沉淀顾客资产，系统提升全链路转化率的商家',
       '服务内容：',
       '1. 增长策略与账户搭建（合约期第 1 个月）：广告策略制定与账户开设，私域社群框架搭建',
       '2. 多平台付费广告管理：每月不少于 4 组创意制作投放，A/B 测试，监控与预算调配',

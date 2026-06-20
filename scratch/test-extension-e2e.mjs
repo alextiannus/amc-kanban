@@ -125,26 +125,28 @@ async function run() {
       // Wait for page hydration and stability
       await merchantPage.waitForTimeout(2000);
 
-      // Trigger AI response test
-      console.log(`Triggering AI response test for ${pf.reviewId}...`);
-      const triggerBtn = await merchantPage.$(`#review-${pf.reviewId} .reply-trigger-btn`);
-      if (!triggerBtn) {
-        throw new Error(`Could not find trigger button on /mock-merchant/${pf.name}`);
-      }
-      await triggerBtn.click();
-
-      // Verify that the reply is successfully simulated and submitted
-      console.log('Waiting for the extension to inject and submit the reply...');
-      
       let success = false;
-      for (let i = 0; i < 20; i++) {
-        const text = await merchantPage.innerText(`#review-${pf.reviewId}`);
-        if (text.includes('已由 插件/AI 自动发表回复')) {
-          success = true;
-          console.log(`✅ Success: Injected reply detected for ${pf.name}!`);
-          break;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        console.log(`Triggering AI response test for ${pf.reviewId} (Attempt ${attempt}/3)...`);
+        const triggerBtn = await merchantPage.$(`#review-${pf.reviewId} .reply-trigger-btn`);
+        if (!triggerBtn) {
+          throw new Error(`Could not find trigger button on /mock-merchant/${pf.name}`);
         }
-        await merchantPage.waitForTimeout(1000);
+        await triggerBtn.click();
+
+        // Wait up to 6 seconds per attempt
+        for (let i = 0; i < 6; i++) {
+          const text = await merchantPage.innerText(`#review-${pf.reviewId}`);
+          if (text.includes('已由 插件/AI 自动发表回复')) {
+            success = true;
+            console.log(`✅ Success: Injected reply detected for ${pf.name}!`);
+            break;
+          }
+          await merchantPage.waitForTimeout(1000);
+        }
+
+        if (success) break;
+        console.warn(`⚠️ Injection not detected after attempt ${attempt}. Retrying...`);
       }
 
       if (!success) {

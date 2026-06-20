@@ -27,20 +27,16 @@ export async function POST(request: Request) {
         { status: 400 }
       )
     }
-    if (typeof nickname !== 'string' || !nickname.trim()) {
-      return NextResponse.json({ error: 'Nickname is required' }, { status: 400 })
-    }
-    if (typeof country !== 'string' || !country.trim()) {
-      return NextResponse.json({ error: 'Country is required' }, { status: 400 })
-    }
-    if (typeof phone !== 'string' || !PHONE_RE.test(phone.trim())) {
-      return NextResponse.json({ error: 'Valid contact phone is required' }, { status: 400 })
-    }
-
     const normalizedEmail = email.trim().toLowerCase()
-    const normalizedNickname = nickname.trim()
-    const normalizedCountry = country.trim()
-    const normalizedPhone = phone.trim()
+    const rawNickname = typeof nickname === 'string' ? nickname.trim() : ''
+    const normalizedNickname = rawNickname || normalizedEmail.split('@')[0]
+    const normalizedCountry = typeof country === 'string' ? country.trim() : null
+    const rawPhone = typeof phone === 'string' ? phone.trim() : ''
+    
+    if (rawPhone && !PHONE_RE.test(rawPhone)) {
+      return NextResponse.json({ error: 'Valid contact phone format is required if provided' }, { status: 400 })
+    }
+    const normalizedPhone = rawPhone || null
 
     const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
     if (existing) {

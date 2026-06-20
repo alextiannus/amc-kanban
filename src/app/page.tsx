@@ -34,8 +34,8 @@ const FacebookIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
-const LABEL_CLASS = 'block font-jetbrains text-xs text-slate-400 mb-2 ml-1'
-const INPUT_CLASS = 'w-full bg-white/5 border border-white/10 rounded-lg py-4 pl-12 pr-4 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-slate-500 font-hanken text-base'
+const LABEL_CLASS = 'block font-jetbrains text-xs text-slate-500 mb-2 ml-1'
+const INPUT_CLASS = 'w-full bg-slate-50 border border-slate-200 rounded-lg py-4 pl-12 pr-4 text-slate-800 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600/50 transition-all placeholder:text-slate-400 font-hanken text-base shadow-sm'
 
 export default function Login() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
@@ -77,11 +77,14 @@ export default function Login() {
     },
   ])
 
-  const terminalEndRef = useRef<HTMLDivElement>(null)
+  const terminalContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    if (terminalContainerRef.current) {
+      terminalContainerRef.current.scrollTo({
+        top: terminalContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      })
     }
   }, [terminalLines])
 
@@ -237,78 +240,111 @@ export default function Login() {
   const renderPlatformIcon = (platform: string) => {
     switch (platform) {
       case 'Instagram':
-        return <InstagramIcon className="h-4 w-4 text-pink-400" />
+        return <InstagramIcon className="h-4 w-4 text-pink-600" />
       case 'Google Maps':
-        return <MapPin className="h-4 w-4 text-blue-400" />
+        return <MapPin className="h-4 w-4 text-blue-600" />
       case 'Facebook':
         return <FacebookIcon className="h-4 w-4 text-blue-600" />
       default:
-        return <MessageSquare className="h-4 w-4 text-red-500" />
+        return <MessageSquare className="h-4 w-4 text-rose-600" />
     }
   }
 
   const isRegister = mode === 'register'
 
   return (
-    <div className="min-h-screen w-full relative flex items-center justify-center bg-[#030712] overflow-hidden text-slate-200 p-4 md:p-8">
+    <div className="min-h-screen w-full relative flex items-center justify-center bg-[#F8FAFC] overflow-hidden text-slate-800 p-4 md:p-8">
       {/* Background aurora glows and grid */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         <div className="aurora-glow-1"></div>
         <div className="aurora-glow-2"></div>
-        <div className="absolute inset-0 opacity-[0.25] bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] bg-center z-1"></div>
-        <div className="absolute inset-0 bg-black/40 mix-blend-multiply z-2"></div>
+        <div className="absolute inset-0 opacity-[0.4] bg-[linear-gradient(rgba(0,0,0,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.02)_1px,transparent_1px)] bg-[size:40px_40px] bg-center z-1"></div>
+        <div className="absolute inset-0 bg-white/10 mix-blend-multiply z-2"></div>
       </div>
 
       {/* Main Container */}
-      <main className="relative z-10 w-full max-w-[1280px] bg-slate-900/40 border border-white/5 rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl backdrop-blur-md min-h-[750px]">
+      <main className="relative z-10 w-full max-w-[1280px] bg-white/70 border border-slate-200/80 rounded-3xl overflow-hidden flex flex-col md:flex-row shadow-2xl backdrop-blur-md min-h-[750px]">
         {/* Left Side: Autopilot Console */}
-        <section className="hidden md:flex flex-1 flex-col bg-slate-950/60 p-8 lg:p-10 border-r border-white/5 justify-between">
-          <div>
+        <section className="hidden md:flex flex-1 flex-col bg-slate-50/50 p-8 lg:p-10 border-r border-slate-200/60 justify-between">
+          <div className="space-y-8">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shadow-lg">
-                  <Sparkles className="h-5 w-5 text-indigo-400" />
+                <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shadow-sm">
+                  <Sparkles className="h-5 w-5 text-indigo-500" />
                 </div>
-                <h2 className="font-manrope font-semibold text-lg text-white">Autopilot Console</h2>
+                <div>
+                  <h2 className="font-manrope font-semibold text-lg text-slate-800">Autopilot Console</h2>
+                  <p className="font-hanken text-xs text-slate-500">Autonomous marketing agent logs</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full">
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200/80 px-3 py-1.5 rounded-full">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10B981]"></div>
-                <span className="font-jetbrains text-[10px] text-emerald-400 tracking-wider font-semibold">LIVE ACTIVE</span>
+                <span className="font-jetbrains text-[10px] text-emerald-700 tracking-wider font-semibold">LIVE ACTIVE</span>
               </div>
             </div>
 
             {/* Live Feed Section */}
-            <div className="space-y-6">
-              <h3 className="font-jetbrains text-xs text-slate-400 uppercase tracking-wider">Live Interaction Feed</h3>
-              <div className="space-y-4">
-                {commentsList.map((c, i) => (
-                  <div key={i} className="bg-white/[0.02] border border-white/[0.06] p-5 rounded-xl relative overflow-hidden transition-all duration-500 animate-card-slide-in">
+            <div className="space-y-4">
+              <h3 className="font-jetbrains text-xs text-slate-400 uppercase tracking-wider">Active Agent Response</h3>
+              {commentsList.length > 0 && (() => {
+                const c = commentsList[0];
+                return (
+                  <div 
+                    key={c.platform + c.user} 
+                    className="bg-white border border-slate-200/80 p-6 rounded-2xl relative overflow-hidden transition-all duration-500 animate-card-slide-in shadow-sm"
+                  >
                     {/* Platform stripe indicator */}
-                    <div className={`absolute left-0 top-0 w-1 h-full bg-gradient-to-b ${c.color}`}></div>
-                    <div className="flex items-center gap-2 mb-3">
+                    <div className={`absolute left-0 top-0 w-1.5 h-full bg-gradient-to-b ${c.color}`}></div>
+                    
+                    <div className="flex items-center gap-2 mb-4">
                       {renderPlatformIcon(c.platform)}
-                      <span className="font-jetbrains text-[11px] text-slate-300 font-medium">{c.platform}</span>
-                      <span className="font-jetbrains text-[10px] text-slate-500 ml-auto">{c.time}</span>
+                      <span className="font-jetbrains text-xs text-slate-700 font-medium">{c.platform}</span>
+                      <span className="font-jetbrains text-[10px] text-slate-400 ml-auto">{c.time}</span>
                     </div>
-                    <div className="mb-3">
-                      <p className="font-hanken text-sm text-slate-200"><span className="font-semibold text-white">{c.user}</span>: {c.comment}</p>
+                    
+                    <div className="mb-4">
+                      <p className="font-hanken text-sm text-slate-800 leading-relaxed">
+                        <span className="font-semibold text-slate-900 mr-1.5">@{c.user}</span> 
+                        {c.comment}
+                      </p>
                     </div>
-                    <div className="bg-white/[0.03] rounded-lg p-3 border border-white/5 flex gap-3 items-start">
-                      <div className="w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Sparkles className="h-3 w-3 text-indigo-400" />
+                    
+                    <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-4 flex gap-3 items-start shadow-sm">
+                      <div className="w-6 h-6 rounded-md bg-emerald-100 border border-emerald-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
                       </div>
-                      <p className="font-hanken text-xs text-emerald-400 leading-relaxed">{c.reply}</p>
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="font-jetbrains text-[9px] text-emerald-700 uppercase font-semibold">Auto-Reply Submitted</span>
+                        </div>
+                        <p className="font-hanken text-xs text-slate-700 leading-relaxed">{c.reply}</p>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })()}
             </div>
           </div>
 
-          {/* Terminal Log */}
-          <div className="h-44 bg-black/40 border border-white/5 rounded-xl p-4 font-jetbrains text-xs text-slate-400 overflow-y-auto terminal-scrollbar mt-6 relative">
-            <div className="space-y-2">
+          {/* Terminal Console */}
+          <div className="flex flex-col bg-slate-100/60 border border-slate-200/80 rounded-2xl overflow-hidden mt-8 shadow-sm">
+            {/* Terminal Window Header Bar */}
+            <div className="flex items-center justify-between bg-slate-200/40 border-b border-slate-200 px-4 py-3">
+              <div className="flex gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-500/60"></div>
+                <div className="w-3 h-3 rounded-full bg-yellow-500/60"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500/60"></div>
+              </div>
+              <span className="font-jetbrains text-[10px] text-slate-500 tracking-wider">AGENT_LOG@AMC-CONSOLE</span>
+              <div className="w-12"></div>
+            </div>
+            
+            {/* Terminal Log Output */}
+            <div 
+              ref={terminalContainerRef}
+              className="h-44 p-4 font-jetbrains text-xs text-slate-600 overflow-y-auto terminal-scrollbar relative space-y-2 bg-slate-50/80"
+            >
               {terminalLines.map((line, idx) => {
                 const time = line.substring(0, 9)
                 const rest = line.substring(9)
@@ -318,26 +354,25 @@ export default function Login() {
                 
                 const getTypeColor = (t: string) => {
                   switch (t.trim()) {
-                    case 'REFRESH': return 'text-sky-400'
-                    case 'PUBLISH': return 'text-purple-400'
-                    case 'REVIEW': return 'text-yellow-400'
-                    case 'INSIGHTS': return 'text-emerald-400 font-semibold'
-                    case 'SEARCH': return 'text-amber-500'
-                    case 'AUDIT': return 'text-teal-400'
-                    case 'ANALYZE': return 'text-indigo-400'
-                    default: return 'text-pink-400'
+                    case 'REFRESH': return 'text-sky-600 font-semibold'
+                    case 'PUBLISH': return 'text-purple-600 font-semibold'
+                    case 'REVIEW': return 'text-amber-600 font-semibold'
+                    case 'INSIGHTS': return 'text-emerald-600 font-bold'
+                    case 'SEARCH': return 'text-orange-600 font-semibold'
+                    case 'AUDIT': return 'text-teal-600 font-semibold'
+                    case 'ANALYZE': return 'text-indigo-600 font-semibold'
+                    default: return 'text-pink-600 font-semibold'
                   }
                 }
                 
                 return (
-                  <div key={idx} className="flex gap-2 items-start font-mono animate-terminal-line">
-                    <span className="text-slate-600 select-none">{time}</span>
+                  <div key={idx} className="flex gap-2 items-start font-mono animate-terminal-line leading-relaxed">
+                    <span className="text-slate-400 select-none">{time}</span>
                     <span className={getTypeColor(type)}>{type}</span>
-                    <span className="text-slate-300">{msg}</span>
+                    <span className="text-slate-700">{msg}</span>
                   </div>
                 )
               })}
-              <div ref={terminalEndRef} />
             </div>
           </div>
         </section>
@@ -347,17 +382,17 @@ export default function Login() {
           <div className="w-full max-w-[440px]">
             {/* Header */}
             <div className="text-center mb-8">
-              <h1 className="font-manrope font-bold text-5xl mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-500 tracking-tight">AMC</h1>
-              <p className="font-jetbrains text-xs text-slate-400 uppercase tracking-[0.15em]">AI Marketing Crew</p>
+              <h1 className="font-manrope font-bold text-5xl mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 tracking-tight">AMC</h1>
+              <p className="font-jetbrains text-xs text-slate-500 uppercase tracking-[0.15em]">AI Marketing Crew</p>
             </div>
 
             {/* Tab Navigation */}
-            <div className="flex bg-white/5 p-1 rounded-full mb-8 relative">
+            <div className="flex bg-slate-100/80 p-1 rounded-full mb-8 relative border border-slate-200/50">
               <button
                 type="button"
                 onClick={() => switchMode('login')}
                 className={`flex-1 py-3 text-center rounded-full font-hanken font-semibold text-sm transition-all relative z-10 ${
-                  !isRegister ? 'bg-white/10 text-white shadow-sm border border-white/5' : 'text-slate-400 hover:text-white'
+                  !isRegister ? 'bg-white text-slate-800 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 Sign In
@@ -366,7 +401,7 @@ export default function Login() {
                 type="button"
                 onClick={() => switchMode('register')}
                 className={`flex-1 py-3 text-center rounded-full font-hanken font-semibold text-sm transition-all relative z-10 ${
-                  isRegister ? 'bg-white/10 text-white shadow-sm border border-white/5' : 'text-slate-400 hover:text-white'
+                  isRegister ? 'bg-white text-slate-800 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
                 Create Account
@@ -396,9 +431,9 @@ export default function Login() {
               {/* Password Field */}
               <div>
                 <div className="flex justify-between items-center mb-2 ml-1 mr-1">
-                  <label className="block font-jetbrains text-xs text-slate-400" htmlFor="password">Password</label>
+                  <label className="block font-jetbrains text-xs text-slate-500" htmlFor="password">Password</label>
                   {!isRegister && (
-                    <a className="font-jetbrains text-xs text-purple-400 hover:text-purple-300 transition-colors hover:underline" href="#">Forgot?</a>
+                    <a className="font-jetbrains text-xs text-purple-600 hover:text-purple-700 transition-colors hover:underline" href="#">Forgot?</a>
                   )}
                 </div>
                 <div className="relative">
@@ -408,7 +443,7 @@ export default function Login() {
                     type={showPassword ? 'text' : 'password'}
                     required
                     autoComplete={isRegister ? 'new-password' : 'current-password'}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg py-4 pl-12 pr-12 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-slate-500 font-hanken text-base"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg py-4 pl-12 pr-12 text-slate-800 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600/50 transition-all placeholder:text-slate-400 font-hanken text-base shadow-sm"
                     placeholder={isRegister ? 'At least 8 characters' : '••••••••'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -416,7 +451,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors"
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
@@ -436,7 +471,7 @@ export default function Login() {
                         type={showConfirmPassword ? 'text' : 'password'}
                         required
                         autoComplete="new-password"
-                        className="w-full bg-white/5 border border-white/10 rounded-lg py-4 pl-12 pr-12 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-slate-500 font-hanken text-base"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg py-4 pl-12 pr-12 text-slate-800 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600/50 transition-all placeholder:text-slate-400 font-hanken text-base shadow-sm"
                         placeholder="Confirm password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
@@ -444,61 +479,10 @@ export default function Login() {
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors"
                       >
                         {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
-                    </div>
-                  </div>
-
-                  {/* Nickname Field */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="nickname">Nickname</label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
-                      <input
-                        id="nickname"
-                        type="text"
-                        required
-                        className={INPUT_CLASS}
-                        placeholder="Your nickname"
-                        value={nickname}
-                        onChange={(e) => setNickname(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Country Field */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="country">Country</label>
-                    <div className="relative">
-                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
-                      <input
-                        id="country"
-                        type="text"
-                        required
-                        className={INPUT_CLASS}
-                        placeholder="Your country"
-                        value={country}
-                        onChange={(e) => setCountry(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Contact Phone Field */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="phone">Contact Phone</label>
-                    <div className="relative">
-                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
-                      <input
-                        id="phone"
-                        type="tel"
-                        required
-                        className={INPUT_CLASS}
-                        placeholder="Contact phone"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                      />
                     </div>
                   </div>
                 </>
@@ -515,7 +499,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-8 py-4 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white font-manrope font-bold text-lg shadow-lg shadow-purple-900/30 hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 transition-all duration-300 flex items-center justify-center gap-2 group"
+                className="w-full mt-8 py-4 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-manrope font-bold text-lg shadow-lg shadow-indigo-100 hover:shadow-indigo-200/80 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 transition-all duration-300 flex items-center justify-center gap-2 group"
               >
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -530,7 +514,7 @@ export default function Login() {
 
             <div className="mt-8 text-center">
               <p className="font-jetbrains text-[10px] text-slate-400 uppercase tracking-wider">
-                Secure access via <span className="text-white">SSO</span> is enabled.
+                Secure access via <span className="text-slate-700">SSO</span> is enabled.
               </p>
             </div>
           </div>

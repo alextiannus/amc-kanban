@@ -3,6 +3,7 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
+import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/compliance'
 
 const DRAFT_SELECT = {
   id: true,
@@ -89,6 +90,18 @@ export async function POST(request: Request, { params }: Params) {
   const body = await request.json().catch(() => ({}))
   const caption = typeof body.caption === 'string' ? body.caption.trim() : ''
   if (!caption) return NextResponse.json({ error: 'caption is required' }, { status: 400 })
+
+  // Run compliance checks on caption before creating draft
+  const complianceConfig = await parseBrandComplianceConfig(brandId)
+  if (complianceConfig) {
+    const validation = validateContentCompliance(caption, complianceConfig)
+    if (!validation.isValid) {
+      return NextResponse.json(
+        { error: `内容包含品牌违禁词: ${validation.matchedProhibitedWords.join(', ')}，请调整后重新提交。` },
+        { status: 400 }
+      )
+    }
+  }
 
   const accountId = typeof body.accountId === 'string' && body.accountId ? body.accountId : ''
   if (!accountId) return NextResponse.json({ error: 'accountId is required' }, { status: 400 })

@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BrandKnowledgeComplianceSchema",
+  "type": "object",
+  "properties": {
+    "prohibitedWords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of case-insensitive words or phrases that must not appear in any social media post caption."
+    },
+    "requiredKeywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of words or phrases that should ideally be highlighted or mentioned in post drafts."
+    },
+    "tone": {
+      "type": "string",
+      "description": "Short description of the desired brand voice tone (e.g., professional, enthusiastic, warm)."
+    }
+  },
+  "additionalProperties": true
+}

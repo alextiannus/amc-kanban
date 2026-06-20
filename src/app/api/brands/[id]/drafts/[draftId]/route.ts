@@ -3,6 +3,7 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
+import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/compliance'
 
 const DRAFT_SELECT = {
   id: true,
@@ -77,6 +78,18 @@ export async function PATCH(request: Request, { params }: Params) {
     const trimmedCaption = typeof body.caption === 'string' ? body.caption.trim() : ''
     if (!trimmedCaption) {
       return NextResponse.json({ error: 'caption cannot be empty' }, { status: 400 })
+    }
+
+    // Run compliance checks on new caption before updating draft
+    const complianceConfig = await parseBrandComplianceConfig(brandId)
+    if (complianceConfig) {
+      const validation = validateContentCompliance(trimmedCaption, complianceConfig)
+      if (!validation.isValid) {
+        return NextResponse.json(
+          { error: `内容包含品牌违禁词: ${validation.matchedProhibitedWords.join(', ')}，请调整后重新提交。` },
+          { status: 400 }
+        )
+      }
     }
   }
 

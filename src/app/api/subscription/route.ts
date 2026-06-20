@@ -283,7 +283,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       brand: null,
-      plans: SUBSCRIPTION_PLANS,
+      plans: SUBSCRIPTION_PLANS.filter((p) => p.visible !== false),
       comparisonRows: PLAN_COMPARISON_ROWS,
       addons: SUBSCRIPTION_ADDONS,
       durations: ALLOWED_DURATIONS,
@@ -376,7 +376,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     brand: { id: brand.id, name: brand.name },
-    plans: SUBSCRIPTION_PLANS,
+    plans: SUBSCRIPTION_PLANS.filter((p) => p.visible !== false),
     comparisonRows: PLAN_COMPARISON_ROWS,
     addons: SUBSCRIPTION_ADDONS,
     durations: ALLOWED_DURATIONS,
