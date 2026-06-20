@@ -1,6 +1,27 @@
 import type { Metadata } from "next";
-// import { Geist, Geist_Mono } from "next/font/google";
+import { Hanken_Grotesk, Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+
+const hankenGrotesk = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "600"],
+  variable: "--font-hanken-next",
+  display: "swap",
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-manrope-next",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["500"],
+  variable: "--font-jetbrains-next",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "AI Marketing Crew",
@@ -24,7 +45,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className="h-full antialiased"
+      className={`h-full antialiased ${hankenGrotesk.variable} ${manrope.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col font-sans" suppressHydrationWarning>
@@ -35,3 +56,4 @@ export default function RootLayout({
     </html>
   );
 }
+

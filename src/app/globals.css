@@ -2,6 +2,7 @@
 @plugin "@tailwindcss/typography";
 @custom-variant dark (&:is(.dark *));
 
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -14,6 +15,9 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-hanken: var(--font-hanken-next), "Hanken Grotesk", sans-serif;
+  --font-manrope: var(--font-manrope-next), "Manrope", sans-serif;
+  --font-jetbrains: var(--font-jetbrains-next), "JetBrains Mono", monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -101,6 +105,82 @@ body {
   background: linear-gradient(-45deg, rgba(15, 23, 42, 0.2), rgba(70, 72, 212, 0.1), rgba(15, 23, 42, 0.2));
   background-size: 400% 400%;
   animation: subtleAtmosphere 15s ease infinite;
+}
+
+/* Obsidian Theme login backdrop and custom card styles */
+.obsidian-card {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@keyframes auroraMove {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(5%, -5%) scale(1.15);
+  }
+}
+
+.aurora-glow-1 {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  top: -15%;
+  left: -15%;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.18) 0%, rgba(79, 70, 229, 0) 70%);
+  filter: blur(80px);
+  animation: auroraMove 20s infinite alternate ease-in-out;
+  pointer-events: none;
+}
+
+.aurora-glow-2 {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  bottom: -15%;
+  right: -15%;
+  background: radial-gradient(circle, rgba(147, 51, 234, 0.18) 0%, rgba(147, 51, 234, 0) 70%);
+  filter: blur(80px);
+  animation: auroraMove 25s infinite alternate-reverse ease-in-out;
+  pointer-events: none;
+}
+
+/* Autopilot Console specific animations */
+@keyframes terminalLineFade {
+  from { opacity: 0; transform: translateX(-4px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-terminal-line {
+  animation: terminalLineFade 0.3s ease-out forwards;
+}
+
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-card-slide-in {
+  animation: cardSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom scrollbar for terminal log */
+.terminal-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.terminal-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 99px;
+}
+.terminal-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+}
+.terminal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 

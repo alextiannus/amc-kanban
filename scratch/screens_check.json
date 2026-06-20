@@ -1,0 +1,416 @@
+{
+  "screens": [
+    {
+      "name": "projects/8413246193928657119/screens/13c42b7e63a542b7a90b88edacff4d4e",
+      "title": "Marketing Media Lab - Asset Management (No Chatbot)",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/233f9d86aac34c18bebded93142968be",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLv3qvo1FAP2ONY-9Mb3NCluJFJNEGc8MqiFa0enEn3nwzILTBtWV3Pq9nCiKmv1zzVE5biYHndvDpukXTNUhFc6l5X2jfpcbJ38sr5ThfG2wm1wrOpFjh_lSDaKffnmhDf2V67uG-mwrtX7i8wSi2PhvHf9O4-xDJjv3QrNj6GjB12T0IjlZupSyX6bBkAvtLtS05N9M092ZIdmvOLm4DgooAiWd6ITn1g6jynXuyPu_F0nORHbm_7Cww"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/985cdf0eed954f5e840b71a1518e7334",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sX2YxMDMyOWViNjZiZjQ1Njg5MWYxMDUyNjMxNThkOGQ5EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/1f0dec86da9f41f09e7b102f0383a5af",
+      "title": "Marketing Media Lab - Single Asset Insight (Mobile)",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/5697697926579451582",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLsrqS3prYHcEDbbS7CkCTJhmOOzMDtT-m_Uw4csSq2MAo3CU-LTfvzYmLBwjF3txWt-gqfaWTKn6B1qzikdN2LpwQ3oOva0KjyvA2HEVvkflOSu6lWvYK93qTyardRbgotePqx-T4w2Z0wjPP1SxWyApSNSynGUaCeyRlXZwqQNTUtfvOa007zGlQX43AiofNluoYzHjbBeNBQaDRa-XzNNaPLIxk9nIsPy7_b7iLxmvONd6a28Hk_OQEA"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/18420839481584746030",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2U0ZWM5MGYyMGUwMWE2MzE3YzUwMDFlMDQzEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "780",
+      "height": "1768",
+      "deviceType": "MOBILE"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/d273c6406b6948f9bc11bf542c633bb7",
+      "title": "ACM 学习中心 - Dark Mode Dashboard",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/93a80f749f684369a8a3aea9144766f0",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLuqCunjwRNVj3AWyVRufSrRbd3nGAzkDaeCCxSxz5D2ePPw5YZkSfQkt0e53VHcDr-tRWZRl_fUk7yHd7Hm0rHAxmmLDj4fdCF_Cu-sbFD2akjcHvGHh_fE-kH37zd6TKVEJFe70aG0c2iSHU-eEF8sDvro6EfOS93RohsP6yc-f8-W7hH55ksvHAqq1l-5otqUlTXgSPJQSwBRDsI3yVjBU3gfh-JZQT-xhtDiN0KgUVALipYuyODGrA"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/4ed44162b4ca4b6891cfcac34fd3725f",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzE2NjAxNjNiYzNjOTRkODQ5MjBkNzUwZjFjZjcxYTFjEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/9ea5e185de3d4a3bb94b37d237ef7082",
+      "title": "Marketing Media Lab - Batch Operations (Mobile)",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/18132765428087194879",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLvOhZ-JX_CfIh4rQAxhPr7bSk4pCLjFGKw5ETkZkr6IHkW9XbptL06rytiqzmvyYiNSg-zhBlnUKDVfLi-1l1eQ11eJeM6ZX0CGRF8HOCza3XT7bKc1YvmPYrE7hrDRKmh6CJeDJx48Vze6jWSfeBX_ZlDQHeyAFRdzpvr8Offjn4aUmZM1_Y6P-TGaibYvGfS0gLAFz8JI_j-ky7HxZzh_ktvbGjY4Z1InmnV9zC23-CfvoTSK_SNWew"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/3419669520204564900",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2U0ZWNhNWYyMjcwMzM4NWM5MWZiMWJiNTk2EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "780",
+      "height": "1768",
+      "deviceType": "MOBILE"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/fd580c1d38374a2182f425c8324abe9f",
+      "title": "AMC Principal Console - Dashboard",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/2ed4e6550782442487ced19acbc10690",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLtAiHVceAWcyvNoldiTdFdhgek0E4hhz470JHheM9H-0_QUxQ9_-WzxB_l2xQl0ZGcqSsSgP2jQAl8SNnjIiDvxaUBPRNatcGDWbjthL4j5uLOEe9Et42ERQfnNNsU2suqPBLTMTtc-jIRicqNE_WEhg9aLEGYkvVHbmIUopoZo390VKWBHqXbjW3IOtz39nEYM9KWozGS80Ii3M6WSxPnSTrOjjwlJzTEorRZ-T0qUZSFd2cn7xVEUgJg"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/88157c508f0044819930a0582d584473",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sX2U3MDE4YjM5MTc3NzQ0MzY5YTYzYTYxZTdkZGY5Nzk0EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "3080",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/798040d3157b48bf841d85823f6fb2c6",
+      "title": "Marketing Media Lab - Image-to-Video Insight",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/17273795836969641927",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLuVQEJrrbsByqqokr5LClMaeDAPLjE56B4zeDD31QEYz0DlPzs9KghnS53DXE6FSIRqIh1u5L2lBOjl9NoysxeSX4xLUgUP4-aWgaOYxzNhGYclrJH9BuhAICRcd_BKoZMJXYRuIiPArPVzQ1-Nrb4qap3nVGSbq-_LYaOuihbVdOkGs_O2rYvj19qruNnD06OkaI0aP8q3dK0Woqomx7DRcH4OsX509wYXxwmtTVtfnmyicjNIf-bGft8"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/17477021710872942143",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2U1MGJlNDk5YmEwOTI1ZDQ5YzJiMTg1Zjg4EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/09ef3d411260498894f10c0f1fe4d5b7",
+      "title": "AMC Subscription - Final Multi-store Update (S16)",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/a392d0fd7360498082b3ab35ce30d733",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLv7JEvAontiy-6HIMcZI9gn8v2Ra1yLN4kWDfRAImz34SpkxWF7Gvoct-n8uNo7dmda-h1AgDNIq26po4Qu_SnY8WSvWgRtiIhRP_Dh_6ylbcWCpfzYE9M8Fwj8SUCQgCndp8wPA5wyivOQyibd8o1iekgE4YEYfB9QFrqp-x-qwm46aXyvGbF_ZyvdvGGbdZg-oocM0PQqn_8o0jI8ksygAXNoEV2QKQe47_oj38fUXGkbgMad2GIErMo"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/02ca982ada89496e9d0e8f1918fe3647",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sX2I4OWM2YTU1N2Y3MTQwYjhiMTljMTIwNTMyNTMwOWZlEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "6662",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/bb9523ab1dcf48f78c95611a839d8c50",
+      "title": "AMC Subscription - Premium Hero Animation",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/11978654614402614624",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLtCgDW2z5vr7UOkvaKrEsjTnSH0hBBiFQEW2zJWBuo0DRh1i0nmZ35efW1--z3qutNZc0dWEnUF7hl5xSiifidzw4PizNQF-M7IqB5t4lVLm5GnS5q_qFXaQennYGZjqG0VUXpajnueWXaDeAOqY9ca-cYgYCseXVIC8VNJh4Ietitx_t0KOPSqsfB18D_Gz9X0xVb6PPIX_Ses7i-9U1AbYG-z_qW2HQSzi_xPOpdSHKKIexCeRY_SBZk"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/18086380787528974905",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2U5N2JiMGNjZmYwN2M0ZDcyMWVlMjMxZTlmEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "7110",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/765e0b45a83544bbabd051fee8dc9448",
+      "title": "Marketing Media Lab - Categorized Asset Manager",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/18197355064588508358",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLsvt8J5WTYP9SVRCFOU0yMJ8o9VG6lsaMV498RWP1AT2CodNxWoujdGo3Q2zxu6g5DiNXZDgR1-H7wP53Zd1lw71j5zRo2TR5NQGHR29CO20msZpm_m6sGKUGttj0I8Fygbj2l3oGSUC728KawZMZq3xjV6ALs79hRsJQ73urb-FVnBFY9ER0DBW7JupcQFDbSOpNyWRsdldZlVrGwjIVO4NSj_U4Ia9Bsw2CXkcgezuDkox2JYOHkzAIE"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/11539637556625471613",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2UwODYxOTEwYzEwMmE5YTY3ZmEwM2E4ODg1EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/a8965ff91cd940e08da32c8d895ad358",
+      "title": "AMC Kanban - Premium Glassmorphic Login",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/ebe6989397184d268ea50617958db41b",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLvCZQA68WRwUiKAJcOHQMc6Pu429ufrAfVwArq-dr8jx-xvpWHFthV7LNZVdALcv3x6L35YqRZiGXO-SARmLm5Uie7tFciPbEiJvzTdcnFuo378jjQEoQF0cM_ZDq7I90_26oIacApBOP9k3YUn4_csDJETA7fEJWSMayAWHJ0NSWp_XlKy__qpbNfE2X6zxi56NM3V4gpvLsI7h1v-mRwxqXX-GHTmZAk0gRJ5LPHhW7SupXFwpE7-IA"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/da0dc6ab374d4cc9ad82944d81112e05",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzJiMTQ3Mzc1MWYyYjQ0ZTA5MmI1M2MyMmUzZTljZjNmEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/ae65d2064b334dcbb873639213868335",
+      "title": "AMC Subscription - Updated Add-ons & Receipt",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/93603949dc794c96a5f1371146738282",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLstbP8m-H4kGq1-WQY7A8HrUuB4gA066mQw4KmJEC7FQeyq8FpWXWC-IxhwfU8iZJlaktlxBVA764nxIgYPd_CQWb8RGeb-D2W33PKyzIpu0EZerCkqTq_mDx2qqNNgtapHlYqdehyv9OE2-7NKf2xupOtPeN4P8xCOqDRMfZebjZP2Do_fnNSg8Gi5eQAwckmzBrx9TsliSBQdAeG7o97R0LbbQsLNB2JuDZcJJSBxiJRCJnp2rvHxwQ"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/bb32d4c0974c4984a0048a40078ca0db",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sX2JmYTAxMjFiNTUwNjQ2MDc4ZmI5M2MwN2ViOGY1ZTUxEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "7710",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/af52d8fd0a004c4e928405a750175d6f",
+      "title": "AMC Subscription - Updated Multi-store Add-on (S16)",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/08f56390a68d4d4bbbeeb5456afa65c6",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLutD6m65BTu4Ku4Cwfjh7EPqXRnb3KVUAaid8vyVMJmGpitLyHU2tbmL_AnZDuBFzukPuLI-R422Ep8mhFA4KCzLUc0vr68Af7i-VPSz82wWilfRoqRUXhjOFzyV1CbZ7qOkyhTwg1YRbz0fA9HyblJFk97InLPVJvPJR1wFh5R4tz2tVDh9ofvuc30H-g-_-AAbBsJgPs3CPDlDeqHE_enZOsTbNpALifvF4R8jply4BG4C46kjSIDjZ4"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/ba630922f14243d3a64243c88009c1f0",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sX2Q3ZWExMTMwMDhiMDRmZGU4YTY1MjMxZjNhY2M1MGEyEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "6624",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/196dd463aab742b39113074382c962f4",
+      "title": "AMC Subscription - Updated Multi-store Add-on (S2)",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/11240241c17f4105b4fede0cd7c591c7",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLtNNSaQ2y_ZsCommRRUxVhfttoRg0EAycl6kMWqEYLU_4pmnVSJk5l294U80huY9-J0amsP5NYkGeox36t4CJ2B1Z8gAxGcUjCaJ6EFa4GoqqpoSOMoLIABQp9qVOtWYepxLVbAAc1KTtMH2W88oFLkMNx0dlupNKlv_wyqPAl0RLdjRAkypC2kfGBrnyogtBYT7au78qLUOA0x9j34jvd5PAjRgFAKOwJ1sLxNQiM1Kq0WA2ufGS6K5UI"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/849b5f0303f6440b94313f480dc9518d",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzhjNDRhYWYyZDVlYjQwM2Q5ZmM3M2NlNDY4Yjc2YjExEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "5534",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/15303672872950066811",
+      "title": "DESIGN.md",
+      "screenshot": {},
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/15303672872950063690",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBKNARIhYXBwX2NvbXBhbmlvbl91c2VyX3VwbG9hZGVkX2ZpbGVzGmgKM3VzZXJfdXBsb2FkZWRfaHRtbF8wMDA2NTNkZmNhMzAyNDQyMDcwOTIxOTI2ODExMTAxYhILEgcQ2_f_rNgJGAGSASMKCnByb2plY3RfaWQSFUITODQxMzI0NjE5MzkyODY1NzExOQ&filename=&opi=96797242",
+        "mimeType": "text/markdown"
+      },
+      "width": "780",
+      "height": "1768"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/eaa90527cfd34514a995626b56b59183",
+      "title": "AMC Digital Employee Console - Dashboard (No Chatbot)",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/c3b7ddb63d31413d97fe166fa5615ce8",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLsPXgyI8WpLbIqHCFPAxjsWueregoM8WMNgzaSxH7GBIYbMdvse6LJKtuAuPa5YxGQsOlyImf7ZCdy_j6QsZC5sg1QVKvYGlSDuoCNwnVPEi2uXJPMK5vO2_rdr3upXyw5K4vXrc1Ue35l6BPpxB_534p6jTWBKgT7X5FIzw9IXM5dpEUKKJaXxcw9UHr5k_OUoDM8wLaQd5Oe4qDSeH_P9Uo4yjXgOfTVfnIo9tNadVwHINBcvMcYKwRU"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/f5eae038a4da4426a85299bb2b09fb46",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzg5MGU0Y2Y4ZDM4YzQ0NDc4NWI4ZTM1NzI2ZGFkNzNlEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "3856",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/f6ce4f18f42e46ce87c2267fb21fc60f",
+      "title": "Marketing Media Lab - Mobile Grid",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/1255239721285084297",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLtFtN2syNi8hdPUCoieSYg7BlnlXmzZmkbjYJovnqGZkD0XrcXyP2wM3mlYczJr-BpZrSXiDJdTaB8Cuv49mE5aOvvY3gXMslEVZVOhuMmD7TSPssbD8SsAAtTXyCHQrnasB5PKjZxfMKm1o3jNSiD95hv-cC_TLekQDWyassDqUlg8RiPLXVeiwSVcQqY9AzT2pmA1pADV6W9X7VWYKBaI_SO8ZboZwSnzL7W8I7OYMCY8cuSFhPZfPTs"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/4420812040091694225",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2U0ZWM5YmE4MTYwMzM4NWJkMzVhMGI5NThjEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "780",
+      "height": "1968",
+      "deviceType": "MOBILE"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/d37d9af100c5415ba0047d0161e2df6b",
+      "title": "AMC Onboarding - Brand & Store Configuration",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/15943200051838710507",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLsSkq09EvEDfvM9QGjFONtKRpbZ8niVsEFaO_Cpn55TTt7gSkUqMRc4Y_zUj7OqtYEszMevxaLkdWLuyTR9tXvu0npz0YTTVvRXVHqw1lP5ITxRW3hpS2tNr5Gx-fTYUNDYQwnQJdVhSzlCSmYaeR1MPDLrlYZLoP0A7MvgDv12d5rnq2JwZ5-POFudG6faFEIA7Jl7ufX2INtl3cj_Z8fFopw0gDmZDrTmkJqWHhQFnv5eI31LI4ACjNg"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/9061487561631399443",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2U4Nzk2ZjI0OTAwYTdjMDdkMmZjMzcxN2M0EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2366",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/df07ead127ca469bb28547a6088e5620",
+      "title": "Marketing Media Lab - Batch Image-to-Video Operation",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/12775645039386490937",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLvHFu69q2TViSN6HW1-mobLm8dqUj-2kepa80nmexE_eivdIfB8v7kIrf6Z3D0k2mS0RND-PnSOzlFmNl2KFv1rz95H9QhVqtQW7HpV9pkyBGlOAHqnRbG-EA6ysl6otkgHe-UNOPVD_8SXRHXleNHWITm3X3aTG7BFhM82hqIVoRr_zzZqdiO1-TgzYyYVSbEilN6cykjds8DYdGGAPjlMx7mE_hTVwpDDBFORdOEXKpn-bba4258cBAs"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/6429855371088093772",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2U0ZWNiMjA3MjEwN2M0ZGEwYzhiMWI3YTZlEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/2d424663208f4557b5423c8d7acdddfa",
+      "title": "AMC Subscription - Updated Multi-store Add-on (S14)",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/5f502b5eeea44435bc992acb1b7189c7",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLvUzusgztlDva9IOXj7ZB207-RFrlIbuvCvvIP-cXPBrXAB2DYvI2ieszIc9y6ewivKYBrTpYKvE7lycmwF1Lj9u3j1znuVXLVW3vnoyq3GUPPi4DSUnoHtYS9ANFBsLtr7oTysw6AAnfsOw48UzQHIw7-vpzRG5QkbK253Tu34cuzVDCtJa_2dct80G0-I2_RT11am5PfBlNlhB9ryIreh9x4VldqVoBnzQ1-NNhxLkhYoywthbphBgQ"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/b0160a8386fb4676be20d4578aeb8f32",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sX2I5OWFjOTc5OThjYzQ3NDU5N2QyY2NiZDgzYjczMzY1EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "5494",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/16ef63a5968e40d6826113c2e7ce40af",
+      "title": "Digital Employee Console - Replicated UI",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/11237612136676930931",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLsBS0dfgu67gTRiSIA2DrF7slzDo3tSI9mbrxQSk4AAQkr-5PmVKoGEbwCma-zQlolQ3z6dfUqOA_0p_Aki7oD9nZ6BJAzzFskSRyAezD3TmobRR7IqsplI-Bs0B-Vsu8MzPCsB9csgYkMpJ5WR_QemQ7jgMHjB3RKysyHJG3lCljpup6lU_kl2_bA14_NRvOS1jLpy0xu-N0JbAx3OJVcteOkOgTZ20zPloHLJvXXB5EEaux_xCD7UVQ"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/12359804830975203587",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2U0ZWNjNDQxY2EwYTdjMDdkMmZjMzcxN2M0EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "3752",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/b9e37a4f32634700bae62002e30ee864",
+      "title": "AMC Subscription - Updated Multi-store Add-on (S11)",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/ba323563808b454fa5a3cf6161a79f28",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLu7N30JoCMB_PJfDFZ-WXQKYo9CwnOCTPR1E5a6nz1TQSqE2OKfgbZ3EkEO7BfeiWmiVttOM4HuLJUuFFJLmkYYTC5Hot1t3j9zEOYfMOSitOBIxHctrOBQEAiUHWD-qvzhP2xdy8sLFgjpMYlYsXITK3_Mq1HN34jqrHNhPeOjeE9F0_CGSq_3RUL1Vp0cMpXgjjlQWWcrB2Ld6ML41mq8goNbc3qPnvjKfI2Yc3ZDTLJ80d1cMIagNA"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/9ce664d3bbdb49538c775821df5b07b2",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sX2RhZmVjYTFiMjBkMDRhMTk4ZWEzN2U2MTU2MGU1ZDc4EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "7630",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/7418491a90c648d39f757967e177908e",
+      "title": "ACM Learning Center - Dashboard",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/5f3586362e98490ab7179a9cf4bb38d0",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLvNwdrL6H0CQiU2pFfge9H16YWEFvpeK8n7_TNPvcq91G4f7Hdr5fUFh0VSNQQtnG29n2xYJ_ycgFEiaUe3lQTLepPsZxlE_BAhVRE4BdpRhSvUO0prp-EtVg-S4EGKCtsclcgDHLUe6iNYqM2uSaDZSC8jr7Ap5DlX-7wD0N-l9h0XsglDjU9Df5i-BydXPBDjzmSYeJiKWE296rP033JZc8bzqMhgREjOZpMUGbqayblQ0NzaDiztRbs"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/3ed6aec7553e4c0ab4c6c19fa92bed8c",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAxOGNkY2U0MjQ2YzQyNmY4ZGI5MjBjNzFlMTMzOTRmEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/2836e690f8ec4cdab0939eca32fb0ec2",
+      "title": "Marketing Media Lab - Batch Action Management (No Chatbot)",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/fc7bbd59f2a746ab86573a1bcc806a1a",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLvenddq7mGWkt-wFmcXBYH3oUdiCI5YcUbUFZwE7WzwDjXRu6egUtt08rkYCy6pOqOrV39GV4gKHQJOvamTDzwZRamMiKEHpzLmarZRo0revjRHBcJzTOHGiCSOm6BDr8R-j9tJTB96RzfDEFkKvVoGFsxkb0qu2zJwnS6xPsVPFwYhDJb6LoEQjHhNx7G6U76w8brhueMoJpLGD7xqsCqr0kMI9LzwoNxPx0SVheNkJL8CDFT5uy249jw"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/750f6e5c9ed94b038ef094c56b70ad8d",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzNlZTBmZTVmMTQ3NjQ3NmY5OTg4NjIyZjQzYzg1MWEzEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/e26b2b447b104caa8d0411dc7925b8eb",
+      "title": "Marketing Media Lab - Asset Management",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/13915337651357656277",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLtY93Tb_qzOG2C72qCLDzOFiUx2FRZkrgOhJGnAeZSN1J8rNeVAckkPXgPktKHheeyAvU1XalaYhWQq6wHaxw0D3dn7Memm863Uef2KI68_sAzPkReZfDfbGF7nS91Tg61T-aDd1j2mmPZM-pUdIdf6t_JpmUQl6WjVDAKIQL_fei59VQqf6zlnlvX1IRNJGtTy2K-ttfWbiFppR98mX_ld-8Z2q8PwvFMjvqd4BKVNVGJQFORuFWw8UTE"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/15745954290449852111",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2UwODYwY2U0YzIwMzM4NDdhYTQyM2E0ZTNiEgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/d2b1ee360a44498dba13245c1dec7d44",
+      "title": "AMC Dashboard - Premium Login",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/ee1ad82fb48c4b6582a0497c78b89b81",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLuiGw784TpMZ5qqWipj2cBVWY1m54I2WobexevcsdWzXCLtCEGl2apXjt0YpS6rCJXoGdkGF1fTv_2CDaWI76bsoNEpBRrkrTm8REDSY_8paAUeVJJnUG_qz7e58qFINm6fqOkhvsCe2R1qYtJNGT_c0yOMOs14RZeMBPiBwBYD9TbZsRdoGD1p99t83R9MUqk4V-sZuDdXsGlMNtqyiP_BUV1lFmUERVBIUafLYU2l783-jJXLj4HHuA"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/41f4da6fe3744aabbe59e9a98c36047c",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzBhMzNmYTJmZmRmMjRkNGZiZmU5MWFmY2RiOTQ0NDA2EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=96797242",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    },
+    {
+      "name": "projects/8413246193928657119/screens/f4df550febad424f88e36e4bebf2f234",
+      "title": "Marketing Media Lab - Batch Action Management",
+      "screenshot": {
+        "name": "projects/8413246193928657119/files/13825556726501861628",
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLsUSIezbY7_h_zgTPqOJHYtxgUbo5VajCyLhAFai4uBNbLfuu0EVxRyG6w2c2g1SJzm_GhRty7FVfzlKW0UIog9FFA1bHZv2jJtp4j6tP8WSH1n-8vYPoholCLnro0Ttdg-FWpF9NrezxDl8EWFnhTsLea8iQS97eBtx6X3H1rV_tQSdFgy-9qP-8R5HAK1TbAMfczro5R1Fgb-fqbfK9Egl3caMOWLBFHOqbuKg2jqbHd3XsBs9Ktm4g"
+      },
+      "htmlCode": {
+        "name": "projects/8413246193928657119/files/9403393712227435443",
+        "downloadUrl": "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJ7Eh1hcHBfY29tcGFuaW9uX2dlbmVyYXRlZF9maWxlcxpaCiVodG1sXzAwMDY1M2UwYWY5ZGNhMmYwMDMwM2U5MGE1Mjk0NzU2EgsSBxDb9_-s2AkYAZIBIwoKcHJvamVjdF9pZBIVQhM4NDEzMjQ2MTkzOTI4NjU3MTE5&filename=&opi=89354086",
+        "mimeType": "text/html"
+      },
+      "width": "2560",
+      "height": "2048",
+      "deviceType": "DESKTOP"
+    }
+  ]
+}
