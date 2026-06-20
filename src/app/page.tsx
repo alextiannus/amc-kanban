@@ -2,7 +2,37 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mail, Lock, Eye, EyeOff, User, Globe, Phone, ArrowRight, Loader2, Sparkles, MessageSquare, Instagram, MapPin, Facebook } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, Globe, Phone, ArrowRight, Loader2, Sparkles, MessageSquare, MapPin } from 'lucide-react'
+
+const InstagramIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+  </svg>
+)
+
+const FacebookIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+  </svg>
+)
 
 const LABEL_CLASS = 'block font-jetbrains text-xs text-slate-400 mb-2 ml-1'
 const INPUT_CLASS = 'w-full bg-white/5 border border-white/10 rounded-lg py-4 pl-12 pr-4 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all placeholder:text-slate-500 font-hanken text-base'
@@ -207,11 +237,11 @@ export default function Login() {
   const renderPlatformIcon = (platform: string) => {
     switch (platform) {
       case 'Instagram':
-        return <Instagram className="h-4 w-4 text-pink-400" />
+        return <InstagramIcon className="h-4 w-4 text-pink-400" />
       case 'Google Maps':
         return <MapPin className="h-4 w-4 text-blue-400" />
       case 'Facebook':
-        return <Facebook className="h-4 w-4 text-blue-600" />
+        return <FacebookIcon className="h-4 w-4 text-blue-600" />
       default:
         return <MessageSquare className="h-4 w-4 text-red-500" />
     }
