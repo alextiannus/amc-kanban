@@ -111,7 +111,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       const res = await fetch(`/api/brands/${brandId}/folders`)
       if (res.ok) {
         const data = await res.json()
-        const folderNames = data.folders.map((f: any) => f.name)
+        const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
         setFolders(['素材库', ...folderNames])
       }
     } catch (err) {
@@ -142,8 +142,8 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       }
       await loadFolders()
       setSelectedFolder(folderName)
-    } catch (err: any) {
-      alert(err.message || '创建文件夹失败')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : '创建文件夹失败')
     }
   }
 
@@ -170,8 +170,8 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         setSelectedFolder('素材库')
       }
       await loadAssets()
-    } catch (err: any) {
-      alert(err.message || '删除文件夹失败')
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : '删除文件夹失败')
     }
   }
 
@@ -413,37 +413,67 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           if (!res.ok) throw new Error(json.error || '素材上传失败')
         } else {
           // 2. Perform direct binary upload to Huawei OBS pre-signed PUT URL
-          const uploadHeaders: Record<string, string> = {
-            'Content-Type': mimeType,
-          }
-          
-          const uploadRes = await fetch(presignData.uploadUrl, {
-            method: 'PUT',
-            headers: uploadHeaders,
-            body: file, // Directly send the raw binary File/Blob
-          })
+          try {
+            const uploadHeaders: Record<string, string> = {
+              'Content-Type': mimeType,
+            }
+            
+            const uploadRes = await fetch(presignData.uploadUrl, {
+              method: 'PUT',
+              headers: uploadHeaders,
+              body: file, // Directly send the raw binary File/Blob
+            })
 
-          if (!uploadRes.ok) {
-            throw new Error(`直接上传到存储服务失败 (HTTP ${uploadRes.status})`)
-          }
+            if (!uploadRes.ok) {
+              throw new Error(`直接上传到存储服务失败 (HTTP ${uploadRes.status})`)
+            }
 
-          // 3. Confirm the upload with the backend to write the record in database
-          const confirmRes = await fetch(`/api/brands/${brandId}/assets/confirm-upload`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: file.name,
-              mimeType,
-              sizeBytes: file.size,
-              url: presignData.assetUrl,
-              key: presignData.key,
-              folder: targetFolder,
-              aiTags: [targetFolder, '待确认'],
-            }),
-          })
-          const confirmData = await confirmRes.json().catch(() => ({}))
-          if (!confirmRes.ok) {
-            throw new Error(confirmData.error || '确认素材入库失败')
+            // 3. Confirm the upload with the backend to write the record in database
+            const confirmRes = await fetch(`/api/brands/${brandId}/assets/confirm-upload`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                filename: file.name,
+                mimeType,
+                sizeBytes: file.size,
+                url: presignData.assetUrl,
+                key: presignData.key,
+                folder: targetFolder,
+                aiTags: [targetFolder, '待确认'],
+              }),
+            })
+            const confirmData = await confirmRes.json().catch(() => ({}))
+            if (!confirmRes.ok) {
+              throw new Error(confirmData.error || '确认素材入库失败')
+            }
+          } catch (directUploadError) {
+            console.warn('Direct upload failed, falling back to server-side upload:', directUploadError)
+            
+            // Fallback to backend upload route
+            const fileBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => {
+                const value = String(reader.result || '')
+                resolve(value.includes(',') ? value.split(',').pop() || '' : value)
+              }
+              reader.onerror = () => reject(new Error('读取文件失败'))
+              reader.readAsDataURL(file)
+            })
+
+            const res = await fetch(`/api/brands/${brandId}/assets/upload`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                filename: file.name,
+                mimeType,
+                fileBase64,
+                folder: targetFolder,
+                aiCategory: targetFolder === '素材库' ? 'raw' : targetFolder,
+                aiTags: [targetFolder, '待确认'],
+              }),
+            })
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(json.error || '素材备用上传失败')
           }
         }
       }
