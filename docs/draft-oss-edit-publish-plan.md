@@ -281,3 +281,34 @@
 ---
 
 此方案是“基于你当前仓库能力的增量设计”，目标是在不推翻现有模型与发布链路的前提下，最短路径完成草稿编辑与 OSS 发布闭环。
+
+## 15. 增量迭代与优化记录 (2026-06-23)
+
+为了防止生成空草稿、提升内容质量、改善媒体排序体验，系统进行了以下增强：
+
+### 15.1 空草稿预防机制 (Failure Prevention)
+- **发布渠道不确定校验**：在 `CoordinatorNode` 中，如果任务标题、描述或标签中未匹配到明确的发布渠道关键字 (`instagram`, `facebook`, `google_business`, `red` / `xiaohongshu`, `tiktok`)，工作流将直接挂起，将任务状态设为 `pending` 并返回 `requiredInput` 提示用户指定渠道，避免生成空的/不确定平台的 Post Draft。
+- **素材不全校验**：在 `AssetCuratorNode` 中，如果品牌素材库没有任何媒体资产，工作流将直接挂起，状态设为 `pending` 并返回 `requiredInput` 引导用户上传素材。
+- **工作流链路阻断**：`CopywriterNode`、`DesignerNode`、`ComplianceNode`、`PublisherNode` 等后续节点在执行前会校验状态，若状态为 `pending` 则自动跳过，实现彻底的空草稿预防。
+
+### 15.2 拖拽媒体排序体验 (Drag-and-Drop Reordering)
+- **统一媒体状态管理**：前端将数据库资产 (`assetRefs`) 与外部媒体外链 (`mediaUrls`) 统一为 `attachedMedia` 列表状态。
+- **HTML5 Drag-and-Drop**：前端预览网格支持实时拖拽交互，拖拽时即时更新 `attachedMedia` 的位置和排序。
+- **后端按序持久化**：在 `PATCH` 和 `POST` 草稿 API 中，后端尊重传入的 `assetIds` 顺序，使用 map 按对应索引顺序逐一插入 `ContentAssetRef`，从而在数据库层面完美还原用户排序。
+- **外链快捷添加**：使用全新的 URL 追加输入框和 "添加" 按钮，取代之前不便的英文逗号分隔输入框。
+
+### 15.3 多平台发布预览 (Multi-Platform Previews)
+- **一键预览**：在草稿编辑抽屉底部新增 "预览效果" 按钮，可触发沉浸式全屏毛玻璃平台预览弹窗。
+- **高保真 Mockup 效果**：
+  - **Instagram**: 高保真移动端布局，支持多图滑动轮播切换、点赞数、加粗 Handle 及正文、蓝色 Hashtag。
+  - **小红书**: 精美双栏卡片移动端布局，右上角展示 `1/3` 图片指示器，支持首行标题提取、正文、关注按钮、点赞收藏数。
+  - **Facebook**: 桌面端 News Feed 卡片布局，支持根据附加媒体数量自动生成智能拼接栅格 (1图/2图/3图/4+图拼图)。
+  - **TikTok**: 沉浸式暗黑风格视频/图文满屏渲染，右侧侧边栏互动按钮，底部 Handle 及两行截断文本，以及旋转的黑胶唱片动效。
+  - **Google Business**: Google 搜索/地图卡片式更新样式，支持封面图、更新时间、了解更多 (Learn More) 操作按钮。
+
+### 15.4 未联通账号的手动发布引导 (Unlinked Platform Publishing)
+- 对于小红书等尚未开通 API 自动对接的平台，或者在缺少 API Key 的情况下：
+  - 生成 `status: "draft"` 的 ContentDraft 卡片。
+  - 在卡片内写入明确的手动发布备注和复制指引。
+  - 将看板卡片状态置为 `done`，提示主理人手动复制发布。
+

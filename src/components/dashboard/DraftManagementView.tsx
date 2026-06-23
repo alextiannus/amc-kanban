@@ -191,9 +191,63 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
   const [brandAssets, setBrandAssets] = useState<Array<{ id: string; url: string; filename?: string | null; mimeType: string }>>([])
   const [mediaUrlsInput, setMediaUrlsInput] = useState('')
-  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([])
+  const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [newUrlInput, setNewUrlInput] = useState('')
 
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    if (draggedIndex === null || draggedIndex === index) return
+    setAttachedMedia((prev) => {
+      const updated = [...prev]
+      const draggedItem = updated[draggedIndex]
+      updated.splice(draggedIndex, 1)
+      updated.splice(index, 0, draggedItem)
+      return updated
+    })
+    setDraggedIndex(index)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+  }
+
+  const handleToggleAsset = (asset: { id: string; url: string }) => {
+    setAttachedMedia((prev) => {
+      const exists = prev.some((m) => m.type === 'asset' && m.id === asset.id)
+      if (exists) {
+        return prev.filter((m) => !(m.type === 'asset' && m.id === asset.id))
+      } else {
+        return [...prev, { id: asset.id, type: 'asset', url: asset.url }]
+      }
+    })
+  }
+
+  const handleRemoveMedia = (index: number) => {
+    setAttachedMedia((prev) => prev.filter((_, idx) => idx !== index))
+  }
+
+  const handleAddUrl = () => {
+    const url = newUrlInput.trim()
+    if (!url) return
+    setAttachedMedia((prev) => [
+      ...prev,
+      { id: url, type: 'url', url }
+    ])
+    setNewUrlInput('')
+  }
+
+  const selectedAssetIds = useMemo(() => attachedMedia.filter(m => m.type === 'asset').map(m => m.id), [attachedMedia])
   const selectedDraft = useMemo(() => drafts.find((draft) => draft.id === selectedId) || null, [drafts, selectedId])
+
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewPlatform, setPreviewPlatform] = useState('instagram')
+  const [previewMediaIndex, setPreviewMediaIndex] = useState(0)
 
   const loadDrafts = async () => {
     if (!brandId) return
@@ -250,7 +304,8 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       setScheduledAt('')
       setAgentNote('')
       setMediaUrlsInput('')
-      setSelectedAssetIds([])
+      setAttachedMedia([])
+      setReviewNote('')
       return
     }
     setCaption(selectedDraft.caption)
@@ -259,7 +314,29 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setScheduledAt(toDateTimeLocal(selectedDraft.scheduledAt))
     setAgentNote(selectedDraft.agentNote || '')
     setMediaUrlsInput((selectedDraft.mediaUrls || []).join(', '))
-    setSelectedAssetIds((selectedDraft.assetRefs || []).map((ref) => ref.asset.id))
+
+    const initialMedia: Array<{ id: string; type: 'asset' | 'url'; url: string }> = []
+    if (selectedDraft.assetRefs) {
+      selectedDraft.assetRefs.forEach((ref) => {
+        if (ref.asset) {
+          initialMedia.push({
+            id: ref.asset.id,
+            type: 'asset',
+            url: ref.asset.url || '',
+          })
+        }
+      })
+    }
+    if (selectedDraft.mediaUrls) {
+      selectedDraft.mediaUrls.forEach((url) => {
+        initialMedia.push({
+          id: url,
+          type: 'url',
+          url,
+        })
+      })
+    }
+    setAttachedMedia(initialMedia)
     setReviewNote('')
   }, [selectedDraft?.id])
 
@@ -312,7 +389,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setScheduledAt('')
     setAgentNote('')
     setMediaUrlsInput('')
-    setSelectedAssetIds([])
+    setAttachedMedia([])
     setReviewNote('')
   }
 
@@ -329,7 +406,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     }
     setSaving(true)
     setError(null)
-    const mediaUrls = mediaUrlsInput.split(',').map((url) => url.trim()).filter(Boolean)
+    const mediaUrls = attachedMedia.filter((m) => m.type === 'url').map((m) => m.url)
     try {
       const endpoint = selectedDraft ? `/api/brands/${brandId}/drafts/${selectedDraft.id}` : `/api/brands/${brandId}/drafts`
       const res = await fetch(endpoint, {
@@ -555,31 +632,37 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-black text-slate-800 dark:text-slate-200">媒体与素材</h4>
                   <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    已选: {selectedAssetIds.length + mediaUrlsInput.split(',').map((u) => u.trim()).filter(Boolean).length}
+                    已选: {attachedMedia.length}
                   </span>
                 </div>
 
-                {/* 1. Preview of currently selected/attached media */}
-                {(selectedAssetIds.length > 0 || mediaUrlsInput.trim()) && (
+                {/* Drag-and-drop grid */}
+                {attachedMedia.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-bold text-slate-400">已附加媒体预览</p>
+                    <p className="text-xs font-bold text-slate-400">拖拽调整媒体排序</p>
                     <div className="grid grid-cols-4 gap-2">
-                      {/* Selected Assets */}
-                      {selectedAssetIds.map((assetId) => {
-                        const asset = brandAssets.find((a) => a.id === assetId)
-                        if (!asset) return null
-                        const isVid = asset.mimeType.startsWith('video/')
+                      {attachedMedia.map((item, index) => {
+                        const isVid = isVideoUrl(item.url)
                         return (
-                          <div key={assetId} className="relative aspect-square rounded-lg border border-slate-200 bg-slate-100 overflow-hidden dark:border-slate-800 dark:bg-slate-900 group shadow-sm">
+                          <div
+                            key={`${item.type}-${item.id}-${index}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, index)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragEnd={handleDragEnd}
+                            className={`relative aspect-square rounded-lg border border-slate-200 bg-slate-100 overflow-hidden dark:border-slate-800 dark:bg-slate-900 group shadow-sm cursor-grab active:cursor-grabbing transition-shadow hover:shadow ${
+                              draggedIndex === index ? 'opacity-40 border-emerald-500 scale-95' : ''
+                            }`}
+                          >
                             {isVid ? (
-                              <video src={`${asset.url}#t=0.1`} preload="metadata" className="h-full w-full object-cover" muted />
+                              <video src={item.url.startsWith('http') ? item.url : `${item.url}#t=0.1`} preload="metadata" className="h-full w-full object-cover pointer-events-none" muted />
                             ) : (
-                              <img src={asset.url} className="h-full w-full object-cover" alt="" />
+                              <img src={item.url} className="h-full w-full object-cover pointer-events-none" alt="" />
                             )}
                             <button
                               type="button"
-                              onClick={() => setSelectedAssetIds((prev) => prev.filter((id) => id !== assetId))}
-                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-600 p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => handleRemoveMedia(index)}
+                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-600 p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -588,37 +671,11 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                                 <Play className="h-3 w-3 text-white fill-white" />
                               </div>
                             )}
-                            <div className="absolute bottom-1 left-1 bg-emerald-500/80 px-1 rounded text-[8px] font-black text-white">素材库</div>
-                          </div>
-                        )
-                      })}
-                      {/* Manual URLs */}
-                      {mediaUrlsInput.split(',').map((u) => u.trim()).filter(Boolean).map((url, idx) => {
-                        const isVid = isVideoUrl(url)
-                        return (
-                          <div key={`manual-${idx}`} className="relative aspect-square rounded-lg border border-slate-200 bg-slate-100 overflow-hidden dark:border-slate-800 dark:bg-slate-900 group shadow-sm">
-                            {isVid ? (
-                              <video src={url} className="h-full w-full object-cover" muted />
-                            ) : (
-                              <img src={url} className="h-full w-full object-cover" alt="" />
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const urls = mediaUrlsInput.split(',').map((u) => u.trim()).filter(Boolean)
-                                urls.splice(idx, 1)
-                                setMediaUrlsInput(urls.join(', '))
-                              }}
-                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-600 p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                            {isVid && (
-                              <div className="absolute bottom-1 right-1 bg-black/50 p-0.5 rounded">
-                                <Play className="h-3 w-3 text-white fill-white" />
-                              </div>
-                            )}
-                            <div className="absolute bottom-1 left-1 bg-blue-500/80 px-1 rounded text-[8px] font-black text-white">外链</div>
+                            <div className={`absolute bottom-1 left-1 px-1 rounded text-[8px] font-black text-white ${
+                              item.type === 'asset' ? 'bg-emerald-500/80' : 'bg-blue-500/80'
+                            }`}>
+                              {item.type === 'asset' ? '素材库' : '外链'}
+                            </div>
                           </div>
                         )
                       })}
@@ -626,18 +683,33 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   </div>
                 )}
 
-                {/* 2. Direct media URL input */}
+                {/* Add URL input */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">手动附加媒体 URL (用逗号分隔)</label>
-                  <input
-                    value={mediaUrlsInput}
-                    onChange={(event) => setMediaUrlsInput(event.target.value)}
-                    placeholder="https://example.com/image.jpg, https://example.com/video.mp4"
-                    className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                  />
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">添加外部媒体链接</label>
+                  <div className="flex gap-2">
+                    <input
+                      value={newUrlInput}
+                      onChange={(event) => setNewUrlInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          handleAddUrl()
+                        }
+                      }}
+                      placeholder="https://example.com/image.jpg"
+                      className="h-10 flex-1 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddUrl}
+                      className="inline-flex h-10 items-center justify-center rounded-md bg-slate-900 px-4 text-xs font-bold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+                    >
+                      添加
+                    </button>
+                  </div>
                 </div>
 
-                {/* 3. Browse brand assets */}
+                {/* Browse brand assets */}
                 <div className="space-y-2">
                   <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">从品牌素材库中选择</label>
                   {brandAssets.length === 0 ? (
@@ -654,21 +726,15 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                           <button
                             key={asset.id}
                             type="button"
-                            onClick={() => {
-                              setSelectedAssetIds((prev) =>
-                                prev.includes(asset.id)
-                                  ? prev.filter((id) => id !== asset.id)
-                                  : [...prev, asset.id]
-                              )
-                            }}
+                            onClick={() => handleToggleAsset(asset)}
                             className={`relative aspect-square rounded-md overflow-hidden border-2 bg-slate-100 dark:bg-slate-900 transition-all ${
                               isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-transparent hover:border-slate-300'
                             }`}
                           >
                             {isVid ? (
-                              <video src={`${asset.url}#t=0.1`} preload="metadata" className="h-full w-full object-cover" muted />
+                              <video src={asset.url.startsWith('http') ? asset.url : `${asset.url}#t=0.1`} preload="metadata" className="h-full w-full object-cover pointer-events-none" muted />
                             ) : (
-                              <img src={asset.url} className="h-full w-full object-cover" alt="" />
+                              <img src={asset.url} className="h-full w-full object-cover pointer-events-none" alt="" />
                             )}
                             {isVid && (
                               <div className="absolute bottom-1 right-1 bg-black/50 p-0.5 rounded">
@@ -702,7 +768,23 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
               )}
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-800">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-800 w-full">
+              <button
+                type="button"
+                onClick={() => {
+                  const account = accounts.find((a) => a.id === accountId)
+                  if (account) {
+                    setPreviewPlatform(account.platformId.toLowerCase())
+                  } else {
+                    setPreviewPlatform('instagram')
+                  }
+                  setPreviewMediaIndex(0)
+                  setPreviewOpen(true)
+                }}
+                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 mr-auto flex items-center gap-2"
+              >
+                <Eye className="h-4 w-4" /> 预览效果
+              </button>
               <button disabled={saving || !caption.trim() || !accountId} onClick={() => { void saveDraft('draft') }} className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">保存</button>
               <button disabled={saving || !caption.trim() || !accountId} onClick={submitDraft} className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-50"><Send className="h-4 w-4" /> 提交草稿</button>
               {selectedDraft?.status === 'pending_review' && (
@@ -712,6 +794,460 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Platform Preview Mockups Dialog */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-md" onClick={() => setPreviewOpen(false)}>
+          <div className="relative flex h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/95 shadow-2xl dark:border-slate-800 dark:bg-slate-900/95 lg:flex-row" onClick={(e) => e.stopPropagation()}>
+            
+            {/* Platform Selector Left Sidebar */}
+            <div className="w-full border-b border-slate-200 bg-white/50 p-5 dark:border-slate-800 dark:bg-slate-950/50 lg:w-80 lg:border-b-0 lg:border-r flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Eye className="h-5 w-5 text-emerald-500" /> 发布预览
+                  </h3>
+                  <button onClick={() => setPreviewOpen(false)} className="lg:hidden rounded-md p-1 hover:bg-slate-200 dark:hover:bg-slate-800">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                
+                <p className="mt-2 text-xs font-semibold text-slate-400">
+                  查看该内容在各个社交媒体平台的发布效果。
+                </p>
+
+                <div className="mt-6 space-y-2">
+                  {[
+                    { id: 'instagram', name: 'Instagram Feed', icon: '📸' },
+                    { id: 'red', name: '小红书 (Xiaohongshu)', icon: '📕' },
+                    { id: 'facebook', name: 'Facebook Post', icon: '👥' },
+                    { id: 'tiktok', name: 'TikTok Video', icon: '🎵' },
+                    { id: 'google_business', name: 'Google Business', icon: '🏪' },
+                  ].map((plat) => (
+                    <button
+                      key={plat.id}
+                      onClick={() => {
+                        setPreviewPlatform(plat.id)
+                        setPreviewMediaIndex(0)
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-black transition-all ${
+                        previewPlatform === plat.id
+                          ? 'bg-slate-900 text-white shadow-lg dark:bg-white dark:text-slate-950'
+                          : 'text-slate-600 hover:bg-slate-200/50 dark:text-slate-400 dark:hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <span className="text-base">{plat.icon}</span>
+                      {plat.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/30">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">草稿摘要</h4>
+                <div className="mt-2 space-y-1 text-xs">
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">
+                    <span className="font-bold text-slate-400">正文字数:</span> {caption.length} 字
+                  </p>
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">
+                    <span className="font-bold text-slate-400">标签数量:</span> {parseTags(hashtags).length} 个
+                  </p>
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">
+                    <span className="font-bold text-slate-400">媒体数量:</span> {attachedMedia.length} 个
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Preview Viewport Center/Right Pane */}
+            <div className="flex flex-1 items-center justify-center overflow-y-auto p-4 lg:p-8">
+              
+              {/* Instagram Preview */}
+              {previewPlatform === 'instagram' && (
+                <div className="relative mx-auto w-full max-w-[375px] overflow-hidden rounded-[40px] border-[12px] border-slate-900 bg-white shadow-2xl dark:border-slate-900 dark:bg-black text-black dark:text-white">
+                  {/* Instagram Header */}
+                  <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5 dark:border-slate-900">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 p-[1.5px]">
+                        <div className="h-full w-full rounded-full border border-white bg-slate-200 dark:border-black" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold">{accounts.find(a => a.id === accountId)?.displayName || accounts.find(a => a.id === accountId)?.handle || brandName || 'Your Brand'}</p>
+                        <p className="text-[10px] text-slate-500">Sponsored</p>
+                      </div>
+                    </div>
+                    <MoreVertical className="h-4 w-4 text-slate-400" />
+                  </div>
+
+                  {/* Instagram Media Slider */}
+                  <div className="relative aspect-square w-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+                    {attachedMedia.length > 0 ? (
+                      <>
+                        {isVideoUrl(attachedMedia[previewMediaIndex].url) ? (
+                          <video src={attachedMedia[previewMediaIndex].url} className="h-full w-full object-cover" controls muted />
+                        ) : (
+                          <img src={attachedMedia[previewMediaIndex].url} className="h-full w-full object-cover" alt="" />
+                        )}
+                        
+                        {attachedMedia.length > 1 && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPreviewMediaIndex((prev) => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
+                              }}
+                              className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 z-10"
+                            >
+                              ‹
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPreviewMediaIndex((prev) => (prev < attachedMedia.length - 1 ? prev + 1 : 0))
+                              }}
+                              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 z-10"
+                            >
+                              ›
+                            </button>
+                            <span className="absolute right-3 top-3 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-black text-white z-10">
+                              {previewMediaIndex + 1}/{attachedMedia.length}
+                            </span>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
+                        <FileText className="h-10 w-10 text-slate-300" />
+                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Instagram Actions */}
+                  <div className="px-3 py-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className="text-xl">🤍</span>
+                        <span className="text-xl">💬</span>
+                        <span className="text-xl">✈️</span>
+                      </div>
+                      <span className="text-xl">🔖</span>
+                    </div>
+                    <p className="mt-2 text-xs font-bold">1,245 likes</p>
+                    
+                    {/* Instagram Caption */}
+                    <div className="mt-1.5 space-y-1 text-xs">
+                      <p className="leading-5">
+                        <span className="font-bold mr-1.5">{accounts.find(a => a.id === accountId)?.handle || brandName || 'brand_account'}</span>
+                        <span className="whitespace-pre-wrap">{caption}</span>
+                      </p>
+                      <p className="text-blue-600 dark:text-blue-400 font-medium">
+                        {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Xiaohongshu Preview */}
+              {previewPlatform === 'red' && (
+                <div className="relative mx-auto w-full max-w-[375px] overflow-hidden rounded-[40px] border-[12px] border-slate-900 bg-white shadow-2xl dark:border-slate-900 dark:bg-[#0f0f0f] text-black dark:text-white">
+                  {/* XHS Header */}
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-900">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-full bg-slate-200" />
+                      <div>
+                        <p className="text-xs font-bold">{accounts.find(a => a.id === accountId)?.displayName || brandName || 'Your Brand'}</p>
+                      </div>
+                    </div>
+                    <button className="rounded-full bg-[#ff2442] px-3 py-1 text-xs font-black text-white">关注</button>
+                  </div>
+
+                  {/* XHS Media */}
+                  <div className="relative aspect-[3/4] w-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+                    {attachedMedia.length > 0 ? (
+                      <>
+                        {isVideoUrl(attachedMedia[previewMediaIndex].url) ? (
+                          <video src={attachedMedia[previewMediaIndex].url} className="h-full w-full object-cover" controls muted />
+                        ) : (
+                          <img src={attachedMedia[previewMediaIndex].url} className="h-full w-full object-cover" alt="" />
+                        )}
+                        
+                        {attachedMedia.length > 1 && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPreviewMediaIndex((prev) => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
+                              }}
+                              className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white z-10"
+                            >
+                              ‹
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPreviewMediaIndex((prev) => (prev < attachedMedia.length - 1 ? prev + 1 : 0))
+                              }}
+                              className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white z-10"
+                            >
+                              ›
+                            </button>
+                            <span className="absolute right-3 top-3 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-bold text-white z-10">
+                              {previewMediaIndex + 1}/{attachedMedia.length}
+                            </span>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
+                        <FileText className="h-10 w-10 text-slate-300" />
+                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* XHS Content */}
+                  <div className="px-4 py-3 max-h-48 overflow-y-auto">
+                    <h4 className="text-sm font-black leading-6 text-slate-900 dark:text-white">
+                      {caption.split('\n')[0]?.slice(0, 30) || 'Untitled Post'}
+                    </h4>
+                    <p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700 dark:text-slate-300">
+                      {caption.split('\n').slice(1).join('\n') || caption}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {parseTags(hashtags).map((tag) => (
+                        <span key={tag} className="text-xs text-[#3a5b8f] dark:text-[#6a90d0] font-medium">#{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* XHS Footer bar */}
+                  <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5 dark:border-slate-900 text-slate-500 dark:text-slate-400">
+                    <span className="text-xs">说点什么...</span>
+                    <div className="flex gap-4 text-xs font-bold">
+                      <span>❤️ 152</span>
+                      <span>⭐ 48</span>
+                      <span>💬 12</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Facebook Preview */}
+              {previewPlatform === 'facebook' && (
+                <div className="mx-auto w-full max-w-[550px] rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900 text-black dark:text-white">
+                  {/* FB Header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-10 w-10 rounded-full bg-slate-200" />
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">{accounts.find(a => a.id === accountId)?.displayName || brandName || 'Your Brand'}</p>
+                        <p className="text-xs text-slate-500 flex items-center gap-1">Just now · 🌎</p>
+                      </div>
+                    </div>
+                    <MoreVertical className="h-5 w-5 text-slate-400" />
+                  </div>
+
+                  {/* FB Text */}
+                  <div className="mt-3 text-sm leading-6 text-slate-800 dark:text-slate-200">
+                    <p className="whitespace-pre-wrap">{caption}</p>
+                    <p className="mt-2 text-blue-600 dark:text-blue-400 font-medium">
+                      {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
+                    </p>
+                  </div>
+
+                  {/* FB Collage Layout */}
+                  <div className="mt-3 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                    {attachedMedia.length === 0 ? (
+                      <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-400">
+                        <FileText className="h-10 w-10 text-slate-300" />
+                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      </div>
+                    ) : attachedMedia.length === 1 ? (
+                      <div className="relative aspect-video w-full">
+                        {isVideoUrl(attachedMedia[0].url) ? (
+                          <video src={attachedMedia[0].url} className="h-full w-full object-cover" controls muted />
+                        ) : (
+                          <img src={attachedMedia[0].url} className="h-full w-full object-cover" alt="" />
+                        )}
+                      </div>
+                    ) : attachedMedia.length === 2 ? (
+                      <div className="grid grid-cols-2 gap-1">
+                        {attachedMedia.map((m, idx) => (
+                          <div key={idx} className="relative aspect-square">
+                            {isVideoUrl(m.url) ? (
+                              <video src={m.url} className="h-full w-full object-cover" muted />
+                            ) : (
+                              <img src={m.url} className="h-full w-full object-cover" alt="" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-1">
+                        <div className="col-span-3 relative aspect-video">
+                          {isVideoUrl(attachedMedia[0].url) ? (
+                            <video src={attachedMedia[0].url} className="h-full w-full object-cover" muted />
+                          ) : (
+                            <img src={attachedMedia[0].url} className="h-full w-full object-cover" alt="" />
+                          )}
+                        </div>
+                        {attachedMedia.slice(1, 4).map((m, idx) => (
+                          <div key={idx} className="relative aspect-square">
+                            {isVideoUrl(m.url) ? (
+                              <video src={m.url} className="h-full w-full object-cover" muted />
+                            ) : (
+                              <img src={m.url} className="h-full w-full object-cover" alt="" />
+                            )}
+                            {idx === 2 && attachedMedia.length > 4 && (
+                              <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-black text-lg z-10">
+                                +{attachedMedia.length - 4}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* FB Actions */}
+                  <div className="mt-3 flex items-center justify-around border-t border-slate-100 pt-2.5 text-sm font-black text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 p-1.5 rounded dark:hover:bg-slate-800">👍 Like</span>
+                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 p-1.5 rounded dark:hover:bg-slate-800">💬 Comment</span>
+                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 p-1.5 rounded dark:hover:bg-slate-800">🔄 Share</span>
+                  </div>
+                </div>
+              )}
+
+              {/* TikTok Preview */}
+              {previewPlatform === 'tiktok' && (
+                <div className="relative mx-auto w-full max-w-[375px] overflow-hidden rounded-[40px] border-[12px] border-slate-900 bg-black shadow-2xl dark:border-slate-900 text-white">
+                  {/* TikTok Header */}
+                  <div className="absolute top-8 left-0 right-0 z-10 flex justify-center gap-4 text-sm font-bold text-white/60">
+                    <span className="hover:text-white">Following</span>
+                    <span className="text-white border-b-2 border-white pb-1">For You</span>
+                  </div>
+
+                  {/* TikTok Media Panel */}
+                  <div className="relative aspect-[9/16] w-full bg-slate-950 flex items-center justify-center">
+                    {attachedMedia.length > 0 ? (
+                      <>
+                        {/* Blur Background if it's an image */}
+                        <img src={attachedMedia[0].url} className="absolute inset-0 h-full w-full object-cover blur-2xl opacity-40" alt="" />
+                        
+                        {isVideoUrl(attachedMedia[0].url) ? (
+                          <video src={attachedMedia[0].url} className="relative z-10 h-full w-full object-contain" controls autoPlay loop muted />
+                        ) : (
+                          <img src={attachedMedia[0].url} className="relative z-10 max-h-full max-w-full object-contain" alt="" />
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-2 text-white/40">
+                        <Video className="h-10 w-10" />
+                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      </div>
+                    )}
+
+                    {/* TikTok Sidebar overlay */}
+                    <div className="absolute bottom-28 right-3 z-10 flex flex-col items-center gap-5">
+                      <div className="relative">
+                        <div className="h-10 w-10 rounded-full border border-white bg-slate-400" />
+                        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full bg-[#ff0050] px-1 text-[8px] font-black text-white z-10">+</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-2xl">❤️</span>
+                        <span className="text-[10px] font-bold text-white/90">89.2K</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-2xl">💬</span>
+                        <span className="text-[10px] font-bold text-white/90">4,120</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-2xl">🔗</span>
+                        <span className="text-[10px] font-bold text-white/90">1,029</span>
+                      </div>
+                    </div>
+
+                    {/* TikTok Bottom Text */}
+                    <div className="absolute bottom-6 left-4 right-16 z-10 space-y-2 text-white text-xs">
+                      <p className="font-bold text-sm">@{accounts.find(a => a.id === accountId)?.handle || brandName || 'brand_tiktok'}</p>
+                      <p className="line-clamp-2 leading-relaxed text-white/90 whitespace-pre-wrap">{caption}</p>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {parseTags(hashtags).map((tag) => (
+                          <span key={tag} className="font-bold">#{tag}</span>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 overflow-hidden bg-white/10 backdrop-blur px-2 py-1 rounded-full w-fit">
+                        <span className="animate-pulse">🎵</span>
+                        <span className="w-24 text-[10px] overflow-hidden whitespace-nowrap text-ellipsis">Original Sound - @{brandName || 'Brand'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Google Business Preview */}
+              {previewPlatform === 'google_business' && (
+                <div className="mx-auto w-full max-w-[450px] rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900 text-black dark:text-white">
+                  {/* GBP Header */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 text-white font-black">
+                      🏪
+                    </div>
+                    <div>
+                      <p className="text-sm font-black">{brandName || 'Your Business Name'}</p>
+                      <p className="text-xs text-slate-400">Post on Google Business · Updated just now</p>
+                    </div>
+                  </div>
+
+                  {/* GBP Cover image */}
+                  <div className="mt-3 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                    {attachedMedia.length > 0 ? (
+                      <div className="relative aspect-video w-full">
+                        {isVideoUrl(attachedMedia[0].url) ? (
+                          <video src={attachedMedia[0].url} className="h-full w-full object-cover" controls muted />
+                        ) : (
+                          <img src={attachedMedia[0].url} className="h-full w-full object-cover" alt="" />
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex h-40 flex-col items-center justify-center gap-2 text-slate-400">
+                        <FileText className="h-8 w-8 text-slate-300" />
+                        <span className="text-xs font-semibold">暂无封面图片</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* GBP Text */}
+                  <div className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-300">
+                    <p className="whitespace-pre-wrap">{caption}</p>
+                    <p className="mt-2 text-blue-600 dark:text-blue-400 font-medium">
+                      {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
+                    </p>
+                  </div>
+
+                  {/* GBP Button */}
+                  <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+                    <button className="w-full rounded-md bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
+                      了解更多 (Learn More)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+            
+            {/* Absolute Close Button */}
+            <button
+              onClick={() => setPreviewOpen(false)}
+              className="absolute right-4 top-4 z-20 hidden rounded-full bg-slate-900/60 p-2 text-white hover:bg-slate-900/80 dark:bg-slate-100/60 dark:text-black dark:hover:bg-slate-100/80 lg:flex"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
       )}

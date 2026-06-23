@@ -132,9 +132,16 @@ export async function POST(request: Request, { params }: Params) {
         where: { id: { in: assetIds }, brandId },
         select: { id: true, aiTags: true },
       })
-      await Promise.all(validAssets.map((asset, index) => tx.contentAssetRef.create({
-        data: { draftId: created.id, assetId: asset.id, order: index },
-      })))
+      const validAssetMap = new Map(validAssets.map(a => [a.id, a]))
+      let order = 0
+      for (const assetId of assetIds) {
+        const asset = validAssetMap.get(assetId)
+        if (asset) {
+          await tx.contentAssetRef.create({
+            data: { draftId: created.id, assetId: asset.id, order: order++ },
+          })
+        }
+      }
       
       // Sort asset IDs to avoid deadlocks under concurrent transactions
       const sortedAssets = [...validAssets].sort((a, b) => a.id.localeCompare(b.id))
