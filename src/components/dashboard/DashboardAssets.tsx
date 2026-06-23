@@ -471,17 +471,26 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       }
     }
 
-    // Chunk files into groups of 3 to run concurrently
-    const chunks: File[][] = []
-    const chunkSize = 3
-    for (let i = 0; i < fileList.length; i += chunkSize) {
-      chunks.push(fileList.slice(i, i + chunkSize))
+    // Process files using a worker pool with a concurrency limit of 3
+    const queue = [...fileList]
+    const concurrencyLimit = 3
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const file = queue.shift()
+        if (file) {
+          await uploadSingleFile(file)
+        }
+      }
     }
 
     try {
-      for (const chunk of chunks) {
-        await Promise.all(chunk.map(file => uploadSingleFile(file)))
-      }
+      // Start workers in parallel
+      const workers = Array.from(
+        { length: Math.min(concurrencyLimit, fileList.length) },
+        () => worker()
+      )
+      await Promise.all(workers)
       
       await loadAssets()
       
