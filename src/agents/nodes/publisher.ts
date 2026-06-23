@@ -3,6 +3,9 @@ import { postfastPublish } from "../../lib/integrations/postfast.ts";
 
 export async function publisherNode(state: any) {
   console.log("=== PublisherNode Running ===");
+  if (state.status === "pending" || state.status === "failed") {
+    return state;
+  }
   const { brandId, taskId, platform, caption, mediaUrls, hashtags } = state;
 
   if (!brandId || !taskId) {
@@ -46,8 +49,11 @@ export async function publisherNode(state: any) {
   const cleanHashtags = hashtags || [];
   const fullCaption = `${caption}\n\n${cleanHashtags.map((h: string) => h.startsWith('#') ? h : `#${h}`).join(" ")}`;
 
-  // 3. Execute publishing via PostFast if API Key is configured
-  if (brand.postfastApiKey) {
+  const isMockAccount = socialAccount.handle?.startsWith("mock_") || !brand.postfastApiKey;
+  const isManualPlatform = platform === "red" || platform === "xiaohongshu";
+
+  // 3. Execute publishing via PostFast if API Key is configured and account is connected and supports auto-publish
+  if (brand.postfastApiKey && !isMockAccount && !isManualPlatform) {
     console.log(`Brand ${brand.name} has PostFast API key. Initiating actual social media publish...`);
     try {
       const publishRes = await postfastPublish({
@@ -138,20 +144,28 @@ export async function publisherNode(state: any) {
     }
   }
 
-  // 4. Fallback mockup publishing flow
-  console.log("No PostFast API Key configured for brand. Running mockup publishing flow.");
-  const publishedUrl = `https://www.${platform}.com/p/amc_mock_${Date.now()}`;
+  // 4. Manual / mockup draft generation flow
+  const platformNameMap: Record<string, string> = {
+    red: "小红书",
+    xiaohongshu: "小红书",
+    instagram: "Instagram",
+    facebook: "Facebook",
+    tiktok: "TikTok",
+    google_business: "Google Business"
+  };
+  const readablePlatform = platformNameMap[platform] || platform;
 
-  await prisma.contentDraft.create({
+  console.log(`Platform ${platform} is unlinked or requires manual publishing. Generating draft.`);
+  
+  const draft = await prisma.contentDraft.create({
     data: {
       brandId,
       accountId: socialAccount.id,
       caption: fullCaption,
       mediaUrls: mediaUrls || [],
       hashtags: cleanHashtags,
-      status: "published",
-      platformPostId: "post_" + Date.now(),
-      publishedAt: new Date()
+      status: "draft",
+      agentNote: `【手动发布提醒】此内容已生成。由于 ${readablePlatform} 账号未联通，请在草稿中手动复制发布。`
     }
   });
 
@@ -159,14 +173,14 @@ export async function publisherNode(state: any) {
     where: { id: taskId },
     data: {
       status: "done",
-      requiredInput: `Published successfully at: ${publishedUrl}`
+      requiredInput: `Draft generated for manual publishing on ${readablePlatform}. Please review and copy it from the Drafts page: ${draft.id}`
     }
   });
 
-  console.log(`WorkUnit ${taskId} successfully closed and marked as done.`);
+  console.log(`WorkUnit ${taskId} successfully closed and marked as done. Manual draft created: ${draft.id}`);
 
   return {
-    publishedUrl,
+    publishedUrl: `manual://${platform}/${draft.id}`,
     status: "done"
   };
 }

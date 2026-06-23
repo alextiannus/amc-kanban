@@ -4,6 +4,9 @@ import { generateText } from "../../lib/gemini.ts";
 
 export async function copywriterNode(state: any) {
   console.log("=== CopywriterNode Running ===");
+  if (state.status === "pending" || state.status === "failed") {
+    return state;
+  }
   const { brandId, taskId, platform } = state;
 
   if (!brandId || !taskId) {

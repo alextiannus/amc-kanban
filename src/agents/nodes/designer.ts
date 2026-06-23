@@ -69,6 +69,9 @@ async function downloadToBuffer(urlOrPath: string): Promise<Buffer> {
 
 export async function designerNode(state: any) {
   console.log("=== DesignerNode Running ===");
+  if (state.status === "pending" || state.status === "failed") {
+    return state;
+  }
   const { brandId, taskId, mediaUrls, platform, watermarkText } = state;
 
   if (!brandId || !taskId) {

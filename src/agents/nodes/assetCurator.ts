@@ -46,6 +46,23 @@ export async function assetCuratorNode(state: any) {
     orderBy: { createdAt: "desc" }
   });
 
+  if (assets.length === 0) {
+    console.log(`AssetCurator: Brand has no assets at all in the library. Curation failed.`);
+    if (taskId) {
+      await prisma.workUnit.update({
+        where: { id: taskId },
+        data: {
+          status: "pending",
+          requiredInput: "Incomplete materials: No assets found in the brand library. Please upload images or videos to the Asset Library (素材库) first."
+        }
+      });
+    }
+    return {
+      status: "pending",
+      error: "Missing brand assets"
+    };
+  }
+
   let selectedUrls: string[] = [];
   let geminiUsed = false;
 
