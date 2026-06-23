@@ -110,6 +110,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   // Image Lightbox Preview State
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
 
+  // Drag and Drop folder categorization state
+  const [draggingIds, setDraggingIds] = useState<string[] | null>(null)
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null)
+
   // Drag/Swipe selection tracking refs
   const isDragSelecting = useRef(false)
   const dragSelectionMode = useRef<'select' | 'deselect'>('select')
@@ -183,6 +187,61 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       await loadAssets()
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : '删除文件夹失败')
+    }
+  }
+
+  const handleDragStart = (assetId: string, e: React.DragEvent) => {
+    const targets = selected.includes(assetId) ? selected : [assetId]
+    setDraggingIds(targets)
+    e.dataTransfer.setData('application/json', JSON.stringify(targets))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragEnd = () => {
+    setDraggingIds(null)
+    setDragOverFolder(null)
+  }
+
+  const handleDropOnFolder = async (folderName: string, e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOverFolder(null)
+
+    let ids: string[] = []
+    try {
+      const data = e.dataTransfer.getData('application/json')
+      if (data) {
+        ids = JSON.parse(data)
+      }
+    } catch {
+      // fallback
+    }
+
+    if (ids.length === 0 && draggingIds) {
+      ids = draggingIds
+    }
+
+    if (!brandId || ids.length === 0) return
+
+    setUploading(true)
+    setError(null)
+    try {
+      await Promise.all(ids.map((assetId) => {
+        const payload: Record<string, unknown> = {
+          folder: folderName,
+          aiCategory: folderName
+        }
+        return fetch(`/api/brands/${brandId}/assets/${assetId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      }))
+      setDraggingIds(null)
+      await loadAssets()
+    } catch {
+      setError('移动素材文件夹失败')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -887,7 +946,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             {/* 全部文件夹 */}
             <button
               onClick={() => { setSelectedFolder('all'); setTargetFolder('素材库'); }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all group ${selectedFolder === 'all' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+              onDragEnter={() => setDragOverFolder('all')}
+              onDragLeave={() => setDragOverFolder(null)}
+              onDrop={(e) => handleDropOnFolder('素材库', e)}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all group ${dragOverFolder === 'all' ? 'bg-indigo-100 dark:bg-indigo-900/50 border-2 border-indigo-500 scale-[1.02]' : selectedFolder === 'all' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold border-2 border-transparent' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border-2 border-transparent'}`}
             >
               <div className="flex items-center gap-3 truncate">
                 <span className="shrink-0 text-md">📁</span>
@@ -898,6 +961,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
             {folders.map(f => {
               const isSelected = selectedFolder === f
+              const isDragOver = dragOverFolder === f
               const count = assets.filter(a => f === '素材库' ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw') : a.aiCategory === f).length
               const isDeletable = !['素材库', '产品', '环境', '活动'].includes(f)
 
@@ -905,7 +969,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 <button
                   key={f}
                   onClick={() => { setSelectedFolder(f); setTargetFolder(f); }}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all group ${isSelected ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                  onDragEnter={() => setDragOverFolder(f)}
+                  onDragLeave={() => setDragOverFolder(null)}
+                  onDrop={(e) => handleDropOnFolder(f, e)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all group ${isDragOver ? 'bg-indigo-100 dark:bg-indigo-900/50 border-2 border-indigo-500 scale-[1.02]' : isSelected ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold border-2 border-transparent' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border-2 border-transparent'}`}
                 >
                   <div className="flex items-center gap-3 truncate">
                     <span className="shrink-0 text-md">📁</span>
@@ -1062,10 +1130,13 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                   <div
                     key={asset.id}
                     data-asset-id={asset.id}
+                    draggable={true}
+                    onDragStart={(e) => handleDragStart(asset.id, e)}
+                    onDragEnd={handleDragEnd}
                     onClick={() => handleCardClick(asset.id)}
                     onMouseEnter={() => handleCardMouseEnter(asset.id)}
                     onTouchMove={handleTouchMove}
-                    className={`group flex flex-col bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 select-none shadow-sm relative ${isActive ? 'ring-2 ring-indigo-500 border-indigo-500' : isSelected ? 'ring-2 ring-indigo-500/50 border-indigo-500/50' : 'border-slate-100 dark:border-slate-800/80 hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md'}`}
+                    className={`group flex flex-col bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 select-none shadow-sm relative ${isActive ? 'ring-2 ring-indigo-500 border-indigo-500' : isSelected ? 'ring-2 ring-indigo-500/50 border-indigo-500/50' : 'border-slate-100 dark:border-slate-800/80 hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md'} ${draggingIds?.includes(asset.id) ? 'opacity-40 scale-95 border-dashed border-indigo-400' : ''}`}
                   >
                     {/* Thumbnail Container */}
                     <div className="relative aspect-square w-full overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
