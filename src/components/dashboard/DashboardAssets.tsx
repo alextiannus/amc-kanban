@@ -1071,23 +1071,6 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           </nav>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 pt-2 border-t border-slate-100 dark:border-slate-800">
-          <h3 className="px-3 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 flex items-center justify-between">
-            <span>标签浏览</span>
-            <Plus className="w-3.5 h-3.5 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300" />
-          </h3>
-          <div className="flex flex-wrap gap-2 px-2">
-            {CATEGORY_META.map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`px-2.5 py-1 text-xs rounded-full font-medium transition-all border ${activeCategory === cat.id ? 'bg-slate-800 border-slate-800 text-white dark:bg-slate-100 dark:border-slate-100 dark:text-slate-900 shadow-sm font-bold' : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100'}`}
-              >
-                #{cat.label}
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
           <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">Powered by Immedi.AI</p>
