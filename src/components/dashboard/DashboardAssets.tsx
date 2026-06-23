@@ -21,7 +21,9 @@ import {
   Play,
   RefreshCw,
   Trash2,
-  Maximize2
+  Maximize2,
+  Send,
+  ChevronRight
 } from 'lucide-react'
 
 // Category definitions
@@ -109,6 +111,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
   // Image Lightbox Preview State
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
+
+  // Designer AI Chat State
+  const [designerPromptText, setDesignerPromptText] = useState('')
+  const [chatHistory, setChatHistory] = useState<Record<string, Array<{ sender: 'user' | 'ai'; text: string; newAssetId?: string; newAssetUrl?: string }>>>({})
+  const [aiProcessing, setAiProcessing] = useState(false)
 
   // Drag and Drop folder categorization state
   const [draggingIds, setDraggingIds] = useState<string[] | null>(null)
@@ -245,6 +252,73 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     }
   }
 
+  const getChatMessages = (assetId: string) => {
+    return chatHistory[assetId] || [
+      {
+        sender: 'ai' as const,
+        text: '你好！我是 Designer AI。你可以直接告诉我如何操作这张图片，例如：“裁剪为 1:1”、“添加水印”、“添加‘店长推荐’标签”、“调亮图片” 等。我将为你生成一张全新素材，不会覆盖原图。'
+      }
+    ]
+  }
+
+  const handleSendDesignerCommand = async (customPrompt?: string) => {
+    const text = (customPrompt || designerPromptText || '').trim()
+    if (!text || aiProcessing || !activeAsset) return
+
+    if (!customPrompt) {
+      setDesignerPromptText('')
+    }
+
+    const assetId = activeAsset.id
+    const userMsg = { sender: 'user' as const, text }
+
+    setChatHistory(prev => ({
+      ...prev,
+      [assetId]: [...(prev[assetId] || []), userMsg]
+    }))
+
+    setAiProcessing(true)
+
+    try {
+      const res = await fetch(`/api/brands/${brandId}/assets/${assetId}/design`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text })
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || '设计修改失败')
+      }
+
+      const newAsset = data.asset
+      const aiMsg = {
+        sender: 'ai' as const,
+        text: `已为您完成修改！新图片已成功保存为新素材：${newAsset.filename || '新图片.jpg'}。您可以点击下方预览或在素材库中查看。`,
+        newAssetId: newAsset.id,
+        newAssetUrl: newAsset.url
+      }
+
+      setChatHistory(prev => ({
+        ...prev,
+        [assetId]: [...(prev[assetId] || []), aiMsg]
+      }))
+
+      await loadAssets()
+    } catch (err: any) {
+      const errorMsg = {
+        sender: 'ai' as const,
+        text: `抱歉，设计修改遇到了问题：${err.message || '未知错误'}`
+      }
+      setChatHistory(prev => ({
+        ...prev,
+        [assetId]: [...(prev[assetId] || []), errorMsg]
+      }))
+    } finally {
+      setAiProcessing(false)
+    }
+  }
+
 
 
   // Bulk Tagging simulator state
@@ -273,7 +347,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         setAssets(loadedAssets)
         // Auto-select first asset for Single AI Insight
         if (loadedAssets.length > 0) {
-          setActiveAssetId(loadedAssets[0].id)
+          setActiveAssetId(prev => {
+            const exists = loadedAssets.some((a: any) => a.id === prev)
+            return exists ? prev : loadedAssets[0].id
+          })
         }
       }
       if (!cancelled) {
@@ -1442,6 +1519,124 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                     {activeAsset.aiCaption || 'AI 尚未生成图析描述。可以点击批量打标来分析。'}
                   </p>
                 </div>
+              </div>
+
+              {/* Designer AI Chat Section */}
+              <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Designer AI 智能修改助手</span>
+                </div>
+                {activeAsset.mimeType.startsWith('video/') ? (
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60 rounded-2xl text-center space-y-1">
+                    <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto" />
+                    <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300">仅支持图片素材</h5>
+                    <p className="text-[10px] text-slate-400 leading-normal">Designer AI 智能操作目前仅支持对图片进行裁剪、水印、滤镜、亮度等调整。</p>
+                  </div>
+                ) : (
+                  <div className="bg-slate-50/80 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200/55 dark:border-slate-800/80 rounded-2xl p-4 space-y-3.5 shadow-sm">
+                    {/* Message Log */}
+                    <div className="max-h-60 overflow-y-auto space-y-3 pr-1 custom-scrollbar text-xs">
+                      {getChatMessages(activeAsset.id).map((msg, idx) => (
+                        <div
+                          key={idx}
+                          className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} items-start gap-2`}
+                        >
+                          {msg.sender === 'ai' && (
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-xs">
+                              <Bot className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          )}
+                          <div className="flex flex-col max-w-[85%]">
+                            <div
+                              className={`p-2.5 rounded-2xl leading-relaxed ${
+                                msg.sender === 'user'
+                                  ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-tr-none shadow-xs'
+                                  : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 text-slate-700 dark:text-slate-200 rounded-tl-none'
+                              }`}
+                            >
+                              {msg.text}
+                            </div>
+                            {msg.sender === 'ai' && msg.newAssetUrl && (
+                              <div
+                                onClick={() => {
+                                  if (msg.newAssetId) {
+                                    setActiveAssetId(msg.newAssetId)
+                                  }
+                                }}
+                                className="mt-1.5 p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] shadow-xs"
+                              >
+                                <img
+                                  src={msg.newAssetUrl}
+                                  alt="designed result"
+                                  className="w-10 h-10 object-cover rounded-lg shrink-0 border border-slate-100 dark:border-slate-800"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate">查看生成的新图</p>
+                                  <p className="text-[9px] text-slate-400">点击在此面板预览</p>
+                                </div>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Quick Command Chips */}
+                    {getChatMessages(activeAsset.id).length === 1 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {[
+                          { label: '裁剪 1:1', prompt: '裁剪为 1:1 正方形' },
+                          { label: '添加水印', prompt: '添加品牌水印' },
+                          { label: '黑白滤镜', prompt: '将图片转换为黑白' },
+                          { label: '调亮画面', prompt: '将图片调亮' },
+                          { label: '添加“店长推荐”标签', prompt: '在图片中添加“店长推荐”封面标签' },
+                        ].map((chip) => (
+                          <button
+                            key={chip.label}
+                            type="button"
+                            onClick={() => handleSendDesignerCommand(chip.prompt)}
+                            disabled={aiProcessing}
+                            className="px-2.5 py-1 bg-white hover:bg-indigo-50 dark:bg-slate-900 dark:hover:bg-indigo-950/30 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 text-[10px] rounded-lg font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+                          >
+                            + {chip.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Chat Input Field */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={designerPromptText}
+                        disabled={aiProcessing}
+                        onChange={(e) => setDesignerPromptText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !aiProcessing) {
+                            e.preventDefault()
+                            void handleSendDesignerCommand()
+                          }
+                        }}
+                        placeholder={aiProcessing ? "Designer AI 正在生成中..." : "告诉 Designer AI 如何修改此图片..."}
+                        className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSendDesignerCommand()}
+                        disabled={aiProcessing || !designerPromptText.trim()}
+                        className="px-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-100 dark:disabled:bg-slate-800 text-white disabled:text-slate-400 rounded-xl flex items-center justify-center transition-all cursor-pointer active:scale-95 shrink-0"
+                      >
+                        {aiProcessing ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Send className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Folder selection for single asset */}
