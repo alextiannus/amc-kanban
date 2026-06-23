@@ -65,7 +65,7 @@ export async function GET(request: Request, { params }: Params) {
   const planId = subscription.planId
   const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId)
   const included_services = plan?.services ?? []
-  const monthly_content_quota = planId === 'starter' ? 30 : 38
+  const monthly_content_quota = planId === 'starter' ? 30 : planId === 'essential' ? 28 : 38
   
   let platform_coverage: string[] = []
   if (planId === 'starter') platform_coverage = ['Instagram', 'Facebook', 'TikTok']

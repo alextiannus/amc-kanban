@@ -143,7 +143,7 @@ ONBOARDING_FLOW:
 2. 发布成功后，将真实的线上 URL 填回任务中，并将任务状态移至 `done`。
 
 #### 3. 内容创作与自动排期自检（发帖配额承诺保障）
-1. 自动对比当月订阅的发帖配额（如 Starter 每月 30 条发帖，约每日 1 条；Essential 每月 20 条图文 + 4-8 条视频）。
+1. 自动对比当月订阅的发帖配额（如 Starter 每月 30 条发帖，约每日 1 条；Essential 每月 20 条图文 + 8 条视频）。
 2. 统计本月已发布与未来已排期（`scheduled`）的草稿总数。若发现发帖进度滞后，或未来 3 天内没有排期发布的内容，**自动触发内容创作工作流**。
 3. 从 TopicFeed 选题库和素材库中提取内容，调用 `board_save_draft` 保存草稿，设置黄金发布时间 `scheduledAt` 并调用 `board_submit_draft` 提交（若开启了 `autoPilot` 将直接排期发布）。
 
@@ -302,7 +302,7 @@ Lark 接口（`lark_notify`、`lark_create_workspace`、`lark_upload_file`）在
     {
       "plan_name": "essential",
       "included_services": ["content_creation", "google_review_reply", "weekly_report"],
-      "monthly_content_quota": 38,
+      "monthly_content_quota": 28,
       "platform_coverage": ["Instagram", "Facebook", "TikTok", "Xiaohongshu"]
     }
     ```
