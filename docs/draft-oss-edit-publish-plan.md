@@ -309,6 +309,12 @@
 ### 15.4 未联通账号的手动发布引导 (Unlinked Platform Publishing)
 - 对于小红书等尚未开通 API 自动对接的平台，或者在缺少 API Key 的情况下：
   - 生成 `status: "draft"` 的 ContentDraft 卡片。
-  - 在卡片内写入明确的手动发布备注和复制指引。
+  - 在卡片内写入明确的手动发布备注 and 复制指引。
   - 将看板卡片状态置为 `done`，提示主理人手动复制发布。
+
+### 15.5 定时发布回滚草稿取消机制 (Scheduled Post Reversion and Cancellation)
+- **取消定时任务**：如果一个 Post 已经提交到 PostFast 且处于 `scheduled` 状态（已生成 `platformPostId`），一旦用户或 AI 在编辑后点击保存，导致其状态变更回 `draft`、`pending_review` 或 `rejected`：
+  - 系统在 `PATCH` 接口中自动调用 `postfastDeletePost` API，删除 PostFast 端的定时发布计划。
+  - 成功取消后，系统会将该 Post 的 `platformPostId` 设为 `null`，确保该 Post **不会**再如期发布，实现两端状态完全同步。
+
 
