@@ -43,15 +43,34 @@ export async function triggerDesignerAutoTag(assetId: string): Promise<void> {
       return
     }
 
-    // 2. Download the image and convert it to Base64
+    // 2. Fetch brand details for context
+    const brand = await prisma.brand.findUnique({
+      where: { id: asset.brandId }
+    })
+
+    // 3. Download the image and convert it to Base64
     console.log(`[Platform Designer] Downloading image from: ${asset.url}`)
     const base64Data = await downloadToBase64(asset.url)
 
-    // 3. Construct prompt and request Gemini Multimodal analysis
-    const prompt = `You are an AI Designer and Image Curator. 
-Analyze this uploaded image and generate:
-1. A short, descriptive caption of what is in the image (max 1 sentence) for F&B marketing context.
-2. A list of 3-7 relevant keywords/tags (such as food names, cooking style, vibes, color tone).
+    // 4. Construct prompt and request Gemini Multimodal analysis
+    const brandContext = brand 
+      ? `Brand Name: ${brand.name}
+Brand Description: ${brand.description || "A F&B restaurant."}
+Brand Location: ${brand.address || "Singapore"}`
+      : "";
+
+    const prompt = `You are an AI Designer and Image Curator specialized in Singapore F&B marketing.
+Analyze this uploaded image and generate F&B-focused metadata.
+
+${brandContext}
+
+Instructions:
+1. Provide a short, descriptive caption (aiCaption) detailing what food/scene is in the image (max 1 sentence). Use bilingual Chinese/English.
+2. Provide a list of 3-7 highly relevant keywords/tags (aiTags). The tags MUST:
+   - Identify the specific food/dish name shown in the image (matching the brand's menu/theme if applicable).
+   - Use Chinese or bilingual format (e.g. "海南鸡饭 (Chicken Rice)", "招牌推荐", "南洋风味", "下午茶").
+   - Do NOT use generic terms like "food", "dish", "plate", "cook".
+   - Include color tone and vibe tags (e.g. "暖色调", "精致摆盘", "烟火气").
 
 Return your output ONLY as a valid JSON object with the exact following keys:
 {
