@@ -326,7 +326,14 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       setError('请先选择品牌')
       return
     }
-    const pendingIds = assets.filter(a => !a.aiReady).map(a => a.id)
+    const pendingIds = assets.filter(a => 
+      !a.aiReady || 
+      a.aiTags.length === 0 || 
+      a.aiTags.includes('待确认') || 
+      a.aiTags.includes('待打标') ||
+      !a.aiCaption
+    ).map(a => a.id)
+    
     if (pendingIds.length === 0) {
       setBulkTagProgress(100)
       return
@@ -342,7 +349,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         const res = await fetch(`/api/brands/${brandId}/assets/${assetId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ aiReady: true }),
+          body: JSON.stringify({ aiReady: true, triggerAiTagging: true }),
         })
         if (!res.ok) {
           const json = await res.json().catch(() => ({}))

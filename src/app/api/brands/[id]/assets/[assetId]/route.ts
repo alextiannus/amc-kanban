@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { triggerDesignerAutoTag } from '@/lib/designer'
 
 type Params = { params: Promise<{ id: string; assetId: string }> }
 
@@ -37,6 +38,13 @@ export async function PATCH(request: Request, { params }: Params) {
       aiReady: typeof body.aiReady === 'boolean' ? body.aiReady : undefined,
     },
   })
+
+  // Trigger platform Designer auto-tagging in the background
+  if (body.triggerAiTagging === true && asset.mimeType.startsWith('image/')) {
+    void triggerDesignerAutoTag(asset.id).catch((err) => {
+      console.error('[Asset PATCH] Failed to auto-tag asset in background:', err)
+    })
+  }
 
   return NextResponse.json({ ok: true, asset })
 }
