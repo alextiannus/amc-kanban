@@ -14,17 +14,32 @@ async function downloadToBuffer(urlOrPath: string): Promise<Buffer> {
       throw new Error(`Failed to download image from ${urlOrPath} (HTTP ${res.status})`);
     }
     return Buffer.from(await res.arrayBuffer());
-  } else {
-    // Treat as local file path. If it starts with "/", resolve relative to "public" directory.
-    let resolvedPath = urlOrPath;
+  }
+
+  // Case 2: PostFast proxy URL -> redirect to S3 URL
+  if (urlOrPath.startsWith("/api/integrations/postfast/file/")) {
+    const parts = urlOrPath.split("/");
+    const s3Key = parts.slice(6).join("/");
+    const s3Url = `https://postfast-media-prod.s3.ap-southeast-1.amazonaws.com/${s3Key}`;
+    return downloadToBuffer(s3Url);
+  }
+
+  // Case 3: Local relative paths
+  if (urlOrPath.startsWith("/uploads/") || urlOrPath.startsWith("/")) {
+    let relativePath = urlOrPath;
     if (urlOrPath.startsWith("/")) {
-      resolvedPath = path.join(process.cwd(), "public", urlOrPath);
+      relativePath = urlOrPath.slice(1);
     }
+    const resolvedPath = path.join(process.cwd(), "public", relativePath);
     if (!fs.existsSync(resolvedPath)) {
       throw new Error(`Local file not found at: ${resolvedPath}`);
     }
     return fs.readFileSync(resolvedPath);
   }
+
+  // Case 4: Token fallback
+  const s3Url = `https://postfast-media-prod.s3.ap-southeast-1.amazonaws.com/${urlOrPath}`;
+  return downloadToBuffer(s3Url);
 }
 
 export async function designerNode(state: any) {

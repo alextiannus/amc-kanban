@@ -12,18 +12,10 @@ This document details the selected features for the evolution of the multi-agent
   * **Instagram / RED (小红书) / TikTok**: Target 3-9 images (minimum 3 images or 1 video).
   * **Google Business Profile**: Target 1-2 images (minimum 1 image).
   * **Others**: Target 1 image.
-* **Asset Auto-Tagging Trigger (Designer Integration)**:
+* **Asset Auto-Tagging Trigger & Industry-Adaptive Recognition**:
   * When a new media asset is confirmed via the upload API, it triggers a background process of the **Platform Designer**.
-  * The designer downloads the image, sends it to Gemini Multimodal, auto-analyzes the image content, generates semantic tags (`aiTags`) and captions (`aiCaption`), removes the temporary `'待确认'` tag, and triggers a board update SSE event to live-refresh the UI.
-* **Insufficient Assets Handling**:
-  * If matched images count is less than the platform's minimum target (e.g. < 3 for Instagram/RED/TikTok):
-    * **Slideshow Video Compilation**: If at least 1 image is available, the agent can compile the existing assets into a slideshow video (represented by a compiled video URL `/uploads/videos/compiled_${taskId}.mp4`).
-    * **HIL Supplement Request**: If assets are completely missing (0 assets) or the operator chooses to suspend, the agent triggers a LangGraph `interrupt` to prompt the human brand manager to upload more files or approve the video compilation.
-    * The task status is set to `pending` with a description detailing the material request.
-* **Mechanism**:
-  * Retrieve the active Task (`WorkUnit`) and all `aiReady` media assets for the brand.
-  * Use Gemini to select the best candidate image URLs up to the platform's target count.
-  * Evaluate sufficiency and trigger the HIL interrupt or video compiler fallback.
+  * **Dynamic Industry Resolution**: The designer queries `AssignmentDecisionLog` and parses the brand name/description to infer the brand's industry (e.g., F&B, Pilates/Fitness, Home Renovation, Winery).
+  * The designer downloads the image, sends it to Gemini Multimodal with an industry-specific tagging prompt, auto-analyzes the image content, generates highly relevant semantic tags (`aiTags`) and captions (`aiCaption`), removes the temporary `'待确认'` tag, and triggers a board update SSE event to live-refresh the UI. This prevents generating incorrect food-related tags on non-F&B brands.
 
 ### Feature 3: True Social Publishing (Refactor `publisherNode`)
 * **Objective**: Transition the mockup publishing flow into actual API publishing through PostFast when the brand has configured credentials.
@@ -39,6 +31,7 @@ This document details the selected features for the evolution of the multi-agent
   * Fetch post performance metrics using `postfastGetAnalytics` if `postfastApiKey` is configured.
   * Sort posts by engagement metrics (impressions, likes) to identify the top 3 highest-performing posts.
   * If PostFast analytics are not available, fall back to retrieving the last 3-5 published content drafts for the brand to provide context.
+  * **Industry-Adaptive Prompt & Fallbacks**: The copywriter detects the brand's industry using the same dynamic resolution mechanism. The Gemini prompt and rule-based fallback templates are adapted specifically to the brand's industry (e.g. using fitness/Pilates, renovation, or winery specific vocabulary and hashtags rather than hardcoding food-related copy for non-F&B brands).
   * Construct a detailed prompt for Gemini containing the brand description, target platform, task details, and the top-performing posts (with their metrics) as reference examples.
   * Request Gemini to generate a high-performing post caption.
   * Fall back to rule-based template generation if the Gemini API key is missing or the call fails.

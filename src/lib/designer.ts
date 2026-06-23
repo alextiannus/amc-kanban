@@ -1,21 +1,56 @@
 import { prisma } from './prisma'
 import { generateMultimodalText } from './gemini'
 
+import fs from 'fs'
+import path from 'path'
+
 /**
- * Downloads a public image URL and returns its content as a Base64 string.
+ * Downloads a public image URL or local path and returns its content as a Base64 string.
  */
 async function downloadToBase64(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    },
-  })
-  if (!res.ok) {
-    throw new Error(`Failed to download image from ${url} (HTTP ${res.status})`)
+  // Case 1: Absolute URL
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    })
+    if (!res.ok) {
+      throw new Error(`Failed to download image from ${url} (HTTP ${res.status})`)
+    }
+    const arrayBuffer = await res.arrayBuffer()
+    return Buffer.from(arrayBuffer).toString('base64')
   }
-  const arrayBuffer = await res.arrayBuffer()
-  return Buffer.from(arrayBuffer).toString('base64')
+
+  // Case 2: PostFast proxy URL -> redirect to S3 URL
+  if (url.startsWith('/api/integrations/postfast/file/')) {
+    const parts = url.split('/')
+    const s3Key = parts.slice(6).join('/')
+    const s3Url = `https://postfast-media-prod.s3.ap-southeast-1.amazonaws.com/${s3Key}`
+    console.log(`[Platform Designer] PostFast proxy URL detected. Rewriting to direct S3: ${s3Url}`)
+    return downloadToBase64(s3Url)
+  }
+
+  // Case 3: Local relative paths
+  if (url.startsWith('/uploads/') || url.startsWith('/')) {
+    let relativePath = url
+    if (url.startsWith('/')) {
+      relativePath = url.slice(1)
+    }
+    const absolutePath = path.join(process.cwd(), 'public', relativePath)
+    console.log(`[Platform Designer] Local path detected. Reading directly from disk: ${absolutePath}`)
+    if (!fs.existsSync(absolutePath)) {
+      throw new Error(`Local file not found at: ${absolutePath}`)
+    }
+    const buffer = fs.readFileSync(absolutePath)
+    return buffer.toString('base64')
+  }
+
+  // Case 4: Token fallback
+  const s3Url = `https://postfast-media-prod.s3.ap-southeast-1.amazonaws.com/${url}`
+  console.log(`[Platform Designer] Asset token detected. Fetching from S3: ${s3Url}`)
+  return downloadToBase64(s3Url)
 }
 
 /**
@@ -48,6 +83,28 @@ export async function triggerDesignerAutoTag(assetId: string): Promise<void> {
       where: { id: asset.brandId }
     })
 
+    // Try to get requested industry from assignment decision logs to be as accurate as possible
+    const decision = await prisma.assignmentDecisionLog.findFirst({
+      where: { subjectId: asset.brandId },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    const nameLower = (brand?.name || '').toLowerCase()
+    const descLower = (brand?.description || '').toLowerCase()
+    let detectedIndustry = decision?.requestedIndustry || 'General'
+
+    if (detectedIndustry === 'General' || !detectedIndustry) {
+      if (nameLower.includes('pilates') || nameLower.includes('普拉提') || descLower.includes('pilates') || descLower.includes('fitness') || descLower.includes('yoga')) {
+        detectedIndustry = 'Pilates/Fitness'
+      } else if (nameLower.includes('装修') || nameLower.includes('白钢') || nameLower.includes('renovation') || descLower.includes('renovation') || descLower.includes('interior')) {
+        detectedIndustry = 'Home Renovation/Steel Work'
+      } else if (nameLower.includes('winery') || nameLower.includes('酒') || descLower.includes('winery') || descLower.includes('wine')) {
+        detectedIndustry = 'Winery/Beverages'
+      } else if (nameLower.includes('seafood') || nameLower.includes('海鲜') || nameLower.includes('烤鱼') || nameLower.includes('restaurant') || nameLower.includes('饭') || nameLower.includes('菜') || descLower.includes('food') || descLower.includes('restaurant') || descLower.includes('dining')) {
+        detectedIndustry = 'Food & Beverage'
+      }
+    }
+
     // 3. Download the image and convert it to Base64
     console.log(`[Platform Designer] Downloading image from: ${asset.url}`)
     const base64Data = await downloadToBase64(asset.url)
@@ -55,22 +112,22 @@ export async function triggerDesignerAutoTag(assetId: string): Promise<void> {
     // 4. Construct prompt and request Gemini Multimodal analysis
     const brandContext = brand 
       ? `Brand Name: ${brand.name}
-Brand Description: ${brand.description || "A F&B restaurant."}
-Brand Location: ${brand.address || "Singapore"}`
+Brand Description: ${brand.description || `A premium brand in ${detectedIndustry} industry.`}
+Brand Location: ${brand.address || brand.location || "Singapore"}`
       : "";
 
-    const prompt = `You are an AI Designer and Image Curator specialized in Singapore F&B marketing.
-Analyze this uploaded image and generate F&B-focused metadata.
+    const prompt = `You are an AI Designer and Image Curator specialized in Singapore brand marketing for the "${detectedIndustry}" industry.
+Analyze this uploaded image and generate metadata tailored to the brand's industry context.
 
 ${brandContext}
 
 Instructions:
-1. Provide a short, descriptive caption (aiCaption) detailing what food/scene is in the image (max 1 sentence). Use bilingual Chinese/English.
+1. Provide a short, descriptive caption (aiCaption) detailing what is shown in the image (max 1 sentence). Use bilingual Chinese/English.
 2. Provide a list of 3-7 highly relevant keywords/tags (aiTags). The tags MUST:
-   - Identify the specific food/dish name shown in the image (matching the brand's menu/theme if applicable).
-   - Use Chinese or bilingual format (e.g. "海南鸡饭 (Chicken Rice)", "招牌推荐", "南洋风味", "下午茶").
-   - Do NOT use generic terms like "food", "dish", "plate", "cook".
-   - Include color tone and vibe tags (e.g. "暖色调", "精致摆盘", "烟火气").
+   - Identify the specific subject shown in the image (matching the brand's theme/industry, e.g. specific dish name like "海南鸡饭 (Chicken Rice)" if F&B, "核心床训练 (Reformer Workout)" if Pilates, "定制白钢橱柜 (Custom Steel Cabinet)" if renovation/construction, etc.).
+   - Use Chinese or bilingual format.
+   - Do NOT use generic terms like "food", "dish", "plate", "image", "photo", "object".
+   - Include visual style, color tone, and vibe tags relevant to the scene (e.g. "暖色调", "高端大气", "精致摆盘", "现代简约", "活力健康").
 
 Return your output ONLY as a valid JSON object with the exact following keys:
 {
