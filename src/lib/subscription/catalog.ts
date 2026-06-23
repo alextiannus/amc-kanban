@@ -48,7 +48,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'starter',
     name: '自媒体基础运营',
-    monthlyUsd: 800,
+    monthlyUsd: 600,
     description: '消灭宣传真空',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · 品牌主理人',
     suitableFor: '新商家，或只有微信/小红书账号、海外本地平台处于真空状态、无法持续更新的商家',
@@ -80,8 +80,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'essential',
     name: '品牌建设版',
-    monthlyUsd: 3600,
-    promoMonthlyUsd: 2400,
+    monthlyUsd: 2800,
     description: '从基础展示到品牌建设',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
     suitableFor: '希望确立品牌策略、明确目标客群，通过全平台覆盖、视频内容与大规模博主推广积极拉新，并通过团购等转化设计唤醒老顾客的商家',
