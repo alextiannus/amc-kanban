@@ -69,7 +69,10 @@ export async function PATCH(request: Request, { params }: Params) {
   const actor = await ensureAccess(request, brandId)
   if (!actor) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const existing = await prisma.contentDraft.findFirst({ where: { id: draftId, brandId }, select: { id: true } })
+  const existing = await prisma.contentDraft.findFirst({
+    where: { id: draftId, brandId },
+    select: { id: true, status: true, platformPostId: true, publishedAt: true }
+  })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
@@ -103,6 +106,23 @@ export async function PATCH(request: Request, { params }: Params) {
   const assetIds = Array.isArray(body.assetIds) ? normalizeStringArray(body.assetIds) : null
   const nextStatus = typeof body.status === 'string' ? body.status : undefined
 
+  let platformPostIdUpdate: string | null | undefined = undefined
+  if (existing.platformPostId && !existing.publishedAt && nextStatus && ['draft', 'pending_review', 'rejected'].includes(nextStatus)) {
+    const brand = await prisma.brand.findUnique({
+      where: { id: brandId },
+      select: { postfastApiKey: true }
+    })
+    if (brand?.postfastApiKey) {
+      const { postfastDeletePost } = await import('@/lib/integrations/postfast')
+      const cancelResult = await postfastDeletePost(brand.postfastApiKey, existing.platformPostId)
+      if (cancelResult.success) {
+        platformPostIdUpdate = null
+      } else {
+        console.warn(`[PATCH Draft] Failed to cancel scheduled post on PostFast: ${cancelResult.error}`)
+      }
+    }
+  }
+
   const draft = await prisma.$transaction(async (tx) => {
     const updated = await tx.contentDraft.update({
       where: { id: draftId },
@@ -114,6 +134,7 @@ export async function PATCH(request: Request, { params }: Params) {
         hashtags: Array.isArray(body.hashtags) ? normalizeStringArray(body.hashtags) : undefined,
         scheduledAt: typeof body.scheduledAt === 'string' ? (body.scheduledAt ? new Date(body.scheduledAt) : null) : undefined,
         status: nextStatus,
+        platformPostId: platformPostIdUpdate,
         agentNote: typeof body.agentNote === 'string' ? body.agentNote : undefined,
         rejectionNote: nextStatus === 'pending_review' ? null : typeof body.rejectionNote === 'string' ? body.rejectionNote : undefined,
       },
