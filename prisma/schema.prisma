@@ -677,3 +677,16 @@ model BrandFolder {
   @@index([brandId])
 }
 
+model BrandAgentCheckpoint {
+  id                 String   @id @default(cuid())
+  threadId           String
+  checkpointId       String
+  parentCheckpointId String?
+  checkpoint         Json     // Serialized checkpoint state data
+  metadata           Json     // Checkpoint metadata
+  createdAt          DateTime @default(now())
+
+  @@unique([threadId, checkpointId])
+  @@index([threadId])
+}
+
