@@ -105,7 +105,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [targetFolder, setTargetFolder] = useState('素材库')
   const [moveFolder, setMoveFolder] = useState('')
   const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动'])
-  const [selectedFolder, setSelectedFolder] = useState<string>('素材库')
+  const [selectedFolder, setSelectedFolder] = useState<string>('all')
 
   // Image Lightbox Preview State
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
@@ -386,9 +386,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   // Filter logic
   const filtered = assets.filter(a => {
     // Folder filter
-    const folderMatch = selectedFolder === '素材库'
-      ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw')
-      : a.aiCategory === selectedFolder
+    const folderMatch = selectedFolder === 'all'
+      ? true
+      : selectedFolder === '素材库'
+        ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw')
+        : a.aiCategory === selectedFolder
     if (!folderMatch) return false
     // 1. Sidebar views filter
     if (viewFilter === 'recent') {
@@ -673,7 +675,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     if (!brandId || selected.length === 0) return
     setUploading(true)
     setError(null)
-    const newTags = batchTagsText.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean)
+    const newTags = batchTagsText
+      .split(/[#,，\s]+/)
+      .map(t => t.trim().replace(/^#/, ''))
+      .filter(Boolean)
     try {
       await Promise.all(selected.map((assetId) => {
         const original = assets.find(a => a.id === assetId)
@@ -879,6 +884,18 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             />
           </h3>
           <nav className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
+            {/* 全部文件夹 */}
+            <button
+              onClick={() => { setSelectedFolder('all'); setTargetFolder('素材库'); }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all group ${selectedFolder === 'all' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            >
+              <div className="flex items-center gap-3 truncate">
+                <span className="shrink-0 text-md">📁</span>
+                <span className="truncate">全部文件夹 (显示所有)</span>
+              </div>
+              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{assets.length}</span>
+            </button>
+
             {folders.map(f => {
               const isSelected = selectedFolder === f
               const count = assets.filter(a => f === '素材库' ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw') : a.aiCategory === f).length
@@ -887,7 +904,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               return (
                 <button
                   key={f}
-                  onClick={() => setSelectedFolder(f)}
+                  onClick={() => { setSelectedFolder(f); setTargetFolder(f); }}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all group ${isSelected ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
                 >
                   <div className="flex items-center gap-3 truncate">
@@ -938,7 +955,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         <div className="p-6 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 shadow-sm z-10">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-950 dark:text-white flex items-center gap-2">
-              营销素材知识库
+              <span>营销素材知识库</span>
+              <span className="text-xs px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-full font-bold border border-indigo-100/50 dark:border-indigo-900/30">
+                📁 {selectedFolder === 'all' ? '全部文件夹' : selectedFolder}
+              </span>
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               AI 自动理解素材内容，一键生成多平台营销帖子与动态视频
@@ -1003,10 +1023,15 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           </div>
           
           <select
-            value={targetFolder}
-            onChange={(e) => setTargetFolder(e.target.value)}
+            value={selectedFolder}
+            onChange={(e) => {
+              const val = e.target.value
+              setSelectedFolder(val)
+              setTargetFolder(val === 'all' ? '素材库' : val)
+            }}
             className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none hover:bg-slate-50 transition-all cursor-pointer"
           >
+            <option value="all">全部文件夹 (所有素材)</option>
             {folders.map(f => (
               <option key={f} value={f}>
                 {f === '素材库' ? '根目录 (素材库)' : `${f} 目录`}
@@ -1416,10 +1441,17 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           const val = e.currentTarget.value.trim()
-                          if (val && !activeAsset.aiTags.includes(val)) {
-                            const updated = [...activeAsset.aiTags, val]
-                            void updateAssetTags(activeAsset.id, updated)
-                            e.currentTarget.value = ''
+                          if (val) {
+                            const newTags = val
+                              .split(/[#,，\s]+/)
+                              .map(t => t.trim().replace(/^#/, ''))
+                              .filter(Boolean)
+                            
+                            if (newTags.length > 0) {
+                              const combined = Array.from(new Set([...activeAsset.aiTags, ...newTags]))
+                              void updateAssetTags(activeAsset.id, combined)
+                              e.currentTarget.value = ''
+                            }
                           }
                         }
                       }}
