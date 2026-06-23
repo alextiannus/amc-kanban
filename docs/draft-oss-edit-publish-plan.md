@@ -317,4 +317,6 @@
   - 系统在 `PATCH` 接口中自动调用 `postfastDeletePost` API，删除 PostFast 端的定时发布计划。
   - 成功取消后，系统会将该 Post 的 `platformPostId` 设为 `null`，确保该 Post **不会**再如期发布，实现两端状态完全同步。
 
-
+### 15.6 草稿编辑抽屉状态同步与关闭重置机制 (Editor Drawer State Synchronization and Reset)
+- **关闭抽屉重置 ID**：引入 `closeEditor` 统一关闭方法，在关闭抽屉（点击遮罩层、点击 X 按钮、保存成功、提交成功、审核成功）时，同时将 `selectedId` 设为 `null`。
+- **防止状态缓存冲突**：当用户修改同一篇草稿并保存后，能够正常清空选中的 CUID；下次再次点击该卡片时，`selectedId` 从 `null` 顺利过渡到对应的草稿 ID，从而强制触发 React `useEffect` 重新拉取并填充最新保存的数据，彻底解决“修改内容没有保存或再次打开依然显示旧数据”的缓存 Bug。
