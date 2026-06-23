@@ -117,17 +117,25 @@ Brand Location: ${brand.address || brand.location || "Singapore"}`
       : "";
 
     const prompt = `You are an AI Designer and Image Curator specialized in Singapore brand marketing for the "${detectedIndustry}" industry.
-Analyze this uploaded image and generate metadata tailored to the brand's industry context.
+Analyze the uploaded image and generate metadata tailored to the brand's context.
 
 ${brandContext}
 
 Instructions:
 1. Provide a short, descriptive caption (aiCaption) detailing what is shown in the image (max 1 sentence). Use bilingual Chinese/English.
 2. Provide a list of 3-7 highly relevant keywords/tags (aiTags). The tags MUST:
-   - Identify the specific subject shown in the image (matching the brand's theme/industry, e.g. specific dish name like "海南鸡饭 (Chicken Rice)" if F&B, "核心床训练 (Reformer Workout)" if Pilates, "定制白钢橱柜 (Custom Steel Cabinet)" if renovation/construction, etc.).
+   - Identify the specific subject shown in the image.
+     * If the image shows a food dish or beverage (F&B context): identify the exact seafood type, meat type, or dish name and cooking style if visible (e.g., "辣椒螃蟹 (Chili Crab)", "黑胡椒蟹 (Black Pepper Crab)", "清蒸石斑鱼 (Steamed Grouper)", "避风塘皮皮虾 (Mantis Shrimp)", "麦片虾 (Cereal Prawns)"). Do NOT guess or generalize if it is a specific dish.
+     * If the image shows fitness/exercise scenes: identify the exact equipment or movement (e.g., "核心床训练 (Reformer Workout)", "拉伸动作 (Stretching)").
+     * If the image shows interior design or construction: identify the specific room and materials (e.g., "定制白钢橱柜 (Custom Steel Cabinet)", "开放式厨房 (Open Kitchen)").
    - Use Chinese or bilingual format.
-   - Do NOT use generic terms like "food", "dish", "plate", "image", "photo", "object".
-   - Include visual style, color tone, and vibe tags relevant to the scene (e.g. "暖色调", "高端大气", "精致摆盘", "现代简约", "活力健康").
+   - Do NOT use generic terms like "food", "dish", "plate", "image", "photo", "object", "cook".
+   - Include visual style, color tone, and vibe tags relevant to the scene (e.g. "暖色调", "精致摆盘", "烟火气", "高端大气", "现代简约", "活力健康").
+
+CRITICAL:
+- Rely strictly on the actual visual details of the uploaded image. If the image shows a seafood dish, make sure to identify the specific type of seafood (e.g. crab, lobster, shrimp, fish) and cooking style rather than generic labels.
+- Do NOT guess or hallucinate dishes, ingredients, or equipment that are not clearly visible in the photo.
+- Ensure all tags are highly specific and descriptive.
 
 Return your output ONLY as a valid JSON object with the exact following keys:
 {
