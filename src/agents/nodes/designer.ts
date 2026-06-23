@@ -5,15 +5,31 @@ import { prisma } from "../../lib/prisma.ts";
 
 async function downloadToBuffer(urlOrPath: string): Promise<Buffer> {
   if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://")) {
-    const res = await fetch(urlOrPath, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    try {
+      const res = await fetch(urlOrPath, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+      });
+      if (res.ok) {
+        return Buffer.from(await res.arrayBuffer());
       }
-    });
-    if (!res.ok) {
-      throw new Error(`Failed to download image from ${urlOrPath} (HTTP ${res.status})`);
+      console.warn(`[Designer Node] Fetch returned status ${res.status} for ${urlOrPath}`);
+    } catch (err) {
+      console.warn(`[Designer Node] Fetch exception for ${urlOrPath}:`, err);
     }
-    return Buffer.from(await res.arrayBuffer());
+
+    // Remote fallback
+    console.warn(`[Designer Node] Falling back to default food image due to fetch failure.`);
+    try {
+      const fallbackRes = await fetch('https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800');
+      if (fallbackRes.ok) {
+        return Buffer.from(await fallbackRes.arrayBuffer());
+      }
+    } catch (err) {
+      console.error(`[Designer Node] Failed to fetch fallback image:`, err);
+    }
+    throw new Error(`Failed to download image from ${urlOrPath}`);
   }
 
   // Case 2: PostFast proxy URL -> redirect to S3 URL
@@ -32,6 +48,15 @@ async function downloadToBuffer(urlOrPath: string): Promise<Buffer> {
     }
     const resolvedPath = path.join(process.cwd(), "public", relativePath);
     if (!fs.existsSync(resolvedPath)) {
+      console.warn(`[Designer Node] Local file not found at: ${resolvedPath}. Falling back to default food image.`);
+      try {
+        const fallbackRes = await fetch('https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800');
+        if (fallbackRes.ok) {
+          return Buffer.from(await fallbackRes.arrayBuffer());
+        }
+      } catch (err) {
+        console.error(`[Designer Node] Failed to fetch fallback image:`, err);
+      }
       throw new Error(`Local file not found at: ${resolvedPath}`);
     }
     return fs.readFileSync(resolvedPath);

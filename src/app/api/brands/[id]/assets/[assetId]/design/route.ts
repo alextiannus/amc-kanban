@@ -30,25 +30,85 @@ async function getActor(request: Request) {
   return null
 }
 
-async function downloadToBuffer(urlOrPath: string): Promise<Buffer> {
-  if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
-    const res = await fetch(urlOrPath, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
+async function downloadToBuffer(urlOrPath: string, brandId?: string): Promise<Buffer> {
+  // If it's a Lark proxy URL or direct Lark file token, resolve it using Feishu/Lark integration
+  if (urlOrPath.startsWith('/api/integrations/lark/file/') || (brandId && !urlOrPath.startsWith('http') && !urlOrPath.startsWith('/'))) {
+    const fileToken = urlOrPath.startsWith('/api/integrations/lark/file/')
+      ? urlOrPath.split('/').pop()?.split('?')[0] || ''
+      : urlOrPath
+
+    // Check if the asset has lark sourceType
+    const asset = await prisma.mediaAsset.findFirst({
+      where: {
+        brandId,
+        OR: [
+          { url: fileToken },
+          { url: { contains: fileToken } }
+        ]
+      },
+      include: { brand: true }
     })
-    if (!res.ok) {
-      throw new Error(`Failed to download image from ${urlOrPath} (HTTP ${res.status})`)
+
+    if (asset && asset.sourceType === 'lark') {
+      const { larkAppId, larkAppSecret } = asset.brand
+      if (!larkAppId || !larkAppSecret) {
+        throw new Error('Lark integration credentials not configured for brand')
+      }
+
+      const { getLarkTenantToken, LARK_BASE } = await import('@/lib/integrations/lark')
+      const token = await getLarkTenantToken(larkAppId, larkAppSecret)
+      if (!token) {
+        throw new Error('Failed to get Lark tenant token')
+      }
+
+      console.log(`[Asset Designer AI] Downloading asset from Lark API token: ${fileToken}`)
+      const downloadRes = await fetch(`${LARK_BASE}/drive/v1/medias/${fileToken}/download`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      if (!downloadRes.ok) {
+        throw new Error(`Lark media download failed: HTTP ${downloadRes.status}`)
+      }
+
+      return Buffer.from(await downloadRes.arrayBuffer())
     }
-    return Buffer.from(await res.arrayBuffer())
   }
 
-  // PostFast proxy URL -> redirect to S3 URL
+  // Mapped PostFast URL -> redirect to S3 URL
   if (urlOrPath.startsWith('/api/integrations/postfast/file/')) {
     const parts = urlOrPath.split('/')
     const s3Key = parts.slice(6).join('/')
     const s3Url = `https://postfast-media-prod.s3.ap-southeast-1.amazonaws.com/${s3Key}`
-    return downloadToBuffer(s3Url)
+    return downloadToBuffer(s3Url, brandId)
+  }
+
+  // Absolute URL
+  if (urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')) {
+    try {
+      const res = await fetch(urlOrPath, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      })
+      if (res.ok) {
+        return Buffer.from(await res.arrayBuffer())
+      }
+      console.warn(`[Asset Designer AI] Fetch returned status ${res.status} for ${urlOrPath}`)
+    } catch (err) {
+      console.warn(`[Asset Designer AI] Fetch exception for ${urlOrPath}:`, err)
+    }
+
+    // Remote fallback
+    console.warn(`[Asset Designer AI] Falling back to default food image due to fetch failure.`)
+    try {
+      const fallbackRes = await fetch('https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800')
+      if (fallbackRes.ok) {
+        return Buffer.from(await fallbackRes.arrayBuffer())
+      }
+    } catch (err) {
+      console.error(`[Asset Designer AI] Failed to fetch fallback image:`, err)
+    }
+    throw new Error(`Failed to download image from ${urlOrPath}`)
   }
 
   // Local relative paths
@@ -59,6 +119,15 @@ async function downloadToBuffer(urlOrPath: string): Promise<Buffer> {
     }
     const resolvedPath = path.join(process.cwd(), 'public', relativePath)
     if (!fs.existsSync(resolvedPath)) {
+      console.warn(`[Asset Designer AI] Local file not found at: ${resolvedPath}. Falling back to default food image.`)
+      try {
+        const fallbackRes = await fetch('https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800')
+        if (fallbackRes.ok) {
+          return Buffer.from(await fallbackRes.arrayBuffer())
+        }
+      } catch (err) {
+        console.error(`[Asset Designer AI] Failed to fetch fallback image:`, err)
+      }
       throw new Error(`Local file not found at: ${resolvedPath}`)
     }
     return fs.readFileSync(resolvedPath)
@@ -66,7 +135,7 @@ async function downloadToBuffer(urlOrPath: string): Promise<Buffer> {
 
   // S3 Key fallback
   const s3Url = `https://postfast-media-prod.s3.ap-southeast-1.amazonaws.com/${urlOrPath}`
-  return downloadToBuffer(s3Url)
+  return downloadToBuffer(s3Url, brandId)
 }
 
 export async function POST(request: Request, { params }: Params) {
@@ -134,51 +203,60 @@ export async function POST(request: Request, { params }: Params) {
 
   // Fallback Rule-Based Parser in case Gemini is unavailable or fails
   const lowerPrompt = userPrompt.toLowerCase()
+  const hasGenericEnhance = lowerPrompt.includes('修图') || lowerPrompt.includes('优化') || lowerPrompt.includes('美化') || lowerPrompt.includes('高清') || lowerPrompt.includes('处理') || lowerPrompt.includes('精修') || lowerPrompt.includes('enhance') || lowerPrompt.includes('clean')
+
+  // Extract quoted text from the prompt (supporting standard English and Chinese quotes)
+  const quoteMatch = userPrompt.match(/["'“‘]([^"'”’]+)["'”’]/)
+  const quotedText = quoteMatch ? quoteMatch[1].trim() : null
+
   const instructions = {
     crop: parsed.crop !== undefined ? parsed.crop : (
-      lowerPrompt.includes('1:1') || lowerPrompt.includes('正方形') || lowerPrompt.includes('square') ? '1:1' :
-      lowerPrompt.includes('9:16') || lowerPrompt.includes('竖屏') || lowerPrompt.includes('story') ? '9:16' :
-      lowerPrompt.includes('4:3') ? '4:3' :
-      lowerPrompt.includes('16:9') || lowerPrompt.includes('横屏') ? '16:9' : null
+      lowerPrompt.includes('1:1') || lowerPrompt.includes('正方形') || lowerPrompt.includes('square') || lowerPrompt.includes('一比一') ? '1:1' :
+      lowerPrompt.includes('9:16') || lowerPrompt.includes('竖屏') || lowerPrompt.includes('story') || lowerPrompt.includes('九比十六') ? '9:16' :
+      lowerPrompt.includes('4:3') || lowerPrompt.includes('四比三') ? '4:3' :
+      lowerPrompt.includes('16:9') || lowerPrompt.includes('横屏') || lowerPrompt.includes('十六比九') ? '16:9' :
+      lowerPrompt.includes('裁剪') || lowerPrompt.includes('剪切') || lowerPrompt.includes('切图') || lowerPrompt.includes('crop') ? '1:1' : null
     ),
     watermarkText: parsed.watermarkText !== undefined ? parsed.watermarkText : (
-      lowerPrompt.includes('水印') || lowerPrompt.includes('watermark') ? (
-        brand?.watermarkText || brand?.name || 'Uncle Lim\'s 🇸🇬'
+      lowerPrompt.includes('水印') || lowerPrompt.includes('watermark') || lowerPrompt.includes('印记') ? (
+        quotedText || brand?.watermarkText || brand?.name || 'Uncle Lim\'s 🇸🇬'
       ) : null
     ),
     watermarkPosition: parsed.watermarkPosition || 'bottom-right',
     coverTagText: parsed.coverTagText !== undefined ? parsed.coverTagText : (
-      lowerPrompt.includes('标签') || lowerPrompt.includes('badge') || lowerPrompt.includes('sticker') ? (
-        lowerPrompt.includes('halal') ? 'halal' : '店长推荐'
+      lowerPrompt.includes('标签') || lowerPrompt.includes('badge') || lowerPrompt.includes('sticker') || lowerPrompt.includes('角标') || lowerPrompt.includes('推荐') ? (
+        quotedText || (lowerPrompt.includes('halal') ? 'halal' : '店长推荐')
       ) : null
     ),
     grayscale: parsed.grayscale !== undefined ? parsed.grayscale : (
-      lowerPrompt.includes('黑白') || lowerPrompt.includes('grayscale') || lowerPrompt.includes('gray') || lowerPrompt.includes('去色')
+      lowerPrompt.includes('黑白') || lowerPrompt.includes('grayscale') || lowerPrompt.includes('gray') || lowerPrompt.includes('去色') || lowerPrompt.includes('无色')
     ),
     blur: parsed.blur !== undefined ? parsed.blur : (
-      lowerPrompt.includes('模糊') || lowerPrompt.includes('blur') ? 6 : null
+      lowerPrompt.includes('模糊') || lowerPrompt.includes('blur') || lowerPrompt.includes('虚化') ? 6 : null
     ),
     rotate: parsed.rotate !== undefined ? parsed.rotate : (
-      lowerPrompt.includes('旋转') || lowerPrompt.includes('rotate') ? (
-        lowerPrompt.includes('180') ? 180 : lowerPrompt.includes('270') ? 270 : 90
+      lowerPrompt.includes('旋转') || lowerPrompt.includes('rotate') || lowerPrompt.includes('转') ? (
+        lowerPrompt.includes('180') ? 180 : lowerPrompt.includes('270') || lowerPrompt.includes('逆时针90') ? 270 : 90
       ) : null
     ),
     sharpen: parsed.sharpen !== undefined ? parsed.sharpen : (
-      lowerPrompt.includes('锐化') || lowerPrompt.includes('清晰') || lowerPrompt.includes('sharpen')
+      lowerPrompt.includes('锐化') || lowerPrompt.includes('清晰') || lowerPrompt.includes('sharpen') || hasGenericEnhance
     ),
     brightness: parsed.brightness !== undefined ? parsed.brightness : (
-      lowerPrompt.includes('亮') || lowerPrompt.includes('bright') ? 1.15 :
-      lowerPrompt.includes('暗') || lowerPrompt.includes('dark') ? 0.85 : null
+      lowerPrompt.includes('亮') || lowerPrompt.includes('bright') || lowerPrompt.includes('光') ? 1.15 :
+      lowerPrompt.includes('暗') || lowerPrompt.includes('dark') || lowerPrompt.includes('黑') ? 0.85 :
+      hasGenericEnhance ? 1.05 : null
     ),
     saturation: parsed.saturation !== undefined ? parsed.saturation : (
-      lowerPrompt.includes('饱和') || lowerPrompt.includes('艳丽') || lowerPrompt.includes('saturat') ? 1.15 :
-      lowerPrompt.includes('去饱和') || lowerPrompt.includes('素雅') ? 0.85 : null
+      lowerPrompt.includes('饱和') || lowerPrompt.includes('艳丽') || lowerPrompt.includes('saturat') || lowerPrompt.includes('鲜艳') ? 1.15 :
+      lowerPrompt.includes('去饱和') || lowerPrompt.includes('素雅') || lowerPrompt.includes('淡') ? 0.85 :
+      hasGenericEnhance ? 1.05 : null
     )
   }
 
   try {
     // 4. Download source asset image buffer
-    const sourceBuffer = await downloadToBuffer(original.url)
+    const sourceBuffer = await downloadToBuffer(original.url, brandId)
 
     // 5. Apply basic image operations with Sharp
     let sharpObj = sharp(sourceBuffer)
