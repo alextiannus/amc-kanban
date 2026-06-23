@@ -172,6 +172,10 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const [accounts, setAccounts] = useState<SocialAccountOption[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
+  const closeEditor = () => {
+    setEditorOpen(false)
+    setSelectedId(null)
+  }
   const [activeTab, setActiveTab] = useState<TabKey>('all')
   const [query, setQuery] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
@@ -453,7 +457,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || '提交草稿失败')
       await loadDrafts()
-      setSelectedId(json.draft?.id || draftId)
+      closeEditor()
     } catch (e) {
       setError(e instanceof Error ? e.message : '提交草稿失败')
     } finally {
@@ -474,7 +478,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || '审核操作失败')
       await loadDrafts()
-      setSelectedId(json.draft?.id || selectedDraft.id)
+      closeEditor()
     } catch (e) {
       setError(e instanceof Error ? e.message : '审核操作失败')
     } finally {
@@ -577,14 +581,14 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       </div>
 
       {editorOpen && (
-        <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/30 p-3 backdrop-blur-sm" onClick={() => setEditorOpen(false)}>
+        <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/30 p-3 backdrop-blur-sm" onClick={closeEditor}>
           <div className="flex h-full w-full max-w-xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
               <div>
                 <p className="text-xs font-black uppercase tracking-wide text-slate-400">{selectedDraft ? STATUS_LABELS[selectedDraft.status] || selectedDraft.status : 'New draft'}</p>
                 <h3 className="text-lg font-black text-slate-950 dark:text-white">{selectedDraft ? '编辑草稿' : '新建草稿'}</h3>
               </div>
-              <button onClick={() => setEditorOpen(false)} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+              <button onClick={closeEditor} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -785,7 +789,16 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
               >
                 <Eye className="h-4 w-4" /> 预览效果
               </button>
-              <button disabled={saving || !caption.trim() || !accountId} onClick={() => { void saveDraft('draft') }} className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">保存</button>
+              <button
+                disabled={saving || !caption.trim() || !accountId}
+                onClick={async () => {
+                  const saved = await saveDraft('draft')
+                  if (saved) closeEditor()
+                }}
+                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                保存
+              </button>
               <button disabled={saving || !caption.trim() || !accountId} onClick={submitDraft} className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-50"><Send className="h-4 w-4" /> 提交草稿</button>
               {selectedDraft?.status === 'pending_review' && (
                 <>
