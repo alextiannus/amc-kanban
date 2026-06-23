@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canOwnBrand } from '@/lib/brandAccess'
-import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER, LARK_APP_DOMAIN } from '@/lib/integrations/lark'
+import { LARK_APP_DOMAIN, DEFAULT_LARK_PARENT_FOLDER } from '@/lib/integrations/lark'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 
@@ -139,30 +139,7 @@ export async function PATCH(request: Request, { params }: Params) {
     },
   })
 
-  // Auto-create brand workspace folder when Lark is first configured
-  // Trigger: Lark credentials now set but workspace folder not yet created
-  if (updated.larkAppId && updated.larkAppSecret && !updated.larkDriveFolderId) {
-    try {
-      const workspace = await createBrandWorkspace({
-        appId: updated.larkAppId,
-        appSecret: updated.larkAppSecret,
-        parentFolderToken: updated.larkParentFolderToken ?? DEFAULT_LARK_PARENT_FOLDER,
-        brandName: updated.name,
-      })
-      if (workspace.success && workspace.folderToken) {
-        await prisma.brand.update({
-          where: { id },
-          data: { larkDriveFolderId: workspace.folderToken },
-        })
-        updated.larkDriveFolderId = workspace.folderToken
-        console.log(`[Settings] Created Lark workspace for "${updated.name}": ${workspace.folderUrl}`)
-      } else {
-        console.warn(`[Settings] Lark workspace not created: ${workspace.error}`)
-      }
-    } catch (e) {
-      console.warn('[Settings] Lark workspace creation failed (non-fatal):', e)
-    }
-  }
+  // Auto-create brand workspace folder is disabled as Lark Drive is decommissioned
 
   const larkFolderUrl = updated.larkDriveFolderId
     ? `${LARK_APP_DOMAIN}/drive/folder/${updated.larkDriveFolderId}`

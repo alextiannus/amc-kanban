@@ -100,6 +100,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [targetFolder, setTargetFolder] = useState('素材库')
   const [moveFolder, setMoveFolder] = useState('')
   const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动'])
@@ -199,7 +200,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       if (!res.ok) throw new Error('load failed')
       const data = await res.json()
       if (!cancelled) {
-        const loadedAssets = (data.assets || []).filter(isPreviewable)
+        const loadedAssets = data.assets || []
         setAssets(loadedAssets)
         // Auto-select first asset for Single AI Insight
         if (loadedAssets.length > 0) {
@@ -370,11 +371,16 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
     setUploading(true)
     setError(null)
-    try {
-      for (const file of fileList) {
-        const filename = file.name
-        const mimeType = file.type || 'application/octet-stream'
+    setUploadProgress(`准备上传 (${fileList.length}个文件)...`)
 
+    let uploadedCount = 0
+    const failedFiles: string[] = []
+
+    const uploadSingleFile = async (file: File) => {
+      const filename = file.name
+      const mimeType = file.type || 'application/octet-stream'
+
+      try {
         // 1. Request presigned upload URL from backend
         const presignRes = await fetch(
           `/api/brands/${brandId}/assets/presign-upload?filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}&folder=${encodeURIComponent(targetFolder)}`
@@ -385,35 +391,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           throw new Error(presignData.error || '获取上传凭证失败')
         }
 
-        if (presignData.useDirectApi) {
-          // Fallback to local Base64 upload route (e.g. in dev environment)
-          const fileBase64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => {
-              const value = String(reader.result || '')
-              resolve(value.includes(',') ? value.split(',').pop() || '' : value)
-            }
-            reader.onerror = () => reject(new Error('read failed'))
-            reader.readAsDataURL(file)
-          })
+        let uploadSuccess = false
 
-          const res = await fetch(`/api/brands/${brandId}/assets/upload`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: file.name,
-              mimeType,
-              fileBase64,
-              folder: targetFolder,
-              aiCategory: targetFolder === '素材库' ? 'raw' : targetFolder,
-              aiTags: [targetFolder, '待确认'],
-            }),
-          })
-          const json = await res.json().catch(() => ({}))
-          if (!res.ok) throw new Error(json.error || '素材上传失败')
-        } else {
-          // 2. Perform direct binary upload to Huawei OBS pre-signed PUT URL
+        if (!presignData.useDirectApi) {
           try {
+            // 2. Perform direct binary upload to Huawei OBS pre-signed PUT URL
             const uploadHeaders: Record<string, string> = {
               'Content-Type': mimeType,
             }
@@ -446,42 +428,73 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             if (!confirmRes.ok) {
               throw new Error(confirmData.error || '确认素材入库失败')
             }
-          } catch (directUploadError) {
-            console.warn('Direct upload failed, falling back to server-side upload:', directUploadError)
-            
-            // Fallback to backend upload route
-            const fileBase64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader()
-              reader.onload = () => {
-                const value = String(reader.result || '')
-                resolve(value.includes(',') ? value.split(',').pop() || '' : value)
-              }
-              reader.onerror = () => reject(new Error('读取文件失败'))
-              reader.readAsDataURL(file)
-            })
 
-            const res = await fetch(`/api/brands/${brandId}/assets/upload`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                filename: file.name,
-                mimeType,
-                fileBase64,
-                folder: targetFolder,
-                aiCategory: targetFolder === '素材库' ? 'raw' : targetFolder,
-                aiTags: [targetFolder, '待确认'],
-              }),
-            })
-            const json = await res.json().catch(() => ({}))
-            if (!res.ok) throw new Error(json.error || '素材备用上传失败')
+            uploadSuccess = true
+          } catch (directErr: any) {
+            console.warn(`Direct OBS upload failed for ${filename}, falling back to server API:`, directErr)
           }
         }
+
+        if (presignData.useDirectApi || !uploadSuccess) {
+          // Fallback to local Base64 upload route
+          const fileBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => {
+              const value = String(reader.result || '')
+              resolve(value.includes(',') ? value.split(',').pop() || '' : value)
+            }
+            reader.onerror = () => reject(new Error('read failed'))
+            reader.readAsDataURL(file)
+          })
+
+          const res = await fetch(`/api/brands/${brandId}/assets/upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              mimeType,
+              fileBase64,
+              folder: targetFolder,
+              aiCategory: targetFolder === '素材库' ? 'raw' : targetFolder,
+              aiTags: [targetFolder, '待确认'],
+            }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json.error || '素材上传失败')
+        }
+
+        uploadedCount++
+        setUploadProgress(`正在上传... 已成功 ${uploadedCount}/${fileList.length}`)
+      } catch (fileError: any) {
+        console.error(`Upload failed for file "${file.name}":`, fileError)
+        failedFiles.push(`${file.name}: ${fileError?.message || '未知错误'}`)
       }
+    }
+
+    // Chunk files into groups of 3 to run concurrently
+    const chunks: File[][] = []
+    const chunkSize = 3
+    for (let i = 0; i < fileList.length; i += chunkSize) {
+      chunks.push(fileList.slice(i, i + chunkSize))
+    }
+
+    try {
+      for (const chunk of chunks) {
+        await Promise.all(chunk.map(file => uploadSingleFile(file)))
+      }
+      
       await loadAssets()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '素材上传失败')
+      
+      if (failedFiles.length > 0) {
+        setError(`成功上传 ${uploadedCount} 个，失败 ${failedFiles.length} 个：\n${failedFiles.join('\n')}`)
+      } else {
+        alert(`已成功上传 ${uploadedCount} 个素材！`)
+      }
+    } catch (e: any) {
+      setError(e instanceof Error ? e.message : '素材上传异常')
     } finally {
       setUploading(false)
+      setUploadProgress(null)
     }
   }
 
@@ -834,7 +847,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 active:scale-95 transition-all"
             >
               <Upload className="w-4 h-4" />
-              <span>{uploading ? '上传中...' : '上传素材'}</span>
+              <span>{uploading ? (uploadProgress || '上传中...') : '上传素材'}</span>
             </button>
           </div>
         </div>

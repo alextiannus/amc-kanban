@@ -448,7 +448,41 @@ async function uploadPublicUrlToPostfast(apiKey: string, url: string): Promise<s
   let mimeType = 'image/jpeg'
   let filename = 'file.jpg'
 
-  if (url.startsWith('/') || !url.startsWith('http')) {
+  if (url.startsWith('/api/integrations/lark/file/')) {
+    const fileToken = url.split('/').pop()?.split('?')[0] || ''
+    const { prisma } = await import('@/lib/prisma')
+    const asset = await prisma.mediaAsset.findFirst({
+      where: {
+        OR: [
+          { url: fileToken },
+          { url: { contains: fileToken } }
+        ]
+      },
+      include: { brand: true }
+    })
+    
+    if (!asset || !asset.brand?.larkAppId || !asset.brand?.larkAppSecret) {
+      throw new Error(`Failed to find Lark credentials for asset with token: ${fileToken}`)
+    }
+
+    const { getLarkTenantToken, LARK_BASE } = await import('./lark')
+    const token = await getLarkTenantToken(asset.brand.larkAppId, asset.brand.larkAppSecret)
+    if (!token) {
+      throw new Error(`Failed to get Lark access token for brand: ${asset.brandId}`)
+    }
+
+    const downloadRes = await fetch(`${LARK_BASE}/drive/v1/medias/${fileToken}/download`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    
+    if (!downloadRes.ok) {
+      throw new Error(`Lark download failed with status ${downloadRes.status}`)
+    }
+
+    fileBuffer = Buffer.from(await downloadRes.arrayBuffer())
+    mimeType = downloadRes.headers.get('content-type') || asset.mimeType
+    filename = asset.filename || `${fileToken}.jpg`
+  } else if (url.startsWith('/') || !url.startsWith('http')) {
     const { readFile } = await import('node:fs/promises')
     const { join } = await import('node:path')
     const path = await import('node:path')
@@ -573,6 +607,12 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
 
   if (input.mediaUrls && input.mediaUrls.length > 0) {
     for (const url of input.mediaUrls) {
+      if (url.startsWith('/api/integrations/postfast/file/')) {
+        const parts = url.split('/')
+        const key = parts.slice(6).join('/')
+        mediaKeys.push(key)
+        continue
+      }
       if (!url.startsWith('http') && !url.startsWith('/')) {
         // If it's already a storage key/token (doesn't start with http or /), treat it as a mediaStorageKey directly
         mediaKeys.push(url)

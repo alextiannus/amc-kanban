@@ -10,6 +10,7 @@ import {
   getGoogleAccessToken,
   replyGoogleGBPReview,
 } from '@/lib/integrations/google'
+import { getGeminiApiKey } from '@/lib/systemConfig'
 
 type GoogleReview = {
   reviewId: string
@@ -29,7 +30,8 @@ async function generateReviewReply(
   brandName: string,
   compensationLink?: string
 ): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY
+  const apiKey = await getGeminiApiKey()
+
   if (!apiKey) {
     if (rating >= 4) {
       return `非常感谢 ${reviewer} 对我们【${brandName}】的支持和五星好评！我们会继续努力提供更优质的产品和服务，期待您的再次光临！`

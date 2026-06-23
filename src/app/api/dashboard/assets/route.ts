@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 async function getAccessibleBrandIds(userId: string, userType: string, role: string) {
   if (userType === 'AI_AGENT') {
@@ -16,17 +17,71 @@ async function getAccessibleBrandIds(userId: string, userType: string, role: str
     return brands.map(brand => brand.id)
   }
 
-  const ownerLinks = await prisma.brandOwner.findMany({
-    where: { userId },
-    select: { brandId: true },
-  })
-  const ownerBrandIds = ownerLinks.map(link => link.brandId)
-  const legacyBrands = await prisma.brand.findMany({
-    where: { ownerId: userId, id: { notIn: ownerBrandIds } },
-    select: { id: true },
-  })
+  // Regular human user
+  const [ownerLinks, legacyOwnedBrands, delegatedAgentPermissions, organizationMemberships] = await Promise.all([
+    prisma.brandOwner.findMany({
+      where: { userId },
+      select: { brandId: true },
+    }),
+    prisma.brand.findMany({
+      where: { ownerId: userId },
+      select: { id: true },
+    }),
+    prisma.agentPermission.findMany({
+      where: { humanId: userId },
+      select: { agentId: true },
+    }),
+    prisma.organizationMember.findMany({
+      where: { memberId: userId },
+      select: { ownerId: true },
+    }),
+  ])
 
-  return [...ownerBrandIds, ...legacyBrands.map(brand => brand.id)]
+  const ownedBrandIds = new Set([
+    ...ownerLinks.map((link) => link.brandId),
+    ...legacyOwnedBrands.map((brand) => brand.id),
+  ])
+
+  const permittedAgentIds = delegatedAgentPermissions.map((perm) => perm.agentId)
+  const delegatedBrandLinks = permittedAgentIds.length
+    ? await prisma.brandAgent.findMany({
+        where: {
+          agentId: { in: permittedAgentIds },
+          active: true,
+        },
+        select: { brandId: true },
+      })
+    : []
+
+  const delegatedBrandIds = delegatedBrandLinks.map((link) => link.brandId)
+  const organizationOwnerIds = organizationMemberships.map((m) => m.ownerId)
+
+  let organizationBrandIds: string[] = []
+  if (organizationOwnerIds.length > 0) {
+    const organizationBrands = await prisma.brand.findMany({
+      where: {
+        OR: [
+          { ownerId: { in: organizationOwnerIds } },
+          {
+            owners: {
+              some: {
+                role: 'owner',
+                userId: { in: organizationOwnerIds },
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    })
+    organizationBrandIds = organizationBrands.map((brand) => brand.id)
+  }
+
+  return Array.from(new Set([
+    ...ownedBrandIds,
+    ...delegatedBrandIds,
+    ...organizationBrandIds,
+  ]))
 }
 
 // GET /api/dashboard/assets?brandId=<id>
@@ -37,12 +92,13 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const requestedBrandId = url.searchParams.get('brandId')
 
-  const brandIds = await getAccessibleBrandIds(session.user.id, session.user.type ?? 'HUMAN', session.user.role)
-  if (brandIds.length === 0) return NextResponse.json({ assets: [] })
-
-  const scopedBrandIds = requestedBrandId
-    ? (brandIds.includes(requestedBrandId) ? [requestedBrandId] : [])
-    : brandIds
+  let scopedBrandIds: string[] = []
+  if (requestedBrandId) {
+    const ok = await canSessionAccessBrandProject(requestedBrandId, session.user.id, session.user.type ?? 'HUMAN', session.user.role)
+    scopedBrandIds = ok ? [requestedBrandId] : []
+  } else {
+    scopedBrandIds = await getAccessibleBrandIds(session.user.id, session.user.type ?? 'HUMAN', session.user.role)
+  }
 
   if (scopedBrandIds.length === 0) return NextResponse.json({ assets: [] })
 
@@ -66,7 +122,19 @@ export async function GET(request: Request) {
     id: asset.id,
     brandId: asset.brandId,
     brandName: brandMap.get(asset.brandId) || asset.brand.name,
-    url: asset.url,
+    url: (() => {
+      const url = asset.url || ''
+      if (url.startsWith('http') || url.startsWith('/')) {
+        return url
+      }
+      if (asset.sourceType === 'lark') {
+        return `/api/integrations/lark/file/${url}`
+      }
+      if (asset.sourceType === 'postfast') {
+        return `/api/integrations/postfast/file/${asset.brandId}/${url}`
+      }
+      return url
+    })(),
     filename: asset.filename,
     mimeType: asset.mimeType,
     aiTags: asset.aiTags,

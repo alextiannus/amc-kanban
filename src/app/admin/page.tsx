@@ -39,7 +39,7 @@ interface BrandRecord {
   updatedAt: string
 }
 
-type AdminTab = 'users' | 'brands' | 'agents' | 'pool'
+type AdminTab = 'users' | 'brands' | 'agents' | 'pool' | 'system'
 
 interface InvitationResult {
   user: { id: string; email: string; type: string }
@@ -125,6 +125,77 @@ export default function AdminPage() {
   const [poolDrafts, setPoolDrafts] = useState<Record<string, { capacity: number; priority: number; industries: string; regions: string }>>({})
   const [brandDrafts, setBrandDrafts] = useState<Record<string, { name: string; location: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; agentIds: string[] }>>({})
 
+  // System config & audit logs states
+  interface SystemConfigAuditLog {
+    id: string
+    timestamp: string
+    actorId: string | null
+    actorType: string
+    actorName: string | null
+    action: string
+    resourceId: string
+    resourceType: string
+    oldValue: any
+    newValue: any
+    reason: string | null
+    metadata: any
+  }
+  const [systemConfig, setSystemConfig] = useState<{ geminiApiKey: string; configured: boolean } | null>(null)
+  const [systemLogs, setSystemLogs] = useState<SystemConfigAuditLog[]>([])
+  const [systemLogsLoading, setSystemLogsLoading] = useState(false)
+  const [savingSystemConfig, setSavingSystemConfig] = useState(false)
+
+  const fetchSystemConfig = async () => {
+    try {
+      const res = await fetch('/api/admin/system-config')
+      if (res.ok) {
+        setSystemConfig(await res.json())
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const fetchSystemLogs = async () => {
+    setSystemLogsLoading(true)
+    try {
+      const res = await fetch('/api/admin/logs?limit=50')
+      if (res.ok) {
+        const data = await res.json()
+        setSystemLogs(data.logs || [])
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSystemLogsLoading(false)
+    }
+  }
+
+  const saveSystemConfig = async () => {
+    if (!systemConfig) return
+    setSavingSystemConfig(true)
+    try {
+      const res = await fetch('/api/admin/system-config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ geminiApiKey: systemConfig.geminiApiKey }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setSystemConfig(updated)
+        alert('系统配置保存成功')
+        void fetchSystemLogs()
+      } else {
+        alert('保存失败，请重试')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('保存失败')
+    } finally {
+      setSavingSystemConfig(false)
+    }
+  }
+
   const fetchUsers = async () => {
     setLoading(true)
     const res = await fetch('/api/admin/users')
@@ -193,6 +264,8 @@ export default function AdminPage() {
       void fetchBrands()
       void fetchPoolData()
       void fetchDecisionLogs()
+      void fetchSystemConfig()
+      void fetchSystemLogs()
     })
   }, [])
 
@@ -591,16 +664,23 @@ export default function AdminPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:grid-cols-5">
           {([
             ['users', User, '用户管理'],
             ['brands', Store, '品牌管理'],
             ['agents', Bot, 'AI Agent 管理'],
             ['pool', CreditCard, '分配池'],
+            ['system', Shield, '系统设置'],
           ] as const).map(([id, Icon, label]) => (
             <button
               key={id}
-              onClick={() => setActiveAdminTab(id)}
+              onClick={() => {
+                setActiveAdminTab(id)
+                if (id === 'system') {
+                  void fetchSystemConfig()
+                  void fetchSystemLogs()
+                }
+              }}
               className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${activeAdminTab === id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}
             >
               <Icon size={15} /> {label}
@@ -999,6 +1079,117 @@ export default function AdminPage() {
             </table>
           </div>
         </div>}
+
+        {activeAdminTab === 'system' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Global AI API key config */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4">
+              <div>
+                <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <Shield size={16} className="text-blue-500" /> 全局 AI 接口配置
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  此 API Key 是全平台通用的 AI 接口令牌（System settings / Admin only）。
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block">Gemini API Key</label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={systemConfig?.geminiApiKey ?? ''}
+                    onChange={e => setSystemConfig(prev => prev ? { ...prev, geminiApiKey: e.target.value } : { geminiApiKey: e.target.value, configured: false })}
+                    placeholder="请输入 Gemini API Key (例如 AI_API_TOKEN)"
+                    className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                  <button
+                    onClick={saveSystemConfig}
+                    disabled={savingSystemConfig || !systemConfig}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition flex-shrink-0 flex items-center gap-2"
+                  >
+                    {savingSystemConfig ? '保存中...' : '保存配置'}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  说明：系统调用 AI 模块（如自动评论回复）时，将优先使用此处配置的全局 Key。若此处留空，系统将退回使用服务器环境变量 (process.env.GEMINI_API_KEY)。
+                </p>
+              </div>
+            </div>
+
+            {/* Detailed System Logs */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 font-bold">系统操作日志</h2>
+                <button
+                  onClick={fetchSystemLogs}
+                  disabled={systemLogsLoading}
+                  className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50 font-bold"
+                >
+                  {systemLogsLoading ? '刷新中...' : '刷新'}
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500">
+                    <tr>
+                      <th className="text-left px-4 py-2">时间</th>
+                      <th className="text-left px-4 py-2">操作人</th>
+                      <th className="text-left px-4 py-2">动作 (Action)</th>
+                      <th className="text-left px-4 py-2">关联资源</th>
+                      <th className="text-left px-4 py-2">变更详情</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {systemLogs.map(log => {
+                      const displayActor = log.actorName || log.actorId || '系统';
+                      const displayResource = `${log.resourceType}:${log.resourceId}`;
+                      
+                      // Format oldValue & newValue safely for visual review
+                      let details = '-';
+                      if (log.oldValue || log.newValue) {
+                        try {
+                          const changes: string[] = [];
+                          const oldObj = log.oldValue || {};
+                          const newObj = log.newValue || {};
+                          
+                          // Find changed keys
+                          const allKeys = Array.from(new Set([...Object.keys(oldObj), ...Object.keys(newObj)]));
+                          for (const key of allKeys) {
+                            if (key === 'createdAt' || key === 'updatedAt' || key === 'id') continue;
+                            const oldVal = oldObj[key];
+                            const newVal = newObj[key];
+                            if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+                              changes.push(`${key}: ${JSON.stringify(oldVal)} → ${JSON.stringify(newVal)}`);
+                            }
+                          }
+                          details = changes.length > 0 ? changes.join(' | ') : '无字段变更';
+                        } catch {
+                          details = '数据解析失败';
+                        }
+                      }
+                      
+                      return (
+                        <tr key={log.id} className="border-t border-slate-100 dark:border-slate-800">
+                          <td className="px-4 py-2 text-xs text-slate-500">{new Date(log.timestamp).toLocaleString('zh-CN')}</td>
+                          <td className="px-4 py-2 font-medium">{displayActor}</td>
+                          <td className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-350">{log.action}</td>
+                          <td className="px-4 py-2 text-xs text-slate-400 font-mono">{displayResource}</td>
+                          <td className="px-4 py-2 text-xs text-slate-500 max-w-sm truncate" title={details}>{details}</td>
+                        </tr>
+                      );
+                    })}
+                    {systemLogs.length === 0 && (
+                      <tr>
+                        <td className="px-4 py-6 text-center text-slate-400" colSpan={5}>暂无操作日志</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Agent Permission Modal */}

@@ -1424,7 +1424,7 @@ export function createAmcMcpServer(agentApiKey: string) {
   // ── lark_upload_file ────────────────────────────────────────────────────
   server.tool(
     'lark_upload_file',
-    'Upload a file (image, PDF, video) to the brand\'s Lark Drive workspace. Returns a file token usable as asset URL.',
+    '[DEPRECATED] Upload a file to the brand\'s Lark Drive workspace. Do not use. Use board_upload_asset instead.',
     {
       brandId: z.string(),
       filename: z.string().describe('File name including extension, e.g. "banner.jpg"'),
@@ -1432,94 +1432,33 @@ export function createAmcMcpServer(agentApiKey: string) {
       fileBase64: z.string().describe('Base64-encoded file content (without data: prefix)'),
       folderId: z.string().optional().describe('Lark folder token to upload into. Defaults to brand workspace root.'),
     },
-    async ({ brandId, filename, mimeType, fileBase64, folderId }) => {
-      const agent = await resolveAgent()
-      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
-
-      const brand = await prisma.brand.findUnique({
-        where: { id: brandId },
-        select: { larkAppId: true, larkAppSecret: true, larkDriveFolderId: true },
-      })
-
-      if (!brand?.larkAppId || !brand?.larkAppSecret) {
-        return { content: [{ type: 'text' as const, text: 'Error: larkAppId and larkAppSecret not configured. Run update_brand_config first.' }], isError: true }
+    async () => {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: 'Error: Lark cloud docs storage is disabled. Please use board_upload_asset instead, which automatically uploads assets directly to Huawei OBS (OSS).',
+        }],
+        isError: true,
       }
-
-      const targetFolder = folderId || brand.larkDriveFolderId
-      if (!targetFolder) {
-        return { content: [{ type: 'text' as const, text: 'Error: No Lark folder target. Either provide folderId or create a workspace first with lark_create_workspace.' }], isError: true }
-      }
-
-      const fileBuffer = Buffer.from(fileBase64, 'base64')
-      const { uploadToLarkDrive } = await import('@/lib/integrations/lark')
-      const result = await uploadToLarkDrive({
-        appId: brand.larkAppId,
-        appSecret: brand.larkAppSecret,
-        folderId: targetFolder,
-        filename,
-        mimeType,
-        fileBuffer,
-      })
-
-      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
-
-      await prisma.mediaAsset.create({
-        data: {
-          brandId,
-          url: result.fileToken!,
-          filename,
-          mimeType,
-          uploadedBy: agent.id,
-          sourceType: 'mcp_lark_upload',
-          aiReady: mimeType.startsWith('image/') || mimeType.startsWith('video/'),
-        },
-      })
-
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, fileToken: result.fileToken, downloadUrl: result.downloadUrl, filename }) }] }
     }
   )
 
   // ── lark_create_workspace ───────────────────────────────────────────────
   server.tool(
     'lark_create_workspace',
-    'Create a brand workspace folder in Lark Drive. Call once per brand. Returns folder token for future uploads.',
+    '[DEPRECATED] Create a brand workspace folder in Lark Drive. Do not use.',
     {
       brandId: z.string(),
-      parentFolderToken: z.string().optional().describe('Override parent folder. Defaults to the shared AI Workspaces root.'),
+      parentFolderToken: z.string().optional().describe('Override parent folder.'),
     },
-    async ({ brandId, parentFolderToken }) => {
-      const agent = await resolveAgent()
-      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
-
-      const brand = await prisma.brand.findUnique({
-        where: { id: brandId },
-        select: { name: true, larkAppId: true, larkAppSecret: true },
-      })
-
-      if (!brand?.larkAppId || !brand?.larkAppSecret) {
-        return { content: [{ type: 'text' as const, text: 'Error: larkAppId and larkAppSecret not configured. Run update_brand_config first.' }], isError: true }
+    async () => {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: 'Error: Lark Drive workspace creation is disabled as we have migrated to Huawei OBS (OSS) for storage.',
+        }],
+        isError: true,
       }
-
-      const { createBrandWorkspace } = await import('@/lib/integrations/lark')
-      const result = await createBrandWorkspace({
-        appId: brand.larkAppId,
-        appSecret: brand.larkAppSecret,
-        parentFolderToken,
-        brandName: brand.name,
-      })
-
-      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
-
-      // Persist folder token on brand for future uploads
-      await prisma.brand.update({ where: { id: brandId }, data: { larkDriveFolderId: result.folderToken } })
-
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, folderToken: result.folderToken, folderUrl: result.folderUrl }) }] }
     }
   )
 

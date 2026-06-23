@@ -18,7 +18,6 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastGetSignedUploadUrls, postfastUploadFile } from '@/lib/integrations/postfast'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { uploadToLarkDrive } from '@/lib/integrations/lark'
 import { getHuaweiObsConfig, makeBrandAssetKey, uploadHuaweiObsObject } from '@/lib/integrations/huaweiObs'
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
@@ -79,9 +78,6 @@ export async function POST(request: Request, { params }: Params) {
     where: { id: brandId },
     select: {
       postfastApiKey: true,
-      larkAppId: true,
-      larkAppSecret: true,
-      larkDriveFolderId: true,
     }
   })
 
@@ -244,47 +240,7 @@ export async function POST(request: Request, { params }: Params) {
       })
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Lark Drive Upload
-    if (brand.larkAppId && brand.larkAppSecret && brand.larkDriveFolderId) {
-      const uploadResult = await uploadToLarkDrive({
-        appId: brand.larkAppId,
-        appSecret: brand.larkAppSecret,
-        folderId: brand.larkDriveFolderId,
-        filename,
-        mimeType: resolvedMimeType,
-        fileBuffer,
-      })
 
-      if (!uploadResult.success || !uploadResult.fileToken) {
-        return NextResponse.json({ error: uploadResult.error || 'Lark upload failed' }, { status: 400 })
-      }
-
-      const asset = await prisma.mediaAsset.create({
-        data: {
-          brandId,
-          url: uploadResult.downloadUrl || uploadResult.fileToken,
-          filename,
-          mimeType: resolvedMimeType,
-          sizeBytes: fileBuffer.length,
-          aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
-          aiCategory: body.folder || body.aiCategory || '素材库',
-          aiCaption: body.aiCaption || null,
-          aiReady: true,
-          uploadedBy: user.id,
-          sourceType: 'lark',
-        },
-      })
-
-      return NextResponse.json({
-        ok: true,
-        assetId: asset.id,
-        assetUrl: asset.url,
-        storageEngine: 'lark',
-        asset,
-        uploadedAt: new Date().toISOString(),
-      })
-    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // Local fallback for Phase 1 development and brands without OSS credentials.
@@ -395,7 +351,24 @@ export async function GET(request: Request, { params }: Params) {
   const assetFolderNames = assets.map(asset => asset.aiCategory || '素材库')
   const baseFolders = dbFolderNames.length > 0 ? dbFolderNames : ['产品', '环境', '活动']
   const folders = Array.from(new Set(['素材库', ...baseFolders, ...assetFolderNames]))
-  return NextResponse.json({ assets, folders })
+  const mappedAssets = assets.map(asset => ({
+    ...asset,
+    url: (() => {
+      const url = asset.url || ''
+      if (url.startsWith('http') || url.startsWith('/')) {
+        return url
+      }
+      if (asset.sourceType === 'lark') {
+        return `/api/integrations/lark/file/${url}`
+      }
+      if (asset.sourceType === 'postfast') {
+        return `/api/integrations/postfast/file/${brandId}/${url}`
+      }
+      return url
+    })()
+  }))
+
+  return NextResponse.json({ assets: mappedAssets, folders })
 }
 
 // PATCH /api/brands/[id]/assets

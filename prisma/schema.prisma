@@ -264,6 +264,11 @@ model Brand {
   // Brand profile (Agent can populate these)
   description    String?  // Brand tagline / about text
   logoUrl        String?  // Brand logo image URL
+  watermarkUrl      String?  // Custom watermark image URL (fallback to logoUrl if null)
+  watermarkPosition String   @default("bottom-right") // position: top-left | top-right | bottom-left | bottom-right | center
+  watermarkOpacity  Float    @default(0.8) // Opacity level from 0.0 to 1.0
+  watermarkPadding  Int      @default(20)  // Padding in pixels from the edge
+  watermarkText     String?  // Optional watermark text (fallback to brand name if both logo and custom text null)
   website        String?  // Brand website URL
   phone          String?  // Contact phone
   address        String?  // Full address
@@ -689,4 +694,12 @@ model BrandAgentCheckpoint {
   @@unique([threadId, checkpointId])
   @@index([threadId])
 }
+
+model SystemConfig {
+  id           String   @id @default("default")
+  geminiApiKey String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 

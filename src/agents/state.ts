@@ -39,5 +39,9 @@ export const StateAnnotation = Annotation.Root({
   error: Annotation<string>({
     reducer: (x, y) => y ?? x,
     default: () => ""
+  }),
+  watermarkText: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
   })
 });

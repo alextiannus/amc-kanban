@@ -28,6 +28,7 @@
     "@langchain/core": "^1.2.1",
     "@langchain/langgraph": "^1.4.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "sharp": "^0.33.5",
     "@prisma/client": "^6.19.3",
     "@tailwindcss/typography": "^0.5.19",
     "bcryptjs": "^3.0.3",

@@ -309,3 +309,42 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     `await app.updateState(config, { approved: true, comment: "Approved by Whatsapp" })`
     `await app.invoke(null, config);`
 5.  Graph 节点自动从 HIL 断点处苏醒，恢复日常发布飞轮。
+
+---
+
+## 8. 素材库多存储引擎预览与代理协议 (Media Asset Library Proxying & Bulk Upload)
+
+为解决非 URL 形式存储键（如 Lark fileToken `boxcnxxxx` 或 PostFast S3 存储键 `pf_file_xxxx`）在浏览器中无法渲染的问题，系统设计并集成了轻量级、高安全的本地文件媒体代理网关。
+
+### 8.1 代理端点契约 (Proxy Endpoints)
+
+#### 8.1.1 Lark 云文档代理
+*   **路由**: `GET /api/integrations/lark/file/[fileToken]`
+*   **安全机制**:
+    *   读取 `MediaAsset` 查询其绑定的 `brandId`。
+    *   通过 `canSessionAccessBrandProject` 校验当前登录 Session 是否拥有访问该品牌项目的权限。
+    *   使用品牌专用的 Lark App 凭证获取 `tenant_access_token`。
+*   **请求与流转**:
+    *   代理向 Lark 发起 `GET https://open.feishu.cn/open-apis/drive/v1/medias/[fileToken]/download`。
+    *   拉取文件流后，以对应的 `Content-Type` 和浏览器强缓存头（`Cache-Control: public, max-age=31536000`）回传客户端，保障预览体验。
+
+#### 8.1.2 PostFast 媒体 S3 代理
+*   **路由**: `GET /api/integrations/postfast/file/[brandId]/[...key]`
+*   **安全机制**:
+    *   校验当前登录 Session 拥有 `brandId` 项目的访问权限。
+*   **请求与流转**:
+    *   由于 PostFast S3 上的多媒体资产需要开放给社交渠道（如 Facebook、Instagram 等）拉取，因此该存储桶为公开只读。
+    *   验证授权后，代理端点执行 **307 临时重定向** 至 PostFast 专属生产 S3 地址：`https://postfast-media-prod.s3.ap-southeast-1.amazonaws.com/[key]`，避免占用应用服务器带宽并极大加速加载。
+
+### 8.2 动态 URL 重写映射 (Dynamic URL Rewriting)
+为在保持 API 与底层数据库存储键兼容的同时，实现前端预览，在 `GET /api/dashboard/assets` 与 `GET /api/brands/[id]/assets` 两个获取资产列表的后端路由中：
+*   当资产 `url` 为非 `http` / `/` 开头的原始存储键时，后端在返回 Payload 时对其进行动态重写：
+    *   如果 `sourceType === 'lark'`，重写为 `/api/integrations/lark/file/${url}`。
+    *   如果 `sourceType === 'postfast'`，重写为 `/api/integrations/postfast/file/${brandId}/${url}`。
+*   在前端，移除了对非标准协议过滤的 `.filter(isPreviewable)`，当遇到不可解析的数据类型时退化为通用文件图标展位，避免资产“神秘消失”。
+
+### 8.3 批量上传健壮性设计 (Bulk Upload Protocol)
+*   **前端上传队列**: 前端 `uploadFiles` 将选中的 `FileList` 转为数组，执行顺序循环上传。
+*   **单点故障隔离 (Error Isolation)**: 每一个文件的预签名获取、文件直传/备用 Base64 上传以及入库确认逻辑均用 `try/catch` 结构进行隔离。某个文件失败后，会把错误信息推入 `failedFiles` 错误收集栈，并不影响其他文件的继续上传。
+*   **进度感知**: 在上传循环体中，使用 `uploadProgress` 变量动态更新当前正在上传的索引 (如 `正在上传 (2/5)...`)，从而提升用户在传输大文件或多文件时的交互体验。
+

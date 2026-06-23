@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createBrandWorkspace, DEFAULT_LARK_PARENT_FOLDER } from '@/lib/integrations/lark'
+
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
@@ -198,29 +198,8 @@ export async function PATCH(request: Request) {
     },
   })
 
-  // Auto-create Lark workspace folder if brand has Lark creds but no workspace yet
-  let larkFolderUrl: string | undefined
-  if (updated.larkAppId && updated.larkAppSecret && !updated.larkDriveFolderId) {
-    try {
-      const workspace = await createBrandWorkspace({
-        appId: updated.larkAppId,
-        appSecret: updated.larkAppSecret,
-        parentFolderToken: updated.larkParentFolderToken ?? DEFAULT_LARK_PARENT_FOLDER,
-        brandName: updated.name,
-      })
-      if (workspace.success && workspace.folderToken) {
-        await prisma.brand.update({
-          where: { id: brandId },
-          data: { larkDriveFolderId: workspace.folderToken },
-        })
-        updated.larkDriveFolderId = workspace.folderToken
-        larkFolderUrl = workspace.folderUrl
-        console.log(`[Agent] Created Lark workspace for "${updated.name}": ${workspace.folderUrl}`)
-      }
-    } catch (e) {
-      console.warn('[Agent] Lark workspace creation failed (non-fatal):', e)
-    }
-  }
+  // Auto-create Lark workspace folder is disabled as Lark Drive is decommissioned
+  let larkFolderUrl: string | undefined = undefined
 
   // Auto-sync PostFast accounts when API key is present
   let postfastSync: { synced: number; accounts: string[] } | undefined

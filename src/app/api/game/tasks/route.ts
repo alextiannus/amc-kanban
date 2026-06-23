@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { uploadToLarkDrive } from '@/lib/integrations/lark'
+import { getHuaweiObsConfig, makeBrandAssetKey, uploadHuaweiObsObject } from '@/lib/integrations/huaweiObs'
 import crypto from 'crypto'
 import fs from 'fs/promises'
 import path from 'path'
@@ -42,13 +42,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No files uploaded' }, { status: 400 })
     }
 
-    // 2. Fetch Brand config & integrations status
+    // 2. Fetch Brand config
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
       select: {
-        larkAppId: true,
-        larkAppSecret: true,
-        larkDriveFolderId: true,
+        id: true,
       },
     })
     if (!brand) {
@@ -79,27 +77,27 @@ export async function POST(request: Request) {
 
     // 5. Upload files and create MediaAssets
     const savedUrls: string[] = []
-    const isLarkConfigured = brand.larkAppId && brand.larkAppSecret && brand.larkDriveFolderId
+    const obsConfig = getHuaweiObsConfig()
 
     for (const item of fileData) {
       let fileUrl = ''
 
-      if (isLarkConfigured) {
-        // Option A: Upload to Lark Drive
-        const uploadResult = await uploadToLarkDrive({
-          appId: brand.larkAppId!,
-          appSecret: brand.larkAppSecret!,
-          folderId: brand.larkDriveFolderId!,
-          filename: item.name,
-          mimeType: item.type,
-          fileBuffer: item.buffer,
+      if (obsConfig) {
+        // Upload to Huawei OBS
+        const key = makeBrandAssetKey({ brandId, folder: 'UGC素材', filename: item.name })
+        const uploadResult = await uploadHuaweiObsObject({
+          key,
+          body: item.buffer,
+          contentType: item.type,
         })
-        if (uploadResult.success) {
-          fileUrl = uploadResult.fileToken!
+        if (uploadResult.ok) {
+          fileUrl = uploadResult.url
+        } else {
+          console.error('[Game Task UGC] Huawei OBS upload failed, error:', uploadResult.error)
         }
       }
 
-      // Option B: Fallback locally to public uploads if Lark fails or is not configured
+      // Fallback locally to public uploads if OBS is not configured or fails
       if (!fileUrl) {
         const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'ugc')
         await fs.mkdir(uploadDir, { recursive: true })
