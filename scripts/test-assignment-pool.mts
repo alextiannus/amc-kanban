@@ -14,6 +14,10 @@ async function main() {
     return
   }
 
+  // Clean up existing records to prevent cross-test pollution
+  await prisma.assignmentPoolMember.deleteMany({})
+  await prisma.assignmentPoolConfig.deleteMany({})
+
   await prisma.assignmentPoolMember.upsert({
     where: { agentId: agent.id },
     create: {
