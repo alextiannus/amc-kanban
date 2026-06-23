@@ -39,7 +39,25 @@ async function runTest() {
       aiCategory: "raw_photos"
     }
   });
-  console.log("2. Created raw cover photo asset URL:", coverAsset.url);
+  await prisma.mediaAsset.create({
+    data: {
+      brandId: brand.id,
+      url: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800",
+      mimeType: "image/jpeg",
+      aiReady: true,
+      aiCategory: "raw_photos"
+    }
+  });
+  await prisma.mediaAsset.create({
+    data: {
+      brandId: brand.id,
+      url: "https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800",
+      mimeType: "image/jpeg",
+      aiReady: true,
+      aiCategory: "raw_photos"
+    }
+  });
+  console.log("2. Created raw photos assets (3 total) to satisfy Instagram limits.");
 
   // 3. Create task (violating Halal to force compliance interrupt so we can test resume-redesign)
   const task = await prisma.workUnit.create({
@@ -53,7 +71,7 @@ async function runTest() {
   });
   console.log("3. Created task to trigger HIL:", task.id);
 
-  const config = { configurable: { thread_id: brand.id } };
+  const config = { configurable: { thread_id: `${brand.id}-${Date.now()}` } };
 
   // 4. Invoke graph
   console.log("4. Running graph (expecting compliance interrupt)...");

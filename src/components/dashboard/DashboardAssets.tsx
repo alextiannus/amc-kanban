@@ -20,7 +20,8 @@ import {
   AlertTriangle,
   Play,
   RefreshCw,
-  Trash2
+  Trash2,
+  Maximize2
 } from 'lucide-react'
 
 // Category definitions
@@ -105,6 +106,15 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [moveFolder, setMoveFolder] = useState('')
   const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动'])
   const [selectedFolder, setSelectedFolder] = useState<string>('素材库')
+
+  // Image Lightbox Preview State
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
+
+  // Drag/Swipe selection tracking refs
+  const isDragSelecting = useRef(false)
+  const dragSelectionMode = useRef<'select' | 'deselect'>('select')
+  const dragVisitedIds = useRef<Set<string>>(new Set())
+  const hasToggledThisInteraction = useRef(false)
 
   const loadFolders = useCallback(async () => {
     if (!brandId) return
@@ -252,8 +262,115 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     }
   }
 
-  const toggleSelect = (id: string, e?: React.MouseEvent) => {
+  // Handler for mouse up globally (to terminate dragging)
+  const handleMouseUpGlobal = useCallback(() => {
+    isDragSelecting.current = false
+    dragVisitedIds.current.clear()
+    setTimeout(() => {
+      hasToggledThisInteraction.current = false
+    }, 50)
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('mouseup', handleMouseUpGlobal)
+    window.addEventListener('touchend', handleMouseUpGlobal)
+    return () => {
+      window.removeEventListener('mouseup', handleMouseUpGlobal)
+      window.removeEventListener('touchend', handleMouseUpGlobal)
+    }
+  }, [handleMouseUpGlobal])
+
+  const startDragSelection = (startId: string) => {
+    isDragSelecting.current = true
+    dragVisitedIds.current.clear()
+    dragVisitedIds.current.add(startId)
+    hasToggledThisInteraction.current = true
+
+    // Determine mode based on whether startId is already selected
+    const isAlreadySelected = selected.includes(startId)
+    if (isAlreadySelected) {
+      dragSelectionMode.current = 'deselect'
+      setSelected(prev => prev.filter(id => id !== startId))
+    } else {
+      dragSelectionMode.current = 'select'
+      setSelected(prev => [...prev, startId])
+    }
+    setActiveAssetId(startId)
+  }
+
+  const handleCheckboxMouseDown = (id: string, e: React.MouseEvent) => {
+    if (e.button !== 0) return // Left click only
+    startDragSelection(id)
+  }
+
+  const handleCheckboxTouchStart = (id: string) => {
+    startDragSelection(id)
+  }
+
+  const handleCardMouseEnter = (id: string) => {
+    if (!isDragSelecting.current) return
+    if (dragVisitedIds.current.has(id)) return
+
+    dragVisitedIds.current.add(id)
+    if (dragSelectionMode.current === 'select') {
+      setSelected(prev => {
+        if (prev.includes(id)) return prev
+        return [...prev, id]
+      })
+    } else {
+      setSelected(prev => prev.filter(x => x !== id))
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragSelecting.current) return
+    
+    // Call e.preventDefault() if safe to do so to prevent viewport scrolling
+    if (e.cancelable) {
+      e.preventDefault()
+    }
+
+    const touch = e.touches[0]
+    if (!touch) return
+
+    const el = document.elementFromPoint(touch.clientX, touch.clientY)
+    if (!el) return
+
+    // Walk up DOM to find target card
+    let current: HTMLElement | null = el as HTMLElement
+    let id: string | null = null
+    while (current) {
+      const assetId = current.getAttribute('data-asset-id')
+      if (assetId) {
+        id = assetId
+        break
+      }
+      current = current.parentElement
+    }
+
+    if (id && !dragVisitedIds.current.has(id)) {
+      dragVisitedIds.current.add(id)
+      const targetId = id
+      if (dragSelectionMode.current === 'select') {
+        setSelected(prev => {
+          if (prev.includes(targetId)) return prev
+          return [...prev, targetId]
+        })
+      } else {
+        setSelected(prev => prev.filter(x => x !== targetId))
+      }
+    }
+  }
+
+  const toggleSelect = (id: string, e?: React.MouseEvent | React.TouchEvent) => {
     if (e) e.stopPropagation()
+    
+    // If handled in the current touch/mouse interaction, skip the redundant click handler toggle
+    if (hasToggledThisInteraction.current) {
+      hasToggledThisInteraction.current = false
+      return
+    }
+
     setSelected(p => {
       const isSel = p.includes(id)
       const next = isSel ? p.filter(s => s !== id) : [...p, id]
@@ -572,7 +689,6 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           body: JSON.stringify(payload),
         })
       }))
-      setSelected([])
       setBatchTagsText('')
       setMoveFolder('')
       await loadAssets()
@@ -920,8 +1036,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 return (
                   <div
                     key={asset.id}
+                    data-asset-id={asset.id}
                     onClick={() => handleCardClick(asset.id)}
-                    className={`group flex flex-col bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 select-none shadow-sm ${isActive ? 'ring-2 ring-indigo-500 border-indigo-500' : isSelected ? 'ring-2 ring-indigo-500/50 border-indigo-500/50' : 'border-slate-100 dark:border-slate-800/80 hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md'}`}
+                    onMouseEnter={() => handleCardMouseEnter(asset.id)}
+                    onTouchMove={handleTouchMove}
+                    className={`group flex flex-col bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 select-none shadow-sm relative ${isActive ? 'ring-2 ring-indigo-500 border-indigo-500' : isSelected ? 'ring-2 ring-indigo-500/50 border-indigo-500/50' : 'border-slate-100 dark:border-slate-800/80 hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md'}`}
                   >
                     {/* Thumbnail Container */}
                     <div className="relative aspect-square w-full overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
@@ -963,7 +1082,15 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                       {/* Top-Left: Checkbox hover overlay */}
                       <div
                         onClick={(e) => toggleSelect(asset.id, e)}
-                        className={`absolute top-2 left-2 w-5.5 h-5.5 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-500 border-indigo-500 scale-100' : 'bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600 opacity-0 group-hover:opacity-100 hover:scale-105'}`}
+                        onMouseDown={(e) => {
+                          e.stopPropagation()
+                          handleCheckboxMouseDown(asset.id, e)
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation()
+                          handleCheckboxTouchStart(asset.id)
+                        }}
+                        className={`absolute top-2 left-2 w-5.5 h-5.5 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-500 border-indigo-500 scale-100' : 'bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600 opacity-0 group-hover:opacity-100 hover:scale-105'} z-20`}
                       >
                         {isSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
                       </div>
@@ -972,6 +1099,18 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                       <div className="absolute bottom-2 left-2 bg-slate-900/75 text-white text-[9px] font-black px-1.5 py-0.5 rounded backdrop-blur-sm truncate max-w-[85%]">
                         {asset.brandName}
                       </div>
+
+                      {/* Bottom-Right: Zoom preview button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setPreviewImageUrl(asset.url)
+                        }}
+                        className="absolute bottom-2 right-2 w-7 h-7 bg-slate-950/60 dark:bg-black/60 hover:bg-indigo-600 text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 active:scale-95 transition-all shadow-md backdrop-blur-sm z-20"
+                        title="点击放大查看原图"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
 
@@ -1161,7 +1300,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             <div className="p-5 flex-1 overflow-y-auto space-y-6 custom-scrollbar">
               {/* Asset Preview Thumbnail card */}
               <div className="rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 shadow-sm">
-                <div className="aspect-[4/3] w-full bg-slate-200 dark:bg-slate-800 relative flex items-center justify-center">
+                <div
+                  onClick={() => setPreviewImageUrl(activeAsset.url)}
+                  className="aspect-[4/3] w-full bg-slate-200 dark:bg-slate-800 relative flex items-center justify-center cursor-zoom-in group/preview"
+                  title="点击查看原图"
+                >
                   {isPreviewable(activeAsset) ? (
                     activeAsset.mimeType.startsWith('video/') ? (
                       <video src={`${activeAsset.url}#t=0.1`} preload="metadata" muted className="w-full h-full object-cover" />
@@ -1182,6 +1325,13 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                       <Play className="w-8 h-8 text-white fill-white" />
                     </div>
                   )}
+                  {/* Hover magnifying overlay */}
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1.5 text-white bg-black/60 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm">
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      <span>查看原图</span>
+                    </div>
+                  </div>
                 </div>
                 <div className="p-3.5">
                   <div className="flex items-center justify-between">
@@ -1344,7 +1494,52 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         )}
       </aside>
 
-
+      {/* Lightbox original media preview modal */}
+      {previewImageUrl && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm transition-all animate-fade-in"
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          <button
+            onClick={() => setPreviewImageUrl(null)}
+            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
+            title="关闭预览"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          
+          <div
+            className="max-w-[90vw] max-h-[90vh] flex items-center justify-center relative"
+            onClick={e => e.stopPropagation()}
+          >
+            {previewImageUrl.toLowerCase().endsWith('.mp4') || previewImageUrl.includes('/videos/') ? (
+              <video
+                src={previewImageUrl}
+                controls
+                autoPlay
+                className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              />
+            ) : (
+              <img
+                src={previewImageUrl}
+                alt="Original preview"
+                className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl select-none"
+              />
+            )}
+            
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-white/70 text-xs font-mono bg-black/40 px-3 py-1 rounded-full backdrop-blur-md whitespace-nowrap">
+              <a
+                href={previewImageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline flex items-center gap-1 hover:text-white"
+              >
+                <span>在新标签页打开原文件 ↗</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )
