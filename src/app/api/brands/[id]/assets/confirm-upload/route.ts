@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { triggerDesignerAutoTag } from '@/lib/designer'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -73,6 +74,13 @@ export async function POST(request: Request, { params }: Params) {
         sourceType: 'huawei_obs',
       },
     })
+
+    // Trigger platform Designer auto-tagging in the background
+    if (asset.mimeType.startsWith('image/')) {
+      void triggerDesignerAutoTag(asset.id).catch((err) => {
+        console.error('[confirm-upload] Failed to auto-tag asset in background:', err)
+      })
+    }
 
     return NextResponse.json({
       ok: true,

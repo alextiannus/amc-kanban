@@ -50,6 +50,12 @@ export async function designerNode(state: any) {
   }
 
   const coverUrl = mediaUrls[0];
+  const isVideo = coverUrl.toLowerCase().endsWith(".mp4") || coverUrl.includes("/videos/");
+  if (isVideo) {
+    console.log("Designer Node: Media is a video. Skipping image design processing (sharp).");
+    return { mediaUrls };
+  }
+
   const watermarkUrl = brand.watermarkUrl || brand.logoUrl;
 
   console.log(`Designer Node: Processing cover image: ${coverUrl}`);

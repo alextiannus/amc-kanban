@@ -30,7 +30,8 @@ async function runTest() {
   });
   console.log("2. Created violating task ID:", task.id);
 
-  const config = { configurable: { thread_id: brand.id } };
+  const threadId = `${brand.id}-${Date.now()}`;
+  const config = { configurable: { thread_id: threadId } };
 
   // 3. Invoke graph and expect HIL Interrupt
   console.log("3. Invoking LangGraph workflow...");
