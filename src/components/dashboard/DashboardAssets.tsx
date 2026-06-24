@@ -126,6 +126,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const dragSelectionMode = useRef<'select' | 'deselect'>('select')
   const dragVisitedIds = useRef<Set<string>>(new Set())
   const hasToggledThisInteraction = useRef(false)
+  
+  // Selection mode states & refs
+  const [isSelectingState, setIsSelectingState] = useState(false)
+  const lastSelectedId = useRef<string | null>(null)
 
   const loadFolders = useCallback(async () => {
     if (!brandId) return
@@ -401,6 +405,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   // Handler for mouse up globally (to terminate dragging)
   const handleMouseUpGlobal = useCallback(() => {
     isDragSelecting.current = false
+    setIsSelectingState(false)
     dragVisitedIds.current.clear()
     setTimeout(() => {
       hasToggledThisInteraction.current = false
@@ -418,9 +423,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
   const startDragSelection = (startId: string) => {
     isDragSelecting.current = true
+    setIsSelectingState(true)
     dragVisitedIds.current.clear()
     dragVisitedIds.current.add(startId)
     hasToggledThisInteraction.current = true
+    lastSelectedId.current = startId
 
     // Determine mode based on whether startId is already selected
     const isAlreadySelected = selected.includes(startId)
@@ -436,6 +443,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
   const handleCheckboxMouseDown = (id: string, e: React.MouseEvent) => {
     if (e.button !== 0) return // Left click only
+    if (e.shiftKey) {
+      // Let the toggleSelect onClick handle the shift range selection
+      return
+    }
     startDragSelection(id)
   }
 
@@ -448,6 +459,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     if (dragVisitedIds.current.has(id)) return
 
     dragVisitedIds.current.add(id)
+    lastSelectedId.current = id
     if (dragSelectionMode.current === 'select') {
       setSelected(prev => {
         if (prev.includes(id)) return prev
@@ -486,6 +498,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
     if (id && !dragVisitedIds.current.has(id)) {
       dragVisitedIds.current.add(id)
+      lastSelectedId.current = id
       const targetId = id
       if (dragSelectionMode.current === 'select') {
         setSelected(prev => {
@@ -507,16 +520,41 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       return
     }
 
-    setSelected(p => {
-      const isSel = p.includes(id)
-      const next = isSel ? p.filter(s => s !== id) : [...p, id]
+    const isShift = e && 'shiftKey' in e && (e as React.MouseEvent).shiftKey
+
+    setSelected(prev => {
+      const isSel = prev.includes(id)
+      
+      if (isShift && lastSelectedId.current) {
+        const lastIdx = filtered.findIndex(a => a.id === lastSelectedId.current)
+        const currentIdx = filtered.findIndex(a => a.id === id)
+        if (lastIdx !== -1 && currentIdx !== -1) {
+          const start = Math.min(lastIdx, currentIdx)
+          const end = Math.max(lastIdx, currentIdx)
+          const idsInRange = filtered.slice(start, end + 1).map(a => a.id)
+          
+          const lastWasSelected = prev.includes(lastSelectedId.current)
+          if (lastWasSelected) {
+            return Array.from(new Set([...prev, ...idsInRange]))
+          } else {
+            return prev.filter(x => !idsInRange.includes(x))
+          }
+        }
+      }
+
+      lastSelectedId.current = id
+      const next = isSel ? prev.filter(s => s !== id) : [...prev, id]
       return next
     })
     setActiveAssetId(id)
   }
 
-  const handleCardClick = (id: string) => {
-    setActiveAssetId(id)
+  const handleCardClick = (id: string, e: React.MouseEvent) => {
+    if (selected.length > 0) {
+      toggleSelect(id, e)
+    } else {
+      setActiveAssetId(id)
+    }
   }
 
   // Filter logic
@@ -1179,7 +1217,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
           {/* Grid Layout */}
           {filtered.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 pb-20">
+            <div
+              className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 pb-20"
+              style={{ touchAction: isSelectingState ? 'none' : 'auto' }}
+            >
               {filtered.map((asset, i) => {
                 const isSelected = selected.includes(asset.id)
                 const isActive = activeAssetId === asset.id
@@ -1190,12 +1231,13 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                   <div
                     key={asset.id}
                     data-asset-id={asset.id}
-                    draggable={true}
+                    draggable={!isSelectingState}
                     onDragStart={(e) => handleDragStart(asset.id, e)}
                     onDragEnd={handleDragEnd}
-                    onClick={() => handleCardClick(asset.id)}
+                    onClick={(e) => handleCardClick(asset.id, e)}
                     onMouseEnter={() => handleCardMouseEnter(asset.id)}
                     onTouchMove={handleTouchMove}
+                    style={{ touchAction: isSelectingState ? 'none' : 'auto' }}
                     className={`group flex flex-col bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 select-none shadow-sm relative ${isActive ? 'ring-2 ring-indigo-500 border-indigo-500' : isSelected ? 'ring-2 ring-indigo-500/50 border-indigo-500/50' : 'border-slate-100 dark:border-slate-800/80 hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md'} ${draggingIds?.includes(asset.id) ? 'opacity-40 scale-95 border-dashed border-indigo-400' : ''}`}
                   >
                     {/* Thumbnail Container */}
@@ -1246,9 +1288,15 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                           e.stopPropagation()
                           handleCheckboxTouchStart(asset.id)
                         }}
-                        className={`absolute top-2 left-2 w-5.5 h-5.5 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-500 border-indigo-500 scale-100' : 'bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600 opacity-0 group-hover:opacity-100 hover:scale-105'} z-20`}
+                        className={`absolute top-2.5 left-2.5 w-6.5 h-6.5 rounded-lg border-2 flex items-center justify-center transition-all ${
+                          isSelected
+                            ? 'bg-indigo-500 border-indigo-500 scale-100 shadow-sm shadow-indigo-500/20'
+                            : selected.length > 0
+                              ? 'bg-white/90 dark:bg-slate-900/90 border-slate-400 dark:border-slate-500 opacity-100'
+                              : 'bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600 opacity-0 group-hover:opacity-100 hover:scale-105'
+                        } z-20`}
                       >
-                        {isSelected && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                        {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
                       </div>
 
                       {/* Brand Label */}
