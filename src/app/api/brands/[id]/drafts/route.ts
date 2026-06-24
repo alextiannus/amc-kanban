@@ -81,7 +81,28 @@ export async function GET(request: Request, { params }: Params) {
     take: 100,
   })
 
-  return NextResponse.json({ drafts })
+  // Dynamically resolve postUrl for published drafts
+  const hasPublishedDrafts = drafts.some((d) => d.status === 'published' && d.platformPostId)
+  let resolvedDrafts = drafts.map((d) => ({ ...d, postUrl: undefined as string | undefined }))
+
+  if (hasPublishedDrafts) {
+    const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
+    if (brand?.postfastApiKey) {
+      const { postfastListPosts } = await import('@/lib/integrations/postfast')
+      const pfResult = await postfastListPosts(brand.postfastApiKey, { status: 'published' })
+      if (pfResult.success) {
+        resolvedDrafts = drafts.map((d) => {
+          if (d.status === 'published' && d.platformPostId) {
+            const pfPost = pfResult.posts.find((p) => p.id === d.platformPostId)
+            return { ...d, postUrl: pfPost?.postUrl }
+          }
+          return { ...d, postUrl: undefined }
+        })
+      }
+    }
+  }
+
+  return NextResponse.json({ drafts: resolvedDrafts })
 }
 
 export async function POST(request: Request, { params }: Params) {

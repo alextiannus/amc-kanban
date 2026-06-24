@@ -61,7 +61,21 @@ export async function GET(request: Request, { params }: Params) {
 
   const draft = await prisma.contentDraft.findFirst({ where: { id: draftId, brandId }, select: DRAFT_SELECT })
   if (!draft) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json({ draft })
+
+  let postUrl: string | undefined
+  if (draft.status === 'published' && draft.platformPostId) {
+    const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
+    if (brand?.postfastApiKey) {
+      const { postfastListPosts } = await import('@/lib/integrations/postfast')
+      const pfResult = await postfastListPosts(brand.postfastApiKey, { status: 'published' })
+      if (pfResult.success) {
+        const pfPost = pfResult.posts.find((p) => p.id === draft.platformPostId)
+        if (pfPost) postUrl = pfPost.postUrl
+      }
+    }
+  }
+
+  return NextResponse.json({ draft: { ...draft, postUrl } })
 }
 
 export async function PATCH(request: Request, { params }: Params) {

@@ -41,6 +41,7 @@ type DraftItem = {
   scheduledAt?: string | null
   platformPostId?: string | null
   publishedAt?: string | null
+  postUrl?: string | null
   createdAt?: string | null
   updatedAt: string
   agentNote?: string | null
@@ -695,8 +696,22 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
           <div className="flex h-full w-full max-w-xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
               <div>
-                <p className="text-xs font-black uppercase tracking-wide text-slate-400">{selectedDraft ? STATUS_LABELS[selectedDraft.status] || selectedDraft.status : 'New draft'}</p>
-                <h3 className="text-lg font-black text-slate-950 dark:text-white">{selectedDraft ? '编辑草稿' : '新建草稿'}</h3>
+                <p className="text-xs font-black uppercase tracking-wide text-slate-400 flex items-center gap-2">
+                  <span>{selectedDraft ? STATUS_LABELS[selectedDraft.status] || selectedDraft.status : 'New draft'}</span>
+                  {selectedDraft?.status === 'published' && selectedDraft.postUrl && (
+                    <a
+                      href={selectedDraft.postUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300 font-bold"
+                    >
+                      🔗 查看文章
+                    </a>
+                  )}
+                </p>
+                <h3 className="text-lg font-black text-slate-950 dark:text-white">
+                  {selectedDraft ? (selectedDraft.status === 'published' ? '查看已发布文章' : '编辑草稿') : '新建草稿'}
+                </h3>
               </div>
               <button onClick={closeEditor} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
                 <X className="h-5 w-5" />
@@ -708,13 +723,15 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 value={caption}
                 onChange={(event) => setCaption(event.target.value)}
                 placeholder="输入草稿正文..."
-                className="min-h-[220px] w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                disabled={selectedDraft?.status === 'published'}
+                className="min-h-[220px] w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed"
               />
               <input
                 value={hashtags}
                 onChange={(event) => setHashtags(event.target.value)}
                 placeholder="标签，用逗号分隔，例如 lunch, promo, weekend"
-                className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                disabled={selectedDraft?.status === 'published'}
+                className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed"
               />
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 min-h-[44px]">
@@ -729,6 +746,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                           <button
                             key={account.id}
                             type="button"
+                            disabled={selectedDraft?.status === 'published'}
                             onClick={() => {
                               setSelectedAccountIds(prev => {
                                 const next = prev.includes(account.id)
@@ -738,7 +756,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                                 return next
                               })
                             }}
-                            className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                            className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all flex items-center gap-1.5 disabled:opacity-75 disabled:cursor-not-allowed ${
                               isSelected
                                 ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900 dark:text-indigo-300'
                                 : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50'
@@ -756,8 +774,9 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   <input
                     type="datetime-local"
                     value={scheduledAt}
+                    disabled={selectedDraft?.status === 'published'}
                     onChange={(event) => setScheduledAt(event.target.value)}
-                    className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -765,7 +784,8 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 value={agentNote}
                 onChange={(event) => setAgentNote(event.target.value)}
                 placeholder="协作备注 / 修改说明"
-                className="min-h-20 w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                disabled={selectedDraft?.status === 'published'}
+                className="min-h-20 w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed"
               />
 
               {/* Media & Assets Section */}
@@ -773,7 +793,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-black text-slate-800 dark:text-slate-200">媒体与素材</h4>
                   <div className="flex items-center gap-2">
-                    {attachedMedia.length > 0 && (
+                    {attachedMedia.length > 0 && selectedDraft?.status !== 'published' && (
                       <button
                         type="button"
                         onClick={() => setAttachedMedia([])}
@@ -791,19 +811,25 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 {/* Drag-and-drop grid */}
                 {attachedMedia.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-bold text-slate-400">拖拽调整媒体排序</p>
+                    <p className="text-xs font-bold text-slate-400">
+                      {selectedDraft?.status === 'published' ? '媒体内容' : '拖拽调整媒体排序'}
+                    </p>
                     <div className="grid grid-cols-4 gap-2">
                       {attachedMedia.map((item, index) => {
                         const isVid = isVideoUrl(item.url)
                         return (
                           <div
                             key={`${item.type}-${item.id}-${index}`}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, index)}
-                            onDragOver={(e) => handleDragOver(e, index)}
-                            onDragEnd={handleDragEnd}
-                            className={`relative aspect-square rounded-lg border border-slate-200 bg-slate-100 overflow-hidden dark:border-slate-800 dark:bg-slate-900 group shadow-sm cursor-grab active:cursor-grabbing transition-shadow hover:shadow ${
-                              draggedIndex === index ? 'opacity-40 border-emerald-500 scale-95' : ''
+                            draggable={selectedDraft?.status !== 'published'}
+                            onDragStart={(e) => selectedDraft?.status !== 'published' && handleDragStart(e, index)}
+                            onDragOver={(e) => selectedDraft?.status !== 'published' && handleDragOver(e, index)}
+                            onDragEnd={selectedDraft?.status !== 'published' ? handleDragEnd : undefined}
+                            className={`relative aspect-square rounded-lg border border-slate-200 bg-slate-100 overflow-hidden dark:border-slate-800 dark:bg-slate-900 group shadow-sm transition-shadow ${
+                              selectedDraft?.status === 'published'
+                                ? 'cursor-default'
+                                : draggedIndex === index
+                                ? 'opacity-40 border-emerald-500 scale-95 cursor-grab active:cursor-grabbing'
+                                : 'cursor-grab active:cursor-grabbing hover:shadow'
                             }`}
                           >
                             {isVid ? (
@@ -811,13 +837,15 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                             ) : (
                               <img src={item.url} className="h-full w-full object-cover pointer-events-none" alt="" />
                             )}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveMedia(index)}
-                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-600 p-1 text-white opacity-90 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                            {selectedDraft?.status !== 'published' && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveMedia(index)}
+                                className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-600 p-1 text-white opacity-90 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
                             {isVid && (
                               <div className="absolute bottom-1 right-1 bg-black/50 p-0.5 rounded">
                                 <Play className="h-3 w-3 text-white fill-white" />
@@ -841,20 +869,22 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   <div className="flex gap-2">
                     <input
                       value={newUrlInput}
+                      disabled={selectedDraft?.status === 'published'}
                       onChange={(event) => setNewUrlInput(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
                           event.preventDefault()
-                          handleAddUrl()
+                          if (selectedDraft?.status !== 'published') handleAddUrl()
                         }
                       }}
                       placeholder="https://example.com/image.jpg"
-                      className="h-10 flex-1 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                      className="h-10 flex-1 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed"
                     />
                     <button
                       type="button"
+                      disabled={selectedDraft?.status === 'published'}
                       onClick={handleAddUrl}
-                      className="inline-flex h-10 items-center justify-center rounded-md bg-slate-900 px-4 text-xs font-bold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+                      className="inline-flex h-10 items-center justify-center rounded-md bg-slate-900 px-4 text-xs font-bold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       添加
                     </button>
@@ -878,8 +908,9 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                           <button
                             key={asset.id}
                             type="button"
-                            onClick={() => handleToggleAsset(asset)}
-                            className={`relative aspect-square rounded-md overflow-hidden border-2 bg-slate-100 dark:bg-slate-900 transition-all group ${
+                            disabled={selectedDraft?.status === 'published'}
+                            onClick={() => selectedDraft?.status !== 'published' && handleToggleAsset(asset)}
+                            className={`relative aspect-square rounded-md overflow-hidden border-2 bg-slate-100 dark:bg-slate-900 transition-all group disabled:cursor-not-allowed ${
                               isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-transparent hover:border-slate-300'
                             }`}
                           >
@@ -894,9 +925,11 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                               </div>
                             )}
                             {isSelected && (
-                              <div className="absolute top-1 right-1 bg-emerald-500 group-hover:bg-rose-600 rounded-full p-0.5 shadow-sm transition-colors">
-                                <Check className="h-2.5 w-2.5 text-white stroke-[3px] block group-hover:hidden" />
-                                <X className="h-2.5 w-2.5 text-white stroke-[3px] hidden group-hover:block" />
+                              <div className={`absolute top-1 right-1 bg-emerald-500 rounded-full p-0.5 shadow-sm transition-colors ${selectedDraft?.status !== 'published' ? 'group-hover:bg-rose-600' : ''}`}>
+                                <Check className={`h-2.5 w-2.5 text-white stroke-[3px] block ${selectedDraft?.status !== 'published' ? 'group-hover:hidden' : ''}`} />
+                                {selectedDraft?.status !== 'published' && (
+                                  <X className="h-2.5 w-2.5 text-white stroke-[3px] hidden group-hover:block" />
+                                )}
                               </div>
                             )}
                           </button>
@@ -934,11 +967,11 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   setPreviewMediaIndex(0)
                   setPreviewOpen(true)
                 }}
-                className={`rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 flex items-center gap-2 ${!selectedDraft ? 'mr-auto' : ''}`}
+                className={`rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 flex items-center gap-2 ${(!selectedDraft || selectedDraft.status === 'published') ? 'mr-auto' : ''}`}
               >
                 <Eye className="h-4 w-4" /> 预览效果
               </button>
-              {selectedDraft && (
+              {selectedDraft && selectedDraft.status !== 'published' && (
                 <button
                   type="button"
                   disabled={saving}
@@ -948,49 +981,71 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   <Trash2 className="h-4 w-4" /> 废弃
                 </button>
               )}
-              <button
-                type="button"
-                disabled={saving || selectedAccountIds.length === 0}
-                onClick={async () => {
-                  const activeCaption = caption.trim() || '【AI 正在创作中...】'
-                  if (!caption.trim()) {
-                    setCaption(activeCaption)
-                  }
-                  const statusToSave = selectedDraft ? selectedDraft.status : 'draft'
-                  const saved = await saveDraft(statusToSave, activeCaption)
-                  if (saved) {
-                    await triggerCopywriter(saved.id)
-                  }
-                }}
-                className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-              >
-                ✨ AI 创作
-              </button>
-              <button
-                disabled={saving || !caption.trim() || !accountId}
-                onClick={async () => {
-                  const saved = await saveDraft('draft')
-                  if (saved) closeEditor()
-                }}
-                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                保存
-              </button>
-              <button disabled={saving || !caption.trim() || !accountId} onClick={submitDraft} className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><Send className="h-4 w-4" /> 提交草稿</button>
-              {selectedDraft?.status === 'pending_review' && (
+              {selectedDraft?.status === 'published' ? (
+                selectedDraft.postUrl ? (
+                  <a
+                    href={selectedDraft.postUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white transition-colors animate-pulse"
+                  >
+                    打开已发布文章
+                  </a>
+                ) : (
+                  <button
+                    disabled
+                    className="inline-flex items-center gap-2 rounded-md bg-slate-300 dark:bg-slate-700 px-4 py-2 text-sm font-bold text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                  >
+                    打开已发布文章 (暂无链接)
+                  </button>
+                )
+              ) : (
                 <>
                   <button
                     type="button"
-                    disabled={saving}
+                    disabled={saving || selectedAccountIds.length === 0}
                     onClick={async () => {
-                      await triggerCopywriter(selectedDraft.id)
+                      const activeCaption = caption.trim() || '【AI 正在创作中...】'
+                      if (!caption.trim()) {
+                        setCaption(activeCaption)
+                      }
+                      const statusToSave = selectedDraft ? selectedDraft.status : 'draft'
+                      const saved = await saveDraft(statusToSave, activeCaption)
+                      if (saved) {
+                        await triggerCopywriter(saved.id)
+                      }
                     }}
                     className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                   >
-                    ✨ AI 重新创作
+                    ✨ AI 创作
                   </button>
-                  <button disabled={saving} onClick={() => reviewDraft('reject')} className="inline-flex items-center gap-2 rounded-md border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50"><X className="h-4 w-4" /> 驳回</button>
-                  <button disabled={saving} onClick={() => reviewDraft('approve')} className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"><Check className="h-4 w-4" /> 批准</button>
+                  <button
+                    disabled={saving || !caption.trim() || !accountId}
+                    onClick={async () => {
+                      const saved = await saveDraft('draft')
+                      if (saved) closeEditor()
+                    }}
+                    className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    保存
+                  </button>
+                  <button disabled={saving || !caption.trim() || !accountId} onClick={submitDraft} className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><Send className="h-4 w-4" /> 提交草稿</button>
+                  {selectedDraft?.status === 'pending_review' && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={async () => {
+                          await triggerCopywriter(selectedDraft.id)
+                        }}
+                        className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                      >
+                        ✨ AI 重新创作
+                      </button>
+                      <button disabled={saving} onClick={() => reviewDraft('reject')} className="inline-flex items-center gap-2 rounded-md border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50"><X className="h-4 w-4" /> 驳回</button>
+                      <button disabled={saving} onClick={() => reviewDraft('approve')} className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"><Check className="h-4 w-4" /> 批准</button>
+                    </>
+                  )}
                 </>
               )}
             </div>
