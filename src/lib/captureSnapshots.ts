@@ -264,9 +264,10 @@ export async function captureAccountSnapshot(accountId: string): Promise<string>
 }
 
 export async function runDailySnapshotCrawler(): Promise<{ successCount: number; failedCount: number }> {
-  // Fetch active social accounts (e.g. running accounts)
+  // Fetch active social accounts (focus on Instagram only!)
   const accounts = await prisma.socialAccount.findMany({
     where: {
+      platformId: 'instagram',
       brand: {
         status: 'ACTIVE',
       },

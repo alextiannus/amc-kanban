@@ -48,7 +48,7 @@ export default function DataAnalysisView() {
   
   // Filters
   const [selectedBrand, setSelectedBrand] = useState('all')
-  const [selectedPlatform, setSelectedPlatform] = useState('all')
+  const [selectedPlatform, setSelectedPlatform] = useState('instagram')
   const [selectedOwner, setSelectedOwner] = useState('all')
   
   // Search & Sort
