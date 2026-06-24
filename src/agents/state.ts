@@ -47,5 +47,21 @@ export const StateAnnotation = Annotation.Root({
   draftId: Annotation<string>({
     reducer: (x, y) => y ?? x,
     default: () => ""
+  }),
+  copywriteOnly: Annotation<boolean>({
+    reducer: (x, y) => y !== undefined ? y : x,
+    default: () => false
+  }),
+  mediaFromDraft: Annotation<boolean>({
+    reducer: (x, y) => y !== undefined ? y : x,
+    default: () => false
+  }),
+  researchNotes: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
+  }),
+  marketingStrategy: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
   })
 });

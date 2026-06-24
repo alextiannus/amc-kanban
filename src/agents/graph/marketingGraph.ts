@@ -2,6 +2,8 @@ import { StateGraph, START, END, interrupt } from "@langchain/langgraph";
 import { StateAnnotation } from "../state.ts";
 import { PrismaCheckpointer } from "../checkpointer.ts";
 import { coordinatorNode } from "../nodes/coordinator.ts";
+import { researcherNode } from "../nodes/researcher.ts";
+import { strategistNode } from "../nodes/strategist.ts";
 import { copywriterNode } from "../nodes/copywriter.ts";
 import { assetCuratorNode } from "../nodes/assetCurator.ts";
 import { designerNode } from "../nodes/designer.ts";
@@ -91,6 +93,8 @@ async function complianceCheckNode(state: typeof StateAnnotation.State) {
 // 2. Build the workflow topology DAG
 const workflow = new StateGraph(StateAnnotation)
   .addNode("coordinator", coordinatorNode)
+  .addNode("researcher", researcherNode)
+  .addNode("strategist", strategistNode)
   .addNode("copywriter", copywriterNode)
   .addNode("assetCurator", assetCuratorNode)
   .addNode("designer", designerNode)
@@ -99,7 +103,9 @@ const workflow = new StateGraph(StateAnnotation)
 
   // Define edges
   .addEdge(START, "coordinator")
-  .addEdge("coordinator", "copywriter")
+  .addEdge("coordinator", "researcher")
+  .addEdge("researcher", "strategist")
+  .addEdge("strategist", "copywriter")
   .addEdge("copywriter", "assetCurator")
   .addEdge("assetCurator", "designer")
   .addEdge("designer", "complianceCheck")
@@ -119,7 +125,7 @@ const workflow = new StateGraph(StateAnnotation)
     {
       publish: "publisher",
       redesign: "designer",
-      retry: "copywriter"
+      retry: "researcher"
     }
   )
   

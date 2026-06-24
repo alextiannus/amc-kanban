@@ -91,7 +91,8 @@ export async function POST(request: Request, { params }: Params) {
     taskId: task.id,
     brandId,
     draftId,
-    platform
+    platform,
+    copywriteOnly: true
   }, config).catch((err) => {
     console.error(`Background copywriter trigger failed for draft ${draftId}:`, err);
   })

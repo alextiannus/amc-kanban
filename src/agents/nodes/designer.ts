@@ -72,7 +72,12 @@ export async function designerNode(state: any) {
   if (state.status === "pending" || state.status === "failed") {
     return state;
   }
-  const { brandId, taskId, mediaUrls, platform, watermarkText } = state;
+  const { brandId, taskId, mediaUrls, platform, watermarkText, mediaFromDraft, copywriteOnly } = state;
+
+  if (mediaFromDraft || copywriteOnly) {
+    console.log("Designer Node: mediaFromDraft or copywriteOnly is true. Bypassing design processing.");
+    return { mediaUrls: mediaUrls || [] };
+  }
 
   if (!brandId || !taskId) {
     throw new Error("Missing brandId or taskId in state.");

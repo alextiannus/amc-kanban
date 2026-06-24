@@ -17,9 +17,38 @@ export async function coordinatorNode(state: any) {
     throw new Error(`Task with ID ${taskId} not found in database.`);
   }
 
+  // Extract draft ID if present in state or task
+  let existingDraftId = state.draftId || null;
+  if (!existingDraftId) {
+    const match = `${task.description || ""} ${task.materials || ""}`.match(/(?:草稿|Draft)\s*ID:\s*([a-z0-9]{25,})/i);
+    if (match) {
+      existingDraftId = match[1];
+    }
+  }
+
+  let draftMediaUrls: string[] = [];
+  let mediaFromDraft = false;
+
+  if (existingDraftId) {
+    try {
+      const draft = await prisma.contentDraft.findUnique({
+        where: { id: existingDraftId }
+      });
+      if (draft) {
+        draftMediaUrls = draft.mediaUrls || [];
+        if (draftMediaUrls.length > 0) {
+          mediaFromDraft = true;
+          console.log(`Coordinator: Found ${draftMediaUrls.length} existing media URLs in draft ${existingDraftId}. Preserving.`);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load draft details in coordinatorNode:", err);
+    }
+  }
+
   // Detect platform from tags, title, or description
-  let platform: string | null = null;
-  if (task.tags && task.tags.length > 0) {
+  let platform: string | null = state.platform || null;
+  if (!platform && task.tags && task.tags.length > 0) {
     const matched = task.tags.find(t => ["instagram", "facebook", "google_business", "red", "xiaohongshu", "tiktok"].includes(t.toLowerCase()));
     if (matched) {
       platform = matched.toLowerCase() === "xiaohongshu" ? "red" : matched.toLowerCase();
@@ -62,6 +91,9 @@ export async function coordinatorNode(state: any) {
   return {
     brandId: task.brandId || "",
     platform,
+    draftId: existingDraftId || "",
+    mediaUrls: draftMediaUrls,
+    mediaFromDraft,
     status: "in_progress"
   };
 }

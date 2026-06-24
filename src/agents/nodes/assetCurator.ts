@@ -17,7 +17,17 @@ function getPlatformLimits(platform: string) {
 
 export async function assetCuratorNode(state: any) {
   console.log("=== AssetCuratorNode Running ===");
-  const { brandId, taskId, platform } = state;
+  const { brandId, taskId, platform, mediaUrls, mediaFromDraft, copywriteOnly } = state;
+
+  if (mediaUrls && mediaUrls.length > 0) {
+    console.log(`AssetCurator: Preserving existing ${mediaUrls.length} media URLs. Skipping curation.`);
+    return { mediaUrls };
+  }
+
+  if (mediaFromDraft || copywriteOnly) {
+    console.log(`AssetCurator: mediaFromDraft or copywriteOnly is true. Skipping curation.`);
+    return { mediaUrls: mediaUrls || [] };
+  }
 
   if (!brandId) {
     throw new Error("Missing brandId in state.");

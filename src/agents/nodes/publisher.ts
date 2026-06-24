@@ -6,7 +6,7 @@ export async function publisherNode(state: any) {
   if (state.status === "pending" || state.status === "failed") {
     return state;
   }
-  const { brandId, taskId, platform, caption, mediaUrls, hashtags } = state;
+  const { brandId, taskId, platform, caption, mediaUrls, hashtags, copywriteOnly } = state;
 
   if (!brandId || !taskId) {
     throw new Error("Missing brandId or taskId in state.");
@@ -46,6 +46,41 @@ export async function publisherNode(state: any) {
     }
   }
 
+  const cleanHashtags = hashtags || [];
+  const fullCaption = `${caption}\n\n${cleanHashtags.map((h: string) => h.startsWith('#') ? h : `#${h}`).join(" ")}`;
+
+  if (copywriteOnly) {
+    console.log("Publisher Node: copywriteOnly is true. Updating draft caption and hashtags, and completing task.");
+    if (existingDraftId) {
+      const draft = await prisma.contentDraft.findUnique({
+        where: { id: existingDraftId }
+      });
+      if (draft) {
+        await prisma.contentDraft.update({
+          where: { id: existingDraftId },
+          data: {
+            caption: fullCaption,
+            hashtags: cleanHashtags
+          }
+        });
+        console.log(`Updated draft ${existingDraftId} caption and hashtags.`);
+      }
+    }
+
+    await prisma.workUnit.update({
+      where: { id: taskId },
+      data: {
+        status: "done",
+        requiredInput: `AI Copywriting completed successfully.`
+      }
+    });
+
+    return {
+      publishedUrl: existingDraftId ? `manual://${platform}/${existingDraftId}` : "",
+      status: "done"
+    };
+  }
+
   // 2. Fetch or create a social account record for logging
   let socialAccount = await prisma.socialAccount.findFirst({
     where: {
@@ -66,9 +101,6 @@ export async function publisherNode(state: any) {
       }
     });
   }
-
-  const cleanHashtags = hashtags || [];
-  const fullCaption = `${caption}\n\n${cleanHashtags.map((h: string) => h.startsWith('#') ? h : `#${h}`).join(" ")}`;
 
   const isMockAccount = socialAccount.handle?.startsWith("mock_") || !brand.postfastApiKey;
   const isManualPlatform = platform === "red" || platform === "xiaohongshu";
