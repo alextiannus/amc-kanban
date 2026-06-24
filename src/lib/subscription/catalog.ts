@@ -80,7 +80,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'essential',
     name: '品牌建设版',
-    monthlyUsd: 2800,
+    monthlyUsd: 3600,
     description: '从基础展示到品牌建设',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
     suitableFor: '希望确立品牌策略、明确目标客群，通过全平台覆盖、视频内容与大规模博主推广积极拉新，并通过团购等转化设计唤醒老顾客的商家',
