@@ -215,6 +215,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   }
 
   const handleDragStart = (assetId: string, e: React.DragEvent) => {
+    if (isDragSelecting.current) {
+      e.preventDefault()
+      return
+    }
     const targets = selected.includes(assetId) ? selected : [assetId]
     setDraggingIds(targets)
     e.dataTransfer.setData('application/json', JSON.stringify(targets))
