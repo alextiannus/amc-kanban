@@ -29,7 +29,32 @@ export async function captureAccountSnapshot(accountId: string): Promise<string>
   }
 
   const timestamp = Date.now()
-  const profileUrl = account.profileUrl || `https://instagram.com/${account.handle}`
+  
+  // Clean handle for platform URL construction
+  let cleanHandle = account.handle
+  if (cleanHandle.startsWith('@')) {
+    cleanHandle = cleanHandle.slice(1)
+  }
+
+  let profileUrl = account.profileUrl
+  if (!profileUrl) {
+    const platform = account.platformId.toLowerCase()
+    if (platform === 'instagram' || platform === 'ig') {
+      profileUrl = `https://www.instagram.com/${cleanHandle}/`
+    } else if (platform === 'tiktok') {
+      profileUrl = `https://www.tiktok.com/@${cleanHandle}`
+    } else if (platform === 'xiaohongshu' || platform === 'red') {
+      profileUrl = `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(account.handle)}`
+    } else if (platform === 'facebook' || platform === 'fb') {
+      profileUrl = `https://www.facebook.com/${cleanHandle}/`
+    } else if (platform === 'google' || platform === 'google_business') {
+      const q = account.brand ? `${account.brand.name} ${account.brand.location || ''}` : account.handle
+      profileUrl = `https://www.google.com/search?q=${encodeURIComponent(q)}`
+    } else {
+      profileUrl = `https://www.google.com/search?q=${encodeURIComponent(account.handle)}`
+    }
+  }
+
   let savedFilename = ''
   let screenshotCaptured = false
 
@@ -45,11 +70,27 @@ export async function captureAccountSnapshot(accountId: string): Promise<string>
       // Wait briefly for content to populate
       await page.waitForTimeout(2000)
       
-      const pngPath = path.join(dirPath, `${timestamp}.png`)
-      await page.screenshot({ path: pngPath, fullPage: false })
-      savedFilename = `/snapshots/${accountId}/${timestamp}.png`
-      screenshotCaptured = true
-      console.log(`[AMC Researcher] Captured screenshot for ${account.handle} at ${pngPath}`)
+      const currentUrl = page.url()
+      const pageContent = await page.content()
+      
+      let isBlockedOrInvalid = false
+      if (currentUrl.includes('/login') || currentUrl.includes('accounts/login') || currentUrl.includes('/signup')) {
+        console.log(`[AMC Researcher] Detected login wall for ${account.handle} at ${currentUrl}`);
+        isBlockedOrInvalid = true;
+      } else if (pageContent.includes("Profile isn't available") || pageContent.includes("页面不存在") || pageContent.includes("page not found") || pageContent.includes("找不到页面")) {
+        console.log(`[AMC Researcher] Detected invalid/missing profile page for ${account.handle}`);
+        isBlockedOrInvalid = true;
+      }
+      
+      if (isBlockedOrInvalid) {
+        screenshotCaptured = false;
+      } else {
+        const pngPath = path.join(dirPath, `${timestamp}.png`)
+        await page.screenshot({ path: pngPath, fullPage: false })
+        savedFilename = `/snapshots/${accountId}/${timestamp}.png`
+        screenshotCaptured = true
+        console.log(`[AMC Researcher] Captured screenshot for ${account.handle} at ${pngPath}`)
+      }
     } catch (err) {
       console.error(`[AMC Researcher] Playwright capture failed for ${account.handle}, falling back to SVG mockup`, err)
     } finally {
