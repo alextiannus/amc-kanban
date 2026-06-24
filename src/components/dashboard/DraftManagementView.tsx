@@ -635,9 +635,20 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
               <div className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-black text-slate-800 dark:text-slate-200">媒体与素材</h4>
-                  <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    已选: {attachedMedia.length}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {attachedMedia.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setAttachedMedia([])}
+                        className="text-xs font-semibold text-rose-600 dark:text-rose-455 hover:underline cursor-pointer"
+                      >
+                        清空选择
+                      </button>
+                    )}
+                    <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      已选: {attachedMedia.length}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Drag-and-drop grid */}
@@ -666,7 +677,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                             <button
                               type="button"
                               onClick={() => handleRemoveMedia(index)}
-                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-600 p-1 text-white opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-600 p-1 text-white opacity-90 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -731,7 +742,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                             key={asset.id}
                             type="button"
                             onClick={() => handleToggleAsset(asset)}
-                            className={`relative aspect-square rounded-md overflow-hidden border-2 bg-slate-100 dark:bg-slate-900 transition-all ${
+                            className={`relative aspect-square rounded-md overflow-hidden border-2 bg-slate-100 dark:bg-slate-900 transition-all group ${
                               isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-transparent hover:border-slate-300'
                             }`}
                           >
@@ -746,8 +757,9 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                               </div>
                             )}
                             {isSelected && (
-                              <div className="absolute top-1 right-1 bg-emerald-500 rounded-full p-0.5 shadow-sm">
-                                <Check className="h-2.5 w-2.5 text-white stroke-[3px]" />
+                              <div className="absolute top-1 right-1 bg-emerald-500 group-hover:bg-rose-600 rounded-full p-0.5 shadow-sm transition-colors">
+                                <Check className="h-2.5 w-2.5 text-white stroke-[3px] block group-hover:hidden" />
+                                <X className="h-2.5 w-2.5 text-white stroke-[3px] hidden group-hover:block" />
                               </div>
                             )}
                           </button>

@@ -7,6 +7,7 @@ import {
   Image as ImageIcon,
   Video,
   Check,
+  CheckSquare,
   Sparkles,
   X,
   Grid,
@@ -550,6 +551,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   }
 
   const handleCardClick = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
     if (selected.length > 0) {
       toggleSelect(id, e)
     } else {
@@ -932,6 +934,16 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         }
       }
 
+      if (e.key === 'Escape') {
+        if (selected.length > 0) {
+          e.preventDefault()
+          setSelected([])
+        } else if (activeAssetId) {
+          e.preventDefault()
+          setActiveAssetId(null)
+        }
+      }
+
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selected.length > 0) {
           e.preventDefault()
@@ -1204,10 +1216,72 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               </option>
             ))}
           </select>
+
+          {filtered.length > 0 && (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selected.length > 0) {
+                    setSelected([])
+                  } else {
+                    if (activeAssetId) {
+                      setSelected([activeAssetId])
+                    } else if (filtered.length > 0) {
+                      setSelected([filtered[0].id])
+                    }
+                  }
+                }}
+                className={`rounded-xl border px-3.5 py-2 text-sm font-semibold outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0 ${
+                  selected.length > 0
+                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300'
+                    : 'border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                }`}
+              >
+                <CheckSquare className="w-4 h-4" />
+                <span>{selected.length > 0 ? '退出选择' : '批量选择'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const visibleIds = filtered.map(a => a.id)
+                  const allVisibleSelected = visibleIds.every(id => selected.includes(id))
+                  if (allVisibleSelected) {
+                    setSelected(prev => prev.filter(id => !visibleIds.includes(id)))
+                  } else {
+                    setSelected(prev => Array.from(new Set([...prev, ...visibleIds])))
+                  }
+                }}
+                className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none hover:bg-slate-50 transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
+              >
+                <Check className="w-4 h-4 text-indigo-500" strokeWidth={3} />
+                <span>{filtered.every(a => selected.includes(a.id)) ? '取消全选' : '全选'}</span>
+              </button>
+
+              {selected.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelected([])}
+                  className="rounded-xl border border-rose-100 dark:border-rose-900/30 bg-rose-50/50 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-900/35 px-3.5 py-2 text-sm font-semibold text-rose-600 dark:text-rose-450 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                  <span>清除选择 ({selected.length})</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Scrollable grid wrapper */}
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/40 dark:bg-slate-950/20">
+        <div 
+          onClick={() => {
+            if (selected.length > 0) {
+              setSelected([])
+            }
+          }}
+          className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/40 dark:bg-slate-950/20"
+        >
           {error && (
             <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 flex-shrink-0" />
@@ -1288,15 +1362,23 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                           e.stopPropagation()
                           handleCheckboxTouchStart(asset.id)
                         }}
-                        className={`absolute top-2.5 left-2.5 w-6.5 h-6.5 rounded-lg border-2 flex items-center justify-center transition-all ${
+                        className={`absolute top-2.5 left-2.5 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${
                           isSelected
-                            ? 'bg-indigo-500 border-indigo-500 scale-100 shadow-sm shadow-indigo-500/20'
+                            ? 'bg-indigo-500 border-indigo-500 hover:bg-rose-600 hover:border-rose-600 scale-100 shadow-sm shadow-indigo-500/20 group/cb'
                             : selected.length > 0
-                              ? 'bg-white/90 dark:bg-slate-900/90 border-slate-400 dark:border-slate-500 opacity-100'
-                              : 'bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600 opacity-0 group-hover:opacity-100 hover:scale-105'
+                              ? 'bg-white/90 dark:bg-slate-900/90 border-slate-400 dark:border-slate-500 opacity-100 hover:border-indigo-500'
+                              : 'bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600 opacity-0 group-hover:opacity-100 hover:scale-105 hover:border-indigo-500'
                         } z-20`}
+                        title={isSelected ? "点击取消选择" : "点击选择"}
                       >
-                        {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+                        {isSelected ? (
+                          <>
+                            <Check className="w-4 h-4 text-white block group-hover/cb:hidden" strokeWidth={3} />
+                            <X className="w-4 h-4 text-white hidden group-hover/cb:block" strokeWidth={3} />
+                          </>
+                        ) : (
+                          <Check className="w-4 h-4 text-slate-400 dark:text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" strokeWidth={2.5} />
+                        )}
                       </div>
 
                       {/* Brand Label */}
@@ -1867,6 +1949,43 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               </a>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Bottom Bar for selection operations */}
+      {selected.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[40] flex items-center gap-3 px-5 py-3 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-2xl transition-all duration-355 transform scale-100 whitespace-nowrap select-none">
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">
+            已选择 <span className="text-indigo-600 dark:text-indigo-400 text-sm font-black">{selected.length}</span> 项
+          </span>
+          
+          <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />
+          
+          <button
+            onClick={() => markForSchedule(selected)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 active:scale-95 transition-all"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>标记排期</span>
+          </button>
+          
+          <button
+            onClick={handleBatchDeleteAssets}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-95 transition-all"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>批量删除</span>
+          </button>
+          
+          <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />
+          
+          <button
+            onClick={() => setSelected([])}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-black rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-850 dark:hover:bg-slate-700 text-white active:scale-95 transition-all shadow-sm flex items-center justify-center cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+            <span>取消选择</span>
+          </button>
         </div>
       )}
 
