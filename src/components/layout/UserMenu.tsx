@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { User as UserIcon, BookOpen, Settings, Shield, Inbox, LogOut, GraduationCap } from 'lucide-react'
+import { User as UserIcon, BookOpen, Settings, Shield, Inbox, LogOut, GraduationCap, Camera } from 'lucide-react'
 
 interface UserMenuProps {
   user: {
@@ -16,7 +16,7 @@ interface UserMenuProps {
     avatar?: string | null
   } | null
   currentView: string
-  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets') => void
+  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'dataAnalysis') => void
   onShowSettings: () => void
   onShowSystemLog: () => void
   onNewAgentKeyGenerated: (key: string) => void
@@ -118,6 +118,16 @@ export default function UserMenu({
 
             {(isAdmin || isPrincipal) && (
               <>
+                <button
+                  onClick={() => { setShowProfile(false); setCurrentView('dataAnalysis') }}
+                  className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
+                    currentView === 'dataAnalysis'
+                      ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <Camera size={16} /> 账号快照
+                </button>
                 <button
                   onClick={() => { setShowProfile(false); setCurrentView('archive') }}
                   className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${

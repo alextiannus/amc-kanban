@@ -114,30 +114,17 @@ export default function MainLayout({
             <Images size={16} /> 素材库
           </button>
           {canSeeSocialInsight && (
-            <>
-              <button
-                onClick={() => setCurrentView('socialInsight')}
-                className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
-                  currentView === 'socialInsight'
-                    ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-                }`}
-                id="nav-social-insight"
-              >
-                <Activity size={16} /> 数据分析
-              </button>
-              <button
-                onClick={() => setCurrentView('dataAnalysis')}
-                className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
-                  currentView === 'dataAnalysis'
-                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-                }`}
-                id="nav-data-analysis"
-              >
-                <Store size={16} /> 账号展现
-              </button>
-            </>
+            <button
+              onClick={() => setCurrentView('socialInsight')}
+              className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
+                currentView === 'socialInsight'
+                  ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+              }`}
+              id="nav-social-insight"
+            >
+              <Activity size={16} /> 数据分析
+            </button>
           )}
           <button
             onClick={() => setCurrentView('game')}
