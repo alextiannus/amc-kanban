@@ -1391,6 +1391,9 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         {/* Scrollable grid wrapper */}
         <div 
           onClick={() => {
+            if (hasToggledThisInteraction.current) {
+              return
+            }
             if (selected.length > 0) {
               setSelected([])
             }
