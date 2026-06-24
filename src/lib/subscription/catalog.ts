@@ -152,9 +152,9 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     id: 'onsite_photo',
     name: '专业到店内容拍摄',
     pricing: 'one_time',
-    usd: 380,
-    description: '半天现场专业素材拍摄，交付高清图文与短视频素材包。',
-    details: ['+$380 / 次 (含后期)'],
+    usd: 200,
+    description: '半天现场专业素材与新品拍摄等专业服务，交付高清图文与短视频素材包。',
+    details: ['+$200 / 次 (含后期，包含新品专业拍摄等)'],
   },
   {
     id: 'influencer_visit',
