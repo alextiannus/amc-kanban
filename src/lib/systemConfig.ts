@@ -1,4 +1,4 @@
-import { prisma } from './prisma'
+import { prisma } from './prisma.ts'
 
 export async function ensureSystemConfig() {
   const existing = await prisma.systemConfig.findUnique({ where: { id: 'default' } })

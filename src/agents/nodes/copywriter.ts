@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma.ts";
 import { postfastGetAnalytics } from "../../lib/integrations/postfast.ts";
 import { generateText } from "../../lib/gemini.ts";
+import { getRelevantKnowledge } from "../knowledgeBase.ts";
 
 export async function copywriterNode(state: any) {
   console.log("=== CopywriterNode Running ===");
@@ -100,6 +101,25 @@ export async function copywriterNode(state: any) {
     }
   }
 
+  // Load relevant copywriting ideas, templates, video scripts, and specialized prompts from knowledge base
+  const knowledge = getRelevantKnowledge(detectedIndustry, platform || "instagram", task.title + " " + (task.description || ""));
+
+  // Format knowledge entries to inject into Gemini prompt
+  const knowledgeText = `
+Here is some context and assets from the brand's knowledge base that you MUST reference/use or adapt:
+- Content Ideas to consider:
+${knowledge.ideas.map(i => `  * ${i}`).join("\n")}
+
+- Applicable Templates (adapt these formats or styles):
+${knowledge.templates.map(t => `  * ${t}`).join("\n")}
+
+- Video Script Blueprints (if this is for a video platform like TikTok/Instagram Reels/Shorts, or if a video script is needed):
+${knowledge.videoScripts.map(s => `  * ${s}`).join("\n")}
+
+- Specialized Prompt Rules/Guidelines:
+${knowledge.prompts.map(p => `  * ${p}`).join("\n")}
+`;
+
   // 2. Attempt AI Generation with Gemini
   let aiCaption = "";
   let aiHashtags: string[] = [];
@@ -114,6 +134,7 @@ Task Details: ${task.description || "Create an engaging post."}
 Goal: Generate an extremely engaging social media post caption and relevant hashtags optimized for "${platform}". 
 The post must be tailored to Singlish, bilingual English/Chinese, or Chinese based on the platform and localized context (e.g. use "Don't say bojio", "Chope your seats" for Instagram/TikTok if appropriate).
 ${examplesText}
+${knowledgeText}
 
 Instructions:
 1. Make the copy highly engaging, natural, and customized to the brand's industry (${detectedIndustry}).
@@ -133,7 +154,7 @@ Please output ONLY a valid JSON object.`;
         aiCaption = parsed.caption;
         aiHashtags = parsed.hashtags || [];
         geminiUsed = true;
-        console.log("AI Copywriter generated optimized content successfully using Gemini.");
+        console.log("AI Copywriter generated optimized content successfully using Gemini and Knowledge Base.");
       }
     }
   } catch (error) {
@@ -142,93 +163,34 @@ Please output ONLY a valid JSON object.`;
 
   // 3. Fallback Rule-Based Generation (Runs if Gemini is not configured or fails)
   if (!geminiUsed) {
-    console.log("Falling back to rule-based copywriter templates.");
+    console.log("Falling back to rule-based copywriter templates using knowledge base.");
     const brandName = brand.name;
     const signature = brand.description || `premium ${detectedIndustry} services`;
-    const taskTitle = task.title;
 
+    // Pick the first matched template from knowledge base
+    const template = knowledge.templates[0] || "Welcome to [BrandName]! Specially crafted for those who seek excellence.";
+
+    // Replace placeholders in the template
+    let generatedCaption = template
+      .replace(/\[BrandName\]/g, brandName)
+      .replace(/\[Signature\]/g, signature)
+      .replace(/\[Texture\]/g, "口感绝佳，每一口都是满满的幸福感");
+
+    aiCaption = generatedCaption;
+
+    // Generate fallback hashtags
     if (detectedIndustry.toLowerCase().includes('fitness') || detectedIndustry.toLowerCase().includes('pilates')) {
-      if (platform === "instagram" || platform === "tiktok") {
-        aiCaption = `Don't say bojio! 🧘‍♀️ Chope your slots now at ${brandName}!
-    
-We offer the most professional Pilates and fitness sessions. Specially crafted for health enthusiasts who love core strengthening and posture correction! 🇸🇬
-
-别说我们没约你！赶紧来 ${brandName} 霸位体验我们家招牌普拉提核心课程！动作超标准，绝对满足你挑剔的锻炼需求！🔥`;
-        aiHashtags = ["sgfitness", "sgpilates", "workout", brandName.replace(/\s+/g, "").toLowerCase(), "singaporefit"];
-      } else if (platform === "red") { // 小红书
-        aiCaption = `🇸🇬 新加坡本地人都在冲的宝藏普拉提工作室！
-    
-今天打卡 ${brandName}，他们家真的太专业了！
-✨ 招牌推荐：${signature.substring(0, 50)}...
-核心塑形效果真的绝了，教练超级温柔有耐心，环境十分干净舒适！
-    
-快艾特你的小伙伴一起来塑形锻炼！let's stretch!`;
-        aiHashtags = ["新加坡普拉提", "新加坡健身", brandName.replace(/\s+/g, ""), "新加坡探店", "新加坡生活"];
-      } else if (platform === "google_business") {
-        aiCaption = `Looking for the best Pilates and fitness studio in town? Look no further!
-    
-${brandName} is open daily offering professional workouts and certified trainers. Check out our schedules and reviews. Visit us today!`;
-        aiHashtags = [brandName.replace(/\s+/g, "").toLowerCase(), "googlemaps", "sgpilates"];
-      } else {
-        aiCaption = `Welcome to ${brandName}! Enjoy our best ${signature}. We wait for you!`;
-        aiHashtags = [brandName.replace(/\s+/g, "").toLowerCase()];
-      }
+      aiHashtags = ["sgfitness", "sgpilates", "workout", brandName.replace(/\s+/g, "").toLowerCase(), "singaporefit"];
     } else if (detectedIndustry.toLowerCase().includes('renovation') || detectedIndustry.toLowerCase().includes('steel')) {
-      if (platform === "instagram" || platform === "tiktok") {
-        aiCaption = `Looking for premium home renovations? Chope your consultation now at ${brandName}!
-    
-We deliver top-tier custom stainless steel fabrication and interior renovations. Specially crafted for homeowners who value durability and elegant designs! 🇸🇬
-
-想要打造完美的家居空间？赶紧联系 ${brandName} 预定您的专属咨询！精工细作，绝对让您的家居焕然一新！🔥`;
-        aiHashtags = ["sgrenovation", "sginterior", "homedecor", brandName.replace(/\s+/g, "").toLowerCase(), "singaporehome"];
-      } else if (platform === "red") { // 小红书
-        aiCaption = `🇸🇬 新加坡本地宝藏高颜值不锈钢与全屋定制装修！
-    
-今天安利 ${brandName}，他们家做工真的太扎实了！
-✨ 招牌推荐：${signature.substring(0, 50)}...
-不锈钢厨柜效果真的绝了，质感拉满，细节处处理得严丝合缝，老板特别专业！
-    
-有装修需求的小伙伴赶紧收藏起来！冲呀！`;
-        aiHashtags = ["新加坡装修", "新加坡室内设计", brandName.replace(/\s+/g, ""), "新加坡生活", "不锈钢厨柜"];
-      } else if (platform === "google_business") {
-        aiCaption = `Looking for reliable home renovation or custom steel works in Singapore? Look no further!
-    
-${brandName} is open daily providing premium design and fabrication services. Contact us today for a quote!`;
-        aiHashtags = [brandName.replace(/\s+/g, "").toLowerCase(), "googlemaps", "sgrenovation"];
-      } else {
-        aiCaption = `Welcome to ${brandName}! Enjoy our best ${signature}. We wait for you!`;
-        aiHashtags = [brandName.replace(/\s+/g, "").toLowerCase()];
-      }
+      aiHashtags = ["sgrenovation", "sginterior", "homedecor", brandName.replace(/\s+/g, "").toLowerCase(), "singaporehome"];
+    } else if (detectedIndustry.toLowerCase().includes('winery') || detectedIndustry.toLowerCase().includes('wine')) {
+      aiHashtags = ["sgwine", "sgwinery", "winetasting", brandName.replace(/\s+/g, "").toLowerCase(), "singaporewine"];
     } else {
-      // F&B Default fallback
-      if (platform === "instagram" || platform === "tiktok") {
-        aiCaption = `Don't say bojio! 🥩 Chope your seats now at ${brandName}!
-    
-We are serving up the most tender and juicy dishes. Specially crafted for local foodies who love that authentic taste! 🇸🇬
-
-别说我们没约你！赶紧来 ${brandName} 霸位体验我们家招牌特色菜！超级入味，绝对满足你挑剔的味蕾！🔥`;
-        aiHashtags = ["sgfood", "sgfoodie", "instafood", brandName.replace(/\s+/g, "").toLowerCase(), "singaporeeat"];
-      } else if (platform === "red") { // 小红书
-        aiCaption = `🇸🇬 新加坡本地人排队都要吃的爆款美食！
-    
-今天打卡 ${brandName}，他们家真的太出圈了！
-✨ 招牌推荐：${signature.substring(0, 50)}...
-口感真的绝了，分量超级足，老板还特别热情！
-    
-快艾特你的小伙伴一起来吃！makan time!`;
-        aiHashtags = ["新加坡美食", "新加坡生活", brandName.replace(/\s+/g, ""), "新加坡探店", "新加坡吃喝玩乐"];
-      } else if (platform === "google_business") {
-        aiCaption = `Looking for the best dining spot in town? Look no further!
-    
-${brandName} is open daily serving up fresh, high-quality local delicacies. Check out our menu and reviews. Visit us today!`;
-        aiHashtags = [brandName.replace(/\s+/g, "").toLowerCase(), "googlemaps", "sgrestaurants"];
-      } else {
-        aiCaption = `Welcome to ${brandName}! Enjoy our best ${signature}. We wait for you!`;
-        aiHashtags = [brandName.replace(/\s+/g, "").toLowerCase()];
-      }
+      aiHashtags = ["sgfood", "sgfoodie", "instafood", brandName.replace(/\s+/g, "").toLowerCase(), "singaporeeat"];
     }
 
     // Adapt based on task title keywords
+    const taskTitle = task.title;
     if (taskTitle.toLowerCase().includes("burgers") || taskTitle.toLowerCase().includes("汉堡")) {
       aiCaption = aiCaption.replace("dishes", "Wagyu Burgers").replace("特色菜", "多汁和牛堡");
     } else if (taskTitle.toLowerCase().includes("steak") || taskTitle.toLowerCase().includes("牛排")) {

@@ -12,7 +12,11 @@ export async function publisherNode(state: any) {
     throw new Error("Missing brandId or taskId in state.");
   }
 
-  // 1. Fetch brand details
+  // 1. Fetch task and brand details
+  const task = await prisma.workUnit.findUnique({
+    where: { id: taskId }
+  });
+
   const brand = await prisma.brand.findUnique({
     where: { id: brandId },
     select: {
@@ -23,6 +27,23 @@ export async function publisherNode(state: any) {
 
   if (!brand) {
     throw new Error(`Brand ${brandId} not found.`);
+  }
+
+  // Extract draft ID if present
+  let existingDraftId = state.draftId || null;
+  if (!existingDraftId && task) {
+    if (task.description) {
+      const match = task.description.match(/(?:草稿|Draft)\s*ID:\s*([a-z0-9]{25,})/i);
+      if (match) {
+        existingDraftId = match[1];
+      }
+    }
+    if (!existingDraftId && task.materials) {
+      const match = task.materials.match(/(?:草稿|Draft)\s*ID:\s*([a-z0-9]{25,})/i);
+      if (match) {
+        existingDraftId = match[1];
+      }
+    }
   }
 
   // 2. Fetch or create a social account record for logging
@@ -70,18 +91,41 @@ export async function publisherNode(state: any) {
         console.log(`PostFast Publish Success! Post ID: ${publishRes.postId}, URL: ${publishedUrl}`);
 
         // Log the published draft
-        await prisma.contentDraft.create({
-          data: {
-            brandId,
-            accountId: socialAccount.id,
-            caption: fullCaption,
-            mediaUrls: mediaUrls || [],
-            hashtags: cleanHashtags,
-            status: "published",
-            platformPostId: publishRes.postId || "post_" + Date.now(),
-            publishedAt: new Date()
+        let draftRecord;
+        if (existingDraftId) {
+          try {
+            draftRecord = await prisma.contentDraft.update({
+              where: { id: existingDraftId },
+              data: {
+                accountId: socialAccount.id,
+                caption: fullCaption,
+                mediaUrls: mediaUrls || [],
+                hashtags: cleanHashtags,
+                status: "published",
+                platformPostId: publishRes.postId || "post_" + Date.now(),
+                publishedAt: new Date()
+              }
+            });
+            console.log(`Updated existing draft ${existingDraftId} to published.`);
+          } catch (e) {
+            console.warn(`Failed to update existing draft ${existingDraftId} to published, fallback to create.`, e);
           }
-        });
+        }
+
+        if (!draftRecord) {
+          draftRecord = await prisma.contentDraft.create({
+            data: {
+              brandId,
+              accountId: socialAccount.id,
+              caption: fullCaption,
+              mediaUrls: mediaUrls || [],
+              hashtags: cleanHashtags,
+              status: "published",
+              platformPostId: publishRes.postId || "post_" + Date.now(),
+              publishedAt: new Date()
+            }
+          });
+        }
 
         // Update the Kanban WorkUnit to done
         await prisma.workUnit.update({
@@ -100,17 +144,39 @@ export async function publisherNode(state: any) {
         console.error(`PostFast Publish Failed: ${publishRes.error}`);
         
         // Log draft with failed status
-        await prisma.contentDraft.create({
-          data: {
-            brandId,
-            accountId: socialAccount.id,
-            caption: fullCaption,
-            mediaUrls: mediaUrls || [],
-            hashtags: cleanHashtags,
-            status: "failed",
-            agentNote: `PostFast Publish Failed: ${publishRes.error || "Unknown error"}`
+        let draftRecord;
+        if (existingDraftId) {
+          try {
+            draftRecord = await prisma.contentDraft.update({
+              where: { id: existingDraftId },
+              data: {
+                accountId: socialAccount.id,
+                caption: fullCaption,
+                mediaUrls: mediaUrls || [],
+                hashtags: cleanHashtags,
+                status: "failed",
+                agentNote: `PostFast Publish Failed: ${publishRes.error || "Unknown error"}`
+              }
+            });
+            console.log(`Updated existing draft ${existingDraftId} to failed.`);
+          } catch (e) {
+            console.warn(`Failed to update existing draft ${existingDraftId} to failed, fallback to create.`, e);
           }
-        });
+        }
+
+        if (!draftRecord) {
+          await prisma.contentDraft.create({
+            data: {
+              brandId,
+              accountId: socialAccount.id,
+              caption: fullCaption,
+              mediaUrls: mediaUrls || [],
+              hashtags: cleanHashtags,
+              status: "failed",
+              agentNote: `PostFast Publish Failed: ${publishRes.error || "Unknown error"}`
+            }
+          });
+        }
 
         // Keep task pending and report error
         await prisma.workUnit.update({
@@ -157,17 +223,39 @@ export async function publisherNode(state: any) {
 
   console.log(`Platform ${platform} is unlinked or requires manual publishing. Generating draft.`);
   
-  const draft = await prisma.contentDraft.create({
-    data: {
-      brandId,
-      accountId: socialAccount.id,
-      caption: fullCaption,
-      mediaUrls: mediaUrls || [],
-      hashtags: cleanHashtags,
-      status: "draft",
-      agentNote: `【手动发布提醒】此内容已生成。由于 ${readablePlatform} 账号未联通，请在草稿中手动复制发布。`
+  let draft;
+  if (existingDraftId) {
+    try {
+      draft = await prisma.contentDraft.update({
+        where: { id: existingDraftId },
+        data: {
+          accountId: socialAccount.id,
+          caption: fullCaption,
+          mediaUrls: mediaUrls || [],
+          hashtags: cleanHashtags,
+          status: "draft",
+          agentNote: `【手动发布提醒】此内容已更新。由于 ${readablePlatform} 账号未联通，请在草稿中手动复制发布。`
+        }
+      });
+      console.log(`ContentDraft ${existingDraftId} updated in-place successfully.`);
+    } catch (e) {
+      console.warn(`Failed to update existing draft ${existingDraftId}, fallback to create.`, e);
     }
-  });
+  }
+
+  if (!draft) {
+    draft = await prisma.contentDraft.create({
+      data: {
+        brandId,
+        accountId: socialAccount.id,
+        caption: fullCaption,
+        mediaUrls: mediaUrls || [],
+        hashtags: cleanHashtags,
+        status: "draft",
+        agentNote: `【手动发布提醒】此内容已生成。由于 ${readablePlatform} 账号未联通，请在草稿中手动复制发布。`
+      }
+    });
+  }
 
   await prisma.workUnit.update({
     where: { id: taskId },
@@ -177,7 +265,7 @@ export async function publisherNode(state: any) {
     }
   });
 
-  console.log(`WorkUnit ${taskId} successfully closed and marked as done. Manual draft created: ${draft.id}`);
+  console.log(`WorkUnit ${taskId} successfully closed and marked as done. Draft ID: ${draft.id}`);
 
   return {
     publishedUrl: `manual://${platform}/${draft.id}`,

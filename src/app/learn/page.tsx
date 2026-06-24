@@ -639,34 +639,44 @@ export default function LearnPage() {
                           <tr className="bg-slate-900 border-b border-slate-800">
                             <th className="p-3 font-bold text-slate-200 w-16">步骤</th>
                             <th className="p-3 font-bold text-slate-200 w-32">执行者</th>
-                            <th className="p-3 font-bold text-slate-200">说明</th>
+                            <th className="p-3 font-bold text-slate-200">业务操作与协同说明</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/50">
                           <tr>
-                            <td className="p-3 font-bold">1. 素材上传</td>
-                            <td className="p-3 text-indigo-400 font-semibold">商家 / 主理人</td>
-                            <td className="p-3 text-slate-300">商家与主理人周度提供高质量的图片和视频素材，并安排探店补充素材库。</td>
+                            <td className="p-3 font-bold">1. 方案与主题设定</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人 ↔ AMC Agent</td>
+                            <td className="p-3 text-slate-300">主理人建立品牌深度理解并设计推广大纲，设定当月主题通过 Agent 记录进 brand 上下文与记忆库。</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">2. 草稿生成</td>
-                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
-                            <td className="p-3 text-slate-300">AI 每日扫描素材库中标记有“排期发布”的素材，自动进行文案排版与草稿生成，任务置于 pending 状态挂起（触发终审锁）。</td>
+                            <td className="p-3 font-bold">2. 素材丰富与汇聚</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人</td>
+                            <td className="p-3 text-slate-300">线下对接丰富素材库。包含：1. 商家日常提供 2. 安排达人探店 3. 安排专业拍摄。</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">3. 终审锁</td>
-                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人 / 商家</td>
-                            <td className="p-3 text-slate-300">审核看板中标红的 **Require Input** 卡片草稿。批准 ➜ 进入排期发布队列；修改 ➜ 提交修改意见，AI 重新生成。</td>
+                            <td className="p-3 font-bold">3. 生产计划任务化</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人 或 AMC Agent</td>
+                            <td className="p-3 text-slate-300">主理人进行主题选择、素材组织与视觉审核，可直接在看板上创建带 post draft 的 to-do 任务；或由 AMC Agent 自动扫描素材并基于当月主题生成带主题、建议图片及视频素材的生产计划（在看板生成 To-do task）。</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">4. 发布执行</td>
-                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent / 主理人</td>
-                            <td className="p-3 text-slate-300">正常账号通过 PostFast API 自动发送；高风控社媒渠道由系统生成 Require Input 指示，由主理人手动进行发布以规避封号风险。</td>
+                            <td className="p-3 font-bold">4. 自动创作与排期</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Copywriter (AI)</td>
+                            <td className="p-3 text-slate-300">自动对接看板中的生产计划任务，完成内容创作（正文、Hashtags），保存草稿并安排排期发布，在此过程中持续提升 AI 内容创作质量。</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">5. 真实发布验证</td>
-                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
-                            <td className="p-3 text-slate-300">排期到达后，Agent 自动验证贴文是否真实上线，拉取回填线上 Post URL，将任务归档并置为 done。主理人 review 并邀请商家查看。</td>
+                            <td className="p-3 font-bold">5. 发布内容终审</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人 (人工 QA)</td>
+                            <td className="p-3 text-slate-300">主理人 review 已生成的发布内容草稿，执行人工 QA 终审，确保符合品牌调性。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">6. 数据采集与看板截图</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Researcher (AI)</td>
+                            <td className="p-3 text-slate-300">AI 自动执行数据采集、效果回填；Researcher 机器人保持登录状态，定期截图每个品牌的社媒账号首页，集中呈现在账号整体展现看板中。</td>
+                          </tr>
+                          <tr>
+                            <td className="p-3 font-bold">7. 线下复盘 Review</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人 ↔ 品牌主</td>
+                            <td className="p-3 text-slate-300">品牌主理人与品牌主进行线下人工对接，复盘上月社媒效果，并讨论设定下期活动与营销主题。</td>
                           </tr>
                         </tbody>
                       </table>
@@ -837,19 +847,19 @@ export default function LearnPage() {
                         </thead>
                         <tbody className="divide-y divide-slate-800/50">
                           <tr>
-                            <td className="p-3 font-bold">1. 数据汇总</td>
-                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
-                            <td className="p-3 text-slate-300">自动汇总上月各渠道触达量、互动率、粉丝净增长、Google Maps 评分并写入看板数据库。</td>
+                            <td className="p-3 font-bold">1. 数据回填与截图</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC Researcher (AI)</td>
+                            <td className="p-3 text-slate-300">完成数据采集和回填，保持登录状态，截图每个品牌的社媒首页，展示在账号整体展现看板中。</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">2. 报告解读</td>
-                            <td className="p-3 text-indigo-400 font-semibold">主理人 ↔ 商家</td>
-                            <td className="p-3 text-slate-300">主理人向商家解读上月运营成效，沟通下月新品/活动等特定安排，收集商家反馈。</td>
+                            <td className="p-3 font-bold">2. 线下人工对接 Review</td>
+                            <td className="p-3 text-indigo-400 font-semibold">AMC 主理人 ↔ 品牌主</td>
+                            <td className="p-3 text-slate-350">主理人与餐厅品牌老板进行线下人工对接，解读上月运营成效与数据报告。</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">3. 认知更新</td>
-                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
-                            <td className="p-3 text-slate-300">主理人将反馈记录同步回写给 AI（Memory），AI 更新品牌档案与长期记忆，实现持续调优。</td>
+                            <td className="p-3 font-bold">3. 品牌认知更新</td>
+                            <td className="p-3 text-indigo-400 font-semibold">品牌主理人 ↔ AMC Agent</td>
+                            <td className="p-3 text-slate-300">主理人将复盘反馈、推广方案与下期营销主题更新同步，通过 AMC Agent 存入品牌长期上下文与记忆库。</td>
                           </tr>
                         </tbody>
                       </table>

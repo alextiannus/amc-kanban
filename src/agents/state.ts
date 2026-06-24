@@ -43,5 +43,9 @@ export const StateAnnotation = Annotation.Root({
   watermarkText: Annotation<string>({
     reducer: (x, y) => y ?? x,
     default: () => ""
+  }),
+  draftId: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
   })
 });

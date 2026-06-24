@@ -175,6 +175,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const closeEditor = () => {
     setEditorOpen(false)
     setSelectedId(null)
+    setSelectedAccountIds([])
   }
   const [activeTab, setActiveTab] = useState<TabKey>('all')
   const [query, setQuery] = useState('')
@@ -188,6 +189,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const [caption, setCaption] = useState('')
   const [hashtags, setHashtags] = useState('')
   const [accountId, setAccountId] = useState('')
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
   const [scheduledAt, setScheduledAt] = useState('')
   const [agentNote, setAgentNote] = useState('')
   const [reviewNote, setReviewNote] = useState('')
@@ -305,6 +307,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       setCaption('')
       setHashtags('')
       setAccountId('')
+      setSelectedAccountIds([])
       setScheduledAt('')
       setAgentNote('')
       setMediaUrlsInput('')
@@ -314,7 +317,9 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     }
     setCaption(selectedDraft.caption)
     setHashtags(formatTags(selectedDraft.hashtags))
-    setAccountId(selectedDraft.accountId || selectedDraft.account?.id || '')
+    const accId = selectedDraft.accountId || selectedDraft.account?.id || ''
+    setAccountId(accId)
+    setSelectedAccountIds(accId ? [accId] : [])
     setScheduledAt(toDateTimeLocal(selectedDraft.scheduledAt))
     setAgentNote(selectedDraft.agentNote || '')
     setMediaUrlsInput((selectedDraft.mediaUrls || []).join(', '))
@@ -390,6 +395,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setCaption('')
     setHashtags('')
     setAccountId('')
+    setSelectedAccountIds([])
     setScheduledAt('')
     setAgentNote('')
     setMediaUrlsInput('')
@@ -397,14 +403,15 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setReviewNote('')
   }
 
-  const saveDraft = async (nextStatus?: string): Promise<DraftItem | null> => {
+  const saveDraft = async (nextStatus?: string, captionOverride?: string): Promise<DraftItem | null> => {
     if (!brandId) return null
-    const trimmedCaption = caption.trim()
+    const activeCaption = captionOverride !== undefined ? captionOverride : caption
+    const trimmedCaption = activeCaption.trim()
     if (!trimmedCaption) {
       setError('草稿正文不能为空')
       return null
     }
-    if (!accountId) {
+    if (selectedAccountIds.length === 0) {
       setError('请选择发布账号（确定发布平台）')
       return null
     }
@@ -412,26 +419,88 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setError(null)
     const mediaUrls = attachedMedia.filter((m) => m.type === 'url').map((m) => m.url)
     try {
-      const endpoint = selectedDraft ? `/api/brands/${brandId}/drafts/${selectedDraft.id}` : `/api/brands/${brandId}/drafts`
-      const res = await fetch(endpoint, {
-        method: selectedDraft ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          caption: trimmedCaption,
-          hashtags: parseTags(hashtags),
-          accountId,
-          scheduledAt: fromDateTimeLocal(scheduledAt),
-          agentNote,
-          status: nextStatus || selectedDraft?.status || 'draft',
-          mediaUrls,
-          assetIds: selectedAssetIds,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || '保存草稿失败')
+      let mainDraft: DraftItem | null = null
+
+      if (selectedDraft) {
+        // Update existing draft with first account
+        const endpoint = `/api/brands/${brandId}/drafts/${selectedDraft.id}`
+        const res = await fetch(endpoint, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caption: trimmedCaption,
+            hashtags: parseTags(hashtags),
+            accountId: selectedAccountIds[0],
+            scheduledAt: fromDateTimeLocal(scheduledAt),
+            agentNote,
+            status: nextStatus || selectedDraft.status || 'draft',
+            mediaUrls,
+            assetIds: selectedAssetIds,
+          }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(json.error || '修改草稿失败')
+        mainDraft = json.draft || null
+
+        // Create new drafts for any additional accounts
+        const otherAccounts = selectedAccountIds.slice(1)
+        if (otherAccounts.length > 0) {
+          await Promise.all(
+            otherAccounts.map(async (accId) => {
+              const resCreate = await fetch(`/api/brands/${brandId}/drafts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  caption: trimmedCaption,
+                  hashtags: parseTags(hashtags),
+                  accountId: accId,
+                  scheduledAt: fromDateTimeLocal(scheduledAt),
+                  agentNote,
+                  status: nextStatus || 'draft',
+                  mediaUrls,
+                  assetIds: selectedAssetIds,
+                }),
+              })
+              if (!resCreate.ok) {
+                const errJson = await resCreate.json().catch(() => ({}))
+                console.error(`Failed to create copy draft for account ${accId}:`, errJson.error)
+              }
+            })
+          )
+        }
+      } else {
+        // Create new drafts for all selected accounts
+        const results = await Promise.all(
+          selectedAccountIds.map(async (accId, idx) => {
+            const res = await fetch(`/api/brands/${brandId}/drafts`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                caption: trimmedCaption,
+                hashtags: parseTags(hashtags),
+                accountId: accId,
+                scheduledAt: fromDateTimeLocal(scheduledAt),
+                agentNote,
+                status: nextStatus || 'draft',
+                mediaUrls,
+                assetIds: selectedAssetIds,
+              }),
+            })
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error(json.error || '创建草稿失败')
+            return json.draft || null
+          })
+        )
+        if (results.length > 0) {
+          mainDraft = results[0]
+        }
+      }
+
       await loadDrafts()
-      setSelectedId(json.draft?.id || selectedDraft?.id || null)
-      return json.draft || null
+      if (mainDraft) {
+        setSelectedId((mainDraft as any).id)
+      }
+      return mainDraft
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存草稿失败')
       return null
@@ -481,6 +550,26 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       closeEditor()
     } catch (e) {
       setError(e instanceof Error ? e.message : '审核操作失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const triggerCopywriter = async (draftId: string) => {
+    if (!brandId) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
+        method: 'POST',
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '触发 AI 创作失败')
+      alert('AI 创作已在后台启动，您可以稍后查看。')
+      closeEditor()
+      await loadDrafts()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '触发 AI 创作失败')
     } finally {
       setSaving(false)
     }
@@ -607,22 +696,49 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
               <div className="grid gap-3 md:grid-cols-2">
-                <select
-                  value={accountId}
-                  onChange={(event) => setAccountId(event.target.value)}
-                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                >
-                  <option value="">选择发布账号</option>
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>{account.platformId} · {account.displayName || account.handle}</option>
-                  ))}
-                </select>
-                <input
-                  type="datetime-local"
-                  value={scheduledAt}
-                  onChange={(event) => setScheduledAt(event.target.value)}
-                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                />
+                <div className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 min-h-[44px]">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">发布账号 (多选) <span className="text-red-500">*</span></p>
+                  {accounts.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">未绑定任何账号</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {accounts.map((account) => {
+                        const isSelected = selectedAccountIds.includes(account.id)
+                        return (
+                          <button
+                            key={account.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAccountIds(prev => {
+                                const next = prev.includes(account.id)
+                                  ? prev.filter(id => id !== account.id)
+                                  : [...prev, account.id]
+                                setAccountId(next[0] || '')
+                                return next
+                              })
+                            }}
+                            className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900 dark:text-indigo-300'
+                                : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span>{account.platformId.toLowerCase() === 'instagram' ? '📸' : account.platformId.toLowerCase() === 'facebook' ? '👥' : account.platformId.toLowerCase() === 'red' ? '📕' : account.platformId.toLowerCase() === 'tiktok' ? '🎵' : '🔗'}</span>
+                            <span>{account.displayName || account.handle}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col justify-end">
+                  <input
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={(event) => setScheduledAt(event.target.value)}
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </div>
               </div>
               <textarea
                 value={agentNote}
@@ -802,6 +918,24 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 <Eye className="h-4 w-4" /> 预览效果
               </button>
               <button
+                type="button"
+                disabled={saving || selectedAccountIds.length === 0}
+                onClick={async () => {
+                  const activeCaption = caption.trim() || '【AI 正在创作中...】'
+                  if (!caption.trim()) {
+                    setCaption(activeCaption)
+                  }
+                  const statusToSave = selectedDraft ? selectedDraft.status : 'draft'
+                  const saved = await saveDraft(statusToSave, activeCaption)
+                  if (saved) {
+                    await triggerCopywriter(saved.id)
+                  }
+                }}
+                className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                ✨ AI 创作
+              </button>
+              <button
                 disabled={saving || !caption.trim() || !accountId}
                 onClick={async () => {
                   const saved = await saveDraft('draft')
@@ -811,9 +945,19 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
               >
                 保存
               </button>
-              <button disabled={saving || !caption.trim() || !accountId} onClick={submitDraft} className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-50"><Send className="h-4 w-4" /> 提交草稿</button>
+              <button disabled={saving || !caption.trim() || !accountId} onClick={submitDraft} className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><Send className="h-4 w-4" /> 提交草稿</button>
               {selectedDraft?.status === 'pending_review' && (
                 <>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={async () => {
+                      await triggerCopywriter(selectedDraft.id)
+                    }}
+                    className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  >
+                    ✨ AI 重新创作
+                  </button>
                   <button disabled={saving} onClick={() => reviewDraft('reject')} className="inline-flex items-center gap-2 rounded-md border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50"><X className="h-4 w-4" /> 驳回</button>
                   <button disabled={saving} onClick={() => reviewDraft('approve')} className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"><Check className="h-4 w-4" /> 批准</button>
                 </>

@@ -300,6 +300,17 @@ export async function PATCH(
       }
     })
 
+    if (updatedTask.status === 'todo' && updatedTask.brandId && existingTask.status !== 'todo') {
+      const config = { configurable: { thread_id: updatedTask.brandId } };
+      const { marketingGraph } = await import('@/agents/graph/marketingGraph.ts');
+      void marketingGraph.invoke({
+        taskId: updatedTask.id,
+        brandId: updatedTask.brandId
+      }, config).catch((err) => {
+        console.error(`Background copywriter trigger failed for task ${updatedTask.id}:`, err);
+      });
+    }
+
     await writeAuditLog({
       actor: actorFromContext(session?.user, authenticatedAgent),
       action: 'TASK_UPDATED',

@@ -1,4 +1,4 @@
-import { getGeminiApiKey } from '@/lib/systemConfig'
+import { getGeminiApiKey } from './systemConfig.ts'
 
 /**
  * Call the Gemini 2.0 Flash API to generate text.

@@ -2733,6 +2733,50 @@ export function createAmcMcpServer(agentApiKey: string) {
       }
     }
   )
+  // ── submit_knowledge_template ───────────────────────────────────────────
+  server.tool(
+    'submit_knowledge_template',
+    'Submit a copywriting template, content idea, video script blueprint, or prompt rule to the AMC Knowledge Base.',
+    {
+      industry: z.enum(['fb', 'fitness', 'renovation', 'winery', 'general']).describe('The industry category for this template'),
+      platform: z.string().describe('The target platform name, e.g. "instagram", "red", "tiktok", "facebook", "google_business", or "all"'),
+      template: z.string().optional().describe('Copywriting template content with placeholders like [BrandName], [Signature], [Texture] if applicable'),
+      idea: z.string().optional().describe('Content creation/marketing idea'),
+      videoScript: z.string().optional().describe('Video script blueprint with time markers'),
+      prompt: z.string().optional().describe('Specialized prompt/rule for the AI agent copywriter'),
+    },
+    async ({ industry, platform, template, idea, videoScript, prompt }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+
+      if (!template && !idea && !videoScript && !prompt) {
+        return { content: [{ type: 'text' as const, text: 'Error: At least one of template, idea, videoScript, or prompt must be provided' }], isError: true }
+      }
+
+      try {
+        const { addCustomTemplate } = await import('@/agents/knowledgeBase.ts')
+        const success = addCustomTemplate({
+          industry,
+          platform,
+          template,
+          idea,
+          videoScript,
+          prompt,
+        })
+        if (!success) {
+          return { content: [{ type: 'text' as const, text: 'Error: Failed to save template to the knowledge base file' }], isError: true }
+        }
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({ success: true, message: 'Template submitted successfully to AMC Knowledge Base' }, null, 2),
+          }],
+        }
+      } catch (error) {
+        return { content: [{ type: 'text' as const, text: `Error: ${errorMessage(error, 'Failed to save template')}` }], isError: true }
+      }
+    }
+  )
 
   return server
 }

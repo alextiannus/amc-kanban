@@ -24,7 +24,10 @@ import {
   Trash2,
   Maximize2,
   Send,
-  ChevronRight
+  ChevronRight,
+  Eye,
+  MoreVertical,
+  FileText
 } from 'lucide-react'
 
 // Category definitions
@@ -89,6 +92,19 @@ function relativeDate(value: string) {
   return `${date.getMonth() + 1}/${date.getDate()}`
 }
 
+function isVideoUrl(url: string): boolean {
+  if (!url) return false
+  const path = url.split('?')[0]
+  return /\.(mp4|mov|avi|webm|ogg|m4v|3gp)(?:\?.*)?$/i.test(path)
+}
+
+function parseTags(value: string) {
+  return value
+    .split(/[#,，,\s]+/)
+    .map((tag) => tag.trim().replace(/^#/, ''))
+    .filter(Boolean)
+}
+
 interface DashboardAssetsProps {
   brandId?: string
 }
@@ -100,6 +116,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [selected, setSelected] = useState<string[]>([])
   const [isBatchSelectMode, setIsBatchSelectMode] = useState(false)
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setIsBatchSelectMode(selected.length > 0)
+  }, [selected.length])
   
   const [assets, setAssets] = useState<DashboardAsset[]>([])
   const [loading, setLoading] = useState(true)
@@ -136,14 +156,16 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   // Schedule / Create Task Modal State
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
   const [scheduleTargetIds, setScheduleTargetIds] = useState<string[]>([])
-  const [scheduleTheme, setScheduleTheme] = useState('')
-  const [scheduleDescription, setScheduleDescription] = useState('')
-  const [scheduleAgentId, setScheduleAgentId] = useState('')
-  const [brandAgents, setBrandAgents] = useState<any[]>([])
+  const [scheduleCaption, setScheduleCaption] = useState('')
+  const [scheduleHashtags, setScheduleHashtags] = useState('')
+  const [scheduleSelectedAccountIds, setScheduleSelectedAccountIds] = useState<string[]>([])
+  const [scheduleScheduledAt, setScheduleScheduledAt] = useState('')
+  const [scheduleAgentNote, setScheduleAgentNote] = useState('')
   const [brandAccounts, setBrandAccounts] = useState<any[]>([])
-  const [scheduleAccountId, setScheduleAccountId] = useState('')
-  const [scheduleDate, setScheduleDate] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewPlatform, setPreviewPlatform] = useState('instagram')
+  const [previewMediaIndex, setPreviewMediaIndex] = useState(0)
 
   const loadFolders = useCallback(async () => {
     if (!brandId) return
@@ -396,22 +418,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     }
   }, [loadAssets])
 
-  const loadBrandAgents = useCallback(async () => {
-    if (!brandId) return
-    try {
-      const res = await fetch(`/api/brands/${brandId}/agents`)
-      if (res.ok) {
-        const data = await res.json()
-        setBrandAgents(data || [])
-        if (data && data.length > 0) {
-          const leadAgent = data.find((ba: any) => ba.role === 'lead')
-          setScheduleAgentId(leadAgent?.agent?.id || data[0]?.agent?.id || '')
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load brand agents:', err)
-    }
-  }, [brandId])
+
 
   const loadBrandAccounts = useCallback(async () => {
     if (!brandId) return
@@ -422,7 +429,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         const data = json.accounts || []
         setBrandAccounts(data)
         if (data && data.length > 0) {
-          setScheduleAccountId(data[0].id)
+          setScheduleSelectedAccountIds([data[0].id])
         }
       }
     } catch (err) {
@@ -432,12 +439,12 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
   const handleConfirmScheduleAndTask = async () => {
     if (!brandId || scheduleTargetIds.length === 0) return
-    if (!scheduleTheme.trim()) {
-      alert('请输入帖子主题描述')
+    if (!scheduleCaption.trim()) {
+      alert('草稿正文不能为空')
       return
     }
-    if (!scheduleAccountId) {
-      alert('请选择目标发布渠道账户')
+    if (scheduleSelectedAccountIds.length === 0) {
+      alert('请选择发布账号（确定发布平台）')
       return
     }
 
@@ -465,31 +472,46 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         .filter(a => scheduleTargetIds.includes(a.id))
         .map(a => a.url)
 
-      const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accountId: scheduleAccountId,
-          caption: `【草稿排期 Idea】\n主题：${scheduleTheme.trim()}\n详细要求：${scheduleDescription.trim() || '无'}\n提示：本草稿由素材库一键生成，您可以直接在此基础上修改文案与排期。`,
-          assetIds: scheduleTargetIds,
-          mediaUrls: selectedUrls,
-          scheduledAt: scheduleDate ? new Date(scheduleDate).toISOString() : null,
-          status: 'draft',
-          agentId: scheduleAgentId || null,
-        }),
-      })
-
-      const draftData = await draftRes.json().catch(() => ({}))
-      if (!draftRes.ok) {
-        throw new Error(draftData.error || '创建 Post 草稿失败')
+      const parseTags = (str: string) => {
+        if (!str.trim()) return []
+        return str
+          .split(/[\s,，]+/)
+          .map((t) => t.trim().replace(/^#/, ''))
+          .filter((t) => t.length > 0)
       }
+
+      await Promise.all(
+        scheduleSelectedAccountIds.map(async (accId) => {
+          const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accountId: accId,
+              caption: scheduleCaption.trim(),
+              hashtags: parseTags(scheduleHashtags),
+              assetIds: scheduleTargetIds,
+              mediaUrls: selectedUrls,
+              scheduledAt: scheduleScheduledAt ? new Date(scheduleScheduledAt).toISOString() : null,
+              status: 'draft',
+              agentNote: scheduleAgentNote.trim() || null,
+              agentId: null,
+              createTask: true,
+            }),
+          })
+
+          const draftData = await draftRes.json().catch(() => ({}))
+          if (!draftRes.ok) {
+            throw new Error(draftData.error || '创建 Post 草稿失败')
+          }
+        })
+      )
 
       // 3. Reset states and notify
       setSelected([])
       setIsBatchSelectMode(false)
       setScheduleModalOpen(false)
       await loadAssets()
-      alert(`已成功生成 Post 草稿！\n您可以在「发布内容」或日历中查看与编辑。`)
+      alert(`已成功生成 Post 草稿并创建了看板任务！\n平台的 AMC Copywriter 将继续完成内容的完整创作和发布。`)
     } catch (err: any) {
       setError(err?.message || '操作失败，请重试')
     } finally {
@@ -501,11 +523,11 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     const ids = Array.isArray(assetIds) ? assetIds : [assetIds]
     if (ids.length === 0) return
     setScheduleTargetIds(ids)
-    setScheduleTheme('')
-    setScheduleDescription('')
-    setScheduleDate('')
+    setScheduleCaption('')
+    setScheduleHashtags('')
+    setScheduleScheduledAt('')
+    setScheduleAgentNote('')
     setScheduleModalOpen(true)
-    void loadBrandAgents()
     void loadBrandAccounts()
   }
 
@@ -1325,33 +1347,8 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             ))}
           </select>
 
-          {filtered.length > 0 && (
+          {selected.length > 0 && (
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsBatchSelectMode(prev => {
-                    const next = !prev
-                    if (next && selected.length === 0) {
-                      if (activeAssetId) {
-                        setSelected([activeAssetId])
-                      } else if (filtered.length > 0) {
-                        setSelected([filtered[0].id])
-                      }
-                    }
-                    return next
-                  })
-                }}
-                className={`rounded-xl border px-3.5 py-2 text-sm font-semibold outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0 ${
-                  isBatchSelectMode
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300 font-bold'
-                    : 'border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                <CheckSquare className="w-4 h-4" />
-                <span>{isBatchSelectMode ? '退出选择' : '批量选择'}</span>
-              </button>
-
               <button
                 type="button"
                 onClick={() => {
@@ -1369,30 +1366,26 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 <span>{filtered.every(a => selected.includes(a.id)) ? '取消全选' : '全选'}</span>
               </button>
 
-              {selected.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => markForSchedule(selected)}
-                  className="rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-900/35 px-3.5 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-450 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
-                >
-                  <Calendar className="w-4 h-4" />
-                  <span>准备草稿排期(idea)</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => markForSchedule(selected)}
+                className="rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-900/35 px-3.5 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-450 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
+              >
+                <Calendar className="w-4 h-4" />
+                <span>准备草稿排期(idea)</span>
+              </button>
 
-              {selected.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected([])
-                    setIsBatchSelectMode(false)
-                  }}
-                  className="rounded-xl border border-rose-100 dark:border-rose-900/30 bg-rose-50/50 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-900/35 px-3.5 py-2 text-sm font-semibold text-rose-600 dark:text-rose-450 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                  <span>清除选择 ({selected.length})</span>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelected([])
+                  setIsBatchSelectMode(false)
+                }}
+                className="rounded-xl border border-rose-100 dark:border-rose-900/30 bg-rose-50/50 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-900/35 px-3.5 py-2 text-sm font-semibold text-rose-600 dark:text-rose-455 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
+              >
+                <X className="w-4 h-4" />
+                <span>取消选择 ({selected.length})</span>
+              </button>
             </div>
           )}
         </div>
@@ -2083,171 +2076,674 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         </div>
       )}
 
-      {/* 4. Schedule and Task Creation Modal */}
+      {/* 4. Schedule Drawer (100% identical to new draft drawer in DraftManagementView) */}
       {scheduleModalOpen && (
-        <div 
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-          onClick={() => setScheduleModalOpen(false)}
-        >
-          <div 
-            className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl p-6 relative flex flex-col max-h-[90vh] overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="fixed inset-0 z-[9999] flex justify-end bg-slate-950/30 p-3 backdrop-blur-sm" onClick={() => setScheduleModalOpen(false)}>
+          <div className="flex h-full w-full max-w-xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in slide-in-from-right duration-250" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
               <div>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-indigo-500" />
-                  <span>准备草稿排期 (Idea)</span>
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  将已选素材直接生成 Post 草稿，并指定渠道与发布时间
-                </p>
+                <p className="text-xs font-black uppercase tracking-wide text-slate-400">New draft</p>
+                <h3 className="text-lg font-black text-slate-950 dark:text-white">准备草稿排期 (Idea)</h3>
               </div>
-              <button 
-                onClick={() => setScheduleModalOpen(false)}
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
+              <button onClick={() => setScheduleModalOpen(false)} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Content Scrollable */}
-            <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 custom-scrollbar">
-              {/* Selected assets preview */}
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
-                  已选排期素材 ({scheduleTargetIds.length}张)
-                </label>
-                <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
-                  {scheduleTargetIds.map(id => {
-                    const matched = assets.find(a => a.id === id)
-                    if (!matched) return null
-                    return (
-                      <div key={id} className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-800">
-                        <img src={matched.url} alt="preview" className="w-full h-full object-cover" />
-                      </div>
-                    )
-                  })}
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+              <textarea
+                value={scheduleCaption}
+                onChange={e => setScheduleCaption(e.target.value)}
+                placeholder="输入草稿正文..."
+                className="min-h-[220px] w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+              <input
+                value={scheduleHashtags}
+                onChange={e => setScheduleHashtags(e.target.value)}
+                placeholder="标签，用逗号分隔，例如 lunch, promo, weekend"
+                className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 min-h-[44px]">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">发布账号 (多选) <span className="text-red-500">*</span></p>
+                  {brandAccounts.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">未绑定任何账号</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {brandAccounts.map((account) => {
+                        const isSelected = scheduleSelectedAccountIds.includes(account.id)
+                        return (
+                          <button
+                            key={account.id}
+                            type="button"
+                            onClick={() => {
+                              setScheduleSelectedAccountIds(prev =>
+                                prev.includes(account.id)
+                                  ? prev.filter(id => id !== account.id)
+                                  : [...prev, account.id]
+                              )
+                            }}
+                            className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900 dark:text-indigo-300'
+                                : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span>{account.platformId.toLowerCase() === 'instagram' ? '📸' : account.platformId.toLowerCase() === 'facebook' ? '👥' : account.platformId.toLowerCase() === 'red' ? '📕' : account.platformId.toLowerCase() === 'tiktok' ? '🎵' : '🔗'}</span>
+                            <span>{account.displayName || account.name || account.handle}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col justify-end">
+                  <input
+                    type="datetime-local"
+                    value={scheduleScheduledAt}
+                    onChange={(event) => setScheduleScheduledAt(event.target.value)}
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  />
                 </div>
               </div>
+              <textarea
+                value={scheduleAgentNote}
+                onChange={e => setScheduleAgentNote(e.target.value)}
+                placeholder="协作备注 / 修改说明"
+                className="min-h-20 w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
 
-              {/* Theme description */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  帖子主题描述 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={scheduleTheme}
-                  onChange={e => setScheduleTheme(e.target.value)}
-                  placeholder="例如: 端午节烤鱼促销活动 / Crispy Pork Cutlet Launch"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-semibold"
-                />
-              </div>
+              {/* Media & Assets Section */}
+              <div className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-black text-slate-800 dark:text-slate-200">媒体与素材</h4>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      已选: {scheduleTargetIds.length}
+                    </span>
+                  </div>
+                </div>
 
-              {/* Target Channel Account */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  目标发布渠道账户 <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={scheduleAccountId}
-                  onChange={e => setScheduleAccountId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 cursor-pointer font-semibold"
-                >
-                  <option value="">请选择目标账户...</option>
-                  {brandAccounts.map((acc: any) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.platform === 'instagram' ? '📸' : acc.platform === 'facebook' ? '👥' : acc.platform === 'red' ? '📕' : acc.platform === 'tiktok' ? '🎵' : '🔗'} {acc.name} ({acc.platform})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Scheduled Time */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  建议排期时间 (可选)
-                </label>
-                <input
-                  type="datetime-local"
-                  value={scheduleDate}
-                  onChange={e => setScheduleDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-850 dark:text-slate-100 font-semibold"
-                />
-              </div>
-
-              {/* Assignee AI Agent */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  分配执行 Agent (可选)
-                </label>
-                <select
-                  value={scheduleAgentId}
-                  onChange={e => setScheduleAgentId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 cursor-pointer font-semibold"
-                >
-                  <option value="">不指定 Agent (仅生成草稿)...</option>
-                  {brandAgents.map((ba: any) => ba.agent && (
-                    <option key={ba.agent.id} value={ba.agent.id}>
-                      🤖 {ba.agent.nickname || ba.agent.email} ({ba.role === 'lead' ? '主理人' : '助手'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Task detailed description */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  详细要求 (可选)
-                </label>
-                <textarea
-                  rows={3}
-                  value={scheduleDescription}
-                  onChange={e => setScheduleDescription(e.target.value)}
-                  placeholder="选填。可以输入针对帖子的具体要求，例如：语气偏向生动有趣，增加一些本地话..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-855 dark:text-slate-100"
-                />
+                {/* Grid for selected schedule target assets */}
+                {scheduleTargetIds.length > 0 && (
+                  <div className="grid grid-cols-4 gap-2">
+                    {scheduleTargetIds.map((id, index) => {
+                      const matched = assets.find(a => a.id === id)
+                      if (!matched) return null
+                      const isVid = matched.mimeType.startsWith('video/')
+                      return (
+                        <div
+                          key={id}
+                          className="relative aspect-square rounded-lg border border-slate-200 bg-slate-100 overflow-hidden dark:border-slate-800 dark:bg-slate-900 shadow-sm"
+                        >
+                          {isVid ? (
+                            <video src={`${matched.url}#t=0.1`} preload="metadata" className="h-full w-full object-cover" muted />
+                          ) : (
+                            <img src={matched.url} className="h-full w-full object-cover" alt="" />
+                          )}
+                          {isVid && (
+                            <div className="absolute bottom-1 right-1 bg-black/50 p-0.5 rounded">
+                              <Play className="h-3 w-3 text-white fill-white" />
+                            </div>
+                          )}
+                          <div className="absolute bottom-1 left-1 px-1 rounded text-[8px] font-black text-white bg-emerald-500/80">
+                            素材库
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-455 text-xs font-semibold">
+              <div className="mx-5 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 text-xs font-semibold">
                 {error}
               </div>
             )}
 
-            {/* Footer buttons */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3 bg-white dark:bg-slate-900 shrink-0">
+            {/* Footer */}
+            <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-800 w-full bg-white dark:bg-slate-900">
+              <button
+                type="button"
+                onClick={() => {
+                  const firstSelectedAccountId = scheduleSelectedAccountIds[0]
+                  const account = brandAccounts.find((a) => a.id === firstSelectedAccountId)
+                  if (account) {
+                    setPreviewPlatform(account.platformId.toLowerCase())
+                  } else {
+                    setPreviewPlatform('instagram')
+                  }
+                  setPreviewMediaIndex(0)
+                  setPreviewOpen(true)
+                }}
+                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 mr-auto flex items-center gap-2"
+              >
+                <Eye className="h-4 w-4" /> 预览效果
+              </button>
               <button
                 type="button"
                 onClick={() => setScheduleModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all"
+                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 取消
               </button>
               <button
-                type="button"
+                disabled={creatingTask || !scheduleCaption.trim() || scheduleSelectedAccountIds.length === 0}
                 onClick={handleConfirmScheduleAndTask}
-                disabled={creatingTask || !scheduleTheme.trim() || !scheduleAccountId}
-                className="px-5 py-2 rounded-xl text-sm font-black text-white bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-50"
               >
-                {creatingTask ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>生成中...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>生成 Post 草稿</span>
-                  </>
-                )}
+                {creatingTask ? '生成中...' : '生成 Post 草稿'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Platform Preview Mockups Dialog */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-md" onClick={() => setPreviewOpen(false)}>
+          <div className="relative flex h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/95 shadow-2xl dark:border-slate-800 dark:bg-slate-900/95 lg:flex-row" onClick={(e) => e.stopPropagation()}>
+            
+            {/* Platform Selector Left Sidebar */}
+            <div className="w-full border-b border-slate-200 bg-white/50 p-5 dark:border-slate-800 dark:bg-slate-950/50 lg:w-80 lg:border-b-0 lg:border-r flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Eye className="h-5 w-5 text-emerald-500" /> 发布预览
+                  </h3>
+                  <button onClick={() => setPreviewOpen(false)} className="lg:hidden rounded-md p-1 hover:bg-slate-200 dark:hover:bg-slate-800">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                
+                <p className="mt-2 text-xs font-semibold text-slate-400">
+                  查看该内容在各个社交媒体平台的发布效果。
+                </p>
+
+                <div className="mt-6 space-y-2">
+                  {[
+                    { id: 'instagram', name: 'Instagram Feed', icon: '📸' },
+                    { id: 'red', name: '小红书 (Xiaohongshu)', icon: '📕' },
+                    { id: 'facebook', name: 'Facebook Post', icon: '👥' },
+                    { id: 'tiktok', name: 'TikTok Video', icon: '🎵' },
+                    { id: 'google_business', name: 'Google Business', icon: '🏪' },
+                  ].map((plat) => (
+                    <button
+                      key={plat.id}
+                      onClick={() => {
+                        setPreviewPlatform(plat.id)
+                        setPreviewMediaIndex(0)
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-black transition-all ${
+                        previewPlatform === plat.id
+                          ? 'bg-slate-900 text-white shadow-lg dark:bg-white dark:text-slate-950'
+                          : 'text-slate-600 hover:bg-slate-200/50 dark:text-slate-400 dark:hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <span className="text-base">{plat.icon}</span>
+                      {plat.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/30">
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-400">草稿摘要</h4>
+                <div className="mt-2 space-y-1 text-xs">
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">
+                    <span className="font-bold text-slate-400">正文字数:</span> {scheduleCaption.length} 字
+                  </p>
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">
+                    <span className="font-bold text-slate-400">标签数量:</span> {parseTags(scheduleHashtags).length} 个
+                  </p>
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">
+                    <span className="font-bold text-slate-400">媒体数量:</span> {scheduleTargetIds.length} 个
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Preview Viewport Center/Right Pane */}
+            <div className="flex flex-1 items-center justify-center overflow-y-auto p-4 lg:p-8">
+              
+              {/* Instagram Preview */}
+              {previewPlatform === 'instagram' && (
+                <div className="relative mx-auto w-full max-w-[375px] overflow-hidden rounded-[40px] border-[12px] border-slate-900 bg-white shadow-2xl dark:border-slate-900 dark:bg-black text-black dark:text-white">
+                  {/* Instagram Header */}
+                  <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5 dark:border-slate-900">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 p-[1.5px]">
+                        <div className="h-full w-full rounded-full border border-white bg-slate-200 dark:border-black" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold">
+                          {brandAccounts.find(a => a.id === scheduleSelectedAccountIds[0])?.displayName ||
+                            brandAccounts.find(a => a.id === scheduleSelectedAccountIds[0])?.handle ||
+                            (assets[0]?.brandName || 'Your Brand')}
+                        </p>
+                        <p className="text-[10px] text-slate-500">Sponsored</p>
+                      </div>
+                    </div>
+                    <MoreVertical className="h-4 w-4 text-slate-400" />
+                  </div>
+
+                  {/* Instagram Media Slider */}
+                  <div className="relative aspect-square w-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+                    {scheduleTargetIds.length > 0 ? (
+                      <>
+                        {(() => {
+                          const matched = assets.find(a => a.id === scheduleTargetIds[previewMediaIndex])
+                          if (!matched) return null
+                          return isVideoUrl(matched.url) ? (
+                            <video src={matched.url} className="h-full w-full object-cover" controls muted />
+                          ) : (
+                            <img src={matched.url} className="h-full w-full object-cover" alt="" />
+                          )
+                        })()}
+                        
+                        {scheduleTargetIds.length > 1 && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPreviewMediaIndex((prev) => (prev > 0 ? prev - 1 : scheduleTargetIds.length - 1))
+                              }}
+                              className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 z-10"
+                            >
+                              ‹
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPreviewMediaIndex((prev) => (prev < scheduleTargetIds.length - 1 ? prev + 1 : 0))
+                              }}
+                              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 z-10"
+                            >
+                              ›
+                            </button>
+                            <span className="absolute right-3 top-3 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-black text-white z-10">
+                              {previewMediaIndex + 1}/{scheduleTargetIds.length}
+                            </span>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
+                        <FileText className="h-10 w-10 text-slate-300" />
+                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Instagram Actions */}
+                  <div className="px-3 py-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className="text-xl">🤍</span>
+                        <span className="text-xl">💬</span>
+                        <span className="text-xl">✈️</span>
+                      </div>
+                      <span className="text-xl">🔖</span>
+                    </div>
+                    <p className="mt-2 text-xs font-bold">1,245 likes</p>
+                    
+                    {/* Instagram Caption */}
+                    <div className="mt-1.5 space-y-1 text-xs">
+                      <p className="leading-5">
+                        <span className="font-bold mr-1.5">
+                          {brandAccounts.find(a => a.id === scheduleSelectedAccountIds[0])?.handle ||
+                            (assets[0]?.brandName || 'brand_account')}
+                        </span>
+                        <span className="whitespace-pre-wrap">{scheduleCaption}</span>
+                      </p>
+                      <p className="text-blue-600 dark:text-blue-400 font-medium">
+                        {parseTags(scheduleHashtags).map(tag => `#${tag}`).join(' ')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Xiaohongshu Preview */}
+              {previewPlatform === 'red' && (
+                <div className="relative mx-auto w-full max-w-[375px] overflow-hidden rounded-[40px] border-[12px] border-slate-900 bg-white shadow-2xl dark:border-slate-900 dark:bg-[#0f0f0f] text-black dark:text-white">
+                  {/* XHS Header */}
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-900">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-full bg-slate-200" />
+                      <div>
+                        <p className="text-xs font-bold">
+                          {brandAccounts.find(a => a.id === scheduleSelectedAccountIds[0])?.displayName ||
+                            (assets[0]?.brandName || 'Your Brand')}
+                        </p>
+                      </div>
+                    </div>
+                    <button className="rounded-full bg-[#ff2442] px-3 py-1 text-xs font-black text-white">关注</button>
+                  </div>
+
+                  {/* XHS Media */}
+                  <div className="relative aspect-[3/4] w-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+                    {scheduleTargetIds.length > 0 ? (
+                      <>
+                        {(() => {
+                          const matched = assets.find(a => a.id === scheduleTargetIds[previewMediaIndex])
+                          if (!matched) return null
+                          return isVideoUrl(matched.url) ? (
+                            <video src={matched.url} className="h-full w-full object-cover" controls muted />
+                          ) : (
+                            <img src={matched.url} className="h-full w-full object-cover" alt="" />
+                          )
+                        })()}
+                        
+                        {scheduleTargetIds.length > 1 && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPreviewMediaIndex((prev) => (prev > 0 ? prev - 1 : scheduleTargetIds.length - 1))
+                              }}
+                              className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white z-10"
+                            >
+                              ‹
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setPreviewMediaIndex((prev) => (prev < scheduleTargetIds.length - 1 ? prev + 1 : 0))
+                              }}
+                              className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white z-10"
+                            >
+                              ›
+                            </button>
+                            <span className="absolute right-3 top-3 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-bold text-white z-10">
+                              {previewMediaIndex + 1}/{scheduleTargetIds.length}
+                            </span>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
+                        <FileText className="h-10 w-10 text-slate-300" />
+                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* XHS Content */}
+                  <div className="px-4 py-3 max-h-48 overflow-y-auto">
+                    <h4 className="text-sm font-black leading-6 text-slate-900 dark:text-white">
+                      {scheduleCaption.split('\n')[0]?.slice(0, 30) || 'Untitled Post'}
+                    </h4>
+                    <p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700 dark:text-slate-300">
+                      {scheduleCaption.split('\n').slice(1).join('\n') || scheduleCaption}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {parseTags(scheduleHashtags).map((tag) => (
+                        <span key={tag} className="text-xs text-[#3a5b8f] dark:text-[#6a90d0] font-medium">#{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* XHS Footer bar */}
+                  <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5 dark:border-slate-900 text-slate-500 dark:text-slate-400">
+                    <span className="text-xs">说点什么...</span>
+                    <div className="flex gap-4 text-xs font-bold">
+                      <span>❤️ 152</span>
+                      <span>⭐ 48</span>
+                      <span>💬 12</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Facebook Preview */}
+              {previewPlatform === 'facebook' && (
+                <div className="mx-auto w-full max-w-[550px] rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900 text-black dark:text-white">
+                  {/* FB Header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-10 w-10 rounded-full bg-slate-200" />
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">
+                          {brandAccounts.find(a => a.id === scheduleSelectedAccountIds[0])?.displayName ||
+                            (assets[0]?.brandName || 'Your Brand')}
+                        </p>
+                        <p className="text-xs text-slate-500 flex items-center gap-1">Just now · 🌎</p>
+                      </div>
+                    </div>
+                    <MoreVertical className="h-5 w-5 text-slate-400" />
+                  </div>
+
+                  {/* FB Text */}
+                  <div className="mt-3 text-sm leading-6 text-slate-800 dark:text-slate-200">
+                    <p className="whitespace-pre-wrap">{scheduleCaption}</p>
+                    <p className="mt-2 text-blue-600 dark:text-blue-400 font-medium">
+                      {parseTags(scheduleHashtags).map(tag => `#${tag}`).join(' ')}
+                    </p>
+                  </div>
+
+                  {/* FB Collage Layout */}
+                  <div className="mt-3 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                    {scheduleTargetIds.length === 0 ? (
+                      <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-400">
+                        <FileText className="h-10 w-10 text-slate-300" />
+                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      </div>
+                    ) : scheduleTargetIds.length === 1 ? (
+                      <div className="relative aspect-video w-full">
+                        {(() => {
+                          const matched = assets.find(a => a.id === scheduleTargetIds[0])
+                          if (!matched) return null
+                          return isVideoUrl(matched.url) ? (
+                            <video src={matched.url} className="h-full w-full object-cover" controls muted />
+                          ) : (
+                            <img src={matched.url} className="h-full w-full object-cover" alt="" />
+                          )
+                        })()}
+                      </div>
+                    ) : scheduleTargetIds.length === 2 ? (
+                      <div className="grid grid-cols-2 gap-1">
+                        {scheduleTargetIds.map((id, idx) => {
+                          const matched = assets.find(a => a.id === id)
+                          if (!matched) return null
+                          return (
+                            <div key={idx} className="relative aspect-square">
+                              {isVideoUrl(matched.url) ? (
+                                <video src={matched.url} className="h-full w-full object-cover" muted />
+                              ) : (
+                                <img src={matched.url} className="h-full w-full object-cover" alt="" />
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-1">
+                        <div className="col-span-3 relative aspect-video">
+                          {(() => {
+                            const matched = assets.find(a => a.id === scheduleTargetIds[0])
+                            if (!matched) return null
+                            return isVideoUrl(matched.url) ? (
+                              <video src={matched.url} className="h-full w-full object-cover" muted />
+                            ) : (
+                              <img src={matched.url} className="h-full w-full object-cover" alt="" />
+                            )
+                          })()}
+                        </div>
+                        {scheduleTargetIds.slice(1, 4).map((id, idx) => {
+                          const matched = assets.find(a => a.id === id)
+                          if (!matched) return null
+                          return (
+                            <div key={idx} className="relative aspect-square">
+                              {isVideoUrl(matched.url) ? (
+                                <video src={matched.url} className="h-full w-full object-cover" muted />
+                              ) : (
+                                <img src={matched.url} className="h-full w-full object-cover" alt="" />
+                              )}
+                              {idx === 2 && scheduleTargetIds.length > 4 && (
+                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-black text-lg z-10">
+                                  +{scheduleTargetIds.length - 4}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* FB Actions */}
+                  <div className="mt-3 flex items-center justify-around border-t border-slate-100 pt-2.5 text-sm font-black text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 p-1.5 rounded dark:hover:bg-slate-800">👍 Like</span>
+                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 p-1.5 rounded dark:hover:bg-slate-800">💬 Comment</span>
+                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 p-1.5 rounded dark:hover:bg-slate-800">🔄 Share</span>
+                  </div>
+                </div>
+              )}
+
+              {/* TikTok Preview */}
+              {previewPlatform === 'tiktok' && (
+                <div className="relative mx-auto w-full max-w-[375px] overflow-hidden rounded-[40px] border-[12px] border-slate-900 bg-black shadow-2xl dark:border-slate-900 text-white">
+                  {/* TikTok Header */}
+                  <div className="absolute top-8 left-0 right-0 z-10 flex justify-center gap-4 text-sm font-bold text-white/60">
+                    <span className="hover:text-white">Following</span>
+                    <span className="text-white border-b-2 border-white pb-1">For You</span>
+                  </div>
+
+                  {/* TikTok Media Panel */}
+                  <div className="relative aspect-[9/16] w-full bg-slate-950 flex items-center justify-center">
+                    {scheduleTargetIds.length > 0 ? (
+                      <>
+                        {(() => {
+                          const matched = assets.find(a => a.id === scheduleTargetIds[0])
+                          if (!matched) return null
+                          return (
+                            <>
+                              <img src={matched.url} className="absolute inset-0 h-full w-full object-cover blur-2xl opacity-40" alt="" />
+                              {isVideoUrl(matched.url) ? (
+                                <video src={matched.url} className="relative z-10 h-full w-full object-contain" controls autoPlay loop muted />
+                              ) : (
+                                <img src={matched.url} className="relative z-10 max-h-full max-w-full object-contain" alt="" />
+                              )}
+                            </>
+                          )
+                        })()}
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-2 text-white/40">
+                        <Video className="h-10 w-10" />
+                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      </div>
+                    )}
+
+                    {/* TikTok Sidebar overlay */}
+                    <div className="absolute bottom-28 right-3 z-10 flex flex-col items-center gap-5">
+                      <div className="relative">
+                        <div className="h-10 w-10 rounded-full border border-white bg-slate-400" />
+                        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full bg-[#ff0050] px-1 text-[8px] font-black text-white z-10">+</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-2xl">❤️</span>
+                        <span className="text-[10px] font-bold text-white/90">89.2K</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-2xl">💬</span>
+                        <span className="text-[10px] font-bold text-white/90">4,120</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-2xl">🔗</span>
+                        <span className="text-[10px] font-bold text-white/90">1,029</span>
+                      </div>
+                    </div>
+
+                    {/* TikTok Bottom Text */}
+                    <div className="absolute bottom-6 left-4 right-16 z-10 space-y-2 text-white text-xs">
+                      <p className="font-bold text-sm">
+                        @{brandAccounts.find(a => a.id === scheduleSelectedAccountIds[0])?.handle ||
+                          (assets[0]?.brandName || 'brand_tiktok')}
+                      </p>
+                      <p className="line-clamp-2 leading-relaxed text-white/90 whitespace-pre-wrap">{scheduleCaption}</p>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {parseTags(scheduleHashtags).map((tag) => (
+                          <span key={tag} className="font-bold">#{tag}</span>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 overflow-hidden bg-white/10 backdrop-blur px-2 py-1 rounded-full w-fit">
+                        <span className="animate-pulse">🎵</span>
+                        <span className="w-24 text-[10px] overflow-hidden whitespace-nowrap text-ellipsis">
+                          Original Sound - @{(assets[0]?.brandName || 'Brand')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Google Business Preview */}
+              {previewPlatform === 'google_business' && (
+                <div className="mx-auto w-full max-w-[450px] rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900 text-black dark:text-white">
+                  {/* GBP Header */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 text-white font-black">
+                      🏪
+                    </div>
+                    <div>
+                      <p className="text-sm font-black">{(assets[0]?.brandName || 'Your Business Name')}</p>
+                      <p className="text-xs text-slate-400">Post on Google Business · Updated just now</p>
+                    </div>
+                  </div>
+
+                  {/* GBP Cover image */}
+                  <div className="mt-3 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                    {scheduleTargetIds.length > 0 ? (
+                      <div className="relative aspect-video w-full">
+                        {(() => {
+                          const matched = assets.find(a => a.id === scheduleTargetIds[0])
+                          if (!matched) return null
+                          return isVideoUrl(matched.url) ? (
+                            <video src={matched.url} className="h-full w-full object-cover" controls muted />
+                          ) : (
+                            <img src={matched.url} className="h-full w-full object-cover" alt="" />
+                          )
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="flex h-40 flex-col items-center justify-center gap-2 text-slate-400">
+                        <FileText className="h-8 w-8 text-slate-300" />
+                        <span className="text-xs font-semibold">暂无封面图片</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* GBP Text */}
+                  <div className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-300">
+                    <p className="whitespace-pre-wrap">{scheduleCaption}</p>
+                    <p className="mt-2 text-blue-600 dark:text-blue-400 font-medium">
+                      {parseTags(scheduleHashtags).map(tag => `#${tag}`).join(' ')}
+                    </p>
+                  </div>
+
+                  {/* GBP Button */}
+                  <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+                    <button className="w-full rounded-md bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
+                      了解更多 (Learn More)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+            
+            {/* Absolute Close Button */}
+            <button
+              onClick={() => setPreviewOpen(false)}
+              className="absolute right-4 top-4 z-20 hidden rounded-full bg-slate-900/60 p-2 text-white hover:bg-slate-900/80 dark:bg-slate-100/60 dark:text-black dark:hover:bg-slate-100/80 lg:flex"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
       )}

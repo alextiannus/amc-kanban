@@ -222,6 +222,7 @@ describe('REST: Tasks', () => {
       status: 'todo',
       priority: 'low',
       weight: 1,
+      brandId,
     })
     assert.equal(status, 200, `Create task returned ${status}: ${JSON.stringify(data)}`)
     assert.ok((data as any).id, 'Task should have an id')
@@ -244,6 +245,7 @@ describe('REST: Tasks', () => {
       status: 'todo',
       priority: 'medium',
       weight: 3,
+      brandId,
     })
     assert.equal(resA.status, 200)
     const taskAId = (resA.data as any).id
@@ -256,7 +258,8 @@ describe('REST: Tasks', () => {
       status: 'todo',
       priority: 'high',
       weight: 3,
-      blockerTaskIds: [taskAId]
+      blockerTaskIds: [taskAId],
+      brandId,
     })
     assert.equal(resB.status, 200)
     const taskBId = (resB.data as any).id
@@ -311,6 +314,7 @@ describe('MCP: Tool discovery', () => {
     'update_task',
     'update_accounts',
     'post_action_item',
+    'submit_knowledge_template',
   ]
 
   test('MCP tools/list returns all expected tools', async () => {
@@ -389,6 +393,7 @@ describe('MCP: Tool invocation', () => {
         status: 'todo',
         priority: 'low',
         weight: 1,
+        brandId,
       },
     })
     assert.ok(!error, `MCP error: ${JSON.stringify(error)}`)
@@ -408,6 +413,47 @@ describe('MCP: Tool invocation', () => {
     const text = result?.content?.[0]?.text
     const parsed = JSON.parse(text)
     assert.ok(parsed.ok === true, `Expected ok:true, got: ${text}`)
+  })
+
+  test('MCP submit_knowledge_template saves custom template', async () => {
+    const { result, error } = await mcpCall('tools/call', {
+      name: 'submit_knowledge_template',
+      arguments: {
+        industry: 'fitness',
+        platform: 'instagram',
+        template: '【MCP INTEGRATION TEST】Reformer pilates at [BrandName]!',
+        idea: '【MCP INTEGRATION IDEA】Posture correction check'
+      }
+    })
+    assert.ok(!error, `MCP error: ${JSON.stringify(error)}`)
+    const text = result?.content?.[0]?.text
+    const parsed = JSON.parse(text)
+    assert.ok(parsed.success === true, `Expected success:true, got: ${text}`)
+    console.log('    ✓  MCP template saved')
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// 7.5. REST — Templates API
+// ════════════════════════════════════════════════════════════════════════════
+describe('REST: Templates API', () => {
+  test('GET /api/learn/templates returns custom templates', async () => {
+    const { status, data } = await rest('GET', '/api/learn/templates')
+    assert.equal(status, 200, `GET templates returned ${status}`)
+    assert.ok((data as any).success === true)
+    assert.ok(Array.isArray((data as any).templates))
+  })
+
+  test('POST /api/learn/templates adds a custom template', async () => {
+    const { status, data } = await rest('POST', '/api/learn/templates', {
+      industry: 'fb',
+      platform: 'instagram',
+      template: '【REST INTEGRATION TEST】Makan time at [BrandName]!',
+      idea: '【REST INTEGRATION IDEA】Sensory food descriptions'
+    })
+    assert.equal(status, 201, `POST templates returned ${status}`)
+    assert.ok((data as any).success === true)
+    assert.equal((data as any).entry.template, '【REST INTEGRATION TEST】Makan time at [BrandName]!')
   })
 })
 

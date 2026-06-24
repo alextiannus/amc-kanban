@@ -325,6 +325,17 @@ export async function POST(request: Request) {
         }
       })
 
+      if (newTask.status === 'todo' && newTask.brandId) {
+        const config = { configurable: { thread_id: newTask.brandId } };
+        const { marketingGraph } = await import('@/agents/graph/marketingGraph.ts');
+        void marketingGraph.invoke({
+          taskId: newTask.id,
+          brandId: newTask.brandId
+        }, config).catch((err) => {
+          console.error(`Background copywriter trigger failed for task ${newTask.id}:`, err);
+        });
+      }
+
       await writeAuditLog({
         actor: actorFromContext(session?.user, authenticatedAgent),
         action: 'TASK_CREATED',

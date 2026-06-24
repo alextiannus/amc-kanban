@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/compliance'
+import { actorFromContext, writeAuditLog } from '@/lib/audit'
+import { eventEmitter } from '@/lib/events'
 
 const DRAFT_SELECT = {
   id: true,
@@ -110,6 +112,8 @@ export async function POST(request: Request, { params }: Params) {
   const status = typeof body.status === 'string' ? body.status : 'draft'
   const scheduledAt = typeof body.scheduledAt === 'string' && body.scheduledAt ? new Date(body.scheduledAt) : null
 
+  let newTask: any = null
+
   const draft = await prisma.$transaction(async (tx) => {
     const created = await tx.contentDraft.create({
       data: {
@@ -173,8 +177,60 @@ export async function POST(request: Request, { params }: Params) {
       })
     }
 
+    if (body.createTask === true) {
+      const brandAgent = await tx.brandAgent.findFirst({
+        where: { brandId, active: true },
+        select: { agentId: true },
+      })
+
+      const account = await tx.socialAccount.findUnique({
+        where: { id: accountId },
+        select: { platformId: true },
+      })
+
+      const platformName = account
+        ? account.platformId.toLowerCase() === 'instagram' ? 'Instagram'
+          : account.platformId.toLowerCase() === 'xiaohongshu' ? '小红书'
+          : account.platformId.toLowerCase() === 'facebook' ? 'Facebook'
+          : account.platformId.toLowerCase() === 'tiktok' ? 'TikTok'
+          : account.platformId
+        : '社媒'
+
+      const taskTitle = `【${platformName}排期发布】由 AMC Copywriter 继续完成文案创作与发布`
+      const taskDescription = `基于素材库提交的排期草稿，由平台的 AMC Copywriter 继续完成内容的完整创作（正文、Hashtags）与排期发布。\n\n草稿 ID: ${created.id}\n初始文案: ${caption}`
+
+      newTask = await tx.workUnit.create({
+        data: {
+          title: taskTitle,
+          description: taskDescription,
+          status: 'todo',
+          brandId,
+          assigneeId: brandAgent?.agentId || null,
+          tags: [account?.platformId || 'social', 'copywriter'],
+          priority: 'medium',
+          deadline: scheduledAt,
+        },
+      })
+    }
+
     return tx.contentDraft.findUniqueOrThrow({ where: { id: created.id }, select: DRAFT_SELECT })
   })
+
+  if (newTask) {
+    const session = await getSession()
+    const apiKey = extractApiKey(request)
+    const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
+
+    await writeAuditLog({
+      actor: actorFromContext(session?.user, authenticatedAgent),
+      action: 'TASK_CREATED',
+      resourceId: newTask.id,
+      newValue: newTask,
+      metadata: { source: apiKey ? 'api' : 'web' }
+    })
+
+    eventEmitter.emit('board_update')
+  }
 
   void persistDraftSnapshotToObs({ brandId, draftId: draft.id, data: draft }).catch((error) => {
     console.error('[POST /api/brands/:id/drafts] OBS draft snapshot failed:', error)
