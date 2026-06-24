@@ -132,6 +132,15 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [isSelectingState, setIsSelectingState] = useState(false)
   const lastSelectedId = useRef<string | null>(null)
 
+  // Schedule / Create Task Modal State
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false)
+  const [scheduleTargetIds, setScheduleTargetIds] = useState<string[]>([])
+  const [scheduleTheme, setScheduleTheme] = useState('')
+  const [scheduleDescription, setScheduleDescription] = useState('')
+  const [scheduleAgentId, setScheduleAgentId] = useState('')
+  const [brandAgents, setBrandAgents] = useState<any[]>([])
+  const [creatingTask, setCreatingTask] = useState(false)
+
   const loadFolders = useCallback(async () => {
     if (!brandId) return
     try {
@@ -379,28 +388,97 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     }
   }, [loadAssets])
 
-  const markForSchedule = async (assetIds: string | string[]) => {
+  const loadBrandAgents = useCallback(async () => {
     if (!brandId) return
-    const ids = Array.isArray(assetIds) ? assetIds : [assetIds]
-    if (ids.length === 0) return
-
-    setUploading(true)
-    setError(null)
     try {
-      const res = await fetch(`/api/brands/${brandId}/assets`, {
+      const res = await fetch(`/api/brands/${brandId}/agents`)
+      if (res.ok) {
+        const data = await res.json()
+        setBrandAgents(data || [])
+        if (data && data.length > 0) {
+          const leadAgent = data.find((ba: any) => ba.role === 'lead')
+          setScheduleAgentId(leadAgent?.agent?.id || data[0]?.agent?.id || '')
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load brand agents:', err)
+    }
+  }, [brandId])
+
+  const handleConfirmScheduleAndTask = async () => {
+    if (!brandId || scheduleTargetIds.length === 0) return
+    if (!scheduleTheme.trim()) {
+      alert('请输入帖子主题描述')
+      return
+    }
+    if (!scheduleAgentId) {
+      alert('请选择执行任务 of AI Agent')
+      return
+    }
+
+    setCreatingTask(true)
+    setError(null)
+
+    try {
+      // 1. Tag the assets as "排期发布"
+      const assetRes = await fetch(`/api/brands/${brandId}/assets`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assetIds: ids, appendTags: ['排期发布'], aiReady: true }),
+        body: JSON.stringify({
+          assetIds: scheduleTargetIds,
+          appendTags: ['排期发布'],
+          aiReady: true,
+        }),
       })
-      if (!res.ok) throw new Error('Update failed')
+
+      if (!assetRes.ok) {
+        throw new Error('标记素材为排期发布失败')
+      }
+
+      // 2. Create the WorkUnit Task
+      const selectedUrls = assets
+        .filter(a => scheduleTargetIds.includes(a.id))
+        .map(a => a.url)
+
+      const taskRes = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId,
+          title: `[排期发布] ${scheduleTheme.trim()}`,
+          description: scheduleDescription.trim() || `基于标记排期的素材，生成关于 ${scheduleTheme.trim()} 的营销帖子。`,
+          assigneeId: scheduleAgentId,
+          status: 'todo',
+          tags: ['排期发布'],
+          materials: selectedUrls.join(', '),
+        }),
+      })
+
+      const taskData = await taskRes.json().catch(() => ({}))
+      if (!taskRes.ok) {
+        throw new Error(taskData.error || '创建待办任务失败')
+      }
+
+      // 3. Reset states and notify
       setSelected([])
+      setScheduleModalOpen(false)
       await loadAssets()
-      alert('已成功将素材标记为“排期发布”，AI 将读取并自动处理！')
-    } catch {
-      setError('标记为排期发布失败')
+      alert(`已成功将素材标记为“排期发布”，并直接在看板生成待办任务！\n任务标题: [排期发布] ${scheduleTheme.trim()}`)
+    } catch (err: any) {
+      setError(err?.message || '操作失败，请重试')
     } finally {
-      setUploading(false)
+      setCreatingTask(false)
     }
+  }
+
+  const markForSchedule = (assetIds: string | string[]) => {
+    const ids = Array.isArray(assetIds) ? assetIds : [assetIds]
+    if (ids.length === 0) return
+    setScheduleTargetIds(ids)
+    setScheduleTheme('')
+    setScheduleDescription('')
+    setScheduleModalOpen(true)
+    void loadBrandAgents()
   }
 
   // Handler for mouse up globally (to terminate dragging)
@@ -1262,6 +1340,17 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               {selected.length > 0 && (
                 <button
                   type="button"
+                  onClick={() => markForSchedule(selected)}
+                  className="rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-900/35 px-3.5 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-450 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
+                >
+                  <Calendar className="w-4 h-4" />
+                  <span>排期发布</span>
+                </button>
+              )}
+
+              {selected.length > 0 && (
+                <button
+                  type="button"
                   onClick={() => setSelected([])}
                   className="rounded-xl border border-rose-100 dark:border-rose-900/30 bg-rose-50/50 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-900/35 px-3.5 py-2 text-sm font-semibold text-rose-600 dark:text-rose-450 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
                 >
@@ -1947,6 +2036,143 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               >
                 <span>在新标签页打开原文件 ↗</span>
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Schedule and Task Creation Modal */}
+      {scheduleModalOpen && (
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          onClick={() => setScheduleModalOpen(false)}
+        >
+          <div 
+            className="w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl p-6 relative flex flex-col max-h-[90vh] overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-indigo-500" />
+                  <span>标记排期并生成 To-Do 任务</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  将已选素材归档到排期，并一键派遣 AI 创作任务
+                </p>
+              </div>
+              <button 
+                onClick={() => setScheduleModalOpen(false)}
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Scrollable */}
+            <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 custom-scrollbar">
+              {/* Selected assets preview */}
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+                  已选排期素材 ({scheduleTargetIds.length}张)
+                </label>
+                <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+                  {scheduleTargetIds.map(id => {
+                    const matched = assets.find(a => a.id === id)
+                    if (!matched) return null
+                    return (
+                      <div key={id} className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-800">
+                        <img src={matched.url} alt="preview" className="w-full h-full object-cover" />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Theme description */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  帖子主题描述 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={scheduleTheme}
+                  onChange={e => setScheduleTheme(e.target.value)}
+                  placeholder="例如: 端午节烤鱼促销活动 / Crispy Pork Cutlet Launch"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 font-semibold"
+                />
+              </div>
+
+              {/* Assignee AI Agent */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  分配执行 Agent <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={scheduleAgentId}
+                  onChange={e => setScheduleAgentId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 cursor-pointer font-semibold"
+                >
+                  <option value="">请选择 AI Agent...</option>
+                  {brandAgents.map((ba: any) => ba.agent && (
+                    <option key={ba.agent.id} value={ba.agent.id}>
+                      🤖 {ba.agent.nickname || ba.agent.email} ({ba.role === 'lead' ? '主理人' : '助手'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Task detailed description */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  任务详细要求 (可选)
+                </label>
+                <textarea
+                  rows={3}
+                  value={scheduleDescription}
+                  onChange={e => setScheduleDescription(e.target.value)}
+                  placeholder="选填。可以输入针对帖子的具体要求，例如：语气偏向生动有趣，增加一些本地话..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-850 dark:text-slate-100"
+                />
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-455 text-xs font-semibold">
+                {error}
+              </div>
+            )}
+
+            {/* Footer buttons */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3 bg-white dark:bg-slate-900 shrink-0">
+              <button
+                type="button"
+                onClick={() => setScheduleModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-sm font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmScheduleAndTask}
+                disabled={creatingTask || !scheduleTheme.trim() || !scheduleAgentId}
+                className="px-5 py-2 rounded-xl text-sm font-black text-white bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 disabled:opacity-50 transition-all flex items-center gap-1.5"
+              >
+                {creatingTask ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>生成任务中...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>确认生成 Task</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
