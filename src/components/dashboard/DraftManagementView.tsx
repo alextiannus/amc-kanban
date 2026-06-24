@@ -16,6 +16,7 @@ import {
   Search,
   Send,
   Smartphone,
+  Trash2,
   Tag,
   Users,
   X,
@@ -555,6 +556,26 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     }
   }
 
+  const discardDraft = async (draftId: string) => {
+    if (!brandId) return
+    if (!confirm('确定要废弃该草稿吗？此操作不可逆。')) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '废弃草稿失败')
+      closeEditor()
+      await loadDrafts()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '废弃草稿失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const triggerCopywriter = async (draftId: string) => {
     if (!brandId) return
     setSaving(true)
@@ -913,10 +934,20 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   setPreviewMediaIndex(0)
                   setPreviewOpen(true)
                 }}
-                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 mr-auto flex items-center gap-2"
+                className={`rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 flex items-center gap-2 ${!selectedDraft ? 'mr-auto' : ''}`}
               >
                 <Eye className="h-4 w-4" /> 预览效果
               </button>
+              {selectedDraft && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => discardDraft(selectedDraft.id)}
+                  className="rounded-md border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/30 flex items-center gap-1.5 mr-auto"
+                >
+                  <Trash2 className="h-4 w-4" /> 废弃
+                </button>
+              )}
               <button
                 type="button"
                 disabled={saving || selectedAccountIds.length === 0}
