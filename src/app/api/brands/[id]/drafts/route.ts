@@ -151,7 +151,7 @@ export async function POST(request: Request, { params }: Params) {
           data: {
             usedCount: { increment: 1 },
             lastUsedAt: new Date(),
-            aiTags: asset.aiTags.filter((t) => t !== '排期发布'),
+            aiTags: asset.aiTags.filter((t) => t !== '排期发布' && t !== '草稿排期'),
           },
         })
       }

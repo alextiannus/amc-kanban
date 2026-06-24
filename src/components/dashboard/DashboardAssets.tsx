@@ -139,6 +139,9 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [scheduleDescription, setScheduleDescription] = useState('')
   const [scheduleAgentId, setScheduleAgentId] = useState('')
   const [brandAgents, setBrandAgents] = useState<any[]>([])
+  const [brandAccounts, setBrandAccounts] = useState<any[]>([])
+  const [scheduleAccountId, setScheduleAccountId] = useState('')
+  const [scheduleDate, setScheduleDate] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
 
   const loadFolders = useCallback(async () => {
@@ -405,14 +408,31 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     }
   }, [brandId])
 
+  const loadBrandAccounts = useCallback(async () => {
+    if (!brandId) return
+    try {
+      const res = await fetch(`/api/brands/${brandId}/accounts`)
+      if (res.ok) {
+        const json = await res.json()
+        const data = json.accounts || []
+        setBrandAccounts(data)
+        if (data && data.length > 0) {
+          setScheduleAccountId(data[0].id)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load brand accounts:', err)
+    }
+  }, [brandId])
+
   const handleConfirmScheduleAndTask = async () => {
     if (!brandId || scheduleTargetIds.length === 0) return
     if (!scheduleTheme.trim()) {
       alert('请输入帖子主题描述')
       return
     }
-    if (!scheduleAgentId) {
-      alert('请选择执行任务 of AI Agent')
+    if (!scheduleAccountId) {
+      alert('请选择目标发布渠道账户')
       return
     }
 
@@ -420,50 +440,50 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     setError(null)
 
     try {
-      // 1. Tag the assets as "排期发布"
+      // 1. Tag the assets as "草稿排期"
       const assetRes = await fetch(`/api/brands/${brandId}/assets`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assetIds: scheduleTargetIds,
-          appendTags: ['排期发布'],
+          appendTags: ['草稿排期'],
           aiReady: true,
         }),
       })
 
       if (!assetRes.ok) {
-        throw new Error('标记素材为排期发布失败')
+        throw new Error('标记素材为草稿排期失败')
       }
 
-      // 2. Create the WorkUnit Task
+      // 2. Create the ContentDraft directly
       const selectedUrls = assets
         .filter(a => scheduleTargetIds.includes(a.id))
         .map(a => a.url)
 
-      const taskRes = await fetch('/api/tasks', {
+      const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          brandId,
-          title: `[排期发布] ${scheduleTheme.trim()}`,
-          description: scheduleDescription.trim() || `基于标记排期的素材，生成关于 ${scheduleTheme.trim()} 的营销帖子。`,
-          assigneeId: scheduleAgentId,
-          status: 'todo',
-          tags: ['排期发布'],
-          materials: selectedUrls.join(', '),
+          accountId: scheduleAccountId,
+          caption: `【草稿排期 Idea】\n主题：${scheduleTheme.trim()}\n详细要求：${scheduleDescription.trim() || '无'}\n提示：本草稿由素材库一键生成，您可以直接在此基础上修改文案与排期。`,
+          assetIds: scheduleTargetIds,
+          mediaUrls: selectedUrls,
+          scheduledAt: scheduleDate ? new Date(scheduleDate).toISOString() : null,
+          status: 'draft',
+          agentId: scheduleAgentId || null,
         }),
       })
 
-      const taskData = await taskRes.json().catch(() => ({}))
-      if (!taskRes.ok) {
-        throw new Error(taskData.error || '创建待办任务失败')
+      const draftData = await draftRes.json().catch(() => ({}))
+      if (!draftRes.ok) {
+        throw new Error(draftData.error || '创建 Post 草稿失败')
       }
 
       // 3. Reset states and notify
       setSelected([])
       setScheduleModalOpen(false)
       await loadAssets()
-      alert(`已成功将素材标记为“排期发布”，并直接在看板生成待办任务！\n任务标题: [排期发布] ${scheduleTheme.trim()}`)
+      alert(`已成功生成 Post 草稿！\n您可以在「发布内容」或日历中查看与编辑。`)
     } catch (err: any) {
       setError(err?.message || '操作失败，请重试')
     } finally {
@@ -477,8 +497,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     setScheduleTargetIds(ids)
     setScheduleTheme('')
     setScheduleDescription('')
+    setScheduleDate('')
     setScheduleModalOpen(true)
     void loadBrandAgents()
+    void loadBrandAccounts()
   }
 
   // Handler for mouse up globally (to terminate dragging)
@@ -662,7 +684,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
     } else if (viewFilter === 'videos') {
       if (!a.mimeType.startsWith('video/')) return false
     } else if (viewFilter === 'scheduled') {
-      if (!a.aiTags.includes('排期发布')) return false
+      if (!a.aiTags.includes('草稿排期') && !a.aiTags.includes('排期发布')) return false
     }
 
     // 2. Category tag filter
@@ -689,7 +711,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const countAiPending = assets.filter(a => !a.aiReady).length
   const countImages = assets.filter(a => a.mimeType.startsWith('image/')).length
   const countVideos = assets.filter(a => a.mimeType.startsWith('video/')).length
-  const countScheduled = assets.filter(a => a.aiTags.includes('排期发布')).length
+  const countScheduled = assets.filter(a => a.aiTags.includes('草稿排期') || a.aiTags.includes('排期发布')).length
 
   const activeAsset = assets.find(a => a.id === activeAssetId) || filtered[0] || assets[0]
 
@@ -1108,7 +1130,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             >
               <div className="flex items-center gap-3">
                 <Calendar className="w-4 h-4" />
-                <span>排期发布</span>
+                <span>草稿排期</span>
               </div>
               <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countScheduled}</span>
             </button>
@@ -1344,7 +1366,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                   className="rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-900/35 px-3.5 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-450 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
                 >
                   <Calendar className="w-4 h-4" />
-                  <span>排期发布</span>
+                  <span>准备草稿排期(idea)</span>
                 </button>
               )}
 
@@ -1399,7 +1421,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                     onDragEnd={handleDragEnd}
                     onClick={(e) => handleCardClick(asset.id, e)}
                     onMouseEnter={() => handleCardMouseEnter(asset.id)}
-                    onTouchMove={handleTouchMove}
+                    onTouchMove={isSelectingState ? handleTouchMove : undefined}
                     style={{ touchAction: isSelectingState ? 'none' : 'auto' }}
                     className={`group flex flex-col bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 select-none shadow-sm relative ${isActive ? 'ring-2 ring-indigo-500 border-indigo-500' : isSelected ? 'ring-2 ring-indigo-500/50 border-indigo-500/50' : 'border-slate-100 dark:border-slate-800/80 hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md'} ${draggingIds?.includes(asset.id) ? 'opacity-40 scale-95 border-dashed border-indigo-400' : ''}`}
                   >
@@ -1626,7 +1648,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                   className="w-full py-2.5 border border-indigo-100 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all flex items-center justify-center gap-2"
                 >
                   <Calendar className="w-4 h-4" />
-                  <span>标记为排期发布</span>
+                  <span>准备草稿排期(idea)</span>
                 </button>
               </div>
             </div>
@@ -1973,7 +1995,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 py-2.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
               >
                 <Calendar className="w-4 h-4" />
-                <span>标记为排期发布</span>
+                <span>准备草稿排期(idea)</span>
               </button>
 
               <button
@@ -2056,10 +2078,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               <div>
                 <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-indigo-500" />
-                  <span>标记排期并生成 To-Do 任务</span>
+                  <span>准备草稿排期 (Idea)</span>
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  将已选素材归档到排期，并一键派遣 AI 创作任务
+                  将已选素材直接生成 Post 草稿，并指定渠道与发布时间
                 </p>
               </div>
               <button 
@@ -2105,17 +2127,49 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 />
               </div>
 
+              {/* Target Channel Account */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  目标发布渠道账户 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={scheduleAccountId}
+                  onChange={e => setScheduleAccountId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 cursor-pointer font-semibold"
+                >
+                  <option value="">请选择目标账户...</option>
+                  {brandAccounts.map((acc: any) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.platform === 'instagram' ? '📸' : acc.platform === 'facebook' ? '👥' : acc.platform === 'red' ? '📕' : acc.platform === 'tiktok' ? '🎵' : '🔗'} {acc.name} ({acc.platform})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Scheduled Time */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  建议排期时间 (可选)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={scheduleDate}
+                  onChange={e => setScheduleDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-850 dark:text-slate-100 font-semibold"
+                />
+              </div>
+
               {/* Assignee AI Agent */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  分配执行 Agent <span className="text-red-500">*</span>
+                  分配执行 Agent (可选)
                 </label>
                 <select
                   value={scheduleAgentId}
                   onChange={e => setScheduleAgentId(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 cursor-pointer font-semibold"
                 >
-                  <option value="">请选择 AI Agent...</option>
+                  <option value="">不指定 Agent (仅生成草稿)...</option>
                   {brandAgents.map((ba: any) => ba.agent && (
                     <option key={ba.agent.id} value={ba.agent.id}>
                       🤖 {ba.agent.nickname || ba.agent.email} ({ba.role === 'lead' ? '主理人' : '助手'})
@@ -2127,14 +2181,14 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               {/* Task detailed description */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  任务详细要求 (可选)
+                  详细要求 (可选)
                 </label>
                 <textarea
                   rows={3}
                   value={scheduleDescription}
                   onChange={e => setScheduleDescription(e.target.value)}
                   placeholder="选填。可以输入针对帖子的具体要求，例如：语气偏向生动有趣，增加一些本地话..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-850 dark:text-slate-100"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-855 dark:text-slate-100"
                 />
               </div>
             </div>
@@ -2158,18 +2212,18 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               <button
                 type="button"
                 onClick={handleConfirmScheduleAndTask}
-                disabled={creatingTask || !scheduleTheme.trim() || !scheduleAgentId}
+                disabled={creatingTask || !scheduleTheme.trim() || !scheduleAccountId}
                 className="px-5 py-2 rounded-xl text-sm font-black text-white bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 disabled:opacity-50 transition-all flex items-center gap-1.5"
               >
                 {creatingTask ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>生成任务中...</span>
+                    <span>生成中...</span>
                   </>
                 ) : (
                   <>
                     <Check className="w-4 h-4" />
-                    <span>确认生成 Task</span>
+                    <span>生成 Post 草稿</span>
                   </>
                 )}
               </button>
@@ -2192,7 +2246,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 active:scale-95 transition-all"
           >
             <Calendar className="w-3.5 h-3.5" />
-            <span>标记排期</span>
+            <span>准备草稿排期(idea)</span>
           </button>
           
           <button
