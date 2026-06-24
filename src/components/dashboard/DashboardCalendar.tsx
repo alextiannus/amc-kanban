@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Clock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Clock, Sparkles } from 'lucide-react'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 const MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
@@ -89,6 +89,38 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [triggeringId, setTriggeringId] = useState<string | null>(null)
+
+  const handleAIWrite = async (eventBrandId: string, draftId: string) => {
+    const targetBrandId = eventBrandId || brandId
+    if (!targetBrandId) {
+      alert('未找到关联的品牌ID')
+      return
+    }
+    setTriggeringId(draftId)
+    try {
+      const res = await fetch(`/api/brands/${targetBrandId}/drafts/${draftId}/trigger-copywriter`, {
+        method: 'POST',
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '触发 AI 创作失败')
+      alert('AI 创作已成功在后台启动，并会应用最新研究与排期策略，请稍后查看结果！')
+      
+      // Reload events to show updated caption/status
+      const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
+      const query = new URLSearchParams({ month })
+      if (brandId) query.set('brandId', brandId)
+      const reloadRes = await fetch(`/api/dashboard/calendar?${query.toString()}`)
+      if (reloadRes.ok) {
+        const data = await reloadRes.json()
+        setEvents(data.events || [])
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '触发 AI 创作失败')
+    } finally {
+      setTriggeringId(null)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -253,7 +285,21 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     <p className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">{ev.title}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{ev.brandName} · {formatTime(ev.time)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
+                    {(!ev.id.startsWith('task_') && ev.status !== 'done') && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleAIWrite(ev.brandId, ev.id)
+                        }}
+                        disabled={triggeringId === ev.id}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-black bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl border border-indigo-500 shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 fill-white/10" />
+                        {triggeringId === ev.id ? '创作中...' : 'AI 创作'}
+                      </button>
+                    )}
                     <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${STATUS_COLORS[ev.status]}`}>
                       {ev.status === 'done' ? '已发布' : ev.status === 'pending' ? '待审核' : '已排期'}
                     </span>
