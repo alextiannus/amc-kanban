@@ -98,6 +98,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos' | 'scheduled'>('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string[]>([])
+  const [isBatchSelectMode, setIsBatchSelectMode] = useState(false)
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null)
   
   const [assets, setAssets] = useState<DashboardAsset[]>([])
@@ -485,6 +486,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
       // 3. Reset states and notify
       setSelected([])
+      setIsBatchSelectMode(false)
       setScheduleModalOpen(false)
       await loadAssets()
       alert(`已成功生成 Post 草稿！\n您可以在「发布内容」或日历中查看与编辑。`)
@@ -529,6 +531,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const startDragSelection = (startId: string) => {
     isDragSelecting.current = true
     setIsSelectingState(true)
+    setIsBatchSelectMode(true)
     dragVisitedIds.current.clear()
     dragVisitedIds.current.add(startId)
     hasToggledThisInteraction.current = true
@@ -656,7 +659,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
   const handleCardClick = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (selected.length > 0) {
+    if (isBatchSelectMode) {
       toggleSelect(id, e)
     } else {
       setActiveAssetId(id)
@@ -1019,6 +1022,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         })
       }))
       setSelected([])
+      setIsBatchSelectMode(false)
       setActiveAssetId(null)
       await loadAssets()
     } catch {
@@ -1326,24 +1330,26 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               <button
                 type="button"
                 onClick={() => {
-                  if (selected.length > 0) {
-                    setSelected([])
-                  } else {
-                    if (activeAssetId) {
-                      setSelected([activeAssetId])
-                    } else if (filtered.length > 0) {
-                      setSelected([filtered[0].id])
+                  setIsBatchSelectMode(prev => {
+                    const next = !prev
+                    if (next && selected.length === 0) {
+                      if (activeAssetId) {
+                        setSelected([activeAssetId])
+                      } else if (filtered.length > 0) {
+                        setSelected([filtered[0].id])
+                      }
                     }
-                  }
+                    return next
+                  })
                 }}
                 className={`rounded-xl border px-3.5 py-2 text-sm font-semibold outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0 ${
-                  selected.length > 0
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300'
+                  isBatchSelectMode
+                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300 font-bold'
                     : 'border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
                 }`}
               >
                 <CheckSquare className="w-4 h-4" />
-                <span>{selected.length > 0 ? '退出选择' : '批量选择'}</span>
+                <span>{isBatchSelectMode ? '退出选择' : '批量选择'}</span>
               </button>
 
               <button
@@ -1377,7 +1383,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               {selected.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setSelected([])}
+                  onClick={() => {
+                    setSelected([])
+                    setIsBatchSelectMode(false)
+                  }}
                   className="rounded-xl border border-rose-100 dark:border-rose-900/30 bg-rose-50/50 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-900/35 px-3.5 py-2 text-sm font-semibold text-rose-600 dark:text-rose-450 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
                 >
                   <X className="w-4 h-4" />
@@ -1396,6 +1405,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
             }
             if (selected.length > 0) {
               setSelected([])
+              setIsBatchSelectMode(false)
             }
           }}
           className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/40 dark:bg-slate-950/20"
@@ -1483,7 +1493,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                         className={`absolute top-2.5 left-2.5 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${
                           isSelected
                             ? 'bg-indigo-500 border-indigo-500 hover:bg-rose-600 hover:border-rose-600 scale-100 shadow-sm shadow-indigo-500/20 group/cb'
-                            : selected.length > 0
+                            : isBatchSelectMode
                               ? 'bg-white/90 dark:bg-slate-900/90 border-slate-400 dark:border-slate-500 opacity-100 hover:border-indigo-500'
                               : 'bg-white/80 dark:bg-slate-900/80 border-slate-300 dark:border-slate-600 opacity-0 group-hover:opacity-100 hover:scale-105 hover:border-indigo-500'
                         } z-20`}
@@ -1553,7 +1563,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
                 <p className="text-[11px] text-slate-400 mt-0.5">已选择 {selected.length} 个素材</p>
               </div>
               <button
-                onClick={() => setSelected([])}
+                onClick={() => {
+                  setSelected([])
+                  setIsBatchSelectMode(false)
+                }}
                 className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
               >
                 <X className="w-4 h-4" />
@@ -2267,7 +2280,10 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
           <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />
           
           <button
-            onClick={() => setSelected([])}
+            onClick={() => {
+              setSelected([])
+              setIsBatchSelectMode(false)
+            }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-black rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-850 dark:hover:bg-slate-700 text-white active:scale-95 transition-all shadow-sm flex items-center justify-center cursor-pointer"
           >
             <X className="w-3.5 h-3.5" strokeWidth={2.5} />
