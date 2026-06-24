@@ -60,6 +60,43 @@ export default function DataAnalysisView() {
   const [activeSnapshotUrl, setActiveSnapshotUrl] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
+  // Login State
+  const [loginModalAccount, setLoginModalAccount] = useState<SnapshotData | null>(null)
+  const [loginUsername, setLoginUsername] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
+
+  const handleInstagramLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!loginModalAccount) return
+    setLoggingIn(true)
+    setNotification(null)
+    try {
+      const res = await fetch('/api/researcher/login-instagram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: loginModalAccount.accountId,
+          username: loginUsername,
+          password: loginPassword,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json.error || '登录并抓取快照失败')
+      }
+      setNotification({ type: 'success', message: `Instagram 账号 ${loginModalAccount.handle} 登录并截屏成功！` })
+      setLoginModalAccount(null)
+      setLoginUsername('')
+      setLoginPassword('')
+      loadData()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '登录失败')
+    } finally {
+      setLoggingIn(false)
+    }
+  }
+
   const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -352,10 +389,25 @@ export default function DataAnalysisView() {
                       </div>
                     </>
                   ) : (
-                    <div className="flex flex-col items-center p-6 text-center text-slate-500">
-                      <Camera className="w-12 h-12 text-slate-600 dark:text-slate-700 mb-3" />
-                      <p className="text-sm font-extrabold">暂无主页快照</p>
-                      <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">待 AMC Researcher 执行抓取任务后自动呈现。</p>
+                    <div className="flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-4">
+                      <div className="flex flex-col items-center">
+                        <Camera className="w-10 h-10 text-slate-600 dark:text-slate-700 mb-2" />
+                        <p className="text-xs font-black text-slate-400 dark:text-slate-500">快照抓取失效 (需要登录)</p>
+                        <p className="text-[10px] text-slate-400 mt-1 max-w-[220px]">
+                          因 Instagram 登录墙限制，请点击下方输入账号密码登录，以便自动回采最新主页真实截图。
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLoginModalAccount(item)
+                          setLoginUsername('')
+                          setLoginPassword('')
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-md transition-all active:scale-95 cursor-pointer"
+                      >
+                        <span>🔑 登录并获取截图</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -405,6 +457,91 @@ export default function DataAnalysisView() {
               />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Instagram Login Modal */}
+      {loginModalAccount && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => !loggingIn && setLoginModalAccount(null)}
+        >
+          <form 
+            onSubmit={handleInstagramLogin}
+            className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-2xl max-w-sm w-full p-5 space-y-4 text-slate-900 dark:text-slate-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white">
+                Instagram 登录授权
+              </h3>
+              <button 
+                type="button"
+                disabled={loggingIn}
+                onClick={() => setLoginModalAccount(null)}
+                className="p-1 text-slate-400 hover:text-slate-650 dark:hover:text-white cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              请输入账号 <strong>{loginModalAccount.handle}</strong> 的 Instagram 登录凭证。系统将启动后台 Playwright 浏览器模拟登录并安全保存会话 Cookies，以支持自动截图抓取。
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">手机号、用户名或邮箱</label>
+                <input
+                  type="text"
+                  required
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  disabled={loggingIn}
+                  placeholder="Username, email, or phone"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">密码</label>
+                <input
+                  type="password"
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  disabled={loggingIn}
+                  placeholder="Instagram password"
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl py-2 px-3 text-xs text-slate-800 dark:text-slate-100 outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={loggingIn}
+                onClick={() => setLoginModalAccount(null)}
+                className="px-4 py-2 border border-slate-250 dark:border-slate-700 text-xs font-bold text-slate-600 dark:text-slate-350 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={loggingIn}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+              >
+                {loggingIn ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>登录授权中...</span>
+                  </>
+                ) : (
+                  <span>确认并登录</span>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

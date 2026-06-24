@@ -84,6 +84,7 @@ export async function GET(request: Request) {
           imageUrl: latestSnapshot.imageUrl,
           capturedAt: latestSnapshot.capturedAt,
         } : null,
+        hasCredentials: !!acc.loginUsername,
       }
     })
 

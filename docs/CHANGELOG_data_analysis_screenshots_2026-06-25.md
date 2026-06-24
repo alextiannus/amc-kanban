@@ -14,11 +14,11 @@ AMC 平台增加了 **“账号展现” (Data Analysis)** 页面，用来呈现
 - 记录采集完成时间 (`capturedAt`)。
 - 每个 `SocialAccount` 通过一对多关联拥有多条快照历史，方便追溯和查询最新状态。
 
-### 2. AMC Researcher 截图服务与高可靠 SVG 降级方案
+### 2. AMC Researcher 截图服务与账号登录凭证授权方案
 设计了 `src/lib/captureSnapshots.ts` 与 `src/lib/researcherScheduler.ts`：
-- **定时调度**：每日（每24小时）自动唤醒截图抓取器，遍历抓取所有 ACTIVE 品牌的社交账号。
+- **定时调度**：每日（每24小时）自动唤醒截图抓取器，遍历抓取所有 ACTIVE 品牌的社交账号（限 Instagram）。
 - **Playwright 抓取**：自动尝试启动无头 Chromium 浏览器访问账号的 `profileUrl` 并进行截图，保存到本地 `public/snapshots/[accountId]/[timestamp].png`。
-- **高可靠性 SVG 矢量降级**：因社交平台（如 Instagram）有非常严格的防爬防登录墙（Cloudflare / 登录重定向 / 2FA），若 Playwright 抓取受阻，截图器会自动生成一份融合了最新品牌名、账号 Handle、最新粉丝数及健康指标的 **高保真 SVG 动态矢量卡片**，代替 PNG 截图保存并展现。这保证了即使在极端网络环境或无浏览器依赖的精简容器中，整个服务也绝不崩溃，且页面始终能呈现精美、实时的数据卡片。
+- **强制阻断与要求登录**：因社交平台（Instagram）有严格的防爬/登录墙限制，若截图失败或被重定向到登录页面，爬虫程序会直接抛出错误。用户在前端展现页面中，可以直接输入 Instagram 账号密码并执行登录，生成并存储 `cookies.json` 会话缓存，以彻底突破登录重定向，不采用任何无意义的 SVG 降级卡片。
 
 ### 3. 数据分析（账号展现）API 与多维过滤
 在 `src/app/api/data-analysis/route.ts` 实现了数据拉取接口：
@@ -51,4 +51,4 @@ AMC 平台增加了 **“账号展现” (Data Analysis)** 页面，用来呈现
 
 ## 验证与测试
 - 执行 `npx tsc --noEmit` 编译检查无任何错误。
-- 运行 `scripts/test-snapshots-api.mts`，完成测试账号创建、快照拉取与 SVG 矢量回写断言测试，取得 **100% PASS**。
+- 运行 `scripts/test-snapshots-api.mts`，完成测试账号创建、未授权重定向抛错断言与 Crawler 错误统计测试，取得 **100% PASS**。

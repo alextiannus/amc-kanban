@@ -69,25 +69,23 @@ async function main() {
     createdAccountId = account.id
     console.log(`- Created test social account: ${account.handle}`)
 
-    // 4. Test captureAccountSnapshot (should fallback to SVG and create DB record)
-    console.log('- Running captureAccountSnapshot...')
-    const savedUrl = await captureAccountSnapshot(account.id)
-    assert.ok(savedUrl, 'imageUrl should be returned')
-    assert.ok(savedUrl.endsWith('.svg') || savedUrl.endsWith('.png'), 'imageUrl should point to svg or png')
-
-    // Verify snapshot in DB
-    const snapshotInDb = await prisma.socialAccountSnapshot.findFirst({
-      where: { accountId: account.id }
-    })
-    assert.ok(snapshotInDb, 'Snapshot should be saved to database')
-    assert.equal(snapshotInDb.imageUrl, savedUrl, 'Database imageUrl should match returned url')
-    console.log(`- Snapshot verified in DB, imageUrl: ${snapshotInDb.imageUrl}`)
+    // 4. Test captureAccountSnapshot (should throw error because it is a dummy account and has no credentials)
+    console.log('- Running captureAccountSnapshot (expecting failure for invalid account/no credentials)...')
+    await assert.rejects(
+      async () => {
+        await captureAccountSnapshot(account.id)
+      },
+      /Screenshot failed: redirected to Instagram login wall or profile not found/,
+      'Should throw an error due to invalid profile and no credentials'
+    )
+    console.log('- Successfully verified that captureAccountSnapshot throws error for invalid/blocked profiles (no SVG fallback).')
 
     // 5. Test runDailySnapshotCrawler
     console.log('- Running runDailySnapshotCrawler...')
     const crawlerResult = await runDailySnapshotCrawler()
-    assert.ok(crawlerResult.successCount > 0, 'Crawler should execute successfully on at least one account')
-    console.log(`- Crawler results: success=${crawlerResult.successCount}, failed=${crawlerResult.failedCount}`)
+    assert.equal(crawlerResult.successCount, 0, 'Crawler success count should be 0 because the dummy account fails')
+    assert.ok(crawlerResult.failedCount >= 1, 'Crawler failed count should be at least 1')
+    console.log(`- Crawler results verified: success=${crawlerResult.successCount}, failed=${crawlerResult.failedCount}`)
 
     console.log('=== All snapshot integration tests PASSED ===')
   } catch (e) {
