@@ -1,8 +1,8 @@
 'use client'
 
 import React, { Suspense } from 'react'
-import MobileLayout from '@/components/dashboard/MobileLayout'
-import BrandOwnerDashboard from '@/components/dashboard/BrandOwnerDashboard'
+import MobileLayout from '@/components/MobileLayout'
+import BrandOwnerDashboard from '@/components/BrandOwnerDashboard'
 
 export default function BrandOwnerPage() {
   return (

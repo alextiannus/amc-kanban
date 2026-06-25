@@ -2,6 +2,9 @@
   "name": "temp-app",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "packages/brand-owner"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",

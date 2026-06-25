@@ -31,15 +31,23 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Root path: redirect to /board if already logged in
+  // Root path (Login page): redirect to dashboard if logged in
   if (pathname === '/') {
     if (sessionExists) {
-      return NextResponse.redirect(new URL('/board', request.url))
+      return NextResponse.redirect(new URL('/dashboard', request.url))
     }
     return NextResponse.next()
   }
 
-  // Other paths: redirect to / if not logged in
+  // Protected dashboard paths: redirect to login if not logged in
+  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
+    if (!sessionExists) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+    return NextResponse.next()
+  }
+
+  // Fallback redirect to login
   if (!sessionExists) {
     return NextResponse.redirect(new URL('/', request.url))
   }

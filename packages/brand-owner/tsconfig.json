@@ -18,9 +18,9 @@
         "name": "next"
       }
     ],
-    "allowImportingTsExtensions": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@root/*": ["../../src/*"]
     }
   },
   "include": [
@@ -28,8 +28,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "postiz", "packages"]
+  "exclude": ["node_modules"]
 }

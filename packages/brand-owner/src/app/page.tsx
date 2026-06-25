@@ -30,7 +30,7 @@ export default function BrandOwnerLogin() {
         if (res.ok) {
           const user = await res.json()
           if (user && user.id) {
-            router.push('/dashboard/brand-owner')
+            router.push('/dashboard')
             return
           }
         }
@@ -67,7 +67,7 @@ export default function BrandOwnerLogin() {
       })
       const data = await res.json()
       if (res.ok) {
-        router.push('/dashboard/brand-owner')
+        router.push('/dashboard')
         router.refresh()
       } else {
         setError(data.error || '登录失败')
@@ -101,7 +101,7 @@ export default function BrandOwnerLogin() {
       })
       const data = await res.json()
       if (res.ok) {
-        router.push('/dashboard/brand-owner')
+        router.push('/dashboard')
         router.refresh()
       } else {
         setError(data.error || '注册失败')
