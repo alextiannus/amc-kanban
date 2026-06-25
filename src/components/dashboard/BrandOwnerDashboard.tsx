@@ -1236,10 +1236,12 @@ export default function BrandOwnerDashboard() {
               className="fixed right-0 top-0 h-full w-[280px] bg-[#f7f9fb] shadow-2xl z-50 flex flex-col p-8 border-l border-slate-200/50"
             >
               <div className="flex justify-between items-center mb-10">
-                <h3 className="text-base font-bold text-slate-800">Menu</h3>
+                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
+                  <span className="material-symbols-outlined text-[20px]">menu</span>
+                </div>
                 <button 
                   onClick={() => setSideMenuOpen(false)}
-                  className="material-symbols-outlined text-slate-500 hover:text-slate-700 cursor-pointer"
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200/50 text-slate-500 hover:text-slate-700 transition-colors material-symbols-outlined cursor-pointer text-[20px]"
                 >
                   close
                 </button>
@@ -1306,30 +1308,30 @@ export default function BrandOwnerDashboard() {
                     setActiveSubPage('calendar')
                     setSideMenuOpen(false)
                   }}
-                  className="w-full flex items-center gap-4 text-slate-600 hover:text-primary transition-colors py-2 text-left cursor-pointer"
+                  className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-2xl text-slate-500">calendar_month</span>
-                  <span className="font-semibold text-sm">Calendar</span>
+                  <span className="font-bold text-sm tracking-wide">发布日历</span>
                 </button>
                 <button 
                   onClick={() => {
                     setActiveSubPage('market')
                     setSideMenuOpen(false)
                   }}
-                  className="w-full flex items-center gap-4 text-slate-600 hover:text-primary transition-colors py-2 text-left cursor-pointer"
+                  className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-2xl text-slate-500">shopping_bag</span>
-                  <span className="font-semibold text-sm">Market</span>
+                  <span className="font-bold text-sm tracking-wide">店内活动</span>
                 </button>
                 <button 
                   onClick={() => {
                     setActiveSubPage('assets')
                     setSideMenuOpen(false)
                   }}
-                  className="w-full flex items-center gap-4 text-slate-600 hover:text-primary transition-colors py-2 text-left cursor-pointer"
+                  className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-2xl text-slate-500">image</span>
-                  <span className="font-semibold text-sm">Assets</span>
+                  <span className="font-bold text-sm tracking-wide">素材库</span>
                 </button>
                 <div className="pt-6 mt-6 border-t border-slate-200/50 space-y-4">
                   <button 
@@ -1337,10 +1339,10 @@ export default function BrandOwnerDashboard() {
                       setActiveSubPage('settings')
                       setSideMenuOpen(false)
                     }}
-                    className="w-full flex items-center gap-4 text-slate-600 hover:text-primary transition-colors py-2 text-left cursor-pointer"
+                    className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-2xl text-slate-500">settings</span>
-                    <span className="font-semibold text-sm">Settings</span>
+                    <span className="font-bold text-sm tracking-wide">系统设置</span>
                   </button>
                   <button 
                     onClick={async () => {
@@ -1354,7 +1356,7 @@ export default function BrandOwnerDashboard() {
                     className="w-full flex items-center gap-4 text-rose-600 hover:text-rose-700 transition-colors py-2 text-left cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-2xl text-rose-500">logout</span>
-                    <span className="font-semibold text-sm">Log Out</span>
+                    <span className="font-bold text-sm tracking-wide">退出登录</span>
                   </button>
                 </div>
               </nav>
