@@ -348,3 +348,29 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 *   **单点故障隔离 (Error Isolation)**: 每一个文件的预签名获取、文件直传/备用 Base64 上传以及入库确认逻辑均用 `try/catch` 结构进行隔离。某个文件失败后，会把错误信息推入 `failedFiles` 错误收集栈，并不影响其他文件的继续上传。
 *   **进度感知**: 在上传循环体中，使用 `uploadProgress` 变量动态更新当前正在上传的索引 (如 `正在上传 (2/5)...`)，从而提升用户在传输大文件或多文件时的交互体验。
 
+---
+
+## 9. 域名隔离与端点分离设计 (Domain Routing & Portal Separation Architecture)
+
+为了向不同类型的用户提供最佳且低摩擦的界面交互，系统通过 Next.js 中间件对品牌主控制端与主理人/智能体运营看板进行了域名隔离与入口分流。
+
+### 9.1 域名与角色匹配规则 (Subdomain Mappings)
+
+*   **品牌主专属控制台 (Brand Owner Portal)**: 运行于 `amc-mm.immedi.ai`（本地开发使用 `amc-mm.localhost:3000` 或 `amc-mm.lvh.me:3000` 等 `amc-mm.` 前缀域名）。
+*   **运营看板控制台 (Operator Kanban Board)**: 运行于 `amc-kanban.immedi.ai`（本地开发使用 `localhost:3000` 或 `lvh.me:3000` 等主域名）。
+
+### 9.2 边缘侧 session 校验与重定向逻辑 (Middleware Routing Engine)
+
+为了保持高效的路由分发且不引入额外的数据库查询负担，Next.js 中间件 (`src/middleware.ts`) 在 Edge Runtime 级执行以下轻量级校验流程：
+
+1.  **静态资源与公共接口放行**: 中间件自动放行所有静态文件 (`_next/static`、`_next/image`、`favicon.ico`)、公共展示页面 (`/game` 等) 以及 API 请求 (`/api/`)，以保障两者共享同一后端核心 API 服务。
+2.  **JWT Session 解密与过期验证**: 提取 `session` cookie 并使用 Edge 兼容的 `jose` 库进行解析与时效验证。若验证失败或已过期，则视为未登录状态。
+3.  **分流路由策略 (Routing Policies)**:
+    *   **在 `amc-mm.` 品牌主域名下**:
+        *   若访问根路径 `/`，已登录重定向到 `/dashboard/brand-owner`，未登录重定向到 `/dashboard/brand-owner/login`。
+        *   限制只能访问品牌主相关路由。如果用户尝试强行访问运营端页面（如 `/board`、`/connect`、`/learn` 等），将被重定向回品牌主控制台或品牌主登录页。
+        *   在侧边栏抽屉菜单底部内置了统一的 `Log Out` (退出登录) 按钮，安全清除 session 并跳转回品牌主登录页面。
+    *   **在 `amc-kanban.` 运营主域名下**:
+        *   若访问根路径 `/`，已登录重定向到运营看板 `/board`，未登录停留在根路径 `/`（即主理人/代理商登录页）。
+        *   限制无法访问品牌主路径。如果访问 `/dashboard/brand-owner` 或其子路径，中间件将根据当前环境动态将其重定向到对应的品牌主域名（例如 `http(s)://amc-mm.immedi.ai/dashboard/brand-owner`）。
+

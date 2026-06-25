@@ -1461,7 +1461,7 @@ export default function BrandOwnerDashboard() {
                   <span className="material-symbols-outlined text-2xl text-slate-500">image</span>
                   <span className="font-semibold text-sm">Assets</span>
                 </button>
-                <div className="pt-6 mt-6 border-t border-slate-200/50">
+                <div className="pt-6 mt-6 border-t border-slate-200/50 space-y-4">
                   <button 
                     onClick={() => {
                       setActiveSubPage('settings')
@@ -1471,6 +1471,20 @@ export default function BrandOwnerDashboard() {
                   >
                     <span className="material-symbols-outlined text-2xl text-slate-500">settings</span>
                     <span className="font-semibold text-sm">Settings</span>
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      try {
+                        await fetch('/api/auth/logout', { method: 'POST' })
+                        window.location.href = '/dashboard/brand-owner/login'
+                      } catch (e) {
+                        console.error('[BrandOwnerDashboard] logout error', e)
+                      }
+                    }}
+                    className="w-full flex items-center gap-4 text-rose-600 hover:text-rose-700 transition-colors py-2 text-left cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-2xl text-rose-500">logout</span>
+                    <span className="font-semibold text-sm">Log Out</span>
                   </button>
                 </div>
               </nav>

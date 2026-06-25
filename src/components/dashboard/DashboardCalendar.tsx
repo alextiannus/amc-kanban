@@ -473,19 +473,26 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
           )}
 
           {/* Dynamic Brand Website / Landing Conversion page */}
-          {brandDetails?.website && (
-            <div>
-              <div className="flex items-center justify-between mb-3 px-1">
-                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">引流落地页</span>
-              </div>
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/35 border border-slate-100 dark:border-slate-800 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <Compass className="w-4 h-4 text-indigo-500" />
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-[170px]">{brandDetails.website}</span>
-                </div>
+          <div>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">引流落地页</span>
+            </div>
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/35 border border-slate-100 dark:border-slate-800 rounded-xl">
+              <div className="flex items-center gap-2">
+                {brandDetails?.website ? (
+                  <>
+                    <Compass className="w-4 h-4 text-indigo-500" />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-[170px]">{brandDetails.website}</span>
+                  </>
+                ) : (
+                  <>
+                    <Compass className="w-4 h-4 text-slate-400" />
+                    <span className="text-xs font-bold text-slate-400 dark:text-slate-500 italic">缺失</span>
+                  </>
+                )}
               </div>
             </div>
-          )}
+          </div>
         </div>
       </aside>
 
