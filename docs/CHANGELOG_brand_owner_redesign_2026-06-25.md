@@ -10,7 +10,8 @@ To improve the visual quality and simplification of the brand owner portal (`amc
 - Redesign the login and registration page to be simpler, cleaner, and more professional.
 - Move the active brand switcher dropdown from the top header to the side menu drawer, supporting brand switching if multiple brands are owned.
 - Simplify the dashboard homepage by removing the resource-intensive flashing WebGL background and its face contour outline, leaving only the clean animating eyes and mouth emoji in the center.
-- Redesign the notification center trigger on the homepage into a small circular badge containing only the unread count.
+- Redesign the notification center trigger on the homepage into a small circular badge containing only the unread count, and place it inside the header directly before the menu drawer button.
+- Make the dialogue interface voice-only by removing the text input box, send button, and prompt suggestion pills.
 
 ---
 
@@ -36,12 +37,21 @@ To improve the visual quality and simplification of the brand owner portal (`amc
   - Completely removed the WebGL canvas, shaders compiling code, and rendering animation loops.
   - Placed the absolute-positioned animating emoji expressions (blinking eyes and mouths for listening, thinking, and idle states) in the center of the viewport over a clean, solid background. This reduces CPU/GPU resource usage to 0% when idle.
 
-### D. Notification Badge Redesign
-- **File Modified**: [BrandOwnerDashboard.tsx](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/components/dashboard/BrandOwnerDashboard.tsx)
+### D. Voice-Only Dialogue UI Simplification
+- **Files Modified**: 
+  - [BrandOwnerDashboard.tsx (sub-package)](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/packages/brand-owner/src/components/BrandOwnerDashboard.tsx)
+  - [BrandOwnerDashboard.tsx (parent package)](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/components/dashboard/BrandOwnerDashboard.tsx)
 - **Changes**:
-  - Replaced the wide notification button with a small 36x36px circular badge.
-  - Renders only the active count of pending notifications (e.g. `2`).
-  - Added a subtle pulsing animation overlay (`animate-ping`) for clean attention drawing.
+  - Removed the text input box, submit/send button, and prompt suggestion pills.
+  - Provided a clean, voice-centric control console with a centered voice microphone button and a left-aligned photo library upload button.
+
+### E. Notification Badge Header Reposition
+- **Files Modified**: 
+  - [BrandOwnerDashboard.tsx (sub-package)](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/packages/brand-owner/src/components/BrandOwnerDashboard.tsx)
+  - [BrandOwnerDashboard.tsx (parent package)](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/components/dashboard/BrandOwnerDashboard.tsx)
+- **Changes**:
+  - Repositioned the notification badge from a floating element below the header into the top-right header section.
+  - Placed the circular badge containing the unread alert count directly in front of (to the left of) the main logo menu drawer button.
 
 ---
 

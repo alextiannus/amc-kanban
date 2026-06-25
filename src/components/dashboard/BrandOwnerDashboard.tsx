@@ -538,49 +538,44 @@ export default function BrandOwnerDashboard() {
           </span>
         </div>
 
-        <button 
-          onClick={() => setSideMenuOpen(true)}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 transition-all active:scale-95 overflow-hidden"
-        >
-          <img src="/logo.svg" alt="logo" className="w-6 h-6 object-contain" />
-        </button>
-      </header>
-
-      {/* Collapsible Notification Center */}
-      {activeSubPage === null && (showMapsAlert || showScheduleAlert) && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 w-[90%] max-w-sm z-40 px-4 pointer-events-none flex flex-col items-center">
-          
-          {/* Consolidated Circular Trigger */}
-          {!notificationsExpanded && (
-            <motion.button
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              onClick={() => setNotificationsExpanded(true)}
-              className="pointer-events-auto w-9 h-9 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-lg font-black text-xs relative cursor-pointer outline-none border border-rose-400/20"
+        <div className="flex items-center gap-2 relative">
+          {(showMapsAlert || showScheduleAlert) && (
+            <button
+              onClick={() => setNotificationsExpanded(prev => !prev)}
+              className="w-10 h-10 rounded-full bg-rose-50 hover:bg-rose-100/80 text-rose-600 flex items-center justify-center relative cursor-pointer transition-all active:scale-95 border border-rose-100/30"
+              title="通知消息"
             >
-              <span>{(showMapsAlert ? 1 : 0) + (showScheduleAlert ? 1 : 0)}</span>
-              <span className="absolute inset-0 rounded-full border border-rose-500 animate-ping opacity-75"></span>
-            </motion.button>
+              <span className="material-symbols-outlined text-lg">notifications</span>
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-rose-500 text-white rounded-full flex items-center justify-center text-[9px] font-black font-jetbrains animate-pulse">
+                {(showMapsAlert ? 1 : 0) + (showScheduleAlert ? 1 : 0)}
+              </span>
+            </button>
           )}
 
-          {/* Expanded Accordion list */}
+          <button 
+            onClick={() => setSideMenuOpen(true)}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 transition-all active:scale-95 overflow-hidden"
+          >
+            <img src="/logo.svg" alt="logo" className="w-6 h-6 object-contain" />
+          </button>
+
+          {/* Expanded Accordion list dropdown */}
           <AnimatePresence>
-            {notificationsExpanded && (
+            {notificationsExpanded && (showMapsAlert || showScheduleAlert) && (
               <motion.div
-                initial={{ opacity: 0, height: 0, y: -10 }}
-                animate={{ opacity: 1, height: 'auto', y: 0 }}
-                exit={{ opacity: 0, height: 0, y: -10 }}
-                transition={{ type: 'spring', damping: 22, stiffness: 180 }}
-                className="pointer-events-auto w-full bg-white/90 backdrop-blur-lg border border-slate-200/50 rounded-2xl p-4 shadow-xl space-y-3 overflow-hidden"
+                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="absolute right-0 top-12 w-80 bg-white/95 backdrop-blur-lg border border-slate-200/50 rounded-2xl p-4 shadow-xl space-y-3 z-50 text-left"
               >
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <span className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">Updates & Notifications</span>
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">通知与待办项目</span>
                   <button 
                     onClick={() => setNotificationsExpanded(false)}
                     className="text-[10px] font-bold text-primary flex items-center gap-0.5 hover:underline cursor-pointer"
                   >
-                    <span>Collapse</span>
+                    <span>折叠</span>
                     <span className="material-symbols-outlined text-[12px]">expand_less</span>
                   </button>
                 </div>
@@ -588,27 +583,26 @@ export default function BrandOwnerDashboard() {
                 <div className="space-y-2.5">
                   {showMapsAlert && (
                     <div 
-                      className="flex items-start justify-between p-3 rounded-xl border border-rose-100 bg-rose-50/20 hover:bg-rose-50/40 transition-colors"
+                      className="flex items-start justify-between p-3 rounded-xl border border-rose-100 bg-rose-50/20 hover:bg-rose-50/40 transition-colors cursor-pointer"
+                      onClick={handleMapsAlertClick}
                     >
-                      <div 
-                        onClick={handleMapsAlertClick}
-                        className="flex items-start gap-3 cursor-pointer flex-1"
-                      >
+                      <div className="flex items-start gap-3 flex-1">
                         <div className="bg-rose-50 p-2 rounded-lg text-rose-500 flex items-center justify-center flex-shrink-0">
                           <span className="material-symbols-outlined text-lg">location_on</span>
                         </div>
                         <div>
-                          <h4 className="text-[10px] font-bold text-rose-500 uppercase tracking-wider mb-0.5">Alert</h4>
-                          <p className="text-[12px] leading-snug text-slate-800 font-bold">Low rating alert on Google Maps</p>
-                          <p className="text-[10px] text-slate-400 font-medium">Click to generate AI response</p>
+                          <h4 className="text-[9px] font-bold text-rose-500 uppercase tracking-wider mb-0.5">警报</h4>
+                          <p className="text-[11px] leading-snug text-slate-800 font-bold">Google Maps 收到低分评价</p>
+                          <p className="text-[9px] text-slate-400 font-medium">点击生成 AI 回复</p>
                         </div>
                       </div>
                       <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           setShowMapsAlert(false)
                           if (!showScheduleAlert) setNotificationsExpanded(false)
                         }}
-                        className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer flex items-center justify-center"
+                        className="text-slate-400 hover:text-slate-650 p-1 cursor-pointer flex items-center justify-center ml-2"
                       >
                         <span className="material-symbols-outlined text-[14px]">close</span>
                       </button>
@@ -617,31 +611,30 @@ export default function BrandOwnerDashboard() {
 
                   {showScheduleAlert && (
                     <div 
-                      className="flex items-start justify-between p-3 rounded-xl border border-indigo-100 bg-indigo-50/20 hover:bg-indigo-50/40 transition-colors"
+                      className="flex items-start justify-between p-3 rounded-xl border border-indigo-100 bg-indigo-50/20 hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setActiveSubPage('calendar')
+                        setShowScheduleAlert(false)
+                        setNotificationsExpanded(false)
+                      }}
                     >
-                      <div 
-                        onClick={() => {
-                          setActiveSubPage('calendar')
-                          setShowScheduleAlert(false)
-                          setNotificationsExpanded(false)
-                        }}
-                        className="flex items-start gap-3 cursor-pointer flex-1"
-                      >
+                      <div className="flex items-start gap-3 flex-1">
                         <div className="bg-indigo-50 p-2 rounded-lg text-primary flex items-center justify-center flex-shrink-0">
                           <span className="material-symbols-outlined text-lg">calendar_today</span>
                         </div>
                         <div>
-                          <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider mb-0.5">Schedule</h4>
-                          <p className="text-[12px] leading-snug text-slate-800 font-bold">Upcoming schedule draft needs review</p>
-                          <p className="text-[10px] text-slate-400 font-medium">Click to review drafts calendar</p>
+                          <h4 className="text-[9px] font-bold text-primary uppercase tracking-wider mb-0.5">日程</h4>
+                          <p className="text-[11px] leading-snug text-slate-800 font-bold">待审核的发布草稿</p>
+                          <p className="text-[9px] text-slate-400 font-medium">点击进入发布日历</p>
                         </div>
                       </div>
                       <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           setShowScheduleAlert(false)
                           if (!showMapsAlert) setNotificationsExpanded(false)
                         }}
-                        className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer flex items-center justify-center"
+                        className="text-slate-400 hover:text-slate-650 p-1 cursor-pointer flex items-center justify-center ml-2"
                       >
                         <span className="material-symbols-outlined text-[14px]">close</span>
                       </button>
@@ -652,7 +645,7 @@ export default function BrandOwnerDashboard() {
             )}
           </AnimatePresence>
         </div>
-      )}
+      </header>
 
       {/* Main Content Area - Companion Chat interface */}
       {activeSubPage === null && (
@@ -708,64 +701,58 @@ export default function BrandOwnerDashboard() {
           </div>
 
           {/* Chat Input Console */}
-          <div className="px-4 pb-8 pt-4 bg-gradient-to-t from-[#f7f9fb] via-[#f7f9fb]/90 to-transparent">
-            {/* Context suggestions */}
-            <div className="flex gap-2 mb-3 overflow-x-auto pb-1 no-scrollbar">
-              {[
-                { label: 'Analyze Review', text: 'Analyze our latest store reviews' },
-                { label: 'Post on Maps', text: 'Post a new update on Google Maps' },
-                { label: 'Next Staff Meeting', text: 'Generate takeaways for next staff meeting' }
-              ].map((pill, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSuggestionClick(pill.text)}
-                  className="whitespace-nowrap px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-slate-200/80 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
-                >
-                  {pill.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Input Bar */}
-            <div className="bg-white/80 backdrop-blur-md p-2 pr-2 pl-2 rounded-full flex items-center gap-3 border border-white/50 shadow-xl focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+          <div className="px-6 pb-10 pt-4 bg-gradient-to-t from-[#f7f9fb] via-[#f7f9fb]/90 to-transparent flex flex-col items-center">
+            
+            {/* Voice Assistant Panel */}
+            <div className="w-full max-w-sm flex items-center justify-between gap-6 px-4">
+              {/* Left Column: Upload button */}
               <button 
                 type="button"
                 onClick={handleUploadClick}
                 disabled={uploading}
-                className="w-10 h-10 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-650 hover:bg-slate-100/50 active:scale-95 transition-all cursor-pointer flex-shrink-0"
+                className="w-12 h-12 rounded-full bg-white border border-slate-200/80 shadow-md flex items-center justify-center text-slate-400 hover:text-slate-650 hover:bg-slate-50 transition-all active:scale-95 cursor-pointer flex-shrink-0"
                 title="上传图片到素材库"
               >
                 <ImageIcon className="w-5 h-5" />
               </button>
-              
-              <div className="flex-1 text-slate-500 text-xs py-2.5 font-medium select-none flex items-center gap-2 pl-2">
-                {companionState === 'listening' ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping flex-shrink-0" />
-                    <span className="text-emerald-600 font-bold animate-pulse">正在倾听... Speak now</span>
-                  </>
-                ) : companionState === 'thinking' ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse flex-shrink-0" />
-                    <span className="text-slate-400 italic">正在思考... AI is thinking</span>
-                  </>
-                ) : (
-                  <span className="text-slate-400">点击右侧麦克风开始语音对话</span>
-                )}
+
+              {/* Center Column: Big voice assistant button */}
+              <div className="flex flex-col items-center gap-2 flex-1">
+                <button 
+                  type="button"
+                  onClick={startVoiceAssist}
+                  className={`w-16 h-16 rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-all cursor-pointer flex-shrink-0 ${
+                    companionState === 'listening'
+                      ? 'bg-emerald-500 shadow-emerald-500/30 scale-105'
+                      : companionState === 'thinking'
+                      ? 'bg-indigo-500 shadow-indigo-500/20'
+                      : 'bg-primary hover:bg-indigo-tint shadow-primary/30'
+                  }`}
+                >
+                  {companionState === 'listening' ? (
+                    <motion.div
+                      animate={{ scale: [1, 1.2, 1] }}
+                      transition={{ repeat: Infinity, duration: 1.2 }}
+                      className="w-full h-full rounded-full bg-emerald-500 flex items-center justify-center relative"
+                    >
+                      <Mic className="w-6 h-6 text-white" />
+                      <span className="absolute inset-0 rounded-full border-2 border-emerald-500 animate-ping opacity-60"></span>
+                    </motion.div>
+                  ) : companionState === 'thinking' ? (
+                    <RefreshCw className="w-6 h-6 animate-spin" />
+                  ) : (
+                    <Mic className="w-6 h-6" />
+                  )}
+                </button>
+                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest text-center mt-1">
+                  {companionState === 'listening' ? '正在倾听...' : companionState === 'thinking' ? '正在思考...' : '点击麦克风对话'}
+                </span>
               </div>
 
-              <button 
-                type="button"
-                onClick={startVoiceAssist}
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md active:scale-95 transition-all cursor-pointer flex-shrink-0 ${
-                  companionState === 'listening'
-                    ? 'bg-emerald-600 shadow-emerald-600/20 animate-pulse'
-                    : 'bg-primary hover:bg-indigo-tint shadow-primary/20'
-                }`}
-              >
-                <Mic className="w-4 h-4" />
-              </button>
+              {/* Right Column: Balanced empty space spacer */}
+              <div className="w-12 h-12 flex-shrink-0" />
             </div>
+
           </div>
         </main>
       )}
