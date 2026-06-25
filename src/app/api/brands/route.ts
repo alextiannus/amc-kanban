@@ -71,36 +71,38 @@ export async function GET(request: Request) {
       return NextResponse.json(agentLinks.map(l => l.brand))
     }
 
-    // ADMIN human — see ALL brands across the system (or only assigned if assignedOnly=true)
+    // If assignedOnly=true, return only brands assigned to the user's permitted AI Agents.
+    // This applies to all human users (both Admins/Operators and Regular users).
+    if (assignedOnly) {
+      const delegatedAgentPermissions = await prisma.agentPermission.findMany({
+        where: { humanId: session.user.id },
+        select: { agentId: true },
+      })
+      const permittedAgentIds = delegatedAgentPermissions.map((perm) => perm.agentId)
+      const delegatedBrandLinks = permittedAgentIds.length
+        ? await prisma.brandAgent.findMany({
+            where: {
+              agentId: { in: permittedAgentIds },
+              active: true,
+            },
+            select: { brandId: true },
+          })
+        : []
+
+      const delegatedBrandIds = Array.from(new Set(delegatedBrandLinks.map((link) => link.brandId)))
+      const brands = delegatedBrandIds.length
+        ? await prisma.brand.findMany({
+            where: { id: { in: delegatedBrandIds }, ...activeBrandFilter },
+            include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
+            orderBy: { createdAt: 'asc' },
+          })
+        : []
+      return NextResponse.json(brands)
+    }
+
+    // ADMIN human — see ALL brands across the system
     // (Agents may create brands with themselves as ownerId; admins need full visibility)
     if (isAmcOperator(session.user)) {
-      if (assignedOnly) {
-        const delegatedAgentPermissions = await prisma.agentPermission.findMany({
-          where: { humanId: session.user.id },
-          select: { agentId: true },
-        })
-        const permittedAgentIds = delegatedAgentPermissions.map((perm) => perm.agentId)
-        const delegatedBrandLinks = permittedAgentIds.length
-          ? await prisma.brandAgent.findMany({
-              where: {
-                agentId: { in: permittedAgentIds },
-                active: true,
-              },
-              select: { brandId: true },
-            })
-          : []
-
-        const delegatedBrandIds = Array.from(new Set(delegatedBrandLinks.map((link) => link.brandId)))
-        const brands = delegatedBrandIds.length
-          ? await prisma.brand.findMany({
-              where: { id: { in: delegatedBrandIds }, ...activeBrandFilter },
-              include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
-              orderBy: { createdAt: 'asc' },
-            })
-          : []
-        return NextResponse.json(brands)
-      }
-
       const allBrands = await prisma.brand.findMany({
         where: activeBrandFilter,
         include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
