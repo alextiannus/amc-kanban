@@ -38,12 +38,14 @@ export async function copywriterNode(state: any) {
 
   let draftCaption = "";
   let draftMediaUrls: string[] = [];
+  let draftObj: any = null;
   if (existingDraftId) {
     try {
       const draft = await prisma.contentDraft.findUnique({
         where: { id: existingDraftId }
       });
       if (draft) {
+        draftObj = draft;
         draftCaption = draft.caption || "";
         draftMediaUrls = draft.mediaUrls || [];
       }
@@ -75,7 +77,13 @@ export async function copywriterNode(state: any) {
   }
 
   let userPrompt = "";
-  if (draftCaption && draftCaption !== "【AI 正在创作中...】") {
+  if (draftObj && draftObj.agentNote && draftObj.agentNote.includes("【AI 生成指令】")) {
+    const match = draftObj.agentNote.match(/【AI 生成指令】([\s\S]*?)【\/AI 生成指令】/);
+    if (match) {
+      userPrompt = match[1].trim();
+    }
+  }
+  if (!userPrompt && draftCaption && draftCaption !== "【AI 正在创作中...】") {
     userPrompt = draftCaption.trim();
   }
 

@@ -24,6 +24,10 @@ import {
   Video,
   Link,
   Loader2,
+  Sparkles,
+  Zap,
+  Image as ImageIcon,
+  Wand2,
 } from 'lucide-react'
 
 function isVideoUrl(url: string): boolean {
@@ -197,6 +201,11 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const [reviewNote, setReviewNote] = useState('')
   const [error, setError] = useState<string | null>(null)
 
+  const [contentIdea, setContentIdea] = useState('')
+  const [activeMediaOp, setActiveMediaOp] = useState<{ index: number; action: 'design' | 'video' } | null>(null)
+  const [mediaOpPrompt, setMediaOpPrompt] = useState('')
+  const [mediaProcessingIndex, setMediaProcessingIndex] = useState<number | null>(null)
+
   const [brandAssets, setBrandAssets] = useState<Array<{ id: string; url: string; filename?: string | null; mimeType: string }>>([])
   const [mediaUrlsInput, setMediaUrlsInput] = useState('')
   const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
@@ -315,15 +324,32 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       setMediaUrlsInput('')
       setAttachedMedia([])
       setReviewNote('')
+      setContentIdea('')
+      setActiveMediaOp(null)
+      setMediaOpPrompt('')
+      setMediaProcessingIndex(null)
       return
     }
+    setContentIdea('')
+    setActiveMediaOp(null)
+    setMediaOpPrompt('')
+    setMediaProcessingIndex(null)
     setCaption(selectedDraft.caption)
     setHashtags(formatTags(selectedDraft.hashtags))
     const accId = selectedDraft.accountId || selectedDraft.account?.id || ''
     setAccountId(accId)
     setSelectedAccountIds(accId ? [accId] : [])
     setScheduledAt(toDateTimeLocal(selectedDraft.scheduledAt))
-    setAgentNote(selectedDraft.agentNote || '')
+    if (selectedDraft.agentNote && selectedDraft.agentNote.includes("【AI 生成指令】")) {
+      const cleanNote = selectedDraft.agentNote.replace(/【AI 生成指令】[\s\S]*?【\/AI 生成指令】(?:\r?\n)?/, '');
+      setAgentNote(cleanNote.trim());
+      const match = selectedDraft.agentNote.match(/【AI 生成指令】([\s\S]*?)【\/AI 生成指令】/);
+      if (match) {
+        setContentIdea(match[1].trim());
+      }
+    } else {
+      setAgentNote(selectedDraft.agentNote || '');
+    }
     setMediaUrlsInput((selectedDraft.mediaUrls || []).join(', '))
 
     const initialMedia: Array<{ id: string; type: 'asset' | 'url'; url: string }> = []
@@ -405,23 +431,28 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setReviewNote('')
   }
 
-  const saveDraft = async (nextStatus?: string, captionOverride?: string): Promise<DraftItem | null> => {
+  const saveDraft = async (nextStatus?: string, captionOverride?: string): Promise<DraftItem[] | null> => {
     if (!brandId) return null
-    const activeCaption = captionOverride !== undefined ? captionOverride : caption
+    let activeCaption = captionOverride !== undefined ? captionOverride : caption
+    if (!activeCaption.trim() && contentIdea.trim()) {
+      activeCaption = contentIdea.trim()
+      setCaption(activeCaption)
+    }
     const trimmedCaption = activeCaption.trim()
     if (!trimmedCaption) {
-      setError('草稿正文不能为空')
+      setError('草稿正文或内容创意不能为空')
       return null
     }
     if (selectedAccountIds.length === 0) {
-      setError('请选择发布账号（确定发布平台）')
+      setError('请选择发布平台账号')
       return null
     }
     setSaving(true)
     setError(null)
     const mediaUrls = attachedMedia.filter((m) => m.type === 'url').map((m) => m.url)
+    const formattedAgentNote = contentIdea.trim() ? `【AI 生成指令】${contentIdea.trim()}【/AI 生成指令】\n${agentNote}` : agentNote
     try {
-      let mainDraft: DraftItem | null = null
+      const savedDrafts: DraftItem[] = []
 
       if (selectedDraft) {
         // Update existing draft with first account
@@ -434,7 +465,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
             hashtags: parseTags(hashtags),
             accountId: selectedAccountIds[0],
             scheduledAt: fromDateTimeLocal(scheduledAt),
-            agentNote,
+            agentNote: formattedAgentNote,
             status: nextStatus || selectedDraft.status || 'draft',
             mediaUrls,
             assetIds: selectedAssetIds,
@@ -442,12 +473,12 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
         })
         const json = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(json.error || '修改草稿失败')
-        mainDraft = json.draft || null
+        if (json.draft) savedDrafts.push(json.draft)
 
         // Create new drafts for any additional accounts
         const otherAccounts = selectedAccountIds.slice(1)
         if (otherAccounts.length > 0) {
-          await Promise.all(
+          const results = await Promise.all(
             otherAccounts.map(async (accId) => {
               const resCreate = await fetch(`/api/brands/${brandId}/drafts`, {
                 method: 'POST',
@@ -457,23 +488,27 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   hashtags: parseTags(hashtags),
                   accountId: accId,
                   scheduledAt: fromDateTimeLocal(scheduledAt),
-                  agentNote,
+                  agentNote: formattedAgentNote,
                   status: nextStatus || 'draft',
                   mediaUrls,
                   assetIds: selectedAssetIds,
                 }),
               })
-              if (!resCreate.ok) {
-                const errJson = await resCreate.json().catch(() => ({}))
-                console.error(`Failed to create copy draft for account ${accId}:`, errJson.error)
+              const jsonCreate = await resCreate.json().catch(() => ({}))
+              if (resCreate.ok && jsonCreate.draft) {
+                return jsonCreate.draft
+              } else {
+                console.error(`Failed to create copy draft for account ${accId}:`, jsonCreate.error)
+                return null
               }
             })
           )
+          results.forEach(d => { if (d) savedDrafts.push(d) })
         }
       } else {
         // Create new drafts for all selected accounts
         const results = await Promise.all(
-          selectedAccountIds.map(async (accId, idx) => {
+          selectedAccountIds.map(async (accId) => {
             const res = await fetch(`/api/brands/${brandId}/drafts`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -482,7 +517,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 hashtags: parseTags(hashtags),
                 accountId: accId,
                 scheduledAt: fromDateTimeLocal(scheduledAt),
-                agentNote,
+                agentNote: formattedAgentNote,
                 status: nextStatus || 'draft',
                 mediaUrls,
                 assetIds: selectedAssetIds,
@@ -493,16 +528,14 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
             return json.draft || null
           })
         )
-        if (results.length > 0) {
-          mainDraft = results[0]
-        }
+        results.forEach(d => { if (d) savedDrafts.push(d) })
       }
 
       await loadDrafts()
-      if (mainDraft) {
-        setSelectedId((mainDraft as any).id)
+      if (savedDrafts.length > 0) {
+        setSelectedId(savedDrafts[0].id)
       }
-      return mainDraft
+      return savedDrafts
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存草稿失败')
       return null
@@ -513,20 +546,23 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
   const submitDraft = async () => {
     if (!brandId) return
-    const draft = await saveDraft('draft')
-    const draftId = draft?.id || selectedDraft?.id
-    if (!draftId) return
+    const draftsList = await saveDraft('draft')
+    if (!draftsList || draftsList.length === 0) return
 
     setSaving(true)
     setError(null)
     try {
-      const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/submit`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: agentNote }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || '提交草稿失败')
+      await Promise.all(
+        draftsList.map(async (draft) => {
+          const res = await fetch(`/api/brands/${brandId}/drafts/${draft.id}/submit`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: agentNote }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json.error || `提交草稿 ${draft.id} 失败`)
+        })
+      )
       await loadDrafts()
       closeEditor()
     } catch (e) {
@@ -577,7 +613,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     }
   }
 
-  const triggerCopywriter = async (draftId: string) => {
+  const triggerCopywriter = async (draftId: string, silent = false) => {
     if (!brandId) return
     setSaving(true)
     setError(null)
@@ -587,13 +623,62 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || '触发 AI 创作失败')
-      alert('AI 创作已在后台启动，您可以稍后查看。')
-      closeEditor()
-      await loadDrafts()
+      if (!silent) {
+        alert('AI 创作已在后台启动，您可以稍后查看。')
+        closeEditor()
+        await loadDrafts()
+      }
     } catch (e) {
-      setError(e instanceof Error ? e.message : '触发 AI 创作失败')
+      if (!silent) {
+        setError(e instanceof Error ? e.message : '触发 AI 创作失败')
+      } else {
+        console.error(`Copywriter trigger failed silently:`, e)
+      }
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleMediaAIDesign = async (index: number, assetId: string, actionType: 'design' | 'video') => {
+    if (!mediaOpPrompt.trim()) {
+      alert('请输入操作提示词')
+      return
+    }
+    
+    setMediaProcessingIndex(index)
+    setError(null)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/assets/${assetId}/design`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: mediaOpPrompt, action: actionType })
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || '操作失败')
+      }
+
+      const newAsset = data.asset
+
+      setAttachedMedia(prev => {
+        const next = [...prev]
+        next[index] = {
+          id: newAsset.id,
+          type: 'asset',
+          url: newAsset.url
+        }
+        return next
+      })
+
+      alert(actionType === 'video' ? 'AI 视频生成成功！已为您同步该视频。' : 'AI 修图优化成功！已为您更新该图片。')
+      setActiveMediaOp(null)
+      setMediaOpPrompt('')
+      await loadBrandAssets()
+    } catch (err: any) {
+      alert(err.message || '操作失败')
+    } finally {
+      setMediaProcessingIndex(null)
     }
   }
 
@@ -719,13 +804,28 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
             </div>
 
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
-              <textarea
-                value={caption}
-                onChange={(event) => setCaption(event.target.value)}
-                placeholder="输入草稿正文..."
-                disabled={selectedDraft?.status === 'published'}
-                className="min-h-[220px] w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed"
-              />
+              {selectedDraft?.status !== 'published' && (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">内容创意 / 生成指令 (AI Idea & Prompt)</label>
+                  <textarea
+                    value={contentIdea}
+                    onChange={(event) => setContentIdea(event.target.value)}
+                    placeholder="输入内容创意或AI生成指令，例如：‘介绍我们的新菜单，突出新鲜食材和南洋风味’，AI将自动按所选平台特性重构文案..."
+                    className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </div>
+              )}
+              
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">草稿正文 (Draft Caption)</label>
+                <textarea
+                  value={caption}
+                  onChange={(event) => setCaption(event.target.value)}
+                  placeholder="输入草稿正文..."
+                  disabled={selectedDraft?.status === 'published'}
+                  className="min-h-[160px] w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-500 dark:disabled:text-slate-400 disabled:cursor-not-allowed"
+                />
+              </div>
               <input
                 value={hashtags}
                 onChange={(event) => setHashtags(event.target.value)}
@@ -856,10 +956,116 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                             }`}>
                               {item.type === 'asset' ? '素材库' : '外链'}
                             </div>
+
+                            {/* AI Image design & Video generation overlays */}
+                            {selectedDraft?.status !== 'published' && item.type === 'asset' && !isVid && (
+                              <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setActiveMediaOp({ index, action: 'design' })
+                                    setMediaOpPrompt('')
+                                  }}
+                                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] py-1 font-bold flex items-center justify-center gap-1"
+                                >
+                                  <Wand2 className="h-2.5 w-2.5" /> AI优化
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setActiveMediaOp({ index, action: 'video' })
+                                    setMediaOpPrompt('')
+                                  }}
+                                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[10px] py-1 font-bold flex items-center justify-center gap-1"
+                                >
+                                  <Video className="h-2.5 w-2.5" /> 生视频
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Processing Overlay */}
+                            {mediaProcessingIndex === index && (
+                              <div className="absolute inset-0 bg-slate-950/70 flex flex-col items-center justify-center gap-1 z-20">
+                                <Loader2 className="h-5 w-5 text-white animate-spin" />
+                                <span className="text-[9px] text-white font-bold">
+                                  {activeMediaOp?.action === 'video' ? '视频生成中...' : '图片优化中...'}
+                                </span>
+                              </div>
+                            )}
                           </div>
                         )
                       })}
                     </div>
+
+                    {/* Inline media AI prompt form */}
+                    {activeMediaOp && (
+                      <div className="mt-3 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                            {activeMediaOp.action === 'video' ? (
+                              <>
+                                <Video className="h-3.5 w-3.5 text-indigo-500" />
+                                AI 图生视频 (第 {activeMediaOp.index + 1} 张图)
+                              </>
+                            ) : (
+                              <>
+                                <Wand2 className="h-3.5 w-3.5 text-emerald-500" />
+                                AI 图片优化 (第 {activeMediaOp.index + 1} 张图)
+                              </>
+                            )}
+                          </span>
+                          <span className="text-[10px] text-slate-400">使用 Kie.ai API</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={mediaOpPrompt}
+                            onChange={(e) => setMediaOpPrompt(e.target.value)}
+                            placeholder={
+                              activeMediaOp.action === 'video'
+                                ? "输入提示词，例如：'让锅里的食物冒热气，缓慢推近'..."
+                                : "输入提示词，例如：'提高亮度，添加专业的美食滤镜'..."
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                const item = attachedMedia[activeMediaOp.index]
+                                if (item && item.type === 'asset') {
+                                  handleMediaAIDesign(activeMediaOp.index, item.id, activeMediaOp.action)
+                                }
+                              }
+                            }}
+                            className="h-9 flex-1 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                          />
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const item = attachedMedia[activeMediaOp.index]
+                                if (item && item.type === 'asset') {
+                                  handleMediaAIDesign(activeMediaOp.index, item.id, activeMediaOp.action)
+                                }
+                              }}
+                              className="px-3 rounded-md bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800"
+                            >
+                              确定
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMediaOp(null)
+                                setMediaOpPrompt('')
+                              }}
+                              className="px-3 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 text-xs font-bold"
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1003,7 +1209,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 <>
                   <button
                     type="button"
-                    disabled={saving || selectedAccountIds.length === 0}
+                    disabled={saving || (!caption.trim() && !contentIdea.trim()) || selectedAccountIds.length === 0}
                     onClick={async () => {
                       const activeCaption = caption.trim() || '【AI 正在创作中...】'
                       if (!caption.trim()) {
@@ -1011,8 +1217,13 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                       }
                       const statusToSave = selectedDraft ? selectedDraft.status : 'draft'
                       const saved = await saveDraft(statusToSave, activeCaption)
-                      if (saved) {
-                        await triggerCopywriter(saved.id)
+                      if (saved && saved.length > 0) {
+                        await Promise.all(
+                          saved.map(draft => triggerCopywriter(draft.id, true))
+                        )
+                        alert('AI 创作已在后台启动，您可以稍后查看。')
+                        closeEditor()
+                        await loadDrafts()
                       }
                     }}
                     className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
@@ -1020,7 +1231,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                     ✨ AI 创作
                   </button>
                   <button
-                    disabled={saving || !caption.trim() || !accountId}
+                    disabled={saving || (!caption.trim() && !contentIdea.trim()) || selectedAccountIds.length === 0}
                     onClick={async () => {
                       const saved = await saveDraft('draft')
                       if (saved) closeEditor()
@@ -1029,7 +1240,13 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   >
                     保存
                   </button>
-                  <button disabled={saving || !caption.trim() || !accountId} onClick={submitDraft} className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"><Send className="h-4 w-4" /> 提交草稿</button>
+                  <button
+                    disabled={saving || (!caption.trim() && !contentIdea.trim()) || selectedAccountIds.length === 0}
+                    onClick={submitDraft}
+                    className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  >
+                    <Send className="h-4 w-4" /> 提交草稿
+                  </button>
                   {selectedDraft?.status === 'pending_review' && (
                     <>
                       <button

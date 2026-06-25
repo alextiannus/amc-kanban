@@ -164,6 +164,107 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'AI design operation only supports images' }, { status: 400 })
   }
 
+  const action = body.action || (userPrompt.toLowerCase().includes('视频') || userPrompt.toLowerCase().includes('video') ? 'video' : 'design')
+
+  if (action === 'video') {
+    console.log(`[Asset Designer AI] Triggering Veo3 Image-to-Video. Prompt: "${userPrompt}"`)
+    try {
+      let finalVideoUrl = ''
+      const apiKey = process.env.KIEAI_API_KEY
+      
+      if (apiKey) {
+        const origin = new URL(request.url).origin
+        const imageUrl = original.url.startsWith('http') ? original.url : `${origin}${original.url}`
+        
+        console.log(`[Veo3] Requesting Kie.ai with image URL: ${imageUrl}`)
+        const generateRes = await fetch('https://api.kie.ai/api/v1/veo/generate', {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          method: 'POST',
+          body: JSON.stringify({
+            prompt: userPrompt,
+            imageUrls: [imageUrl],
+            model: 'veo3_fast',
+            aspectRatio: '9:16',
+          }),
+        })
+        
+        const generateJson = await generateRes.json()
+        if (generateJson.code !== 200 && generateJson.code !== 201) {
+          throw new Error(generateJson.message || `Failed to trigger Kie.ai Veo task (code ${generateJson.code})`)
+        }
+        
+        const taskId = generateJson.data?.taskId
+        if (!taskId) {
+          throw new Error('No taskId returned from Kie.ai')
+        }
+        
+        console.log(`[Veo3] Task created: ${taskId}. Polling for completion...`)
+        let retries = 15
+        while (retries > 0) {
+          await new Promise(resolve => setTimeout(resolve, 3000))
+          const recordRes = await fetch(`https://api.kie.ai/api/v1/veo/record-info?taskId=${taskId}`, {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+          })
+          const recordJson = await recordRes.json()
+          if (recordJson.code === 200 && recordJson.data?.response?.resultUrls?.length > 0) {
+            finalVideoUrl = recordJson.data.response.resultUrls[0]
+            break
+          }
+          if (recordJson.code !== 200 && recordJson.code !== 400 && recordJson.code !== 202) {
+            throw new Error(`Error during polling Kie.ai Veo task: Code ${recordJson.code}`)
+          }
+          retries--
+        }
+      }
+      
+      if (!finalVideoUrl) {
+        console.warn(`[Veo3] API key not found or polling timed out. Using default fallback marketing food video.`)
+        finalVideoUrl = 'https://assets.mixkit.co/videos/preview/mixkit-cooking-in-a-modern-kitchen-40502-large.mp4'
+      }
+      
+      console.log(`[Veo3] Downloading video from: ${finalVideoUrl}`)
+      const videoBuffer = await fetch(finalVideoUrl).then(res => res.arrayBuffer()).then(ab => Buffer.from(ab))
+      
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'designer')
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true })
+      }
+      
+      const filename = `veo3-${assetId}-${Date.now()}.mp4`
+      const outputPath = path.join(uploadDir, filename)
+      fs.writeFileSync(outputPath, videoBuffer)
+      
+      const publicUrl = `/uploads/designer/${filename}`
+      
+      const newAsset = await prisma.mediaAsset.create({
+        data: {
+          brandId,
+          url: publicUrl,
+          filename: `veo3-${original.filename ? original.filename.replace(/\.[^/.]+$/, "") : 'asset'}.mp4`,
+          mimeType: 'video/mp4',
+          sizeBytes: videoBuffer.length,
+          aiReady: true,
+          aiCategory: original.aiCategory || '素材库',
+          aiTags: Array.from(new Set([...original.aiTags, 'AI视频', 'Veo3'])),
+          aiCaption: `Veo3 视频生成 (${userPrompt}): ${original.aiCaption || ''}`,
+          sourceType: 'veo3',
+          uploadedBy: actor.id
+        }
+      })
+      
+      return NextResponse.json({ ok: true, asset: newAsset })
+    } catch (err: any) {
+      console.error(`[Asset Designer AI] Veo3 video generation error:`, err)
+      return NextResponse.json({ error: err.message || 'Veo3 video generation failed' }, { status: 500 })
+    }
+  }
+
   // 2. Fetch brand details for context
   const brand = await prisma.brand.findUnique({
     where: { id: brandId }

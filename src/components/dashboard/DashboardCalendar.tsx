@@ -184,7 +184,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       const res = await fetch(`/api/brands/${targetBrandId}/assets/${mediaAssetId}/design`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: designerPromptText })
+        body: JSON.stringify({ prompt: designerPromptText, action: actionType })
       })
 
       const data = await res.json()
@@ -209,7 +209,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         throw new Error(patchData.error || '关联新素材到排期失败')
       }
 
-      alert('Designer AI 操作成功！排期已自动同步全新设计的海报。')
+      alert(actionType === 'video' ? 'Designer AI 操作成功！已成功利用 Veo3 生成短视频并同步到排期。' : 'Designer AI 操作成功！排期已自动同步全新设计的海报。')
       
       const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
       const query = new URLSearchParams({ month })
