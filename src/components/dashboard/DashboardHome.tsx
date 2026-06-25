@@ -790,6 +790,14 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
               </div>
             )}
             <button
+              onClick={() => window.open(`/dashboard/brand-owner?brandId=${activeBrand.id}`, '_blank')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10"
+              title="以品牌主身份打开看板"
+            >
+              <ExternalLink className="w-3 h-3" />
+              品牌主端
+            </button>
+            <button
               onClick={() => setShowSettings(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/10"
               title="集成配置"

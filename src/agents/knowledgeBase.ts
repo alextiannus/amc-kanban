@@ -229,10 +229,44 @@ export function getRelevantKnowledge(industry: string, platform: string, queryTe
     matchedTemplates = repoEntry.templates;
   }
 
+  let finalIdeas = repoEntry.ideas;
+  let finalPrompts = repoEntry.prompts;
+
+  if (queryText && queryText.trim()) {
+    matchedTemplates = [...matchedTemplates].sort((a, b) => getJaccardSimilarity(b, queryText) - getJaccardSimilarity(a, queryText));
+    finalIdeas = [...finalIdeas].sort((a, b) => getJaccardSimilarity(b, queryText) - getJaccardSimilarity(a, queryText));
+    finalPrompts = [...finalPrompts].sort((a, b) => getJaccardSimilarity(b, queryText) - getJaccardSimilarity(a, queryText));
+  }
+
   return {
-    ideas: repoEntry.ideas,
+    ideas: finalIdeas,
     templates: matchedTemplates,
     videoScripts: repoEntry.videoScripts,
-    prompts: repoEntry.prompts
+    prompts: finalPrompts
   };
+}
+
+export function getJaccardSimilarity(str1: string, str2: string): number {
+  const tokenize = (s: string) => {
+    const clean = (s || '').toLowerCase().trim()
+    const parts = clean.split(/\s+/)
+    const tokens: string[] = []
+    for (const part of parts) {
+      if (/[\u4e00-\u9fa5]/.test(part)) {
+        tokens.push(...part.split(''))
+      } else if (part) {
+        tokens.push(part)
+      }
+    }
+    return tokens
+  }
+
+  const tokens1 = tokenize(str1)
+  const tokens2 = tokenize(str2)
+  if (tokens1.length === 0 || tokens2.length === 0) return 0
+  const s1 = new Set(tokens1)
+  const s2 = new Set(tokens2)
+  const intersection = new Set([...s1].filter(x => s2.has(x)))
+  const union = new Set([...s1, ...s2])
+  return intersection.size / union.size
 }

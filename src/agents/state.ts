@@ -63,5 +63,9 @@ export const StateAnnotation = Annotation.Root({
   marketingStrategy: Annotation<string>({
     reducer: (x, y) => y ?? x,
     default: () => ""
+  }),
+  retryCount: Annotation<number>({
+    reducer: (x, y) => y ?? x,
+    default: () => 0
   })
 });

@@ -8,6 +8,7 @@ import {
   Play, BarChart2, Star, Video, Link, ArrowRight
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useSearchParams } from 'next/navigation'
 
 interface Brand {
   id: string
@@ -36,6 +37,9 @@ interface ContentDraft {
 }
 
 export default function BrandOwnerDashboard() {
+  const searchParams = useSearchParams()
+  const queryBrandId = searchParams?.get('brandId')
+
   // --- States ---
   const [brands, setBrands] = useState<Brand[]>([])
   const [activeBrand, setActiveBrand] = useState<Brand | null>(null)
@@ -88,8 +92,8 @@ export default function BrandOwnerDashboard() {
           const list = await res.json()
           setBrands(list)
           if (list.length > 0) {
-            // Read active brand from local storage if available
-            const savedId = localStorage.getItem('dashboard.activeBrandId')
+            // Read active brand from URL parameter, or local storage if available
+            const savedId = queryBrandId || localStorage.getItem('dashboard.activeBrandId')
             const found = list.find((b: any) => b.id === savedId) || list[0]
             setActiveBrand(found)
           }
@@ -101,7 +105,17 @@ export default function BrandOwnerDashboard() {
       }
     }
     loadInitialData()
-  }, [])
+  }, [queryBrandId])
+
+  // Sync active brand when query param changes
+  useEffect(() => {
+    if (queryBrandId && brands.length > 0) {
+      const found = brands.find(b => b.id === queryBrandId)
+      if (found && found.id !== activeBrand?.id) {
+        setActiveBrand(found)
+      }
+    }
+  }, [queryBrandId, brands, activeBrand?.id])
 
   // --- Load Assets & Drafts for Active Brand ---
   useEffect(() => {

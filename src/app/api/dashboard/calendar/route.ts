@@ -136,6 +136,12 @@ export async function GET(request: Request) {
       })
     : []
 
+  const mediaAssets = await prisma.mediaAsset.findMany({
+    where: { brandId: { in: scopedBrandIds } },
+    select: { id: true, url: true }
+  })
+  const mediaUrlToIdMap = new Map(mediaAssets.map(asset => [asset.url, asset.id]))
+
   const events = drafts.map(draft => {
     const eventAt = draft.status === 'published'
       ? (draft.publishedAt ?? draft.scheduledAt ?? draft.updatedAt)
@@ -149,6 +155,9 @@ export async function GET(request: Request) {
           ? 'pending'
           : 'scheduled'
 
+    const firstMediaUrl = draft.mediaUrls?.[0]
+    const mediaAssetId = firstMediaUrl ? mediaUrlToIdMap.get(firstMediaUrl) : null
+
     return {
       id: draft.id,
       brandId: draft.brandId,
@@ -160,6 +169,7 @@ export async function GET(request: Request) {
       scheduledAt: eventAt.toISOString(),
       mediaUrls: draft.mediaUrls,
       captionLang: draft.captionLang,
+      mediaAssetId: mediaAssetId || null,
     }
   })
 

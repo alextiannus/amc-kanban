@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma.ts";
 import { callLLM } from "../../lib/llmRouter.ts";
 import { getFewShotExamples } from "../../lib/feedbackService.ts";
+import { getJaccardSimilarity } from "../knowledgeBase.ts";
 
 export async function copywriterNode(state: any) {
   console.log("=== CopywriterNode Running (Composition Mode) ===");
@@ -130,64 +131,138 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
     }
   }
 
-  // Fetch approved corrections to use as Few-Shot examples
-  const fewShots = await getFewShotExamples(brandId, 3);
+  // 1. Fetch approved corrections and perform Jaccard-similarity Few-Shot sorting
   let fewShotText = "";
-  if (fewShots.length > 0) {
-    fewShotText = "\n--- BRAND PREFERRED STYLE EXAMPLES (FEW-SHOT CORRECTIONS) ---\n" +
-      fewShots.map((shot, idx) => `Example ${idx + 1}:\n[AI Original generated text]: ${shot.originalText}\n[User Preferred published text]: ${shot.correctedText}`).join("\n\n") + "\n";
+  try {
+    const allApproved = await prisma.userCorrectionFeedback.findMany({
+      where: { brandId, isApproved: true },
+      select: { originalText: true, correctedText: true }
+    });
+    if (allApproved.length > 0) {
+      const taskQuery = `${task.title} ${task.description || ""}`;
+      const sortedShots = [...allApproved].sort((a, b) => {
+        const simA = getJaccardSimilarity(a.originalText + " " + a.correctedText, taskQuery);
+        const simB = getJaccardSimilarity(b.originalText + " " + b.correctedText, taskQuery);
+        return simB - simA;
+      });
+      const topShots = sortedShots.slice(0, 3);
+      fewShotText = "\n--- BRAND PREFERRED STYLE EXAMPLES (FEW-SHOT CORRECTIONS) ---\n" +
+        topShots.map((shot, idx) => `Example ${idx + 1}:\n[AI Original generated text]: ${shot.originalText}\n[User Preferred published text]: ${shot.correctedText}`).join("\n\n") + "\n";
+    }
+  } catch (err) {
+    console.error("Failed to fetch custom few-shot examples:", err);
   }
 
-  // 2. Attempt AI Generation using routed LLM call with state.researchNotes & state.marketingStrategy
+  // Refinement prompt if compliance failed previously
+  let refinementPromptText = "";
+  if (state.complianceReason && !state.compliancePassed) {
+    refinementPromptText = `\n--- REFINEMENT REQUEST ---\nYour previous generated caption failed compliance checks with the following reason:\n"${state.complianceReason}"\n\nPrevious Caption: "${state.caption}"\n\nYou MUST rewrite the caption, strictly avoiding the violation. Fix any superlative or Halal violations directly while preserving the marketing message.\n`;
+  }
+
   let aiCaption = "";
   let aiHashtags: string[] = [];
   let geminiUsed = false;
 
-  const prompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
+  // --- STAGE 1: HOOK GENERATION ---
+  const hookPrompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
 Brand Description: ${brand.description || "A premium brand."}
 Target Platform: ${platform}
-Active Task/Topic: "${task.title}"
-Task Details: ${task.description || "Create an engaging post."}
-${userPrompt ? `User Prompt/Theme/Instruction: "${userPrompt}"` : ""}
+Active Task: "${task.title}"
+Task Details: ${task.description || ""}
+${userPrompt ? `User Custom Theme: "${userPrompt}"` : ""}
 ${attachedAssetsText}
 ${brandToneText}
 ${menuText}
 ${slangText}
 ${negativePromptText}
 ${fewShotText}
+${refinementPromptText}
 
---- BRAND RESEARCH CONTEXT ---
-${researchNotes || "No specific brand research available."}
+Goal: Generate 3 different engaging hook variants (opening lines/titles) optimized for "${platform}".
+Rules:
+1. Catchy and high click-through-rate.
+2. Platform-native:
+   - For Instagram/TikTok/Facebook: short, conversational, and direct.
+   - For Xiaohongshu (Rednote): must include popular emoji/exclamation-driven visual formatting.
+3. STRICT Negative prompt: Avoid weird hooks starting with clichés like "Discover the secrets...", "The best...", "The most...", "The top...". Do not use cringy or over-the-top AI language.
+4. Output your response as a JSON array of strings:
+   ["Hook 1", "Hook 2", "Hook 3"]
+Please output ONLY a valid JSON array of strings.`;
 
---- BRAND MARKETING STRATEGY & GUIDELINES ---
-${marketingStrategy || "No specific marketing guidelines available."}
+  let generatedHooks: string[] = [];
+  try {
+    const hookResult = await callLLM("copywriting", hookPrompt, 800);
+    if (hookResult.text) {
+      const cleanJson = hookResult.text.replace(/```json/g, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(cleanJson);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        generatedHooks = parsed;
+        console.log(`AI Copywriter Hook stage generated ${parsed.length} hooks successfully.`);
+      }
+    }
+  } catch (err) {
+    console.error("Failed to generate hooks in Stage 1:", err);
+  }
 
-Goal: Generate an extremely engaging social media post caption and relevant hashtags optimized for "${platform}". 
-The post must be tailored to Singlish, bilingual English/Chinese, or Chinese based on the platform and localized context (e.g. use "Don't say bojio", "Chope your seats" for Instagram/TikTok if appropriate).
+  if (generatedHooks.length === 0) {
+    generatedHooks = [
+      platform === "xiaohongshu" ? `🔥 抢先打卡！这家店的招牌真的绝了！` : `Chope your seats! Something exciting is cooking at ${brand.name}.`
+    ];
+  }
 
-Instructions:
-1. Make the copy highly engaging, natural, and customized to the brand's industry.
-2. Alignment with Images: You MUST analyze the details of the attached images provided above. Ensure the caption's description matches the visual contents of the images (e.g., if the image shows a specific flavor of food or reformer pilates movement, describe exactly that; do not write about steak if the image shows a burger). Avoid generic filler copy.
-3. Direct copy only. Do NOT include markdown styling, emojis in hashtags, or wrapper texts like "Sure, here is your post:".
-4. Return the output in JSON format with two keys:
-   "caption": The generated post caption (string)
+  const selectedHook = generatedHooks[0];
+
+  // --- STAGE 2: BODY & CTA GENERATION ---
+  const bodyPrompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
+Brand Description: ${brand.description || "A premium brand."}
+Target Platform: ${platform}
+Active Task: "${task.title}"
+Task Details: ${task.description || ""}
+${userPrompt ? `User Custom Theme: "${userPrompt}"` : ""}
+${attachedAssetsText}
+${brandToneText}
+${menuText}
+${slangText}
+${negativePromptText}
+${fewShotText}
+${refinementPromptText}
+
+Here is the approved Hook (opening line/title) generated for this post:
+"${selectedHook}"
+
+Goal: Compose the full social media post caption and hashtags starting with (or directly using) the hook above.
+Guidelines:
+1. Tone & Perspective Switch:
+   Analyze the Brand Tone/Voice setting. Adopt the requested persona:
+   - If Tone suggests chef/owner/maker perspective (e.g. contains "chef", "owner", "我", "老板"), write in the first-person singular ("我今天亲自...").
+   - If Tone suggests explorer/food blogger perspective (e.g. contains "blogger", "探店", "recommend"), write in the third-person explorer perspective ("这家店绝了...").
+   - Else, write in the official brand/corporate perspective ("我们很高兴为您呈献...").
+2. Include a compelling Call to Action (CTA) at the end:
+   - For F&B/restaurants: remind them to book a table, include the restaurant's address/position, or highlight any active promo codes.
+   - For others: prompt for bookings/inquiries.
+3. Platform-Native Formatting:
+   - For Xiaohongshu: Use emojis, markdown bullet points for layout, and tag list.
+   - For Instagram: bilingual or refined English, clean layout, tag handles.
+   - For Google Business Profile: professional, concise, with reservation instructions.
+4. Output your response in JSON format with two keys:
+   "caption": The complete post caption (string)
    "hashtags": An array of hashtags (array of strings, without the '#' symbol)
 Please output ONLY a valid JSON object.`;
 
   try {
-    const result = await callLLM("copywriting", prompt, 1000);
-    if (result.text) {
-      const cleanJson = result.text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const bodyResult = await callLLM("copywriting", bodyPrompt, 1000);
+    if (bodyResult.text) {
+      const cleanJson = bodyResult.text.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleanJson);
       if (parsed.caption) {
         aiCaption = parsed.caption;
         aiHashtags = parsed.hashtags || [];
         geminiUsed = true;
-        console.log(`AI Copywriter generated optimized content successfully using routed model: ${result.provider}/${result.modelName}`);
+        console.log(`AI Copywriter Body stage generated decoupled content successfully using: ${bodyResult.provider}/${bodyResult.modelName}`);
       }
     }
   } catch (error) {
-    console.error("Failed to generate or parse copywriter response from LLM router:", error);
+    console.error("Failed to generate body caption in Stage 2:", error);
   }
 
   // 3. Fallback Rule-Based Generation (Runs if Gemini fails)

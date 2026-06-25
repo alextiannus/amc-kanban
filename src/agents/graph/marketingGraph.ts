@@ -24,9 +24,19 @@ async function complianceCheckNode(state: typeof StateAnnotation.State) {
 
   const result = await complianceNode(state);
 
-  // If compliance check fails, trigger LangGraph HIL Interrupt
+  // If compliance check fails, check retry count
   if (!result.compliancePassed) {
-    console.log("HIL Triggered: Awaiting Human approval or correction.");
+    const currentRetryCount = state.retryCount || 0;
+    if (currentRetryCount < 2) {
+      console.log(`Compliance failed. Auto-retrying (Attempt ${currentRetryCount + 1}/2). Reason: ${result.complianceReason}`);
+      return {
+        compliancePassed: false,
+        complianceReason: result.complianceReason,
+        retryCount: currentRetryCount + 1
+      };
+    }
+
+    console.log("HIL Triggered: Max auto-retries reached or HIL explicitly required.");
     
     // Create require_input WorkUnit card in database
     await prisma.workUnit.update({
@@ -125,7 +135,7 @@ const workflow = new StateGraph(StateAnnotation)
     {
       publish: "publisher",
       redesign: "designer",
-      retry: "researcher"
+      retry: "copywriter"
     }
   )
   
