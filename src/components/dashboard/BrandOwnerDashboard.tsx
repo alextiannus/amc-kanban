@@ -534,7 +534,7 @@ export default function BrandOwnerDashboard() {
             <img src="/logo.svg" alt="logo" className="w-full h-full object-contain" />
           </div>
           <span className="font-bold text-sm text-slate-800 tracking-wide">
-            {activeBrand ? activeBrand.name : '品牌主控制台'}
+            {activeBrand ? activeBrand.name : ''}
           </span>
         </div>
 
@@ -542,13 +542,11 @@ export default function BrandOwnerDashboard() {
           {(showMapsAlert || showScheduleAlert) && (
             <button
               onClick={() => setNotificationsExpanded(prev => !prev)}
-              className="w-10 h-10 rounded-full bg-rose-50 hover:bg-rose-100/80 text-rose-600 flex items-center justify-center relative cursor-pointer transition-all active:scale-95 border border-rose-100/30"
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 text-slate-650 transition-all active:scale-95 cursor-pointer relative"
               title="通知消息"
             >
               <span className="material-symbols-outlined text-lg">notifications</span>
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-rose-500 text-white rounded-full flex items-center justify-center text-[9px] font-black font-jetbrains animate-pulse">
-                {(showMapsAlert ? 1 : 0) + (showScheduleAlert ? 1 : 0)}
-              </span>
+              <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" />
             </button>
           )}
 
