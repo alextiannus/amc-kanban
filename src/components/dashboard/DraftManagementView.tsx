@@ -206,7 +206,16 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const [mediaOpPrompt, setMediaOpPrompt] = useState('')
   const [mediaProcessingIndex, setMediaProcessingIndex] = useState<number | null>(null)
 
+  const [assetTypeFilter, setAssetTypeFilter] = useState<'all' | 'image' | 'video'>('all')
   const [brandAssets, setBrandAssets] = useState<Array<{ id: string; url: string; filename?: string | null; mimeType: string }>>([])
+  const filteredAssets = useMemo(() => {
+    return brandAssets.filter(asset => {
+      const isVid = asset.mimeType.startsWith('video/')
+      if (assetTypeFilter === 'image') return !isVid
+      if (assetTypeFilter === 'video') return isVid
+      return true
+    })
+  }, [brandAssets, assetTypeFilter])
   const [mediaUrlsInput, setMediaUrlsInput] = useState('')
   const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
@@ -1099,15 +1108,55 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
                 {/* Browse brand assets */}
                 <div className="space-y-2">
-                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">从品牌素材库中选择</label>
-                  {brandAssets.length === 0 ? (
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">从品牌素材库中选择</label>
+                    <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-md text-[10px] font-black">
+                      <button
+                        type="button"
+                        onClick={() => setAssetTypeFilter('all')}
+                        className={`px-2 py-0.5 rounded transition-all ${
+                          assetTypeFilter === 'all'
+                            ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
+                        }`}
+                      >
+                        全部
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAssetTypeFilter('image')}
+                        className={`px-2 py-0.5 rounded transition-all ${
+                          assetTypeFilter === 'image'
+                            ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
+                        }`}
+                      >
+                        图片
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAssetTypeFilter('video')}
+                        className={`px-2 py-0.5 rounded transition-all ${
+                          assetTypeFilter === 'video'
+                            ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
+                        }`}
+                      >
+                        视频
+                      </button>
+                    </div>
+                  </div>
+
+                  {filteredAssets.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center dark:border-slate-800">
-                      <p className="text-xs text-slate-400">品牌素材库中暂无素材</p>
+                      <p className="text-xs text-slate-400">
+                        {assetTypeFilter === 'image' ? '暂无图片素材' : assetTypeFilter === 'video' ? '暂无视频素材' : '品牌素材库中暂无素材'}
+                      </p>
                       <p className="mt-1 text-[10px] text-slate-300">请前往“素材”面板上传图片或视频</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2 bg-white dark:bg-slate-950">
-                      {brandAssets.map((asset) => {
+                    <div className="grid grid-cols-4 gap-2.5 max-h-[320px] overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 bg-white dark:bg-slate-950">
+                      {filteredAssets.map((asset) => {
                         const isSelected = selectedAssetIds.includes(asset.id)
                         const isVid = asset.mimeType.startsWith('video/')
                         return (
@@ -1116,6 +1165,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                             type="button"
                             disabled={selectedDraft?.status === 'published'}
                             onClick={() => selectedDraft?.status !== 'published' && handleToggleAsset(asset)}
+                            title={asset.filename || undefined}
                             className={`relative aspect-square rounded-md overflow-hidden border-2 bg-slate-100 dark:bg-slate-900 transition-all group disabled:cursor-not-allowed ${
                               isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-transparent hover:border-slate-300'
                             }`}
@@ -1131,11 +1181,16 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                               </div>
                             )}
                             {isSelected && (
-                              <div className={`absolute top-1 right-1 bg-emerald-500 rounded-full p-0.5 shadow-sm transition-colors ${selectedDraft?.status !== 'published' ? 'group-hover:bg-rose-600' : ''}`}>
+                              <div className={`absolute top-1 right-1 bg-emerald-500 rounded-full p-0.5 shadow-sm transition-colors z-10 ${selectedDraft?.status !== 'published' ? 'group-hover:bg-rose-600' : ''}`}>
                                 <Check className={`h-2.5 w-2.5 text-white stroke-[3px] block ${selectedDraft?.status !== 'published' ? 'group-hover:hidden' : ''}`} />
                                 {selectedDraft?.status !== 'published' && (
                                   <X className="h-2.5 w-2.5 text-white stroke-[3px] hidden group-hover:block" />
                                 )}
+                              </div>
+                            )}
+                            {asset.filename && (
+                              <div className="absolute bottom-0 inset-x-0 bg-slate-950/70 p-1 text-[8px] text-white truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                                {asset.filename}
                               </div>
                             )}
                           </button>
