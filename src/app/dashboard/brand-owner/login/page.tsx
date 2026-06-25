@@ -127,7 +127,7 @@ export default function BrandOwnerLogin() {
   const isRegister = mode === 'register'
 
   return (
-    <div className="min-h-screen w-full relative flex items-center justify-center bg-[#F8FAFC] overflow-hidden text-slate-800 p-4">
+    <div className="min-h-screen w-full relative flex items-center justify-center bg-[#F8FAFC] overflow-y-auto text-slate-800 p-4 py-8">
       {/* Background aurora glows and grid */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-indigo-200/40 blur-[120px]" />
@@ -136,15 +136,15 @@ export default function BrandOwnerLogin() {
       </div>
 
       {/* Center Card */}
-      <main className="relative z-10 w-full max-w-[480px] bg-white/80 border border-slate-200/80 rounded-3xl shadow-2xl backdrop-blur-md p-8 md:p-10">
+      <main className="relative z-10 w-full max-w-[480px] bg-white/80 border border-slate-200/80 rounded-3xl shadow-2xl backdrop-blur-md p-8 md:p-10 my-auto">
         
         {/* Brand Header */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shadow-sm mb-4">
             <Store className="h-6 w-6 text-indigo-600" />
           </div>
-          <h2 className="font-manrope font-bold text-2xl text-slate-800 text-center">AMC 品牌主控制台</h2>
-          <p className="font-hanken text-xs text-slate-500 tracking-wide mt-1">品牌主自主化运营工作台</p>
+          <h2 className="font-manrope font-bold text-2xl text-slate-800 text-center">品牌主控制台</h2>
+          <p className="font-hanken text-xs text-slate-500 tracking-wide mt-1">自主化运营工作台</p>
         </div>
 
         {/* Tab Navigation */}

@@ -525,7 +525,9 @@ export default function BrandOwnerDashboard() {
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
             <span className="material-symbols-outlined text-[18px]">restaurant</span>
           </div>
-          <span className="font-bold text-sm text-slate-800 tracking-wide">AMC Portal</span>
+          <span className="font-bold text-sm text-slate-800 tracking-wide">
+            {activeBrand ? activeBrand.name : '品牌主控制台'}
+          </span>
         </div>
 
         <button 
