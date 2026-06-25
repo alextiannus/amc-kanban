@@ -181,9 +181,17 @@ ${refinementPromptText}
 Goal: Generate 3 different engaging hook variants (opening lines/titles) optimized for "${platform}".
 Rules:
 1. Catchy and high click-through-rate.
-2. Platform-native:
-   - For Instagram/TikTok/Facebook: short, conversational, and direct.
-   - For Xiaohongshu (Rednote): must include popular emoji/exclamation-driven visual formatting.
+2. Platform-native visual formatting:
+   - For Xiaohongshu (小红书/Rednote):
+     * Must start with highly eye-catching emojis (e.g. 🔥, 😭, 😱, 📍, 🌟, ⚠️, 🧐).
+     * Must end with double exclamation marks ("！！").
+     * Enforce proven viral hook formulas:
+       a. Surprise/Disbelief: "我不允许还有人不知道..." (I won't allow anyone to not know about...), "天呐！这家店也太..." (Heavens! This shop is too...), "直接封神！..." (Directly canonized!).
+       b. Local Geotargeting focus: "新加坡克拉码头必吃..." (Clarke Quay Singapore must eat...), "克拉码头这家店绝了..." (This shop at Clarke Quay is amazing...).
+       c. Urgency/FOMO: "听我劝！去这家店前一定要..." (Hear my advice! Before going to this shop, you must...), "Bojio! 别说我不提前分享..." (Bojio! Don't say I didn't share...).
+   - For Instagram/TikTok/Facebook:
+     * Write an intriguing, premium, and direct opening sentence.
+     * Must be punchy and fit within 80-125 characters (since Instagram folds captions after 125 characters, the primary message must be visible before the fold).
 3. STRICT Negative prompt: Avoid weird hooks starting with clichés like "Discover the secrets...", "The best...", "The most...", "The top...". Do not use cringy or over-the-top AI language.
 4. Output your response as a JSON array of strings:
    ["Hook 1", "Hook 2", "Hook 3"]
@@ -240,10 +248,19 @@ Guidelines:
 2. Include a compelling Call to Action (CTA) at the end:
    - For F&B/restaurants: remind them to book a table, include the restaurant's address/position, or highlight any active promo codes.
    - For others: prompt for bookings/inquiries.
-3. Platform-Native Formatting:
-   - For Xiaohongshu: Use emojis, markdown bullet points for layout, and tag list.
-   - For Instagram: bilingual or refined English, clean layout, tag handles.
-   - For Google Business Profile: professional, concise, with reservation instructions.
+3. Platform-Native Formatting & Layout Rules:
+   - For Xiaohongshu (小红书/Rednote):
+     * High Density Emojis: Use emojis as visual separator markers for list items (e.g. ✨, 👉, ✅, 📌, 💡, ▫️) instead of default markdown dashes.
+     * Easy Reading: Break text into short, 1-2 sentence paragraphs separated by a full blank line. Do not write large dense blocks of text.
+     * Conversational Tone: Use friendly, colloquial styles (e.g. "家人们", "姐妹们", "宝子们") and naturally integrate local Singlish slang (e.g. "Bojio", "Shiok", "Chope") if defined in slangDict.
+     * Hashtags: Output hashtags at the very bottom, space-separated (e.g. "#新加坡美食 #克拉码头").
+   - For Instagram:
+     * Elegant Bilingual Structure: First present high-quality, inviting English copywriting, followed by a clean divider line (or ▫️ dot separators), and then a Simplified Chinese translation.
+     * Spacing: Enforce clean double line breaks between sections to avoid crowded layouts.
+     * Bullet points: Use custom character bullet points (e.g. •, ▫️) for lists.
+     * Hashtags: Output hashtags neatly at the bottom separated from the caption by line breaks.
+   - For Google Business Profile:
+     * Professional, concise, focus on booking details, contact info, and clear promotion terms.
 4. Output your response in JSON format with two keys:
    "caption": The complete post caption (string)
    "hashtags": An array of hashtags (array of strings, without the '#' symbol)
