@@ -60,9 +60,11 @@ To improve the visual quality and simplification of the brand owner portal (`amc
   - Enhanced the `GET /api/brands` API handler to support a `assignedOnly=true` search parameter for human operators (`isAmcOperator`). When enabled, it queries the `AgentPermission` and `BrandAgent` tables to resolve only the brands assigned to the operator's active AI agents.
   - Configured `DashboardCalendar.tsx` to fetch `/api/brands?assignedOnly=true`, restricting the calendar brand list to only show the operator's assigned brands and hide others.
 
-### C. Next.js Middleware Naming Fix (Subdomain Routing Release)
-- **File Renamed**: `src/proxy.ts` -> [middleware.ts](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/middleware.ts)
+### C. Next.js 16 Subdomain Proxy Resolution Fix
+- **File Modified**: [proxy.ts](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/proxy.ts)
 - **Changes**:
-  - Renamed the subdomain separation and session check code from `src/proxy.ts` to `src/middleware.ts` so Next.js matches and compiles it as the official middleware.
-  - Enabled active domain redirection so that accessing `amc-mm.immedi.ai` correctly redirects users to the Brand Owner Login/Dashboard instead of rendering the operator login page on the root path `/`.
+  - Maintained the Next.js 16 router proxy convention by keeping the file named `src/proxy.ts` (Next.js 16 deprecates `middleware.ts` in favor of `proxy.ts`).
+  - Added robust hostname resolution using `x-forwarded-host` before falling back to `host` inside `src/proxy.ts`. This resolves subdomain detection failure when behind Cloudflare and Render reverse proxies, which rewrite the standard `host` header.
+  - Enabled subdomain redirection so that accessing `amc-mm.immedi.ai` correctly redirects users to the Brand Owner Login/Dashboard instead of rendering the operator login page on `/`.
+
 
