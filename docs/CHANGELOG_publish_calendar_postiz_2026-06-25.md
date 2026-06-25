@@ -20,6 +20,15 @@ We have adjusted the publishing calendar view on both the design level (in Stitc
   - Exposes **AI Designer (AI 修图)** and **AI Video (Veo3)** prompt panel, letting users input natural language commands to automatically edit images and update drafts in the database in real-time.
   - Displays Dub.co click and ROI tags for published cards, and Temporal retry status for scheduled posts.
 
+### C. Brand Owner Portal Calendar Cleanup
+- **File**: [BrandOwnerDashboard.tsx](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/components/dashboard/BrandOwnerDashboard.tsx)
+- Replaced the hardcoded monthly grid (static 30 days and dot indicators) with dynamic calendar rendering.
+- Computes month bounds (first day offset, total days) to build a correct calendar grid dynamically.
+- Interrogates local drafts to show green dot schedule indicators only on dates with active posts in the database.
+- Transitioned `selectedDay` to a full `Date` object to prevent month-crossing comparison errors.
+- Updates "Scheduled Posts This Month" feed to dynamically filter drafts for the current calendar month and year.
+- Filters Weekly Planner action feed items to display only drafts scheduled for the user's selected day, removing static placeholder posts.
+
 ---
 
 ## 2. Verification

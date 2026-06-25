@@ -142,6 +142,10 @@ export async function GET(request: Request) {
   })
   const mediaUrlToIdMap = new Map(mediaAssets.map(asset => [asset.url, asset.id]))
 
+  const conversions = await prisma.conversionEvent.findMany({
+    where: { brandId: { in: scopedBrandIds } }
+  })
+
   const events = drafts.map(draft => {
     const eventAt = draft.status === 'published'
       ? (draft.publishedAt ?? draft.scheduledAt ?? draft.updatedAt)
@@ -158,6 +162,14 @@ export async function GET(request: Request) {
     const firstMediaUrl = draft.mediaUrls?.[0]
     const mediaAssetId = firstMediaUrl ? mediaUrlToIdMap.get(firstMediaUrl) : null
 
+    const draftConversions = conversions.filter(c => c.referPostId === draft.id || (draft.platformPostId && c.referPostId === draft.platformPostId))
+    const clicks = draftConversions.length
+    const roi = draftConversions.reduce((sum, c) => {
+      const meta = c.metadata as any
+      const val = meta?.revenue || meta?.value || 0
+      return sum + Number(val)
+    }, 0)
+
     return {
       id: draft.id,
       brandId: draft.brandId,
@@ -170,6 +182,8 @@ export async function GET(request: Request) {
       mediaUrls: draft.mediaUrls,
       captionLang: draft.captionLang,
       mediaAssetId: mediaAssetId || null,
+      clicks,
+      roi
     }
   })
 

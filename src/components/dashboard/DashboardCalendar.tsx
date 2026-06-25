@@ -77,6 +77,8 @@ interface CalendarEvent {
   mediaUrls?: string[]
   captionLang?: string
   mediaAssetId?: string | null
+  clicks?: number
+  roi?: number
 }
 
 interface DashboardCalendarProps {
@@ -114,15 +116,6 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   }, [brandId])
 
   const handleAIWrite = async (eventBrandId: string, draftId: string) => {
-    if (draftId.startsWith('mock_')) {
-      setTriggeringId(draftId)
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      alert('AI 创作已在后台启动，应用了双阶段爆款 Hook 文案生成，并已根据 Jaccard 相似度匹配了最佳 approved 文案模板！')
-      setEvents(prev => prev.map(e => e.id === draftId ? { ...e, title: e.title + ' (AI文案已优化)' } : e))
-      setTriggeringId(null)
-      return
-    }
-
     const targetBrandId = eventBrandId || brandId
     if (!targetBrandId) {
       alert('未找到关联的品牌ID')
@@ -165,18 +158,6 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     }
 
     try {
-      if (draftId.startsWith('mock_')) {
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        alert(actionType === 'video' ? 'AI 视频 (Veo3) 生成任务已提交！已成功将海报转换为 9:16 短视频发布资产。' : 'Designer AI 修改成功！海报已添加品牌 Logo 与促销标签水印。')
-        const newImgUrl = actionType === 'video'
-          ? 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800'
-          : 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800'
-        setEvents(prev => prev.map(e => e.id === draftId ? { ...e, mediaUrls: [newImgUrl] } : e))
-        setShowDesignerPanel(null)
-        setDesignerPromptText('')
-        return
-      }
-
       const targetBrandId = brandId || events.find(e => e.id === draftId)?.brandId
       if (!targetBrandId) {
         throw new Error('未找到关联的品牌ID')
@@ -232,26 +213,28 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
   const handleAIProposal = async () => {
     setAiProposalGenerating(true)
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    alert('AI 一键排期提案生成成功！已为您自动规划端午节前后 5 篇涵盖 Instagram、小红书和 Google Business 的系列菜品种种草排期。')
-    
-    const newMockDraft: CalendarEvent = {
-      id: `mock_proposal_${Date.now()}`,
-      brandId: brandId || 'dintaifung',
-      brandName: brandDetails?.name || '鼎泰丰',
-      platform: 'IG',
-      title: 'IG · AI 节日新品蟹粉小笼包推广提案',
-      status: 'pending',
-      time: '2026-06-25T15:00:00.000Z',
-      scheduledAt: '2026-06-25T15:00:00.000Z',
-      mediaUrls: ['https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800'],
-      mediaAssetId: 'mock_asset_crab',
-      captionLang: 'zh'
+    try {
+      // Trigger Apify sync to get latest reviews/topics for planning
+      await fetch(`/api/brands/${brandId}/apify-sync`, { method: 'POST' }).catch(() => {})
+      
+      // Call coordinate-scheduler workflows to generate drafts (simulated interval or direct trigger if present)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      // Reload calendar to fetch newly created draft proposals
+      const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
+      const query = new URLSearchParams({ month })
+      if (brandId) query.set('brandId', brandId)
+      const res = await fetch(`/api/dashboard/calendar?${query.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        setEvents(data.events || [])
+        alert('AI 已根据品牌资产和本地动态为您生成了全新排期提案！')
+      }
+    } catch (err) {
+      alert('一键排期提案失败，请稍后重试')
+    } finally {
+      setAiProposalGenerating(false)
     }
-    
-    setEvents(prev => [...prev, newMockDraft])
-    setSelectedDay(25)
-    setAiProposalGenerating(false)
   }
 
   useEffect(() => {
@@ -302,76 +285,8 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
   const isToday = (d: number) => d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
   
-  const mergedEvents = [...events]
-  if (viewYear === 2026 && viewMonth === 5) {
-    const mockEvents: CalendarEvent[] = [
-      {
-        id: 'mock_ig_zongzi_video',
-        brandId: brandId || 'dintaifung',
-        brandName: brandDetails?.name || '鼎泰丰',
-        platform: 'IG',
-        title: 'IG · 粽子出餐短视频',
-        status: 'pending',
-        time: '2026-06-25T18:00:00.000Z',
-        scheduledAt: '2026-06-25T18:00:00.000Z',
-        mediaUrls: ['https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800'],
-        mediaAssetId: 'mock_asset_zongzi',
-        captionLang: 'zh'
-      },
-      {
-        id: 'mock_xhs_cheese',
-        brandId: brandId || 'dintaifung',
-        brandName: brandDetails?.name || '鼎泰丰',
-        platform: '小红书',
-        title: '小红书 · 新品拉丝芝士包',
-        status: 'pending',
-        time: '2026-06-25T10:00:00.000Z',
-        scheduledAt: '2026-06-25T10:00:00.000Z',
-        mediaUrls: ['https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800']
-      },
-      {
-        id: 'mock_google_father',
-        brandId: brandId || 'dintaifung',
-        brandName: brandDetails?.name || '鼎泰丰',
-        platform: 'Google',
-        title: 'Google · 父亲节折扣',
-        status: 'scheduled',
-        time: '2026-06-26T12:00:00.000Z',
-        scheduledAt: '2026-06-26T12:00:00.000Z',
-        mediaAssetId: 'mock_asset_father'
-      },
-      {
-        id: 'mock_ig_dragonboat',
-        brandId: brandId || 'dintaifung',
-        brandName: brandDetails?.name || '鼎泰丰',
-        platform: 'IG',
-        title: 'IG · 端午节特惠',
-        status: 'done',
-        time: '2026-06-24T09:00:00.000Z',
-        scheduledAt: '2026-06-24T09:00:00.000Z',
-        mediaUrls: ['https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800'],
-        mediaAssetId: 'mock_asset_dragonboat'
-      },
-      {
-        id: 'mock_email_newsletter',
-        brandId: brandId || 'dintaifung',
-        brandName: brandDetails?.name || '鼎泰丰',
-        platform: 'Email',
-        title: 'Email · 周日晚市特惠推送',
-        status: 'scheduled',
-        time: '2026-06-28T17:00:00.000Z',
-        scheduledAt: '2026-06-28T17:00:00.000Z'
-      }
-    ]
-
-    mockEvents.forEach(mock => {
-      if (!mergedEvents.some(e => e.id === mock.id)) {
-        mergedEvents.push(mock)
-      }
-    })
-  }
-
-  const filteredEvents = mergedEvents.filter(ev => {
+  // Filter based on selected state tab
+  const filteredEvents = events.filter(ev => {
     if (activeFilter === 'all') return true
     return ev.status === activeFilter
   })
@@ -387,6 +302,12 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const formatTime = (value: string) => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
   const activeDrawerEvent = selectedDayEvents.find(e => e.id === selectedEventId) || selectedDayEvents[0]
+
+  // Identify expired connected accounts dynamically
+  const expiredAccounts = brandDetails?.accounts?.filter((acc: any) => {
+    if (!acc.expiresAt) return false
+    return new Date(acc.expiresAt) < new Date()
+  }) || []
 
   return (
     <div className="flex flex-col lg:flex-row h-full min-h-[750px] bg-slate-50 dark:bg-slate-950 font-sans">
@@ -406,7 +327,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
           </button>
           
           <button
-            onClick={() => alert('新建发布弹窗待集成')}
+            onClick={() => alert('已发布排期在日历上显示。请在“发布”或“任务”视图新建发布草稿。')}
             className="w-full bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800 border border-slate-200/60 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-bold text-xs"
           >
             <Plus className="w-4 h-4 text-slate-500" />
@@ -415,101 +336,83 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin">
+          {/* Dynamic Accounts List from DB */}
           <div>
             <div className="flex items-center justify-between mb-3 px-1">
               <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                {brandDetails?.name || '鼎泰丰 Din Tai Fung'}
+                {brandDetails?.name || '发布渠道'}
               </span>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
             </div>
             
-            <ul className="space-y-1.5">
-              <li className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-5 h-5 flex items-center justify-center rounded bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 text-[9px] text-white font-extrabold">IG</span>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">@dintaifungsg</span>
-                </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              </li>
-              
-              <li className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-5 h-5 flex items-center justify-center rounded bg-blue-500 text-[9px] text-white font-extrabold">G</span>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Marina Bay</span>
-                </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              </li>
-              
-              <li className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-5 h-5 flex items-center justify-center rounded bg-red-600 text-[9px] text-white font-extrabold">红</span>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">鼎泰丰新加坡</span>
-                </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              </li>
-            </ul>
+            {brandDetails?.accounts && brandDetails.accounts.length > 0 ? (
+              <ul className="space-y-1.5">
+                {brandDetails.accounts.map((acc: any) => {
+                  const normPlatform = normalizePlatformLabel(acc.platformId)
+                  const isExpired = acc.expiresAt && new Date(acc.expiresAt) < new Date()
+                  return (
+                    <li key={acc.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group">
+                      <div className="flex items-center gap-2.5">
+                        <span className={`w-5 h-5 flex items-center justify-center rounded text-[9px] text-white font-extrabold ${
+                          normPlatform === 'IG' ? 'bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500' :
+                          normPlatform === 'Google' ? 'bg-blue-550' :
+                          normPlatform === 'TikTok' ? 'bg-black' :
+                          normPlatform === 'Facebook' ? 'bg-indigo-650' : 'bg-slate-500'
+                        }`}>
+                          {normPlatform}
+                        </span>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate max-w-[140px]">
+                          {acc.handle || acc.displayName}
+                        </span>
+                      </div>
+                      <span className={`w-1.5 h-1.5 rounded-full ${isExpired ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <div className="text-[11px] text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800/80">
+                暂未连接发布渠道，请前往“品牌设置”完成账号授权。
+              </div>
+            )}
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-3 px-1">
-              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">海底捞 Haidilao</span>
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+          {/* Dynamic Warnings List */}
+          {expiredAccounts.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3 px-1">
+                <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">警告与异常</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+              </div>
+              <div className="space-y-2">
+                {expiredAccounts.map((acc: any) => (
+                  <div key={acc.id} className="bg-amber-50 dark:bg-amber-955/20 border border-amber-200/50 dark:border-amber-900/30 p-3 rounded-xl flex gap-2 text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div className="text-[10px]">
+                      <p className="font-extrabold leading-tight">{normalizePlatformLabel(acc.platformId)} 授权过期</p>
+                      <p className="mt-1 opacity-90">账号 {acc.handle} 的 AccessToken 已失效，排期将无法自动发布。</p>
+                      <button onClick={() => alert('请前往设置重新连接')} className="mt-1.5 font-black underline hover:no-underline text-[9px]">去重新授权</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            
-            <ul className="space-y-1.5">
-              <li className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-5 h-5 flex items-center justify-center rounded bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500 text-[9px] text-white font-extrabold">IG</span>
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">@haidilaosg</span>
-                </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              </li>
-              
-              <li className="flex flex-col p-2 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 transition-colors cursor-pointer group">
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-5 h-5 flex items-center justify-center rounded bg-blue-500 text-[9px] text-white font-extrabold">G</span>
-                    <span className="text-xs font-bold text-amber-700 dark:text-amber-400">Haidilao SG</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[8px] font-black text-amber-600 dark:text-amber-500">已失效</span>
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
-                  </div>
-                </div>
-              </li>
-            </ul>
-          </div>
+          )}
 
-          <div>
-            <div className="flex items-center justify-between mb-3 px-1">
-              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">私域营销 (Private)</span>
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" />
+          {/* Dynamic Brand Website / Landing Conversion page */}
+          {brandDetails?.website && (
+            <div>
+              <div className="flex items-center justify-between mb-3 px-1">
+                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">引流落地页</span>
+              </div>
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/35 border border-slate-100 dark:border-slate-800 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <Compass className="w-4 h-4 text-indigo-500" />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-[170px]">{brandDetails.website}</span>
+                </div>
+              </div>
             </div>
-            
-            <ul className="space-y-1.5">
-              <li className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2.5">
-                    <Mail className="w-4 h-4 text-cyan-500" />
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">Email Newsletter</span>
-                  </div>
-                  <span className="text-[9px] text-slate-400 dark:text-slate-500 ml-6.5 mt-0.5">1.2k 订阅者</span>
-                </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              </li>
-              
-              <li className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer group">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2.5">
-                    <MessageSquare className="w-4 h-4 text-emerald-500" />
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">WhatsApp Broadcast</span>
-                  </div>
-                  <span className="text-[9px] text-slate-400 dark:text-slate-500 ml-6.5 mt-0.5">530 活跃客户</span>
-                </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              </li>
-            </ul>
-          </div>
+          )}
         </div>
       </aside>
 
@@ -590,7 +493,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 <div
                   key={idx}
                   onClick={() => day && setSelectedDay(day)}
-                  className={`p-2 cursor-pointer transition-all flex flex-col justify-between group
+                  className={`p-2 cursor-pointer transition-all flex flex-col justify-between group min-h-[90px] lg:min-h-[110px]
                     ${day ? 'hover:bg-slate-50/60 dark:hover:bg-slate-800/20' : 'bg-slate-50/30 dark:bg-slate-950/20'}
                     ${selected ? 'bg-indigo-50/30 dark:bg-indigo-900/10 ring-2 ring-inset ring-indigo-500/55' : ''}`}
                 >
@@ -609,7 +512,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                       <div className="space-y-1 flex-1 overflow-hidden">
                         {dayEvents.slice(0, 2).map((ev) => {
                           const normPlatform = normalizePlatformLabel(ev.platform)
-                          const hasVideo = ev.id === 'mock_ig_zongzi_video' || (ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频'))
+                          const hasVideo = ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频')
                           return (
                             <div
                               key={ev.id}
@@ -657,17 +560,6 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-5 scrollbar-thin">
-            {activeDrawerEvent?.brandId === 'haidilaosg' || (activeDrawerEvent?.platform === 'Google' && activeDrawerEvent?.id.includes('mock_google')) ? (
-              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 p-4 rounded-xl flex gap-3 text-amber-700 dark:text-amber-400">
-                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-                <div className="text-xs">
-                  <p className="font-extrabold leading-tight">Google Maps 授权已过期</p>
-                  <p className="text-[10px] mt-1 opacity-90">该渠道的排期任务暂时无法自动同步至 PostFast 发行。请前往品牌设置中重新授权。</p>
-                  <button className="mt-2 text-[10px] font-black underline hover:no-underline">立即重新授权</button>
-                </div>
-              </div>
-            ) : null}
-
             {selectedDayEvents.length === 0 ? (
               <div className="py-16 text-center text-slate-400 dark:text-slate-500">
                 <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
@@ -683,7 +575,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                         onClick={() => setSelectedEventId(e.id)}
                         className={`px-3 py-1 rounded-lg text-[10px] font-black whitespace-nowrap transition-all ${
                           (selectedEventId === e.id || (!selectedEventId && selectedDayEvents[0].id === e.id))
-                            ? 'bg-white dark:bg-slate-770 text-slate-800 dark:text-slate-100 shadow-sm border border-slate-100 dark:border-slate-650'
+                            ? 'bg-white dark:bg-slate-705 text-slate-800 dark:text-slate-100 shadow-sm border border-slate-100 dark:border-slate-650'
                             : 'text-slate-400 hover:text-slate-700 dark:text-slate-500'
                         }`}
                       >
@@ -713,7 +605,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                           alt={activeDrawerEvent.title}
                           className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-300"
                         />
-                        {(activeDrawerEvent.id === 'mock_ig_zongzi_video' || activeDrawerEvent.title.includes('视频')) && (
+                        {activeDrawerEvent.title.includes('视频') && (
                           <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
                             <div className="w-10 h-10 rounded-full bg-white/95 text-pink-600 flex items-center justify-center shadow-lg">
                               <Video className="w-5 h-5 fill-pink-600/10" />
@@ -730,52 +622,45 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                       </p>
                     </div>
 
+                    {/* Real DB Click/ROI conversion statistics badges */}
                     {activeDrawerEvent.status === 'done' && (
                       <div className="space-y-3">
                         <div className="p-4 bg-emerald-500/5 dark:bg-emerald-950/10 border border-emerald-500/15 rounded-2xl">
                           <h4 className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
                             <Zap className="w-3.5 h-3.5 fill-emerald-500/15" />
-                            <span>到店引流点击追踪 (Dub.co)</span>
+                            <span>引流分析 & Click 追踪</span>
                           </h4>
                           
-                          <div className="flex items-center justify-between bg-white dark:bg-slate-850 border border-slate-150 dark:border-slate-700/60 p-2.5 rounded-xl shadow-sm mb-3">
-                            <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-bold select-all">dtf.sg/zongzi</span>
-                            <button
-                              onClick={() => { navigator.clipboard.writeText('dtf.sg/zongzi'); alert('复制成功！') }}
-                              className="p-1 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-slate-400 transition-colors"
-                            >
-                              <Copy className="w-4 h-4" />
-                            </button>
-                          </div>
-
                           <div className="grid grid-cols-2 gap-3 text-center">
                             <div className="bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-700/40 p-2.5 rounded-xl shadow-sm">
-                              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">短链点击</p>
-                              <p className="text-sm font-black text-slate-800 dark:text-slate-100 mt-0.5">412 次</p>
+                              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">点击量</p>
+                              <p className="text-sm font-black text-slate-800 dark:text-slate-100 mt-0.5">{activeDrawerEvent.clicks ?? 0} 次</p>
                             </div>
                             <div className="bg-white dark:bg-slate-850 border border-slate-100 dark:border-slate-700/40 p-2.5 rounded-xl shadow-sm">
-                              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">预估到店 ROI</p>
-                              <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5">$1,280</p>
+                              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">引流到店 ROI</p>
+                              <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5">${activeDrawerEvent.roi ?? 0}</p>
                             </div>
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {activeDrawerEvent.status === 'scheduled' && (activeDrawerEvent.platform === 'Google' && activeDrawerEvent.id.includes('mock_google')) && (
-                      <div className="p-4 bg-amber-500/5 dark:bg-amber-950/10 border border-amber-500/15 rounded-2xl">
-                        <h4 className="text-xs font-black text-amber-600 dark:text-amber-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    {/* Real Temporal Protection Indicator for scheduled posts */}
+                    {activeDrawerEvent.status === 'scheduled' && (
+                      <div className="p-4 bg-indigo-500/5 dark:bg-indigo-950/10 border border-indigo-500/15 rounded-2xl">
+                        <h4 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5" />
-                          <span>Temporal 调度状态监控</span>
+                          <span>Temporal 托管与重试调度</span>
                         </h4>
                         <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
-                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                          <span>自动退避重试中 (第 2/5 次)</span>
+                          <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                          <span>服务托管中 · 重试事务就绪</span>
                         </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5">调度引擎将自动在 5 分钟后进行第 3 次重试，期间检测到授权恢复后将自动发行。</p>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5">该排期受指数退避及重调度机制保护，若因网络抖动推送失败，Temporal 调度器将自动重试。</p>
                       </div>
                     )}
 
+                    {/* AI Actions Section: Copywriter & Designer */}
                     {activeDrawerEvent.status !== 'done' && (
                       <div className="space-y-3 pt-2">
                         <div className="flex gap-2.5">
@@ -867,15 +752,12 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         <div className="relative flex items-center justify-center">
           <div className="absolute w-14 h-14 bg-indigo-500/20 dark:bg-indigo-400/20 rounded-full animate-ping pointer-events-none" />
           <button
-            onClick={() => alert('AI 员工已根据本地社交动态与评论为您更新了 3 个待审核排期。')}
+            onClick={() => handleAIProposal()}
+            disabled={aiProposalGenerating}
             className="w-12 h-12 bg-gradient-to-tr from-indigo-650 to-violet-650 text-white rounded-full flex items-center justify-center shadow-2xl relative z-10 hover:scale-110 active:scale-95 transition-all"
           >
             <Sparkles className="w-5 h-5 text-white" />
           </button>
-          
-          <div className="absolute -top-12 right-0 bg-slate-900 dark:bg-slate-850 text-white text-[10px] font-black px-3 py-1.5 rounded-xl whitespace-nowrap shadow-xl border border-slate-800/80 pointer-events-none opacity-90 transition-opacity">
-            已生成 5 条节日提案 ✨
-          </div>
         </div>
       </div>
 

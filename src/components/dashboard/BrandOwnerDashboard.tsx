@@ -39,6 +39,7 @@ interface ContentDraft {
 export default function BrandOwnerDashboard() {
   const searchParams = useSearchParams()
   const queryBrandId = searchParams?.get('brandId')
+  const now = new Date()
 
   // --- States ---
   const [brands, setBrands] = useState<Brand[]>([])
@@ -66,7 +67,7 @@ export default function BrandOwnerDashboard() {
 
   // Drafts & Weekly feed state
   const [drafts, setDrafts] = useState<ContentDraft[]>([])
-  const [selectedDay, setSelectedDay] = useState(new Date().getDate())
+  const [selectedDay, setSelectedDay] = useState<Date>(new Date())
 
   // Marketplace & Subscription state
   const [addons, setAddons] = useState({ veo3: true, dubco: true })
@@ -451,6 +452,28 @@ export default function BrandOwnerDashboard() {
   }
 
   const weekDates = getWeekDates()
+
+  // --- Dynamic Calendar calculations for Brand Owner subpage ---
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
+  const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay()
+  const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate()
+  const monthCells = [
+    ...Array(firstDayIndex).fill(null),
+    ...Array.from({ length: totalDays }, (_, i) => i + 1)
+  ]
+  const monthDrafts = drafts.filter(draft => {
+    if (!draft.scheduledAt) return false
+    const dDraft = new Date(draft.scheduledAt)
+    return dDraft.getMonth() === currentMonth && dDraft.getFullYear() === currentYear
+  })
+  const selectedDayDrafts = drafts.filter(draft => {
+    if (!draft.scheduledAt) return false
+    const dDraft = new Date(draft.scheduledAt)
+    return dDraft.getDate() === selectedDay.getDate() &&
+           dDraft.getMonth() === selectedDay.getMonth() &&
+           dDraft.getFullYear() === selectedDay.getFullYear()
+  })
 
   // --- Floating alert interactive actions ---
   const handleMapsAlertClick = () => {
@@ -914,31 +937,68 @@ export default function BrandOwnerDashboard() {
               <>
                 {/* Campaign Calendar */}
                 <section className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-4">
-                  <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-2">Monthly Calendar</h3>
+                  <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-2">
+                    {now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </h3>
                   <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold text-slate-400 mb-2">
                     <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
                   </div>
                   <div className="grid grid-cols-7 gap-1">
-                    {Array.from({ length: 30 }).map((_, i) => (
-                      <div 
-                        key={i} 
-                        className={`h-11 rounded-lg flex flex-col items-center justify-between p-1 text-[11px] ${
-                          i + 1 === new Date().getDate() 
-                            ? 'bg-primary text-white font-bold' 
-                            : 'bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <span>{i + 1}</span>
-                        {i % 4 === 0 && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
-                      </div>
-                    ))}
+                    {monthCells.map((day, idx) => {
+                      if (day === null) {
+                        return <div key={`empty-${idx}`} className="h-11" />
+                      }
+
+                      const cellDate = new Date(currentYear, currentMonth, day)
+                      const isToday = day === now.getDate() && currentMonth === now.getMonth() && currentYear === now.getFullYear()
+                      const isSelected = selectedDay.getDate() === day &&
+                                         selectedDay.getMonth() === currentMonth &&
+                                         selectedDay.getFullYear() === currentYear
+
+                      const hasDraft = drafts.some(draft => {
+                        if (!draft.scheduledAt) return false
+                        const dDraft = new Date(draft.scheduledAt)
+                        return dDraft.getDate() === day &&
+                               dDraft.getMonth() === currentMonth &&
+                               dDraft.getFullYear() === currentYear
+                      })
+
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => setSelectedDay(cellDate)}
+                          className={`h-11 rounded-lg flex flex-col items-center justify-between p-1 text-[11px] transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary text-white font-bold shadow-md shadow-primary/20 scale-105'
+                              : isToday
+                                ? 'bg-indigo-50 border border-primary/30 text-primary font-bold'
+                                : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span>{day}</span>
+                          {hasDraft && (
+                            <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-400'}`} />
+                          )}
+                        </button>
+                      )
+                    })}
                   </div>
-                  <div className="pt-4 border-t border-slate-100 space-y-2">
+                  <div className="pt-4 border-t border-slate-100 space-y-2 max-h-48 overflow-y-auto scrollbar-thin">
                     <p className="text-xs font-bold text-slate-400">Scheduled Posts This Month</p>
-                    <div className="p-3 bg-slate-50 rounded-xl flex items-center justify-between text-xs">
-                      <span>Xiaohongshu Weekend Feast</span>
-                      <span className="text-[10px] text-slate-400">June 26</span>
-                    </div>
+                    {monthDrafts.length === 0 ? (
+                      <div className="text-center py-4 text-xs text-slate-400 italic">
+                        No campaign posts scheduled for this month.
+                      </div>
+                    ) : (
+                      monthDrafts.map(draft => (
+                        <div key={draft.id} className="p-3 bg-slate-50 rounded-xl flex items-center justify-between text-xs mb-1.5 last:mb-0">
+                          <span className="font-medium text-slate-700 truncate max-w-[200px]">{draft.caption || 'Campaign Post'}</span>
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase">
+                            {new Date(draft.scheduledAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </section>
 
@@ -954,30 +1014,35 @@ export default function BrandOwnerDashboard() {
                   <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-4">
                     {/* Horizontal days slider */}
                     <div className="flex justify-between overflow-x-auto gap-2 no-scrollbar">
-                      {weekDates.map(day => (
-                        <button
-                          key={day.dateNum}
-                          onClick={() => setSelectedDay(day.dateNum)}
-                          className={`flex flex-col items-center gap-1.5 px-3.5 py-2.5 rounded-xl transition-all ${
-                            selectedDay === day.dateNum
-                              ? 'bg-primary text-white shadow-md shadow-primary/20 scale-105'
-                              : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
-                          }`}
-                        >
-                          <span className="text-[9px] font-extrabold uppercase opacity-80">{day.dayName}</span>
-                          <span className="text-sm font-black">{day.dateNum}</span>
-                        </button>
-                      ))}
+                      {weekDates.map(day => {
+                        const isSelected = selectedDay.getDate() === day.fullDate.getDate() &&
+                                           selectedDay.getMonth() === day.fullDate.getMonth() &&
+                                           selectedDay.getFullYear() === day.fullDate.getFullYear()
+                        return (
+                          <button
+                            key={day.dateNum}
+                            onClick={() => setSelectedDay(day.fullDate)}
+                            className={`flex flex-col items-center gap-1.5 px-3.5 py-2.5 rounded-xl transition-all ${
+                              isSelected
+                                ? 'bg-primary text-white shadow-md shadow-primary/20 scale-105'
+                                : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="text-[9px] font-extrabold uppercase opacity-80">{day.dayName}</span>
+                            <span className="text-sm font-black">{day.dateNum}</span>
+                          </button>
+                        )
+                      })}
                     </div>
 
                     {/* Action Items List */}
                     <div className="space-y-2">
-                      {drafts.length === 0 ? (
+                      {selectedDayDrafts.length === 0 ? (
                         <div className="text-center py-6 text-xs text-slate-400 italic">
-                          No campaign posts scheduled for today.
+                          No campaign posts scheduled for this day.
                         </div>
                       ) : (
-                        drafts.map(draft => (
+                        selectedDayDrafts.map(draft => (
                           <div 
                             key={draft.id}
                             className="flex items-center justify-between p-3 rounded-xl bg-slate-50/50 border border-slate-100 hover:bg-slate-50 transition-colors"
