@@ -5,7 +5,9 @@ import {
   Sparkles, Mic, Image as ImageIcon, Calendar as CalendarIcon, 
   ShoppingBag, Trash2, CheckCircle2, AlertCircle, Plus, 
   Send, RefreshCw, Layers, ShieldCheck, ChevronDown, Check,
-  Play, BarChart2, Star, Video, Link, ArrowRight
+  Play, BarChart2, Star, Video, Link, ArrowRight,
+  Bell, Menu, Upload, X, ChevronUp, MapPin, Settings, LogOut,
+  Utensils
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams } from 'next/navigation'
@@ -574,7 +576,7 @@ export default function BrandOwnerDashboard() {
                     className="text-[10px] font-bold text-primary flex items-center gap-0.5 hover:underline cursor-pointer"
                   >
                     <span>折叠</span>
-                    <span className="material-symbols-outlined text-[12px]">expand_less</span>
+                    <ChevronUp className="w-3 h-3" />
                   </button>
                 </div>
 
@@ -586,7 +588,7 @@ export default function BrandOwnerDashboard() {
                     >
                       <div className="flex items-start gap-3 flex-1">
                         <div className="bg-rose-50 p-2 rounded-lg text-rose-500 flex items-center justify-center flex-shrink-0">
-                          <span className="material-symbols-outlined text-lg">location_on</span>
+                          <MapPin className="w-4 h-4" />
                         </div>
                         <div>
                           <h4 className="text-[9px] font-bold text-rose-500 uppercase tracking-wider mb-0.5">警报</h4>
@@ -618,7 +620,7 @@ export default function BrandOwnerDashboard() {
                     >
                       <div className="flex items-start gap-3 flex-1">
                         <div className="bg-indigo-50 p-2 rounded-lg text-primary flex items-center justify-center flex-shrink-0">
-                          <span className="material-symbols-outlined text-lg">calendar_today</span>
+                          <CalendarIcon className="w-4 h-4" />
                         </div>
                         <div>
                           <h4 className="text-[9px] font-bold text-primary uppercase tracking-wider mb-0.5">日程</h4>
@@ -661,7 +663,7 @@ export default function BrandOwnerDashboard() {
                   {m.sender === 'ai' ? (
                     <>
                       <div className="w-5 h-5 rounded-full bg-indigo-tint flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[12px] text-white" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                        <Sparkles className="w-3 h-3 text-white fill-white" />
                       </div>
                       <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">AI Marketing Crew</span>
                     </>
@@ -1237,9 +1239,10 @@ export default function BrandOwnerDashboard() {
                 </div>
                 <button 
                   onClick={() => setSideMenuOpen(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200/50 text-slate-500 hover:text-slate-700 transition-colors material-symbols-outlined cursor-pointer text-[20px]"
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
+                  title="关闭"
                 >
-                  close
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
@@ -1252,7 +1255,7 @@ export default function BrandOwnerDashboard() {
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white flex-shrink-0">
-                        <span className="material-symbols-outlined text-[18px]">restaurant</span>
+                        <Utensils className="w-4.5 h-4.5 text-white" />
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span className="font-bold text-xs text-slate-800 truncate">
@@ -1306,7 +1309,7 @@ export default function BrandOwnerDashboard() {
                   }}
                   className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-2xl text-slate-500">calendar_month</span>
+                  <CalendarIcon className="w-5.5 h-5.5 text-slate-500" />
                   <span className="font-bold text-sm tracking-wide">发布日历</span>
                 </button>
                 <button 
@@ -1316,7 +1319,7 @@ export default function BrandOwnerDashboard() {
                   }}
                   className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-2xl text-slate-500">shopping_bag</span>
+                  <ShoppingBag className="w-5.5 h-5.5 text-slate-500" />
                   <span className="font-bold text-sm tracking-wide">店内活动</span>
                 </button>
                 <button 
@@ -1326,7 +1329,7 @@ export default function BrandOwnerDashboard() {
                   }}
                   className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-2xl text-slate-500">image</span>
+                  <ImageIcon className="w-5.5 h-5.5 text-slate-500" />
                   <span className="font-bold text-sm tracking-wide">素材库</span>
                 </button>
                 <div className="pt-6 mt-6 border-t border-slate-200/50 space-y-4">
@@ -1337,7 +1340,7 @@ export default function BrandOwnerDashboard() {
                     }}
                     className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-2xl text-slate-500">settings</span>
+                    <Settings className="w-5.5 h-5.5 text-slate-500" />
                     <span className="font-bold text-sm tracking-wide">系统设置</span>
                   </button>
                   <button 
@@ -1351,7 +1354,7 @@ export default function BrandOwnerDashboard() {
                     }}
                     className="w-full flex items-center gap-4 text-rose-600 hover:text-rose-700 transition-colors py-2 text-left cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-2xl text-rose-500">logout</span>
+                    <LogOut className="w-5.5 h-5.5 text-rose-500" />
                     <span className="font-bold text-sm tracking-wide">退出登录</span>
                   </button>
                 </div>
