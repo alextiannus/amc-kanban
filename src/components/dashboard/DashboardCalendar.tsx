@@ -384,6 +384,110 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     return weekDays
   }
 
+  // --- Start of Diagnostics & Stats ---
+  const getVisibleEvents = () => {
+    if (activeView === 'day' && selectedDay) {
+      return events.filter(ev => {
+        const d = new Date(ev.scheduledAt)
+        return d.getFullYear() === viewYear && d.getMonth() === viewMonth && d.getDate() === selectedDay
+      })
+    } else if (activeView === 'week') {
+      const weekDays = getDaysForWeekView()
+      const start = weekDays[0]
+      const end = weekDays[6]
+      const startMs = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0).getTime()
+      const endMs = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999).getTime()
+      return events.filter(ev => {
+        const t = new Date(ev.scheduledAt).getTime()
+        return t >= startMs && t <= endMs
+      })
+    } else {
+      return events.filter(ev => {
+        const d = new Date(ev.scheduledAt)
+        return d.getFullYear() === viewYear && d.getMonth() === viewMonth
+      })
+    }
+  }
+
+  const visibleEvents = getVisibleEvents()
+
+  const stats = {
+    done: visibleEvents.filter(e => e.status === 'done').length,
+    scheduled: visibleEvents.filter(e => e.status === 'scheduled').length,
+    pending: visibleEvents.filter(e => e.status === 'pending').length,
+    total: visibleEvents.length
+  }
+
+  // Calculate gap days (days with 0 posts)
+  const getGapDaysCount = () => {
+    if (activeView === 'day' && selectedDay) {
+      const dayEvents = events.filter(ev => {
+        const d = new Date(ev.scheduledAt)
+        return d.getFullYear() === viewYear && d.getMonth() === viewMonth && d.getDate() === selectedDay
+      })
+      return dayEvents.length === 0 ? 1 : 0
+    } else if (activeView === 'week') {
+      let gaps = 0
+      const weekDays = getDaysForWeekView()
+      weekDays.forEach(wd => {
+        const dayEvents = events.filter(ev => {
+          const d = new Date(ev.scheduledAt)
+          return d.getFullYear() === wd.getFullYear() && d.getMonth() === wd.getMonth() && d.getDate() === wd.getDate()
+        })
+        if (dayEvents.length === 0) gaps++
+      })
+      return gaps
+    } else {
+      let gaps = 0
+      const totalMonthDays = new Date(viewYear, viewMonth + 1, 0).getDate()
+      for (let d = 1; d <= totalMonthDays; d++) {
+        const dayEvents = events.filter(ev => {
+          const date = new Date(ev.scheduledAt)
+          return date.getFullYear() === viewYear && date.getMonth() === viewMonth && date.getDate() === d
+        })
+        if (dayEvents.length === 0) gaps++
+      }
+      return gaps
+    }
+  }
+
+  const gapDaysCount = getGapDaysCount()
+
+  // Calculate missing platforms (for single brand view)
+  const getMissingPlatforms = () => {
+    const activeAccounts = brandDetails?.accounts || []
+    const missing: string[] = []
+    if (activeBrandId && activeAccounts.length > 0) {
+      activeAccounts.forEach((acc: any) => {
+        const normPlatform = normalizePlatformLabel(acc.platformId)
+        const hasPost = visibleEvents.some(ev => normalizePlatformLabel(ev.platform) === normPlatform)
+        if (!hasPost && !missing.includes(normPlatform)) {
+          missing.push(normPlatform)
+        }
+      })
+    }
+    return missing
+  }
+
+  const missingPlatforms = getMissingPlatforms()
+
+  // Calculate missing brands (for all brands view)
+  const getMissingBrands = () => {
+    const missing: string[] = []
+    if (!activeBrandId && allBrands.length > 0) {
+      allBrands.forEach((b: any) => {
+        const hasPost = visibleEvents.some(ev => ev.brandId === b.id)
+        if (!hasPost) {
+          missing.push(b.name)
+        }
+      })
+    }
+    return missing
+  }
+
+  const missingBrands = getMissingBrands()
+  // --- End of Diagnostics & Stats ---
+
   const isToday = (d: number) => d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
   
   // Filter based on selected state tab
@@ -649,6 +753,73 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
           </div>
         </div>
 
+        {/* 3. Statistics & Gap Diagnostics Bar */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 shrink-0">
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <CheckCircle className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">已发布 (Published)</div>
+              <div className="text-xl font-black text-slate-850 dark:text-slate-100 mt-0.5">{stats.done} <span className="text-[10px] font-normal text-slate-400">条</span></div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">已排期 (Scheduled)</div>
+              <div className="text-xl font-black text-slate-850 dark:text-slate-100 mt-0.5">{stats.scheduled} <span className="text-[10px] font-normal text-slate-400">条</span></div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-955/20 flex items-center justify-center text-amber-600 dark:text-amber-450 shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">待审核 (Pending)</div>
+              <div className="text-xl font-black text-slate-850 dark:text-slate-100 mt-0.5">{stats.pending} <span className="text-[10px] font-normal text-slate-400">条</span></div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm flex items-center gap-3 col-span-2 lg:col-span-1">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+              (activeBrandId ? (gapDaysCount > 0 || missingPlatforms.length > 0) : (missingBrands.length > 0 || gapDaysCount > 0))
+                ? 'bg-red-50 dark:bg-red-955/20 text-red-650 dark:text-red-400'
+                : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400'
+            }`}>
+              <Zap className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">排期与渠道诊断</div>
+              <div className="text-[11px] font-bold text-slate-700 dark:text-slate-350 mt-0.5 truncate leading-tight">
+                {activeBrandId ? (
+                  (gapDaysCount > 0 || missingPlatforms.length > 0) ? (
+                    <span className="text-red-500 dark:text-red-400">
+                      {gapDaysCount > 0 && `${gapDaysCount}天无排期`}
+                      {missingPlatforms.length > 0 && ` | 渠道缺失: ${missingPlatforms.join(', ')}`}
+                    </span>
+                  ) : (
+                    <span className="text-emerald-500 font-extrabold">✓ 排期覆盖健全</span>
+                  )
+                ) : (
+                  (missingBrands.length > 0 || gapDaysCount > 0) ? (
+                    <span className="text-red-500 dark:text-red-400">
+                      {gapDaysCount > 0 && `${gapDaysCount}天无排期`}
+                      {missingBrands.length > 0 && ` | ${missingBrands.length}个品牌空缺`}
+                    </span>
+                  ) : (
+                    <span className="text-emerald-500 font-extrabold">✓ 全部品牌排期正常</span>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800/60 shadow-sm overflow-hidden flex flex-col flex-1">
           {activeView !== 'day' && activeView !== 'list' && (
             <div className="grid grid-cols-7 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
@@ -687,29 +858,38 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                           )}
                         </div>
                         
-                        <div className="space-y-1 flex-1 overflow-hidden">
-                          {dayEvents.slice(0, 2).map((ev) => {
-                            const normPlatform = normalizePlatformLabel(ev.platform)
-                            const hasVideo = ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频')
-                            return (
-                              <div
-                                key={ev.id}
-                                onClick={(e) => { e.stopPropagation(); setSelectedDay(day); setSelectedEventId(ev.id) }}
-                                className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
-                                  PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
-                                } ${ev.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
-                              >
-                                {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
-                                {ev.status === 'scheduled' && normPlatform === 'Google' && (
-                                  <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
-                                )}
-                                <span>
-                                  {!activeBrandId && `[${ev.brandName}] `}
-                                  {normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}
-                                </span>
-                              </div>
-                            )
-                          })}
+                        <div className="space-y-1 flex-1 flex flex-col justify-end overflow-hidden">
+                          {dayEvents.length > 0 ? (
+                            dayEvents.slice(0, 2).map((ev) => {
+                              const normPlatform = normalizePlatformLabel(ev.platform)
+                              const hasVideo = ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频')
+                              return (
+                                <div
+                                  key={ev.id}
+                                  onClick={(e) => { e.stopPropagation(); setSelectedDay(day); setSelectedEventId(ev.id) }}
+                                  className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
+                                    PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
+                                  } ${ev.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
+                                >
+                                  {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
+                                  {ev.status === 'scheduled' && normPlatform === 'Google' && (
+                                    <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
+                                  )}
+                                  <span>
+                                    {!activeBrandId && `[${ev.brandName}] `}
+                                    {normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}
+                                  </span>
+                                </div>
+                              )
+                            })
+                          ) : (
+                            <div className="flex-1 flex items-center justify-center border border-dashed border-slate-200 dark:border-slate-800/80 rounded-lg p-1 bg-slate-50/40 dark:bg-slate-950/20">
+                              <span className="text-[9px] font-black text-slate-400 dark:text-slate-550 flex items-center gap-0.5">
+                                <AlertTriangle className="w-2.5 h-2.5 text-amber-500/60 dark:text-amber-500/40" />
+                                无排期
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </>
                     ) : (
@@ -755,29 +935,37 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                       <span className="text-[8px] font-bold text-slate-400 uppercase">{WEEKDAYS[d.getDay()]}</span>
                     </div>
                     
-                    <div className="space-y-1 flex-1 overflow-y-auto no-scrollbar">
-                      {dayEvents.map((ev) => {
-                        const normPlatform = normalizePlatformLabel(ev.platform)
-                        const hasVideo = ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频')
-                        return (
-                          <div
-                            key={ev.id}
-                            onClick={(e) => { e.stopPropagation(); setSelectedDay(d.getDate()); setSelectedEventId(ev.id) }}
-                            className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
-                              PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
-                            } ${ev.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
-                          >
-                            {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
-                            {ev.status === 'scheduled' && normPlatform === 'Google' && (
-                              <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
-                            )}
-                            <span>
-                              {!activeBrandId && `[${ev.brandName}] `}
-                              {normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}
-                            </span>
-                          </div>
-                        )
-                      })}
+                    <div className="space-y-1 flex-1 flex flex-col justify-end overflow-y-auto no-scrollbar">
+                      {dayEvents.length > 0 ? (
+                        dayEvents.map((ev) => {
+                          const normPlatform = normalizePlatformLabel(ev.platform)
+                          const hasVideo = ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频')
+                          return (
+                            <div
+                              key={ev.id}
+                              onClick={(e) => { e.stopPropagation(); setSelectedDay(d.getDate()); setSelectedEventId(ev.id) }}
+                              className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
+                                PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
+                              } ${ev.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
+                            >
+                              {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
+                              {ev.status === 'scheduled' && normPlatform === 'Google' && (
+                                <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
+                              )}
+                              <span>
+                                {!activeBrandId && `[${ev.brandName}] `}
+                                {normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}
+                              </span>
+                            </div>
+                          )
+                        })
+                      ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-2 bg-slate-50/40 dark:bg-slate-950/20 mt-2">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500/60 dark:text-amber-500/45 mb-1" />
+                          <span className="text-[9px] font-black text-slate-400 dark:text-slate-550">发布缺失</span>
+                          <span className="text-[7px] text-slate-350 dark:text-slate-600 mt-0.5 text-center leading-tight">当天无任何排期</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )
@@ -798,10 +986,44 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 </div>
                 
                 {selectedDayEvents.length === 0 ? (
-                  <div className="py-24 text-center text-slate-400 dark:text-slate-500">
-                    <Clock className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                    <p className="text-sm font-extrabold">当天无排期内容</p>
-                    <p className="text-xs opacity-75 mt-1">请点击其他日期查看，或新建排期草稿</p>
+                  <div className="py-12 text-center bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm">
+                    <Clock className="w-10 h-10 mx-auto mb-3 opacity-20 text-slate-400" />
+                    <p className="text-sm font-extrabold text-slate-750 dark:text-slate-350">当天无任何排期内容</p>
+                    
+                    {activeBrandId && (brandDetails?.accounts || []).length > 0 ? (
+                      <div className="mt-4 max-w-sm mx-auto p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/50 dark:border-slate-800 text-left">
+                        <span className="text-[10px] font-black text-slate-400 dark:text-slate-550 uppercase tracking-widest block mb-2">渠道发布缺口检测：</span>
+                        <div className="space-y-1.5">
+                          {(brandDetails.accounts || []).map((acc: any) => {
+                            const normPlatform = normalizePlatformLabel(acc.platformId)
+                            return (
+                              <div key={acc.id} className="flex items-center justify-between text-xs">
+                                <span className="text-slate-650 dark:text-slate-450">{normPlatform} ({acc.handle || acc.displayName})</span>
+                                <span className="text-[10px] font-black text-red-500 bg-red-50 dark:bg-red-955/20 px-1.5 py-0.5 rounded-full border border-red-100 dark:border-red-900/30">
+                                  ❌ 缺失发布内容
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ) : !activeBrandId ? (
+                      <p className="text-xs text-slate-450 mt-2">当前显示合并品牌看板。选择左侧特定品牌，可检测该品牌的具体渠道发布缺口。</p>
+                    ) : (
+                      <p className="text-xs text-slate-450 mt-2">该品牌暂未绑定任何托管发布渠道。请先前往“品牌设置”连接渠道账号。</p>
+                    )}
+
+                    {activeBrandId && (
+                      <button
+                        onClick={() => {
+                          alert('请在“发布”或“任务”视图新建排期草稿，发布后将在日历对应日期上显示。')
+                        }}
+                        className="mt-6 inline-flex items-center gap-2 bg-indigo-650 hover:bg-indigo-750 text-white font-bold text-xs py-2 px-4 rounded-xl transition-all shadow-md active:scale-95"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-white" />
+                        <span>新建排期草稿</span>
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4">
