@@ -70,8 +70,12 @@ export default function BrandOwnerDashboard() {
   const [selectedDay, setSelectedDay] = useState<Date>(new Date())
 
   // Marketplace & Subscription state
-  const [addons, setAddons] = useState({ veo3: true, dubco: true })
+  const [addons, setAddons] = useState({ veo3: false, dubco: false })
   const [updatingAddons, setUpdatingAddons] = useState(false)
+
+  // AI Voice & Slang dictionary state
+  const [brandTone, setBrandTone] = useState('')
+  const [slangDict, setSlangDict] = useState<Record<string, string>>({})
 
   // Dropdown states
   const [brandDropdownOpen, setBrandDropdownOpen] = useState(false)
@@ -138,6 +142,28 @@ export default function BrandOwnerDashboard() {
         if (assetsRes.ok) {
           const data = await assetsRes.json()
           setAssets(data)
+        }
+
+        // Fetch subscription
+        const subRes = await fetch(`/api/brands/${id}/subscription`)
+        if (subRes.ok) {
+          const subData = await subRes.json()
+          if (subData && subData.selectedAddons) {
+            setAddons({
+              veo3: !!subData.selectedAddons.veo3,
+              dubco: !!subData.selectedAddons.dubco
+            })
+          } else {
+            setAddons({ veo3: false, dubco: false })
+          }
+        }
+
+        // Fetch brand knowledge
+        const knowRes = await fetch(`/api/brands/${id}/knowledge`)
+        if (knowRes.ok) {
+          const knowData = await knowRes.json()
+          setBrandTone(knowData.brandTone || '')
+          setSlangDict(knowData.slangDict || {})
         }
       } catch (err) {
         console.error('Failed to load brand details:', err)
@@ -1275,7 +1301,9 @@ export default function BrandOwnerDashboard() {
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Brand Voice Style</label>
                     <textarea 
-                      defaultValue={activeBrand?.description || 'A casual, engaging restaurant tone using local Singlish slang.'}
+                      value={brandTone}
+                      onChange={e => setBrandTone(e.target.value)}
+                      placeholder="A casual, engaging restaurant tone using local Singlish slang."
                       rows={3}
                       className="w-full text-xs p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-primary"
                     />
@@ -1284,22 +1312,84 @@ export default function BrandOwnerDashboard() {
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Local Slang Dictionary</label>
                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2 text-xs">
-                      <div className="flex justify-between border-b border-slate-200 pb-1.5">
-                        <span className="font-semibold">"Chope"</span>
-                        <span className="text-slate-400">Reserve a seat</span>
-                      </div>
-                      <div className="flex justify-between border-b border-slate-200 pb-1.5">
-                        <span className="font-semibold">"Bojio"</span>
-                        <span className="text-slate-400">Inviting someone</span>
-                      </div>
+                      {Object.keys(slangDict).length === 0 ? (
+                        <p className="text-[11px] text-slate-400 italic">No slang terms configured. Add one below!</p>
+                      ) : (
+                        Object.entries(slangDict).map(([term, definition]) => (
+                          <div key={term} className="flex justify-between items-center border-b border-slate-200/60 pb-1.5 last:border-0 last:pb-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-700">"{term}"</span>
+                              <span className="text-slate-400">→</span>
+                              <span className="text-slate-600">{definition}</span>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                const nextDict = { ...slangDict }
+                                delete nextDict[term]
+                                setSlangDict(nextDict)
+                              }}
+                              className="text-slate-400 hover:text-rose-500 transition-colors p-0.5"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    
+                    {/* Add slang inline form */}
+                    <div className="flex gap-2 mt-2">
+                      <input 
+                        type="text" 
+                        placeholder="Slang term (e.g., Bojio)" 
+                        id="new-slang-term"
+                        className="flex-1 text-[11px] p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <input 
+                        type="text" 
+                        placeholder="Meaning (e.g., Don't invite)" 
+                        id="new-slang-meaning"
+                        className="flex-1 text-[11px] p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      <button 
+                        onClick={() => {
+                          const termInput = document.getElementById('new-slang-term') as HTMLInputElement
+                          const meaningInput = document.getElementById('new-slang-meaning') as HTMLInputElement
+                          const term = termInput?.value?.trim()
+                          const meaning = meaningInput?.value?.trim()
+                          if (term && meaning) {
+                            setSlangDict(prev => ({ ...prev, [term]: meaning }))
+                            termInput.value = ''
+                            meaningInput.value = ''
+                          }
+                        }}
+                        className="px-2 bg-primary text-white rounded-lg flex items-center justify-center hover:bg-indigo-tint transition-all"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>
 
                 <button 
-                  onClick={() => {
-                    showToast('Brand voice parameters saved!')
-                    setActiveSubPage(null)
+                  onClick={async () => {
+                    if (!activeBrand) return
+                    try {
+                      const res = await fetch(`/api/brands/${activeBrand.id}/knowledge`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ brandTone, slangDict })
+                      })
+                      if (res.ok) {
+                        showToast('Brand voice and slang settings saved!')
+                        setActiveSubPage(null)
+                      } else {
+                        showToast('Failed to save settings', 'error')
+                      }
+                    } catch (err) {
+                      console.error('Save knowledge settings failed:', err)
+                      showToast('Network error saving settings', 'error')
+                    }
                   }}
                   className="w-full bg-primary text-white py-2.5 rounded-xl text-xs font-bold shadow-md shadow-primary/20 active:scale-95 transition-all mt-4 cursor-pointer"
                 >
