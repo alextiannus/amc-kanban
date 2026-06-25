@@ -172,137 +172,7 @@ export default function BrandOwnerDashboard() {
     loadBrandDetails(currentBrandId)
   }, [activeBrand])
 
-  // --- Companion WebGL Shaders render effect ---
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  useEffect(() => {
-    if (activeSubPage !== null) return
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as WebGLRenderingContext | null
-    if (!gl) return
-
-    let animationId: number
-    const vs = `
-      attribute vec2 a_position;
-      varying vec2 v_texCoord;
-      void main() {
-        v_texCoord = a_position * 0.5 + 0.5;
-        gl_Position = vec4(a_position, 0.0, 1.0);
-      }
-    `
-    // Shaders change based on companionState (idle, listening, thinking)
-    const getFS = (state: 'idle' | 'listening' | 'thinking') => {
-      let speed = '0.8'
-      let noiseScale = '5.0'
-      let pulseAmp = '0.15'
-      let baseGlow = '3.5'
-      
-      if (state === 'listening') {
-        speed = '2.2'
-        noiseScale = '12.0'
-        pulseAmp = '0.25'
-        baseGlow = '2.8'
-      } else if (state === 'thinking') {
-        speed = '1.4'
-        noiseScale = '8.0'
-        pulseAmp = '0.1'
-        baseGlow = '4.5'
-      }
-
-      return `
-        precision highp float;
-        varying vec2 v_texCoord;
-        uniform float u_time;
-        uniform vec2 u_resolution;
-
-        void main() {
-          vec2 uv = v_texCoord;
-          float t = u_time * ${speed};
-          
-          vec2 p = (uv - 0.5) * 2.0;
-          float len = length(p);
-          
-          // Emerald Green if listening, Orange-Yellow if thinking, Indigo if idle
-          vec3 color = vec3(0.275, 0.282, 0.831); // #4648d4
-          if (${state === 'listening'}) {
-            color = vec3(0.0, 0.424, 0.286); // success-emerald
-          } else if (${state === 'thinking'}) {
-            color = vec3(0.988, 0.729, 0.4); // tertiary-dim / orange-gold
-          }
-          
-          float pulse = sin(t) * ${pulseAmp} + 0.85;
-          float ring = smoothstep(0.4 * pulse, 0.41 * pulse, len) - smoothstep(0.45 * pulse, 0.46 * pulse, len);
-          
-          float glow = exp(-len * ${baseGlow}) * pulse;
-          
-          float angle = atan(p.y, p.x);
-          float strands = sin(angle * ${noiseScale} + t * 2.0) * 0.1;
-          float strandGlow = smoothstep(0.35, 0.4, len + strands) * smoothstep(0.45, 0.4, len + strands);
-          
-          vec3 finalColor = color * (glow + ring * 1.5 + strandGlow * 0.8);
-          
-          float aura = smoothstep(0.8, 0.2, len) * 0.2;
-          finalColor += color * aura;
-          
-          gl_FragColor = vec4(finalColor, clamp(len < 0.9 ? 1.0 : 0.0, 0.0, 1.0));
-        }
-      `
-    }
-
-    const compileShader = (type: number, src: string) => {
-      const s = gl.createShader(type)!
-      gl.shaderSource(s, src)
-      gl.compileShader(s)
-      return s
-    }
-
-    let program = gl.createProgram()!
-    const initShaders = () => {
-      gl.deleteProgram(program)
-      program = gl.createProgram()!
-      gl.attachShader(program, compileShader(gl.VERTEX_SHADER, vs))
-      gl.attachShader(program, compileShader(gl.FRAGMENT_SHADER, getFS(companionState)))
-      gl.linkProgram(program)
-      gl.useProgram(program)
-
-      const buf = gl.createBuffer()
-      gl.bindBuffer(gl.ARRAY_BUFFER, buf)
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW)
-      const pos = gl.getAttribLocation(program, 'a_position')
-      gl.enableVertexAttribArray(pos)
-      gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0)
-    }
-
-    initShaders()
-
-    const uTime = gl.getUniformLocation(program, 'u_time')
-    const uRes = gl.getUniformLocation(program, 'u_resolution')
-
-    const syncSize = () => {
-      const w = canvas.clientWidth || 128
-      const h = canvas.clientHeight || 128
-      if (canvas.width !== w || canvas.height !== h) {
-        canvas.width = w
-        canvas.height = h
-        gl.viewport(0, 0, w, h)
-      }
-    }
-    syncSize()
-
-    const render = (time: number) => {
-      syncSize()
-      if (uTime) gl.uniform1f(uTime, time * 0.001)
-      if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height)
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
-      animationId = requestAnimationFrame(render)
-    }
-    render(0)
-
-    return () => {
-      cancelAnimationFrame(animationId)
-    }
-  }, [companionState, activeSubPage])
+  // WebGL shader effects removed per request to simplify expressions and save CPU/GPU resources
 
   // --- Voice Assist Activation ---
   const startVoiceAssist = () => {
@@ -566,89 +436,84 @@ export default function BrandOwnerDashboard() {
         )}
       </AnimatePresence>
 
-      {/* Full-screen WebGL Background */}
+      {/* Full-screen Emoji Companion Center without face contour */}
       {activeSubPage === null && (
-        <div className="fixed inset-0 z-0">
-          <canvas ref={canvasRef} className="w-full h-full block" />
-          
-          {/* Facial Expressions Overlay */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-            <div className="flex flex-col items-center justify-center gap-6 w-32 h-32">
-              {/* Eyes Row */}
-              <div className="flex justify-between w-16 px-1">
-                {/* Left Eye */}
-                <motion.div 
-                  animate={
-                    companionState === 'listening' 
-                      ? { scaleY: 1.2, scaleX: 1.1 } 
-                      : companionState === 'thinking' 
-                      ? { scaleY: 0.5, y: 1 } 
-                      : { scaleY: [1, 1, 0.1, 1, 1] } /* Idle blinking */
-                  }
-                  transition={
-                    companionState === 'idle'
-                      ? { repeat: Infinity, duration: 4, times: [0, 0.9, 0.95, 1, 1] }
-                      : { duration: 0.3 }
-                  }
-                  className="w-3.5 h-3.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]"
-                />
-                {/* Right Eye */}
-                <motion.div 
-                  animate={
-                    companionState === 'listening' 
-                      ? { scaleY: 1.2, scaleX: 1.1 } 
-                      : companionState === 'thinking' 
-                      ? { scaleY: 0.5, y: 1 } 
-                      : { scaleY: [1, 1, 0.1, 1, 1] } /* Idle blinking */
-                  }
-                  transition={
-                    companionState === 'idle'
-                      ? { repeat: Infinity, duration: 4, times: [0, 0.9, 0.95, 1, 1] }
-                      : { duration: 0.3 }
-                  }
-                  className="w-3.5 h-3.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]"
-                />
-              </div>
+        <div className="fixed inset-0 z-0 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center justify-center gap-6 w-32 h-32">
+            {/* Eyes Row */}
+            <div className="flex justify-between w-16 px-1">
+              {/* Left Eye */}
+              <motion.div 
+                animate={
+                  companionState === 'listening' 
+                    ? { scaleY: 1.2, scaleX: 1.1 } 
+                    : companionState === 'thinking' 
+                    ? { scaleY: 0.5, y: 1 } 
+                    : { scaleY: [1, 1, 0.1, 1, 1] } /* Idle blinking */
+                }
+                transition={
+                  companionState === 'idle'
+                    ? { repeat: Infinity, duration: 4, times: [0, 0.9, 0.95, 1, 1] }
+                    : { duration: 0.3 }
+                }
+                className="w-3.5 h-3.5 bg-slate-700 dark:bg-slate-300 rounded-full"
+              />
+              {/* Right Eye */}
+              <motion.div 
+                animate={
+                  companionState === 'listening' 
+                    ? { scaleY: 1.2, scaleX: 1.1 } 
+                    : companionState === 'thinking' 
+                    ? { scaleY: 0.5, y: 1 } 
+                    : { scaleY: [1, 1, 0.1, 1, 1] } /* Idle blinking */
+                }
+                transition={
+                  companionState === 'idle'
+                    ? { repeat: Infinity, duration: 4, times: [0, 0.9, 0.95, 1, 1] }
+                    : { duration: 0.3 }
+                }
+                className="w-3.5 h-3.5 bg-slate-700 dark:bg-slate-300 rounded-full"
+              />
+            </div>
 
-              {/* Mouth */}
-              <div className="h-6 flex items-center justify-center">
-                {companionState === 'idle' && (
-                  /* Smiling gentle curve */
-                  <svg width="24" height="8" viewBox="0 0 24 8" fill="none">
-                    <path d="M2 2C6 6 18 6 22 2" stroke="white" strokeWidth="3" strokeLinecap="round" />
-                  </svg>
-                )}
+            {/* Mouth */}
+            <div className="h-6 flex items-center justify-center">
+              {companionState === 'idle' && (
+                /* Smiling gentle curve */
+                <svg width="24" height="8" viewBox="0 0 24 8" fill="none">
+                  <path d="M2 2C6 6 18 6 22 2" stroke="currentColor" className="text-slate-700 dark:text-slate-300" strokeWidth="3" strokeLinecap="round" />
+                </svg>
+              )}
 
-                {companionState === 'listening' && (
-                  /* Wavy sound wave lines */
-                  <div className="flex items-center gap-1">
-                    <motion.div 
-                      animate={{ height: [4, 16, 4] }}
-                      transition={{ repeat: Infinity, duration: 0.5, ease: "easeInOut" }}
-                      className="w-1 bg-white rounded-full shadow-[0_0_6px_rgba(255,255,255,0.6)]"
-                    />
-                    <motion.div 
-                      animate={{ height: [6, 22, 6] }}
-                      transition={{ repeat: Infinity, duration: 0.4, ease: "easeInOut", delay: 0.1 }}
-                      className="w-1 bg-white rounded-full shadow-[0_0_6px_rgba(255,255,255,0.6)]"
-                    />
-                    <motion.div 
-                      animate={{ height: [4, 16, 4] }}
-                      transition={{ repeat: Infinity, duration: 0.5, ease: "easeInOut", delay: 0.2 }}
-                      className="w-1 bg-white rounded-full shadow-[0_0_6px_rgba(255,255,255,0.6)]"
-                    />
-                  </div>
-                )}
-
-                {companionState === 'thinking' && (
-                  /* Thinking breathing dot / load bar */
+              {companionState === 'listening' && (
+                /* Wavy sound wave lines */
+                <div className="flex items-center gap-1">
                   <motion.div 
-                    animate={{ scaleX: [1, 2.5, 1], opacity: [0.6, 1, 0.6] }}
-                    transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                    className="w-4 h-1.5 bg-white rounded-full shadow-[0_0_6px_rgba(255,255,255,0.6)]"
+                    animate={{ height: [4, 16, 4] }}
+                    transition={{ repeat: Infinity, duration: 0.5, ease: "easeInOut" }}
+                    className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
                   />
-                )}
-              </div>
+                  <motion.div 
+                    animate={{ height: [6, 22, 6] }}
+                    transition={{ repeat: Infinity, duration: 0.4, ease: "easeInOut", delay: 0.1 }}
+                    className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
+                  />
+                  <motion.div 
+                    animate={{ height: [4, 16, 4] }}
+                    transition={{ repeat: Infinity, duration: 0.5, ease: "easeInOut", delay: 0.2 }}
+                    className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
+                  />
+                </div>
+              )}
+
+              {companionState === 'thinking' && (
+                /* Thinking breathing dot / load bar */
+                <motion.div 
+                  animate={{ scaleX: [1, 2.5, 1], opacity: [0.6, 1, 0.6] }}
+                  transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                  className="w-4 h-1.5 bg-slate-700 dark:bg-slate-300 rounded-full"
+                />
+              )}
             </div>
           </div>
         </div>
@@ -656,60 +521,11 @@ export default function BrandOwnerDashboard() {
 
       {/* Top App Bar */}
       <header className="fixed top-0 w-full z-40 bg-white/40 backdrop-blur-md h-16 flex items-center justify-between px-4 border-b border-slate-200/20">
-        <div className="relative">
-          <button 
-            onClick={() => setBrandDropdownOpen(prev => !prev)}
-            className="flex items-center gap-2 text-left group active:opacity-80 transition-opacity"
-          >
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
-              <span className="material-symbols-outlined text-[18px]">restaurant</span>
-            </div>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-0.5">
-                <span className="font-semibold text-sm text-slate-800 max-w-[150px] truncate">
-                  {activeBrand ? activeBrand.name : 'Loading Brand...'}
-                </span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${brandDropdownOpen ? 'rotate-180' : ''}`} />
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">
-                  AI Pilot: {activeBrand?.autoPilot ? 'Active' : 'Approval Mode'}
-                </span>
-              </div>
-            </div>
-          </button>
-
-          {/* Dropdown Menu */}
-          <AnimatePresence>
-            {brandDropdownOpen && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="absolute left-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50"
-              >
-                <div className="p-3 border-b border-slate-50">
-                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Switch Brand</p>
-                </div>
-                {brands.map(b => (
-                  <button
-                    key={b.id}
-                    onClick={() => {
-                      setActiveBrand(b)
-                      setBrandDropdownOpen(false)
-                    }}
-                    className={`w-full text-left px-4 py-3 flex items-center justify-between text-xs hover:bg-slate-50 transition-colors ${
-                      activeBrand?.id === b.id ? 'bg-indigo-50/50 text-primary font-bold' : 'text-slate-600'
-                    }`}
-                  >
-                    <span>{b.name}</span>
-                    {activeBrand?.id === b.id && <Check className="w-3.5 h-3.5 text-primary" />}
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
+            <span className="material-symbols-outlined text-[18px]">restaurant</span>
+          </div>
+          <span className="font-bold text-sm text-slate-800 tracking-wide">AMC Portal</span>
         </div>
 
         <button 
@@ -724,21 +540,17 @@ export default function BrandOwnerDashboard() {
       {activeSubPage === null && (showMapsAlert || showScheduleAlert) && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 w-[90%] max-w-sm z-40 px-4 pointer-events-none flex flex-col items-center">
           
-          {/* Consolidated Pill Trigger */}
+          {/* Consolidated Circular Trigger */}
           {!notificationsExpanded && (
             <motion.button
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               onClick={() => setNotificationsExpanded(true)}
-              className="pointer-events-auto flex items-center justify-between gap-3 px-5 py-3 rounded-full bg-white/85 backdrop-blur-md border border-white/60 shadow-lg cursor-pointer hover:bg-white active:scale-95 transition-all text-xs font-bold text-slate-700"
+              className="pointer-events-auto w-9 h-9 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-lg font-black text-xs relative cursor-pointer outline-none border border-rose-400/20"
             >
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
-                <span className="material-symbols-outlined text-[16px] text-slate-500">notifications</span>
-                <span>{(showMapsAlert ? 1 : 0) + (showScheduleAlert ? 1 : 0)} updates require attention</span>
-              </div>
-              <span className="material-symbols-outlined text-[16px] text-slate-400">expand_more</span>
+              <span>{(showMapsAlert ? 1 : 0) + (showScheduleAlert ? 1 : 0)}</span>
+              <span className="absolute inset-0 rounded-full border border-rose-500 animate-ping opacity-75"></span>
             </motion.button>
           )}
 
@@ -1430,6 +1242,62 @@ export default function BrandOwnerDashboard() {
                   close
                 </button>
               </div>
+
+              {/* Brand Switcher / Info inside Drawer Menu */}
+              <div className="mb-6 border-b border-slate-200/50 pb-6">
+                <div className="relative">
+                  <button 
+                    onClick={() => setBrandDropdownOpen(prev => !prev)}
+                    className="w-full flex items-center justify-between p-3 bg-white border border-slate-200/60 rounded-xl text-left hover:bg-slate-50 transition-all cursor-pointer outline-none"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white flex-shrink-0">
+                        <span className="material-symbols-outlined text-[18px]">restaurant</span>
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-xs text-slate-800 truncate">
+                          {activeBrand ? activeBrand.name : 'Loading Brand...'}
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-semibold truncate">
+                          {activeBrand?.autoPilot ? 'AI Auto-Pilot' : 'Human Approval'}
+                        </span>
+                      </div>
+                    </div>
+                    {brands.length > 1 && (
+                      <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${brandDropdownOpen ? 'rotate-180' : ''}`} />
+                    )}
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  <AnimatePresence>
+                    {brandDropdownOpen && brands.length > 1 && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute left-0 right-0 mt-2 bg-white rounded-xl shadow-lg border border-slate-200/60 overflow-hidden z-50 max-h-48 overflow-y-auto"
+                      >
+                        {brands.map(b => (
+                          <button
+                            key={b.id}
+                            onClick={() => {
+                              setActiveBrand(b)
+                              setBrandDropdownOpen(false)
+                            }}
+                            className={`w-full text-left px-4 py-2.5 flex items-center justify-between text-xs hover:bg-slate-50 transition-colors ${
+                              activeBrand?.id === b.id ? 'bg-indigo-50/50 text-primary font-bold' : 'text-slate-600'
+                            }`}
+                          >
+                            <span className="truncate mr-2">{b.name}</span>
+                            {activeBrand?.id === b.id && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
               <nav className="space-y-6">
                 <button 
                   onClick={() => {
