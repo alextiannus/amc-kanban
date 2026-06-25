@@ -412,6 +412,14 @@ export default function BrandOwnerDashboard() {
 
   return (
     <div className="min-h-screen text-slate-800 bg-[#f7f9fb] selection:bg-primary/10 overflow-hidden h-screen w-screen relative">
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        multiple 
+        accept="image/*" 
+        className="hidden" 
+      />
       
       {/* Toast Notification */}
       <AnimatePresence>
@@ -944,14 +952,6 @@ export default function BrandOwnerDashboard() {
                       {uploading ? 'Processing File...' : 'Upload Fresh Dish Photos'}
                     </span>
                   </button>
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleFileChange} 
-                    multiple 
-                    accept="image/*" 
-                    className="hidden" 
-                  />
 
                   {/* Horizontally scrolling uploaded assets */}
                   <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
