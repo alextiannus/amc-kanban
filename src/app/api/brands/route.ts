@@ -71,9 +71,11 @@ export async function GET(request: Request) {
       return NextResponse.json(agentLinks.map(l => l.brand))
     }
 
-    // If assignedOnly=true, return only brands assigned to the user's permitted AI Agents.
-    // This applies to all human users (both Admins/Operators and Regular users).
+    // If assignedOnly=true, return only brands that the human user is responsible for.
+    // A user is responsible for a brand if they own it (direct/legacy), belong to its organization,
+    // or have permission to manage the AI agent assigned to it.
     if (assignedOnly) {
+      // 1. Delegated agent permissions -> Brand Agent links
       const delegatedAgentPermissions = await prisma.agentPermission.findMany({
         where: { humanId: session.user.id },
         select: { agentId: true },
@@ -88,15 +90,69 @@ export async function GET(request: Request) {
             select: { brandId: true },
           })
         : []
+      const delegatedBrandIds = delegatedBrandLinks.map((link) => link.brandId)
 
-      const delegatedBrandIds = Array.from(new Set(delegatedBrandLinks.map((link) => link.brandId)))
-      const brands = delegatedBrandIds.length
-        ? await prisma.brand.findMany({
-            where: { id: { in: delegatedBrandIds }, ...activeBrandFilter },
-            include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
-            orderBy: { createdAt: 'asc' },
-          })
-        : []
+      // 2. Owned brands (via BrandOwner join table)
+      const ownerLinks = await prisma.brandOwner.findMany({
+        where: { userId: session.user.id },
+        select: { brandId: true },
+      })
+      const ownedBrandIds = ownerLinks.map((link) => link.brandId)
+
+      // 3. Legacy owned brands (via ownerId field)
+      const legacyOwnedBrands = await prisma.brand.findMany({
+        where: { ownerId: session.user.id },
+        select: { id: true },
+      })
+      const legacyOwnedBrandIds = legacyOwnedBrands.map((b) => b.id)
+
+      // 4. Organization membership brands
+      const organizationMemberships = await prisma.organizationMember.findMany({
+        where: { memberId: session.user.id },
+        select: { ownerId: true },
+      })
+      const organizationOwnerIds = organizationMemberships.map((m) => m.ownerId)
+
+      // Combine direct candidate brands
+      const candidateBrandIds = Array.from(
+        new Set([
+          ...delegatedBrandIds,
+          ...ownedBrandIds,
+          ...legacyOwnedBrandIds,
+        ])
+      )
+
+      // Build OR conditions for query
+      const orConditions: any[] = []
+      if (candidateBrandIds.length > 0) {
+        orConditions.push({ id: { in: candidateBrandIds } })
+      }
+      if (organizationOwnerIds.length > 0) {
+        orConditions.push({ ownerId: { in: organizationOwnerIds } })
+        orConditions.push({
+          owners: {
+            some: {
+              role: 'owner',
+              userId: { in: organizationOwnerIds },
+            },
+          },
+        })
+      }
+
+      // If no responsible conditions, return empty list
+      if (orConditions.length === 0) {
+        return NextResponse.json([])
+      }
+
+      const brands = await prisma.brand.findMany({
+        where: {
+          ...activeBrandFilter,
+          OR: orConditions,
+        },
+        include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
+        orderBy: { createdAt: 'asc' },
+      })
+
       return NextResponse.json(brands)
     }
 
