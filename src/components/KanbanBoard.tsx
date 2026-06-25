@@ -134,7 +134,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
 
   const fetchBrands = async () => {
     try {
-      const res = await fetch('/api/brands')
+      const res = await fetch('/api/brands?assignedOnly=true')
       if (res.ok) {
         const list: Brand[] = await res.json()
         setBrands(list)

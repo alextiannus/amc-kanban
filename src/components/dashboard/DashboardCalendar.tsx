@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -18,7 +18,14 @@ import {
   ArrowRight,
   RefreshCw,
   Send,
-  Zap
+  Zap,
+  Eye,
+  MoreVertical,
+  Wand2,
+  Loader2,
+  Play,
+  X,
+  ChevronDown
 } from 'lucide-react'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
@@ -57,6 +64,31 @@ function normalizePlatformLabel(platform: string) {
   }
 
   return aliasMap[key] ?? platform
+}
+
+function parseTags(value: string) {
+  return value
+    .split(/[#,，,\s]+/)
+    .map((tag) => tag.trim().replace(/^#/, ''))
+    .filter(Boolean)
+}
+
+function isVideoUrl(url: string): boolean {
+  if (!url) return false
+  const path = url.split('?')[0]
+  return /\.(mp4|mov|avi|webm|ogg|m4v|3gp)(?:\?.*)?$/i.test(path)
+}
+
+function toDateTimeLocal(value?: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function fromDateTimeLocal(value: string) {
+  return value ? new Date(value).toISOString() : null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -109,6 +141,46 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [activeBrandId, setActiveBrandId] = useState(brandId)
   const [allBrands, setAllBrands] = useState<any[]>([])
 
+  // Draft Creation Workspace states
+  const [isCreatingPost, setIsCreatingPost] = useState(false)
+  const [contentIdea, setContentIdea] = useState('')
+  const [caption, setCaption] = useState('')
+  const [hashtags, setHashtags] = useState('')
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
+  const [accountId, setAccountId] = useState<string>('')
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [agentNote, setAgentNote] = useState('')
+  const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
+  const [newUrlInput, setNewUrlInput] = useState('')
+  const [assetTypeFilter, setAssetTypeFilter] = useState<'all' | 'image' | 'video'>('all')
+  const [accounts, setAccounts] = useState<any[]>([])
+  const [brandAssets, setBrandAssets] = useState<any[]>([])
+  const [saving, setSaving] = useState(false)
+  const [mediaProcessingIndex, setMediaProcessingIndex] = useState<number | null>(null)
+  const [activeMediaOp, setActiveMediaOp] = useState<{ index: number; action: 'design' | 'video' } | null>(null)
+  const [mediaOpPrompt, setMediaOpPrompt] = useState('')
+  const [previewMediaIndex, setPreviewMediaIndex] = useState(0)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (activeBrandId) {
+      // Load accounts
+      fetch(`/api/brands/${activeBrandId}/accounts`)
+        .then(res => res.json())
+        .then(data => setAccounts(data.accounts || []))
+        .catch(() => setAccounts([]))
+
+      // Load assets
+      fetch(`/api/brands/${activeBrandId}/assets`)
+        .then(res => res.json())
+        .then(data => setBrandAssets(data.assets || []))
+        .catch(() => setBrandAssets([]))
+    } else {
+      setAccounts([])
+      setBrandAssets([])
+    }
+  }, [activeBrandId])
+
   useEffect(() => {
     setActiveBrandId(brandId)
   }, [brandId])
@@ -132,6 +204,237 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         .catch(() => {})
     }
   }, [activeBrandId])
+
+  // Media asset handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    if (draggedIndex === null || draggedIndex === index) return
+    setAttachedMedia((prev) => {
+      const updated = [...prev]
+      const draggedItem = updated[draggedIndex]
+      updated.splice(draggedIndex, 1)
+      updated.splice(index, 0, draggedItem)
+      return updated
+    })
+    setDraggedIndex(index)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+  }
+
+  const handleToggleAsset = (asset: { id: string; url: string }) => {
+    setAttachedMedia((prev) => {
+      const exists = prev.some((m) => m.type === 'asset' && m.id === asset.id)
+      if (exists) {
+        return prev.filter((m) => !(m.type === 'asset' && m.id === asset.id))
+      } else {
+        return [...prev, { id: asset.id, type: 'asset', url: asset.url }]
+      }
+    })
+  }
+
+  const handleRemoveMedia = (index: number) => {
+    setAttachedMedia((prev) => prev.filter((_, idx) => idx !== index))
+  }
+
+  const handleAddUrl = () => {
+    const url = newUrlInput.trim()
+    if (!url) return
+    setAttachedMedia((prev) => [
+      ...prev,
+      { id: url, type: 'url', url }
+    ])
+    setNewUrlInput('')
+  }
+
+  const selectedAssetIds = useMemo(() => attachedMedia.filter(m => m.type === 'asset').map(m => m.id), [attachedMedia])
+
+  // Asset filtering helper
+  const filteredAssets = useMemo(() => {
+    return brandAssets.filter(asset => {
+      const isVid = asset.mimeType?.startsWith('video/') || isVideoUrl(asset.url)
+      if (assetTypeFilter === 'image') return !isVid
+      if (assetTypeFilter === 'video') return isVid
+      return true
+    })
+  }, [brandAssets, assetTypeFilter])
+
+  // API triggers
+  const triggerCopywriter = async (draftId: string, silent = false) => {
+    if (!activeBrandId) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draftId}/trigger-copywriter`, {
+        method: 'POST',
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '触发 AI 创作失败')
+      if (!silent) {
+        alert('AI 创作已在后台启动，您可以稍后查看。')
+        setIsCreatingPost(false)
+        await refreshCalendar()
+      }
+    } catch (e: any) {
+      if (!silent) {
+        alert(e.message || '触发 AI 创作失败')
+      } else {
+        console.error(`Copywriter trigger failed silently:`, e)
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleMediaAIDesign = async (index: number, assetId: string, actionType: 'design' | 'video') => {
+    if (!mediaOpPrompt.trim()) {
+      alert('请输入操作提示词')
+      return
+    }
+    
+    setMediaProcessingIndex(index)
+    try {
+      const res = await fetch(`/api/brands/${activeBrandId}/assets/${assetId}/design`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: mediaOpPrompt, action: actionType })
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || '操作失败')
+      }
+
+      const newAsset = data.asset
+
+      setAttachedMedia(prev => {
+        const next = [...prev]
+        next[index] = {
+          id: newAsset.id,
+          type: 'asset',
+          url: newAsset.url
+        }
+        return next
+      })
+
+      alert(actionType === 'video' ? 'AI 视频生成成功！已为您同步该视频。' : 'AI 修图优化成功！已为您更新该图片。')
+      setActiveMediaOp(null)
+      setMediaOpPrompt('')
+      // refresh assets
+      fetch(`/api/brands/${activeBrandId}/assets`)
+        .then(res => res.json())
+        .then(data => setBrandAssets(data.assets || []))
+        .catch(() => {})
+    } catch (err: any) {
+      alert(err.message || '操作失败')
+    } finally {
+      setMediaProcessingIndex(null)
+    }
+  }
+
+  const saveDraft = async (nextStatus?: string, captionOverride?: string) => {
+    if (!activeBrandId) return null
+    let activeCaption = captionOverride !== undefined ? captionOverride : caption
+    if (!activeCaption.trim() && contentIdea.trim()) {
+      activeCaption = contentIdea.trim()
+      setCaption(activeCaption)
+    }
+    const trimmedCaption = activeCaption.trim()
+    if (!trimmedCaption) {
+      alert('草稿正文或内容创意不能为空')
+      return null
+    }
+    if (selectedAccountIds.length === 0) {
+      alert('请选择发布平台账号')
+      return null
+    }
+    setSaving(true)
+    const mediaUrls = attachedMedia.filter((m) => m.type === 'url').map((m) => m.url)
+    const formattedAgentNote = contentIdea.trim() ? `【AI 生成指令】${contentIdea.trim()}【/AI 生成指令】\n${agentNote}` : agentNote
+    try {
+      const savedDrafts: any[] = []
+
+      // Create new drafts for all selected accounts
+      const results = await Promise.all(
+        selectedAccountIds.map(async (accId) => {
+          const res = await fetch(`/api/brands/${activeBrandId}/drafts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              caption: trimmedCaption,
+              hashtags: parseTags(hashtags),
+              accountId: accId,
+              scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+              agentNote: formattedAgentNote,
+              status: nextStatus || 'draft',
+              mediaUrls,
+              assetIds: selectedAssetIds,
+            }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json.error || '创建草稿失败')
+          return json.draft || null
+        })
+      )
+      results.forEach(d => { if (d) savedDrafts.push(d) })
+
+      await refreshCalendar()
+      return savedDrafts
+    } catch (e: any) {
+      alert(e.message || '保存草稿失败')
+      return null
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const submitDraft = async () => {
+    if (!activeBrandId) return
+    const draftsList = await saveDraft('draft')
+    if (!draftsList || draftsList.length === 0) return
+
+    setSaving(true)
+    try {
+      await Promise.all(
+        draftsList.map(async (draft) => {
+          const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}/submit`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: agentNote }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json.error || `提交草稿 ${draft.id} 失败`)
+        })
+      )
+      alert('草稿提交成功！')
+      setIsCreatingPost(false)
+      await refreshCalendar()
+    } catch (e: any) {
+      alert(e.message || '提交草稿失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const refreshCalendar = async () => {
+    try {
+      const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
+      const query = new URLSearchParams({ month })
+      if (activeBrandId) query.set('brandId', activeBrandId)
+      const res = await fetch(`/api/dashboard/calendar?${query.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        setEvents(data.events || [])
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   const handleAIWrite = async (eventBrandId: string, draftId: string) => {
     const targetBrandId = eventBrandId || activeBrandId
@@ -538,7 +841,15 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 alert('请在左侧选择特定品牌后再新建发布草稿。')
                 return
               }
-              alert('已发布排期在日历上显示。请在“发布”或“任务”视图新建发布草稿。')
+              setIsCreatingPost(true)
+              setCaption('')
+              setContentIdea('')
+              setHashtags('')
+              setSelectedAccountIds([])
+              setScheduledAt('')
+              setAgentNote('')
+              setAttachedMedia([])
+              setNewUrlInput('')
             }}
             className="w-full bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800 border border-slate-200/60 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-bold text-xs"
           >
@@ -691,8 +1002,435 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
       {/* 2. Central Content Area: Calendar Grid */}
       <main className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-950 p-4 lg:p-6 overflow-y-auto">
-        
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm mb-6 shrink-0">
+        {isCreatingPost ? (
+          <div className="flex-1 flex flex-col gap-6 max-w-4xl mx-auto w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl shadow-lg">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div>
+                <h2 className="text-lg font-black text-slate-805 dark:text-slate-100 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-indigo-500 animate-pulse" />
+                  新建排期发布草稿 (Create Post Draft)
+                </h2>
+                <p className="text-xs text-slate-400 dark:text-slate-505 mt-1">品牌: {brandDetails?.name || '当前品牌'} · 支持多平台内容撰写及AI创作</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreatingPost(false)}
+                className="px-3.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all bg-white dark:bg-slate-900"
+              >
+                返回日历
+              </button>
+            </div>
+
+            {/* Editor Body */}
+            <div className="flex-1 space-y-5 overflow-y-auto pr-1 scrollbar-thin">
+              
+              {/* Content Idea & Generator Prompt */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">内容创意 / 生成指令 (AI Idea & Prompt)</label>
+                <textarea
+                  value={contentIdea}
+                  onChange={(event) => setContentIdea(event.target.value)}
+                  placeholder="输入内容创意或AI生成指令，例如：‘介绍我们的新菜单，突出新鲜食材和南洋风味’，AI将自动按所选平台特性重构文案..."
+                  className="min-h-[60px] w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </div>
+
+              {/* Caption */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">草稿正文 (Draft Caption)</label>
+                <textarea
+                  value={caption}
+                  onChange={(event) => setCaption(event.target.value)}
+                  placeholder="输入草稿正文..."
+                  className="min-h-[120px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs leading-6 text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </div>
+
+              {/* Hashtags */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">标签 (Hashtags)</label>
+                <input
+                  value={hashtags}
+                  onChange={(event) => setHashtags(event.target.value)}
+                  placeholder="标签，用逗号分隔，例如 lunch, promo, weekend"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </div>
+
+              {/* Accounts (Multi-Select) & Scheduler Date Time */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-955/20 p-3 min-h-[44px]">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2.5">发布账号 (多选) <span className="text-red-500">*</span></p>
+                  {accounts.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">该品牌未绑定任何渠道账号</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {accounts.map((account) => {
+                        const isSelected = selectedAccountIds.includes(account.id)
+                        return (
+                          <button
+                            key={account.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAccountIds(prev => {
+                                const next = prev.includes(account.id)
+                                  ? prev.filter(id => id !== account.id)
+                                  : [...prev, account.id]
+                                setAccountId(next[0] || '')
+                                return next
+                              })
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900 dark:text-indigo-300'
+                                : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span>{account.platformId.toLowerCase() === 'instagram' ? '📸' : account.platformId.toLowerCase() === 'facebook' ? '👥' : account.platformId.toLowerCase() === 'red' ? '📕' : account.platformId.toLowerCase() === 'tiktok' ? '🎵' : '🔗'}</span>
+                            <span>{account.displayName || account.handle}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col justify-end space-y-1.5">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">定时发布时间</label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={(event) => setScheduledAt(event.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              {/* Agent Note */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">协作备注 / 修改说明</label>
+                <textarea
+                  value={agentNote}
+                  onChange={(event) => setAgentNote(event.target.value)}
+                  placeholder="协作备注 / 修改说明..."
+                  className="min-h-[50px] w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </div>
+
+              {/* Media & Assets Section */}
+              <div className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black text-slate-800 dark:text-slate-200">媒体与素材</h4>
+                  <div className="flex items-center gap-2">
+                    {attachedMedia.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setAttachedMedia([])}
+                        className="text-[10px] font-bold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                      >
+                        清空选择
+                      </button>
+                    )}
+                    <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                      已选: {attachedMedia.length}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Drag-and-drop grid */}
+                {attachedMedia.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-slate-400">拖拽调整媒体排序</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {attachedMedia.map((item, index) => {
+                        const isVid = isVideoUrl(item.url)
+                        return (
+                          <div
+                            key={`${item.type}-${item.id}-${index}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, index)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDragEnd={handleDragEnd}
+                            className={`relative aspect-square rounded-lg border border-slate-200 bg-slate-100 overflow-hidden dark:border-slate-800 dark:bg-slate-900 group shadow-sm transition-shadow cursor-grab active:cursor-grabbing hover:shadow ${
+                              draggedIndex === index ? 'opacity-40 border-emerald-500 scale-95' : ''
+                            }`}
+                          >
+                            {isVid ? (
+                              <video src={item.url} className="h-full w-full object-cover pointer-events-none" muted />
+                            ) : (
+                              <img src={item.url} className="h-full w-full object-cover pointer-events-none" alt="" />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMedia(index)}
+                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-650 p-1 text-white opacity-90 transition-opacity z-10"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                            {isVid && (
+                              <div className="absolute bottom-1 right-1 bg-black/50 p-0.5 rounded">
+                                <Play className="h-3 w-3 text-white fill-white" />
+                              </div>
+                            )}
+                            <div className={`absolute bottom-1 left-1 px-1 rounded text-[8px] font-black text-white ${
+                              item.type === 'asset' ? 'bg-emerald-500/80' : 'bg-blue-500/80'
+                            }`}>
+                              {item.type === 'asset' ? '素材库' : '外链'}
+                            </div>
+
+                            {/* AI Image design & Video generation overlays */}
+                            {item.type === 'asset' && !isVid && (
+                              <div className="absolute inset-0 bg-slate-955/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 p-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setActiveMediaOp({ index, action: 'design' })
+                                    setMediaOpPrompt('')
+                                  }}
+                                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9px] py-1 font-bold flex items-center justify-center gap-0.5"
+                                >
+                                  <Wand2 className="h-2.5 w-2.5" /> AI优化
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setActiveMediaOp({ index, action: 'video' })
+                                    setMediaOpPrompt('')
+                                  }}
+                                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] py-1 font-bold flex items-center justify-center gap-0.5"
+                                >
+                                  <Video className="h-2.5 w-2.5" /> 生视频
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Processing Overlay */}
+                            {mediaProcessingIndex === index && (
+                              <div className="absolute inset-0 bg-slate-950/70 flex flex-col items-center justify-center gap-1 z-20">
+                                <Loader2 className="h-4 w-4 text-white animate-spin" />
+                                <span className="text-[8px] text-white font-bold">
+                                  {activeMediaOp?.action === 'video' ? '视频生成...' : '图片优化...'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Inline media AI prompt form */}
+                    {activeMediaOp && (
+                      <div className="mt-3 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                            {activeMediaOp.action === 'video' ? (
+                              <>
+                                <Video className="h-3.5 w-3.5 text-indigo-500" />
+                                AI 图生视频 (第 {activeMediaOp.index + 1} 张图)
+                              </>
+                            ) : (
+                              <>
+                                <Wand2 className="h-3.5 w-3.5 text-emerald-500" />
+                                AI 图片优化 (第 {activeMediaOp.index + 1} 张图)
+                              </>
+                            )}
+                          </span>
+                          <span className="text-[10px] text-slate-400">使用 Kie.ai API</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={mediaOpPrompt}
+                            onChange={(e) => setMediaOpPrompt(e.target.value)}
+                            placeholder={
+                              activeMediaOp.action === 'video'
+                                ? "输入提示词，例如：'让锅里的食物冒热气，缓慢推近'..."
+                                : "输入提示词，例如：'提高亮度，添加专业的美食滤镜'..."
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                const item = attachedMedia[activeMediaOp.index]
+                                if (item && item.type === 'asset') {
+                                  handleMediaAIDesign(activeMediaOp.index, item.id, activeMediaOp.action)
+                                }
+                              }
+                            }}
+                            className="h-9 flex-1 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                          />
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const item = attachedMedia[activeMediaOp.index]
+                                if (item && item.type === 'asset') {
+                                  handleMediaAIDesign(activeMediaOp.index, item.id, activeMediaOp.action)
+                                }
+                              }}
+                              className="px-3 rounded-md bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-bold hover:bg-slate-800"
+                            >
+                              确定
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMediaOp(null)
+                                setMediaOpPrompt('')
+                              }}
+                              className="px-3 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-350 text-xs font-bold"
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Add URL input */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">添加外部媒体链接</label>
+                  <div className="flex gap-2">
+                    <input
+                      value={newUrlInput}
+                      onChange={(event) => setNewUrlInput(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          handleAddUrl()
+                        }
+                      }}
+                      placeholder="https://example.com/image.jpg"
+                      className="h-9 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-955 dark:text-slate-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddUrl}
+                      className="inline-flex h-9 items-center justify-center rounded-lg bg-slate-900 px-4 text-xs font-bold text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+                    >
+                      添加
+                    </button>
+                  </div>
+                </div>
+
+                {/* Browse brand assets */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">从品牌素材库中选择</label>
+                    <div className="flex bg-slate-105 dark:bg-slate-800 p-0.5 rounded-md text-[10px] font-black">
+                      {(['all', 'image', 'video'] as const).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setAssetTypeFilter(t)}
+                          className={`px-2 py-0.5 rounded transition-all ${
+                            assetTypeFilter === t
+                              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
+                          }`}
+                        >
+                          {t === 'all' ? '全部' : t === 'image' ? '图片' : '视频'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {filteredAssets.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center dark:border-slate-800">
+                      <p className="text-xs text-slate-400">暂无对应素材</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-2.5 max-h-[200px] overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 bg-white dark:bg-slate-950 scrollbar-thin">
+                      {filteredAssets.map((asset) => {
+                        const isSelected = selectedAssetIds.includes(asset.id)
+                        const isVid = asset.mimeType?.startsWith('video/') || isVideoUrl(asset.url)
+                        return (
+                          <button
+                            key={asset.id}
+                            type="button"
+                            onClick={() => handleToggleAsset(asset)}
+                            title={asset.filename || undefined}
+                            className={`relative aspect-square rounded-lg overflow-hidden border-2 bg-slate-100 dark:bg-slate-900 transition-all group ${
+                              isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-transparent hover:border-slate-300'
+                            }`}
+                          >
+                            {isVid ? (
+                              <video src={asset.url} className="h-full w-full object-cover pointer-events-none" muted />
+                            ) : (
+                              <img src={asset.url} className="h-full w-full object-cover pointer-events-none" alt="" />
+                            )}
+                            {isVid && (
+                              <div className="absolute bottom-1 right-1 bg-black/50 p-0.5 rounded">
+                                <Play className="h-2.5 w-2.5 text-white fill-white" />
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-4 mt-auto">
+              <button
+                type="button"
+                disabled={saving || (!caption.trim() && !contentIdea.trim()) || selectedAccountIds.length === 0}
+                onClick={async () => {
+                  const activeCaption = caption.trim() || '【AI 正在创作中...】'
+                  if (!caption.trim()) {
+                    setCaption(activeCaption)
+                  }
+                  const saved = await saveDraft('draft', activeCaption)
+                  if (saved && saved.length > 0) {
+                    await Promise.all(
+                      saved.map(draft => triggerCopywriter(draft.id, true))
+                    )
+                    alert('AI 创作已在后台启动，您可以稍后在日历查看。')
+                    setIsCreatingPost(false)
+                    await refreshCalendar()
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 px-4 py-2 text-xs font-black text-white disabled:opacity-50 transition-all"
+              >
+                ✨ AI 创作
+              </button>
+              <button
+                type="button"
+                disabled={saving || (!caption.trim() && !contentIdea.trim()) || selectedAccountIds.length === 0}
+                onClick={async () => {
+                  const saved = await saveDraft('draft')
+                  if (saved) {
+                    alert('草稿保存成功！')
+                    setIsCreatingPost(false)
+                    await refreshCalendar()
+                  }
+                }}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800 transition-all"
+              >
+                保存草稿
+              </button>
+              <button
+                type="button"
+                disabled={saving || (!caption.trim() && !contentIdea.trim()) || selectedAccountIds.length === 0}
+                onClick={submitDraft}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50 transition-all"
+              >
+                <Send className="h-3.5 w-3.5" /> 提交草稿
+              </button>
+            </div>
+
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm mb-6 shrink-0">
           
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 min-w-[120px]">
@@ -882,14 +1620,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                 </div>
                               )
                             })
-                          ) : (
-                            <div className="flex-1 flex items-center justify-center border border-dashed border-slate-200 dark:border-slate-800/80 rounded-lg p-1 bg-slate-50/40 dark:bg-slate-950/20">
-                              <span className="text-[9px] font-black text-slate-400 dark:text-slate-550 flex items-center gap-0.5">
-                                <AlertTriangle className="w-2.5 h-2.5 text-amber-500/60 dark:text-amber-500/40" />
-                                无排期
-                              </span>
-                            </div>
-                          )}
+                          ) : null}
                         </div>
                       </>
                     ) : (
@@ -959,13 +1690,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                             </div>
                           )
                         })
-                      ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl p-2 bg-slate-50/40 dark:bg-slate-950/20 mt-2">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500/60 dark:text-amber-500/45 mb-1" />
-                          <span className="text-[9px] font-black text-slate-400 dark:text-slate-550">发布缺失</span>
-                          <span className="text-[7px] text-slate-350 dark:text-slate-600 mt-0.5 text-center leading-tight">当天无任何排期</span>
-                        </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 )
@@ -1152,11 +1877,306 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
             </div>
           )}
         </div>
+        </>
+        )}
       </main>
 
-      {/* 3. Right Details Drawer */}
-      {selectedDay && (
-        <aside className="w-full lg:w-[380px] bg-white dark:bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-800 flex flex-col shrink-0 shadow-2xl animate-in slide-in-from-right duration-350 z-20">
+      {/* 3. Right Details Drawer / Stacked Platform Previews */}
+      {isCreatingPost ? (
+        <aside className="w-full lg:w-[420px] bg-slate-50 dark:bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-800 flex flex-col shrink-0 shadow-2xl z-20">
+          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+            <div>
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <Eye className="w-4 h-4 text-emerald-500" />
+                多平台发布预览 ({selectedAccountIds.length} 个账号)
+              </h3>
+              <p className="text-[10px] text-slate-400 dark:text-slate-505 mt-0.5">实时预览不同平台的内容渲染效果</p>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-thin">
+            {selectedAccountIds.length === 0 ? (
+              <div className="py-20 text-center text-slate-400 dark:text-slate-500">
+                <Eye className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                <p className="text-xs font-extrabold">请选择发布账号以查看预览</p>
+              </div>
+            ) : (
+              <div className="space-y-8 pb-10">
+                {selectedAccountIds.map((accId) => {
+                  const account = accounts.find((a) => a.id === accId)
+                  if (!account) return null
+                  const platform = account.platformId.toLowerCase()
+                  
+                  return (
+                    <div key={accId} className="space-y-3 border-b border-slate-100 dark:border-slate-850 pb-6 last:border-0 last:pb-0">
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-850 text-slate-700 dark:text-slate-350">
+                          {account.platformId.toLowerCase() === 'instagram' ? '📸 Instagram Feed' :
+                           account.platformId.toLowerCase() === 'facebook' ? '👥 Facebook Post' :
+                           account.platformId.toLowerCase() === 'red' ? '📕 小红书 / Rednote' :
+                           account.platformId.toLowerCase() === 'tiktok' ? '🎵 TikTok' :
+                           '🔗 Google Business'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">({account.displayName || account.handle})</span>
+                      </div>
+
+                      {platform === 'instagram' && (
+                        <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-white shadow-lg dark:border-slate-950 dark:bg-black text-black dark:text-white">
+                          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-900">
+                            <div className="flex items-center gap-2">
+                              <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 p-[1px]">
+                                <div className="h-full w-full rounded-full border border-white bg-slate-200 dark:border-black" />
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-bold leading-tight">{account.displayName || account.handle || brandDetails?.name || 'Your Brand'}</p>
+                                <p className="text-[8px] text-slate-500 leading-none">Sponsored</p>
+                              </div>
+                            </div>
+                            <span className="text-xs text-slate-400">•••</span>
+                          </div>
+
+                          <div className="relative aspect-square w-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+                            {attachedMedia.length > 0 ? (
+                              <>
+                                {isVideoUrl(attachedMedia[previewMediaIndex % attachedMedia.length]?.url) ? (
+                                  <video src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
+                                ) : (
+                                  <img src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
+                                )}
+                                {attachedMedia.length > 1 && (
+                                  <span className="absolute right-2 top-2 rounded-full bg-black/65 px-1.5 py-0.5 text-[8px] font-black text-white z-10">
+                                    {(previewMediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <div className="flex h-full flex-col items-center justify-center gap-1.5 text-slate-400">
+                                <ImageIcon className="h-8 w-8 text-slate-300" />
+                                <span className="text-[10px] font-semibold">暂无媒体文件</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="px-3 py-2">
+                            <div className="flex items-center justify-between text-base leading-none">
+                              <div className="flex items-center gap-3">
+                                <span>🤍</span>
+                                <span>💬</span>
+                                <span>✈️</span>
+                              </div>
+                              <span>🔖</span>
+                            </div>
+                            <p className="mt-1 text-[9px] font-bold">1,245 likes</p>
+                            <div className="mt-1 space-y-1 text-[10px]">
+                              <p className="leading-relaxed">
+                                <span className="font-bold mr-1">{account.handle || brandDetails?.name || 'brand'}</span>
+                                <span className="whitespace-pre-wrap">{caption || '【AI Copywriter will generate content here】'}</span>
+                              </p>
+                              <p className="text-blue-600 dark:text-blue-400 font-medium">
+                                {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {platform === 'red' && (
+                        <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-white shadow-lg dark:border-slate-955 dark:bg-[#0f0f0f] text-black dark:text-white">
+                          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-900">
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-6 w-6 rounded-full bg-slate-205" />
+                              <p className="text-[10px] font-bold">{account.displayName || brandDetails?.name || 'Your Brand'}</p>
+                            </div>
+                            <button className="rounded-full bg-[#ff2442] px-2.5 py-0.5 text-[9px] font-black text-white">关注</button>
+                          </div>
+
+                          <div className="relative aspect-[3/4] w-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+                            {attachedMedia.length > 0 ? (
+                              <>
+                                {isVideoUrl(attachedMedia[previewMediaIndex % attachedMedia.length]?.url) ? (
+                                  <video src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
+                                ) : (
+                                  <img src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
+                                )}
+                                {attachedMedia.length > 1 && (
+                                  <span className="absolute right-2 top-2 rounded-full bg-black/50 px-1.5 py-0.5 text-[8px] font-bold text-white z-10">
+                                    {(previewMediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <div className="flex h-full flex-col items-center justify-center gap-1.5 text-slate-400">
+                                <ImageIcon className="h-8 w-8 text-slate-300" />
+                                <span className="text-[10px] font-semibold">暂无媒体文件</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="px-3 py-2 max-h-32 overflow-y-auto">
+                            <h4 className="text-[11px] font-black leading-normal text-slate-900 dark:text-white">
+                              {caption.split('\n')[0]?.slice(0, 30) || 'Untitled Post'}
+                            </h4>
+                            <p className="mt-1 whitespace-pre-wrap text-[10px] leading-normal text-slate-705 dark:text-slate-300">
+                              {caption.split('\n').slice(1).join('\n') || caption || '【AI Copywriter will generate content here】'}
+                            </p>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {parseTags(hashtags).map((tag) => (
+                                <span key={tag} className="text-[10px] text-[#3a5b8f] dark:text-[#6a90d0] font-medium">#{tag}</span>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between border-t border-slate-100 px-3 py-1.5 dark:border-slate-900 text-slate-500 dark:text-slate-400 text-[9px]">
+                            <span>说点什么...</span>
+                            <div className="flex gap-2">
+                              <span>❤️ 152</span>
+                              <span>⭐ 48</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {platform === 'facebook' && (
+                        <div className="mx-auto w-full max-w-[340px] rounded-xl border border-slate-205 bg-white p-3 shadow-lg dark:border-slate-800 dark:bg-slate-900 text-black dark:text-white">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="h-8 w-8 rounded-full bg-slate-205" />
+                              <div>
+                                <p className="text-[10px] font-bold text-slate-900 dark:text-white">{account.displayName || brandDetails?.name || 'Your Brand'}</p>
+                                <p className="text-[8px] text-slate-500 flex items-center gap-0.5">Just now · 🌎</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 text-[10px] leading-normal text-slate-850 dark:text-slate-200">
+                            <p className="whitespace-pre-wrap">{caption || '【AI Copywriter will generate content here】'}</p>
+                            <p className="mt-1 text-blue-600 dark:text-blue-400 font-medium">
+                              {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
+                            </p>
+                          </div>
+
+                          <div className="mt-2 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-805 dark:bg-slate-950">
+                            {attachedMedia.length === 0 ? (
+                              <div className="flex h-32 flex-col items-center justify-center gap-1.5 text-slate-400">
+                                <ImageIcon className="h-8 w-8 text-slate-305" />
+                                <span className="text-[10px] font-semibold">暂无媒体文件</span>
+                              </div>
+                            ) : attachedMedia.length === 1 ? (
+                              <div className="relative aspect-video w-full">
+                                {isVideoUrl(attachedMedia[0].url) ? (
+                                  <video src={attachedMedia[0].url} className="h-full w-full object-cover" controls muted />
+                                ) : (
+                                  <img src={attachedMedia[0].url} className="h-full w-full object-cover" alt="" />
+                                )}
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-0.5">
+                                {attachedMedia.slice(0, 2).map((m, idx) => (
+                                  <div key={idx} className="relative aspect-square">
+                                    {isVideoUrl(m.url) ? (
+                                      <video src={m.url} className="h-full w-full object-cover" muted />
+                                    ) : (
+                                      <img src={m.url} className="h-full w-full object-cover" alt="" />
+                                    )}
+                                    {idx === 1 && attachedMedia.length > 2 && (
+                                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-black text-xs z-10">
+                                        +{attachedMedia.length - 2}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {platform === 'tiktok' && (
+                        <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-black shadow-lg dark:border-slate-950 text-white">
+                          <div className="relative aspect-[9/16] w-full bg-slate-950 flex items-center justify-center">
+                            {attachedMedia.length > 0 ? (
+                              <>
+                                <img src={attachedMedia[0].url} className="absolute inset-0 h-full w-full object-cover blur-xl opacity-30" alt="" />
+                                {isVideoUrl(attachedMedia[0].url) ? (
+                                  <video src={attachedMedia[0].url} className="relative z-10 h-full w-full object-contain" controls muted />
+                                ) : (
+                                  <img src={attachedMedia[0].url} className="relative z-10 max-h-full max-w-full object-contain" alt="" />
+                                )}
+                              </>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center gap-1.5 text-white/40">
+                                <Video className="h-8 w-8" />
+                                <span className="text-[10px] font-semibold">暂无媒体文件</span>
+                              </div>
+                            )}
+
+                            <div className="absolute bottom-20 right-2 z-10 flex flex-col items-center gap-3">
+                              <div className="h-8 w-8 rounded-full border border-white bg-slate-400" />
+                              <span className="text-xl">❤️</span>
+                              <span className="text-[8px] font-bold">89.2K</span>
+                            </div>
+
+                            <div className="absolute bottom-4 left-3 right-12 z-10 space-y-1 text-white text-[10px]">
+                              <p className="font-bold text-xs">@{account.handle || brandDetails?.name || 'brand_tiktok'}</p>
+                              <p className="line-clamp-2 leading-relaxed text-white/90 whitespace-pre-wrap">{caption || '【AI Copywriter will generate content here】'}</p>
+                              <div className="flex gap-1 flex-wrap font-bold font-mono">
+                                {parseTags(hashtags).map((tag) => (
+                                  <span key={tag}>#{tag}</span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {platform === 'google_business' && (
+                        <div className="mx-auto w-full max-w-[340px] rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-800 dark:bg-slate-905 text-black dark:text-white">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 text-white font-black text-sm">
+                              🏪
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black">{brandDetails?.name || 'Your Business Name'}</p>
+                              <p className="text-[8px] text-slate-400 leading-none">Google Business · Just now</p>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                            {attachedMedia.length > 0 ? (
+                              <div className="relative aspect-video w-full">
+                                {isVideoUrl(attachedMedia[0].url) ? (
+                                  <video src={attachedMedia[0].url} className="h-full w-full object-cover" controls muted />
+                                ) : (
+                                  <img src={attachedMedia[0].url} className="h-full w-full object-cover" alt="" />
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex h-24 flex-col items-center justify-center gap-1.5 text-slate-400">
+                                <ImageIcon className="h-6 w-6 text-slate-300" />
+                                <span className="text-[10px] font-semibold">暂无封面图片</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mt-2 text-[10px] leading-normal text-slate-700 dark:text-slate-350">
+                            <p className="whitespace-pre-wrap">{caption || '【AI Copywriter will generate content here】'}</p>
+                            <p className="mt-1 text-blue-600 dark:text-blue-400 font-medium">
+                              {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </aside>
+      ) : (
+        selectedDay && (
+          <aside className="w-full lg:w-[380px] bg-white dark:bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-800 flex flex-col shrink-0 shadow-2xl animate-in slide-in-from-right duration-350 z-20">
           <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
             <div>
               <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
@@ -1358,7 +2378,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
             </div>
           )}
         </aside>
-      )}
+      ) )}
 
 
     </div>
