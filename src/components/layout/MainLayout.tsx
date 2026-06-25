@@ -10,8 +10,8 @@ import UserMenu from './UserMenu'
 
 interface MainLayoutProps {
   children: React.ReactNode
-  currentView: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'dataAnalysis'
-  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'dataAnalysis') => void
+  currentView: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'dataAnalysis' | 'logs'
+  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'dataAnalysis' | 'logs') => void
   brands: Brand[]
   activeBrand: Brand | null
   setActiveBrand: (brand: Brand) => void
@@ -150,6 +150,17 @@ export default function MainLayout({
               <Bot size={16} /> AI 序列
             </button>
           )}
+          <button
+            onClick={() => setCurrentView('logs')}
+            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
+              currentView === 'logs'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+            }`}
+            id="nav-logs"
+          >
+            <Activity size={16} /> 工作日志
+          </button>
           {canSeePrincipalDashboard && (
             <button
               onClick={() => { setPrincipalOpening(true); router.push('/profile/principal') }}

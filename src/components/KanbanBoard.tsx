@@ -18,8 +18,9 @@ import GameSettingsDashboard from './dashboard/GameSettingsDashboard'
 import DashboardAssets from './dashboard/DashboardAssets'
 import DraftManagementView from './dashboard/DraftManagementView'
 import DataAnalysisView from './dashboard/DataAnalysisView'
+import AgentLogsView from './dashboard/AgentLogsView'
 
-type BoardView = 'agents' | 'archive' | 'dashboard' | 'calendar' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'dataAnalysis'
+type BoardView = 'agents' | 'archive' | 'dashboard' | 'calendar' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'dataAnalysis' | 'logs'
 
 interface Brand {
   id: string
@@ -86,7 +87,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     if (initialView === 'dashboard') {
       try {
         const savedView = window.localStorage.getItem('amc.currentView') as BoardView | null
-        if (savedView && ['agents', 'archive', 'dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'dataAnalysis'].includes(savedView)) {
+        if (savedView && ['agents', 'archive', 'dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'dataAnalysis', 'logs'].includes(savedView)) {
           setTimeout(() => {
             setCurrentView(savedView)
           }, 0)
@@ -352,6 +353,10 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
           ) : (
             <div className="flex items-center justify-center h-full text-red-500 text-sm font-bold">无权查看该模块</div>
           )}
+        </div>
+      ) : currentView === 'logs' ? (
+        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+          <AgentLogsView brandId={activeBrand?.id} />
         </div>
       ) : (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">

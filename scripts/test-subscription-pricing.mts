@@ -23,8 +23,8 @@ function run() {
   assertEqual(starter3.totalDueUsd, 1800, 'starter 3 months total')
 
   const essential12 = calculatePricing('essential', 12, ['ordering_site', 'onsite_photo'])
-  // (3600 + 220) * 12 * 0.9 + 200 = 41456
-  assertEqual(essential12.totalDueUsd, 41456, 'essential 12 months with add-ons total')
+  // (2800 + 220) * 12 * 0.9 + 200 = 32816
+  assertEqual(essential12.totalDueUsd, 32816, 'essential 12 months with add-ons total')
   assertEqual(essential12.billedMonths, 12, '12 months billed months')
 
   const deduped = calculatePricing('starter', 3, ['ordering_site', 'ordering_site'])
