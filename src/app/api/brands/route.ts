@@ -8,7 +8,10 @@ import { findOrCreateBrandOwnerAccount } from '@/lib/brandOwnerAccount'
 
 // GET /api/brands — list brands for the logged-in user
 // Only return brands that have at least one active AI Agent assigned.
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const assignedOnly = searchParams.get('assignedOnly') === 'true'
+
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -68,9 +71,36 @@ export async function GET() {
       return NextResponse.json(agentLinks.map(l => l.brand))
     }
 
-    // ADMIN human — see ALL brands across the system
+    // ADMIN human — see ALL brands across the system (or only assigned if assignedOnly=true)
     // (Agents may create brands with themselves as ownerId; admins need full visibility)
     if (isAmcOperator(session.user)) {
+      if (assignedOnly) {
+        const delegatedAgentPermissions = await prisma.agentPermission.findMany({
+          where: { humanId: session.user.id },
+          select: { agentId: true },
+        })
+        const permittedAgentIds = delegatedAgentPermissions.map((perm) => perm.agentId)
+        const delegatedBrandLinks = permittedAgentIds.length
+          ? await prisma.brandAgent.findMany({
+              where: {
+                agentId: { in: permittedAgentIds },
+                active: true,
+              },
+              select: { brandId: true },
+            })
+          : []
+
+        const delegatedBrandIds = Array.from(new Set(delegatedBrandLinks.map((link) => link.brandId)))
+        const brands = delegatedBrandIds.length
+          ? await prisma.brand.findMany({
+              where: { id: { in: delegatedBrandIds }, ...activeBrandFilter },
+              include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
+              orderBy: { createdAt: 'asc' },
+            })
+          : []
+        return NextResponse.json(brands)
+      }
+
       const allBrands = await prisma.brand.findMany({
         where: activeBrandFilter,
         include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },

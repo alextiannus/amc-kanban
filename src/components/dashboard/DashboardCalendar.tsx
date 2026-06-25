@@ -114,7 +114,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   }, [brandId])
 
   useEffect(() => {
-    fetch('/api/brands')
+    fetch('/api/brands?assignedOnly=true')
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -1028,19 +1028,6 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         </aside>
       )}
 
-      {/* 4. AI Floating Ball (Contextual Interaction) */}
-      <div className="fixed bottom-8 right-6 lg:right-10 z-[60] group">
-        <div className="relative flex items-center justify-center">
-          <div className="absolute w-14 h-14 bg-indigo-500/20 dark:bg-indigo-400/20 rounded-full animate-ping pointer-events-none" />
-          <button
-            onClick={() => handleAIProposal()}
-            disabled={aiProposalGenerating}
-            className="w-12 h-12 bg-gradient-to-tr from-indigo-650 to-violet-650 text-white rounded-full flex items-center justify-center shadow-2xl relative z-10 hover:scale-110 active:scale-95 transition-all"
-          >
-            <Sparkles className="w-5 h-5 text-white" />
-          </button>
-        </div>
-      </div>
 
     </div>
   )

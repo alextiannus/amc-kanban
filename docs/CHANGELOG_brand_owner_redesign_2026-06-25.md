@@ -42,3 +42,20 @@ To improve the visual quality and simplification of the brand owner portal (`amc
   - Replaced the wide notification button with a small 36x36px circular badge.
   - Renders only the active count of pending notifications (e.g. `2`).
   - Added a subtle pulsing animation overlay (`animate-ping`) for clean attention drawing.
+
+---
+
+## 3. Calendar & Operator Brand Attributions Cleanups
+
+### A. AI Floating Ball Removal
+- **File Modified**: [DashboardCalendar.tsx](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/components/dashboard/DashboardCalendar.tsx)
+- **Changes**:
+  - Completely removed the flashing/pulsing absolute-positioned "AI Floating Ball" button from the bottom-right corner of the publishing calendar view. The main "AI 一键排期提案" button remains available in the left sidebar.
+
+### B. Operator AI Attribution Brand Filtering
+- **Files Modified**:
+  - [route.ts](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/app/api/brands/route.ts)
+  - [DashboardCalendar.tsx](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/components/dashboard/DashboardCalendar.tsx)
+- **Changes**:
+  - Enhanced the `GET /api/brands` API handler to support a `assignedOnly=true` search parameter for human operators (`isAmcOperator`). When enabled, it queries the `AgentPermission` and `BrandAgent` tables to resolve only the brands assigned to the operator's active AI agents.
+  - Configured `DashboardCalendar.tsx` to fetch `/api/brands?assignedOnly=true`, restricting the calendar brand list to only show the operator's assigned brands and hide others.
