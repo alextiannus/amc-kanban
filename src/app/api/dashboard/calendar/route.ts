@@ -112,6 +112,7 @@ export async function GET(request: Request) {
     ? await prisma.workUnit.findMany({
         where: {
           assigneeId: { in: brandAgentIds },
+          brandId: { in: scopedBrandIds },
           OR: [
             // Planned work: tasks scheduled by deadline in the viewed month.
             { deadline: { gte: rangeStart, lt: rangeEnd } },
@@ -131,6 +132,7 @@ export async function GET(request: Request) {
           deadline: true,
           createdAt: true,
           updatedAt: true,
+          brandId: true,
         },
         orderBy: [{ updatedAt: 'desc' }],
       })
@@ -200,8 +202,8 @@ export async function GET(request: Request) {
 
       return {
         id: `task_${task.id}`,
-        brandId: requestedBrandId ?? '',
-        brandName: requestedBrandId ? (brandNameMap.get(requestedBrandId) ?? '当前品牌') : '任务',
+        brandId: task.brandId ?? requestedBrandId ?? '',
+        brandName: task.brandId ? (brandNameMap.get(task.brandId) ?? '当前品牌') : (requestedBrandId ? (brandNameMap.get(requestedBrandId) ?? '当前品牌') : '任务'),
         platform: inferTaskPlatform(task),
         title,
         status,
