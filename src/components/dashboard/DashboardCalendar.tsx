@@ -25,7 +25,9 @@ import {
   Loader2,
   Play,
   X,
-  ChevronDown
+  ChevronDown,
+  Check,
+  Maximize2
 } from 'lucide-react'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
@@ -160,6 +162,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [activeMediaOp, setActiveMediaOp] = useState<{ index: number; action: 'design' | 'video' } | null>(null)
   const [mediaOpPrompt, setMediaOpPrompt] = useState('')
   const [previewMediaIndex, setPreviewMediaIndex] = useState(0)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
   useEffect(() => {
@@ -204,6 +207,8 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         .catch(() => {})
     }
   }, [activeBrandId])
+
+
 
   // Media asset handlers
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -264,6 +269,21 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       return true
     })
   }, [brandAssets, assetTypeFilter])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (lightboxIndex === null) return
+      if (e.key === 'Escape') {
+        setLightboxIndex(null)
+      } else if (e.key === 'ArrowRight') {
+        setLightboxIndex((prev) => (prev !== null && prev < filteredAssets.length - 1 ? prev + 1 : 0))
+      } else if (e.key === 'ArrowLeft') {
+        setLightboxIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : filteredAssets.length - 1))
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [lightboxIndex, filteredAssets.length])
 
   // API triggers
   const triggerCopywriter = async (draftId: string, silent = false) => {
@@ -1036,27 +1056,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 />
               </div>
 
-              {/* Caption */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">草稿正文 (Draft Caption)</label>
-                <textarea
-                  value={caption}
-                  onChange={(event) => setCaption(event.target.value)}
-                  placeholder="输入草稿正文..."
-                  className="min-h-[120px] w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs leading-6 text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                />
-              </div>
 
-              {/* Hashtags */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">标签 (Hashtags)</label>
-                <input
-                  value={hashtags}
-                  onChange={(event) => setHashtags(event.target.value)}
-                  placeholder="标签，用逗号分隔，例如 lunch, promo, weekend"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                />
-              </div>
 
               {/* Accounts (Multi-Select) & Scheduler Date Time */}
               <div className="grid gap-4 md:grid-cols-2">
@@ -1107,16 +1107,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 </div>
               </div>
 
-              {/* Agent Note */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">协作备注 / 修改说明</label>
-                <textarea
-                  value={agentNote}
-                  onChange={(event) => setAgentNote(event.target.value)}
-                  placeholder="协作备注 / 修改说明..."
-                  className="min-h-[50px] w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                />
-              </div>
+
 
               {/* Media & Assets Section */}
               <div className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
@@ -1344,31 +1335,65 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                       <p className="text-xs text-slate-400">暂无对应素材</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-4 gap-2.5 max-h-[200px] overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 bg-white dark:bg-slate-950 scrollbar-thin">
-                      {filteredAssets.map((asset) => {
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3.5 max-h-[340px] overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-950 scrollbar-thin">
+                      {filteredAssets.map((asset, idx) => {
                         const isSelected = selectedAssetIds.includes(asset.id)
                         const isVid = asset.mimeType?.startsWith('video/') || isVideoUrl(asset.url)
                         return (
-                          <button
+                          <div
                             key={asset.id}
-                            type="button"
-                            onClick={() => handleToggleAsset(asset)}
-                            title={asset.filename || undefined}
-                            className={`relative aspect-square rounded-lg overflow-hidden border-2 bg-slate-100 dark:bg-slate-900 transition-all group ${
-                              isSelected ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-transparent hover:border-slate-300'
+                            className={`relative aspect-square rounded-xl overflow-hidden border bg-slate-100 dark:bg-slate-900 transition-all duration-200 group shadow-sm hover:scale-[1.03] hover:shadow-md ${
+                              isSelected 
+                                ? 'border-emerald-500 ring-2 ring-emerald-500/20' 
+                                : 'border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-650'
                             }`}
                           >
-                            {isVid ? (
-                              <video src={asset.url} className="h-full w-full object-cover pointer-events-none" muted />
-                            ) : (
-                              <img src={asset.url} className="h-full w-full object-cover pointer-events-none" alt="" />
+                            <button
+                              type="button"
+                              onClick={() => handleToggleAsset(asset)}
+                              className="absolute inset-0 w-full h-full text-left"
+                            >
+                              {isVid ? (
+                                <video src={asset.url} className="h-full w-full object-cover pointer-events-none" muted />
+                              ) : (
+                                <img src={asset.url} className="h-full w-full object-cover pointer-events-none" alt="" />
+                              )}
+                            </button>
+
+                            {isSelected && (
+                              <div className="absolute inset-0 bg-emerald-950/20 backdrop-blur-[0.5px] pointer-events-none" />
                             )}
+
+                            {isSelected && (
+                              <div className="absolute top-1.5 right-1.5 bg-emerald-500 rounded-full p-0.5 shadow-sm transition-colors z-10">
+                                <Check className="h-3 w-3 text-white stroke-[3px]" />
+                              </div>
+                            )}
+
                             {isVid && (
-                              <div className="absolute bottom-1 right-1 bg-black/50 p-0.5 rounded">
+                              <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-[2px] p-1 rounded border border-white/10 shadow-sm pointer-events-none">
                                 <Play className="h-2.5 w-2.5 text-white fill-white" />
                               </div>
                             )}
-                          </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setLightboxIndex(idx)
+                              }}
+                              className="absolute bottom-1.5 left-1.5 h-7 w-7 bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 backdrop-blur-md rounded-full shadow-sm flex items-center justify-center pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-200 scale-90 group-hover:scale-100 z-10"
+                              title="预览大图"
+                            >
+                              <Maximize2 className="h-3.5 w-3.5" />
+                            </button>
+
+                            {asset.filename && (
+                              <div className="absolute top-0 inset-x-0 bg-slate-950/70 p-1 text-[8px] text-white truncate opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                {asset.filename}
+                              </div>
+                            )}
+                          </div>
                         )
                       })}
                     </div>
@@ -2313,6 +2338,89 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         </aside>
       ) )}
 
+      {/* Lightbox Preview Modal */}
+      {lightboxIndex !== null && filteredAssets[lightboxIndex] && (() => {
+        const asset = filteredAssets[lightboxIndex]
+        const isVid = asset.mimeType?.startsWith('video/') || isVideoUrl(asset.url)
+        const isSelected = selectedAssetIds.includes(asset.id)
+        
+        return (
+          <div 
+            className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-slate-950/90 backdrop-blur-md p-4 animate-in fade-in duration-200"
+            onClick={() => setLightboxIndex(null)}
+          >
+            {/* Top Toolbar */}
+            <div className="w-full flex items-center justify-between px-4 py-2 bg-slate-900/40 backdrop-blur-md border border-white/5 rounded-2xl max-w-5xl z-10" onClick={(e) => e.stopPropagation()}>
+              <div className="flex flex-col text-left">
+                <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">素材库预览 ({lightboxIndex + 1} / {filteredAssets.length})</span>
+                <span className="text-sm text-white font-black truncate max-w-md mt-0.5">{asset.filename || '未命名素材'}</span>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setLightboxIndex(null)} 
+                className="h-9 w-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Media Content Area */}
+            <div className="flex-1 w-full flex items-center justify-center relative py-6" onClick={(e) => e.stopPropagation()}>
+              {/* Previous Button */}
+              <button
+                type="button"
+                onClick={() => setLightboxIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : filteredAssets.length - 1))}
+                className="absolute left-4 lg:left-8 h-12 w-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg border border-white/5 z-10"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+
+              {/* Media Display */}
+              <div className="max-h-[70vh] max-w-[85vw] flex items-center justify-center rounded-2xl overflow-hidden shadow-2xl relative bg-slate-900/50 p-1 border border-white/10">
+                {isVid ? (
+                  <video src={asset.url} controls autoPlay className="max-h-[70vh] max-w-[85vw] object-contain rounded-xl" />
+                ) : (
+                  <img src={asset.url} className="max-h-[70vh] max-w-[85vw] object-contain rounded-xl" alt="" />
+                )}
+              </div>
+
+              {/* Next Button */}
+              <button
+                type="button"
+                onClick={() => setLightboxIndex((prev) => (prev !== null && prev < filteredAssets.length - 1 ? prev + 1 : 0))}
+                className="absolute right-4 lg:right-8 h-12 w-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-lg border border-white/5 z-10"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Bottom Actions Bar */}
+            <div className="w-full flex items-center justify-center gap-3 py-2 z-10" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => handleToggleAsset(asset)}
+                className={`px-6 py-3 rounded-2xl text-xs font-black transition-all flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 ${
+                  isSelected
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                    : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                }`}
+              >
+                {isSelected ? (
+                  <>
+                    <X className="h-4 w-4 stroke-[3px]" />
+                    <span>取消选择此素材</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 stroke-[3px]" />
+                    <span>选择此素材</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
     </div>
   )

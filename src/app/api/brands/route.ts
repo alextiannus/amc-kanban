@@ -71,9 +71,9 @@ export async function GET(request: Request) {
       return NextResponse.json(agentLinks.map(l => l.brand))
     }
 
-    // If assignedOnly=true, return only brands that the human user is responsible for.
-    // A user is responsible for a brand if they own it (direct/legacy), belong to its organization,
-    // or have permission to manage the AI agent assigned to it.
+    // If assignedOnly=true, return only brands that the human user is directly responsible for.
+    // A user is responsible for a brand if they own it (direct/legacy) or have permission to
+    // manage the AI agent assigned to it. Organization memberships are not automatically assigned.
     if (assignedOnly) {
       // 1. Delegated agent permissions -> Brand Agent links
       const delegatedAgentPermissions = await prisma.agentPermission.findMany({
@@ -106,14 +106,7 @@ export async function GET(request: Request) {
       })
       const legacyOwnedBrandIds = legacyOwnedBrands.map((b) => b.id)
 
-      // 4. Organization membership brands
-      const organizationMemberships = await prisma.organizationMember.findMany({
-        where: { memberId: session.user.id },
-        select: { ownerId: true },
-      })
-      const organizationOwnerIds = organizationMemberships.map((m) => m.ownerId)
-
-      // Combine direct candidate brands
+      // Combine direct candidate brands (excluding organization-wide unassigned brands)
       const candidateBrandIds = Array.from(
         new Set([
           ...delegatedBrandIds,
@@ -126,17 +119,6 @@ export async function GET(request: Request) {
       const orConditions: any[] = []
       if (candidateBrandIds.length > 0) {
         orConditions.push({ id: { in: candidateBrandIds } })
-      }
-      if (organizationOwnerIds.length > 0) {
-        orConditions.push({ ownerId: { in: organizationOwnerIds } })
-        orConditions.push({
-          owners: {
-            some: {
-              role: 'owner',
-              userId: { in: organizationOwnerIds },
-            },
-          },
-        })
       }
 
       // If no responsible conditions, return empty list

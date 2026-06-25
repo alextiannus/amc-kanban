@@ -82,7 +82,7 @@ export default function StickerPrintPage() {
       .then(res => res.json())
       .then(async (data) => {
         // Fetch brand details
-        const brandRes = await fetch('/api/brands')
+        const brandRes = await fetch('/api/brands?assignedOnly=true')
         if (brandRes.ok) {
           const list = (await brandRes.json()) as BrandItem[]
           const brandObj = list.find((b) => b.id === brandId)

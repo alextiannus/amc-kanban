@@ -92,7 +92,7 @@ export default function BrandOwnerDashboard() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const res = await fetch('/api/brands')
+        const res = await fetch('/api/brands?assignedOnly=true')
         if (res.ok) {
           const list = await res.json()
           setBrands(list)

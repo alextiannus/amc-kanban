@@ -58,7 +58,7 @@ export default function MockMerchantPage() {
 
   // Fetch human user's brands list to associate the simulated action
   useEffect(() => {
-    fetch('/api/brands')
+    fetch('/api/brands?assignedOnly=true')
       .then((res) => {
         if (!res.ok) throw new Error('Unauthorized')
         return res.json()

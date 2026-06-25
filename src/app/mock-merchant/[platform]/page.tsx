@@ -59,7 +59,7 @@ export default function MockPlatformMerchantPage() {
   }, [platform])
 
   useEffect(() => {
-    fetch('/api/brands')
+    fetch('/api/brands?assignedOnly=true')
       .then((res) => {
         if (!res.ok) throw new Error('Unauthorized')
         return res.json()

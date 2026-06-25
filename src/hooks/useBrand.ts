@@ -91,7 +91,7 @@ export function useBrandList() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/brands')
+    fetch('/api/brands?assignedOnly=true')
       .then(r => r.json())
       .then(setBrands)
       .catch(console.error)
