@@ -25,7 +25,7 @@ export async function checkAndRunTodoTasks() {
       void marketingGraph.invoke({
         taskId: task.id,
         brandId: task.brandId
-      }, config).catch((err) => {
+      }, config).catch((err: any) => {
         console.error(`Copywriter Scheduler error during task ${task.id} invocation:`, err)
       })
     }

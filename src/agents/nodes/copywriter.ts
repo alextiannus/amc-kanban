@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma.ts";
-import { generateText } from "../../lib/gemini.ts";
+import { callLLM } from "../../lib/llmRouter.ts";
+import { getFewShotExamples } from "../../lib/feedbackService.ts";
 
 export async function copywriterNode(state: any) {
   console.log("=== CopywriterNode Running (Composition Mode) ===");
@@ -13,7 +14,8 @@ export async function copywriterNode(state: any) {
   }
 
   const brand = await prisma.brand.findUnique({
-    where: { id: brandId }
+    where: { id: brandId },
+    include: { knowledge: true }
   });
 
   const task = await prisma.workUnit.findUnique({
@@ -102,7 +104,41 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
     }
   }
 
-  // 2. Attempt AI Generation with Gemini using state.researchNotes & state.marketingStrategy
+  // 1. Fetch custom brand context parameters if BrandKnowledge exists
+  let brandToneText = "";
+  let menuText = "";
+  let slangText = "";
+  let negativePromptText = "";
+
+  if (brand && brand.knowledge) {
+    const k = brand.knowledge;
+    if (k.brandTone) {
+      brandToneText = `\nBrand Tone/Voice: ${k.brandTone}\n`;
+    }
+    if (k.menuItems) {
+      const menu = k.menuItems as any[];
+      if (menu.length > 0) {
+        menuText = `\nMenu Items Knowledge:\n` + menu.map(item => `- ${item.name} ($${item.price}): ${item.description || ""}`).join("\n") + "\n";
+      }
+    }
+    if (k.slangDict) {
+      const slang = k.slangDict as Record<string, string>;
+      slangText = `\nTarget Local Slang/Terminology mappings to use:\n` + Object.entries(slang).map(([key, val]) => `- "${key}": ${val}`).join("\n") + "\n";
+    }
+    if (k.negPrompts && k.negPrompts.length > 0) {
+      negativePromptText = `\nNEVER use the following words or phrases:\n` + k.negPrompts.map(word => `- "${word}"`).join("\n") + "\n";
+    }
+  }
+
+  // Fetch approved corrections to use as Few-Shot examples
+  const fewShots = await getFewShotExamples(brandId, 3);
+  let fewShotText = "";
+  if (fewShots.length > 0) {
+    fewShotText = "\n--- BRAND PREFERRED STYLE EXAMPLES (FEW-SHOT CORRECTIONS) ---\n" +
+      fewShots.map((shot, idx) => `Example ${idx + 1}:\n[AI Original generated text]: ${shot.originalText}\n[User Preferred published text]: ${shot.correctedText}`).join("\n\n") + "\n";
+  }
+
+  // 2. Attempt AI Generation using routed LLM call with state.researchNotes & state.marketingStrategy
   let aiCaption = "";
   let aiHashtags: string[] = [];
   let geminiUsed = false;
@@ -114,6 +150,11 @@ Active Task/Topic: "${task.title}"
 Task Details: ${task.description || "Create an engaging post."}
 ${userPrompt ? `User Prompt/Theme/Instruction: "${userPrompt}"` : ""}
 ${attachedAssetsText}
+${brandToneText}
+${menuText}
+${slangText}
+${negativePromptText}
+${fewShotText}
 
 --- BRAND RESEARCH CONTEXT ---
 ${researchNotes || "No specific brand research available."}
@@ -134,19 +175,19 @@ Instructions:
 Please output ONLY a valid JSON object.`;
 
   try {
-    const responseText = await generateText(prompt, 800);
-    if (responseText) {
-      const cleanJson = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+    const result = await callLLM("copywriting", prompt, 1000);
+    if (result.text) {
+      const cleanJson = result.text.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleanJson);
       if (parsed.caption) {
         aiCaption = parsed.caption;
         aiHashtags = parsed.hashtags || [];
         geminiUsed = true;
-        console.log("AI Copywriter generated optimized content successfully using Gemini, Research, and Strategy.");
+        console.log(`AI Copywriter generated optimized content successfully using routed model: ${result.provider}/${result.modelName}`);
       }
     }
   } catch (error) {
-    console.error("Failed to generate or parse Gemini copywriter response:", error);
+    console.error("Failed to generate or parse copywriter response from LLM router:", error);
   }
 
   // 3. Fallback Rule-Based Generation (Runs if Gemini fails)

@@ -331,7 +331,7 @@ export async function POST(request: Request) {
         void marketingGraph.invoke({
           taskId: newTask.id,
           brandId: newTask.brandId
-        }, config).catch((err) => {
+        }, config).catch((err: any) => {
           console.error(`Background copywriter trigger failed for task ${newTask.id}:`, err);
         });
       }

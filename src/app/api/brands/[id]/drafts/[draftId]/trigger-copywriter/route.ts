@@ -93,7 +93,7 @@ export async function POST(request: Request, { params }: Params) {
     draftId,
     platform,
     copywriteOnly: true
-  }, config).catch((err) => {
+  }, config).catch((err: any) => {
     console.error(`Background copywriter trigger failed for draft ${draftId}:`, err);
   })
 

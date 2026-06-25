@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+    <title>AMC MM - Brand Owner Dashboard</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Hanken+Grotesk:wght@400;500;600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "on-secondary-fixed": "#002113",
+                "indigo-tint": "#494bd6",
+                "surface-slate": "#f7f9fb",
+                "secondary-container": "#9af2c5",
+                "primary-fixed": "#e1e0ff",
+                "tertiary-fixed-dim": "#fcba66",
+                "surface-container": "#eceef0",
+                "secondary-fixed": "#9df4c8",
+                "surface-container-lowest": "#ffffff",
+                "on-primary": "#ffffff",
+                "secondary": "#006c49",
+                "inverse-primary": "#c0c1ff",
+                "surface-container-low": "#f2f4f6",
+                "on-tertiary": "#ffffff",
+                "tertiary-fixed": "#ffddb8",
+                "tertiary-container": "#825100",
+                "background": "#f7f9fb",
+                "tertiary": "#623c00",
+                "outline-variant": "#c6c5d7",
+                "on-tertiary-fixed": "#2a1700",
+                "inverse-on-surface": "#eff1f3",
+                "on-secondary": "#ffffff",
+                "surface-bright": "#f7f9fb",
+                "primary-container": "#4648d4",
+                "on-primary-fixed-variant": "#2e2ebe",
+                "secondary-fixed-dim": "#81d8ad",
+                "surface-tint": "#484bd6",
+                "error-container": "#ffdad6",
+                "surface-container-highest": "#e0e3e5",
+                "primary": "#2c2abc",
+                "dark-card": "#111827",
+                "on-error-container": "#93000a",
+                "on-tertiary-container": "#ffcb8f",
+                "surface-variant": "#e0e3e5",
+                "surface": "#f7f9fb",
+                "on-surface-variant": "#464554",
+                "on-secondary-fixed-variant": "#005236",
+                "on-primary-container": "#d1d1ff",
+                "on-background": "#191c1e",
+                "surface-container-high": "#e6e8ea",
+                "danger-coral": "#ef4444",
+                "on-tertiary-fixed-variant": "#653e00",
+                "deep-navy-dark": "#090d16",
+                "on-surface": "#191c1e",
+                "primary-fixed-dim": "#c0c1ff",
+                "surface-dim": "#d8dadc",
+                "on-error": "#ffffff",
+                "on-secondary-container": "#0c714d",
+                "warning-amber": "#825100",
+                "on-primary-fixed": "#06006c",
+                "inverse-surface": "#2d3133",
+                "outline": "#767586",
+                "success-emerald": "#006c49",
+                "error": "#ba1a1a"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "2xl": "24px",
+                "full": "9999px"
+            },
+            "spacing": {
+                "component-gap": "12px",
+                "gutter-mobile": "16px",
+                "gutter-desktop": "24px",
+                "margin-page": "32px",
+                "base": "4px",
+                "rhythm-8": "8px"
+            },
+            "fontFamily": {
+                "label-sm": ["JetBrains Mono"],
+                "body-lg": ["Hanken Grotesk"],
+                "title-md": ["Manrope"],
+                "headline-lg": ["Manrope"],
+                "display-lg": ["Manrope"],
+                "body-md": ["Hanken Grotesk"],
+                "action-button": ["Hanken Grotesk"],
+                "headline-lg-mobile": ["Manrope"]
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+        body {
+            background-color: #f7f9fb;
+            font-family: 'Hanken Grotesk', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        .ai-glow-orb {
+            filter: drop-shadow(0 0 20px rgba(72, 75, 214, 0.4));
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .active-pill {
+            background: linear-gradient(135deg, #4648d4 0%, #2c2abc 100%);
+        }
+        .safe-pb {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+<body class="text-on-surface">
+    <!-- TopAppBar -->
+    <header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl shadow-sm h-16 flex items-center justify-between px-gutter-mobile">
+        <div class="flex items-center gap-2 group cursor-pointer">
+            <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
+                <span class="material-symbols-outlined text-[18px]">restaurant</span>
+            </div>
+            <div class="flex flex-col">
+                <div class="flex items-center gap-1">
+                    <span class="font-title-md text-[14px] font-bold text-on-surface">Din Tai Fung - Clarke Quay</span>
+                    <span class="material-symbols-outlined text-[16px] text-outline">expand_more</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-success-emerald animate-pulse"></span>
+                    <span class="font-label-sm text-[10px] text-success-emerald uppercase tracking-wider">AI Pilot: Active</span>
+                </div>
+            </div>
+        </div>
+        <div class="w-10 h-10 rounded-full border-2 border-white shadow-sm overflow-hidden bg-surface-container">
+            <img class="w-full h-full object-cover" alt="User Profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3UEaCm3FZ3UFXcu5DZu89flKJ3W4pQYYdWEsCKdfzsX0Qr1JLXL5s6rozn75dBXVZWBtUB0VH7RctN_ZMLNMsA4ncwe3Rderxv-W0iVv7IKkleVAfGz_pMOlx_p0ghGbRWUqNeadQoQ_aw3L7BUV7qStdrTpM6l45M4osPzjOUItkYIvOQxV7vMlXE8msjDJ6iG_HPn1VpW10LIWn7I59yS9ULH4_cxvNjJiGAVX0MRbL9hAFiJG4tdJ0YajtpPhzstY5ZHc_0Hg"/>
+        </div>
+    </header>
+
+    <main class="pt-20 pb-24 px-gutter-mobile space-y-6 max-w-md mx-auto">
+        <!-- AI Avatar Card -->
+        <section class="glass-card rounded-2xl p-6 relative overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60">
+            <div class="relative z-10 flex flex-col items-center text-center">
+                <div class="w-32 h-32 mb-6 relative">
+                    <div class="absolute inset-0 bg-primary-container/10 rounded-full scale-125 blur-2xl"></div>
+                    <div class="w-full h-full rounded-full ai-glow-orb relative z-10 overflow-hidden border-2 border-white" style="display:block;">
+                        <canvas id="shader-canvas-ANIMATION_51" style="display:block;width:100%;height:100%"></canvas>
+                        <script>
+                        (function() {
+                          const canvas = document.getElementById('shader-canvas-ANIMATION_51');
+                          function syncSize() {
+                            const w = canvas.clientWidth  || 128;
+                            const h = canvas.clientHeight || 128;
+                            if (canvas.width !== w || canvas.height !== h) {
+                              canvas.width  = w;
+                              canvas.height = h;
+                            }
+                          }
+                          if (typeof ResizeObserver !== 'undefined') {
+                            new ResizeObserver(syncSize).observe(canvas);
+                          }
+                          syncSize();
+
+                          const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                          if (!gl) return;
+                          const vs = `attribute vec2 a_position;
+                          varying vec2 v_texCoord;
+                          void main() {
+                            v_texCoord = a_position * 0.5 + 0.5;
+                            gl_Position = vec4(a_position, 0.0, 1.0);
+                          }`;
+                          const fs = `precision highp float;
+                          varying vec2 v_texCoord;
+                          uniform float u_time;
+                          uniform vec2 u_resolution;
+
+                          void main() {
+                              vec2 uv = v_texCoord;
+                              float t = u_time * 0.8;
+                              
+                              vec2 p = (uv - 0.5) * 2.0;
+                              float len = length(p);
+                              
+                              vec3 color = vec3(0.275, 0.282, 0.831);
+                              
+                              float pulse = sin(t) * 0.15 + 0.85;
+                              float ring = smoothstep(0.4 * pulse, 0.41 * pulse, len) - smoothstep(0.45 * pulse, 0.46 * pulse, len);
+                              
+                              float glow = exp(-len * 3.5) * pulse;
+                              
+                              float angle = atan(p.y, p.x);
+                              float strands = sin(angle * 5.0 + t * 2.0) * 0.1;
+                              float strandGlow = smoothstep(0.35, 0.4, len + strands) * smoothstep(0.45, 0.4, len + strands);
+                              
+                              vec3 finalColor = color * (glow + ring * 1.5 + strandGlow * 0.8);
+                              
+                              float aura = smoothstep(0.8, 0.2, len) * 0.2;
+                              finalColor += color * aura;
+                              
+                              gl_FragColor = vec4(finalColor, clamp(len < 0.9 ? 1.0 : 0.0, 0.0, 1.0));
+                          }`;
+                          function cs(type, src) {
+                            const s = gl.createShader(type);
+                            gl.shaderSource(s, src);
+                            gl.compileShader(s);
+                            return s;
+                          }
+                          const prog = gl.createProgram();
+                          gl.attachShader(prog, cs(gl.VERTEX_SHADER, vs));
+                          gl.attachShader(prog, cs(gl.FRAGMENT_SHADER, fs));
+                          gl.linkProgram(prog);
+                          gl.useProgram(prog);
+                          const buf = gl.createBuffer();
+                          gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+                          const pos = gl.getAttribLocation(prog, 'a_position');
+                          gl.enableVertexAttribArray(pos);
+                          gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+                          const uTime = gl.getUniformLocation(prog, 'u_time');
+                          const uRes = gl.getUniformLocation(prog, 'u_resolution');
+
+                          function render(t) {
+                            if (typeof ResizeObserver === 'undefined') syncSize();
+                            gl.viewport(0, 0, canvas.width, canvas.height);
+                            if (uTime) gl.uniform1f(uTime, t * 0.001);
+                            if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);
+                            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+                            requestAnimationFrame(render);
+                          }
+                          render(0);
+                        })();
+                        </script>
+                    </div>
+                </div>
+                <p class="font-body-lg text-body-lg text-on-surface-variant mb-6 px-2">
+                    Chef, I am optimizing your <span class="text-primary font-bold">Friday dinner campaigns</span>. 1 draft is ready for review.
+                </p>
+                <button class="flex items-center gap-2 bg-primary px-8 py-3 rounded-full text-white font-action-button text-action-button active:scale-95 transition-transform shadow-lg shadow-primary/20">
+                    <span class="material-symbols-outlined">mic</span>
+                    Voice Assist
+                </button>
+            </div>
+            <div class="absolute -top-24 -right-24 w-48 h-48 bg-primary/5 rounded-full blur-3xl"></div>
+        </section>
+
+        <!-- Quick Assets Section -->
+        <section class="space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="font-title-md text-title-md text-on-surface">Quick Assets</h3>
+                <button class="text-primary font-action-button text-label-sm flex items-center gap-1">
+                    See all <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                </button>
+            </div>
+            <button class="w-full glass-card border-dashed border-2 border-primary/20 p-4 rounded-2xl flex items-center justify-center gap-3 active:bg-primary-fixed-dim/30 transition-colors">
+                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                    <span class="material-symbols-outlined">add_a_photo</span>
+                </div>
+                <span class="font-action-button text-on-surface font-semibold">Upload Fresh Dish Photos</span>
+            </button>
+            <div class="flex gap-4 overflow-x-auto pb-4 no-scrollbar -mx-4 px-4">
+                <!-- Asset Card 1 -->
+                <div class="flex-shrink-0 w-48 group">
+                    <div class="relative h-60 rounded-2xl overflow-hidden shadow-md mb-2">
+                        <img class="w-full h-full object-cover" alt="Xiao Long Bao" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWgXXdFeOt9xH5XWPJRDNDNm7IySLpUtldzcsE0CL9hfWX3zV7M00voF4fKm7DiSFiOUp4xMH5YY0LCWSn5pPYrXuBEQs7DXWFxdP6YDYmkEmgUTc6JWGK404EJS5Ss7UaadfrdyJ3fQG19sANz2rZE5UO-v1pu9lcOgcORKcS2O7-NjWMrwhaW3ASxJvoKaEyQHiRJ_EHG31sIZvzxTcbFxSnjRYtDaFmc6A9ZzuluL1JeSrivk9C03uqtiCpnrbPNj9ciE_mnjY"/>
+                        <div class="absolute bottom-2 left-2 right-2">
+                            <button class="w-full bg-white/90 backdrop-blur-md text-on-surface py-2 rounded-xl text-[11px] font-bold shadow-sm flex items-center justify-center gap-1 border border-white/50 active:scale-95 transition-all">
+                                <span class="material-symbols-outlined text-[14px] text-primary">auto_fix_high</span>
+                                Convert to Instagram Post
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Asset Card 2 -->
+                <div class="flex-shrink-0 w-48 group">
+                    <div class="relative h-60 rounded-2xl overflow-hidden shadow-md mb-2">
+                        <img class="w-full h-full object-cover" alt="Spicy Wontons" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsNKIU9gylU7w_AOHVovDpk-XqEWSm10viYSJhqDj8urngbpAtxV2e4rMlgtn_uo-SxeJlK75ZJWsD-JBtEwALwXPBw-bnte7sbxgWStxaC0NzXfjDiZ9KHTzQPsaHDM6IDKZpRAJmJ5utQQFYOESIjw0C1iMIfD3N4hBQbXVCQCV0eTiQ6Axih9dbLvcKOVJWjKDwv1gzHJCOxra03KhnfrXL46Y9TYPij86PUVoHCCI6IqolF1e5riGrTzylANu9e_cqcdIKT38"/>
+                        <div class="absolute bottom-2 left-2 right-2">
+                            <button class="w-full bg-white/90 backdrop-blur-md text-on-surface py-2 rounded-xl text-[11px] font-bold shadow-sm flex items-center justify-center gap-1 border border-white/50 active:scale-95 transition-all">
+                                <span class="material-symbols-outlined text-[14px] text-primary">auto_fix_high</span>
+                                Convert to Instagram Post
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Asset Card 3 -->
+                <div class="flex-shrink-0 w-48 group">
+                    <div class="relative h-60 rounded-2xl overflow-hidden shadow-md mb-2">
+                        <img class="w-full h-full object-cover" alt="Lava Buns" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0nzIG7_1B0jt4GQyvECp3FNm5-B3YiPAWVfDrnsvfSP8h29U7KlfSSXJHHm3nFgqsdqTkk_i8W8HQFgY6M7GehUjC8blUSUIK6z1_MncDrmTbjLOL25yzT2YiZoxLTb7hWjYST74iWHfBpgJSYxFKhPavWCd-y6O1TJtJDVb0BWOxMq2urSSLwUHb2qz742EW6dkqGlQfXzwO5XMBgBvp6JoLJ3nqZ2GZulQ7n4WrKGHAoagM6MH-XhxsSqxBxpzVX9mRDPH6CYg"/>
+                        <div class="absolute bottom-2 left-2 right-2">
+                            <button class="w-full bg-white/90 backdrop-blur-md text-on-surface py-2 rounded-xl text-[11px] font-bold shadow-sm flex items-center justify-center gap-1 border border-white/50 active:scale-95 transition-all">
+                                <span class="material-symbols-outlined text-[14px] text-primary">auto_fix_high</span>
+                                Convert to Instagram Post
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Content Feed (Weekly Planner) -->
+        <section class="space-y-4">
+            <div class="flex items-center justify-between px-1">
+                <h3 class="font-title-md text-title-md text-on-surface">Next 7 Days</h3>
+                <span class="text-on-surface-variant text-[12px] font-medium">May 15 - May 22</span>
+            </div>
+            <div class="glass-card rounded-2xl p-4 overflow-hidden border-indigo-tint/10">
+                <div class="flex justify-between mb-6 overflow-x-auto no-scrollbar gap-2">
+                    <div class="flex flex-col items-center gap-2 px-3 py-2 rounded-xl active-pill text-white">
+                        <span class="text-[10px] font-bold opacity-80 uppercase">Fri</span>
+                        <span class="text-[16px] font-extrabold">15</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-2 px-3 py-2 rounded-xl bg-surface-container-low text-on-surface-variant">
+                        <span class="text-[10px] font-bold opacity-80 uppercase">Sat</span>
+                        <span class="text-[16px] font-extrabold">16</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-2 px-3 py-2 rounded-xl bg-surface-container-low text-on-surface-variant">
+                        <span class="text-[10px] font-bold opacity-80 uppercase">Sun</span>
+                        <span class="text-[16px] font-extrabold">17</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-2 px-3 py-2 rounded-xl bg-surface-container-low text-on-surface-variant">
+                        <span class="text-[10px] font-bold opacity-80 uppercase">Mon</span>
+                        <span class="text-[16px] font-extrabold">18</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-2 px-3 py-2 rounded-xl bg-surface-container-low text-on-surface-variant">
+                        <span class="text-[10px] font-bold opacity-80 uppercase">Tue</span>
+                        <span class="text-[16px] font-extrabold">19</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-2 px-3 py-2 rounded-xl bg-surface-container-low text-on-surface-variant">
+                        <span class="text-[10px] font-bold opacity-80 uppercase">Wed</span>
+                        <span class="text-[16px] font-extrabold">20</span>
+                    </div>
+                </div>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-white border border-surface-container shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-[#E1306C]/10 flex items-center justify-center">
+                                <span class="material-symbols-outlined text-[#E1306C] text-[18px]">photo_camera</span>
+                            </div>
+                            <div>
+                                <h4 class="text-[13px] font-bold">Friday Feast Reel</h4>
+                                <p class="text-[11px] text-on-surface-variant">18:00 • Instagram</p>
+                            </div>
+                        </div>
+                        <span class="px-2 py-1 bg-warning-amber/10 text-warning-amber text-[10px] font-bold rounded-lg border border-warning-amber/20 uppercase tracking-tighter">Pending Review</span>
+                    </div>
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-white border border-surface-container shadow-sm">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+                                <span class="material-symbols-outlined text-red-500 text-[18px]">send</span>
+                            </div>
+                            <div>
+                                <h4 class="text-[13px] font-bold">Weekend Special</h4>
+                                <p class="text-[11px] text-on-surface-variant">09:00 • Xiaohongshu</p>
+                            </div>
+                        </div>
+                        <span class="px-2 py-1 bg-success-emerald/10 text-success-emerald text-[10px] font-bold rounded-lg border border-success-emerald/20 uppercase tracking-tighter">Published</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Marketplace: Standard Package Card -->
+        <section class="space-y-4">
+            <h3 class="font-title-md text-title-md text-on-surface">Membership &amp; Tools</h3>
+            <div class="bg-primary-container p-6 rounded-2xl text-white relative overflow-hidden shadow-lg shadow-primary/10">
+                <div class="relative z-10">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <span class="font-label-sm text-[11px] bg-white/20 px-2 py-1 rounded-full text-white uppercase tracking-wider mb-2 inline-block">Current Plan</span>
+                            <h2 class="font-headline-lg-mobile text-headline-lg-mobile font-bold">Standard Package</h2>
+                        </div>
+                        <span class="material-symbols-outlined text-[32px] opacity-60">workspace_premium</span>
+                    </div>
+                    <div class="space-y-4 mt-6">
+                        <div class="flex items-center justify-between bg-white/10 p-3 rounded-xl backdrop-blur-md">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-[20px]">video_library</span>
+                                <span class="text-[13px] font-medium">Veo3 Image-to-Video API</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input checked="" class="sr-only peer" type="checkbox"/>
+                                <div class="w-11 h-6 bg-white/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success-emerald"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between bg-white/10 p-3 rounded-xl backdrop-blur-md">
+                            <div class="flex items-center gap-3">
+                                <span class="material-symbols-outlined text-[20px]">analytics</span>
+                                <span class="text-[13px] font-medium">Dub.co ROI tracking</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input checked="" class="sr-only peer" type="checkbox"/>
+                                <div class="w-11 h-6 bg-white/30 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success-emerald"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="absolute -bottom-8 -right-8 w-40 h-40 bg-white/10 rounded-full blur-2xl"></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- BottomNavBar -->
+    <nav class="fixed bottom-0 left-0 w-full h-[64px] bg-surface/80 backdrop-blur-xl flex justify-around items-center px-4 pb-safe z-50 shadow-[0_-4px_12px_rgba(72,75,214,0.12)] rounded-t-xl">
+        <a class="flex flex-col items-center justify-center text-primary font-bold transition-all duration-300 ease-out active:scale-95" href="#">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+            <span class="font-label-sm text-label-sm mt-0.5">Feed</span>
+        </a>
+        <a class="flex flex-col items-center justify-center text-on-surface-variant hover:opacity-80 transition-all duration-300 ease-out active:scale-95" href="#">
+            <span class="material-symbols-outlined">calendar_month</span>
+            <span class="font-label-sm text-label-sm mt-0.5">Calendar</span>
+        </a>
+        <div class="flex flex-col items-center justify-center -mt-8">
+            <div class="w-14 h-14 bg-primary rounded-full flex items-center justify-center text-white shadow-lg shadow-primary/30 active:scale-90 transition-transform">
+                <span class="material-symbols-outlined text-[28px]">auto_awesome</span>
+            </div>
+            <span class="font-label-sm text-label-sm mt-1.5 text-primary font-bold">AI</span>
+        </div>
+        <a class="flex flex-col items-center justify-center text-on-surface-variant hover:opacity-80 transition-all duration-300 ease-out active:scale-95" href="#">
+            <span class="material-symbols-outlined">shopping_bag</span>
+            <span class="font-label-sm text-label-sm mt-0.5">Market</span>
+        </a>
+        <a class="flex flex-col items-center justify-center text-on-surface-variant hover:opacity-80 transition-all duration-300 ease-out active:scale-95" href="#">
+            <span class="material-symbols-outlined">add_a_photo</span>
+            <span class="font-label-sm text-label-sm mt-0.5">Assets</span>
+        </a>
+    </nav>
+
+    <script>
+        document.querySelectorAll('a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                const nav = link.closest('nav');
+                if (nav) {
+                    nav.querySelectorAll('a').forEach(a => {
+                        a.classList.remove('text-primary', 'font-bold');
+                        a.classList.add('text-on-surface-variant');
+                        const icon = a.querySelector('.material-symbols-outlined');
+                        if(icon) icon.style.fontVariationSettings = "'FILL' 0";
+                    });
+                    link.classList.add('text-primary', 'font-bold');
+                    link.classList.remove('text-on-surface-variant');
+                    const icon = link.querySelector('.material-symbols-outlined');
+                    if(icon) icon.style.fontVariationSettings = "'FILL' 1";
+                }
+            });
+        });
+
+        document.querySelectorAll('input[type="checkbox"]').forEach(toggle => {
+            toggle.addEventListener('change', function() {
+                const parent = this.closest('.bg-white\\/10');
+                if (this.checked) {
+                    parent.classList.add('ring-2', 'ring-success-emerald/50');
+                    setTimeout(() => parent.classList.remove('ring-2', 'ring-success-emerald/50'), 600);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
+import fs from 'node:fs'
+import path from 'node:path'
 import { prisma } from '../src/lib/prisma.ts'
 
 const PORT = 3001 // use port 3001 to avoid conflicts with 3000 if running
@@ -10,7 +12,7 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function waitForServer(url: string, timeoutMs: number = 15000): Promise<boolean> {
+async function waitForServer(url: string, timeoutMs: number = 60000): Promise<boolean> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
     try {
@@ -27,6 +29,12 @@ async function waitForServer(url: string, timeoutMs: number = 15000): Promise<bo
 }
 
 async function main() {
+  // Clean up any existing memory files for test brand
+  const testMemoryDir = path.join(process.cwd(), 'memory', 'test-onboarding-brand-v2')
+  if (fs.existsSync(testMemoryDir)) {
+    fs.rmSync(testMemoryDir, { recursive: true, force: true })
+  }
+
   console.log('--- Setting up DB Entities for Test ---')
 
   // Find or create test AI Agent
@@ -351,6 +359,11 @@ async function cleanup() {
 
   console.log('Cleaning up test DB records...')
   try {
+    const testMemoryDir = path.join(process.cwd(), 'memory', 'test-onboarding-brand-v2')
+    if (fs.existsSync(testMemoryDir)) {
+      fs.rmSync(testMemoryDir, { recursive: true, force: true })
+    }
+
     const brand = await prisma.brand.findFirst({ where: { name: 'Test Onboarding Brand v2' } })
     if (brand) {
       await prisma.brandAgent.deleteMany({ where: { brandId: brand.id } })

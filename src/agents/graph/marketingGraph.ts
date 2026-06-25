@@ -113,7 +113,7 @@ const workflow = new StateGraph(StateAnnotation)
   // Conditional router after compliance check
   .addConditionalEdges(
     "complianceCheck",
-    (state) => {
+    (state: any) => {
       if (state.compliancePassed || state.approved) {
         return "publish";
       }
@@ -136,4 +136,4 @@ const checkpointer = new PrismaCheckpointer();
 
 export const marketingGraph = workflow.compile({
   checkpointer
-});
+}) as any;

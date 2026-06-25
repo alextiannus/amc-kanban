@@ -44,11 +44,11 @@ memory.getTuple = async function (config: any) {
 };
 
 const graph = new StateGraph(TestAnnotation)
-  .addNode("step1", (state) => ({ count: 1 }))
+  .addNode("step1", (state: any) => ({ count: 1 }))
   .addEdge(START, "step1")
   .addEdge("step1", END);
 
-const app = graph.compile({ checkpointer: memory });
+const app = graph.compile({ checkpointer: memory }) as any;
 
 const config = { configurable: { thread_id: "test-thread" } };
 await app.invoke({ count: 5 }, config);

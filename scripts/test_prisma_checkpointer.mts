@@ -11,7 +11,7 @@ const TestAnnotation = Annotation.Root({
 
 // 1. Define a simple test graph
 const graph = new StateGraph(TestAnnotation)
-  .addNode("step1", (state) => {
+  .addNode("step1", (state: any) => {
     console.log("  Node 'step1' executing, current count:", state.count);
     return { count: 1 };
   })
@@ -20,11 +20,12 @@ const graph = new StateGraph(TestAnnotation)
 
 // 2. Initialize PrismaCheckpointer
 const checkpointer = new PrismaCheckpointer();
-const app = graph.compile({ checkpointer });
+const app = graph.compile({ checkpointer }) as any;
 
 const threadId = "test-prisma-thread-" + Date.now();
 const config = { configurable: { thread_id: threadId } };
 
+// 3. Invoke graph
 console.log("Invoking graph for thread:", threadId);
 await app.invoke({ count: 10 }, config);
 

@@ -306,7 +306,7 @@ export async function PATCH(
       void marketingGraph.invoke({
         taskId: updatedTask.id,
         brandId: updatedTask.brandId
-      }, config).catch((err) => {
+      }, config).catch((err: any) => {
         console.error(`Background copywriter trigger failed for task ${updatedTask.id}:`, err);
       });
     }
