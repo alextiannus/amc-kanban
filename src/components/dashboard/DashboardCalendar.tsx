@@ -106,17 +106,35 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [aiProposalGenerating, setAiProposalGenerating] = useState(false)
   const [brandDetails, setBrandDetails] = useState<any>(null)
 
+  const [activeBrandId, setActiveBrandId] = useState(brandId)
+  const [allBrands, setAllBrands] = useState<any[]>([])
+
   useEffect(() => {
-    if (brandId) {
-      fetch(`/api/brands/${brandId}`)
+    setActiveBrandId(brandId)
+  }, [brandId])
+
+  useEffect(() => {
+    fetch('/api/brands')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAllBrands(data)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (activeBrandId) {
+      fetch(`/api/brands/${activeBrandId}`)
         .then(res => res.json())
         .then(data => setBrandDetails(data))
         .catch(() => {})
     }
-  }, [brandId])
+  }, [activeBrandId])
 
   const handleAIWrite = async (eventBrandId: string, draftId: string) => {
-    const targetBrandId = eventBrandId || brandId
+    const targetBrandId = eventBrandId || activeBrandId
     if (!targetBrandId) {
       alert('未找到关联的品牌ID')
       return
@@ -132,7 +150,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       
       const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
       const query = new URLSearchParams({ month })
-      if (brandId) query.set('brandId', brandId)
+      if (activeBrandId) query.set('brandId', activeBrandId)
       const reloadRes = await fetch(`/api/dashboard/calendar?${query.toString()}`)
       if (reloadRes.ok) {
         const data = await reloadRes.json()
@@ -158,7 +176,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     }
 
     try {
-      const targetBrandId = brandId || events.find(e => e.id === draftId)?.brandId
+      const targetBrandId = activeBrandId || events.find(e => e.id === draftId)?.brandId
       if (!targetBrandId) {
         throw new Error('未找到关联的品牌ID')
       }
@@ -195,7 +213,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       
       const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
       const query = new URLSearchParams({ month })
-      if (brandId) query.set('brandId', brandId)
+      if (activeBrandId) query.set('brandId', activeBrandId)
       const reloadRes = await fetch(`/api/dashboard/calendar?${query.toString()}`)
       if (reloadRes.ok) {
         const data = await reloadRes.json()
@@ -215,7 +233,9 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     setAiProposalGenerating(true)
     try {
       // Trigger Apify sync to get latest reviews/topics for planning
-      await fetch(`/api/brands/${brandId}/apify-sync`, { method: 'POST' }).catch(() => {})
+      if (activeBrandId) {
+        await fetch(`/api/brands/${activeBrandId}/apify-sync`, { method: 'POST' }).catch(() => {})
+      }
       
       // Call coordinate-scheduler workflows to generate drafts (simulated interval or direct trigger if present)
       await new Promise(resolve => setTimeout(resolve, 2000))
@@ -223,7 +243,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       // Reload calendar to fetch newly created draft proposals
       const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
       const query = new URLSearchParams({ month })
-      if (brandId) query.set('brandId', brandId)
+      if (activeBrandId) query.set('brandId', activeBrandId)
       const res = await fetch(`/api/dashboard/calendar?${query.toString()}`)
       if (res.ok) {
         const data = await res.json()
@@ -246,7 +266,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       try {
         const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
         const query = new URLSearchParams({ month })
-        if (brandId) query.set('brandId', brandId)
+        if (activeBrandId) query.set('brandId', activeBrandId)
         const res = await fetch(`/api/dashboard/calendar?${query.toString()}`)
         if (!res.ok) throw new Error('load failed')
         const data = await res.json()
@@ -260,7 +280,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
     load()
     return () => { cancelled = true }
-  }, [viewYear, viewMonth, brandId])
+  }, [viewYear, viewMonth, activeBrandId])
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
@@ -351,11 +371,48 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin">
+          {/* Brand List Selection */}
+          <div>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                我的品牌 (My Brands)
+              </span>
+            </div>
+            {allBrands.length > 0 ? (
+              <ul className="space-y-1.5 mb-6">
+                {allBrands.map((b: any) => {
+                  const isSelected = b.id === activeBrandId
+                  const lacksChannels = !b.accounts || b.accounts.length === 0
+                  return (
+                    <li 
+                      key={b.id} 
+                      onClick={() => setActiveBrandId(b.id)}
+                      className={`flex flex-col p-2.5 rounded-xl cursor-pointer transition-all border ${
+                        isSelected 
+                          ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold' 
+                          : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
+                      }`}
+                    >
+                      <span className="text-xs">{b.name}</span>
+                      {lacksChannels && (
+                        <span className="text-[9px] text-red-500 font-medium mt-1">
+                          ⚠️ 缺失渠道配置
+                        </span>
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <div className="text-[11px] text-slate-400 italic p-1 mb-6">加载品牌中...</div>
+            )}
+          </div>
+
           {/* Dynamic Accounts List from DB */}
           <div>
             <div className="flex items-center justify-between mb-3 px-1">
               <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                {brandDetails?.name || '发布渠道'}
+                {brandDetails?.name || '当前品牌'} · 托管渠道
               </span>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
             </div>

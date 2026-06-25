@@ -38,3 +38,15 @@ To fulfill the requirement that all frontend views, subpages, and interactive co
 
 - **Typescript Compilation**: Completed cleanly without any errors.
 - **Integration Tests**: Booted local dev server and ran integration checks. All workflow endpoints and mock validations passed successfully.
+
+---
+
+## 4. Calendar Brand Switcher & Channel Warning Updates
+
+**Date**: 2026-06-25
+
+To allow brand owners to view all their brands on the publishing calendar page and receive alerts when configurations are incomplete:
+- **Retrieve All Brands**: Fetched the complete brand list from `/api/brands` on component mount.
+- **Interactive Switcher**: Added a "我的品牌 (My Brands)" list to the Left Sidebar of the calendar. Clicking any brand updates the local `activeBrandId` state, dynamically reloading the calendar events, drafts, and active channel details.
+- **Channel Warnings**: For each brand, checked the configured `accounts` length. If a brand has no channels configured, the prompt `⚠️ 缺失渠道配置` is displayed underneath the brand name in red font, alerting the owner to complete channel configuration.
+
