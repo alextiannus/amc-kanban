@@ -20,7 +20,7 @@ async function hasValidSession(request: NextRequest): Promise<boolean> {
 }
 
 export default async function middleware(request: NextRequest) {
-  const hostname = request.headers.get('host') || ''
+  const hostname = request.headers.get('x-forwarded-host') || request.headers.get('host') || ''
   const pathname = request.nextUrl.pathname
   const isBrandOwnerDomain = hostname === 'amc-mm.immedi.ai' || hostname.startsWith('amc-mm.')
   const sessionExists = await hasValidSession(request)
