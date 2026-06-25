@@ -121,7 +121,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
-  const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate())
+  const [selectedDay, setSelectedDay] = useState<number | null>(null)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1487,73 +1487,6 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                   {view === 'month' ? '月' : view === 'week' ? '周' : view === 'day' ? '日' : '列表'}
                 </button>
               ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Statistics & Gap Diagnostics Bar */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 shrink-0">
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-              <CheckCircle className="w-5 h-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">已发布 (Published)</div>
-              <div className="text-xl font-black text-slate-850 dark:text-slate-100 mt-0.5">{stats.done} <span className="text-[10px] font-normal text-slate-400">条</span></div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-              <Clock className="w-5 h-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">已排期 (Scheduled)</div>
-              <div className="text-xl font-black text-slate-850 dark:text-slate-100 mt-0.5">{stats.scheduled} <span className="text-[10px] font-normal text-slate-400">条</span></div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-955/20 flex items-center justify-center text-amber-600 dark:text-amber-450 shrink-0">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">待审核 (Pending)</div>
-              <div className="text-xl font-black text-slate-850 dark:text-slate-100 mt-0.5">{stats.pending} <span className="text-[10px] font-normal text-slate-400">条</span></div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm flex items-center gap-3 col-span-2 lg:col-span-1">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              (activeBrandId ? (gapDaysCount > 0 || missingPlatforms.length > 0) : (missingBrands.length > 0 || gapDaysCount > 0))
-                ? 'bg-red-50 dark:bg-red-955/20 text-red-650 dark:text-red-400'
-                : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400'
-            }`}>
-              <Zap className="w-5 h-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">排期与渠道诊断</div>
-              <div className="text-[11px] font-bold text-slate-700 dark:text-slate-350 mt-0.5 truncate leading-tight">
-                {activeBrandId ? (
-                  (gapDaysCount > 0 || missingPlatforms.length > 0) ? (
-                    <span className="text-red-500 dark:text-red-400">
-                      {gapDaysCount > 0 && `${gapDaysCount}天无排期`}
-                      {missingPlatforms.length > 0 && ` | 渠道缺失: ${missingPlatforms.join(', ')}`}
-                    </span>
-                  ) : (
-                    <span className="text-emerald-500 font-extrabold">✓ 排期覆盖健全</span>
-                  )
-                ) : (
-                  (missingBrands.length > 0 || gapDaysCount > 0) ? (
-                    <span className="text-red-500 dark:text-red-400">
-                      {gapDaysCount > 0 && `${gapDaysCount}天无排期`}
-                      {missingBrands.length > 0 && ` | ${missingBrands.length}个品牌空缺`}
-                    </span>
-                  ) : (
-                    <span className="text-emerald-500 font-extrabold">✓ 全部品牌排期正常</span>
-                  )
-                )}
-              </div>
             </div>
           </div>
         </div>
