@@ -283,6 +283,21 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   ]
   while (cells.length % 7 !== 0) cells.push(null)
 
+  const getDaysForWeekView = () => {
+    const referenceDate = selectedDay ? new Date(viewYear, viewMonth, selectedDay) : new Date(viewYear, viewMonth, 1)
+    const dayOfWeek = referenceDate.getDay() // 0 is Sunday
+    const startOfWeek = new Date(referenceDate)
+    startOfWeek.setDate(referenceDate.getDate() - dayOfWeek)
+    
+    const weekDays = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startOfWeek)
+      d.setDate(startOfWeek.getDate() + i)
+      weekDays.push(d)
+    }
+    return weekDays
+  }
+
   const isToday = (d: number) => d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
   
   // Filter based on selected state tab
@@ -476,69 +491,270 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800/60 shadow-sm overflow-hidden flex flex-col flex-1">
-          <div className="grid grid-cols-7 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-            {WEEKDAYS.map(d => (
-              <div key={d} className="text-center text-[10px] font-black text-slate-400 dark:text-slate-500 py-3 uppercase tracking-wider">
-                {d === '日' || d === '六' ? <span className="text-red-400">{d}</span> : d}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 dark:divide-slate-800 flex-1 min-h-[400px]">
-            {cells.map((day, idx) => {
-              const dayEvents = day ? (eventsByDay[day] || []) : []
-              const selected = day === selectedDay
-              const todayCell = day ? isToday(day) : false
-
-              return (
-                <div
-                  key={idx}
-                  onClick={() => day && setSelectedDay(day)}
-                  className={`p-2 cursor-pointer transition-all flex flex-col justify-between group min-h-[90px] lg:min-h-[110px]
-                    ${day ? 'hover:bg-slate-50/60 dark:hover:bg-slate-800/20' : 'bg-slate-50/30 dark:bg-slate-950/20'}
-                    ${selected ? 'bg-indigo-50/30 dark:bg-indigo-900/10 ring-2 ring-inset ring-indigo-500/55' : ''}`}
-                >
-                  {day ? (
-                    <>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-xs font-black w-6 h-6 flex items-center justify-center rounded-full
-                          ${todayCell ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}>
-                          {day}
-                        </span>
-                        {dayEvents.length > 2 && (
-                          <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">+{dayEvents.length - 2}</span>
-                        )}
-                      </div>
-                      
-                      <div className="space-y-1 flex-1 overflow-hidden">
-                        {dayEvents.slice(0, 2).map((ev) => {
-                          const normPlatform = normalizePlatformLabel(ev.platform)
-                          const hasVideo = ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频')
-                          return (
-                            <div
-                              key={ev.id}
-                              onClick={(e) => { e.stopPropagation(); setSelectedDay(day); setSelectedEventId(ev.id) }}
-                              className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
-                                PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
-                              } ${ev.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
-                            >
-                              {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
-                              {ev.status === 'scheduled' && normPlatform === 'Google' && (
-                                <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
-                              )}
-                              <span>{normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </>
-                  ) : (
-                    <div />
-                  )}
+          {activeView !== 'day' && activeView !== 'list' && (
+            <div className="grid grid-cols-7 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+              {WEEKDAYS.map(d => (
+                <div key={d} className="text-center text-[10px] font-black text-slate-400 dark:text-slate-500 py-3 uppercase tracking-wider">
+                  {d === '日' || d === '六' ? <span className="text-red-400">{d}</span> : d}
                 </div>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          )}
+
+          {activeView === 'month' && (
+            <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 dark:divide-slate-800 flex-1 min-h-[400px]">
+              {cells.map((day, idx) => {
+                const dayEvents = day ? (eventsByDay[day] || []) : []
+                const selected = day === selectedDay
+                const todayCell = day ? isToday(day) : false
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => day && setSelectedDay(day)}
+                    className={`p-2 cursor-pointer transition-all flex flex-col justify-between group min-h-[90px] lg:min-h-[110px]
+                      ${day ? 'hover:bg-slate-50/60 dark:hover:bg-slate-800/20' : 'bg-slate-50/30 dark:bg-slate-950/20'}
+                      ${selected ? 'bg-indigo-50/30 dark:bg-indigo-900/10 ring-2 ring-inset ring-indigo-500/55' : ''}`}
+                  >
+                    {day ? (
+                      <>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-xs font-black w-6 h-6 flex items-center justify-center rounded-full
+                            ${todayCell ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}>
+                            {day}
+                          </span>
+                          {dayEvents.length > 2 && (
+                            <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">+{dayEvents.length - 2}</span>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-1 flex-1 overflow-hidden">
+                          {dayEvents.slice(0, 2).map((ev) => {
+                            const normPlatform = normalizePlatformLabel(ev.platform)
+                            const hasVideo = ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频')
+                            return (
+                              <div
+                                key={ev.id}
+                                onClick={(e) => { e.stopPropagation(); setSelectedDay(day); setSelectedEventId(ev.id) }}
+                                className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
+                                  PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
+                                } ${ev.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
+                              >
+                                {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
+                                {ev.status === 'scheduled' && normPlatform === 'Google' && (
+                                  <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
+                                )}
+                                <span>{normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <div />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {activeView === 'week' && (
+            <div className="grid grid-cols-7 divide-x divide-slate-100 dark:divide-slate-800 flex-1 min-h-[150px]">
+              {getDaysForWeekView().map((d, idx) => {
+                const isSelected = selectedDay === d.getDate() && viewMonth === d.getMonth() && viewYear === d.getFullYear()
+                const todayCell = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()
+                const isCurrentMonth = d.getMonth() === viewMonth
+                
+                const dayEvents = filteredEvents.filter(ev => {
+                  const evDate = new Date(ev.scheduledAt)
+                  return evDate.getDate() === d.getDate() &&
+                         evDate.getMonth() === d.getMonth() &&
+                         evDate.getFullYear() === d.getFullYear()
+                })
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setViewYear(d.getFullYear())
+                      setViewMonth(d.getMonth())
+                      setSelectedDay(d.getDate())
+                    }}
+                    className={`p-2 cursor-pointer transition-all flex flex-col justify-between group min-h-[200px]
+                      ${isCurrentMonth ? 'hover:bg-slate-50/60 dark:hover:bg-slate-800/20' : 'bg-slate-50/30 dark:bg-slate-950/20 opacity-60'}
+                      ${isSelected ? 'bg-indigo-50/30 dark:bg-indigo-900/10 ring-2 ring-inset ring-indigo-500/55' : ''}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-xs font-black w-6 h-6 flex items-center justify-center rounded-full
+                        ${todayCell ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}>
+                        {d.getDate()}
+                      </span>
+                      <span className="text-[8px] font-bold text-slate-400 uppercase">{WEEKDAYS[d.getDay()]}</span>
+                    </div>
+                    
+                    <div className="space-y-1 flex-1 overflow-y-auto no-scrollbar">
+                      {dayEvents.map((ev) => {
+                        const normPlatform = normalizePlatformLabel(ev.platform)
+                        const hasVideo = ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频')
+                        return (
+                          <div
+                            key={ev.id}
+                            onClick={(e) => { e.stopPropagation(); setSelectedDay(d.getDate()); setSelectedEventId(ev.id) }}
+                            className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
+                              PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
+                            } ${ev.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
+                          >
+                            {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
+                            {ev.status === 'scheduled' && normPlatform === 'Google' && (
+                              <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
+                            )}
+                            <span>{normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {activeView === 'day' && (
+            <div className="flex-1 p-6 overflow-y-auto">
+              <div className="max-w-2xl mx-auto space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+                  <div>
+                    <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
+                      {viewYear}年 {viewMonth + 1}月{selectedDay}日 排期内容
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">当天共有 {selectedDayEvents.length} 条排期记录</p>
+                  </div>
+                </div>
+                
+                {selectedDayEvents.length === 0 ? (
+                  <div className="py-24 text-center text-slate-400 dark:text-slate-500">
+                    <Clock className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                    <p className="text-sm font-extrabold">当天无排期内容</p>
+                    <p className="text-xs opacity-75 mt-1">请点击其他日期查看，或新建排期草稿</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {selectedDayEvents.map((ev) => {
+                      const normPlatform = normalizePlatformLabel(ev.platform)
+                      const isExpired = expiredAccounts.some((acc: any) => acc.platformId === ev.platform)
+                      return (
+                        <div 
+                          key={ev.id}
+                          onClick={() => { setSelectedEventId(ev.id) }}
+                          className={`p-4 bg-white dark:bg-slate-850/40 rounded-2xl border border-slate-100 dark:border-slate-800/80 hover:border-indigo-500/40 hover:shadow-md transition-all cursor-pointer flex gap-4 ${
+                            selectedEventId === ev.id ? 'ring-2 ring-indigo-500/60' : ''
+                          }`}
+                        >
+                          {ev.mediaUrls?.[0] && (
+                            <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-slate-100 border border-slate-200/40">
+                              <img src={ev.mediaUrls[0]} alt={ev.title} className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center justify-between gap-2 mb-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${
+                                    PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
+                                  }`}>
+                                    {normPlatform}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold">{formatTime(ev.time)}</span>
+                                </div>
+                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${STATUS_COLORS[ev.status]}`}>
+                                  {ev.status === 'done' ? '已发布' : ev.status === 'pending' ? '待审核' : '已排期'}
+                                </span>
+                              </div>
+                              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-relaxed">{ev.title}</h4>
+                            </div>
+                            
+                            {isExpired && (
+                              <div className="flex items-center gap-1 mt-2 text-[9px] font-bold text-amber-600 dark:text-amber-500">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                <span>授权已失效</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeView === 'list' && (
+            <div className="flex-1 p-6 overflow-y-auto">
+              <div className="max-w-3xl mx-auto space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 mb-2">
+                  <div>
+                    <h3 className="text-base font-black text-slate-800 dark:text-slate-100">本月排期列表</h3>
+                    <p className="text-xs text-slate-400 mt-1">共筛选出 {filteredEvents.length} 条排期记录</p>
+                  </div>
+                </div>
+
+                {filteredEvents.length === 0 ? (
+                  <div className="py-24 text-center text-slate-400 dark:text-slate-500">
+                    <Clock className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                    <p className="text-sm font-extrabold">暂无符合条件的排期记录</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filteredEvents.map((ev) => {
+                      const normPlatform = normalizePlatformLabel(ev.platform)
+                      const evDate = new Date(ev.scheduledAt)
+                      const isSelected = selectedEventId === ev.id
+                      return (
+                        <div
+                          key={ev.id}
+                          onClick={() => {
+                            setSelectedDay(evDate.getDate())
+                            setSelectedEventId(ev.id)
+                          }}
+                          className={`py-3.5 px-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/10 cursor-pointer transition-colors flex items-center justify-between gap-4 ${
+                            isSelected ? 'bg-indigo-50/20 dark:bg-indigo-950/10' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="flex flex-col items-center shrink-0 w-10 text-center">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">
+                                {evDate.toLocaleDateString('zh-CN', { month: 'short' })}
+                              </span>
+                              <span className="text-sm font-black text-slate-700 dark:text-slate-300 mt-0.5">{evDate.getDate()}日</span>
+                            </div>
+
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border shrink-0 ${
+                              PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
+                            }`}>
+                              {normPlatform}
+                            </span>
+
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate max-w-[320px]">
+                              {ev.title.replace(`${normPlatform} · `, '')}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-[10px] text-slate-400 font-bold">{formatTime(ev.time)}</span>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${STATUS_COLORS[ev.status]}`}>
+                              {ev.status === 'done' ? '已发布' : ev.status === 'pending' ? '待审核' : '已排期'}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
