@@ -295,6 +295,72 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     setSelectedEventId(null)
   }
 
+  const handlePrev = () => {
+    if (activeView === 'day') {
+      const refDay = selectedDay || 1
+      const current = new Date(viewYear, viewMonth, refDay)
+      current.setDate(current.getDate() - 1)
+      setViewYear(current.getFullYear())
+      setViewMonth(current.getMonth())
+      setSelectedDay(current.getDate())
+      setSelectedEventId(null)
+    } else if (activeView === 'week') {
+      const refDay = selectedDay || 1
+      const current = new Date(viewYear, viewMonth, refDay)
+      current.setDate(current.getDate() - 7)
+      setViewYear(current.getFullYear())
+      setViewMonth(current.getMonth())
+      setSelectedDay(current.getDate())
+      setSelectedEventId(null)
+    } else {
+      prevMonth()
+    }
+  }
+
+  const handleNext = () => {
+    if (activeView === 'day') {
+      const refDay = selectedDay || 1
+      const current = new Date(viewYear, viewMonth, refDay)
+      current.setDate(current.getDate() + 1)
+      setViewYear(current.getFullYear())
+      setViewMonth(current.getMonth())
+      setSelectedDay(current.getDate())
+      setSelectedEventId(null)
+    } else if (activeView === 'week') {
+      const refDay = selectedDay || 1
+      const current = new Date(viewYear, viewMonth, refDay)
+      current.setDate(current.getDate() + 7)
+      setViewYear(current.getFullYear())
+      setViewMonth(current.getMonth())
+      setSelectedDay(current.getDate())
+      setSelectedEventId(null)
+    } else {
+      nextMonth()
+    }
+  }
+
+  // Auto-select day when entering day/week view if selectedDay is null
+  useEffect(() => {
+    if ((activeView === 'day' || activeView === 'week') && !selectedDay) {
+      const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth()
+      setSelectedDay(isCurrentMonth ? today.getDate() : 1)
+    }
+  }, [activeView, selectedDay, viewYear, viewMonth])
+
+  // Get formatted week range label
+  const getWeekRangeLabel = () => {
+    const weekDays = getDaysForWeekView()
+    const start = weekDays[0]
+    const end = weekDays[6]
+    if (start.getFullYear() === end.getFullYear()) {
+      if (start.getMonth() === end.getMonth()) {
+        return `${start.getFullYear()}年${start.getMonth() + 1}月${start.getDate()}日 - ${end.getDate()}日`
+      }
+      return `${start.getFullYear()}年${start.getMonth() + 1}月${start.getDate()}日 - ${end.getMonth() + 1}月${end.getDate()}日`
+    }
+    return `${start.getFullYear()}年${start.getMonth() + 1}月${start.getDate()}日 - ${end.getFullYear()}年${end.getMonth() + 1}月${end.getDate()}日`
+  }
+
   const firstDay = new Date(viewYear, viewMonth, 1).getDay()
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
   const cells: (number | null)[] = [
@@ -354,15 +420,22 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
           
           <button
             onClick={handleAIProposal}
-            disabled={aiProposalGenerating}
+            disabled={aiProposalGenerating || !activeBrandId}
             className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 disabled:opacity-50 text-white py-3 px-4 rounded-xl flex items-center justify-center gap-2 mb-3 shadow-lg active:scale-[0.98] transition-all font-black text-xs"
+            title={!activeBrandId ? "请先选择特定品牌" : "AI 一键排期提案"}
           >
             <Sparkles className="w-4 h-4 text-white animate-pulse" />
             <span>{aiProposalGenerating ? '排期分析中...' : 'AI 一键排期提案'}</span>
           </button>
           
           <button
-            onClick={() => alert('已发布排期在日历上显示。请在“发布”或“任务”视图新建发布草稿。')}
+            onClick={() => {
+              if (!activeBrandId) {
+                alert('请在左侧选择特定品牌后再新建发布草稿。')
+                return
+              }
+              alert('已发布排期在日历上显示。请在“发布”或“任务”视图新建发布草稿。')
+            }}
             className="w-full bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800 border border-slate-200/60 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-bold text-xs"
           >
             <Plus className="w-4 h-4 text-slate-500" />
@@ -380,6 +453,16 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
             </div>
             {allBrands.length > 0 ? (
               <ul className="space-y-1.5 mb-6">
+                <li
+                  onClick={() => setActiveBrandId(undefined)}
+                  className={`flex flex-col p-2.5 rounded-xl cursor-pointer transition-all border ${
+                    activeBrandId === undefined
+                      ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold'
+                      : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
+                  }`}
+                >
+                  <span className="text-xs">全部品牌 (All Brands)</span>
+                </li>
                 {allBrands.map((b: any) => {
                   const isSelected = b.id === activeBrandId
                   const lacksChannels = !b.accounts || b.accounts.length === 0
@@ -417,7 +500,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
             </div>
             
-            {brandDetails?.accounts && brandDetails.accounts.length > 0 ? (
+            {activeBrandId && brandDetails?.accounts && brandDetails.accounts.length > 0 ? (
               <ul className="space-y-1.5">
                 {brandDetails.accounts.map((acc: any) => {
                   const normPlatform = normalizePlatformLabel(acc.platformId)
@@ -443,6 +526,10 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                   )
                 })}
               </ul>
+            ) : !activeBrandId ? (
+              <div className="text-[11px] text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800/80">
+                当前显示全部品牌发布排期。选择左侧特定品牌可查看并配置其单独的托管发布渠道。
+              </div>
             ) : (
               <div className="text-[11px] text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800/80">
                 暂未连接发布渠道，请前往“品牌设置”完成账号授权。
@@ -451,7 +538,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
           </div>
 
           {/* Dynamic Warnings List */}
-          {expiredAccounts.length > 0 && (
+          {activeBrandId && expiredAccounts.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-3 px-1">
                 <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">警告与异常</span>
@@ -473,26 +560,28 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
           )}
 
           {/* Dynamic Brand Website / Landing Conversion page */}
-          <div>
-            <div className="flex items-center justify-between mb-3 px-1">
-              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">引流落地页</span>
-            </div>
-            <div className="p-3 bg-slate-50 dark:bg-slate-800/35 border border-slate-100 dark:border-slate-800 rounded-xl">
-              <div className="flex items-center gap-2">
-                {brandDetails?.website ? (
-                  <>
-                    <Compass className="w-4 h-4 text-indigo-500" />
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-[170px]">{brandDetails.website}</span>
-                  </>
-                ) : (
-                  <>
-                    <Compass className="w-4 h-4 text-slate-400" />
-                    <span className="text-xs font-bold text-slate-400 dark:text-slate-500 italic">缺失</span>
-                  </>
-                )}
+          {activeBrandId && (
+            <div>
+              <div className="flex items-center justify-between mb-3 px-1">
+                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">引流落地页</span>
+              </div>
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/35 border border-slate-100 dark:border-slate-800 rounded-xl">
+                <div className="flex items-center gap-2">
+                  {brandDetails?.website ? (
+                    <>
+                      <Compass className="w-4 h-4 text-indigo-500" />
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-[170px]">{brandDetails.website}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Compass className="w-4 h-4 text-slate-400" />
+                      <span className="text-xs font-bold text-slate-400 dark:text-slate-500 italic">缺失</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </aside>
 
@@ -502,12 +591,18 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/60 p-4 rounded-2xl shadow-sm mb-6 shrink-0">
           
           <div className="flex items-center gap-4">
-            <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 min-w-[120px]">{viewYear}年 {MONTHS[viewMonth]}</h2>
+            <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 min-w-[120px]">
+              {activeView === 'day' && selectedDay
+                ? `${viewYear}年 ${viewMonth + 1}月${selectedDay}日`
+                : activeView === 'week'
+                ? getWeekRangeLabel()
+                : `${viewYear}年 ${MONTHS[viewMonth]}`}
+            </h2>
             <div className="flex border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm bg-white dark:bg-slate-800">
-              <button onClick={prevMonth} className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 border-r border-slate-200 dark:border-slate-700 transition-colors">
+              <button onClick={handlePrev} className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 border-r border-slate-200 dark:border-slate-700 transition-colors">
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <button onClick={nextMonth} className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 transition-colors">
+              <button onClick={handleNext} className="p-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 transition-colors">
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -608,7 +703,10 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                 {ev.status === 'scheduled' && normPlatform === 'Google' && (
                                   <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
                                 )}
-                                <span>{normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}</span>
+                                <span>
+                                  {!activeBrandId && `[${ev.brandName}] `}
+                                  {normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}
+                                </span>
                               </div>
                             )
                           })}
@@ -673,7 +771,10 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                             {ev.status === 'scheduled' && normPlatform === 'Google' && (
                               <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
                             )}
-                            <span>{normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}</span>
+                            <span>
+                              {!activeBrandId && `[${ev.brandName}] `}
+                              {normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}
+                            </span>
                           </div>
                         )
                       })}
@@ -724,6 +825,11 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                             <div>
                               <div className="flex items-center justify-between gap-2 mb-1.5">
                                 <div className="flex items-center gap-2">
+                                  {!activeBrandId && (
+                                    <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-150 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/30">
+                                      {ev.brandName}
+                                    </span>
+                                  )}
                                   <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${
                                     PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
                                   }`}>
@@ -735,7 +841,10 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                   {ev.status === 'done' ? '已发布' : ev.status === 'pending' ? '待审核' : '已排期'}
                                 </span>
                               </div>
-                              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-relaxed">{ev.title}</h4>
+                              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-relaxed">
+                                {!activeBrandId && `[${ev.brandName}] `}
+                                {ev.title}
+                              </h4>
                             </div>
                             
                             {isExpired && (
@@ -801,6 +910,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                             </span>
 
                             <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate max-w-[320px]">
+                              {!activeBrandId && `[${ev.brandName}] `}
                               {ev.title.replace(`${normPlatform} · `, '')}
                             </span>
                           </div>
