@@ -185,6 +185,7 @@ export async function GET(_req: Request, { params }: Params) {
           autoPilot: true, followerCount: true, followerDelta: true,
           ratingScore: true, snapshotAt: true,
           profileUrl: true,   // public URL — safe to expose
+          expiresAt: true,
           // loginUsername / loginPassword intentionally excluded (admin-only via /api/admin/brand-credentials)
         },
       },

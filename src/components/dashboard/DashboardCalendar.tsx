@@ -357,7 +357,8 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                           normPlatform === 'IG' ? 'bg-gradient-to-tr from-yellow-400 via-red-500 to-purple-500' :
                           normPlatform === 'Google' ? 'bg-blue-550' :
                           normPlatform === 'TikTok' ? 'bg-black' :
-                          normPlatform === 'Facebook' ? 'bg-indigo-650' : 'bg-slate-500'
+                          normPlatform === 'Facebook' ? 'bg-indigo-650' :
+                          normPlatform === '小红书' ? 'bg-red-600' : 'bg-slate-500'
                         }`}>
                           {normPlatform}
                         </span>
