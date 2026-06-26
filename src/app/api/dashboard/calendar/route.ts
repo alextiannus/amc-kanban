@@ -102,41 +102,6 @@ export async function GET(request: Request) {
   })
   const brandNameMap = new Map(brands.map(brand => [brand.id, brand.name]))
 
-  const brandAgentLinks = await prisma.brandAgent.findMany({
-    where: { brandId: { in: scopedBrandIds }, active: true },
-    select: { agentId: true },
-  })
-  const brandAgentIds = Array.from(new Set(brandAgentLinks.map(link => link.agentId)))
-
-  const tasks = brandAgentIds.length > 0
-    ? await prisma.workUnit.findMany({
-        where: {
-          assigneeId: { in: brandAgentIds },
-          brandId: { in: scopedBrandIds },
-          OR: [
-            // Planned work: tasks scheduled by deadline in the viewed month.
-            { deadline: { gte: rangeStart, lt: rangeEnd } },
-            // Past happened: completed/cancelled in the viewed month.
-            { status: 'done', updatedAt: { gte: rangeStart, lt: rangeEnd } },
-            // Planned without deadline: newly created active tasks in the viewed month.
-            { status: { in: ['todo', 'in_progress', 'pending'] }, deadline: null, createdAt: { gte: rangeStart, lt: rangeEnd } },
-          ],
-        },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          materials: true,
-          tags: true,
-          status: true,
-          deadline: true,
-          createdAt: true,
-          updatedAt: true,
-          brandId: true,
-        },
-        orderBy: [{ updatedAt: 'desc' }],
-      })
-    : []
 
   const mediaAssets = await prisma.mediaAsset.findMany({
     where: { brandId: { in: scopedBrandIds } },
@@ -225,31 +190,7 @@ export async function GET(request: Request) {
     }
   })
 
-  const taskEvents = tasks
-    .filter(task => task.status !== 'void' && Boolean(task.deadline))
-    .map(task => {
-      const eventTime = task.status === 'done' ? task.updatedAt : (task.deadline ?? task.createdAt)
-      const status = task.status === 'done'
-        ? 'done'
-        : task.status === 'pending'
-          ? 'pending'
-          : 'scheduled'
-      const title = task.status === 'done' ? `[已完成] ${task.title}` : task.title
-
-      return {
-        id: `task_${task.id}`,
-        brandId: task.brandId ?? requestedBrandId ?? '',
-        brandName: task.brandId ? (brandNameMap.get(task.brandId) ?? '当前品牌') : (requestedBrandId ? (brandNameMap.get(requestedBrandId) ?? '当前品牌') : '任务'),
-        platform: inferTaskPlatform(task),
-        title,
-        status,
-        time: eventTime.toISOString(),
-        scheduledAt: eventTime.toISOString(),
-        type: 'task'
-      }
-    })
-
-  const mergedEvents = [...events, ...taskEvents].sort((a, b) => {
+  const mergedEvents = [...events].sort((a, b) => {
     return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
   })
 
