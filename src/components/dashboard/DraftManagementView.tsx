@@ -284,7 +284,59 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
   const selectedAssetIds = useMemo(() => attachedMedia.filter(m => m.type === 'asset').map(m => m.id), [attachedMedia])
   const selectedDraft = useMemo(() => drafts.find((draft) => draft.id === selectedId) || null, [drafts, selectedId])
-  const activeAccount = useMemo(() => accounts.find(a => a.id === accountId) || null, [accounts, accountId])
+  const accountOptions = useMemo(() => {
+    const list = [...accounts]
+    
+    // Add unconfigured placeholder accounts if they are not already in accounts
+    const hasGoogle = list.some(a => ['google', 'google_business'].includes(a.platformId.toLowerCase()))
+    const hasRednote = list.some(a => ['red', 'xiaohongshu', 'xhs'].includes(a.platformId.toLowerCase()))
+
+    // Check if the currently selected draft belongs to an unconfigured account that is already in the database
+    const selectedDraftAccount = selectedDraft?.account
+    
+    if (selectedDraftAccount && selectedDraftAccount.handle === 'unconfigured') {
+      const pId = selectedDraftAccount.platformId.toLowerCase()
+      const isGoogle = ['google', 'google_business'].includes(pId)
+      const isRed = ['red', 'xiaohongshu', 'xhs'].includes(pId)
+      
+      if (!list.some(a => a.id === selectedDraftAccount.id)) {
+        list.push({
+          id: selectedDraftAccount.id,
+          platformId: selectedDraftAccount.platformId,
+          handle: 'unconfigured',
+          displayName: selectedDraftAccount.displayName || (isGoogle ? 'Google Maps (未配置)' : '小红书 / Rednote (未配置)'),
+          autoPilot: false,
+          profileUrl: null
+        } as any)
+      }
+    }
+
+    // Still add unconfigured placeholders for selection if the user wants to select them for a new/existing draft
+    if (!hasGoogle && !list.some(a => a.id === 'unconfigured_google_business' || (a.handle === 'unconfigured' && ['google', 'google_business'].includes(a.platformId.toLowerCase())))) {
+      list.push({
+        id: 'unconfigured_google_business',
+        platformId: 'google_business',
+        handle: 'unconfigured',
+        displayName: 'Google Maps (未配置)',
+        autoPilot: false,
+        profileUrl: null
+      } as any)
+    }
+    if (!hasRednote && !list.some(a => a.id === 'unconfigured_red' || (a.handle === 'unconfigured' && ['red', 'xiaohongshu', 'xhs'].includes(a.platformId.toLowerCase())))) {
+      list.push({
+        id: 'unconfigured_red',
+        platformId: 'red',
+        handle: 'unconfigured',
+        displayName: '小红书 (未配置)',
+        autoPilot: false,
+        profileUrl: null
+      } as any)
+    }
+    
+    return list
+  }, [accounts, selectedDraft])
+
+  const activeAccount = useMemo(() => accountOptions.find(a => a.id === accountId) || null, [accountOptions, accountId])
 
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewPlatform, setPreviewPlatform] = useState('instagram')
@@ -936,11 +988,11 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 min-h-[44px]">
                   <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">发布账号 (多选) <span className="text-red-500">*</span></p>
-                  {accounts.length === 0 ? (
+                  {accountOptions.length === 0 ? (
                     <p className="text-xs text-slate-400 italic">未绑定任何账号</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
-                      {accounts.map((account) => {
+                      {accountOptions.map((account) => {
                         const isSelected = selectedAccountIds.includes(account.id)
                         return (
                           <button
