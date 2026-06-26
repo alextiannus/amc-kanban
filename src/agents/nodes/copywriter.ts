@@ -9,6 +9,8 @@ export async function copywriterNode(state: any) {
     return state;
   }
   const { brandId, taskId, platform, researchNotes, marketingStrategy } = state;
+  const platformLower = (platform || "").toLowerCase();
+  const isRednote = platformLower === "xiaohongshu" || platformLower === "red" || platformLower === "xhs";
 
   if (!brandId || !taskId) {
     throw new Error("Missing brandId or taskId in state.");
@@ -175,6 +177,9 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
   const hookPrompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
 Brand Description: ${brand.description || "A premium brand."}
 Target Platform: ${platform}
+Language Rule:
+- For Xiaohongshu (小红书/Rednote, platform is "red", "xiaohongshu", or "xhs"): You MUST write the content in Simplified Chinese (中文) by default.
+- For all other platforms (Instagram, Facebook, TikTok, Google Business Profile / Google Maps): You MUST write the content in English (英文) by default.
 Active Task: "${task.title}"
 Task Details: ${task.description || ""}
 ${userPrompt ? `User Custom Theme: "${userPrompt}"` : ""}
@@ -190,14 +195,14 @@ Goal: Generate 3 different engaging hook variants (opening lines/titles) optimiz
 Rules:
 1. Catchy and high click-through-rate.
 2. Platform-native visual formatting:
-   - For Xiaohongshu (小红书/Rednote):
+   - For Xiaohongshu (小红书/Rednote) (Note: MUST generate in Simplified Chinese):
      * Must start with highly eye-catching emojis (e.g. 🔥, 😭, 😱, 📍, 🌟, ⚠️, 🧐).
      * Must end with double exclamation marks ("！！").
      * Enforce proven viral hook formulas:
        a. Surprise/Disbelief: "我不允许还有人不知道..." (I won't allow anyone to not know about...), "天呐！这家店也太..." (Heavens! This shop is too...), "直接封神！..." (Directly canonized!).
        b. Local Geotargeting focus: "新加坡克拉码头必吃..." (Clarke Quay Singapore must eat...), "克拉码头这家店绝了..." (This shop at Clarke Quay is amazing...).
        c. Urgency/FOMO: "听我劝！去这家店前一定要..." (Hear my advice! Before going to this shop, you must...), "Bojio! 别说我不提前分享..." (Bojio! Don't say I didn't share...).
-   - For Instagram/TikTok/Facebook:
+   - For Instagram/TikTok/Facebook/Google Business (Note: MUST generate in English):
      * Write an intriguing, premium, and direct opening sentence.
      * Must be punchy and fit within 80-125 characters (since Instagram folds captions after 125 characters, the primary message must be visible before the fold).
 3. STRICT Negative prompt: Avoid weird hooks starting with clichés like "Discover the secrets...", "The best...", "The most...", "The top...". Do not use cringy or over-the-top AI language.
@@ -222,7 +227,7 @@ Please output ONLY a valid JSON array of strings.`;
 
   if (generatedHooks.length === 0) {
     generatedHooks = [
-      platform === "xiaohongshu" ? `🔥 抢先打卡！这家店的招牌真的绝了！` : `Chope your seats! Something exciting is cooking at ${brand.name}.`
+      isRednote ? `🔥 抢先打卡！这家店的招牌真的绝了！` : `Chope your seats! Something exciting is cooking at ${brand.name}.`
     ];
   }
 
@@ -232,6 +237,9 @@ Please output ONLY a valid JSON array of strings.`;
   const bodyPrompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
 Brand Description: ${brand.description || "A premium brand."}
 Target Platform: ${platform}
+Language Rule:
+- For Xiaohongshu (小红书/Rednote, platform is "red", "xiaohongshu", or "xhs"): You MUST write the content in Simplified Chinese (中文) by default.
+- For all other platforms (Instagram, Facebook, TikTok, Google Business Profile / Google Maps): You MUST write the content in English (英文) by default.
 Active Task: "${task.title}"
 Task Details: ${task.description || ""}
 ${userPrompt ? `User Custom Theme: "${userPrompt}"` : ""}
@@ -257,16 +265,21 @@ Guidelines:
    - For F&B/restaurants: remind them to book a table, include the restaurant's address/position, or highlight any active promo codes.
    - For others: prompt for bookings/inquiries.
 3. Platform-Native Formatting & Layout Rules:
-   - For Xiaohongshu (小红书/Rednote):
+   - For Xiaohongshu (小红书/Rednote) (Note: MUST generate in Simplified Chinese):
      * High Density Emojis: Use emojis as visual separator markers for list items (e.g. ✨, 👉, ✅, 📌, 💡, ▫️) instead of default markdown dashes.
      * Easy Reading: Break text into short, 1-2 sentence paragraphs separated by a full blank line. Do not write large dense blocks of text.
      * Conversational Tone: Use friendly, colloquial styles (e.g. "家人们", "姐妹们", "宝子们") and naturally integrate local Singlish slang (e.g. "Bojio", "Shiok", "Chope") if defined in slangDict.
      * Hashtags: Output hashtags at the very bottom, space-separated (e.g. "#新加坡美食 #克拉码头").
-   - For Instagram:
-     * Elegant Bilingual Structure: First present high-quality, inviting English copywriting, followed by a clean divider line (or ▫️ dot separators), and then a Simplified Chinese translation.
+   - For Instagram (Note: MUST generate in English):
+     * Write inviting, premium English copywriting.
      * Spacing: Enforce clean double line breaks between sections to avoid crowded layouts.
      * Bullet points: Use custom character bullet points (e.g. •, ▫️) for lists.
      * Hashtags: Output hashtags neatly at the bottom separated from the caption by line breaks.
+   - For Facebook / TikTok (Note: MUST generate in English):
+     * Write inviting, premium English social copy.
+     * Hashtags: Output hashtags neatly at the bottom.
+   - For Google Business Profile (Note: MUST generate in English):
+     * Professional, concise, focus on booking details, contact info, and clear promotion terms.
    - For Google Business Profile:
      * Professional, concise, focus on booking details, contact info, and clear promotion terms.
 4. Output your response in JSON format with two keys:

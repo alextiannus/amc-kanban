@@ -96,6 +96,73 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     return { ok: false as const, status: 400, error: '请先为草稿选择发布账号。' }
   }
 
+  if (draft.account.handle === 'unconfigured') {
+    const scheduled = isFuture(draft.scheduledAt)
+    const nextStatus = brand.autoPilot
+      ? (scheduled ? 'scheduled' : 'published')
+      : 'pending_review'
+
+    const updated = await prisma.contentDraft.update({
+      where: { id: draft.id },
+      data: {
+        status: nextStatus,
+        publishedAt: (!scheduled && nextStatus === 'published') ? new Date() : null,
+        agentNote: '未配置发布渠道，已自动进入排期，需要手动发布。',
+        rejectionNote: null,
+      },
+      include: {
+        account: { select: { id: true, platformId: true, handle: true, displayName: true } },
+        assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
+      },
+    })
+
+    if (nextStatus === 'pending_review') {
+      await prisma.actionItem.upsert({
+        where: { draftId: draft.id },
+        create: {
+          brandId: input.brandId,
+          accountId: draft.accountId,
+          type: 'content_approval',
+          priority: 'normal',
+          title: `审核草稿：${draft.caption.slice(0, 36)}`,
+          description: draft.caption,
+          status: 'pending',
+          agentId: draft.agentId,
+          draftId: draft.id,
+        },
+        update: {
+          accountId: draft.accountId,
+          title: `审核草稿：${draft.caption.slice(0, 36)}`,
+          description: draft.caption,
+          status: 'pending',
+          resolvedAt: null,
+          resolvedBy: null,
+          resolvedNote: null,
+        },
+      })
+    } else if (nextStatus === 'published' || nextStatus === 'scheduled') {
+      await prisma.actionItem.updateMany({
+        where: { draftId: draft.id, brandId: input.brandId, status: 'pending' },
+        data: {
+          status: 'approved',
+          resolvedAt: new Date(),
+          resolvedBy: input.actorId,
+          resolvedNote: input.note || (brand.autoPilot ? '自动排期准备发布' : '主理人批准发布'),
+        },
+      })
+    }
+
+    void persistDraftSnapshotToObs({ brandId: input.brandId, draftId: draft.id, data: updated }).catch((error) => {
+      console.error('[submitDraftForDelivery] OBS delivered snapshot failed:', error)
+    })
+
+    return {
+      ok: true as const,
+      mode: (nextStatus === 'pending_review' ? 'approval_required' : nextStatus) as any,
+      draft: updated,
+    }
+  }
+
   if (!brand.postfastApiKey) {
     await prisma.contentDraft.update({ where: { id: draft.id }, data: { status: 'failed', agentNote: '发布失败：品牌尚未配置 PostFast API Key。' } })
     return { ok: false as const, status: 400, error: '品牌尚未配置 PostFast API Key。' }

@@ -111,9 +111,26 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   if (body.accountId !== undefined) {
-    const accountIdVal = typeof body.accountId === 'string' ? body.accountId.trim() : ''
+    let accountIdVal = typeof body.accountId === 'string' ? body.accountId.trim() : ''
     if (!accountIdVal) {
       return NextResponse.json({ error: 'accountId is required (platform must be determined)' }, { status: 400 })
+    }
+    if (accountIdVal.startsWith('unconfigured_')) {
+      const platformId = accountIdVal.replace('unconfigured_', '')
+      let placeholderAccount = await prisma.socialAccount.findFirst({
+        where: { brandId, platformId, handle: 'unconfigured' }
+      })
+      if (!placeholderAccount) {
+        placeholderAccount = await prisma.socialAccount.create({
+          data: {
+            brandId,
+            platformId,
+            handle: 'unconfigured',
+            displayName: platformId === 'google_business' ? 'Google Maps (未配置)' : '小红书 / Rednote (未配置)',
+          }
+        })
+      }
+      body.accountId = placeholderAccount.id
     }
   }
 

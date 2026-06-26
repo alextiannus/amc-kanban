@@ -19,7 +19,10 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   const accounts = await prisma.socialAccount.findMany({
-    where: { brandId },
+    where: {
+      brandId,
+      NOT: { handle: 'unconfigured' }
+    },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true,

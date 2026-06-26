@@ -165,11 +165,40 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
-  const [createdDrafts, setCreatedDrafts] = useState<any[] | null>(null)
+    const [createdDrafts, setCreatedDrafts] = useState<any[] | null>(null)
   const [isAiGenerating, setIsAiGenerating] = useState(false)
   const [draftCaptions, setDraftCaptions] = useState<Record<string, string>>({})
   const [draftHashtags, setDraftHashtags] = useState<Record<string, string>>({})
   const [draftStatuses, setDraftStatuses] = useState<Record<string, 'generating' | 'completed' | 'failed'>>({})
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
+
+  const accountOptions = useMemo(() => {
+    const list = [...accounts]
+    const hasGoogle = accounts.some(a => ['google', 'google_business'].includes(a.platformId.toLowerCase()))
+    const hasRednote = accounts.some(a => ['red', 'xiaohongshu', 'xhs'].includes(a.platformId.toLowerCase()))
+
+    if (!hasGoogle) {
+      list.push({
+        id: 'unconfigured_google_business',
+        platformId: 'google_business',
+        handle: 'unconfigured',
+        displayName: 'Google Maps (未配置)',
+        autoPilot: false,
+        profileUrl: null
+      })
+    }
+    if (!hasRednote) {
+      list.push({
+        id: 'unconfigured_red',
+        platformId: 'red',
+        handle: 'unconfigured',
+        displayName: '小红书 (未配置)',
+        autoPilot: false,
+        profileUrl: null
+      })
+    }
+    return list
+  }, [accounts])
 
   useEffect(() => {
     if (!isAiGenerating || !createdDrafts || createdDrafts.length === 0) return
@@ -404,7 +433,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     }
   }
 
-  const saveDraft = async (nextStatus?: string, captionOverride?: string) => {
+    const saveDraft = async (nextStatus?: string, captionOverride?: string, scheduledAtOverride?: string) => {
     if (!activeBrandId) return null
     let activeCaption = captionOverride !== undefined ? captionOverride : caption
     if (!activeCaption.trim() && contentIdea.trim()) {
@@ -436,7 +465,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               caption: trimmedCaption,
               hashtags: parseTags(hashtags),
               accountId: accId,
-              scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+              scheduledAt: (scheduledAtOverride || scheduledAt) ? new Date(scheduledAtOverride || scheduledAt).toISOString() : null,
               agentNote: formattedAgentNote,
               status: nextStatus || 'draft',
               mediaUrls,
@@ -460,7 +489,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     }
   }
 
-  const saveOrUpdateDrafts = async (status: string) => {
+    const saveOrUpdateDrafts = async (status: string, scheduledAtOverride?: string) => {
     if (!activeBrandId) return null
     setSaving(true)
     try {
@@ -479,7 +508,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 caption: currentCaption,
                 hashtags: Array.isArray(currentHashtags) ? currentHashtags : parseTags(String(currentHashtags || '')),
                 status,
-                scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+                scheduledAt: scheduledAtOverride || (scheduledAt ? new Date(scheduledAt).toISOString() : null),
               }),
             })
             const json = await res.json().catch(() => ({}))
@@ -501,7 +530,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     }
   }
 
-  const submitDraft = async () => {
+    const submitDraft = async () => {
     if (!activeBrandId) return
     const draftsList = await saveOrUpdateDrafts('draft')
     if (!draftsList || draftsList.length === 0) return
@@ -524,6 +553,39 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       await refreshCalendar()
     } catch (e: any) {
       alert(e.message || '提交草稿失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSchedulePublish = async () => {
+    if (!activeBrandId) return
+    const day = selectedDay || new Date().getDate()
+    const targetDate = new Date(viewYear, viewMonth, day, 10, 0, 0)
+    const targetDateISO = targetDate.toISOString()
+
+    const draftsList = await saveOrUpdateDrafts('scheduled', targetDateISO)
+    if (!draftsList || draftsList.length === 0) return
+
+    setSaving(true)
+    try {
+      await Promise.all(
+        draftsList.map(async (draft) => {
+          const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}/submit`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: agentNote }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json.error || `提交草稿 ${draft.id} 失败`)
+        })
+      )
+
+      alert('排期发布成功！系统已自动为您提交排期。')
+      setIsCreatingPost(false)
+      await refreshCalendar()
+    } catch (e: any) {
+      alert(e.message || '排期提交失败')
     } finally {
       setSaving(false)
     }
@@ -963,6 +1025,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               setDraftCaptions({})
               setDraftHashtags({})
               setDraftStatuses({})
+              setEditingAccountId(null)
             }}
             className="w-full bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/40 dark:hover:bg-slate-800 border border-slate-200/60 dark:border-slate-700 text-slate-700 dark:text-slate-300 py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all font-bold text-xs"
           >
@@ -1151,16 +1214,25 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
 
 
-              {/* Accounts (Multi-Select) & Scheduler Date Time */}
+              {/* Accounts (Multi-Select) & AI Write Button */}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-955/20 p-3 min-h-[44px]">
                   <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2.5">发布账号 (多选) <span className="text-red-500">*</span></p>
-                  {accounts.length === 0 ? (
+                  {accountOptions.length === 0 ? (
                     <p className="text-xs text-slate-400 italic">该品牌未绑定任何渠道账号</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
-                      {accounts.map((account) => {
+                      {accountOptions.map((account) => {
                         const isSelected = selectedAccountIds.includes(account.id)
+                        const getPlatformIcon = () => {
+                          const p = account.platformId.toLowerCase()
+                          if (p === 'instagram') return '📸'
+                          if (p === 'facebook' || p === 'fb') return '👥'
+                          if (p === 'red' || p === 'xiaohongshu' || p === 'xhs') return '📕'
+                          if (p === 'tiktok') return '🎵'
+                          if (p === 'google' || p === 'google_business') return '📍'
+                          return '🔗'
+                        }
                         return (
                           <button
                             key={account.id}
@@ -1180,7 +1252,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                 : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50'
                             }`}
                           >
-                            <span>{account.platformId.toLowerCase() === 'instagram' ? '📸' : account.platformId.toLowerCase() === 'facebook' ? '👥' : account.platformId.toLowerCase() === 'red' ? '📕' : account.platformId.toLowerCase() === 'tiktok' ? '🎵' : '🔗'}</span>
+                            <span>{getPlatformIcon()}</span>
                             <span>{account.displayName || account.handle}</span>
                           </button>
                         )
@@ -1190,13 +1262,65 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 </div>
 
                 <div className="flex flex-col justify-end space-y-1.5">
-                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">定时发布时间</label>
-                  <input
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={(event) => setScheduledAt(event.target.value)}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-4 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                  />
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">内容创作</label>
+                  <button
+                    type="button"
+                    disabled={saving || !contentIdea.trim() || selectedAccountIds.length === 0 || isAiGenerating}
+                    onClick={async () => {
+                      setSaving(true)
+                      try {
+                        if (createdDrafts && createdDrafts.length > 0) {
+                          await Promise.all(
+                            createdDrafts.map(d =>
+                              fetch(`/api/brands/${activeBrandId}/drafts/${d.id}`, { method: 'DELETE' }).catch(() => {})
+                            )
+                          )
+                        }
+
+                        const saved = await saveDraft('draft', '【AI 正在创作中...】')
+                        if (saved && saved.length > 0) {
+                          setCreatedDrafts(saved)
+
+                          const newCaptions: Record<string, string> = {}
+                          const newHashtags: Record<string, string> = {}
+                          const newStatuses: Record<string, 'generating' | 'completed' | 'failed'> = {}
+
+                          saved.forEach(d => {
+                            newCaptions[d.accountId] = '【AI 正在创作中...】'
+                            newHashtags[d.accountId] = ''
+                            newStatuses[d.accountId] = 'generating'
+                          })
+
+                          setDraftCaptions(newCaptions)
+                          setDraftHashtags(newHashtags)
+                          setDraftStatuses(newStatuses)
+                          setIsAiGenerating(true)
+
+                          await Promise.all(
+                            saved.map(draft => triggerCopywriter(draft.id, true))
+                          )
+                        }
+                      } catch (e: any) {
+                        alert(e.message || '启动 AI 创作失败')
+                        setIsAiGenerating(false)
+                      } finally {
+                        setSaving(false)
+                      }
+                    }}
+                    className="h-10 w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black text-xs transition-all shadow-md flex items-center justify-center gap-2"
+                  >
+                    {isAiGenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>AI 创作中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-white animate-pulse" />
+                        <span>✨ AI 创作</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -1496,90 +1620,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
             </div>
 
-            {/* Bottom Actions */}
-            <div className="flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-4 mt-auto">
-              <button
-                type="button"
-                disabled={saving || !contentIdea.trim() || selectedAccountIds.length === 0 || isAiGenerating}
-                onClick={async () => {
-                  setSaving(true)
-                  try {
-                    if (createdDrafts && createdDrafts.length > 0) {
-                      await Promise.all(
-                        createdDrafts.map(d =>
-                          fetch(`/api/brands/${activeBrandId}/drafts/${d.id}`, { method: 'DELETE' }).catch(() => {})
-                        )
-                      )
-                    }
-
-                    const saved = await saveDraft('draft', '【AI 正在创作中...】')
-                    if (saved && saved.length > 0) {
-                      setCreatedDrafts(saved)
-
-                      const newCaptions: Record<string, string> = {}
-                      const newHashtags: Record<string, string> = {}
-                      const newStatuses: Record<string, 'generating' | 'completed' | 'failed'> = {}
-
-                      saved.forEach(d => {
-                        newCaptions[d.accountId] = '【AI 正在创作中...】'
-                        newHashtags[d.accountId] = ''
-                        newStatuses[d.accountId] = 'generating'
-                      })
-
-                      setDraftCaptions(newCaptions)
-                      setDraftHashtags(newHashtags)
-                      setDraftStatuses(newStatuses)
-                      setIsAiGenerating(true)
-
-                      await Promise.all(
-                        saved.map(draft => triggerCopywriter(draft.id, true))
-                      )
-                    }
-                  } catch (e: any) {
-                    alert(e.message || '启动 AI 创作失败')
-                    setIsAiGenerating(false)
-                  } finally {
-                    setSaving(false)
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-650 hover:bg-indigo-700 px-4 py-2 text-xs font-black text-white disabled:opacity-50 transition-all"
-              >
-                {isAiGenerating ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>AI 创作中...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>✨ AI 创作</span>
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                disabled={saving || isAiGenerating || selectedAccountIds.length === 0}
-                onClick={async () => {
-                  const saved = await saveOrUpdateDrafts('draft')
-                  if (saved) {
-                    alert('草稿保存成功！')
-                    setIsCreatingPost(false)
-                    await refreshCalendar()
-                  }
-                }}
-                className="rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800 transition-all"
-              >
-                保存草稿
-              </button>
-              <button
-                type="button"
-                disabled={saving || isAiGenerating || selectedAccountIds.length === 0}
-                onClick={submitDraft}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50 transition-all"
-              >
-                <Send className="h-3.5 w-3.5" /> 提交草稿
-              </button>
-            </div>
+            {/* Bottom Actions removed for "Schedule Publish" style */}
 
           </div>
         ) : (
@@ -1977,8 +2018,23 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 <Eye className="w-4 h-4 text-emerald-500" />
                 多平台发布预览 ({selectedAccountIds.length} 个账号)
               </h3>
-              <p className="text-[10px] text-slate-400 dark:text-slate-505 mt-0.5">实时预览不同平台的内容渲染效果</p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-550 mt-0.5">实时预览不同平台的内容渲染效果</p>
             </div>
+            {selectedAccountIds.length > 0 && (
+              <button
+                type="button"
+                disabled={saving || isAiGenerating}
+                onClick={handleSchedulePublish}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1"
+              >
+                {saving ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                <span>排期发布</span>
+              </button>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-thin">
@@ -1990,7 +2046,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
             ) : (
               <div className="space-y-8 pb-10">
                 {selectedAccountIds.map((accId) => {
-                  const account = accounts.find((a) => a.id === accId)
+                  const account = accountOptions.find((a) => a.id === accId)
                   if (!account) return null
                   const platform = account.platformId.toLowerCase()
                   
@@ -1999,20 +2055,40 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                   const currentHashtagsString = draftHashtags[accId] !== undefined ? draftHashtags[accId] : hashtags
                   const currentHashtagsArray = parseTags(currentHashtagsString)
 
+                  const getPlatformLabelText = () => {
+                    const p = account.platformId.toLowerCase()
+                    if (p === 'instagram') return '📸 Instagram Feed'
+                    if (p === 'facebook' || p === 'fb') return '👥 Facebook Post'
+                    if (p === 'red' || p === 'xiaohongshu' || p === 'xhs') return '📕 小红书 / Rednote'
+                    if (p === 'tiktok') return '🎵 TikTok'
+                    if (p === 'google' || p === 'google_business') return '📍 Google Maps'
+                    return '🔗 Social Post'
+                  }
+
                   return (
-                    <div key={accId} className="space-y-4 border-b border-slate-100 dark:border-slate-850 pb-6 last:border-0 last:pb-0">
+                    <div
+                      key={accId}
+                      onClick={() => {
+                        if (!isGenerating) {
+                          setEditingAccountId(accId)
+                        }
+                      }}
+                      className={`space-y-4 border-b border-slate-100 dark:border-slate-850 pb-6 last:border-0 last:pb-0 transition-all ${
+                        !isGenerating ? 'cursor-pointer hover:bg-slate-100/30 dark:hover:bg-slate-800/10 p-2 rounded-2xl' : ''
+                      }`}
+                    >
                       <div className="flex items-center gap-2 px-1">
                         <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-850 text-slate-700 dark:text-slate-355">
-                          {account.platformId.toLowerCase() === 'instagram' ? '📸 Instagram Feed' :
-                           account.platformId.toLowerCase() === 'facebook' ? '👥 Facebook Post' :
-                           account.platformId.toLowerCase() === 'red' ? '📕 小红书 / Rednote' :
-                           account.platformId.toLowerCase() === 'tiktok' ? '🎵 TikTok' :
-                           '🔗 Google Business'}
+                          {getPlatformLabelText()}
                         </span>
                         <span className="text-[10px] text-slate-400 font-bold">({account.displayName || account.handle})</span>
                       </div>
 
-                      <div className="relative">
+                      <div className="relative" onClick={(e) => {
+                        if (e.target instanceof HTMLButtonElement || e.target instanceof SVGElement || (e.target instanceof HTMLElement && e.target.closest('button'))) {
+                          e.stopPropagation()
+                        }
+                      }}>
                         <div className={`${isGenerating ? 'blur-[2px] opacity-70 pointer-events-none' : ''} transition-all duration-300`}>
                           {platform === 'instagram' && (
                             <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-white shadow-lg dark:border-slate-955 dark:bg-black text-black dark:text-white">
@@ -2098,7 +2174,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                             </div>
                           )}
 
-                          {platform === 'red' && (
+                          {(platform === 'red' || platform === 'xiaohongshu' || platform === 'xhs') && (
                             <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-white shadow-lg dark:border-slate-955 dark:bg-[#0f0f0f] text-black dark:text-white">
                               <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-900">
                                 <div className="flex items-center gap-1.5">
@@ -2289,7 +2365,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                             </div>
                           )}
 
-                          {platform === 'google_business' && (
+                          {(platform === 'google_business' || platform === 'google') && (
                             <div className="mx-auto w-full max-w-[340px] rounded-xl border border-slate-205 bg-white p-3 shadow-lg dark:border-slate-888 dark:bg-slate-905 text-black dark:text-white">
                               <div className="flex items-center gap-2">
                                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 text-white font-black text-sm">
@@ -2369,39 +2445,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                         )}
                       </div>
 
-                      {/* Inline Platform-specific editing inputs */}
-                      {!isGenerating && (
-                        <div className="mx-auto w-full max-w-[340px] space-y-3 bg-slate-100/50 dark:bg-slate-800/30 p-3 rounded-xl border border-slate-200/50 dark:border-slate-700/50 mt-2">
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                              编辑 {account.platformId.toLowerCase() === 'red' ? '📕 小红书' : '该渠道'} 文案
-                            </label>
-                            <textarea
-                              value={draftCaptions[accId] !== undefined ? draftCaptions[accId] : (caption || '')}
-                              onChange={(e) => {
-                                setDraftCaptions(prev => ({ ...prev, [accId]: e.target.value }))
-                              }}
-                              placeholder="输入或微调该渠道的专属文案..."
-                              className="w-full min-h-[70px] rounded-lg border border-slate-200/80 bg-white px-3 py-2 text-xs text-slate-850 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                              编辑专属标签
-                            </label>
-                            <input
-                              type="text"
-                              value={draftHashtags[accId] !== undefined ? draftHashtags[accId] : hashtags}
-                              onChange={(e) => {
-                                setDraftHashtags(prev => ({ ...prev, [accId]: e.target.value }))
-                              }}
-                              placeholder="例如: 美食 椰子鸡 (无需加#)"
-                              className="w-full h-8 rounded-lg border border-slate-200/80 bg-white px-3 text-xs text-slate-805 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-955 dark:text-slate-100"
-                            />
-                          </div>
-                        </div>
-                      )}
+                      {/* Inline Platform-specific editing inputs removed. Review Post Modal is used instead. */}
                     </div>
                   )
                 })}
@@ -2693,6 +2737,63 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                   </>
                 )}
               </button>
+                        </div>
+          </div>
+        )
+      })()}
+
+      {/* Review Post Modal */}
+      {editingAccountId && (() => {
+        const account = accountOptions.find(a => a.id === editingAccountId)
+        if (!account) return null
+        const currentCap = draftCaptions[editingAccountId] !== undefined ? draftCaptions[editingAccountId] : (caption || '')
+        const currentHash = draftHashtags[editingAccountId] !== undefined ? draftHashtags[editingAccountId] : hashtags
+        
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-955/60 p-4 backdrop-blur-sm" onClick={() => setEditingAccountId(null)}>
+            <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  <span>{account.platformId.toLowerCase() === 'instagram' ? '📸' : account.platformId.toLowerCase() === 'facebook' ? '👥' : (account.platformId.toLowerCase() === 'red' || account.platformId.toLowerCase() === 'xiaohongshu' || account.platformId.toLowerCase() === 'xhs') ? '📕' : account.platformId.toLowerCase() === 'tiktok' ? '🎵' : '📍'}</span>
+                  编辑 {account.displayName || account.handle} 的发布内容
+                </h3>
+                <button onClick={() => setEditingAccountId(null)} className="rounded-md p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">专属正文 (Caption)</label>
+                  <textarea
+                    value={currentCap}
+                    onChange={(e) => setDraftCaptions(prev => ({ ...prev, [editingAccountId]: e.target.value }))}
+                    placeholder="输入该渠道的专属文案..."
+                    className="w-full min-h-[160px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">专属标签 (Hashtags)</label>
+                  <input
+                    type="text"
+                    value={currentHash}
+                    onChange={(e) => setDraftHashtags(prev => ({ ...prev, [editingAccountId]: e.target.value }))}
+                    placeholder="例如: 美食 探店 推荐 (空格分隔，无需加#)"
+                    className="w-full h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs text-slate-850 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-955 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingAccountId(null)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md transition-all"
+                >
+                  确定
+                </button>
+              </div>
             </div>
           </div>
         )
