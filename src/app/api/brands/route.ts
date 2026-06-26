@@ -236,7 +236,7 @@ export async function GET(request: Request) {
       ...legacyOwnedBrands,
       ...delegatedBrands,
       ...organizationBrands,
-    ])
+    ].filter(Boolean))
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Internal Server Error'
     console.error('[GET /api/brands]', e)

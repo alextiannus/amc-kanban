@@ -30,7 +30,12 @@ export default async function proxy(request: NextRequest) {
   if (isApiRoute || isPublicPage) {
     const mainAppUrl = process.env.APP_BASE_URL || 'http://localhost:3000'
     const targetUrl = new URL(pathname + request.nextUrl.search, mainAppUrl)
-    return NextResponse.rewrite(targetUrl)
+    const requestHeaders = new Headers(request.headers)
+    return NextResponse.rewrite(targetUrl, {
+      request: {
+        headers: requestHeaders,
+      }
+    })
   }
 
   // Root path (Login page): redirect to dashboard if logged in

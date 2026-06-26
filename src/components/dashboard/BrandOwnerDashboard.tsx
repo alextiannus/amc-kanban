@@ -12,6 +12,25 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams } from 'next/navigation'
 
+const getMainAppUrl = (path: string) => {
+  if (typeof window === 'undefined') return path
+  const hostname = window.location.hostname
+  const protocol = window.location.protocol
+  const port = window.location.port
+  
+  if (port === '3001') {
+    return `${protocol}//localhost:3000${path}`
+  }
+  
+  if (hostname.startsWith('amc-mm.')) {
+    const parentHost = hostname.replace(/^amc-mm\./, '')
+    const portSuffix = port ? `:${port}` : ''
+    return `${protocol}//${parentHost}${portSuffix}${path}`
+  }
+  
+  return path
+}
+
 interface Brand {
   id: string
   name: string
@@ -86,6 +105,7 @@ export default function BrandOwnerDashboard() {
   // Marketplace & Subscription state
   const [addons, setAddons] = useState({ veo3: false, dubco: false })
   const [updatingAddons, setUpdatingAddons] = useState(false)
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string>('未激活订阅')
 
   // AI Voice & Slang dictionary state
   const [brandTone, setBrandTone] = useState('')
@@ -162,6 +182,8 @@ export default function BrandOwnerDashboard() {
         const subRes = await fetch(`/api/brands/${id}/subscription`)
         if (subRes.ok) {
           const subData = await subRes.json()
+          const planName = subData.plan_name === 'NONE' ? '未激活订阅' : (subData.plan_name || '未激活订阅')
+          setSubscriptionPlan(planName)
           if (subData && subData.selectedAddons) {
             setAddons({
               veo3: !!subData.selectedAddons.veo3,
@@ -170,6 +192,8 @@ export default function BrandOwnerDashboard() {
           } else {
             setAddons({ veo3: false, dubco: false })
           }
+        } else {
+          setSubscriptionPlan('未激活订阅')
         }
 
         // Fetch brand knowledge
@@ -241,6 +265,10 @@ export default function BrandOwnerDashboard() {
 
   // --- Voice Assist Activation (STT & TTS Chat integration) ---
   const startVoiceAssist = () => {
+    if (!activeBrand) {
+      showToast('未检测到有效品牌，请先选择品牌！', 'error')
+      return
+    }
     if (typeof window === 'undefined') return
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SpeechRecognition) {
@@ -701,10 +729,10 @@ export default function BrandOwnerDashboard() {
         }
       }
 
-      showToast('已提交草稿至后台，等待主理人审核或排期发布！', 'success')
+      showToast('已提交草稿并加入系统排期！', 'success')
       setCompanionState('speaking')
       setEmotion('smile')
-      speakText('老板，我已经把所有生成的推文草稿提交到后台了，目前是草稿状态，您可以让主理人进行排期发布。')
+      speakText('老板，我已经把所有生成的推文草稿提交并加入系统排期了。')
 
       setGeneratedDrafts(null)
       setPendingImages([])
@@ -2408,11 +2436,13 @@ export default function BrandOwnerDashboard() {
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span className="font-bold text-xs text-slate-800 truncate">
-                          {activeBrand ? activeBrand.name : 'Loading Brand...'}
+                          {activeBrand ? activeBrand.name : (loading ? 'Loading Brand...' : '暂无品牌')}
                         </span>
-                        <span className="text-[9px] text-slate-400 font-semibold truncate">
-                          {activeBrand?.autoPilot ? 'AI Auto-Pilot' : 'Human Approval'}
-                        </span>
+                        {activeBrand?.autoPilot && (
+                          <span className="text-[9px] text-emerald-500 font-bold truncate">
+                            AI Auto-Pilot
+                          </span>
+                        )}
                       </div>
                     </div>
                     {brands.length > 1 && (
@@ -2522,13 +2552,27 @@ export default function BrandOwnerDashboard() {
                   </button>
                 </div>
               </nav>
-              <div className="mt-auto p-4 rounded-2xl bg-indigo-50 border border-indigo-100/50">
-                <p className="text-[10px] font-bold text-primary uppercase mb-2">Digital Assistant Status</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                  <span className="text-xs text-slate-700 font-medium">Marketing Engine Active</span>
+              <a 
+                href={activeBrand?.id ? getMainAppUrl(`/board/subscription/${activeBrand.id}`) : '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-auto p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-900/40 transition-colors block text-left cursor-pointer group"
+                title="打开订阅管理"
+              >
+                <div className="flex items-center gap-1.5 mb-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                  <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    AI Marketing Crew:
+                  </span>
+                  <span className="text-[10px] font-black text-primary dark:text-indigo-400 uppercase tracking-wider truncate">
+                    {subscriptionPlan}
+                  </span>
                 </div>
-              </div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500">
+                  <span className="font-bold group-hover:text-primary dark:group-hover:text-indigo-400 transition-colors">点击打开订阅管理</span>
+                  <span className="group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+                </div>
+              </a>
             </motion.div>
           </>
         )}
