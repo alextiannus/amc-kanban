@@ -177,7 +177,7 @@ export default function LearnPage() {
       id: 'review-defender',
       category: 'marketing',
       title: '本地口碑守护者 (GBP & Review Defender)',
-      desc: '24小时监控 Google Maps / 美团商家评价。5星好评由 AI 极速秒回以提升搜索引擎权重；低分差评私下拦截并生成看板预警，自动分发关怀优惠券。',
+      desc: '24小时监控 Google Business / 美团商家评价。5星好评由 AI 极速秒回以提升搜索引擎权重；低分差评私下拦截并生成看板预警，自动分发关怀优惠券。',
       icon: '⭐',
       rating: '5.0',
       installs: '940+',
@@ -549,7 +549,7 @@ export default function LearnPage() {
                           <tr>
                             <td className="p-3 font-bold">3</td>
                             <td className="p-3 text-indigo-400 font-semibold">品牌主理人</td>
-                            <td className="p-3 text-slate-300">Google Maps 信息完善：认领商家地址，完善营业信息。</td>
+                            <td className="p-3 text-slate-300">Google Business 信息完善：认领商家地址，完善营业信息。</td>
                           </tr>
                           <tr>
                             <td className="p-3 font-bold">4</td>
@@ -745,7 +745,7 @@ export default function LearnPage() {
                           <tr>
                             <td className="p-3 font-bold">1. 拉取评论</td>
                             <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
-                            <td className="p-3 text-slate-300">每日 20:00 自动抓取各个平台（如 Google Maps 等）最新的消费者评论与评分。</td>
+                            <td className="p-3 text-slate-300">每日 20:00 自动抓取各个平台（如 Google Business 等）最新的消费者评论与评分。</td>
                           </tr>
                           <tr>
                             <td className="p-3 font-bold">2. 分类处理</td>
@@ -755,7 +755,7 @@ export default function LearnPage() {
                           <tr>
                             <td className="p-3 font-bold">3. 自动回复</td>
                             <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
-                            <td className="p-3 text-slate-300">在托管渠道（如 Google Maps）于 24 小时内全自动调用接口回写回复，拉升口碑响应速度。</td>
+                            <td className="p-3 text-slate-300">在托管渠道（如 Google Business）于 24 小时内全自动调用接口回写回复，拉升口碑响应速度。</td>
                           </tr>
                           <tr>
                             <td className="p-3 font-bold">4. 异常升级</td>

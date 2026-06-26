@@ -148,6 +148,39 @@ export async function GET(request: Request) {
     where: { brandId: { in: scopedBrandIds } }
   })
 
+  // Dynamically resolve postUrl for published drafts using PostFast
+  const hasPublishedDrafts = drafts.some((d) => d.status === 'published' && d.platformPostId)
+  const draftPostUrlMap = new Map<string, string>()
+
+  if (hasPublishedDrafts) {
+    const brandIdsWithPublished = Array.from(new Set(
+      drafts
+        .filter(d => d.status === 'published' && d.platformPostId)
+        .map(d => d.brandId)
+    ))
+
+    if (brandIdsWithPublished.length > 0) {
+      const brandsWithKeys = await prisma.brand.findMany({
+        where: { id: { in: brandIdsWithPublished } },
+        select: { id: true, postfastApiKey: true }
+      })
+
+      const { postfastListPosts } = await import('@/lib/integrations/postfast')
+      for (const brand of brandsWithKeys) {
+        if (brand.postfastApiKey) {
+          const pfResult = await postfastListPosts(brand.postfastApiKey, { status: 'published' })
+          if (pfResult.success) {
+            for (const pfPost of pfResult.posts) {
+              if (pfPost.postUrl) {
+                draftPostUrlMap.set(pfPost.id, pfPost.postUrl)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   const events = drafts.map(draft => {
     const eventAt = draft.status === 'published'
       ? (draft.publishedAt ?? draft.scheduledAt ?? draft.updatedAt)
@@ -186,7 +219,9 @@ export async function GET(request: Request) {
       mediaAssetId: mediaAssetId || null,
       clicks,
       roi,
-      platformPostId: draft.platformPostId
+      platformPostId: draft.platformPostId,
+      postUrl: draft.platformPostId ? draftPostUrlMap.get(draft.platformPostId) : null,
+      type: 'post'
     }
   })
 
@@ -210,6 +245,7 @@ export async function GET(request: Request) {
         status,
         time: eventTime.toISOString(),
         scheduledAt: eventTime.toISOString(),
+        type: 'task'
       }
     })
 

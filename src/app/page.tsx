@@ -55,7 +55,7 @@ export default function Login() {
     '[08:00] REFRESH: Syncing Feishu vault guidelines',
     '[09:00] SEARCH: Crawling Google place details for Yu Shan Fang',
     '[10:00] PUBLISH: Seeding Instagram post (draft_1294)',
-    '[11:30] REVIEW: Replying to 4 reviews on Google Maps',
+    '[11:30] REVIEW: Replying to 4 reviews on Google Business',
   ])
 
   const [commentsList, setCommentsList] = useState([
@@ -68,7 +68,7 @@ export default function Login() {
       color: 'from-pink-500 to-yellow-500',
     },
     {
-      platform: 'Google Maps',
+      platform: 'Google Business',
       user: 'Sarah Jenkins',
       comment: 'Amazing neighborhood gem! Will come back.',
       reply: 'Thanks for the support! Glad you enjoyed the flavors.',
@@ -98,7 +98,7 @@ export default function Login() {
       'PUBLISH: Seeding Instagram post (draft_1294)',
       'PUBLISH: Seeding RedNote post (draft_1295)',
       'MONITOR: Scraping Google Business Profile ratings: 4.8 avg',
-      'REVIEW: Replying to 4 reviews on Google Maps',
+      'REVIEW: Replying to 4 reviews on Google Business',
       'ANALYZE: Generating weekly performance report (weekly_2026-W24.md)',
       'INSIGHTS: High engagement (4.2%) detected on TikTok video',
       'REPURPOSE: Repurposing IG post (draft_1294) to Facebook',
@@ -126,7 +126,7 @@ export default function Login() {
         color: 'from-pink-500 to-yellow-500',
       },
       {
-        platform: 'Google Maps',
+        platform: 'Google Business',
         user: 'Sarah Jenkins',
         comment: 'Amazing neighborhood gem! Will come back.',
         reply: 'Thanks for the support! Glad you enjoyed the flavors.',
@@ -241,7 +241,7 @@ export default function Login() {
     switch (platform) {
       case 'Instagram':
         return <InstagramIcon className="h-4 w-4 text-pink-600" />
-      case 'Google Maps':
+      case 'Google Business':
         return <MapPin className="h-4 w-4 text-blue-600" />
       case 'Facebook':
         return <FacebookIcon className="h-4 w-4 text-blue-600" />

@@ -18,7 +18,7 @@ Social Media Management Services Agreement
 
 二、服务套餐
 甲方可选择 STARTER、ESSENTIAL 套餐，并可按需加购增值服务（含多门店运营支持、KOL 探店分发包等 Add-on）。
-所有套餐均包含 Google Map 配置、评论监控与基础评分优化。
+所有套餐均包含 Google Business 配置、评论监控与基础评分优化。
 
 三、服务范围
 乙方通过 AMC AI 系统提供内容创作、排期发布、舆情监控、评论管理、素材整理与月度复盘。

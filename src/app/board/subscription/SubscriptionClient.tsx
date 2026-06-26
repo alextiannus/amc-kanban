@@ -915,7 +915,7 @@ export default function BrandSubscriptionPage() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  如果您目前有正在运营的实体店铺，配置该选项将能让 AI 市场调研官为您监控 Google Maps 评分与平台口碑。
+                  如果您目前有正在运营的实体店铺，配置该选项将能让 AI 市场调研官为您监控 Google Business 评分与平台口碑。
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -964,7 +964,7 @@ export default function BrandSubscriptionPage() {
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      谷歌商家地图链接 (Google Maps Link)
+                      谷歌商家链接 (Google Business Link)
                     </label>
                     <input
                       type="url"

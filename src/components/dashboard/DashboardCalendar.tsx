@@ -179,7 +179,13 @@ function groupEventsByTitle(events: CalendarEvent[]): GroupedEvent[] {
   return Object.values(groups)
 }
 
-function getPostOriginalUrl(platform: string, platformPostId: string | null | undefined): string {
+function getPostOriginalUrl(platform: string, platformPostId: string | null | undefined, postUrl?: string | null): string {
+  if (postUrl && (postUrl.startsWith('http://') || postUrl.startsWith('https://'))) {
+    return postUrl
+  }
+  if (platformPostId && (platformPostId.startsWith('http://') || platformPostId.startsWith('https://'))) {
+    return platformPostId
+  }
   const normPlatform = normalizePlatformLabel(platform)
   const postId = platformPostId || `mock_post_${Date.now()}`
   switch (normPlatform) {
@@ -213,6 +219,8 @@ interface CalendarEvent {
   clicks?: number
   roi?: number
   platformPostId?: string | null
+  type?: 'post' | 'task'
+  postUrl?: string | null
 }
 
 interface DashboardCalendarProps {
@@ -287,7 +295,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         id: 'unconfigured_google_business',
         platformId: 'google_business',
         handle: 'unconfigured',
-        displayName: 'Google Maps (未配置)',
+        displayName: 'Google Business (未配置)',
         autoPilot: false,
         profileUrl: null
       })
@@ -322,15 +330,29 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         generatingDrafts.map(async (draft) => {
           try {
             const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}`)
+            if (res.status === 404) {
+              if (isMounted) {
+                setDraftStatuses(prev => ({ ...prev, [draft.accountId]: 'failed' }))
+              }
+              return
+            }
             if (!res.ok) return
             const json = await res.json()
             const updatedDraft = json.draft
             
-            if (updatedDraft && updatedDraft.caption && updatedDraft.caption !== '【AI 正在创作中...】') {
-              if (isMounted) {
-                setDraftCaptions(prev => ({ ...prev, [draft.accountId]: updatedDraft.caption }))
-                setDraftHashtags(prev => ({ ...prev, [draft.accountId]: (updatedDraft.hashtags || []).join(' ') }))
-                setDraftStatuses(prev => ({ ...prev, [draft.accountId]: 'completed' }))
+            if (updatedDraft) {
+              if (updatedDraft.status === 'failed') {
+                if (isMounted) {
+                  setDraftStatuses(prev => ({ ...prev, [draft.accountId]: 'failed' }))
+                }
+                return
+              }
+              if (updatedDraft.caption && updatedDraft.caption !== '【AI 正在创作中...】') {
+                if (isMounted) {
+                  setDraftCaptions(prev => ({ ...prev, [draft.accountId]: updatedDraft.caption }))
+                  setDraftHashtags(prev => ({ ...prev, [draft.accountId]: (updatedDraft.hashtags || []).join(' ') }))
+                  setDraftStatuses(prev => ({ ...prev, [draft.accountId]: 'completed' }))
+                }
               }
             }
           } catch (e) {
@@ -873,6 +895,39 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     }
   }
 
+  // Derived state memoizations
+  const filteredEvents = useMemo(() => {
+    return events.filter(ev => {
+      if (activeFilter === 'all') return true
+      if (activeFilter === 'done') {
+        return ev.status === 'done' && ev.type !== 'task'
+      }
+      return ev.status === activeFilter
+    })
+  }, [events, activeFilter])
+
+  const eventsByDay = useMemo(() => {
+    return filteredEvents.reduce<Record<number, CalendarEvent[]>>((acc, event) => {
+      const day = new Date(event.scheduledAt).getDate()
+      acc[day] = acc[day] || []
+      acc[day].push(event)
+      return acc
+    }, {})
+  }, [filteredEvents])
+
+  const selectedDayEvents = useMemo(() => {
+    return selectedDay ? (eventsByDay[selectedDay] || []) : []
+  }, [selectedDay, eventsByDay])
+
+  const activeDrawerEvent = useMemo(() => {
+    return selectedDayEvents.find(e => e.id === selectedEventId) || selectedDayEvents[0]
+  }, [selectedDayEvents, selectedEventId])
+
+  const activeEventComments = useMemo(() => {
+    return (activeDrawerEvent && commentsMap[activeDrawerEvent.id]) || []
+  }, [activeDrawerEvent, commentsMap])
+
+  // Load calendar events
   useEffect(() => {
     let cancelled = false
 
@@ -898,28 +953,42 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     return () => { cancelled = true }
   }, [viewYear, viewMonth, activeBrandId])
 
-  // Load mock comments when selectedEventId changes
+  // Reset selectedEventId to the first event of the selected day when day changes
   useEffect(() => {
-    if (!selectedEventId) return
-    if (commentsMap[selectedEventId]) return
+    if (selectedDay) {
+      if (selectedDayEvents.length > 0) {
+        if (!selectedDayEvents.some(e => e.id === selectedEventId)) {
+          setSelectedEventId(selectedDayEvents[0].id)
+        }
+      } else {
+        setSelectedEventId(null)
+      }
+    } else {
+      setSelectedEventId(null)
+    }
+  }, [selectedDay, selectedDayEvents, selectedEventId])
 
-    const ev = events.find(e => e.id === selectedEventId)
-    if (!ev || ev.status !== 'done') return
+  // Load mock comments when activeDrawerEvent changes
+  useEffect(() => {
+    if (!activeDrawerEvent?.id) return
+    const eventId = activeDrawerEvent.id
+    if (commentsMap[eventId]) return
+    if (activeDrawerEvent.status !== 'done' || activeDrawerEvent.type === 'task') return
 
-    const normPlatform = normalizePlatformLabel(ev.platform)
+    const normPlatform = normalizePlatformLabel(activeDrawerEvent.platform)
     let initialComments: Comment[] = []
 
     if (normPlatform === '小红书') {
       initialComments = [
         {
-          id: `${selectedEventId}-c1`,
+          id: `${eventId}-c1`,
           author: '小红薯_8829',
           avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop',
           content: '请问一下这个新品目前在哪个门店能买到呀？想下午去买！',
           time: '2小时前'
         },
         {
-          id: `${selectedEventId}-c2`,
+          id: `${eventId}-c2`,
           author: '美食小分队',
           avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=80&fit=crop',
           content: '看着好好吃，周末要和闺蜜一起去打卡！',
@@ -931,14 +1000,14 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     } else if (normPlatform === 'IG') {
       initialComments = [
         {
-          id: `${selectedEventId}-c1`,
+          id: `${eventId}-c1`,
           author: 'jane_explorer',
           avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop',
           content: 'This looks absolutely fantastic! Do you guys open on weekends?',
           time: '3h ago'
         },
         {
-          id: `${selectedEventId}-c2`,
+          id: `${eventId}-c2`,
           author: 'foodie.marcus',
           avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop',
           content: 'Do you have dairy-free options for this menu item?',
@@ -948,7 +1017,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     } else if (normPlatform === 'Google') {
       initialComments = [
         {
-          id: `${selectedEventId}-c1`,
+          id: `${eventId}-c1`,
           author: 'Robert Sterling',
           avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop',
           content: 'Great atmosphere, friendly staff, and the food was delicious. Highly recommend!',
@@ -960,7 +1029,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     } else {
       initialComments = [
         {
-          id: `${selectedEventId}-c1`,
+          id: `${eventId}-c1`,
           author: 'Alice Chen',
           avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80&fit=crop',
           content: '这个活动持续到什么时候？想了解一下详情。',
@@ -971,9 +1040,9 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
     setCommentsMap(prev => ({
       ...prev,
-      [selectedEventId]: initialComments
+      [eventId]: initialComments
     }))
-  }, [selectedEventId, events])
+  }, [activeDrawerEvent, events])
 
   const handleSendManualReply = (eventId: string, commentId: string) => {
     const text = commentReplyText[commentId]?.trim()
@@ -1157,7 +1226,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const visibleEvents = getVisibleEvents()
 
   const stats = {
-    done: visibleEvents.filter(e => e.status === 'done').length,
+    done: visibleEvents.filter(e => e.status === 'done' && e.type !== 'task').length,
     scheduled: visibleEvents.filter(e => e.status === 'scheduled').length,
     pending: visibleEvents.filter(e => e.status === 'pending').length,
     total: visibleEvents.length
@@ -1234,27 +1303,8 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   // --- End of Diagnostics & Stats ---
 
   const isToday = (d: number) => d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
-  
-  // Filter based on selected state tab
-  const filteredEvents = events.filter(ev => {
-    if (activeFilter === 'all') return true
-    return ev.status === activeFilter
-  })
-
-  const eventsByDay = filteredEvents.reduce<Record<number, CalendarEvent[]>>((acc, event) => {
-    const day = new Date(event.scheduledAt).getDate()
-    acc[day] = acc[day] || []
-    acc[day].push(event)
-    return acc
-  }, {})
-
-  const selectedDayEvents = selectedDay ? (eventsByDay[selectedDay] || []) : []
   const formatTime = (value: string) => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
-  const activeDrawerEvent = selectedDayEvents.find(e => e.id === selectedEventId) || selectedDayEvents[0]
-  const activeEventComments = (activeDrawerEvent && commentsMap[activeDrawerEvent.id]) || []
-
-  // Identify expired connected accounts dynamically
   const expiredAccounts = brandDetails?.accounts?.filter((acc: any) => {
     if (!acc.expiresAt) return false
     return new Date(acc.expiresAt) < new Date()
@@ -2228,7 +2278,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                       <p className="text-xs text-slate-450 mt-2">该品牌暂未绑定任何托管发布渠道。请先前往“品牌设置”连接渠道账号。</p>
                     )}
 
-                    {activeBrandId && (
+                          {activeBrandId && (
                       <button
                         onClick={() => {
                           alert('请在“发布”或“任务”视图新建排期草稿，发布后将在日历对应日期上显示。')
@@ -2275,9 +2325,9 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                   <span className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold">{formatTime(ev.time)}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  {ev.status === 'done' && (
+                                  {ev.status === 'done' && ev.type !== 'task' && (
                                     <a
-                                      href={getPostOriginalUrl(ev.platform, ev.platformPostId)}
+                                      href={getPostOriginalUrl(ev.platform, ev.platformPostId, ev.postUrl)}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       onClick={(e) => e.stopPropagation()}
@@ -2288,7 +2338,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                     </a>
                                   )}
                                   <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${STATUS_COLORS[ev.status]}`}>
-                                    {ev.status === 'done' ? '已发布' : ev.status === 'pending' ? '待审核' : '已排期'}
+                                    {ev.status === 'done' ? (ev.type === 'task' ? '已完成' : '已发布') : ev.status === 'pending' ? '待审核' : '已排期'}
                                   </span>
                                 </div>
                               </div>
@@ -2368,9 +2418,9 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
                           <div className="flex items-center gap-3 shrink-0">
                             <span className="text-[10px] text-slate-400 font-bold">{formatTime(ev.time)}</span>
-                            {ev.status === 'done' && (
+                            {ev.status === 'done' && ev.type !== 'task' && (
                               <a
-                                href={getPostOriginalUrl(ev.platform, ev.platformPostId)}
+                                href={getPostOriginalUrl(ev.platform, ev.platformPostId, ev.postUrl)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
@@ -2381,7 +2431,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                               </a>
                             )}
                             <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${STATUS_COLORS[ev.status]}`}>
-                              {ev.status === 'done' ? '已发布' : ev.status === 'pending' ? '待审核' : '已排期'}
+                              {ev.status === 'done' ? (ev.type === 'task' ? '已完成' : '已发布') : ev.status === 'pending' ? '待审核' : '已排期'}
                             </span>
                           </div>
                         </div>
@@ -2981,11 +3031,11 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-black text-slate-500 dark:text-slate-400">{formatTime(activeDrawerEvent.time)}</span>
                         <span className={`text-[9px] font-black px-2.5 py-0.5 rounded-full border ${STATUS_COLORS[activeDrawerEvent.status]}`}>
-                          {activeDrawerEvent.status === 'done' ? '已发布' : activeDrawerEvent.status === 'pending' ? '待审核' : '已排期'}
+                          {activeDrawerEvent.status === 'done' ? (activeDrawerEvent.type === 'task' ? '已完成' : '已发布') : activeDrawerEvent.status === 'pending' ? '待审核' : '已排期'}
                         </span>
-                        {activeDrawerEvent.status === 'done' && (
+                        {activeDrawerEvent.status === 'done' && activeDrawerEvent.type !== 'task' && (
                           <a
-                            href={getPostOriginalUrl(activeDrawerEvent.platform, activeDrawerEvent.platformPostId)}
+                            href={getPostOriginalUrl(activeDrawerEvent.platform, activeDrawerEvent.platformPostId, activeDrawerEvent.postUrl)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-650 hover:text-indigo-750 dark:text-indigo-400 dark:hover:text-indigo-300 ml-1 transition-colors"
@@ -2999,12 +3049,12 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     </div>
 
                     {/* Comments & Replies section for published events - Primary card */}
-                    {activeDrawerEvent.status === 'done' && (
+                    {activeDrawerEvent.status === 'done' && activeDrawerEvent.type !== 'task' && (
                       <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-850 rounded-2xl p-4 space-y-3">
                         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
                           <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                             <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
-                            <span>评论与回复 (Comments)</span>
+                            <span>[{normalizePlatformLabel(activeDrawerEvent.platform)}] 帖文评论与回复</span>
                           </h4>
                           <span className="text-[9px] font-black text-indigo-650 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-2 py-0.5 rounded-full">
                             {activeEventComments.length} 条评论
@@ -3101,7 +3151,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     </div>
 
                     {/* Real DB Click/ROI conversion statistics badges */}
-                    {activeDrawerEvent.status === 'done' && (
+                    {activeDrawerEvent.status === 'done' && activeDrawerEvent.type !== 'task' && (
                       <div className="space-y-3">
                         <div className="p-4 bg-emerald-500/5 dark:bg-emerald-950/10 border border-emerald-500/15 rounded-2xl">
                           <h4 className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
@@ -3124,7 +3174,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     )}
 
                     {/* Real Temporal Protection Indicator for scheduled posts */}
-                    {activeDrawerEvent.status === 'scheduled' && (
+                    {activeDrawerEvent.status === 'scheduled' && activeDrawerEvent.type !== 'task' && (
                       <div className="p-4 bg-indigo-500/5 dark:bg-indigo-950/10 border border-indigo-500/15 rounded-2xl">
                         <h4 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5" />
@@ -3139,7 +3189,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     )}
 
                     {/* AI Actions Section: Copywriter & Designer */}
-                    {activeDrawerEvent.status !== 'done' && (
+                    {activeDrawerEvent.status !== 'done' && activeDrawerEvent.type !== 'task' && (
                       <div className="space-y-3 pt-2">
                         <div className="flex gap-2.5">
                           <button

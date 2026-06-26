@@ -170,7 +170,7 @@ export async function getGoogleAccessToken(refreshToken: string): Promise<string
 export async function fetchGoogleLocations(accessToken: string): Promise<Array<{ id: string; name: string; address?: string; accountId: string }>> {
   if (accessToken.startsWith('mock_')) {
     return [
-      { id: 'mock_loc_ziwei', name: '[滋味烤鱼] Google Maps', address: '23 Church St, #01-02, Capital Square, Singapore', accountId: 'mock_account_123' },
+      { id: 'mock_loc_ziwei', name: '[滋味烤鱼] Google Business', address: '23 Church St, #01-02, Capital Square, Singapore', accountId: 'mock_account_123' },
       { id: 'mock_loc_cafe', name: 'AMC Coffee Lab', address: 'Funan Mall, #02-15, Singapore', accountId: 'mock_account_123' }
     ];
   }

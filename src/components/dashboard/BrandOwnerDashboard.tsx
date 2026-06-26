@@ -18,6 +18,7 @@ interface Brand {
   description?: string | null
   location?: string | null
   autoPilot: boolean
+  logoUrl?: string | null
 }
 
 interface MediaAsset {
@@ -61,7 +62,7 @@ export default function BrandOwnerDashboard() {
   ])
   const [chatInput, setChatInput] = useState('')
   const [companionState, setCompanionState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle')
-  const [emotion, setEmotion] = useState<'normal' | 'smile' | 'laugh' | 'effort'>('normal')
+  const [emotion, setEmotion] = useState<'normal' | 'smile' | 'laugh' | 'effort' | 'confused' | 'wink' | 'excited'>('normal')
 
   // Assets upload state
   const [assets, setAssets] = useState<MediaAsset[]>([])
@@ -74,6 +75,12 @@ export default function BrandOwnerDashboard() {
   const [postIdea, setPostIdea] = useState('')
   const [generatingBulk, setGeneratingBulk] = useState(false)
   const [completedNotification, setCompletedNotification] = useState(false)
+
+  // Fullscreen Draft Previews overlay states
+  const [generatedDrafts, setGeneratedDrafts] = useState<any[] | null>(null)
+  const [isSubmittingFinalDrafts, setIsSubmittingFinalDrafts] = useState(false)
+  const [scheduleTime, setScheduleTime] = useState<string>('')
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false)
 
   // Drafts & Weekly feed state
   const [drafts, setDrafts] = useState<ContentDraft[]>([])
@@ -251,12 +258,14 @@ export default function BrandOwnerDashboard() {
       const transcript = event.results[0][0].transcript
       if (!transcript) return
 
-      // If there are pending image previews, feed transcript to the text area
+      // If there are pending media previews, feed transcript and trigger copywriting generation
       if (pendingPreviews.length > 0) {
-        setPostIdea(prev => prev ? prev + ' ' + transcript : transcript)
-        setCompanionState('idle')
-        showToast('已填入创意想法！', 'success')
-        speakText('收到您的创意想法。')
+        setPostIdea(transcript)
+        setCompanionState('thinking')
+        setEmotion('effort')
+        showToast(`已识别想法：“${transcript}”，正在批量创作...`, 'info')
+        speakText('收到您的创意想法，正在为您创作所有平台的文案草稿...')
+        handleBulkSubmit(transcript)
         return
       }
 
@@ -287,7 +296,7 @@ export default function BrandOwnerDashboard() {
       console.error('Speech recognition error:', event.error)
       setCompanionState('idle')
       if (event.error === 'not-allowed') {
-        showToast('请允许麦克风权限以使用语音对话', 'error')
+        showToast('请允许麦克风权限以进行对讲', 'error')
       }
     }
 
@@ -304,73 +313,105 @@ export default function BrandOwnerDashboard() {
   }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0 || !activeBrand) return
+    if (!e.target.files || e.target.files.length === 0) return
+    if (!activeBrand) {
+      showToast('未选择活动品牌，无法上传素材', 'error')
+      e.target.value = ''
+      return
+    }
     const files = Array.from(e.target.files) as File[]
 
-    if (activeSubPage === 'assets') {
-      // Media Library Subpage: Upload immediately to backend
-      setUploading(true)
-      showToast(`正在上传 ${files.length} 个素材...`, 'info')
-      try {
-        for (const file of files) {
-          const fileBase64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => {
-              const result = reader.result as string
-              const base64 = result.split(',')[1]
-              resolve(base64)
-            }
-            reader.onerror = reject
-            reader.readAsDataURL(file)
-          })
-
-          const res = await fetch(`/api/brands/${activeBrand.id}/assets/upload`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: file.name,
-              mimeType: file.type,
-              fileBase64,
-              folder: '素材库',
-              aiCategory: 'raw',
-              aiTags: ['待确认']
+    try {
+      if (activeSubPage === 'assets') {
+        // Media Library Subpage: Upload immediately to backend
+        setUploading(true)
+        showToast(`正在上传 ${files.length} 个素材...`, 'info')
+        try {
+          for (const file of files) {
+            const fileBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader()
+              reader.onload = () => {
+                const result = reader.result as string
+                const base64 = result.split(',')[1]
+                resolve(base64)
+              }
+              reader.onerror = reject
+              reader.readAsDataURL(file)
             })
-          })
 
-          if (res.ok) {
-            const data = await res.json()
-            if (data.asset) {
-              setAssets(prev => [data.asset, ...prev])
+            const res = await fetch(`/api/brands/${activeBrand.id}/assets/upload`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                filename: file.name,
+                mimeType: file.type,
+                fileBase64,
+                folder: '素材库',
+                aiCategory: 'raw',
+                aiTags: ['待确认']
+              })
+            })
+
+            if (res.ok) {
+              const data = await res.json()
+              if (data.asset) {
+                setAssets(prev => [data.asset, ...prev])
+              }
             }
           }
+          showToast('素材上传成功！')
+        } catch (err) {
+          console.error('Upload failed:', err)
+          showToast('素材上传失败，请重试', 'error')
+        } finally {
+          setUploading(false)
         }
-        showToast('素材上传成功！')
-      } catch (err) {
-        console.error('Upload failed:', err)
-        showToast('素材上传失败，请重试', 'error')
-      } finally {
-        setUploading(false)
+      } else {
+        // Homepage: Save to pending and invite prompt/idea input
+        const videos = files.filter(file => file.type.startsWith('video/'))
+        const images = files.filter(file => file.type.startsWith('image/'))
+
+        if (videos.length > 0) {
+          if (files.length > 1) {
+            showToast('视频必须单独上传，不能与其它图片或视频混合！', 'error')
+            return
+          }
+          if (videos.length > 1) {
+            showToast('一次只能上传最多 1 个视频！', 'error')
+            return
+          }
+          setPendingImages(videos)
+          const previews = videos.map(file => URL.createObjectURL(file))
+          setPendingPreviews(previews)
+          showToast('已选择 1 个视频，请输入您的创意想法或开始语音对答。', 'info')
+        } else {
+          if (images.length > 9) {
+            showToast('一次最多只能上传 9 张图片！', 'error')
+            return
+          }
+          setPendingImages(images)
+          const previews = images.map(file => URL.createObjectURL(file))
+          setPendingPreviews(previews)
+          showToast(`已选择 ${images.length} 张图片，请输入您的创意想法或开始语音对答。`, 'info')
+        }
       }
-    } else {
-      // Homepage: Save to pending and invite prompt/idea input
-      if (files.length > 9) {
-        showToast('一次最多只能上传 9 张图片！', 'error')
-        return
-      }
-      setPendingImages(files)
-      const previews = files.map(file => URL.createObjectURL(file))
-      setPendingPreviews(previews)
-      showToast(`已选择 ${files.length} 张图片，请输入您的创意想法。`, 'info')
+    } finally {
+      e.target.value = ''
     }
   }
 
   // --- Bulk Submit (Generate all platform content) ---
-  const handleBulkSubmit = async () => {
+  const handleBulkSubmit = async (overrideIdea?: string) => {
+    const finalIdea = overrideIdea || postIdea
+    if (!finalIdea) {
+      showToast('请输入创意想法！', 'error')
+      return
+    }
     if (pendingImages.length === 0 || !activeBrand) return
     setGeneratingBulk(true)
     setCompanionState('thinking')
     setEmotion('effort')
-    showToast('正在上传并启动 AI Copywriter 生成内容...', 'info')
+    showToast('正在上传素材并启动 AI 创作...', 'info')
 
     try {
       const uploadedAssetIds: string[] = []
@@ -412,7 +453,7 @@ export default function BrandOwnerDashboard() {
       }
 
       if (uploadedAssetIds.length === 0) {
-        throw new Error('素材图片上传失败')
+        throw new Error('素材图片/视频上传失败')
       }
 
       // 2. Submit to bulk-generate copywriter endpoint
@@ -422,7 +463,7 @@ export default function BrandOwnerDashboard() {
         body: JSON.stringify({
           assetIds: uploadedAssetIds,
           mediaUrls: uploadedAssetUrls,
-          idea: postIdea
+          idea: finalIdea
         })
       })
 
@@ -431,22 +472,16 @@ export default function BrandOwnerDashboard() {
         throw new Error(errJson.error || 'Copywriter 批量内容创作失败')
       }
 
-      // 3. Clear pending states and set success notifications
-      setPendingImages([])
-      setPendingPreviews([])
-      setPostIdea('')
-      setCompletedNotification(true)
-
-      // Refresh calendar drafts
-      const draftsRes = await fetch(`/api/brands/${activeBrand.id}/drafts`)
-      if (draftsRes.ok) {
-        const resData = await draftsRes.json()
-        setDrafts(Array.isArray(resData) ? resData : resData.drafts || [])
+      const data = await bulkRes.json()
+      if (data.success && data.drafts) {
+        // Set all selected by default
+        setGeneratedDrafts(data.drafts.map((d: any) => ({ ...d, selected: true })))
+        setCompanionState('speaking')
+        setEmotion('smile')
+        speakText('我已经生成了所有平台的推文草稿，请您在屏幕上预览并安排发布。')
+      } else {
+        throw new Error('未返回有效的草稿列表')
       }
-
-      // 4. Speak voice confirmation
-      speakText('我已为您生成了所有平台的内容，并将其加入到了排期日历中。您可以在发布日历中查看！')
-      showToast('批量创作并排期成功！', 'success')
 
     } catch (err: any) {
       console.error(err)
@@ -455,6 +490,147 @@ export default function BrandOwnerDashboard() {
       setEmotion('normal')
     } finally {
       setGeneratingBulk(false)
+    }
+  }
+
+  const handleImmediatePublish = async () => {
+    if (!generatedDrafts || !activeBrand) return
+    const selected = generatedDrafts.filter(d => d.selected)
+    if (selected.length === 0) {
+      showToast('请选择至少一个平台草稿进行发布！', 'error')
+      return
+    }
+    setIsSubmittingFinalDrafts(true)
+    showToast('正在为您发布选中的草稿...', 'info')
+    
+    try {
+      for (const draft of selected) {
+        // Create draft
+        const createRes = await fetch(`/api/brands/${activeBrand.id}/drafts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accountId: draft.accountId,
+            caption: draft.caption,
+            hashtags: draft.hashtags,
+            mediaUrls: draft.mediaUrls,
+            assetIds: draft.assetIds,
+            status: 'draft',
+          })
+        })
+        if (!createRes.ok) {
+          const err = await createRes.json().catch(() => ({}))
+          throw new Error(err.error || '创建草稿失败')
+        }
+        const createdData = await createRes.json()
+        const createdDraftId = createdData.draft.id
+
+        // Approve/Submit immediately (forces publication)
+        const approveRes = await fetch(`/api/brands/${activeBrand.id}/drafts/${createdDraftId}/approve`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: '立即发布' })
+        })
+        if (!approveRes.ok) {
+          const err = await approveRes.json().catch(() => ({}))
+          throw new Error(err.error || '立即发布草稿失败')
+        }
+      }
+
+      showToast('发布成功！', 'success')
+      speakText('我已为您发布了选中的草稿。')
+      
+      setGeneratedDrafts(null)
+      setPendingImages([])
+      setPendingPreviews([])
+      setPostIdea('')
+      
+      const draftsRes = await fetch(`/api/brands/${activeBrand.id}/drafts`)
+      if (draftsRes.ok) {
+        const resData = await draftsRes.json()
+        setDrafts(Array.isArray(resData) ? resData : resData.drafts || [])
+      }
+    } catch (err: any) {
+      console.error(err)
+      showToast(`发布失败: ${err.message}`, 'error')
+    } finally {
+      setIsSubmittingFinalDrafts(false)
+    }
+  }
+
+  const handleSchedulePublish = async () => {
+    if (!scheduleTime) {
+      showToast('请选择排期发布的时间！', 'error')
+      return
+    }
+    if (!generatedDrafts || !activeBrand) return
+    const selected = generatedDrafts.filter(d => d.selected)
+    if (selected.length === 0) {
+      showToast('请选择至少一个平台草稿进行排期！', 'error')
+      return
+    }
+    setIsSubmittingFinalDrafts(true)
+    showToast('正在为选中的草稿设置排期...', 'info')
+
+    try {
+      const scheduleDate = new Date(scheduleTime)
+      
+      for (let i = 0; i < selected.length; i++) {
+        const draft = selected[i]
+        const draftScheduleTime = new Date(scheduleDate)
+        draftScheduleTime.setHours(scheduleDate.getHours() + i * 2)
+
+        const createRes = await fetch(`/api/brands/${activeBrand.id}/drafts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accountId: draft.accountId,
+            caption: draft.caption,
+            hashtags: draft.hashtags,
+            mediaUrls: draft.mediaUrls,
+            assetIds: draft.assetIds,
+            status: 'draft',
+            scheduledAt: draftScheduleTime.toISOString(),
+          })
+        })
+        if (!createRes.ok) {
+          const err = await createRes.json().catch(() => ({}))
+          throw new Error(err.error || '创建草稿失败')
+        }
+        const createdData = await createRes.json()
+        const createdDraftId = createdData.draft.id
+
+        // Approve/Submit to schedule
+        const approveRes = await fetch(`/api/brands/${activeBrand.id}/drafts/${createdDraftId}/approve`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: '排期发布' })
+        })
+        if (!approveRes.ok) {
+          const err = await approveRes.json().catch(() => ({}))
+          throw new Error(err.error || '排期发布草稿失败')
+        }
+      }
+
+      showToast('排期成功！', 'success')
+      speakText('我已为您将选中的草稿加入了排期计划。')
+      
+      setGeneratedDrafts(null)
+      setShowSchedulePicker(false)
+      setPendingImages([])
+      setPendingPreviews([])
+      setPostIdea('')
+      
+      const draftsRes = await fetch(`/api/brands/${activeBrand.id}/drafts`)
+      if (draftsRes.ok) {
+        const resData = await draftsRes.json()
+        setDrafts(Array.isArray(resData) ? resData : resData.drafts || [])
+      }
+    } catch (err: any) {
+      console.error(err)
+      showToast(`排期失败: ${err.message}`, 'error')
+    } finally {
+      setIsSubmittingFinalDrafts(false)
     }
   }
 
@@ -603,100 +779,210 @@ export default function BrandOwnerDashboard() {
     }, 1500)
   }
 
+  const triggerRandomEmotion = () => {
+    if (companionState !== 'idle' || emotion !== 'normal') return
+    const emotions: ('smile' | 'laugh' | 'wink' | 'excited' | 'confused')[] = ['smile', 'laugh', 'wink', 'excited', 'confused']
+    const random = emotions[Math.floor(Math.random() * emotions.length)]
+    setEmotion(random)
+    setTimeout(() => {
+      setEmotion('normal')
+    }, 2200)
+  }
+
   // --- Dynamic Eye Renderer ---
   const renderEye = (isLeft: boolean) => {
-    if (emotion === 'effort') {
-      return (
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <path 
-            d={isLeft ? "M14 6L6 10L14 14" : "M6 6L14 10L6 14"} 
-            stroke="currentColor" 
-            className="text-slate-700 dark:text-slate-300" 
-            strokeWidth="3.5" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-          />
-        </svg>
-      )
+    // Determine Eyebrow animation/style
+    let eyebrowRotation = 0
+    let eyebrowY = 0
+    if (companionState === 'thinking' || emotion === 'confused') {
+      eyebrowRotation = isLeft ? 12 : -18
+      eyebrowY = isLeft ? 1 : -3
+    } else if (emotion === 'effort') {
+      eyebrowRotation = isLeft ? -15 : 15
+      eyebrowY = 2
+    } else if (emotion === 'excited') {
+      eyebrowY = -4
+    } else if (emotion === 'laugh' || emotion === 'smile' || emotion === 'wink') {
+      eyebrowY = -2
     }
 
-    if (emotion === 'laugh') {
-      return (
-        <svg width="20" height="14" viewBox="0 0 20 14" fill="none">
-          <path 
-            d="M3 11C5 5 15 5 17 11" 
-            stroke="currentColor" 
-            className="text-slate-700 dark:text-slate-300" 
-            strokeWidth="3.5" 
-            strokeLinecap="round"
-          />
-        </svg>
-      )
-    }
-
-    if (emotion === 'smile') {
-      return (
-        <svg width="20" height="12" viewBox="0 0 20 12" fill="none">
-          <path 
-            d="M3 9C5 4 15 4 17 9" 
-            stroke="currentColor" 
-            className="text-slate-700 dark:text-slate-300" 
-            strokeWidth="3" 
-            strokeLinecap="round"
-          />
-        </svg>
-      )
-    }
-
-    // Blinking animation for normal/listening/thinking/speaking
-    return (
-      <motion.div 
-        animate={
-          companionState === 'listening' 
-            ? { scaleY: 1.2, scaleX: 1.1 } 
-            : companionState === 'thinking' 
-            ? { scaleY: 0.6, y: 1 } 
-            : { scaleY: [1, 1, 0.1, 1, 1] }
-        }
-        transition={
-          companionState === 'idle' || companionState === 'speaking'
-            ? { repeat: Infinity, duration: 4.5, times: [0, 0.9, 0.95, 1, 1] }
-            : { duration: 0.3 }
-        }
-        className="w-4 h-4 bg-slate-700 dark:bg-slate-300 rounded-full"
+    const renderEyebrow = () => (
+      <motion.div
+        animate={{ rotate: eyebrowRotation, y: eyebrowY }}
+        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+        className="absolute -top-3.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-slate-700 dark:bg-slate-300 rounded-full"
       />
+    )
+
+    return (
+      <div className="relative w-8 h-8 flex items-center justify-center">
+        {renderEyebrow()}
+        {/* Render Eye Core */}
+        {(() => {
+          if (emotion === 'effort') {
+            return (
+              <motion.svg 
+                animate={{ scale: [1, 0.85, 1] }}
+                transition={{ repeat: Infinity, duration: 1.2 }}
+                width="20" height="20" viewBox="0 0 20 20" fill="none"
+              >
+                <path 
+                  d={isLeft ? "M14 6L6 10L14 14" : "M6 6L14 10L6 14"} 
+                  stroke="currentColor" 
+                  className="text-slate-700 dark:text-slate-300" 
+                  strokeWidth="3.5" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round"
+                />
+              </motion.svg>
+            )
+          }
+
+          if (emotion === 'laugh') {
+            return (
+              <motion.svg 
+                animate={{ y: [0, -2, 0] }}
+                transition={{ repeat: Infinity, duration: 0.6, delay: isLeft ? 0 : 0.15 }}
+                width="20" height="14" viewBox="0 0 20 14" fill="none"
+              >
+                <path 
+                  d="M3 11C5 5 15 5 17 11" 
+                  stroke="currentColor" 
+                  className="text-slate-700 dark:text-slate-300" 
+                  strokeWidth="3.5" 
+                  strokeLinecap="round"
+                />
+              </motion.svg>
+            )
+          }
+
+          if (emotion === 'smile') {
+            return (
+              <motion.svg 
+                animate={{ scaleY: [1, 1.1, 1] }}
+                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                width="20" height="12" viewBox="0 0 20 12" fill="none"
+              >
+                <path 
+                  d="M3 9C5 4 15 4 17 9" 
+                  stroke="currentColor" 
+                  className="text-slate-700 dark:text-slate-300" 
+                  strokeWidth="3" 
+                  strokeLinecap="round"
+                />
+              </motion.svg>
+            )
+          }
+
+          if (emotion === 'wink') {
+            if (isLeft) {
+              // Closed eye for winking
+              return (
+                <motion.svg 
+                  animate={{ scaleY: [1, 0.8, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  width="20" height="12" viewBox="0 0 20 12" fill="none"
+                >
+                  <path 
+                    d="M3 9C5 4 15 4 17 9" 
+                    stroke="currentColor" 
+                    className="text-slate-700 dark:text-slate-300" 
+                    strokeWidth="3.5" 
+                    strokeLinecap="round"
+                  />
+                </motion.svg>
+              )
+            } else {
+              // Open starry eye for winking
+              return (
+                <motion.svg 
+                  animate={{ scale: [1, 1.15, 1] }}
+                  transition={{ repeat: Infinity, duration: 1.5 }}
+                  width="20" height="20" viewBox="0 0 20 20" fill="none"
+                >
+                  <circle cx="10" cy="10" r="7" fill="currentColor" className="text-slate-700 dark:text-slate-300" />
+                  <path d="M10 5L11.5 8L14.5 8.5L12 10.5L13 13.5L10 11.8L7 13.5L8 10.5L5.5 8.5L8.5 8Z" fill="white" />
+                </motion.svg>
+              )
+            }
+          }
+
+          if (emotion === 'excited') {
+            return (
+              <motion.svg 
+                animate={{ rotate: 360, scale: [1, 1.25, 1] }}
+                transition={{ 
+                  rotate: { repeat: Infinity, duration: 3.5, ease: "linear" },
+                  scale: { repeat: Infinity, duration: 1.2, ease: "easeInOut" }
+                }}
+                width="20" height="20" viewBox="0 0 20 20" fill="none"
+              >
+                <path d="M10 2L12.5 7L18 7.5L14 11.5L15.5 17L10 14L4.5 17L6 11.5L2 7.5L7.5 7Z" fill="currentColor" className="text-slate-700 dark:text-slate-300" />
+              </motion.svg>
+            )
+          }
+
+          // Blinking animation for normal/listening/thinking/speaking
+          return (
+            <motion.div 
+              animate={
+                companionState === 'listening' 
+                  ? { scaleY: 1.2, scaleX: 1.1 } 
+                  : companionState === 'thinking' 
+                  ? { scaleY: 0.6, y: 1 } 
+                  : { scaleY: [1, 1, 0.1, 1, 1] }
+              }
+              transition={
+                companionState === 'idle' || companionState === 'speaking'
+                  ? { repeat: Infinity, duration: 4.5, times: [0, 0.9, 0.95, 1, 1] }
+                  : { duration: 0.3 }
+              }
+              className="w-4.5 h-4.5 bg-slate-700 dark:bg-slate-300 rounded-full relative overflow-hidden"
+            >
+              {/* Glossy pupil highlight */}
+              <div className="absolute top-0.5 left-0.5 w-1.5 h-1.5 bg-white rounded-full opacity-80" />
+            </motion.div>
+          )
+        })()}
+      </div>
     )
   }
 
   // --- Dynamic Mouth Renderer ---
   const renderMouth = () => {
-    if (companionState === 'thinking') {
+    if (companionState === 'thinking' || emotion === 'confused') {
       return (
         <motion.div 
-          animate={{ scaleX: [1, 2.5, 1], opacity: [0.6, 1, 0.6] }}
+          animate={{ scaleX: [1, 1.4, 1], opacity: [0.6, 1, 0.6] }}
           transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-          className="w-8 h-2 bg-slate-700 dark:bg-slate-300 rounded-full"
-        />
+          className="w-8 h-2 bg-slate-700 dark:bg-slate-300 rounded-full flex items-center justify-center overflow-hidden"
+        >
+          <motion.div 
+            animate={{ x: [-10, 10, -10] }}
+            transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+            className="w-16 h-0.5 bg-slate-500/30"
+          />
+        </motion.div>
       )
     }
 
     if (companionState === 'listening') {
       return (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 h-6">
           <motion.div 
             animate={{ height: [4, 18, 4] }}
             transition={{ repeat: Infinity, duration: 0.5, ease: "easeInOut" }}
-            className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
+            className="w-1.5 bg-emerald-500 rounded-full"
           />
           <motion.div 
             animate={{ height: [6, 24, 6] }}
             transition={{ repeat: Infinity, duration: 0.4, ease: "easeInOut", delay: 0.1 }}
-            className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
+            className="w-1.5 bg-emerald-500 rounded-full"
           />
           <motion.div 
             animate={{ height: [4, 18, 4] }}
             transition={{ repeat: Infinity, duration: 0.5, ease: "easeInOut", delay: 0.2 }}
-            className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
+            className="w-1.5 bg-emerald-500 rounded-full"
           />
         </div>
       )
@@ -705,8 +991,8 @@ export default function BrandOwnerDashboard() {
     if (companionState === 'speaking') {
       return (
         <motion.div
-          animate={{ height: [6, 16, 6] }}
-          transition={{ repeat: Infinity, duration: 0.3, ease: "easeInOut" }}
+          animate={{ height: [6, 16, 6], scaleX: [0.9, 1.1, 0.9] }}
+          transition={{ repeat: Infinity, duration: 0.25, ease: "easeInOut" }}
           className="w-8 bg-slate-700 dark:bg-slate-300 rounded-full"
         />
       )
@@ -715,20 +1001,25 @@ export default function BrandOwnerDashboard() {
     if (emotion === 'effort') {
       return (
         <svg width="24" height="6" viewBox="0 0 24 6" fill="none">
-          <line x1="2" y1="3" x2="22" y2="3" stroke="currentColor" className="text-slate-700 dark:text-slate-300" strokeWidth="4" strokeLinecap="round" />
+          <line x1="2" y1="3" x2="22" y2="3" stroke="currentColor" className="text-slate-700 dark:text-slate-300" strokeWidth="4.5" strokeLinecap="round" />
         </svg>
       )
     }
 
-    if (emotion === 'laugh') {
+    if (emotion === 'laugh' || emotion === 'excited') {
       return (
-        <svg width="36" height="18" viewBox="0 0 36 18" fill="none">
+        <motion.svg 
+          animate={{ scaleY: [1, 1.15, 1] }}
+          transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
+          width="36" height="18" viewBox="0 0 36 18" fill="none"
+        >
           <path d="M2 2C2 12 34 12 34 2Z" fill="currentColor" className="text-slate-700 dark:text-slate-300" />
-        </svg>
+          <path d="M11 12C14 9 22 9 25 12C22 15 14 15 11 12Z" fill="#ff7a8a" />
+        </motion.svg>
       )
     }
 
-    if (emotion === 'smile') {
+    if (emotion === 'smile' || emotion === 'wink') {
       return (
         <svg width="32" height="12" viewBox="0 0 32 12" fill="none">
           <path d="M3 2C8 9 24 9 29 2" stroke="currentColor" className="text-slate-700 dark:text-slate-300" strokeWidth="3.5" strokeLinecap="round" />
@@ -750,7 +1041,7 @@ export default function BrandOwnerDashboard() {
         ref={fileInputRef} 
         onChange={handleFileChange} 
         multiple 
-        accept="image/*" 
+        accept="image/*,video/*" 
         className="hidden" 
       />
       
@@ -783,7 +1074,12 @@ export default function BrandOwnerDashboard() {
       <header className="fixed top-0 w-full z-40 bg-white/40 backdrop-blur-md h-16 flex items-center justify-between px-4 border-b border-slate-200/20">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-transparent">
-            <img src="/logo.svg" alt="logo" className="w-full h-full object-contain" />
+            <img 
+              src={activeBrand?.logoUrl || "/logo.svg"} 
+              onError={(e) => { e.currentTarget.src = "/logo.svg" }}
+              alt="logo" 
+              className="w-full h-full object-contain" 
+            />
           </div>
           <span className="font-bold text-sm text-slate-800 tracking-wide">
             {activeBrand ? activeBrand.name : ''}
@@ -949,7 +1245,7 @@ export default function BrandOwnerDashboard() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                    已选图片 ({pendingPreviews.length}/9)
+                    {pendingImages[0]?.type.startsWith('video/') ? '已选视频 (1/1)' : `已选图片 (${pendingPreviews.length}/9)`}
                   </span>
                   <button 
                     onClick={() => {
@@ -958,7 +1254,7 @@ export default function BrandOwnerDashboard() {
                       setPostIdea('')
                     }}
                     className="text-slate-400 hover:text-slate-650 p-1 cursor-pointer flex items-center justify-center"
-                    title="清除所有图片"
+                    title="清除所有媒体"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -966,21 +1262,28 @@ export default function BrandOwnerDashboard() {
 
                 {/* Previews thumbnail grid */}
                 <div className="grid grid-cols-3 gap-2 overflow-y-auto max-h-36 p-1 scrollbar-thin">
-                  {pendingPreviews.map((url, i) => (
-                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-100 bg-slate-50 shadow-sm">
-                      <img src={url} alt={`preview-${i}`} className="w-full h-full object-cover" />
-                      <button
-                        onClick={() => {
-                          setPendingPreviews(prev => prev.filter((_, idx) => idx !== i))
-                          setPendingImages(prev => prev.filter((_, idx) => idx !== i))
-                        }}
-                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-slate-900/60 text-white flex items-center justify-center hover:bg-slate-900 active:scale-95 transition-all cursor-pointer shadow-sm"
-                        title="移除图片"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
+                  {pendingPreviews.map((url, i) => {
+                    const isVid = pendingImages[i]?.type.startsWith('video/')
+                    return (
+                      <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-100 bg-slate-50 shadow-sm">
+                        {isVid ? (
+                          <video src={url} className="w-full h-full object-cover" muted playsInline />
+                        ) : (
+                          <img src={url} alt={`preview-${i}`} className="w-full h-full object-cover" />
+                        )}
+                        <button
+                          onClick={() => {
+                            setPendingPreviews(prev => prev.filter((_, idx) => idx !== i))
+                            setPendingImages(prev => prev.filter((_, idx) => idx !== i))
+                          }}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-slate-900/60 text-white flex items-center justify-center hover:bg-slate-900 active:scale-95 transition-all cursor-pointer shadow-sm"
+                          title="移除媒体"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
 
                 {/* Theme/Idea creative prompt textarea */}
@@ -1010,7 +1313,7 @@ export default function BrandOwnerDashboard() {
                     取消
                   </button>
                   <button
-                    onClick={handleBulkSubmit}
+                    onClick={() => handleBulkSubmit()}
                     disabled={generatingBulk}
                     className="flex-1 bg-primary hover:bg-indigo-tint text-white font-extrabold py-2.5 rounded-2xl text-xs active:scale-95 transition-all flex items-center justify-center gap-1 shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50"
                   >
@@ -1073,7 +1376,13 @@ export default function BrandOwnerDashboard() {
                   </AnimatePresence>
 
                   {/* Face base container */}
-                  <div className="w-48 h-48 rounded-full bg-white/70 border border-white/60 shadow-2xl backdrop-blur-md flex flex-col items-center justify-center gap-5 relative z-10">
+                  <motion.div 
+                    animate={{ y: [0, -6, 0] }}
+                    transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut" }}
+                    onClick={triggerRandomEmotion}
+                    className="w-48 h-48 flex flex-col items-center justify-center gap-5 relative z-10 cursor-pointer pointer-events-auto"
+                    title="点击我试试！"
+                  >
                     {/* Sweating drop for effort emotion */}
                     {emotion === 'effort' && (
                       <motion.div 
@@ -1085,24 +1394,51 @@ export default function BrandOwnerDashboard() {
                       </motion.div>
                     )}
 
-                    {/* Sparkles / Joy stars when laughing */}
-                    {emotion === 'laugh' && (
+                    {/* Sparkles / Joy stars when laughing or excited */}
+                    {(emotion === 'laugh' || emotion === 'excited') && (
                       <>
                         <motion.div 
                           animate={{ scale: [1, 1.3, 1], rotate: [0, 45, 0] }} 
                           transition={{ repeat: Infinity, duration: 1.2 }}
-                          className="absolute top-6 left-8 text-amber-400 text-sm"
+                          className="absolute top-6 left-8 text-amber-400 text-sm pointer-events-none"
                         >
                           ⭐
                         </motion.div>
                         <motion.div 
                           animate={{ scale: [1, 1.3, 1], rotate: [0, -45, 0] }} 
                           transition={{ repeat: Infinity, duration: 1.2, delay: 0.3 }}
-                          className="absolute top-10 right-6 text-amber-400 text-xs"
+                          className="absolute top-10 right-6 text-amber-400 text-xs pointer-events-none"
                         >
                           ✨
                         </motion.div>
                       </>
+                    )}
+
+                    {/* Question Marks when confused / thinking */}
+                    {(companionState === 'thinking' || emotion === 'confused') && (
+                      <motion.div 
+                        animate={{ y: [0, -3, 0], opacity: [0.6, 1, 0.6] }}
+                        transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                        className="absolute -top-1 left-24 text-slate-400 text-sm font-extrabold pointer-events-none"
+                      >
+                        ❓
+                      </motion.div>
+                    )}
+
+                    {/* Blush cheeks */}
+                    {(emotion === 'smile' || emotion === 'laugh' || emotion === 'wink' || emotion === 'excited') && (
+                      <div className="absolute top-[88px] w-24 flex justify-between px-1 pointer-events-none">
+                        <motion.div 
+                          animate={{ opacity: [0.4, 0.7, 0.4] }}
+                          transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                          className="w-4 h-2 bg-rose-300/40 rounded-full filter blur-[1px]" 
+                        />
+                        <motion.div 
+                          animate={{ opacity: [0.4, 0.7, 0.4] }}
+                          transition={{ repeat: Infinity, duration: 2, ease: "easeInOut", delay: 0.3 }}
+                          className="w-4 h-2 bg-rose-300/40 rounded-full filter blur-[1px]" 
+                        />
+                      </div>
                     )}
 
                     {/* Eyes Row */}
@@ -1115,7 +1451,7 @@ export default function BrandOwnerDashboard() {
                     <div className="h-10 flex items-center justify-center">
                       {renderMouth()}
                     </div>
-                  </div>
+                  </motion.div>
                 </div>
 
                 {/* Subtitles text display */}
@@ -1125,14 +1461,14 @@ export default function BrandOwnerDashboard() {
                      companionState === 'thinking' ? '正在思考与组织语言...' :
                      companionState === 'speaking' ? '正在语音回复中...' :
                      emotion === 'effort' ? '正在努力为您生成推文...' :
-                     '专属 AI 营销助手'}
+                     'AI 创意对讲助手'}
                   </h3>
                   <p className="text-[11px] text-slate-400 font-semibold px-8 leading-relaxed max-w-xs mx-auto">
                     {companionState === 'listening' ? '您可以说：“帮我做个关于周末促销的活动文案”' :
                      companionState === 'thinking' ? '正在调用平台数据与创意模型...' :
                      companionState === 'speaking' ? '正在用语音为您播报创作成果...' :
                      emotion === 'effort' ? '已开始处理！正在为您排期并发布内容...' :
-                     '只进行语音对话。点击下方麦克风即可开始。'}
+                     '点击下方麦克风说出您的创意想法，或直接上传素材开始批量创作。'}
                   </p>
                 </div>
               </div>
@@ -1155,40 +1491,102 @@ export default function BrandOwnerDashboard() {
                 <ImageIcon className="w-5 h-5" />
               </button>
  
-              {/* Center Column: Voice assistant mic button */}
-              <div className="flex flex-col items-center gap-2 flex-1">
-                <button 
-                  type="button"
-                  onClick={startVoiceAssist}
-                  disabled={generatingBulk}
-                  className={`w-16 h-16 rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-all cursor-pointer flex-shrink-0 ${
+              {/* Center Column: Voice assistant mic button with green intercom design */}
+              <div className="flex flex-col items-center gap-2.5 flex-1 relative">
+                {/* 3D and glowing rings container */}
+                <div className="relative flex items-center justify-center">
+                  {/* Animated ripple sound waves (active when listening/speaking) */}
+                  {companionState === 'listening' && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      {[1, 2, 3].map((idx) => (
+                        <motion.div
+                          key={idx}
+                          initial={{ opacity: 0.6, scale: 1 }}
+                          animate={{ opacity: 0, scale: 2.2 }}
+                          transition={{
+                            repeat: Infinity,
+                            duration: 1.5,
+                            delay: idx * 0.4,
+                            ease: "easeOut",
+                          }}
+                          className="absolute w-16 h-16 rounded-full border-2 border-emerald-500/30 pointer-events-none"
+                        />
+                      ))}
+                    </div>
+                  )}
+                  
+                  {companionState === 'speaking' && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      {[1, 2].map((idx) => (
+                        <motion.div
+                          key={idx}
+                          initial={{ opacity: 0.5, scale: 1 }}
+                          animate={{ opacity: 0, scale: 1.8 }}
+                          transition={{
+                            repeat: Infinity,
+                            duration: 1.8,
+                            delay: idx * 0.6,
+                            ease: "easeOut",
+                          }}
+                          className="absolute w-16 h-16 rounded-full border border-teal-500/25 pointer-events-none"
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Physical Bezel ring */}
+                  <div className="absolute w-[72px] h-[72px] rounded-full border border-slate-200/10 bg-slate-100/40 backdrop-blur-sm shadow-inner pointer-events-none" />
+
+                  {/* Main tactile push button */}
+                  <button 
+                    type="button"
+                    onClick={startVoiceAssist}
+                    disabled={generatingBulk}
+                    className={`w-16 h-16 rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 active:shadow-md transition-all duration-300 cursor-pointer relative z-10 border border-emerald-400/20 ${
+                      companionState === 'listening'
+                        ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 shadow-emerald-500/40 scale-105'
+                        : companionState === 'thinking'
+                        ? 'bg-gradient-to-tr from-emerald-500 to-emerald-400 shadow-emerald-400/20 animate-pulse'
+                        : companionState === 'speaking'
+                        ? 'bg-gradient-to-tr from-teal-500 to-emerald-500 shadow-teal-500/30'
+                        : 'bg-gradient-to-tr from-emerald-500 to-teal-400 hover:from-emerald-600 hover:to-teal-500 shadow-emerald-500/20'
+                    }`}
+                  >
+                    {companionState === 'listening' ? (
+                      <motion.div
+                        animate={{ scale: [1, 1.1, 1] }}
+                        transition={{ repeat: Infinity, duration: 1.2 }}
+                        className="flex items-center justify-center"
+                      >
+                        <Mic className="w-6 h-6 text-white drop-shadow" />
+                      </motion.div>
+                    ) : companionState === 'thinking' ? (
+                      <RefreshCw className="w-6 h-6 animate-spin text-white" />
+                    ) : (
+                      <Mic className="w-6 h-6 text-white drop-shadow" />
+                    )}
+                  </button>
+                </div>
+
+                {/* WeChat-style Intercom Status Pill */}
+                <motion.div 
+                  animate={companionState === 'listening' ? { scale: [1, 1.03, 1] } : {}}
+                  transition={{ repeat: Infinity, duration: 1 }}
+                  className={`px-3 py-1 rounded-full text-[10px] font-black tracking-wide uppercase text-center mt-1 border transition-all duration-300 ${
                     companionState === 'listening'
-                      ? 'bg-emerald-500 shadow-emerald-500/30 scale-105'
+                      ? 'bg-emerald-100 border-emerald-200 text-emerald-800 dark:bg-emerald-950/80 dark:border-emerald-800 dark:text-emerald-300 font-extrabold shadow-sm'
                       : companionState === 'thinking'
-                      ? 'bg-indigo-500 shadow-indigo-500/20'
+                      ? 'bg-amber-100 border-amber-200 text-amber-800 dark:bg-amber-950/80 dark:border-amber-800 dark:text-amber-300'
                       : companionState === 'speaking'
-                      ? 'bg-indigo-tint shadow-indigo-tint/30 animate-pulse'
-                      : 'bg-primary hover:bg-indigo-tint shadow-primary/30'
+                      ? 'bg-teal-100 border-teal-200 text-teal-800 dark:bg-teal-950/80 dark:border-teal-800 dark:text-teal-300'
+                      : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200/50 hover:text-slate-650'
                   }`}
                 >
-                  {companionState === 'listening' ? (
-                    <motion.div
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ repeat: Infinity, duration: 1.2 }}
-                      className="w-full h-full rounded-full bg-emerald-500 flex items-center justify-center relative"
-                    >
-                      <Mic className="w-6 h-6 text-white" />
-                      <span className="absolute inset-0 rounded-full border-2 border-emerald-500 animate-ping opacity-60"></span>
-                    </motion.div>
-                  ) : companionState === 'thinking' ? (
-                    <RefreshCw className="w-6 h-6 animate-spin" />
-                  ) : (
-                    <Mic className="w-6 h-6" />
-                  )}
-                </button>
-                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest text-center mt-1">
-                  {companionState === 'listening' ? '正在倾听...' : companionState === 'thinking' ? '正在思考...' : companionState === 'speaking' ? '正在说话...' : '点击麦克风对话'}
-                </span>
+                  {companionState === 'listening' ? '正在对讲 (倾听中)...' : 
+                   companionState === 'thinking' ? '正在对讲 (思考中)...' : 
+                   companionState === 'speaking' ? '正在对讲 (回答中)...' : 
+                   '按键开始对讲'}
+                </motion.div>
               </div>
  
               {/* Right Column: Balanced empty space spacer */}
@@ -1677,7 +2075,12 @@ export default function BrandOwnerDashboard() {
             >
               <div className="flex justify-between items-center mb-10">
                 <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-transparent">
-                  <img src="/logo.svg" alt="logo" className="w-full h-full object-contain" />
+                  <img 
+                    src={activeBrand?.logoUrl || "/logo.svg"} 
+                    onError={(e) => { e.currentTarget.src = "/logo.svg" }}
+                    alt="logo" 
+                    className="w-full h-full object-contain" 
+                  />
                 </div>
                 <button 
                   onClick={() => setSideMenuOpen(false)}
@@ -1696,8 +2099,17 @@ export default function BrandOwnerDashboard() {
                     className="w-full flex items-center justify-between p-3 bg-white border border-slate-200/60 rounded-xl text-left hover:bg-slate-50 transition-all cursor-pointer outline-none"
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white flex-shrink-0">
-                        <Utensils className="w-4.5 h-4.5 text-white" />
+                      <div className="w-8 h-8 rounded-lg bg-primary overflow-hidden flex items-center justify-center text-white flex-shrink-0">
+                        {activeBrand?.logoUrl ? (
+                          <img 
+                            src={activeBrand.logoUrl} 
+                            onError={(e) => { e.currentTarget.src = "/logo.svg" }}
+                            alt="logo" 
+                            className="w-full h-full object-contain" 
+                          />
+                        ) : (
+                          <Utensils className="w-4.5 h-4.5 text-white" />
+                        )}
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span className="font-bold text-xs text-slate-800 truncate">
@@ -1712,7 +2124,7 @@ export default function BrandOwnerDashboard() {
                       <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${brandDropdownOpen ? 'rotate-180' : ''}`} />
                     )}
                   </button>
-
+ 
                   {/* Dropdown Menu */}
                   <AnimatePresence>
                     {brandDropdownOpen && brands.length > 1 && (
@@ -1733,7 +2145,21 @@ export default function BrandOwnerDashboard() {
                               activeBrand?.id === b.id ? 'bg-indigo-50/50 text-primary font-bold' : 'text-slate-600'
                             }`}
                           >
-                            <span className="truncate mr-2">{b.name}</span>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-6 h-6 rounded bg-primary/10 overflow-hidden flex items-center justify-center text-primary flex-shrink-0">
+                                {b.logoUrl ? (
+                                  <img 
+                                    src={b.logoUrl} 
+                                    onError={(e) => { e.currentTarget.src = "/logo.svg" }}
+                                    alt="logo" 
+                                    className="w-full h-full object-contain" 
+                                  />
+                                ) : (
+                                  <Utensils className="w-3.5 h-3.5" />
+                                )}
+                              </div>
+                              <span className="truncate">{b.name}</span>
+                            </div>
                             {activeBrand?.id === b.id && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
                           </button>
                         ))}
@@ -1810,6 +2236,218 @@ export default function BrandOwnerDashboard() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Fullscreen Generated Draft Previews Overlay */}
+      <AnimatePresence>
+        {generatedDrafts && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex flex-col justify-end md:justify-center md:items-center"
+          >
+            <motion.div
+              initial={{ y: '20%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '20%', opacity: 0 }}
+              className="w-full h-[90vh] md:h-[85vh] md:max-w-4xl bg-[#f7f9fb] md:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+            >
+              {/* Header */}
+              <div className="px-6 py-4 bg-white border-b border-slate-200/50 flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-emerald-500 fill-emerald-500/20" />
+                    AI 批量生成草稿预览
+                  </h2>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                    为您生成的推文，已为您勾选默认全部发布。支持个性化修改内容与标题。
+                  </p>
+                </div>
+                <button
+                  onClick={() => setGeneratedDrafts(null)}
+                  className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Scrollable Draft Cards List */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {generatedDrafts.map((draft, idx) => {
+                    const isVid = draft.mediaUrls && draft.mediaUrls.length > 0 && /\.(mp4|mov|avi|webm|ogg|m4v|3gp)(?:\?.*)?$/i.test(draft.mediaUrls[0].split('?')[0]);
+                    return (
+                      <div
+                        key={idx}
+                        className={`rounded-2xl bg-white border transition-all p-5 flex flex-col justify-between gap-4 ${
+                          draft.selected
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/10 shadow-lg'
+                            : 'border-slate-200/60 shadow-sm opacity-60'
+                        }`}
+                      >
+                        {/* Draft Card Header */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            {/* Platform badge */}
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide ${
+                              draft.platform === 'instagram'
+                                ? 'bg-pink-50 text-pink-600'
+                                : draft.platform === 'xiaohongshu'
+                                ? 'bg-rose-50 text-rose-600'
+                                : draft.platform === 'facebook'
+                                ? 'bg-blue-50 text-blue-600'
+                                : 'bg-slate-100 text-slate-650'
+                            }`}>
+                              {draft.platform === 'instagram' ? 'Instagram' : draft.platform === 'xiaohongshu' ? '小红书 / Rednote' : draft.platform === 'facebook' ? 'Facebook' : draft.platform}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-bold">
+                              {draft.displayName}
+                            </span>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={!!draft.selected}
+                            onChange={(e) => {
+                              setGeneratedDrafts(prev => {
+                                if (!prev) return null
+                                const next = [...prev]
+                                next[idx] = { ...next[idx], selected: e.target.checked }
+                                return next
+                              })
+                            }}
+                            className="w-4.5 h-4.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                        </div>
+
+                        {/* Media preview */}
+                        {draft.mediaUrls && draft.mediaUrls.length > 0 && (
+                          <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-100 border border-slate-200/40">
+                            {isVid ? (
+                              <video src={draft.mediaUrls[0]} className="w-full h-full object-cover" muted controls />
+                            ) : (
+                              <img src={draft.mediaUrls[0]} alt="media" className="w-full h-full object-cover" />
+                            )}
+                            {draft.mediaUrls.length > 1 && (
+                              <span className="absolute bottom-2 right-2 bg-slate-950/60 text-white text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm">
+                                +{draft.mediaUrls.length - 1} 张图片
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Editable caption */}
+                        <div className="space-y-1.5 flex-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">
+                            正文文案
+                          </label>
+                          <textarea
+                            value={draft.caption}
+                            onChange={(e) => {
+                              setGeneratedDrafts(prev => {
+                                if (!prev) return null
+                                const next = [...prev]
+                                next[idx] = { ...next[idx], caption: e.target.value }
+                                return next
+                              })
+                            }}
+                            rows={4}
+                            className="w-full text-xs p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-emerald-500/50 resize-none font-semibold text-slate-700 leading-relaxed"
+                          />
+                        </div>
+
+                        {/* Editable hashtags */}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">
+                            Hashtags
+                          </label>
+                          <input
+                            type="text"
+                            value={draft.hashtags.join(', ')}
+                            onChange={(e) => {
+                              setGeneratedDrafts(prev => {
+                                if (!prev) return null
+                                const next = [...prev]
+                                next[idx] = { ...next[idx], hashtags: e.target.value.split(',').map(h => h.trim()).filter(Boolean) }
+                                return next
+                              })
+                            }}
+                            className="w-full text-xs px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-emerald-500/50 font-semibold text-slate-650"
+                            placeholder="标签以逗号分隔，例如: tag1, tag2"
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Bottom Actions Bar */}
+              <div className="px-6 py-4 bg-white border-t border-slate-200/50 flex flex-col md:flex-row md:items-center justify-between gap-4 flex-shrink-0">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs font-bold text-slate-500">
+                    已选: <span className="text-slate-800 font-extrabold">{generatedDrafts.filter(d => d.selected).length}</span> / {generatedDrafts.length}
+                  </span>
+                  {showSchedulePicker && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="datetime-local"
+                        value={scheduleTime}
+                        onChange={(e) => setScheduleTime(e.target.value)}
+                        className="text-xs border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-primary/50 text-slate-700 font-bold"
+                      />
+                      <button
+                        onClick={handleSchedulePublish}
+                        disabled={isSubmittingFinalDrafts}
+                        className="bg-primary hover:bg-indigo-tint text-white text-xs font-black px-3 py-1.5 rounded-xl shadow-md cursor-pointer disabled:opacity-50"
+                      >
+                        确认排期
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setGeneratedDrafts(null)
+                      setShowSchedulePicker(false)
+                    }}
+                    disabled={isSubmittingFinalDrafts}
+                    className="px-5 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowSchedulePicker(prev => !prev)
+                      if (!scheduleTime) {
+                        // Pre-populate with tomorrow at 10:00 AM
+                        const tomorrow = new Date()
+                        tomorrow.setDate(tomorrow.getDate() + 1)
+                        tomorrow.setHours(10, 0, 0, 0)
+                        const pad = (n: number) => String(n).padStart(2, '0')
+                        const formatted = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}T${pad(tomorrow.getHours())}:${pad(tomorrow.getMinutes())}`
+                        setScheduleTime(formatted)
+                      }
+                    }}
+                    disabled={isSubmittingFinalDrafts}
+                    className="px-5 py-2.5 bg-indigo-50 border border-indigo-100 text-primary hover:bg-indigo-100/50 rounded-xl text-xs font-black shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    排期发布
+                  </button>
+                  <button
+                    onClick={handleImmediatePublish}
+                    disabled={isSubmittingFinalDrafts}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/10 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmittingFinalDrafts ? '发布中...' : '立即发布'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 

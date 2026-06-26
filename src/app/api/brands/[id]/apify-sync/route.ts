@@ -161,7 +161,7 @@ export async function POST(req: Request, { params }: Params) {
   const prevMeta = (previousLog?.metadata ?? {}) as Record<string, unknown>
 
   // ── Collect results ───────────────────────────────────────────────────────
-  if (googleResult.error) errors.push(`Google Maps: ${googleResult.error}`)
+  if (googleResult.error) errors.push(`Google Business: ${googleResult.error}`)
   if (instagramResult.error) errors.push(`Instagram: ${instagramResult.error}`)
   if (tiktokResult.error) errors.push(`TikTok: ${tiktokResult.error}`)
   if (xiaohongshuResult.error) errors.push(`Xiaohongshu: ${xiaohongshuResult.error}`)

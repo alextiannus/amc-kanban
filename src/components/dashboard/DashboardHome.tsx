@@ -999,7 +999,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
       {(() => {
         const getActionItemPlatformLabel = (item: DashboardActionItem) => {
           if (item.account) {
-            const platformName = item.account.platformId.toUpperCase() === 'GOOGLE' ? 'GOOGLE MAPS' : item.account.platformId.toUpperCase()
+            const platformName = item.account.platformId.toUpperCase() === 'GOOGLE' ? 'GOOGLE BUSINESS' : item.account.platformId.toUpperCase()
             return `${platformName} (${item.account.handle})`
           }
 
@@ -1013,7 +1013,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
           }
 
           const pl = payload && typeof payload === 'object' ? payload : null
-          const plPlatform = pl?.platform === 'google_maps' ? 'GOOGLE MAPS' : (pl?.platform?.toUpperCase() || null)
+          const plPlatform = pl?.platform === 'google_maps' ? 'GOOGLE BUSINESS' : (pl?.platform?.toUpperCase() || null)
           const itemType = String(item.type ?? '').toLowerCase()
 
           if (plPlatform) {
@@ -1021,15 +1021,15 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
             if (googleAccount) {
               return `${plPlatform} (${googleAccount.handle})`
             }
-            return `${plPlatform} (${activeBrand?.name || 'Google Maps'})`
+            return `${plPlatform} (${activeBrand?.name || 'Google Business'})`
           }
 
           if (itemType === 'sentiment_alert' || itemType === 'apify_review') {
             const googleAccount = apiAccounts.find(a => normalizeDashboardPlatformId(a.platformId) === 'google')
             if (googleAccount) {
-              return `GOOGLE MAPS (${googleAccount.handle})`
+              return `GOOGLE BUSINESS (${googleAccount.handle})`
             }
-            return `GOOGLE MAPS (${activeBrand?.name || 'Google Maps'})`
+            return `GOOGLE BUSINESS (${activeBrand?.name || 'Google Business'})`
           }
 
           return item.type?.toUpperCase() ?? 'UNKNOWN'

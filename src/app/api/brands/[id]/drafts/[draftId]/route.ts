@@ -127,7 +127,7 @@ export async function PATCH(request: Request, { params }: Params) {
             brandId,
             platformId,
             handle: 'unconfigured',
-            displayName: platformId === 'google_business' ? 'Google Maps (未配置)' : '小红书 / Rednote (未配置)',
+            displayName: platformId === 'google_business' ? 'Google Business (未配置)' : '小红书 / Rednote (未配置)',
           }
         })
       }
@@ -261,6 +261,38 @@ export async function DELETE(request: Request, { params }: Params) {
         return NextResponse.json({ error: `Failed to cancel scheduled post on board backend — ${cancelResult.error}` }, { status: 400 })
       }
     }
+  }
+
+  // Clean up AI-generated media assets associated with this draft
+  try {
+    const assetRefs = await prisma.contentAssetRef.findMany({
+      where: { draftId },
+      include: { asset: true }
+    })
+    for (const ref of assetRefs) {
+      const asset = ref.asset
+      if (asset && (asset.sourceType === 'designer' || asset.sourceType === 'postfast' || asset.sourceType === 'huawei_obs' || asset.aiCategory === 'optimized_media' || asset.aiCategory === 'watermarked_cover')) {
+        // Check if referenced by other drafts
+        const otherRefs = await prisma.contentAssetRef.count({
+          where: { assetId: asset.id, draftId: { not: draftId } }
+        })
+        if (otherRefs === 0) {
+          await prisma.mediaAsset.delete({ where: { id: asset.id } })
+          // Physically delete local file if any
+          if (asset.url.startsWith('/uploads/')) {
+            const fs = await import('fs')
+            const path = await import('path')
+            const localPath = path.join(process.cwd(), 'public', asset.url)
+            if (fs.existsSync(localPath)) {
+              fs.unlinkSync(localPath)
+            }
+          }
+          console.log(`Deleted orphaned AI asset ${asset.id} for draft ${draftId}`)
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to clean up assets for deleted draft ${draftId}:`, err)
   }
 
   await prisma.contentDraft.delete({ where: { id: draftId } })

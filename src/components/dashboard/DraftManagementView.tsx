@@ -195,13 +195,14 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setSelectedId(null)
     setSelectedAccountIds([])
   }
-  const [activeTab, setActiveTab] = useState<TabKey>('all')
+  const [activeTab, setActiveTab] = useState<TabKey>('scheduled')
   const [query, setQuery] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
   const [accountFilter, setAccountFilter] = useState('all')
   const [tagFilter, setTagFilter] = useState('all')
   const [compact, setCompact] = useState(false)
   const [selectMode, setSelectMode] = useState(false)
+  const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [caption, setCaption] = useState('')
@@ -304,7 +305,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
           id: selectedDraftAccount.id,
           platformId: selectedDraftAccount.platformId,
           handle: 'unconfigured',
-          displayName: selectedDraftAccount.displayName || (isGoogle ? 'Google Maps (未配置)' : '小红书 / Rednote (未配置)'),
+          displayName: selectedDraftAccount.displayName || (isGoogle ? 'Google Business (未配置)' : '小红书 / Rednote (未配置)'),
           autoPilot: false,
           profileUrl: null
         } as any)
@@ -317,7 +318,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
         id: 'unconfigured_google_business',
         platformId: 'google_business',
         handle: 'unconfigured',
-        displayName: 'Google Maps (未配置)',
+        displayName: 'Google Business (未配置)',
         autoPilot: false,
         profileUrl: null
       } as any)
@@ -716,6 +717,71 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     }
   }
 
+  const handleCardClick = (draftId: string) => {
+    if (selectMode) {
+      setSelectedDraftIds(prev =>
+        prev.includes(draftId)
+          ? prev.filter(id => id !== draftId)
+          : [...prev, draftId]
+      )
+    } else {
+      setSelectedId(draftId)
+      setEditorOpen(true)
+    }
+  }
+
+  const handleBatchApprove = async () => {
+    if (!brandId || selectedDraftIds.length === 0) return
+    if (!confirm(`确定要批量批准并发布这 ${selectedDraftIds.length} 个草稿吗？`)) return
+    setSaving(true)
+    setError(null)
+    try {
+      for (const draftId of selectedDraftIds) {
+        const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/approve`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: '批量批准发布' })
+        })
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}))
+          throw new Error(json.error || `草稿 ${draftId} 批准失败`)
+        }
+      }
+      setSelectedDraftIds([])
+      setSelectMode(false)
+      await loadDrafts()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '批量批准失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleBatchDiscard = async () => {
+    if (!brandId || selectedDraftIds.length === 0) return
+    if (!confirm(`确定要批量删除/废弃这 ${selectedDraftIds.length} 个草稿吗？此操作不可逆。`)) return
+    setSaving(true)
+    setError(null)
+    try {
+      for (const draftId of selectedDraftIds) {
+        const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}`, {
+          method: 'DELETE',
+        })
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}))
+          throw new Error(json.error || `草稿 ${draftId} 废弃失败`)
+        }
+      }
+      setSelectedDraftIds([])
+      setSelectMode(false)
+      await loadDrafts()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '批量删除失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const triggerCopywriter = async (draftId: string, silent = false) => {
     if (!brandId) return
     setSaving(true)
@@ -872,14 +938,62 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
               <FilterSelect icon={<Smartphone className="h-4 w-4" />} value={platformFilter} onChange={setPlatformFilter} options={[['all', 'All platforms'], ...platformOptions.map((platform) => [platform, platformLabel(platform)] as [string, string])]} />
               <FilterSelect icon={<Users className="h-4 w-4" />} value={accountFilter} onChange={setAccountFilter} options={[['all', 'All accounts'], ...accounts.map((account) => [account.id, account.displayName || account.handle || account.platformId] as [string, string])]} />
               <FilterSelect icon={<Tag className="h-4 w-4" />} value={tagFilter} onChange={setTagFilter} options={[['all', 'All tags'], ...tagOptions.map((tag) => [tag, `#${tag}`] as [string, string])]} />
-              <button onClick={() => setCompact((value) => !value)} className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-bold ${compact ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+              <button onClick={() => setSelectMode((value) => !value)} className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-bold ${compact ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
                 <Grid2X2 className="h-4 w-4" /> Compact
               </button>
-              <button onClick={() => setSelectMode((value) => !value)} className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-bold ${selectMode ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+              <button 
+                onClick={() => {
+                  setSelectMode(prev => {
+                    const next = !prev
+                    if (!next) {
+                      setSelectedDraftIds([])
+                    }
+                    return next
+                  })
+                }} 
+                className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-bold ${selectMode ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}
+              >
                 <CheckSquare className="h-4 w-4" /> Select
               </button>
             </div>
           </div>
+
+          {/* Batch Actions Panel */}
+          {selectMode && selectedDraftIds.length > 0 && (
+            <div className="flex flex-col gap-3 border-b border-slate-150 bg-emerald-50/20 px-5 py-3 dark:border-slate-850 dark:bg-emerald-950/10 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-black text-white">
+                  {selectedDraftIds.length}
+                </div>
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                  已选择 <span className="font-extrabold text-slate-900 dark:text-white">{selectedDraftIds.length}</span> 个草稿
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleBatchApprove}
+                  disabled={saving}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-emerald-600 px-3 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  <Check className="h-3.5 w-3.5" /> 批量批准并发布
+                </button>
+                <button
+                  onClick={handleBatchDiscard}
+                  disabled={saving}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-rose-600 px-3 text-xs font-black text-white hover:bg-rose-700 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> 批量删除
+                </button>
+                <button
+                  onClick={() => setSelectedDraftIds([])}
+                  disabled={saving}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  取消选择
+                </button>
+              </div>
+            </div>
+          )}
 
           {error && <div className="m-3 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">{error}</div>}
 
@@ -901,7 +1015,14 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                     </div>
                     <div className={`grid gap-3 ${compact ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'}`}>
                       {items.map((draft) => (
-                        <DraftCard key={draft.id} draft={draft} compact={compact} selectMode={selectMode} selected={selectedId === draft.id} onOpen={() => { setSelectedId(draft.id); setEditorOpen(true) }} />
+                        <DraftCard 
+                          key={draft.id} 
+                          draft={draft} 
+                          compact={compact} 
+                          selectMode={selectMode} 
+                          selected={selectMode ? selectedDraftIds.includes(draft.id) : selectedId === draft.id} 
+                          onOpen={() => handleCardClick(draft.id)} 
+                        />
                       ))}
                     </div>
                   </section>
@@ -2154,7 +2275,11 @@ function DraftCard({ draft, compact, selectMode, selected, onOpen }: { draft: Dr
     >
       <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-800">
         <div className="flex min-w-0 items-center gap-2">
-          {selectMode && <span className={`h-4 w-4 rounded border ${selected ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 dark:border-slate-600'}`} />}
+          {selectMode && (
+            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all duration-200 ${selected ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 dark:border-slate-600 bg-transparent'}`}>
+              {selected && <Check className="h-3 w-3 stroke-[3px]" />}
+            </span>
+          )}
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white dark:bg-white dark:text-slate-900">{accountInitial(draft)}</span>
           <div className="min-w-0">
             <p className="truncate text-sm font-black text-slate-900 dark:text-slate-100">{accountName}</p>

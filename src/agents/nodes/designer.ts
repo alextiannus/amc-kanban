@@ -2,6 +2,121 @@ import fs from "fs";
 import path from "path";
 import sharp from "sharp";
 import { prisma } from "../../lib/prisma.ts";
+import { getHuaweiObsConfig, uploadHuaweiObsObject, makeBrandAssetKey } from "../../lib/integrations/huaweiObs.ts";
+import { postfastGetSignedUploadUrls, postfastUploadFile } from "../../lib/integrations/postfast.ts";
+
+async function saveAsset({
+  brandId,
+  brand,
+  filename,
+  folder,
+  buffer,
+  mimeType,
+  width,
+  height,
+  aiCategory,
+  sourceTypeFallback
+}: {
+  brandId: string;
+  brand: any;
+  filename: string;
+  folder: string;
+  buffer: Buffer;
+  mimeType: string;
+  width?: number;
+  height?: number;
+  aiCategory: string;
+  sourceTypeFallback: string;
+}): Promise<string> {
+  const obsConfig = getHuaweiObsConfig();
+  if (obsConfig) {
+    const key = makeBrandAssetKey({ brandId, folder: aiCategory, filename });
+    console.log(`[Designer Node] Uploading to Huawei OBS with key: ${key}`);
+    const uploadResult = await uploadHuaweiObsObject({ key, body: buffer, contentType: mimeType });
+    if (uploadResult.ok) {
+      const newAsset = await prisma.mediaAsset.create({
+        data: {
+          brandId,
+          url: uploadResult.url,
+          filename,
+          mimeType,
+          sizeBytes: buffer.length,
+          width,
+          height,
+          aiReady: true,
+          aiCategory,
+          sourceType: "huawei_obs"
+        }
+      });
+      console.log(`[Designer Node] Registered Huawei OBS asset in DB: ${newAsset.id}`);
+      return uploadResult.url;
+    } else {
+      console.error(`[Designer Node] Huawei OBS upload failed:`, uploadResult.error);
+    }
+  }
+
+  if (brand.postfastApiKey) {
+    console.log(`[Designer Node] Uploading to PostFast...`);
+    const sizeBytes = buffer.length;
+    const slotResult = await postfastGetSignedUploadUrls(brand.postfastApiKey, [
+      { filename, mimeType, sizeBytes }
+    ]);
+    if (slotResult.success && slotResult.slots.length > 0) {
+      const slot = slotResult.slots[0];
+      const uploadResult = await postfastUploadFile(slot.uploadUrl, buffer, mimeType);
+      if (uploadResult.success) {
+        const storageKey = slot.storageKey || slot.fileToken || filename;
+        const newAsset = await prisma.mediaAsset.create({
+          data: {
+            brandId,
+            url: storageKey,
+            filename,
+            mimeType,
+            sizeBytes,
+            width,
+            height,
+            aiReady: true,
+            aiCategory,
+            sourceType: "postfast"
+          }
+        });
+        console.log(`[Designer Node] Registered PostFast asset in DB: ${newAsset.id}`);
+        return `/api/integrations/postfast/file/${brandId}/${storageKey}`;
+      } else {
+        console.error(`[Designer Node] PostFast file upload failed:`, uploadResult.error);
+      }
+    } else {
+      console.error(`[Designer Node] PostFast signed URL failed:`, slotResult.error);
+    }
+  }
+
+  // Local fallback
+  console.log(`[Designer Node] Falling back to local storage for filename: ${filename}`);
+  const uploadDir = path.join(process.cwd(), "public", "uploads", folder);
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  const outputPath = path.join(uploadDir, filename);
+  fs.writeFileSync(outputPath, buffer);
+
+  const publicUrl = `/uploads/${folder}/${filename}`;
+  const newAsset = await prisma.mediaAsset.create({
+    data: {
+      brandId,
+      url: publicUrl,
+      filename,
+      mimeType,
+      sizeBytes: buffer.length,
+      width,
+      height,
+      aiReady: true,
+      aiCategory,
+      sourceType: sourceTypeFallback
+    }
+  });
+  console.log(`[Designer Node] Registered local asset in DB: ${newAsset.id}`);
+  return publicUrl;
+}
 
 async function downloadToBuffer(urlOrPath: string): Promise<Buffer> {
   if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://")) {
@@ -338,35 +453,41 @@ export async function designerNode(state: any) {
           .jpeg({ quality: 92 })
           .toBuffer();
 
-        // Save cover image locally
-        const uploadDir = path.join(process.cwd(), "public", "uploads", "watermarked");
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
+        // Delete previous watermarked cover for this task to avoid cluttering the asset library
+        try {
+          const existingCovers = await prisma.mediaAsset.findMany({
+            where: {
+              brandId,
+              aiCategory: "watermarked_cover",
+              filename: { startsWith: `${taskId}-` }
+            }
+          });
+          for (const oldAsset of existingCovers) {
+            await prisma.mediaAsset.delete({ where: { id: oldAsset.id } }).catch(() => {});
+            if (oldAsset.url.startsWith("/uploads/")) {
+              const localPath = path.join(process.cwd(), "public", oldAsset.url);
+              if (fs.existsSync(localPath)) {
+                fs.unlinkSync(localPath);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to clean up old cover asset:", err);
         }
 
         const filename = `${taskId}-${Date.now()}.jpg`;
-        const outputPath = path.join(uploadDir, filename);
-        fs.writeFileSync(outputPath, outputBuffer);
-
-        const publicUrl = `/uploads/watermarked/${filename}`;
-        console.log(`Designer Node: Watermarked and tagged cover saved locally at: ${outputPath}`);
-
-        // Register cover image asset in DB
-        const newAsset = await prisma.mediaAsset.create({
-          data: {
-            brandId,
-            url: publicUrl,
-            filename,
-            mimeType: "image/jpeg",
-            sizeBytes: outputBuffer.length,
-            width: coverWidth,
-            height: coverHeight,
-            aiReady: true,
-            aiCategory: "watermarked_cover",
-            sourceType: "designer"
-          }
+        const publicUrl = await saveAsset({
+          brandId,
+          brand,
+          filename,
+          folder: "watermarked",
+          buffer: outputBuffer,
+          mimeType: "image/jpeg",
+          width: coverWidth,
+          height: coverHeight,
+          aiCategory: "watermarked_cover",
+          sourceTypeFallback: "designer"
         });
-        console.log(`Designer Node: Registered cover asset in DB: ${newAsset.id}`);
         processedMediaUrls.push(publicUrl);
 
       } else {
@@ -386,35 +507,41 @@ export async function designerNode(state: any) {
           .jpeg({ quality: 92 })
           .toBuffer();
 
-        // Save optimized image locally
-        const uploadDir = path.join(process.cwd(), "public", "uploads", "optimized");
-        if (!fs.existsSync(uploadDir)) {
-          fs.mkdirSync(uploadDir, { recursive: true });
+        // Delete previous optimized secondary image for this task at this index to avoid cluttering
+        try {
+          const existingOptimized = await prisma.mediaAsset.findMany({
+            where: {
+              brandId,
+              aiCategory: "optimized_media",
+              filename: { startsWith: `opt-${taskId}-${i}-` }
+            }
+          });
+          for (const oldAsset of existingOptimized) {
+            await prisma.mediaAsset.delete({ where: { id: oldAsset.id } }).catch(() => {});
+            if (oldAsset.url.startsWith("/uploads/")) {
+              const localPath = path.join(process.cwd(), "public", oldAsset.url);
+              if (fs.existsSync(localPath)) {
+                fs.unlinkSync(localPath);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to clean up old optimized asset:", err);
         }
 
         const filename = `opt-${taskId}-${i}-${Date.now()}.jpg`;
-        const outputPath = path.join(uploadDir, filename);
-        fs.writeFileSync(outputPath, optimizedBuffer);
-
-        const publicUrl = `/uploads/optimized/${filename}`;
-        console.log(`Designer Node: Optimized secondary image saved locally at: ${outputPath}`);
-
-        // Register optimized asset in DB
-        const newAsset = await prisma.mediaAsset.create({
-          data: {
-            brandId,
-            url: publicUrl,
-            filename,
-            mimeType: "image/jpeg",
-            sizeBytes: optimizedBuffer.length,
-            width,
-            height,
-            aiReady: true,
-            aiCategory: "optimized_media",
-            sourceType: "designer"
-          }
+        const publicUrl = await saveAsset({
+          brandId,
+          brand,
+          filename,
+          folder: "optimized",
+          buffer: optimizedBuffer,
+          mimeType: "image/jpeg",
+          width,
+          height,
+          aiCategory: "optimized_media",
+          sourceTypeFallback: "designer"
         });
-        console.log(`Designer Node: Registered optimized asset in DB: ${newAsset.id}`);
         processedMediaUrls.push(publicUrl);
       }
     }

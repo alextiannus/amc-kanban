@@ -53,11 +53,11 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · 品牌主理人',
     suitableFor: '新商家，或只有微信/小红书账号、海外本地平台处于真空状态、无法持续更新的商家',
     services: [
-      '账号代注册与信息完善（Google Maps / Facebook / Instagram / TikTok）',
+      '账号代注册与信息完善（Google Business / Facebook / Instagram / TikTok）',
       '账号统一化风格设计（按品牌特点定制）',
       '建立品牌营销素材库',
       '每月 30-36 条图文内容创作与发布，不限平台数量',
-      'Google Maps 评分优化',
+      'Google Business 评分优化',
       '账号运营数据分析报表',
       '评论监控（不含回复）',
       '每月安排不少于 4 位博主探店，素材拍摄，内容发布协调（博主费用含在服务费内）'
@@ -67,11 +67,11 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '团队配置：AI 内容创作官 · AI 市场调研官 · 品牌主理人',
       '适合：新商家，或只有微信/小红书账号、海外本地平台处于真空状态、无法持续更新的商家',
       '服务内容：',
-      '1. 账号代注册与信息完善（Google Maps / Facebook / Instagram / TikTok）',
+      '1. 账号代注册与信息完善（Google Business / Facebook / Instagram / TikTok）',
       '2. 账号统一化风格设计（按品牌特点定制）',
       '3. 建立品牌营销素材库',
       '4. 每月 30-36 条图文内容创作与发布，不限平台数量',
-      '5. Google Maps 评分优化',
+      '5. Google Business 评分优化',
       '6. 账号运营数据分析报表',
       '7. 评论监控（不含回复）',
       '8. 每月安排不少于 4 位博主探店，素材拍摄，内容发布协调（博主费用含在服务费内）'
@@ -86,23 +86,23 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     suitableFor: '希望确立品牌策略、明确目标客群，通过全平台覆盖、视频内容与大规模博主推广积极拉新，并通过团购等转化设计唤醒老顾客的商家',
     services: [
       '数字营销需求分析（合约期第 1 个月完成）：品牌现状审计与竞品分析、目标客群画像建立、中英双语市场平台策略制定、品牌话术与视觉风格指南',
-      '全平台内容运营（每月持续）：每月不少于20条图文；每月 8 条短视频（15-60 秒）；覆盖 Google Maps / Facebook / Instagram / TikTok / 小红书',
+      '全平台内容运营（每月持续）：每月不少于20条图文；每月 8 条短视频（15-60 秒）；覆盖 Google Business / Facebook / Instagram / TikTok / 小红书',
       '月度营销活动策划与执行：每月营销活动（节日活动、新品推广、季节限定等）；团购套餐 / 到店转化活动设计与上线',
       '博主探店管理：每月最多可安排30位博主探店（看店家需求），博主费用含在服务费内；博主筛选、内容审核与发布协调全程负责',
       '评论与口碑管理：全平台评论监控与回复，工作日 24 小时内响应；差评处理与口碑危机应对',
-      '月度绩效报告：各平台互动量、触达数据、粉丝变化；Google Maps 评分追踪与营销活动效果分析'
+      '月度绩效报告：各平台互动量、触达数据、粉丝变化；Google Business 评分追踪与营销活动效果分析'
     ],
-    baseline: '合约期 6 个月内 Google Maps 平均评分提升 0.3 分以上；中英双平台持续内容更新；团购活动上线后到店量可见增长。',
+    baseline: '合约期 6 个月内 Google Business 平均评分提升 0.3 分以上；中英双平台持续内容更新；团购活动上线后到店量可见增长。',
     includes: [
       '团队配置：AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
       '适合：希望确立品牌策略、明确目标客群，通过全平台覆盖、视频内容与大规模博主推广积极拉新，并通过团购等转化设计唤醒老顾客的商家',
       '服务内容：',
       '1. 数字营销需求分析（合约期第 1 个月完成）：品牌现状审计与竞品分析、目标客群画像建立、中英双语市场平台策略制定、品牌话术与视觉风格指南',
-      '2. 全平台内容运营（每月持续）：每月不少于20条图文，每月 8 条短视频（15-60 秒），覆盖 Google Maps / Facebook / Instagram / TikTok / 小红书',
+      '2. 全平台内容运营（每月持续）：每月不少于20条图文，每月 8 条短视频（15-60 秒），覆盖 Google Business / Facebook / Instagram / TikTok / 小红书',
       '3. 月度营销活动策划与执行：每月营销活动（节日活动、新品推广、季节限定等），团购套餐 / 到店转化活动设计与上线',
       '4. 博主探店管理：每月最多可安排30位博主探店（看店家需求，费用含在内）',
       '5. 评论与口碑管理：全平台评论监控与回复，工作日 24 小时内响应，差评与口碑危机应对',
-      '6. 月度绩效报告：各平台互动量、触达数据、粉丝变化，Google Maps 评分追踪与营销活动效果分析'
+      '6. 月度绩效报告：各平台互动量、触达数据、粉丝变化，Google Business 评分追踪与营销活动效果分析'
     ],
   },
   {
@@ -187,8 +187,8 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     key: 'channels',
     label: '覆盖渠道',
     values: {
-      starter: 'Google Maps + Facebook + Instagram + TikTok',
-      essential: 'Google Maps + Facebook + Instagram + TikTok + 小红书',
+      starter: 'Google Business + Facebook + Instagram + TikTok',
+      essential: 'Google Business + Facebook + Instagram + TikTok + 小红书',
       advanced: '中英全平台覆盖 + 付费广告渠道 + 私域顾客社群',
     },
   },
@@ -215,7 +215,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     label: '核心效果保障',
     values: {
       starter: '各平台信息完整，更新持续不缺席',
-      essential: '6个月内 Google Maps 平均分提升 0.3+ ; 团购到店量可见增长',
+      essential: '6个月内 Google Business 平均分提升 0.3+ ; 团购到店量可见增长',
       advanced: '线上引流明显提升；私域复购率增长；精准拉新转化；数据每月可查',
     },
   },

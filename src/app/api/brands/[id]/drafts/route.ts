@@ -141,7 +141,7 @@ export async function POST(request: Request, { params }: Params) {
           brandId,
           platformId,
           handle: 'unconfigured',
-          displayName: platformId === 'google_business' ? 'Google Maps (未配置)' : '小红书 / Rednote (未配置)',
+          displayName: platformId === 'google_business' ? 'Google Business (未配置)' : '小红书 / Rednote (未配置)',
         }
       })
     }
@@ -234,6 +234,7 @@ export async function POST(request: Request, { params }: Params) {
           : account.platformId.toLowerCase() === 'xiaohongshu' ? '小红书'
           : account.platformId.toLowerCase() === 'facebook' ? 'Facebook'
           : account.platformId.toLowerCase() === 'tiktok' ? 'TikTok'
+          : ['google_maps', 'google_business', 'google'].includes(account.platformId.toLowerCase()) ? 'Google Business'
           : account.platformId
         : '社媒'
 

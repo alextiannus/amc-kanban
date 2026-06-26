@@ -47,7 +47,7 @@ export async function GET(request: Request) {
         contractEndDate: true,
       },
     }
-    const activeBrandFilter = {
+    const activeBrandFilterForAgent = {
       status: { not: 'ARCHIVED' as const },
       subscriptions: {
         some: activeSubscriptionWhere,
@@ -59,10 +59,14 @@ export async function GET(request: Request) {
       },
     }
 
+    const activeBrandFilter = {
+      status: { not: 'ARCHIVED' as const },
+    }
+
     // AI Agent — return brands linked via BrandAgent join table
     if (session.user.type === 'AI_AGENT') {
       const agentLinks = await prisma.brandAgent.findMany({
-        where: { agentId: session.user.id, active: true, brand: activeBrandFilter },
+        where: { agentId: session.user.id, active: true, brand: activeBrandFilterForAgent },
         include: {
           brand: { include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect } },
         },

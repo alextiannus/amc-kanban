@@ -77,12 +77,12 @@ export default function GameH5Page() {
       uploadPhotos: '📷 店内环境/产品美图分享',
       uploadPhotosSub: '成功上传 3 张店内照片即可获得 5 个积分',
       submitReview: '⭐ 社媒平台发表好评',
-      submitReviewSub: '在 Google Maps/小红书/Instagram 发布好评或标记并上传凭证图片获得 5 个积分',
+      submitReviewSub: '在 Google Business/小红书/Instagram 发布好评或标记并上传凭证图片获得 5 个积分',
       photoSlot: '照片',
       copyright: '我同意数据使用协议：商家有权下载和使用本次发布所用的图片',
       submitTask: '提交任务',
       submitting: '正在提交，等待店员人工确认...',
-      googleMaps: 'Google Maps 直达',
+      googleMaps: 'Google Business 直达',
       xiaohongshu: '小红书直达',
       instagram: 'Instagram 直达',
       copyText: '一键复制好评文案',
@@ -102,7 +102,7 @@ export default function GameH5Page() {
       unclaimedTitle: '🎁 您有一个未领取的奖品！',
       unclaimedClaim: '立即查看',
       combinedTask: '⭐ 发布好评并上传店内美图',
-      combinedTaskSub: '在 Google Maps/小红书/Instagram 发表好评或标记，上传凭证图片及店内美图即可获得 5 个积分',
+      combinedTaskSub: '在 Google Business/小红书/Instagram 发表好评或标记，上传凭证图片及店内美图即可获得 5 个积分',
       screenshotFirstHint: '（提示：请上传可核验任务完成的凭证图片）',
       addMore: '添加照片',
       uploadPlaceholder: '上传任务凭证与店内美图 (可多选)',
@@ -115,12 +115,12 @@ export default function GameH5Page() {
       uploadPhotos: '📷 Share Store & Food Photos',
       uploadPhotosSub: 'Upload 3 store photos to earn 5 points',
       submitReview: '⭐ Leave a Social Review',
-      submitReviewSub: 'Post on Google Maps/Xiaohongshu/Instagram and upload proof images to get 5 points',
+      submitReviewSub: 'Post on Google Business/Xiaohongshu/Instagram and upload proof images to get 5 points',
       photoSlot: 'Photo',
       copyright: 'I agree to the Data Use Agreement: The merchant has the right to download and use the photos/screenshots uploaded for this post.',
       submitTask: 'Submit Task',
       submitting: 'Submitting and waiting for manual staff confirmation...',
-      googleMaps: 'Direct Google Maps',
+      googleMaps: 'Direct Google Business',
       xiaohongshu: 'Direct Xiaohongshu',
       instagram: 'Direct Instagram',
       copyText: 'Copy Review Text',
@@ -140,7 +140,7 @@ export default function GameH5Page() {
       unclaimedTitle: '🎁 You have an unclaimed prize!',
       unclaimedClaim: 'Claim Now',
       combinedTask: '⭐ Post Review & Share Photos',
-      combinedTaskSub: 'Post on Google Maps/Xiaohongshu/Instagram, upload proof images & store photos to earn 5 points',
+      combinedTaskSub: 'Post on Google Business/Xiaohongshu/Instagram, upload proof images & store photos to earn 5 points',
       screenshotFirstHint: '(Note: upload images that can verify task completion)',
       addMore: 'Add Photo',
       uploadPlaceholder: 'Upload proof images & store photos (multi-select)',
@@ -646,7 +646,7 @@ export default function GameH5Page() {
     const none = !isGoogle && !isXhs && !isInsta
     
     const platforms: string[] = []
-    if (isGoogle || none) platforms.push('Google Maps')
+    if (isGoogle || none) platforms.push('Google Business')
     if (isXhs || none) platforms.push(lang === 'zh' ? '小红书' : 'Xiaohongshu')
     if (isInsta || none) platforms.push('Instagram')
     

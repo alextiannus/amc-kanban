@@ -75,7 +75,7 @@ export function ActionCard({ id, type, title, description, platform, payload, on
               <div className="p-3 bg-amber-500/5 dark:bg-amber-500/10 border border-dashed border-amber-500/20 rounded-xl text-xs">
                 <p className="font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  <span>✍️ 需人工回复 (可在 Google Maps 平台回复，或由 AI 自动同步)</span>
+                  <span>✍️ 需人工回复 (可在 Google Business 平台回复，或由 AI 自动同步)</span>
                 </p>
               </div>
             )}
@@ -86,7 +86,7 @@ export function ActionCard({ id, type, title, description, platform, payload, on
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-500 hover:text-blue-600 transition-colors"
               >
-                🔗 在 Google Maps 查看评价
+                🔗 在 Google Business 查看评价
               </a>
             )}
           </div>

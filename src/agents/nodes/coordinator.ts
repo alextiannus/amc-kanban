@@ -56,9 +56,12 @@ export async function coordinatorNode(state: any) {
   // Detect platform from tags, title, or description
   let platform: string | null = state.platform || null;
   if (!platform && task.tags && task.tags.length > 0) {
-    const matched = task.tags.find(t => ["instagram", "facebook", "google_business", "red", "xiaohongshu", "tiktok"].includes(t.toLowerCase()));
+    const matched = task.tags.find(t => ["instagram", "facebook", "google_business", "google_maps", "google", "red", "xiaohongshu", "tiktok"].includes(t.toLowerCase()));
     if (matched) {
-      platform = matched.toLowerCase() === "xiaohongshu" ? "red" : matched.toLowerCase();
+      const lower = matched.toLowerCase();
+      platform = lower === "xiaohongshu" ? "red"
+               : (lower === "google_maps" || lower === "google") ? "google_business"
+               : lower;
     }
   }
 
@@ -68,7 +71,7 @@ export async function coordinatorNode(state: any) {
       platform = "instagram";
     } else if (searchSource.includes("facebook")) {
       platform = "facebook";
-    } else if (searchSource.includes("google_business") || searchSource.includes("google business") || searchSource.includes("google maps") || searchSource.includes("google")) {
+    } else if (searchSource.includes("google_business") || searchSource.includes("google business") || searchSource.includes("google_maps") || searchSource.includes("google maps") || searchSource.includes("google")) {
       platform = "google_business";
     } else if (searchSource.includes("red") || searchSource.includes("xiaohongshu") || searchSource.includes("小红书")) {
       platform = "red";

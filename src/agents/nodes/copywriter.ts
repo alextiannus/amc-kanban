@@ -191,7 +191,7 @@ Brand Description: ${brand.description || "A premium brand."}
 Target Platform: ${platform}
 Language Rule:
 - For Xiaohongshu (小红书/Rednote, platform is "red", "xiaohongshu", or "xhs"): You MUST write the content in Simplified Chinese (中文) by default.
-- For all other platforms (Instagram, Facebook, TikTok, Google Business Profile / Google Maps): You MUST write the content in English (英文) by default.
+- For all other platforms (Instagram, Facebook, TikTok, Google Business Profile): You MUST write the content in English (英文) by default.
 Active Task: "${task.title}"
 Task Details: ${task.description || ""}
 ${userPrompt ? `User Custom Theme / Creative Idea: "${userPrompt}"` : ""}
@@ -264,7 +264,7 @@ Brand Description: ${brand.description || "A premium brand."}
 Target Platform: ${platform}
 Language Rule:
 - For Xiaohongshu (小红书/Rednote, platform is "red", "xiaohongshu", or "xhs"): You MUST write the content in Simplified Chinese (中文) by default.
-- For all other platforms (Instagram, Facebook, TikTok, Google Business Profile / Google Maps): You MUST write the content in English (英文) by default.
+- For all other platforms (Instagram, Facebook, TikTok, Google Business Profile): You MUST write the content in English (英文) by default.
 Active Task: "${task.title}"
 Task Details: ${task.description || ""}
 ${userPrompt ? `User Custom Theme / Creative Idea: "${userPrompt}"` : ""}
@@ -395,6 +395,7 @@ Please output ONLY a valid JSON object.`;
 
   return {
     caption: aiCaption,
-    hashtags: aiHashtags
+    hashtags: aiHashtags,
+    aiFailed: !geminiUsed
   };
 }

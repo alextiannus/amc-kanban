@@ -152,61 +152,23 @@ Do not include markdown wrappers around the JSON, return the raw JSON object.
       const scheduledAt = new Date(baseDate)
       scheduledAt.setHours(10 + i * 2)
 
-      // Create draft inside transaction
-      const draft = await prisma.$transaction(async (tx) => {
-        const created = await tx.contentDraft.create({
-          data: {
-            brandId,
-            accountId: account.id,
-            caption,
-            captionLang: platform === 'xiaohongshu' ? 'zh' : 'en',
-            mediaUrls: mediaUrls || [],
-            hashtags,
-            scheduledAt,
-            status: 'pending_review',
-            agentId: 'copywriter',
-            agentNote: `由 AI 营销助手批量生成。创意指令：${idea}`
-          }
-        })
+      // Return draft preview details
+      const draftPreview = {
+        platform: account.platformId,
+        accountId: account.id,
+        displayName: account.displayName,
+        caption,
+        captionLang: platform === 'xiaohongshu' ? 'zh' : 'en',
+        mediaUrls: mediaUrls || [],
+        hashtags,
+        scheduledAt,
+        assetIds: assetIds || []
+      }
 
-        if (assetIds && assetIds.length > 0) {
-          let order = 0
-          for (const assetId of assetIds) {
-            await tx.contentAssetRef.create({
-              data: { draftId: created.id, assetId, order: order++ },
-            })
-            // Update asset stats
-            await tx.mediaAsset.update({
-              where: { id: assetId },
-              data: {
-                usedCount: { increment: 1 },
-                lastUsedAt: new Date()
-              }
-            })
-          }
-        }
-
-        // Create action item for approval
-        await tx.actionItem.create({
-          data: {
-            brandId,
-            accountId: account.id,
-            type: 'content_approval',
-            priority: 'normal',
-            title: `审核批量生成草稿：${caption.slice(0, 36)}`,
-            description: caption,
-            status: 'pending',
-            draftId: created.id
-          }
-        })
-
-        return created
-      })
-
-      createdDrafts.push(draft)
+      createdDrafts.push(draftPreview)
     }
 
-    return NextResponse.json({ success: true, count: createdDrafts.length })
+    return NextResponse.json({ success: true, drafts: createdDrafts })
   } catch (error: any) {
     console.error('[Bulk Generate Error]:', error)
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
