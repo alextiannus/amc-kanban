@@ -1289,7 +1289,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               setContentIdea('')
               setCreativeHooks('')
               setHashtags('')
-              setSelectedAccountIds([])
+              setSelectedAccountIds(accounts.map(a => a.id))
               setScheduledAt('')
               setAgentNote('')
               setAttachedMedia([])

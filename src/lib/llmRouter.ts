@@ -5,6 +5,7 @@ export interface LLMCallResult {
   text: string | null
   provider: string
   modelName: string
+  error?: string
 }
 
 /**
@@ -70,12 +71,14 @@ export async function callLLM(
   }
 
   if (!apiKey) {
-    console.warn(`[LLM Router] API key missing for provider: ${provider}, model: ${modelName}. Failed to route.`)
-    return { text: null, provider, modelName }
+    const errorMsg = `API key missing for provider: ${provider}, model: ${modelName}`
+    console.warn(`[LLM Router] ${errorMsg}. Failed to route.`)
+    return { text: null, provider, modelName, error: errorMsg }
   }
 
   try {
     let responseText: string | null = null
+    let errorMsg: string | undefined = undefined
 
     if (provider === 'google') {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
@@ -92,7 +95,15 @@ export async function callLLM(
         const json = await response.json()
         responseText = json.candidates?.[0]?.content?.parts?.[0]?.text || null
       } else {
-        console.error(`[LLM Router] Gemini API call failed: ${response.status} ${response.statusText}`)
+        const errText = await response.text().catch(() => '')
+        if (response.status === 429) {
+          errorMsg = `Gemini API quota/token limit exceeded (Rate limit / 429). Please check your billing or limit settings.`
+        } else if (response.status === 400) {
+          errorMsg = `Gemini API error (400 Bad Request / Token limit exceeded). Details: ${errText.slice(0, 150)}`
+        } else {
+          errorMsg = `Gemini API call failed with status ${response.status}: ${response.statusText}`
+        }
+        console.error(`[LLM Router] ${errorMsg}`)
       }
     } 
     else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim') {
@@ -118,7 +129,15 @@ export async function callLLM(
         const json = await response.json()
         responseText = json.choices?.[0]?.message?.content || null
       } else {
-        console.error(`[LLM Router] OpenAI-compatible API call failed: ${response.status} ${response.statusText}`)
+        const errText = await response.text().catch(() => '')
+        if (response.status === 429) {
+          errorMsg = `${provider.toUpperCase()} API quota/token limit exceeded (Rate limit / 429). Please check your billing or limit settings.`
+        } else if (response.status === 400) {
+          errorMsg = `${provider.toUpperCase()} API error (400 Bad Request / Token limit exceeded). Details: ${errText.slice(0, 150)}`
+        } else {
+          errorMsg = `${provider.toUpperCase()} API call failed with status ${response.status}: ${response.statusText}`
+        }
+        console.error(`[LLM Router] ${errorMsg}`)
       }
     } 
     else if (provider === 'anthropic') {
@@ -141,20 +160,31 @@ export async function callLLM(
         const json = await response.json()
         responseText = json.content?.[0]?.text || null
       } else {
-        console.error(`[LLM Router] Anthropic API call failed: ${response.status} ${response.statusText}`)
+        const errText = await response.text().catch(() => '')
+        if (response.status === 429) {
+          errorMsg = `Anthropic API rate/token limit exceeded (429).`
+        } else if (response.status === 400) {
+          errorMsg = `Anthropic API error (400 Bad Request). Details: ${errText.slice(0, 150)}`
+        } else {
+          errorMsg = `Anthropic API call failed with status ${response.status}: ${response.statusText}`
+        }
+        console.error(`[LLM Router] ${errorMsg}`)
       }
     } 
     else {
-      console.error(`[LLM Router] Unsupported LLM provider: ${provider}`)
+      errorMsg = `Unsupported LLM provider: ${provider}`
+      console.error(`[LLM Router] ${errorMsg}`)
     }
 
     return {
       text: responseText ? responseText.trim() : null,
       provider,
       modelName,
+      error: errorMsg,
     }
-  } catch (error) {
-    console.error(`[LLM Router] Request failed for ${provider}/${modelName}:`, error)
-    return { text: null, provider, modelName }
+  } catch (error: any) {
+    const errorMsg = `Request failed for ${provider}/${modelName}: ${error.message || error}`
+    console.error(`[LLM Router]`, error)
+    return { text: null, provider, modelName, error: errorMsg }
   }
 }

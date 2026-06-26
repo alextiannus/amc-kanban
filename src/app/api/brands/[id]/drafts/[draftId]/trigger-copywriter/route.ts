@@ -83,6 +83,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   // 3. Update draft caption in database to indicate AI is writing
+  const originalCaption = draft.caption || ''
   await prisma.contentDraft.update({
     where: { id: draftId },
     data: { caption: '【AI 正在创作中...】' }
@@ -98,6 +99,7 @@ export async function POST(request: Request, { params }: Params) {
     brandId,
     draftId,
     platform,
+    caption: originalCaption,
     copywriteOnly: true
   }, config).catch((err: any) => {
     console.error(`Background copywriter trigger failed for draft ${draftId}:`, err);

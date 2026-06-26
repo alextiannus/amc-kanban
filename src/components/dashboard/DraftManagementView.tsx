@@ -362,7 +362,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       setCaption('')
       setHashtags('')
       setAccountId('')
-      setSelectedAccountIds([])
+      setSelectedAccountIds(accounts.map(a => a.id))
       setScheduledAt('')
       setAgentNote('')
       setMediaUrlsInput('')
@@ -470,7 +470,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setCaption('')
     setHashtags('')
     setAccountId('')
-    setSelectedAccountIds([])
+    setSelectedAccountIds(accounts.map(a => a.id))
     setScheduledAt('')
     setAgentNote('')
     setMediaUrlsInput('')
@@ -1438,7 +1438,10 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                         type="button"
                         disabled={saving}
                         onClick={async () => {
-                          await triggerCopywriter(selectedDraft.id)
+                          const saved = await saveDraft(selectedDraft.status)
+                          if (saved && saved.length > 0) {
+                            await triggerCopywriter(saved[0].id)
+                          }
                         }}
                         className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                       >

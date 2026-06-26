@@ -79,6 +79,9 @@ export async function copywriterNode(state: any) {
       userPrompt = draftCaption.trim();
     }
   }
+  if (!userPrompt && state.caption && state.caption !== "【AI 正在创作中...】") {
+    userPrompt = state.caption.trim();
+  }
   if (!creativeHooks && task && task.description) {
     const match = task.description.match(/(?:创意\s*hooks|Creative\s*Hooks)\s*:\s*([\s\S]+?)(?:\n|$)/i);
     if (match) {
@@ -229,8 +232,12 @@ Rules:
 Please output ONLY a valid JSON array of strings.`;
 
   let generatedHooks: string[] = [];
+  let hookError = "";
   try {
     const hookResult = await callLLM("copywriting", hookPrompt, 800);
+    if (hookResult.error) {
+      hookError = hookResult.error;
+    }
     if (hookResult.text) {
       const cleanJson = hookResult.text.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleanJson);
@@ -319,8 +326,12 @@ Guidelines:
    "hashtags": An array of hashtags (array of strings, without the '#' symbol)
 Please output ONLY a valid JSON object.`;
 
+  let bodyError = "";
   try {
     const bodyResult = await callLLM("copywriting", bodyPrompt, 1000);
+    if (bodyResult.error) {
+      bodyError = bodyResult.error;
+    }
     if (bodyResult.text) {
       const cleanJson = bodyResult.text.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsed = JSON.parse(cleanJson);
@@ -373,6 +384,11 @@ Please output ONLY a valid JSON object.`;
         aiHashtags = ["sgfood", "sgfoodie", "instafood", brandName.replace(/\s+/g, "").toLowerCase(), "singaporeeat"];
       }
     }
+
+    // Add error message prefix to alert user about insufficient tokens / invalid key / etc.
+    const rawError = bodyError || hookError || "Gemini 接口调用失败，已自动降级为本地规则引擎进行创作。请检查 API Key 配置与额度是否充足。";
+    const errorPrefix = `【⚠️ AI 智能写作未成功：${rawError}】\n\n`;
+    aiCaption = errorPrefix + aiCaption;
   }
 
   console.log("Copywriter final caption preview:", aiCaption.split("\n")[0]);
