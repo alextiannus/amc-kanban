@@ -31,6 +31,14 @@ import {
   Image as ImageIcon,
   Wand2,
   Maximize2,
+  Heart,
+  MessageCircle,
+  Bookmark,
+  Share2,
+  ThumbsUp,
+  Star,
+  Globe,
+  Store,
 } from 'lucide-react'
 
 function isVideoUrl(url: string): boolean {
@@ -274,6 +282,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
   const selectedAssetIds = useMemo(() => attachedMedia.filter(m => m.type === 'asset').map(m => m.id), [attachedMedia])
   const selectedDraft = useMemo(() => drafts.find((draft) => draft.id === selectedId) || null, [drafts, selectedId])
+  const activeAccount = useMemo(() => accounts.find(a => a.id === accountId) || null, [accounts, accountId])
 
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewPlatform, setPreviewPlatform] = useState('instagram')
@@ -1461,86 +1470,91 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
               
               {/* Instagram Preview */}
               {previewPlatform === 'instagram' && (
-                <div className="relative mx-auto w-full max-w-[375px] overflow-hidden rounded-[40px] border-[12px] border-slate-900 bg-white shadow-2xl dark:border-slate-900 dark:bg-black text-black dark:text-white">
+                <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-white shadow-lg dark:border-slate-955 dark:bg-black text-black dark:text-white">
                   {/* Instagram Header */}
-                  <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5 dark:border-slate-900">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-900">
                     <div className="flex items-center gap-2">
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 p-[1.5px]">
-                        <div className="h-full w-full rounded-full border border-white bg-slate-200 dark:border-black" />
+                      <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 p-[1px]">
+                        <div className="h-full w-full rounded-full border border-white bg-slate-200 dark:border-black overflow-hidden">
+                          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" />
+                        </div>
                       </div>
                       <div>
-                        <p className="text-xs font-bold">{accounts.find(a => a.id === accountId)?.displayName || accounts.find(a => a.id === accountId)?.handle || brandName || 'Your Brand'}</p>
-                        <p className="text-[10px] text-slate-500">Sponsored</p>
+                        <p className="text-[10px] font-bold leading-tight">{activeAccount?.displayName || activeAccount?.handle || brandName || 'Your Brand'}</p>
+                        <p className="text-[8px] text-slate-500 leading-none mt-0.5">Singapore</p>
                       </div>
                     </div>
-                    <MoreVertical className="h-4 w-4 text-slate-400" />
+                    <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
                   </div>
 
                   {/* Instagram Media Slider */}
-                  <div className="relative aspect-square w-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+                  <div className="relative aspect-square w-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
                     {attachedMedia.length > 0 ? (
                       <>
-                        {isVideoUrl(attachedMedia[previewMediaIndex].url) ? (
-                          <video src={attachedMedia[previewMediaIndex].url} className="h-full w-full object-cover" controls muted />
+                        {isVideoUrl(attachedMedia[previewMediaIndex % attachedMedia.length]?.url) ? (
+                          <video src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
                         ) : (
-                          <img src={attachedMedia[previewMediaIndex].url} className="h-full w-full object-cover" alt="" />
+                          <img src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
                         )}
-                        
                         {attachedMedia.length > 1 && (
                           <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setPreviewMediaIndex((prev) => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
-                              }}
-                              className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 z-10"
-                            >
-                              ‹
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setPreviewMediaIndex((prev) => (prev < attachedMedia.length - 1 ? prev + 1 : 0))
-                              }}
-                              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white hover:bg-black/60 z-10"
-                            >
-                              ›
-                            </button>
-                            <span className="absolute right-3 top-3 rounded-full bg-black/65 px-2 py-0.5 text-[10px] font-black text-white z-10">
-                              {previewMediaIndex + 1}/{attachedMedia.length}
+                            <span className="absolute right-2 top-2 rounded-full bg-black/65 px-1.5 py-0.5 text-[8px] font-black text-white z-10">
+                              {(previewMediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}
                             </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewMediaIndex(prev => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
+                              }}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewMediaIndex(prev => (prev + 1) % attachedMedia.length)
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
                           </>
                         )}
                       </>
                     ) : (
-                      <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
-                        <FileText className="h-10 w-10 text-slate-300" />
-                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      <div className="flex h-full flex-col items-center justify-center gap-1.5 text-slate-400">
+                        <ImageIcon className="h-8 w-8 text-slate-300" />
+                        <span className="text-[10px] font-semibold">暂无媒体文件</span>
                       </div>
                     )}
                   </div>
 
                   {/* Instagram Actions */}
                   <div className="px-3 py-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <span className="text-xl">🤍</span>
-                        <span className="text-xl">💬</span>
-                        <span className="text-xl">✈️</span>
+                    <div className="flex items-center justify-between text-base leading-none">
+                      <div className="flex items-center gap-3">
+                        <Heart className="w-4.5 h-4.5 text-slate-800 dark:text-slate-200 hover:text-red-500 hover:fill-red-500 transition-colors cursor-pointer" />
+                        <MessageCircle className="w-4.5 h-4.5 text-slate-800 dark:text-slate-200 hover:text-slate-500 transition-colors cursor-pointer" />
+                        <Send className="w-4.5 h-4.5 text-slate-800 dark:text-slate-200 hover:text-slate-500 transition-colors cursor-pointer rotate-45 transform origin-center -translate-y-0.5" />
                       </div>
-                      <span className="text-xl">🔖</span>
+                      <Bookmark className="w-4.5 h-4.5 text-slate-800 dark:text-slate-200 hover:text-slate-550 transition-colors cursor-pointer" />
                     </div>
-                    <p className="mt-2 text-xs font-bold">1,245 likes</p>
-                    
-                    {/* Instagram Caption */}
-                    <div className="mt-1.5 space-y-1 text-xs">
-                      <p className="leading-5">
-                        <span className="font-bold mr-1.5">{accounts.find(a => a.id === accountId)?.handle || brandName || 'brand_account'}</span>
+                    <p className="mt-2 text-[9px] font-bold">1,245 likes</p>
+                    <div className="mt-1 space-y-1 text-[10px]">
+                      <p className="leading-relaxed text-left">
+                        <span className="font-bold mr-1">{activeAccount?.handle || brandName || 'brand'}</span>
                         <span className="whitespace-pre-wrap">{caption}</span>
                       </p>
-                      <p className="text-blue-600 dark:text-blue-400 font-medium">
-                        {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
-                      </p>
+                      {parseTags(hashtags).length > 0 && (
+                        <p className="text-blue-600 dark:text-blue-400 font-medium text-left">
+                          {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
+                        </p>
+                      )}
+                      <p className="text-slate-400 dark:text-slate-500 text-[9px] mt-1 cursor-pointer hover:underline text-left">查看全部 12 条评论</p>
+                      <p className="text-slate-400 dark:text-slate-500 text-[8px] tracking-wider uppercase mt-1 text-left">2小时前</p>
                     </div>
                   </div>
                 </div>
@@ -1548,84 +1562,98 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
               {/* Xiaohongshu Preview */}
               {previewPlatform === 'red' && (
-                <div className="relative mx-auto w-full max-w-[375px] overflow-hidden rounded-[40px] border-[12px] border-slate-900 bg-white shadow-2xl dark:border-slate-900 dark:bg-[#0f0f0f] text-black dark:text-white">
+                <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-white shadow-lg dark:border-slate-955 dark:bg-[#0f0f0f] text-black dark:text-white">
                   {/* XHS Header */}
-                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-900">
-                    <div className="flex items-center gap-2">
-                      <div className="h-8 w-8 rounded-full bg-slate-200" />
-                      <div>
-                        <p className="text-xs font-bold">{accounts.find(a => a.id === accountId)?.displayName || brandName || 'Your Brand'}</p>
+                  <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-900">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-6 w-6 rounded-full bg-slate-200 overflow-hidden border border-slate-100 dark:border-slate-800">
+                        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" />
                       </div>
+                      <p className="text-[10px] font-bold">{activeAccount?.displayName || brandName || 'Your Brand'}</p>
                     </div>
-                    <button className="rounded-full bg-[#ff2442] px-3 py-1 text-xs font-black text-white">关注</button>
+                    <button className="rounded-full bg-[#ff2442] px-2.5 py-0.5 text-[9px] font-black text-white hover:bg-[#e0203a] transition-colors">关注</button>
                   </div>
 
                   {/* XHS Media */}
                   <div className="relative aspect-[3/4] w-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
                     {attachedMedia.length > 0 ? (
                       <>
-                        {isVideoUrl(attachedMedia[previewMediaIndex].url) ? (
-                          <video src={attachedMedia[previewMediaIndex].url} className="h-full w-full object-cover" controls muted />
+                        {isVideoUrl(attachedMedia[previewMediaIndex % attachedMedia.length]?.url) ? (
+                          <video src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
                         ) : (
-                          <img src={attachedMedia[previewMediaIndex].url} className="h-full w-full object-cover" alt="" />
+                          <img src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
                         )}
-                        
                         {attachedMedia.length > 1 && (
                           <>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setPreviewMediaIndex((prev) => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
-                              }}
-                              className="absolute left-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white z-10"
-                            >
-                              ‹
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setPreviewMediaIndex((prev) => (prev < attachedMedia.length - 1 ? prev + 1 : 0))
-                              }}
-                              className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/30 text-white z-10"
-                            >
-                              ›
-                            </button>
-                            <span className="absolute right-3 top-3 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-bold text-white z-10">
-                              {previewMediaIndex + 1}/{attachedMedia.length}
+                            <span className="absolute right-2 top-2 rounded-full bg-black/50 px-1.5 py-0.5 text-[8px] font-bold text-white z-10">
+                              {(previewMediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}
                             </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewMediaIndex(prev => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
+                              }}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewMediaIndex(prev => (prev + 1) % attachedMedia.length)
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
                           </>
                         )}
                       </>
                     ) : (
-                      <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-400">
-                        <FileText className="h-10 w-10 text-slate-300" />
-                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      <div className="flex h-full flex-col items-center justify-center gap-1.5 text-slate-400">
+                        <ImageIcon className="h-8 w-8 text-slate-300" />
+                        <span className="text-[10px] font-semibold">暂无媒体文件</span>
                       </div>
                     )}
                   </div>
 
                   {/* XHS Content */}
-                  <div className="px-4 py-3 max-h-48 overflow-y-auto">
-                    <h4 className="text-sm font-black leading-6 text-slate-900 dark:text-white">
+                  <div className="px-3 py-2.5 max-h-32 overflow-y-auto border-b border-slate-50 dark:border-slate-900">
+                    <h4 className="text-[11px] font-black leading-normal text-slate-900 dark:text-white text-left">
                       {caption.split('\n')[0]?.slice(0, 30) || 'Untitled Post'}
                     </h4>
-                    <p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700 dark:text-slate-300">
+                    <p className="mt-1 whitespace-pre-wrap text-[10px] leading-normal text-slate-700 dark:text-slate-300 text-left">
                       {caption.split('\n').slice(1).join('\n') || caption}
                     </p>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {parseTags(hashtags).map((tag) => (
-                        <span key={tag} className="text-xs text-[#3a5b8f] dark:text-[#6a90d0] font-medium">#{tag}</span>
-                      ))}
-                    </div>
+                    {parseTags(hashtags).length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {parseTags(hashtags).map((tag) => (
+                          <span key={tag} className="text-[10px] text-[#3a5b8f] dark:text-[#6a90d0] font-medium hover:underline cursor-pointer">#${tag}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* XHS Footer bar */}
-                  <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5 dark:border-slate-900 text-slate-500 dark:text-slate-400">
-                    <span className="text-xs">说点什么...</span>
-                    <div className="flex gap-4 text-xs font-bold">
-                      <span>❤️ 152</span>
-                      <span>⭐ 48</span>
-                      <span>💬 12</span>
+                  <div className="flex items-center justify-between px-3 py-2 text-slate-500 dark:text-slate-400 text-[9px]">
+                    <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full px-2.5 py-1 text-slate-405 dark:text-slate-500 text-[9px] mr-2.5 flex items-center">
+                      说点什么...
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex items-center gap-0.5 cursor-pointer">
+                        <Heart className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 hover:text-[#ff2442] hover:fill-[#ff2442]" />
+                        <span className="font-bold text-slate-600 dark:text-slate-300">152</span>
+                      </div>
+                      <div className="flex items-center gap-0.5 cursor-pointer">
+                        <Star className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 hover:text-yellow-500 hover:fill-yellow-500" />
+                        <span className="font-bold text-slate-600 dark:text-slate-300">48</span>
+                      </div>
+                      <div className="flex items-center gap-0.5 cursor-pointer">
+                        <MessageCircle className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                        <span className="font-bold text-slate-600 dark:text-slate-300">12</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1633,151 +1661,181 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
               {/* Facebook Preview */}
               {previewPlatform === 'facebook' && (
-                <div className="mx-auto w-full max-w-[550px] rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900 text-black dark:text-white">
+                <div className="mx-auto w-full max-w-[340px] rounded-xl border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-805 dark:bg-slate-900 text-black dark:text-white">
                   {/* FB Header */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="h-10 w-10 rounded-full bg-slate-200" />
+                      <div className="h-8 w-8 rounded-full bg-slate-200 overflow-hidden border border-slate-100 dark:border-slate-800">
+                        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" />
+                      </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-900 dark:text-white">{accounts.find(a => a.id === accountId)?.displayName || brandName || 'Your Brand'}</p>
-                        <p className="text-xs text-slate-500 flex items-center gap-1">Just now · 🌎</p>
+                        <p className="text-[10px] font-bold text-slate-900 dark:text-white text-left">{activeAccount?.displayName || brandName || 'Your Brand'}</p>
+                        <p className="text-[8px] text-slate-500 flex items-center gap-1 mt-0.5">
+                          Just now · <Globe className="w-2.5 h-2.5 text-slate-400" />
+                        </p>
                       </div>
                     </div>
-                    <MoreVertical className="h-5 w-5 text-slate-400" />
+                    <MoreVertical className="h-4 w-4 text-slate-400" />
                   </div>
 
                   {/* FB Text */}
-                  <div className="mt-3 text-sm leading-6 text-slate-800 dark:text-slate-200">
+                  <div className="mt-2 text-[10px] leading-relaxed text-slate-800 dark:text-slate-205 text-left">
                     <p className="whitespace-pre-wrap">{caption}</p>
-                    <p className="mt-2 text-blue-600 dark:text-blue-400 font-medium">
-                      {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
-                    </p>
+                    {parseTags(hashtags).length > 0 && (
+                      <p className="mt-1 text-blue-600 dark:text-blue-400 font-medium">
+                        {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
+                      </p>
+                    )}
                   </div>
 
                   {/* FB Collage Layout */}
-                  <div className="mt-3 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                  <div className="mt-2 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950 relative">
                     {attachedMedia.length === 0 ? (
-                      <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-400">
-                        <FileText className="h-10 w-10 text-slate-300" />
-                        <span className="text-xs font-semibold">暂无媒体文件</span>
-                      </div>
-                    ) : attachedMedia.length === 1 ? (
-                      <div className="relative aspect-video w-full">
-                        {isVideoUrl(attachedMedia[0].url) ? (
-                          <video src={attachedMedia[0].url} className="h-full w-full object-cover" controls muted />
-                        ) : (
-                          <img src={attachedMedia[0].url} className="h-full w-full object-cover" alt="" />
-                        )}
-                      </div>
-                    ) : attachedMedia.length === 2 ? (
-                      <div className="grid grid-cols-2 gap-1">
-                        {attachedMedia.map((m, idx) => (
-                          <div key={idx} className="relative aspect-square">
-                            {isVideoUrl(m.url) ? (
-                              <video src={m.url} className="h-full w-full object-cover" muted />
-                            ) : (
-                              <img src={m.url} className="h-full w-full object-cover" alt="" />
-                            )}
-                          </div>
-                        ))}
+                      <div className="flex h-32 flex-col items-center justify-center gap-1.5 text-slate-400">
+                        <ImageIcon className="h-8 w-8 text-slate-300" />
+                        <span className="text-[10px] font-semibold">暂无媒体文件</span>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-3 gap-1">
-                        <div className="col-span-3 relative aspect-video">
-                          {isVideoUrl(attachedMedia[0].url) ? (
-                            <video src={attachedMedia[0].url} className="h-full w-full object-cover" muted />
-                          ) : (
-                            <img src={attachedMedia[0].url} className="h-full w-full object-cover" alt="" />
-                          )}
-                        </div>
-                        {attachedMedia.slice(1, 4).map((m, idx) => (
-                          <div key={idx} className="relative aspect-square">
-                            {isVideoUrl(m.url) ? (
-                              <video src={m.url} className="h-full w-full object-cover" muted />
-                            ) : (
-                              <img src={m.url} className="h-full w-full object-cover" alt="" />
-                            )}
-                            {idx === 2 && attachedMedia.length > 4 && (
-                              <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white font-black text-lg z-10">
-                                +{attachedMedia.length - 4}
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                      <div className="relative aspect-video w-full">
+                        {isVideoUrl(attachedMedia[previewMediaIndex % attachedMedia.length]?.url) ? (
+                          <video src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
+                        ) : (
+                          <img src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
+                        )}
+                        {attachedMedia.length > 1 && (
+                          <>
+                            <span className="absolute right-2 top-2 rounded-full bg-black/65 px-1.5 py-0.5 text-[8px] font-black text-white z-10">
+                              {(previewMediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewMediaIndex(prev => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
+                              }}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewMediaIndex(prev => (prev + 1) % attachedMedia.length)
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
 
+                  {/* FB Reactions bar */}
+                  <div className="mt-2.5 flex items-center justify-between border-b border-slate-100 pb-2 text-[9px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <div className="flex items-center gap-1">
+                      <span className="flex items-center justify-center w-4 h-4 rounded-full bg-blue-500 text-white text-[8px] font-bold">👍</span>
+                      <span className="flex items-center justify-center w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold -ml-2">❤️</span>
+                      <span className="font-semibold ml-0.5">45 likes</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span>12 comments</span>
+                      <span>·</span>
+                      <span>3 shares</span>
+                    </div>
+                  </div>
+
                   {/* FB Actions */}
-                  <div className="mt-3 flex items-center justify-around border-t border-slate-100 pt-2.5 text-sm font-black text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 p-1.5 rounded dark:hover:bg-slate-800">👍 Like</span>
-                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 p-1.5 rounded dark:hover:bg-slate-800">💬 Comment</span>
-                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 p-1.5 rounded dark:hover:bg-slate-800">🔄 Share</span>
+                  <div className="mt-1 flex items-center justify-around text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 p-1.5 rounded flex-1 justify-center transition-colors">
+                      <ThumbsUp className="w-3.5 h-3.5" /> Like
+                    </span>
+                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 p-1.5 rounded flex-1 justify-center transition-colors">
+                      <MessageCircle className="w-3.5 h-3.5" /> Comment
+                    </span>
+                    <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 p-1.5 rounded flex-1 justify-center transition-colors">
+                      <Share2 className="w-3.5 h-3.5" /> Share
+                    </span>
                   </div>
                 </div>
               )}
 
               {/* TikTok Preview */}
               {previewPlatform === 'tiktok' && (
-                <div className="relative mx-auto w-full max-w-[375px] overflow-hidden rounded-[40px] border-[12px] border-slate-900 bg-black shadow-2xl dark:border-slate-900 text-white">
-                  {/* TikTok Header */}
-                  <div className="absolute top-8 left-0 right-0 z-10 flex justify-center gap-4 text-sm font-bold text-white/60">
-                    <span className="hover:text-white">Following</span>
-                    <span className="text-white border-b-2 border-white pb-1">For You</span>
-                  </div>
-
+                <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-black shadow-lg dark:border-slate-955 text-white">
                   {/* TikTok Media Panel */}
                   <div className="relative aspect-[9/16] w-full bg-slate-950 flex items-center justify-center">
                     {attachedMedia.length > 0 ? (
                       <>
-                        {/* Blur Background if it's an image */}
-                        <img src={attachedMedia[0].url} className="absolute inset-0 h-full w-full object-cover blur-2xl opacity-40" alt="" />
-                        
+                        <img src={attachedMedia[0].url} className="absolute inset-0 h-full w-full object-cover blur-xl opacity-30" alt="" />
                         {isVideoUrl(attachedMedia[0].url) ? (
-                          <video src={attachedMedia[0].url} className="relative z-10 h-full w-full object-contain" controls autoPlay loop muted />
+                          <video src={attachedMedia[0].url} className="relative z-10 h-full w-full object-contain" controls muted />
                         ) : (
                           <img src={attachedMedia[0].url} className="relative z-10 max-h-full max-w-full object-contain" alt="" />
                         )}
                       </>
                     ) : (
-                      <div className="flex flex-col items-center justify-center gap-2 text-white/40">
-                        <Video className="h-10 w-10" />
-                        <span className="text-xs font-semibold">暂无媒体文件</span>
+                      <div className="flex flex-col items-center justify-center gap-1.5 text-white/40">
+                        <Video className="h-8 w-8" />
+                        <span className="text-[10px] font-semibold">暂无媒体文件</span>
                       </div>
                     )}
 
-                    {/* TikTok Sidebar overlay */}
-                    <div className="absolute bottom-28 right-3 z-10 flex flex-col items-center gap-5">
+                    {/* TikTok Top Navigation */}
+                    <div className="absolute top-4 left-0 right-0 z-10 flex justify-center gap-3.5 text-[10px] font-bold text-white/60">
+                      <span className="hover:text-white">Following</span>
+                      <span className="text-white border-b-2 border-white pb-0.5">For You</span>
+                    </div>
+
+                    {/* TikTok Sidebar Overlay */}
+                    <div className="absolute bottom-20 right-2.5 z-10 flex flex-col items-center gap-3.5">
                       <div className="relative">
-                        <div className="h-10 w-10 rounded-full border border-white bg-slate-400" />
-                        <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 rounded-full bg-[#ff0050] px-1 text-[8px] font-black text-white z-10">+</span>
+                        <div className="h-8 w-8 rounded-full border border-white bg-slate-400 overflow-hidden">
+                          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" />
+                        </div>
+                        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-[#ff0050] px-1 text-[8px] font-bold text-white z-10">+</span>
                       </div>
-                      <div className="flex flex-col items-center">
-                        <span className="text-2xl">❤️</span>
-                        <span className="text-[10px] font-bold text-white/90">89.2K</span>
+                      <div className="flex flex-col items-center cursor-pointer">
+                        <Heart className="w-5.5 h-5.5 text-white fill-white hover:text-red-500 hover:fill-red-500 transition-colors" />
+                        <span className="text-[8px] font-bold mt-0.5">89.2K</span>
                       </div>
-                      <div className="flex flex-col items-center">
-                        <span className="text-2xl">💬</span>
-                        <span className="text-[10px] font-bold text-white/90">4,120</span>
+                      <div className="flex flex-col items-center cursor-pointer">
+                        <MessageCircle className="w-5.5 h-5.5 text-white fill-white" />
+                        <span className="text-[8px] font-bold mt-0.5">4,120</span>
                       </div>
-                      <div className="flex flex-col items-center">
-                        <span className="text-2xl">🔗</span>
-                        <span className="text-[10px] font-bold text-white/90">1,029</span>
+                      <div className="flex flex-col items-center cursor-pointer">
+                        <Bookmark className="w-5.5 h-5.5 text-white fill-white" />
+                        <span className="text-[8px] font-bold mt-0.5">2,845</span>
+                      </div>
+                      <div className="flex flex-col items-center cursor-pointer">
+                        <Share2 className="w-5.5 h-5.5 text-white fill-white" />
+                        <span className="text-[8px] font-bold mt-0.5">1,029</span>
+                      </div>
+
+                      {/* Spinning Disc */}
+                      <div className="w-7 h-7 rounded-full bg-slate-900 border border-slate-700/50 flex items-center justify-center animate-spin mt-1" style={{ animationDuration: '6s' }}>
+                        <div className="w-4 h-4 rounded-full bg-slate-800 border border-slate-650 flex items-center justify-center overflow-hidden">
+                          <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover animate-spin" style={{ animationDuration: '6s' }} alt="" />
+                        </div>
                       </div>
                     </div>
 
-                    {/* TikTok Bottom Text */}
-                    <div className="absolute bottom-6 left-4 right-16 z-10 space-y-2 text-white text-xs">
-                      <p className="font-bold text-sm">@{accounts.find(a => a.id === accountId)?.handle || brandName || 'brand_tiktok'}</p>
+                    {/* TikTok Bottom Panel */}
+                    <div className="absolute bottom-4 left-3 right-12 z-10 space-y-1.5 text-white text-[10px] text-left">
+                      <p className="font-bold text-xs">@{activeAccount?.handle || brandName || 'brand_tiktok'}</p>
                       <p className="line-clamp-2 leading-relaxed text-white/90 whitespace-pre-wrap">{caption}</p>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {parseTags(hashtags).map((tag) => (
-                          <span key={tag} className="font-bold">#{tag}</span>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-2 overflow-hidden bg-white/10 backdrop-blur px-2 py-1 rounded-full w-fit">
-                        <span className="animate-pulse">🎵</span>
-                        <span className="w-24 text-[10px] overflow-hidden whitespace-nowrap text-ellipsis">Original Sound - @{brandName || 'Brand'}</span>
+                      {parseTags(hashtags).length > 0 && (
+                        <div className="flex gap-1 flex-wrap font-bold font-mono">
+                          {parseTags(hashtags).map((tag) => (
+                            <span key={tag}>#${tag}</span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 overflow-hidden bg-white/10 backdrop-blur-sm px-2 py-0.5 rounded-full w-fit max-w-[140px]">
+                        <span className="text-[8px] animate-pulse">🎵</span>
+                        <span className="text-[8px] overflow-hidden whitespace-nowrap text-ellipsis">Original Sound - @{activeAccount?.handle || brandName || 'brand'}</span>
                       </div>
                     </div>
                   </div>
@@ -1786,53 +1844,80 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
               {/* Google Business Preview */}
               {previewPlatform === 'google_business' && (
-                <div className="mx-auto w-full max-w-[450px] rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900 text-black dark:text-white">
+                <div className="mx-auto w-full max-w-[340px] rounded-xl border border-slate-205 bg-white p-3 shadow-lg dark:border-slate-888 dark:bg-slate-905 text-black dark:text-white">
                   {/* GBP Header */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-500 text-white font-black">
-                      🏪
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm shrink-0">
+                      <Store className="w-4 h-4" />
                     </div>
                     <div>
-                      <p className="text-sm font-black">{brandName || 'Your Business Name'}</p>
-                      <p className="text-xs text-slate-400">Post on Google Business · Updated just now</p>
+                      <p className="text-[10px] font-black leading-tight text-left">{brandName || 'Your Business Name'}</p>
+                      <p className="text-[8px] text-slate-400 mt-0.5 text-left">Google Business · Updated just now</p>
                     </div>
                   </div>
 
                   {/* GBP Cover image */}
-                  <div className="mt-3 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
+                  <div className="mt-2 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-955 relative">
                     {attachedMedia.length > 0 ? (
                       <div className="relative aspect-video w-full">
-                        {isVideoUrl(attachedMedia[0].url) ? (
-                          <video src={attachedMedia[0].url} className="h-full w-full object-cover" controls muted />
+                        {isVideoUrl(attachedMedia[previewMediaIndex % attachedMedia.length]?.url) ? (
+                          <video src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
                         ) : (
-                          <img src={attachedMedia[0].url} className="h-full w-full object-cover" alt="" />
+                          <img src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
+                        )}
+                        {attachedMedia.length > 1 && (
+                          <>
+                            <span className="absolute right-2 top-2 rounded-full bg-black/65 px-1.5 py-0.5 text-[8px] font-black text-white z-10">
+                              {(previewMediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewMediaIndex(prev => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
+                              }}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewMediaIndex(prev => (prev + 1) % attachedMedia.length)
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </>
                         )}
                       </div>
                     ) : (
-                      <div className="flex h-40 flex-col items-center justify-center gap-2 text-slate-400">
-                        <FileText className="h-8 w-8 text-slate-300" />
-                        <span className="text-xs font-semibold">暂无封面图片</span>
+                      <div className="flex h-24 flex-col items-center justify-center gap-1.5 text-slate-400">
+                        <ImageIcon className="h-6 w-6 text-slate-300" />
+                        <span className="text-[10px] font-semibold">暂无封面图片</span>
                       </div>
                     )}
                   </div>
 
-                  {/* GBP Text */}
-                  <div className="mt-3 text-sm leading-6 text-slate-700 dark:text-slate-300">
+                  <div className="mt-2 text-[10px] leading-normal text-slate-700 dark:text-slate-350 text-left">
                     <p className="whitespace-pre-wrap">{caption}</p>
-                    <p className="mt-2 text-blue-600 dark:text-blue-400 font-medium">
-                      {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
-                    </p>
+                    {parseTags(hashtags).length > 0 && (
+                      <p className="mt-1 text-blue-600 dark:text-blue-400 font-medium">
+                        {parseTags(hashtags).map(tag => `#${tag}`).join(' ')}
+                      </p>
+                    )}
                   </div>
 
                   {/* GBP Button */}
-                  <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
-                    <button className="w-full rounded-md bg-blue-600 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
+                  <div className="mt-3 border-t border-slate-100 pt-2.5 dark:border-slate-800">
+                    <button className="w-full rounded-md bg-[#1a73e8] hover:bg-[#1557b0] py-2 text-[10px] font-bold text-white transition-colors tracking-wide uppercase">
                       了解更多 (Learn More)
                     </button>
                   </div>
                 </div>
               )}
-
             </div>
             
             {/* Absolute Close Button */}

@@ -60,12 +60,20 @@ export default function BrandOwnerDashboard() {
     { sender: 'ai', text: 'Chef, I am optimizing your Friday dinner campaigns. 1 draft is ready for review.', time: '13:00' }
   ])
   const [chatInput, setChatInput] = useState('')
-  const [companionState, setCompanionState] = useState<'idle' | 'listening' | 'thinking'>('idle')
+  const [companionState, setCompanionState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle')
+  const [emotion, setEmotion] = useState<'normal' | 'smile' | 'laugh' | 'effort'>('normal')
 
   // Assets upload state
   const [assets, setAssets] = useState<MediaAsset[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Previews & Ideas bulk posts states
+  const [pendingImages, setPendingImages] = useState<File[]>([])
+  const [pendingPreviews, setPendingPreviews] = useState<string[]>([])
+  const [postIdea, setPostIdea] = useState('')
+  const [generatingBulk, setGeneratingBulk] = useState(false)
+  const [completedNotification, setCompletedNotification] = useState(false)
 
   // Drafts & Weekly feed state
   const [drafts, setDrafts] = useState<ContentDraft[]>([])
@@ -143,7 +151,7 @@ export default function BrandOwnerDashboard() {
         const assetsRes = await fetch(`/api/brands/${id}/assets`)
         if (assetsRes.ok) {
           const data = await assetsRes.json()
-          setAssets(data)
+          setAssets(data.assets || [])
         }
 
         // Fetch subscription
@@ -174,53 +182,120 @@ export default function BrandOwnerDashboard() {
     loadBrandDetails(currentBrandId)
   }, [activeBrand])
 
-  // WebGL shader effects removed per request to simplify expressions and save CPU/GPU resources
+  // --- Text to Speech (TTS) ---
+  const speakText = (text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return
+    window.speechSynthesis.cancel()
 
-  // --- Voice Assist Activation ---
-  const startVoiceAssist = () => {
-    if (companionState === 'idle') {
-      setCompanionState('listening')
-      showToast('Companion is listening to voice input...', 'info')
-      setTimeout(() => {
-        setCompanionState('thinking')
-        setTimeout(() => {
-          setCompanionState('idle')
-          const mockReplies = [
-            'Understood, Chef. I am updating our brand context dictionary to prioritize local organic ingredients.',
-            'Got it! Generating a new Instagram post draft featuring our fresh Xiaolongbao.',
-            'Okay, checking our weekly performance ROI. Dub.co link tracks indicate a 14% click spike today!'
-          ]
-          const randomReply = mockReplies[Math.floor(Math.random() * mockReplies.length)]
-          setMessages(prev => [
-            ...prev, 
-            { sender: 'user', text: '[Voice Input Recorded]', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
-            { sender: 'ai', text: randomReply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-          ])
-        }, 2000)
-      }, 3000)
-    } else {
-      setCompanionState('idle')
+    // Clean text of markdown and brackets
+    const cleanedText = text.replace(/\[.*?\]/g, '').replace(/[*#_`]/g, '').trim()
+    if (!cleanedText) return
+
+    const utterance = new SpeechSynthesisUtterance(cleanedText)
+    utterance.lang = 'zh-CN'
+    utterance.rate = 1.0
+
+    utterance.onstart = () => {
+      setCompanionState('speaking')
+      // Scan content to select funny/smiling emotion
+      const lower = cleanedText.toLowerCase()
+      if (lower.includes('哈') || lower.includes('喜') || lower.includes('棒') || lower.includes('好') || lower.includes('完成') || lower.includes('成功') || lower.includes('日历')) {
+        setEmotion('laugh')
+      } else {
+        setEmotion('smile')
+      }
     }
+
+    utterance.onend = () => {
+      setCompanionState('idle')
+      setEmotion('normal')
+    }
+
+    utterance.onerror = () => {
+      setCompanionState('idle')
+      setEmotion('normal')
+    }
+
+    window.speechSynthesis.speak(utterance)
   }
 
-  // --- Chat Input Submission ---
-  const handleSendMessage = () => {
-    if (!chatInput.trim()) return
-    const text = chatInput.trim()
-    setChatInput('')
-    setMessages(prev => [...prev, { sender: 'user', text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
-    setCompanionState('thinking')
+  // --- Voice Assist Activation (STT & TTS Chat integration) ---
+  const startVoiceAssist = () => {
+    if (typeof window === 'undefined') return
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      showToast('您的浏览器不支持语音识别，请尝试使用 Chrome 或 Safari。', 'error')
+      return
+    }
 
-    setTimeout(() => {
+    if (companionState === 'listening') {
       setCompanionState('idle')
-      let reply = `I've noted that! I will apply it to optimize our next campaigns for ${activeBrand?.name}.`
-      if (text.toLowerCase().includes('post') || text.toLowerCase().includes('generate') || text.toLowerCase().includes('创')) {
-        reply = 'Sure! I have generated a new draft draft for your review. Take a look in your calendar planner.'
-      } else if (text.toLowerCase().includes('menu') || text.toLowerCase().includes('菜')) {
-        reply = 'Brand menu assets synced successfully. I will include the new prices and items in our next copywriting prompts.'
+      return
+    }
+
+    if (window.speechSynthesis && window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel()
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.continuous = false
+    recognition.interimResults = false
+    recognition.lang = 'zh-CN'
+
+    recognition.onstart = () => {
+      setCompanionState('listening')
+      showToast('正在倾听，请说话...', 'info')
+    }
+
+    recognition.onresult = async (event: any) => {
+      const transcript = event.results[0][0].transcript
+      if (!transcript) return
+
+      // If there are pending image previews, feed transcript to the text area
+      if (pendingPreviews.length > 0) {
+        setPostIdea(prev => prev ? prev + ' ' + transcript : transcript)
+        setCompanionState('idle')
+        showToast('已填入创意想法！', 'success')
+        speakText('收到您的创意想法。')
+        return
       }
-      setMessages(prev => [...prev, { sender: 'ai', text: reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
-    }, 1500)
+
+      setCompanionState('thinking')
+      try {
+        const res = await fetch(`/api/brands/${activeBrand?.id}/copywriter/voice-chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: transcript })
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.reply) {
+            speakText(data.reply)
+          } else {
+            setCompanionState('idle')
+          }
+        } else {
+          setCompanionState('idle')
+        }
+      } catch (err) {
+        console.error(err)
+        setCompanionState('idle')
+      }
+    }
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error)
+      setCompanionState('idle')
+      if (event.error === 'not-allowed') {
+        showToast('请允许麦克风权限以使用语音对话', 'error')
+      }
+    }
+
+    recognition.onend = () => {
+      setCompanionState(prev => prev === 'listening' ? 'idle' : prev)
+    }
+
+    recognition.start()
   }
 
   // --- Quick Upload Photos ---
@@ -230,40 +305,156 @@ export default function BrandOwnerDashboard() {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0 || !activeBrand) return
-    setUploading(true)
     const files = Array.from(e.target.files) as File[]
-    showToast(`Uploading ${files.length} fresh assets...`, 'info')
+
+    if (activeSubPage === 'assets') {
+      // Media Library Subpage: Upload immediately to backend
+      setUploading(true)
+      showToast(`正在上传 ${files.length} 个素材...`, 'info')
+      try {
+        for (const file of files) {
+          const fileBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => {
+              const result = reader.result as string
+              const base64 = result.split(',')[1]
+              resolve(base64)
+            }
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          })
+
+          const res = await fetch(`/api/brands/${activeBrand.id}/assets/upload`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              mimeType: file.type,
+              fileBase64,
+              folder: '素材库',
+              aiCategory: 'raw',
+              aiTags: ['待确认']
+            })
+          })
+
+          if (res.ok) {
+            const data = await res.json()
+            if (data.asset) {
+              setAssets(prev => [data.asset, ...prev])
+            }
+          }
+        }
+        showToast('素材上传成功！')
+      } catch (err) {
+        console.error('Upload failed:', err)
+        showToast('素材上传失败，请重试', 'error')
+      } finally {
+        setUploading(false)
+      }
+    } else {
+      // Homepage: Save to pending and invite prompt/idea input
+      if (files.length > 9) {
+        showToast('一次最多只能上传 9 张图片！', 'error')
+        return
+      }
+      setPendingImages(files)
+      const previews = files.map(file => URL.createObjectURL(file))
+      setPendingPreviews(previews)
+      showToast(`已选择 ${files.length} 张图片，请输入您的创意想法。`, 'info')
+    }
+  }
+
+  // --- Bulk Submit (Generate all platform content) ---
+  const handleBulkSubmit = async () => {
+    if (pendingImages.length === 0 || !activeBrand) return
+    setGeneratingBulk(true)
+    setCompanionState('thinking')
+    setEmotion('effort')
+    showToast('正在上传并启动 AI Copywriter 生成内容...', 'info')
 
     try {
-      for (const file of files) {
-        const formData = new FormData()
-        formData.append('file', file)
-        
-        const res = await fetch(`/api/brands/${activeBrand.id}/assets`, {
-          method: 'POST',
-          body: formData
+      const uploadedAssetIds: string[] = []
+      const uploadedAssetUrls: string[] = []
+
+      // 1. Upload pending images as base64 to assets API
+      for (const file of pendingImages) {
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => {
+            const result = reader.result as string
+            const base64 = result.split(',')[1]
+            resolve(base64)
+          }
+          reader.onerror = reject
+          reader.readAsDataURL(file)
         })
-        
+
+        const res = await fetch(`/api/brands/${activeBrand.id}/assets/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: file.name,
+            mimeType: file.type,
+            fileBase64,
+            folder: '素材库',
+            aiCategory: 'raw',
+            aiTags: ['排期发布', '创意推文']
+          })
+        })
+
         if (res.ok) {
-          const newAsset = await res.json()
-          setAssets(prev => [newAsset, ...prev])
+          const data = await res.json()
+          if (data.assetId) {
+            uploadedAssetIds.push(data.assetId)
+            uploadedAssetUrls.push(data.assetUrl || data.asset?.url)
+          }
         }
       }
-      showToast('Assets uploaded and auto-tagged by AI!')
-    } catch (err) {
-      console.error('Upload failed:', err)
-      showToast('Upload failed, saved as offline mock asset', 'error')
-      // Fallback offline mock asset
-      const mockAsset: MediaAsset = {
-        id: Math.random().toString(),
-        url: URL.createObjectURL(files[0]),
-        filename: files[0].name,
-        aiCategory: 'Dish',
-        aiTags: ['Fresh', 'Yummy', 'New Menu']
+
+      if (uploadedAssetIds.length === 0) {
+        throw new Error('素材图片上传失败')
       }
-      setAssets(prev => [mockAsset, ...prev])
+
+      // 2. Submit to bulk-generate copywriter endpoint
+      const bulkRes = await fetch(`/api/brands/${activeBrand.id}/copywriter/bulk-generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetIds: uploadedAssetIds,
+          mediaUrls: uploadedAssetUrls,
+          idea: postIdea
+        })
+      })
+
+      if (!bulkRes.ok) {
+        const errJson = await bulkRes.json().catch(() => ({}))
+        throw new Error(errJson.error || 'Copywriter 批量内容创作失败')
+      }
+
+      // 3. Clear pending states and set success notifications
+      setPendingImages([])
+      setPendingPreviews([])
+      setPostIdea('')
+      setCompletedNotification(true)
+
+      // Refresh calendar drafts
+      const draftsRes = await fetch(`/api/brands/${activeBrand.id}/drafts`)
+      if (draftsRes.ok) {
+        const resData = await draftsRes.json()
+        setDrafts(Array.isArray(resData) ? resData : resData.drafts || [])
+      }
+
+      // 4. Speak voice confirmation
+      speakText('我已为您生成了所有平台的内容，并将其加入到了排期日历中。您可以在发布日历中查看！')
+      showToast('批量创作并排期成功！', 'success')
+
+    } catch (err: any) {
+      console.error(err)
+      showToast(err.message || '创作失败，请稍后重试', 'error')
+      setCompanionState('idle')
+      setEmotion('normal')
     } finally {
-      setUploading(false)
+      setGeneratingBulk(false)
     }
   }
 
@@ -284,7 +475,7 @@ export default function BrandOwnerDashboard() {
       })
 
       if (res.ok) {
-        const newDraft = await res.ok ? await res.json() : null
+        const newDraft = await res.json()
         if (newDraft) {
           setDrafts(prev => [newDraft, ...prev])
         }
@@ -412,6 +603,146 @@ export default function BrandOwnerDashboard() {
     }, 1500)
   }
 
+  // --- Dynamic Eye Renderer ---
+  const renderEye = (isLeft: boolean) => {
+    if (emotion === 'effort') {
+      return (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path 
+            d={isLeft ? "M14 6L6 10L14 14" : "M6 6L14 10L6 14"} 
+            stroke="currentColor" 
+            className="text-slate-700 dark:text-slate-300" 
+            strokeWidth="3.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+          />
+        </svg>
+      )
+    }
+
+    if (emotion === 'laugh') {
+      return (
+        <svg width="20" height="14" viewBox="0 0 20 14" fill="none">
+          <path 
+            d="M3 11C5 5 15 5 17 11" 
+            stroke="currentColor" 
+            className="text-slate-700 dark:text-slate-300" 
+            strokeWidth="3.5" 
+            strokeLinecap="round"
+          />
+        </svg>
+      )
+    }
+
+    if (emotion === 'smile') {
+      return (
+        <svg width="20" height="12" viewBox="0 0 20 12" fill="none">
+          <path 
+            d="M3 9C5 4 15 4 17 9" 
+            stroke="currentColor" 
+            className="text-slate-700 dark:text-slate-300" 
+            strokeWidth="3" 
+            strokeLinecap="round"
+          />
+        </svg>
+      )
+    }
+
+    // Blinking animation for normal/listening/thinking/speaking
+    return (
+      <motion.div 
+        animate={
+          companionState === 'listening' 
+            ? { scaleY: 1.2, scaleX: 1.1 } 
+            : companionState === 'thinking' 
+            ? { scaleY: 0.6, y: 1 } 
+            : { scaleY: [1, 1, 0.1, 1, 1] }
+        }
+        transition={
+          companionState === 'idle' || companionState === 'speaking'
+            ? { repeat: Infinity, duration: 4.5, times: [0, 0.9, 0.95, 1, 1] }
+            : { duration: 0.3 }
+        }
+        className="w-4 h-4 bg-slate-700 dark:bg-slate-300 rounded-full"
+      />
+    )
+  }
+
+  // --- Dynamic Mouth Renderer ---
+  const renderMouth = () => {
+    if (companionState === 'thinking') {
+      return (
+        <motion.div 
+          animate={{ scaleX: [1, 2.5, 1], opacity: [0.6, 1, 0.6] }}
+          transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+          className="w-8 h-2 bg-slate-700 dark:bg-slate-300 rounded-full"
+        />
+      )
+    }
+
+    if (companionState === 'listening') {
+      return (
+        <div className="flex items-center gap-1">
+          <motion.div 
+            animate={{ height: [4, 18, 4] }}
+            transition={{ repeat: Infinity, duration: 0.5, ease: "easeInOut" }}
+            className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
+          />
+          <motion.div 
+            animate={{ height: [6, 24, 6] }}
+            transition={{ repeat: Infinity, duration: 0.4, ease: "easeInOut", delay: 0.1 }}
+            className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
+          />
+          <motion.div 
+            animate={{ height: [4, 18, 4] }}
+            transition={{ repeat: Infinity, duration: 0.5, ease: "easeInOut", delay: 0.2 }}
+            className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
+          />
+        </div>
+      )
+    }
+
+    if (companionState === 'speaking') {
+      return (
+        <motion.div
+          animate={{ height: [6, 16, 6] }}
+          transition={{ repeat: Infinity, duration: 0.3, ease: "easeInOut" }}
+          className="w-8 bg-slate-700 dark:bg-slate-300 rounded-full"
+        />
+      )
+    }
+
+    if (emotion === 'effort') {
+      return (
+        <svg width="24" height="6" viewBox="0 0 24 6" fill="none">
+          <line x1="2" y1="3" x2="22" y2="3" stroke="currentColor" className="text-slate-700 dark:text-slate-300" strokeWidth="4" strokeLinecap="round" />
+        </svg>
+      )
+    }
+
+    if (emotion === 'laugh') {
+      return (
+        <svg width="36" height="18" viewBox="0 0 36 18" fill="none">
+          <path d="M2 2C2 12 34 12 34 2Z" fill="currentColor" className="text-slate-700 dark:text-slate-300" />
+        </svg>
+      )
+    }
+
+    if (emotion === 'smile') {
+      return (
+        <svg width="32" height="12" viewBox="0 0 32 12" fill="none">
+          <path d="M3 2C8 9 24 9 29 2" stroke="currentColor" className="text-slate-700 dark:text-slate-300" strokeWidth="3.5" strokeLinecap="round" />
+        </svg>
+      )
+    }
+
+    return (
+      <svg width="24" height="8" viewBox="0 0 24 8" fill="none">
+        <path d="M2 2C6 6 18 6 22 2" stroke="currentColor" className="text-slate-700 dark:text-slate-300" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
   return (
     <div className="min-h-screen text-slate-800 bg-[#f7f9fb] selection:bg-primary/10 overflow-hidden h-screen w-screen relative">
       <input 
@@ -446,88 +777,7 @@ export default function BrandOwnerDashboard() {
         )}
       </AnimatePresence>
 
-      {/* Full-screen Emoji Companion Center without face contour */}
-      {activeSubPage === null && (
-        <div className="fixed inset-0 z-0 flex items-center justify-center pointer-events-none">
-          <div className="flex flex-col items-center justify-center gap-6 w-32 h-32">
-            {/* Eyes Row */}
-            <div className="flex justify-between w-16 px-1">
-              {/* Left Eye */}
-              <motion.div 
-                animate={
-                  companionState === 'listening' 
-                    ? { scaleY: 1.2, scaleX: 1.1 } 
-                    : companionState === 'thinking' 
-                    ? { scaleY: 0.5, y: 1 } 
-                    : { scaleY: [1, 1, 0.1, 1, 1] } /* Idle blinking */
-                }
-                transition={
-                  companionState === 'idle'
-                    ? { repeat: Infinity, duration: 4, times: [0, 0.9, 0.95, 1, 1] }
-                    : { duration: 0.3 }
-                }
-                className="w-3.5 h-3.5 bg-slate-700 dark:bg-slate-300 rounded-full"
-              />
-              {/* Right Eye */}
-              <motion.div 
-                animate={
-                  companionState === 'listening' 
-                    ? { scaleY: 1.2, scaleX: 1.1 } 
-                    : companionState === 'thinking' 
-                    ? { scaleY: 0.5, y: 1 } 
-                    : { scaleY: [1, 1, 0.1, 1, 1] } /* Idle blinking */
-                }
-                transition={
-                  companionState === 'idle'
-                    ? { repeat: Infinity, duration: 4, times: [0, 0.9, 0.95, 1, 1] }
-                    : { duration: 0.3 }
-                }
-                className="w-3.5 h-3.5 bg-slate-700 dark:bg-slate-300 rounded-full"
-              />
-            </div>
 
-            {/* Mouth */}
-            <div className="h-6 flex items-center justify-center">
-              {companionState === 'idle' && (
-                /* Smiling gentle curve */
-                <svg width="24" height="8" viewBox="0 0 24 8" fill="none">
-                  <path d="M2 2C6 6 18 6 22 2" stroke="currentColor" className="text-slate-700 dark:text-slate-300" strokeWidth="3" strokeLinecap="round" />
-                </svg>
-              )}
-
-              {companionState === 'listening' && (
-                /* Wavy sound wave lines */
-                <div className="flex items-center gap-1">
-                  <motion.div 
-                    animate={{ height: [4, 16, 4] }}
-                    transition={{ repeat: Infinity, duration: 0.5, ease: "easeInOut" }}
-                    className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
-                  />
-                  <motion.div 
-                    animate={{ height: [6, 22, 6] }}
-                    transition={{ repeat: Infinity, duration: 0.4, ease: "easeInOut", delay: 0.1 }}
-                    className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
-                  />
-                  <motion.div 
-                    animate={{ height: [4, 16, 4] }}
-                    transition={{ repeat: Infinity, duration: 0.5, ease: "easeInOut", delay: 0.2 }}
-                    className="w-1 bg-slate-700 dark:bg-slate-300 rounded-full"
-                  />
-                </div>
-              )}
-
-              {companionState === 'thinking' && (
-                /* Thinking breathing dot / load bar */
-                <motion.div 
-                  animate={{ scaleX: [1, 2.5, 1], opacity: [0.6, 1, 0.6] }}
-                  transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
-                  className="w-4 h-1.5 bg-slate-700 dark:bg-slate-300 rounded-full"
-                />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Top App Bar */}
       <header className="fixed top-0 w-full z-40 bg-white/40 backdrop-blur-md h-16 flex items-center justify-between px-4 border-b border-slate-200/20">
@@ -651,58 +901,246 @@ export default function BrandOwnerDashboard() {
       {/* Main Content Area - Companion Chat interface */}
       {activeSubPage === null && (
         <main className="relative z-10 h-full flex flex-col pt-16 pb-safe">
-          {/* Conversation Feed */}
-          <div className="flex-1 overflow-y-auto px-4 py-8 space-y-6 no-scrollbar">
-            {messages.map((m, idx) => (
-              <div 
-                key={idx} 
-                className={`flex flex-col gap-1.5 max-w-[85%] ${
-                  m.sender === 'user' ? 'self-end ml-auto items-end' : 'self-start mr-auto items-start'
-                }`}
+          
+          {/* Top Info Banner for completed notifications */}
+          {completedNotification && (
+            <div className="px-4 pt-4 flex justify-center z-20 pointer-events-auto">
+              <motion.div 
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full max-w-sm bg-indigo-50 border border-indigo-100 rounded-3xl p-3 shadow-md flex items-start gap-2.5"
               >
-                <div className="flex items-center gap-2 mb-0.5">
-                  {m.sender === 'ai' ? (
-                    <>
-                      <div className="w-5 h-5 rounded-full bg-indigo-tint flex items-center justify-center">
-                        <Sparkles className="w-3 h-3 text-white fill-white" />
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">AI Marketing Crew</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest text-right">Brand Owner</span>
-                      <div className="w-5 h-5 rounded-full bg-slate-200 overflow-hidden">
-                        <img 
-                          className="w-full h-full object-cover" 
-                          alt="Brand Owner avatar" 
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3UEaCm3FZ3UFXcu5DZu89flKJ3W4pQYYdWEsCKdfzsX0Qr1JLXL5s6rozn75dBXVZWBtUB0VH7RctN_ZMLNMsA4ncwe3Rderxv-W0iVv7IKkleVAfGz_pMOlx_p0ghGbRWUqNeadQoQ_aw3L7BUV7qStdrTpM6l45M4osPzjOUItkYIvOQxV7vMlXE8msjDJ6iG_HPn1VpW10LIWn7I59yS9ULH4_cxvNjJiGAVX0MRbL9hAFiJG4tdJ0YajtpPhzstY5ZHc_0Hg"
-                        />
-                      </div>
-                    </>
-                  )}
+                <div className="bg-primary/10 text-primary p-2 rounded-2xl flex items-center justify-center flex-shrink-0">
+                  <CalendarIcon className="w-4 h-4" />
                 </div>
-                <div className={`p-4 rounded-2xl shadow-sm ${
-                  m.sender === 'user' 
-                    ? 'bg-primary text-white rounded-tr-none' 
-                    : 'bg-white/80 backdrop-blur-md text-slate-700 rounded-tl-none border border-white/60'
-                }`}>
-                  <p className="text-xs leading-relaxed whitespace-pre-line">{m.text}</p>
-                  <span className={`block text-[9px] mt-1 text-right ${m.sender === 'user' ? 'text-white/60' : 'text-slate-400'}`}>
-                    {m.time}
+                <div className="flex-1">
+                  <h4 className="text-xs font-black text-slate-800">批量内容创作已完成</h4>
+                  <p className="text-[10px] text-slate-500 font-semibold leading-relaxed mt-0.5">
+                    我已为您生成了所有社交平台的内容草稿，并已将其加入到您的系统发布排期中。
+                  </p>
+                  <button 
+                    onClick={() => {
+                      setActiveSubPage('calendar')
+                      setCompletedNotification(false)
+                    }}
+                    className="text-[10px] text-primary font-extrabold hover:underline mt-2 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    去发布日历中查看 <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+                <button 
+                  onClick={() => setCompletedNotification(false)}
+                  className="text-slate-400 hover:text-slate-650 p-1 flex items-center justify-center cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </motion.div>
+            </div>
+          )}
+
+          {/* Center Space: Either show the Companion Face or show the pending previews grid */}
+          <div className="flex-1 flex flex-col items-center justify-center relative px-6 py-4 overflow-y-auto no-scrollbar">
+            {pendingPreviews.length > 0 ? (
+              /* Pending Image Previews Grid + Creative Input form */
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="w-full max-w-sm bg-white/95 border border-slate-200/50 rounded-3xl p-4 shadow-xl backdrop-blur-md space-y-4 z-20 pointer-events-auto flex flex-col max-h-[90%] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    已选图片 ({pendingPreviews.length}/9)
                   </span>
+                  <button 
+                    onClick={() => {
+                      setPendingImages([])
+                      setPendingPreviews([])
+                      setPostIdea('')
+                    }}
+                    className="text-slate-400 hover:text-slate-650 p-1 cursor-pointer flex items-center justify-center"
+                    title="清除所有图片"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-              </div>
-            ))}
-            {companionState === 'thinking' && (
-              <div className="flex items-center gap-2 text-xs text-slate-400 italic bg-white/60 backdrop-blur-sm p-3 rounded-xl border border-white/40 w-fit">
-                <div className="w-4 h-4 rounded-full border-2 border-slate-200 border-t-primary animate-spin" />
-                <span>AI companion is thinking...</span>
+
+                {/* Previews thumbnail grid */}
+                <div className="grid grid-cols-3 gap-2 overflow-y-auto max-h-36 p-1 scrollbar-thin">
+                  {pendingPreviews.map((url, i) => (
+                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-100 bg-slate-50 shadow-sm">
+                      <img src={url} alt={`preview-${i}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => {
+                          setPendingPreviews(prev => prev.filter((_, idx) => idx !== i))
+                          setPendingImages(prev => prev.filter((_, idx) => idx !== i))
+                        }}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-slate-900/60 text-white flex items-center justify-center hover:bg-slate-900 active:scale-95 transition-all cursor-pointer shadow-sm"
+                        title="移除图片"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Theme/Idea creative prompt textarea */}
+                <div className="space-y-1.5 flex-1 flex flex-col">
+                  <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wide">
+                    发帖主题或创意指令：
+                  </label>
+                  <textarea
+                    value={postIdea}
+                    onChange={(e) => setPostIdea(e.target.value)}
+                    placeholder="输入发帖的想法（例如：‘展示新招牌牛肉汉堡，突出多汁松软’）。或直接点击下方麦克风进行语音输入！"
+                    rows={3}
+                    className="w-full text-xs p-3 rounded-2xl bg-slate-50 border border-slate-200/80 focus:border-primary/50 focus:outline-none resize-none leading-relaxed transition-colors font-semibold text-slate-700 flex-1 min-h-[60px]"
+                  />
+                </div>
+
+                {/* Control Action Buttons */}
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => {
+                      setPendingImages([])
+                      setPendingPreviews([])
+                      setPostIdea('')
+                    }}
+                    className="flex-1 bg-slate-100 hover:bg-slate-250/70 text-slate-650 font-extrabold py-2.5 rounded-2xl text-xs active:scale-95 transition-all cursor-pointer"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleBulkSubmit}
+                    disabled={generatingBulk}
+                    className="flex-1 bg-primary hover:bg-indigo-tint text-white font-extrabold py-2.5 rounded-2xl text-xs active:scale-95 transition-all flex items-center justify-center gap-1 shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50"
+                  >
+                    {generatingBulk ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        正在创作...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        开始创作
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            ) : (
+              /* Centered Voice Companion Visual Interface */
+              <div className="flex flex-col items-center justify-center pointer-events-none">
+                {/* Dynamic halo/aura layer */}
+                <div className="relative flex items-center justify-center w-64 h-64">
+                  <AnimatePresence>
+                    {companionState === 'listening' && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: [0.15, 0.3, 0.15], scale: [1, 1.35, 1] }}
+                        exit={{ opacity: 0 }}
+                        transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                        className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl"
+                      />
+                    )}
+                    {companionState === 'thinking' && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: [0.1, 0.25, 0.1], scale: [1, 1.2, 1] }}
+                        exit={{ opacity: 0 }}
+                        transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                        className="absolute inset-0 rounded-full bg-indigo-500/20 blur-xl"
+                      />
+                    )}
+                    {emotion === 'effort' && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: [0.1, 0.2, 0.1], scale: [1, 1.3, 1] }}
+                        exit={{ opacity: 0 }}
+                        transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+                        className="absolute inset-0 rounded-full bg-amber-500/20 blur-xl"
+                      />
+                    )}
+                    {companionState === 'speaking' && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: [0.15, 0.35, 0.15], scale: [1, 1.45, 1] }}
+                        exit={{ opacity: 0 }}
+                        transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                        className="absolute inset-0 rounded-full bg-indigo-tint/20 blur-xl"
+                      />
+                    )}
+                  </AnimatePresence>
+
+                  {/* Face base container */}
+                  <div className="w-48 h-48 rounded-full bg-white/70 border border-white/60 shadow-2xl backdrop-blur-md flex flex-col items-center justify-center gap-5 relative z-10">
+                    {/* Sweating drop for effort emotion */}
+                    {emotion === 'effort' && (
+                      <motion.div 
+                        animate={{ y: [0, 6, 0], opacity: [1, 0, 1] }} 
+                        transition={{ repeat: Infinity, duration: 1.5, ease: "easeIn" }}
+                        className="absolute top-8 right-10 text-xl pointer-events-none"
+                      >
+                        💧
+                      </motion.div>
+                    )}
+
+                    {/* Sparkles / Joy stars when laughing */}
+                    {emotion === 'laugh' && (
+                      <>
+                        <motion.div 
+                          animate={{ scale: [1, 1.3, 1], rotate: [0, 45, 0] }} 
+                          transition={{ repeat: Infinity, duration: 1.2 }}
+                          className="absolute top-6 left-8 text-amber-400 text-sm"
+                        >
+                          ⭐
+                        </motion.div>
+                        <motion.div 
+                          animate={{ scale: [1, 1.3, 1], rotate: [0, -45, 0] }} 
+                          transition={{ repeat: Infinity, duration: 1.2, delay: 0.3 }}
+                          className="absolute top-10 right-6 text-amber-400 text-xs"
+                        >
+                          ✨
+                        </motion.div>
+                      </>
+                    )}
+
+                    {/* Eyes Row */}
+                    <div className="flex justify-between w-20 px-2 mt-2">
+                      {renderEye(true)}
+                      {renderEye(false)}
+                    </div>
+
+                    {/* Mouth Row */}
+                    <div className="h-10 flex items-center justify-center">
+                      {renderMouth()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subtitles text display */}
+                <div className="text-center mt-6 space-y-1">
+                  <h3 className="text-sm font-extrabold text-slate-700">
+                    {companionState === 'listening' ? '正在倾听您的意见...' :
+                     companionState === 'thinking' ? '正在思考与组织语言...' :
+                     companionState === 'speaking' ? '正在语音回复中...' :
+                     emotion === 'effort' ? '正在努力为您生成推文...' :
+                     '专属 AI 营销助手'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-semibold px-8 leading-relaxed max-w-xs mx-auto">
+                    {companionState === 'listening' ? '您可以说：“帮我做个关于周末促销的活动文案”' :
+                     companionState === 'thinking' ? '正在调用平台数据与创意模型...' :
+                     companionState === 'speaking' ? '正在用语音为您播报创作成果...' :
+                     emotion === 'effort' ? '已开始处理！正在为您排期并发布内容...' :
+                     '只进行语音对话。点击下方麦克风即可开始。'}
+                  </p>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Chat Input Console */}
-          <div className="px-6 pb-10 pt-4 bg-gradient-to-t from-[#f7f9fb] via-[#f7f9fb]/90 to-transparent flex flex-col items-center">
+          {/* Chat Input Console (Voice button & Upload triggers) */}
+          <div className="px-6 pb-10 pt-4 bg-gradient-to-t from-[#f7f9fb] via-[#f7f9fb]/90 to-transparent flex flex-col items-center z-20 pointer-events-auto">
             
             {/* Voice Assistant Panel */}
             <div className="w-full max-w-sm flex items-center justify-between gap-6 px-4">
@@ -710,23 +1148,26 @@ export default function BrandOwnerDashboard() {
               <button 
                 type="button"
                 onClick={handleUploadClick}
-                disabled={uploading}
+                disabled={uploading || generatingBulk}
                 className="w-12 h-12 rounded-full bg-white border border-slate-200/80 shadow-md flex items-center justify-center text-slate-400 hover:text-slate-650 hover:bg-slate-50 transition-all active:scale-95 cursor-pointer flex-shrink-0"
-                title="上传图片到素材库"
+                title="上传图片开始批量排期发帖"
               >
                 <ImageIcon className="w-5 h-5" />
               </button>
-
-              {/* Center Column: Big voice assistant button */}
+ 
+              {/* Center Column: Voice assistant mic button */}
               <div className="flex flex-col items-center gap-2 flex-1">
                 <button 
                   type="button"
                   onClick={startVoiceAssist}
+                  disabled={generatingBulk}
                   className={`w-16 h-16 rounded-full flex items-center justify-center text-white shadow-xl active:scale-95 transition-all cursor-pointer flex-shrink-0 ${
                     companionState === 'listening'
                       ? 'bg-emerald-500 shadow-emerald-500/30 scale-105'
                       : companionState === 'thinking'
                       ? 'bg-indigo-500 shadow-indigo-500/20'
+                      : companionState === 'speaking'
+                      ? 'bg-indigo-tint shadow-indigo-tint/30 animate-pulse'
                       : 'bg-primary hover:bg-indigo-tint shadow-primary/30'
                   }`}
                 >
@@ -746,14 +1187,14 @@ export default function BrandOwnerDashboard() {
                   )}
                 </button>
                 <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest text-center mt-1">
-                  {companionState === 'listening' ? '正在倾听...' : companionState === 'thinking' ? '正在思考...' : '点击麦克风对话'}
+                  {companionState === 'listening' ? '正在倾听...' : companionState === 'thinking' ? '正在思考...' : companionState === 'speaking' ? '正在说话...' : '点击麦克风对话'}
                 </span>
               </div>
-
+ 
               {/* Right Column: Balanced empty space spacer */}
               <div className="w-12 h-12 flex-shrink-0" />
             </div>
-
+ 
           </div>
         </main>
       )}

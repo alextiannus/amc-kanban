@@ -63,8 +63,6 @@ export async function copywriterNode(state: any) {
     }
   }
 
-
-
   let userPrompt = "";
   if (draftObj && draftObj.agentNote && draftObj.agentNote.includes("【AI 生成指令】")) {
     const match = draftObj.agentNote.match(/【AI 生成指令】([\s\S]*?)【\/AI 生成指令】/);
@@ -104,31 +102,43 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
 
   // 1. Fetch custom brand context parameters if BrandKnowledge exists
   let brandToneText = "";
+  let brandContactText = "";
   let menuText = "";
   let slangText = "";
   let negativePromptText = "";
 
-  if (brand && brand.knowledge) {
-    const k = brand.knowledge;
-    if (k.brandTone) {
-      brandToneText = `\nBrand Tone/Voice: ${k.brandTone}\n`;
+  if (brand) {
+    const details: string[] = [];
+    if (brand.address) details.push(`Address: ${brand.address}`);
+    if (brand.location) details.push(`Location/Area: ${brand.location}`);
+    if (brand.website) details.push(`Website: ${brand.website}`);
+    if (brand.phone) details.push(`Phone: ${brand.phone}`);
+    if (details.length > 0) {
+      brandContactText = `\nBrand Contact & Location Information:\n` + details.map(d => `- ${d}`).join("\n") + "\n";
     }
-    if (k.menuItems) {
-      const menu = k.menuItems as any[];
-      if (menu.length > 0) {
-        menuText = `\nMenu Items Knowledge:\n` + menu.map(item => `- ${item.name} ($${item.price}): ${item.description || ""}`).join("\n") + "\n";
+
+    if (brand.knowledge) {
+      const k = brand.knowledge;
+      if (k.brandTone) {
+        brandToneText = `\nBrand Tone/Voice: ${k.brandTone}\n`;
       }
-    }
-    if (k.slangDict) {
-      const slang = k.slangDict as Record<string, string>;
-      slangText = `\nTarget Local Slang/Terminology mappings to use:\n` + Object.entries(slang).map(([key, val]) => `- "${key}": ${val}`).join("\n") + "\n";
-    }
-    if (k.negPrompts && k.negPrompts.length > 0) {
-      negativePromptText = `\nNEVER use the following words or phrases:\n` + k.negPrompts.map(word => `- "${word}"`).join("\n") + "\n";
+      if (k.menuItems) {
+        const menu = k.menuItems as any[];
+        if (menu.length > 0) {
+          menuText = `\nMenu Items Knowledge:\n` + menu.map(item => `- ${item.name} ($${item.price}): ${item.description || ""}`).join("\n") + "\n";
+        }
+      }
+      if (k.slangDict) {
+        const slang = k.slangDict as Record<string, string>;
+        slangText = `\nTarget Local Slang/Terminology mappings to use:\n` + Object.entries(slang).map(([key, val]) => `- "${key}": ${val}`).join("\n") + "\n";
+      }
+      if (k.negPrompts && k.negPrompts.length > 0) {
+        negativePromptText = `\nNEVER use the following words or phrases:\n` + k.negPrompts.map(word => `- "${word}"`).join("\n") + "\n";
+      }
     }
   }
 
-  // 1. Fetch approved corrections and perform Jaccard-similarity Few-Shot sorting
+  // 2. Fetch approved corrections and perform Jaccard-similarity Few-Shot sorting
   let fewShotText = "";
   try {
     const allApproved = await prisma.userCorrectionFeedback.findMany({
@@ -172,6 +182,7 @@ Task Details: ${task.description || ""}
 ${userPrompt ? `User Custom Theme: "${userPrompt}"` : ""}
 ${attachedAssetsText}
 ${brandToneText}
+${brandContactText}
 ${menuText}
 ${slangText}
 ${negativePromptText}
@@ -188,12 +199,16 @@ Rules:
      * Enforce proven viral hook formulas:
        a. Surprise/Disbelief: "我不允许还有人不知道..." (I won't allow anyone to not know about...), "天呐！这家店也太..." (Heavens! This shop is too...), "直接封神！..." (Directly canonized!).
        b. Local Geotargeting focus: "新加坡克拉码头必吃..." (Clarke Quay Singapore must eat...), "克拉码头这家店绝了..." (This shop at Clarke Quay is amazing...).
-       c. Urgency/FOMO: "听我劝！去这家店前一定要..." (Hear my advice! Before going to this shop, you must...), "Bojio! 别说我不提前分享..." (Bojio! Don't say I didn't share...).
+       c. Urgency/FOMO: "听我劝！去这家店前一定要..." (Hear my advice! Before going to this shop, you must...), "Bojio! 别说我不提前分享..." (Don't say I didn't share...).
    - For Instagram/TikTok/Facebook/Google Business (Note: MUST generate in English):
      * Write an intriguing, premium, and direct opening sentence.
      * Must be punchy and fit within 80-125 characters (since Instagram folds captions after 125 characters, the primary message must be visible before the fold).
-3. STRICT Negative prompt: Avoid weird hooks starting with clichés like "Discover the secrets...", "The best...", "The most...", "The top...". Do not use cringy or over-the-top AI language.
-4. Output your response as a JSON array of strings:
+3. Brand Context and Visual Integration:
+   - Carefully review the brand context details (tone, menu, contact, location) and attached images' metadata (AI tags, category, description).
+   - If the images depict specific menu items, locations, or promotions, align the hooks with these visual assets.
+   - Naturally integrate local neighborhood names or landmark details (like Singapore Clarke Quay, etc.) if mentioned in the brand location/address or image tags.
+4. STRICT Negative prompt: Avoid weird hooks starting with clichés like "Discover the secrets...", "The best...", "The most...", "The top...". Do not use cringy or over-the-top AI language.
+5. Output your response as a JSON array of strings:
    ["Hook 1", "Hook 2", "Hook 3"]
 Please output ONLY a valid JSON array of strings.`;
 
@@ -232,6 +247,7 @@ Task Details: ${task.description || ""}
 ${userPrompt ? `User Custom Theme: "${userPrompt}"` : ""}
 ${attachedAssetsText}
 ${brandToneText}
+${brandContactText}
 ${menuText}
 ${slangText}
 ${negativePromptText}
@@ -248,12 +264,21 @@ Guidelines:
    - If Tone suggests chef/owner/maker perspective (e.g. contains "chef", "owner", "我", "老板"), write in the first-person singular ("我今天亲自...").
    - If Tone suggests explorer/food blogger perspective (e.g. contains "blogger", "探店", "recommend"), write in the third-person explorer perspective ("这家店绝了...").
    - Else, write in the official brand/corporate perspective ("我们很高兴为您呈献...").
-2. Include a compelling Call to Action (CTA) at the end:
-   - For F&B/restaurants: remind them to book a table, include the restaurant's address/position, or highlight any active promo codes.
+2. Brand Context, Location & Image Alignment:
+   - You MUST craft the copywriting according to:
+     a) The brand context (especially tagline, tone, menu items, slang dictionary).
+     b) The "内容创意 / 生成指令 (AI Idea & Prompt)" (${userPrompt ? `"${userPrompt}"` : 'none'}).
+     c) The attached images' information (AI tags, categories, visual descriptions/captions).
+   - If the attached images show a specific dish/product or location detail, make sure your text references it accurately.
+   - If the brand has contact details (phone, website, address, location/neighborhood) or the images specify location tags, you MUST naturally integrate these details into the post content (e.g. in the Call to Action or when inviting customers to visit).
+3. Include a compelling Call to Action (CTA) at the end:
+   - For F&B/restaurants/cafes: naturally invite them to book a table, visit the store, check the website, or highlight active promos. Include the address (or landmark/location) and website/phone naturally.
+   - For Google Business Profile: Ensure the post is professional, location-centric, and details how to visit or contact (address, website link, phone).
    - For others: prompt for bookings/inquiries.
-3. Platform-Native Formatting & Layout Rules:
+4. Platform-Native Formatting & Layout Rules:
    - For Xiaohongshu (小红书/Rednote) (Note: MUST generate in Simplified Chinese):
      * High Density Emojis: Use emojis as visual separator markers for list items (e.g. ✨, 👉, ✅, 📌, 💡, ▫️) instead of default markdown dashes.
+     * Location details: If an address/location is available, include it with a map pin emoji (e.g., '📍地址：[Address]').
      * Easy Reading: Break text into short, 1-2 sentence paragraphs separated by a full blank line. Do not write large dense blocks of text.
      * Conversational Tone: Use friendly, colloquial styles (e.g. "家人们", "姐妹们", "宝子们") and naturally integrate local Singlish slang (e.g. "Bojio", "Shiok", "Chope") if defined in slangDict.
      * Hashtags: Output hashtags at the very bottom, space-separated (e.g. "#新加坡美食 #克拉码头").
@@ -261,15 +286,15 @@ Guidelines:
      * Write inviting, premium English copywriting.
      * Spacing: Enforce clean double line breaks between sections to avoid crowded layouts.
      * Bullet points: Use custom character bullet points (e.g. •, ▫️) for lists.
+     * Location/Address: Include the store address or neighborhood naturally near the CTA.
      * Hashtags: Output hashtags neatly at the bottom separated from the caption by line breaks.
    - For Facebook / TikTok (Note: MUST generate in English):
      * Write inviting, premium English social copy.
+     * Include address/contact info naturally.
      * Hashtags: Output hashtags neatly at the bottom.
    - For Google Business Profile (Note: MUST generate in English):
      * Professional, concise, focus on booking details, contact info, and clear promotion terms.
-   - For Google Business Profile:
-     * Professional, concise, focus on booking details, contact info, and clear promotion terms.
-4. Output your response in JSON format with two keys:
+5. Output your response in JSON format with two keys:
    "caption": The complete post caption (string)
    "hashtags": An array of hashtags (array of strings, without the '#' symbol)
 Please output ONLY a valid JSON object.`;
