@@ -12,8 +12,8 @@ export async function copywriterNode(state: any) {
   const platformLower = (platform || "").toLowerCase();
   const isRednote = platformLower === "xiaohongshu" || platformLower === "red" || platformLower === "xhs";
 
-  if (!brandId || !taskId) {
-    throw new Error("Missing brandId or taskId in state.");
+  if (!brandId) {
+    throw new Error("Missing brandId in state.");
   }
 
   const brand = await prisma.brand.findUnique({
@@ -21,13 +21,13 @@ export async function copywriterNode(state: any) {
     include: { knowledge: true }
   });
 
-  const task = await prisma.workUnit.findUnique({
-    where: { id: taskId }
-  });
-
-  if (!brand || !task) {
-    throw new Error("Brand or Task not found in database.");
+  if (!brand) {
+    throw new Error("Brand not found in database.");
   }
+
+  const task = taskId ? await prisma.workUnit.findUnique({
+    where: { id: taskId }
+  }) : null;
 
   // Load draft details if draftId exists to verify media availability
   let existingDraftId = state.draftId || null;
@@ -91,12 +91,13 @@ export async function copywriterNode(state: any) {
 
   // Retrieve attached assets metadata for multi-modal context alignment
   let attachedAssetsText = "";
-  if (draftMediaUrls && draftMediaUrls.length > 0) {
+  const mediaUrlsToUse = (draftMediaUrls && draftMediaUrls.length > 0) ? draftMediaUrls : (state.mediaUrls || []);
+  if (mediaUrlsToUse && mediaUrlsToUse.length > 0) {
     try {
       const attachedAssets = await prisma.mediaAsset.findMany({
         where: {
           brandId,
-          url: { in: draftMediaUrls }
+          url: { in: mediaUrlsToUse }
         }
       });
       if (attachedAssets.length > 0) {
@@ -107,11 +108,11 @@ Tags: ${asset.aiTags.join(", ") || "N/A"}
 Category: ${asset.aiCategory || "N/A"}
 Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
       } else {
-        attachedAssetsText = `\nThere are ${draftMediaUrls.length} images attached to this post (URLs: ${draftMediaUrls.join(", ")}). Please compose the content to match these visual assets.\n`;
+        attachedAssetsText = `\nThere are ${mediaUrlsToUse.length} images attached to this post (URLs: ${mediaUrlsToUse.join(", ")}). Please compose the content to match these visual assets.\n`;
       }
     } catch (err) {
       console.error("Failed to query media asset metadata in copywriterNode:", err);
-      attachedAssetsText = `\nThere are ${draftMediaUrls.length} images attached to this post (URLs: ${draftMediaUrls.join(", ")}). Please compose the content to match these visual assets.\n`;
+      attachedAssetsText = `\nThere are ${mediaUrlsToUse.length} images attached to this post (URLs: ${mediaUrlsToUse.join(", ")}). Please compose the content to match these visual assets.\n`;
     }
   }
 
@@ -161,7 +162,7 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
       select: { originalText: true, correctedText: true }
     });
     if (allApproved.length > 0) {
-      const taskQuery = `${task.title} ${task.description || ""}`;
+      const taskQuery = task ? `${task.title} ${task.description || ""}` : (userPrompt || "");
       const sortedShots = [...allApproved].sort((a, b) => {
         const simA = getJaccardSimilarity(a.originalText + " " + a.correctedText, taskQuery);
         const simB = getJaccardSimilarity(b.originalText + " " + b.correctedText, taskQuery);
@@ -192,8 +193,8 @@ Target Platform: ${platform}
 Language Rule:
 - For Xiaohongshu (小红书/Rednote, platform is "red", "xiaohongshu", or "xhs"): You MUST write the content in Simplified Chinese (中文) by default.
 - For all other platforms (Instagram, Facebook, TikTok, Google Business Profile): You MUST write the content in English (英文) by default.
-Active Task: "${task.title}"
-Task Details: ${task.description || ""}
+Active Task: "${task?.title || 'Social Media Post Content Creation'}"
+Task Details: ${task?.description || ""}
 ${userPrompt ? `User Custom Theme / Creative Idea: "${userPrompt}"` : ""}
 ${creativeHooks ? `Creative Hooks / Writing Angles: "${creativeHooks}"` : ""}
 ${attachedAssetsText}
@@ -265,8 +266,8 @@ Target Platform: ${platform}
 Language Rule:
 - For Xiaohongshu (小红书/Rednote, platform is "red", "xiaohongshu", or "xhs"): You MUST write the content in Simplified Chinese (中文) by default.
 - For all other platforms (Instagram, Facebook, TikTok, Google Business Profile): You MUST write the content in English (英文) by default.
-Active Task: "${task.title}"
-Task Details: ${task.description || ""}
+Active Task: "${task?.title || 'Social Media Post Content Creation'}"
+Task Details: ${task?.description || ""}
 ${userPrompt ? `User Custom Theme / Creative Idea: "${userPrompt}"` : ""}
 ${creativeHooks ? `Creative Hooks / Writing Angles: "${creativeHooks}"` : ""}
 ${attachedAssetsText}

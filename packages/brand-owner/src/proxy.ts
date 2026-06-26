@@ -26,9 +26,11 @@ export default async function proxy(request: NextRequest) {
   const isPublicPage = pathname === '/game' || pathname.startsWith('/game/')
   const isApiRoute = pathname.startsWith('/api')
 
-  // Bypass API and public routes
+  // Proxy/Rewrite API and public game routes to the main application
   if (isApiRoute || isPublicPage) {
-    return NextResponse.next()
+    const mainAppUrl = process.env.APP_BASE_URL || 'http://localhost:3000'
+    const targetUrl = new URL(pathname + request.nextUrl.search, mainAppUrl)
+    return NextResponse.rewrite(targetUrl)
   }
 
   // Root path (Login page): redirect to dashboard if logged in

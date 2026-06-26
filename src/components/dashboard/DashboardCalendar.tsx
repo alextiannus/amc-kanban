@@ -284,6 +284,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [draftHashtags, setDraftHashtags] = useState<Record<string, string>>({})
   const [draftStatuses, setDraftStatuses] = useState<Record<string, 'generating' | 'completed' | 'failed'>>({})
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
+  const [showPublishOptionModal, setShowPublishOptionModal] = useState(false)
 
   const accountOptions = useMemo(() => {
     const list = [...accounts]
@@ -636,7 +637,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               caption: trimmedCaption,
               hashtags: parseTags(hashtags),
               accountId: accId,
-              scheduledAt: (scheduledAtOverride || scheduledAt) ? new Date(scheduledAtOverride || scheduledAt).toISOString() : null,
+              scheduledAt: scheduledAtOverride === 'none' ? null : ((scheduledAtOverride || scheduledAt) ? new Date(scheduledAtOverride || scheduledAt).toISOString() : null),
               agentNote: formattedAgentNote,
               status: nextStatus || 'draft',
               mediaUrls,
@@ -661,7 +662,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     }
   }
 
-    const saveOrUpdateDrafts = async (status: string, scheduledAtOverride?: string) => {
+    const saveOrUpdateDrafts = async (status: string, scheduledAtOverride?: string | null) => {
     if (!activeBrandId) return null
     setSaving(true)
     try {
@@ -680,7 +681,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 caption: currentCaption,
                 hashtags: Array.isArray(currentHashtags) ? currentHashtags : parseTags(String(currentHashtags || '')),
                 status,
-                scheduledAt: scheduledAtOverride || (scheduledAt ? new Date(scheduledAt).toISOString() : null),
+                scheduledAt: scheduledAtOverride === null ? null : (scheduledAtOverride || (scheduledAt ? new Date(scheduledAt).toISOString() : null)),
                 creativeHooks: creativeHooks.trim(),
               }),
             })
@@ -692,7 +693,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         await refreshCalendar()
         return updated
       } else {
-        const saved = await saveDraft(status)
+        const saved = await saveDraft(status, undefined, scheduledAtOverride === null ? 'none' : scheduledAtOverride)
         return saved
       }
     } catch (e: any) {
@@ -756,9 +757,43 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
       alert('排期发布成功！系统已自动为您提交排期。')
       setIsCreatingPost(false)
+      setShowPublishOptionModal(false)
       await refreshCalendar()
     } catch (e: any) {
       alert(e.message || '排期提交失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handlePublishImmediately = async () => {
+    if (!activeBrandId) return
+
+    // For immediate publish, scheduledAt should be null so that it gets published right now
+    const draftsList = await saveOrUpdateDrafts('published', null)
+    if (!draftsList || draftsList.length === 0) return
+
+    setSaving(true)
+    try {
+      await Promise.all(
+        draftsList.map(async (draft) => {
+          // Use /approve route to bypass autopilot check and force publish
+          const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}/approve`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: agentNote }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok) throw new Error(json.error || `发布草稿 ${draft.id} 失败`)
+        })
+      )
+
+      alert('立刻发布成功！系统已为您直接发布内容。')
+      setIsCreatingPost(false)
+      setShowPublishOptionModal(false)
+      await refreshCalendar()
+    } catch (e: any) {
+      alert(e.message || '立刻发布失败')
     } finally {
       setSaving(false)
     }
@@ -2450,7 +2485,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               <button
                 type="button"
                 disabled={saving || isAiGenerating}
-                onClick={handleSchedulePublish}
+                onClick={() => setShowPublishOptionModal(true)}
                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1"
               >
                 {saving ? (
@@ -3403,6 +3438,87 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
           </div>
         )
       })()}
+
+      {/* Publish Option Selection Modal */}
+      {showPublishOptionModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-955/60 p-4 backdrop-blur-sm"
+          onClick={() => setShowPublishOptionModal(false)}
+        >
+          <div 
+            className="relative w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
+                <Send className="w-4 h-4 text-indigo-500" />
+                选择发布模式
+              </h3>
+              <button 
+                onClick={() => setShowPublishOptionModal(false)} 
+                className="rounded-md p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Options Selection */}
+            <div className="mt-5 space-y-4">
+              {/* Option 1: Publish Immediately */}
+              <button
+                type="button"
+                onClick={handlePublishImmediately}
+                disabled={saving}
+                className="w-full text-left p-4 rounded-2xl border border-slate-150 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/10 dark:hover:bg-emerald-950/10 transition-all flex items-start gap-4 group active:scale-[0.99] disabled:opacity-50"
+              >
+                <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+                  <Zap className="w-5 h-5 fill-current" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-xs font-black text-slate-800 dark:text-slate-150 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                    立刻发布 (Publish Now)
+                  </h4>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
+                    立刻将审核通过的内容发布推送到绑定的社交平台渠道。
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2: Smart Scheduling */}
+              <button
+                type="button"
+                onClick={handleSchedulePublish}
+                disabled={saving}
+                className="w-full text-left p-4 rounded-2xl border border-slate-150 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-850 hover:bg-indigo-50/10 dark:hover:bg-indigo-950/10 transition-all flex items-start gap-4 group active:scale-[0.99] disabled:opacity-50"
+              >
+                <div className="p-3 rounded-xl bg-indigo-100 dark:bg-indigo-950/50 text-indigo-650 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-xs font-black text-slate-800 dark:text-slate-150 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    智能排期 (Smart Scheduling)
+                  </h4>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
+                    使用 AI 推荐的黄金时段进行自动排程发布，可在发布日历中编辑调整。
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* Footer with Close Button */}
+            <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
+              <button
+                type="button"
+                onClick={() => setShowPublishOptionModal(false)}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl transition-all"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   )

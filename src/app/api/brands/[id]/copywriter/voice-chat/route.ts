@@ -70,20 +70,39 @@ ${slangText ? `\n${slangText}\n` : ""}
 ${brand.location ? `Location: ${brand.location}` : ""}
 ${brand.address ? `Address: ${brand.address}` : ""}
 
-The user (the brand owner) is talking to you via voice. Respond in a friendly, helpful, conversational manner matching the brand tone.
-Rules:
-1. Speak in Simplified Chinese (中文).
-2. Keep your response very concise (strictly 1 to 2 sentences) so that it is fast and comfortable to listen to when synthesized to speech.
-3. Keep it encouraging, positive, and direct. Do not output markdown, formatting, or bracket annotations.
+The user (the brand owner) is talking to you via voice. Detect if their voice message expresses a semantic command/intent to generate content and publish/post/distribute it to platforms (e.g., "生成并发布到所有平台", "帮我发布推文", "批量生成并排期发布", "一键生成并发布").
 
-User voice message: "${message}"
+Output ONLY a valid JSON object with the following structure:
+{
+  "reply": "Your friendly conversational spoken reply (in Simplified Chinese, strictly 1 to 2 sentences, encouraging and positive, no markdown or brackets)",
+  "action": "GENERATE_AND_PUBLISH" or "NONE"
+}
+Do not include markdown wrappers around the JSON, return the raw JSON object.
 
-Spoken reply:`
+User voice message: "${message}"`
 
     const result = await callLLM("voice-companion", prompt, 300)
-    const replyText = (result.text || "好的，老板，我这就帮您处理！").trim()
+    let replyText = "好的，老板，我这就帮您处理！"
+    let action = "NONE"
 
-    return NextResponse.json({ reply: replyText })
+    try {
+      if (result.text) {
+        const cleanJson = result.text.replace(/```json/g, "").replace(/```/g, "").trim()
+        const parsed = JSON.parse(cleanJson)
+        replyText = parsed.reply || replyText
+        action = parsed.action || "NONE"
+      }
+    } catch (err) {
+      console.error('Failed to parse voice-chat response JSON:', err)
+      if (result.text) {
+        replyText = result.text.trim()
+        if (replyText.includes("发布") || replyText.includes("生成") || message.includes("发布") || message.includes("生成")) {
+          action = "GENERATE_AND_PUBLISH"
+        }
+      }
+    }
+
+    return NextResponse.json({ reply: replyText, action })
   } catch (error: any) {
     console.error('[Voice Chat API Error]:', error)
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })

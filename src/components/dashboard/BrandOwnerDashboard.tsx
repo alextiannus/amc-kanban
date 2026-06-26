@@ -7,7 +7,7 @@ import {
   Send, RefreshCw, Layers, ShieldCheck, ChevronDown, Check,
   Play, BarChart2, Star, Video, Link, ArrowRight,
   Bell, Menu, Upload, X, ChevronUp, MapPin, Settings, LogOut,
-  Utensils
+  Utensils, Copy
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams } from 'next/navigation'
@@ -52,14 +52,11 @@ export default function BrandOwnerDashboard() {
   // Sub-pages overlay view state
   const [activeSubPage, setActiveSubPage] = useState<'calendar' | 'market' | 'assets' | 'settings' | null>(null)
   const [sideMenuOpen, setSideMenuOpen] = useState(false)
-  const [showMapsAlert, setShowMapsAlert] = useState(true)
-  const [showScheduleAlert, setShowScheduleAlert] = useState(true)
+  const [actionItems, setActionItems] = useState<any[]>([])
   const [notificationsExpanded, setNotificationsExpanded] = useState(false)
   
   // Companion Chat state
-  const [messages, setMessages] = useState<{ sender: 'ai' | 'user'; text: string; time: string }[]>([
-    { sender: 'ai', text: 'Chef, I am optimizing your Friday dinner campaigns. 1 draft is ready for review.', time: '13:00' }
-  ])
+  const [messages, setMessages] = useState<{ sender: 'ai' | 'user'; text: string; time: string }[]>([])
   const [chatInput, setChatInput] = useState('')
   const [companionState, setCompanionState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle')
   const [emotion, setEmotion] = useState<'normal' | 'smile' | 'laugh' | 'effort' | 'confused' | 'wink' | 'excited'>('normal')
@@ -109,7 +106,7 @@ export default function BrandOwnerDashboard() {
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const res = await fetch('/api/brands?assignedOnly=true')
+        const res = await fetch('/api/brands')
         if (res.ok) {
           const list = await res.json()
           setBrands(list)
@@ -181,6 +178,22 @@ export default function BrandOwnerDashboard() {
           const knowData = await knowRes.json()
           setBrandTone(knowData.brandTone || '')
           setSlangDict(knowData.slangDict || {})
+        }
+
+        // Fetch brand details to get actionItems
+        const detailRes = await fetch(`/api/brands/${id}`)
+        if (detailRes.ok) {
+          const detailData = await detailRes.json()
+          setActionItems(detailData.actionItems || [])
+          
+          // Set dynamic greeting based on active brand details
+          setMessages([
+            { 
+              sender: 'ai', 
+              text: `你好！我是 ${detailData.name || activeBrand?.name || ''} 的 AI 语音助手。随时可以开始和我说出您的内容创意。`, 
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+            }
+          ])
         }
       } catch (err) {
         console.error('Failed to load brand details:', err)
@@ -258,6 +271,32 @@ export default function BrandOwnerDashboard() {
       const transcript = event.results[0][0].transcript
       if (!transcript) return
 
+      const lower = transcript.toLowerCase()
+      const isPublishCommand = lower.includes('发布') || lower.includes('生成') || lower.includes('上传') || lower.includes('创作')
+
+      if (isPublishCommand) {
+        setCompanionState('thinking')
+        try {
+          const res = await fetch(`/api/brands/${activeBrand?.id}/copywriter/voice-chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: transcript })
+          })
+          if (res.ok) {
+            const data = await res.json()
+            if (data.reply) {
+              speakText(data.reply)
+            }
+            if (data.action === 'GENERATE_AND_PUBLISH') {
+              handleVoiceTriggerGenerateAndPublish(postIdea || '美味新品推荐', true)
+              return
+            }
+          }
+        } catch (err) {
+          console.error(err)
+        }
+      }
+
       // If there are pending media previews, feed transcript and trigger copywriting generation
       if (pendingPreviews.length > 0) {
         setPostIdea(transcript)
@@ -265,7 +304,7 @@ export default function BrandOwnerDashboard() {
         setEmotion('effort')
         showToast(`已识别想法：“${transcript}”，正在批量创作...`, 'info')
         speakText('收到您的创意想法，正在为您创作所有平台的文案草稿...')
-        handleBulkSubmit(transcript)
+        handleVoiceTriggerGenerateAndPublish(transcript, false)
         return
       }
 
@@ -280,8 +319,11 @@ export default function BrandOwnerDashboard() {
           const data = await res.json()
           if (data.reply) {
             speakText(data.reply)
+          }
+          if (data.action === 'GENERATE_AND_PUBLISH') {
+            handleVoiceTriggerGenerateAndPublish(postIdea || '美食新品发布', true)
           } else {
-            setCompanionState('idle')
+            if (!data.reply) setCompanionState('idle')
           }
         } else {
           setCompanionState('idle')
@@ -400,18 +442,21 @@ export default function BrandOwnerDashboard() {
     }
   }
 
-  // --- Bulk Submit (Generate all platform content) ---
-  const handleBulkSubmit = async (overrideIdea?: string) => {
-    const finalIdea = overrideIdea || postIdea
-    if (!finalIdea) {
-      showToast('请输入创意想法！', 'error')
+  // --- Voice Trigger Generate and Publish ---
+  const handleVoiceTriggerGenerateAndPublish = async (idea: string, autoPublish: boolean) => {
+    if (!activeBrand) return
+    if (pendingImages.length === 0) {
+      setCompanionState('speaking')
+      setEmotion('confused')
+      speakText('老板，请先在控制台左侧上传至少一张素材图，然后再让我为您生成发布推文。')
+      showToast('请先选择上传素材图！', 'error')
       return
     }
-    if (pendingImages.length === 0 || !activeBrand) return
+
     setGeneratingBulk(true)
     setCompanionState('thinking')
     setEmotion('effort')
-    showToast('正在上传素材并启动 AI 创作...', 'info')
+    showToast(autoPublish ? '收到指令：正在为您自动创作并发布到全部平台...' : '收到指令：正在为您创作多平台草稿...', 'info')
 
     try {
       const uploadedAssetIds: string[] = []
@@ -453,7 +498,7 @@ export default function BrandOwnerDashboard() {
       }
 
       if (uploadedAssetIds.length === 0) {
-        throw new Error('素材图片/视频上传失败')
+        throw new Error('素材图片上传失败')
       }
 
       // 2. Submit to bulk-generate copywriter endpoint
@@ -463,7 +508,7 @@ export default function BrandOwnerDashboard() {
         body: JSON.stringify({
           assetIds: uploadedAssetIds,
           mediaUrls: uploadedAssetUrls,
-          idea: finalIdea
+          idea
         })
       })
 
@@ -473,78 +518,143 @@ export default function BrandOwnerDashboard() {
       }
 
       const data = await bulkRes.json()
-      if (data.success && data.drafts) {
-        // Set all selected by default
-        setGeneratedDrafts(data.drafts.map((d: any) => ({ ...d, selected: true })))
+      if (!data.success || !data.drafts) {
+        throw new Error('未返回有效的草稿列表')
+      }
+
+      const drafts = data.drafts
+
+      if (autoPublish) {
+        // 3. Auto-publish immediately
+        showToast('文案创作已完成，正在一键发布到全部平台...', 'info')
+        for (const draft of drafts) {
+          const createRes = await fetch(`/api/brands/${activeBrand.id}/drafts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accountId: draft.accountId,
+              caption: draft.caption,
+              hashtags: draft.hashtags,
+              mediaUrls: draft.mediaUrls,
+              assetIds: draft.assetIds,
+              status: 'draft',
+            })
+          })
+          if (!createRes.ok) throw new Error('自动创建草稿失败')
+          const created = await createRes.json()
+          const createdDraftId = created.id
+
+          const approveRes = await fetch(`/api/brands/${activeBrand.id}/drafts/${createdDraftId}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              publishType: 'immediate',
+            })
+          })
+          if (!approveRes.ok) throw new Error('自动发布草稿失败')
+        }
+
+        // Clean preview state
+        setPendingImages([])
+        setPendingPreviews([])
+        setPostIdea('')
+        setGeneratedDrafts(null)
+        setCompanionState('speaking')
+        setEmotion('wink')
+        speakText('搞定，老板！文案已经自动生成并一键发布到了所有平台。您可以去发布日历中查看。')
+        showToast('发布成功！所有推文已同步至排期并发布。', 'success')
+      } else {
+        // Just preview drafts on dashboard
+        setGeneratedDrafts(drafts.map((d: any) => ({ ...d, selected: true })))
         setCompanionState('speaking')
         setEmotion('smile')
         speakText('我已经生成了所有平台的推文草稿，请您在屏幕上预览并安排发布。')
-      } else {
-        throw new Error('未返回有效的草稿列表')
       }
 
     } catch (err: any) {
       console.error(err)
-      showToast(err.message || '创作失败，请稍后重试', 'error')
+      showToast(err.message || '指令执行失败，请稍后重试', 'error')
       setCompanionState('idle')
-      setEmotion('normal')
+      setEmotion('confused')
     } finally {
       setGeneratingBulk(false)
     }
   }
 
-  const handleImmediatePublish = async () => {
+  // --- Bulk Submit (Generate all platform content) ---
+  const handleBulkSubmit = async (overrideIdea?: string) => {
+    await handleVoiceTriggerGenerateAndPublish(overrideIdea || postIdea, false)
+  }
+
+  const handleDirectPublish = async () => {
     if (!generatedDrafts || !activeBrand) return
     const selected = generatedDrafts.filter(d => d.selected)
     if (selected.length === 0) {
       showToast('请选择至少一个平台草稿进行发布！', 'error')
       return
     }
+
+    const connectedDrafts = selected.filter(d => d.isConnected !== false)
+    const unconnectedDrafts = selected.filter(d => d.isConnected === false)
+
     setIsSubmittingFinalDrafts(true)
-    showToast('正在为您发布选中的草稿...', 'info')
     
     try {
-      for (const draft of selected) {
-        // Create draft
-        const createRes = await fetch(`/api/brands/${activeBrand.id}/drafts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            accountId: draft.accountId,
-            caption: draft.caption,
-            hashtags: draft.hashtags,
-            mediaUrls: draft.mediaUrls,
-            assetIds: draft.assetIds,
-            status: 'draft',
+      if (connectedDrafts.length > 0) {
+        showToast('正在为您发布选中的已连接平台推文...', 'info')
+        for (const draft of connectedDrafts) {
+          // Create draft
+          const createRes = await fetch(`/api/brands/${activeBrand.id}/drafts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accountId: draft.accountId,
+              caption: draft.caption,
+              hashtags: draft.hashtags,
+              mediaUrls: draft.mediaUrls,
+              assetIds: draft.assetIds,
+              status: 'draft',
+            })
           })
-        })
-        if (!createRes.ok) {
-          const err = await createRes.json().catch(() => ({}))
-          throw new Error(err.error || '创建草稿失败')
-        }
-        const createdData = await createRes.json()
-        const createdDraftId = createdData.draft.id
+          if (!createRes.ok) {
+            const err = await createRes.json().catch(() => ({}))
+            throw new Error(err.error || '创建草稿失败')
+          }
+          const createdData = await createRes.json()
+          const createdDraftId = createdData.draft.id
 
-        // Approve/Submit immediately (forces publication)
-        const approveRes = await fetch(`/api/brands/${activeBrand.id}/drafts/${createdDraftId}/approve`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ note: '立即发布' })
-        })
-        if (!approveRes.ok) {
-          const err = await approveRes.json().catch(() => ({}))
-          throw new Error(err.error || '立即发布草稿失败')
+          // Approve/Submit immediately (forces publication)
+          const approveRes = await fetch(`/api/brands/${activeBrand.id}/drafts/${createdDraftId}/approve`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note: '立即发布' })
+          })
+          if (!approveRes.ok) {
+            const err = await approveRes.json().catch(() => ({}))
+            throw new Error(err.error || '立即发布草稿失败')
+          }
         }
+        showToast('已连接平台的推文发布成功！', 'success')
       }
 
-      showToast('发布成功！', 'success')
-      speakText('我已为您发布了选中的草稿。')
-      
-      setGeneratedDrafts(null)
-      setPendingImages([])
-      setPendingPreviews([])
-      setPostIdea('')
-      
+      if (unconnectedDrafts.length > 0) {
+        // Keep only unconnected drafts in the preview list
+        setGeneratedDrafts(unconnectedDrafts)
+        setCompanionState('speaking')
+        setEmotion('wink')
+        speakText('部分未连接平台需要您手动复制发布，文案已保留在屏幕上，您可以点击复制按钮进行手动发布。')
+        showToast('有部分平台需手动发布，文案已保留', 'info')
+      } else {
+        // All done
+        setGeneratedDrafts(null)
+        setPendingImages([])
+        setPendingPreviews([])
+        setPostIdea('')
+        setCompanionState('speaking')
+        setEmotion('smile')
+        speakText('搞定，老板！文案已经一键发布到了所有已连接平台。')
+      }
+
       const draftsRes = await fetch(`/api/brands/${activeBrand.id}/drafts`)
       if (draftsRes.ok) {
         const resData = await draftsRes.json()
@@ -558,28 +668,20 @@ export default function BrandOwnerDashboard() {
     }
   }
 
-  const handleSchedulePublish = async () => {
-    if (!scheduleTime) {
-      showToast('请选择排期发布的时间！', 'error')
-      return
-    }
+  const handleSmartSchedule = async () => {
     if (!generatedDrafts || !activeBrand) return
     const selected = generatedDrafts.filter(d => d.selected)
     if (selected.length === 0) {
-      showToast('请选择至少一个平台草稿进行排期！', 'error')
+      showToast('请选择至少一个平台草稿进行智能排期！', 'error')
       return
     }
+
     setIsSubmittingFinalDrafts(true)
-    showToast('正在为选中的草稿设置排期...', 'info')
+    showToast('正在提交草稿到后台...', 'info')
 
     try {
-      const scheduleDate = new Date(scheduleTime)
-      
-      for (let i = 0; i < selected.length; i++) {
-        const draft = selected[i]
-        const draftScheduleTime = new Date(scheduleDate)
-        draftScheduleTime.setHours(scheduleDate.getHours() + i * 2)
-
+      for (const draft of selected) {
+        // Create draft in database with status 'draft' and keep it there
         const createRes = await fetch(`/api/brands/${activeBrand.id}/drafts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -590,37 +692,25 @@ export default function BrandOwnerDashboard() {
             mediaUrls: draft.mediaUrls,
             assetIds: draft.assetIds,
             status: 'draft',
-            scheduledAt: draftScheduleTime.toISOString(),
+            scheduledAt: draft.scheduledAt,
           })
         })
         if (!createRes.ok) {
           const err = await createRes.json().catch(() => ({}))
-          throw new Error(err.error || '创建草稿失败')
-        }
-        const createdData = await createRes.json()
-        const createdDraftId = createdData.draft.id
-
-        // Approve/Submit to schedule
-        const approveRes = await fetch(`/api/brands/${activeBrand.id}/drafts/${createdDraftId}/approve`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ note: '排期发布' })
-        })
-        if (!approveRes.ok) {
-          const err = await approveRes.json().catch(() => ({}))
-          throw new Error(err.error || '排期发布草稿失败')
+          throw new Error(err.error || '提交草稿失败')
         }
       }
 
-      showToast('排期成功！', 'success')
-      speakText('我已为您将选中的草稿加入了排期计划。')
-      
+      showToast('已提交草稿至后台，等待主理人审核或排期发布！', 'success')
+      setCompanionState('speaking')
+      setEmotion('smile')
+      speakText('老板，我已经把所有生成的推文草稿提交到后台了，目前是草稿状态，您可以让主理人进行排期发布。')
+
       setGeneratedDrafts(null)
-      setShowSchedulePicker(false)
       setPendingImages([])
       setPendingPreviews([])
       setPostIdea('')
-      
+
       const draftsRes = await fetch(`/api/brands/${activeBrand.id}/drafts`)
       if (draftsRes.ok) {
         const resData = await draftsRes.json()
@@ -628,7 +718,7 @@ export default function BrandOwnerDashboard() {
       }
     } catch (err: any) {
       console.error(err)
-      showToast(`排期失败: ${err.message}`, 'error')
+      showToast(`保存草稿失败: ${err.message}`, 'error')
     } finally {
       setIsSubmittingFinalDrafts(false)
     }
@@ -741,12 +831,11 @@ export default function BrandOwnerDashboard() {
   })
 
   // --- Floating alert interactive actions ---
-  const handleMapsAlertClick = () => {
-    setShowMapsAlert(false)
+  const handleMapsAlertClick = (itemText?: string) => {
     setCompanionState('thinking')
     setMessages(prev => [
       ...prev,
-      { sender: 'user', text: 'I saw the Google Maps low rating alert. What should we do?', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+      { sender: 'user', text: itemText || 'I saw the Google Maps low rating alert. What should we do?', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
     ])
     setTimeout(() => {
       setCompanionState('idle')
@@ -754,7 +843,7 @@ export default function BrandOwnerDashboard() {
         ...prev,
         { 
           sender: 'ai', 
-          text: 'I detected a new 2-star review on Google Maps mentioning a 45-minute wait time. I suggest we draft a polite response and set up a "Quiet Hour Special" campaign this Tuesday to balance our dining room load. Would you like me to generate that post draft now?', 
+          text: 'I detected a new review alert. I suggest we draft a polite response and set up a special campaign to balance our load and address this feedback. Would you like me to generate that post draft now?', 
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
         }
       ])
@@ -1087,16 +1176,16 @@ export default function BrandOwnerDashboard() {
         </div>
 
         <div className="flex items-center gap-2 relative">
-          {(showMapsAlert || showScheduleAlert) && (
-            <button
-              onClick={() => setNotificationsExpanded(prev => !prev)}
-              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 text-slate-650 transition-all active:scale-95 cursor-pointer relative"
-              title="通知消息"
-            >
-              <Bell className="h-5 w-5" />
+          <button
+            onClick={() => setNotificationsExpanded(prev => !prev)}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 text-slate-650 transition-all active:scale-95 cursor-pointer relative"
+            title="通知消息"
+          >
+            <Bell className="h-5 w-5" />
+            {actionItems.length > 0 && (
               <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" />
-            </button>
-          )}
+            )}
+          </button>
 
           <button 
             onClick={() => setSideMenuOpen(true)}
@@ -1108,7 +1197,7 @@ export default function BrandOwnerDashboard() {
 
           {/* Expanded Accordion list dropdown */}
           <AnimatePresence>
-            {notificationsExpanded && (showMapsAlert || showScheduleAlert) && (
+            {notificationsExpanded && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1127,65 +1216,70 @@ export default function BrandOwnerDashboard() {
                   </button>
                 </div>
 
-                <div className="space-y-2.5">
-                  {showMapsAlert && (
-                    <div 
-                      className="flex items-start justify-between p-3 rounded-xl border border-rose-100 bg-rose-50/20 hover:bg-rose-50/40 transition-colors cursor-pointer"
-                      onClick={handleMapsAlertClick}
-                    >
-                      <div className="flex items-start gap-3 flex-1">
-                        <div className="bg-rose-50 p-2 rounded-lg text-rose-500 flex items-center justify-center flex-shrink-0">
-                          <MapPin className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <h4 className="text-[9px] font-bold text-rose-500 uppercase tracking-wider mb-0.5">警报</h4>
-                          <p className="text-[11px] leading-snug text-slate-800 font-bold">Google Maps 收到低分评价</p>
-                          <p className="text-[9px] text-slate-400 font-medium">点击生成 AI 回复</p>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setShowMapsAlert(false)
-                          if (!showScheduleAlert) setNotificationsExpanded(false)
+                <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                  {actionItems.length === 0 ? (
+                    <p className="text-xs text-slate-400 py-4 text-center">暂无新消息</p>
+                  ) : (
+                    actionItems.map(item => (
+                      <div 
+                        key={item.id}
+                        onClick={() => {
+                          if (item.type === 'sentiment_alert') {
+                            handleMapsAlertClick(item.title)
+                          } else if (item.type === 'content_draft' || item.type === 'content_approval') {
+                            setActiveSubPage('calendar')
+                          }
+                          setNotificationsExpanded(false)
                         }}
-                        className="text-slate-400 hover:text-slate-650 p-1 cursor-pointer flex items-center justify-center ml-2"
+                        className={`flex items-start justify-between p-3 rounded-xl border transition-colors cursor-pointer ${
+                          item.priority === 'urgent' || item.type === 'sentiment_alert'
+                            ? 'border-rose-100 bg-rose-50/20 hover:bg-rose-50/40' 
+                            : 'border-indigo-50 bg-indigo-50/20 hover:bg-indigo-50/40'
+                        }`}
                       >
-                        <span className="material-symbols-outlined text-[14px]">close</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {showScheduleAlert && (
-                    <div 
-                      className="flex items-start justify-between p-3 rounded-xl border border-indigo-100 bg-indigo-50/20 hover:bg-indigo-50/40 transition-colors cursor-pointer"
-                      onClick={() => {
-                        setActiveSubPage('calendar')
-                        setShowScheduleAlert(false)
-                        setNotificationsExpanded(false)
-                      }}
-                    >
-                      <div className="flex items-start gap-3 flex-1">
-                        <div className="bg-indigo-50 p-2 rounded-lg text-primary flex items-center justify-center flex-shrink-0">
-                          <CalendarIcon className="w-4 h-4" />
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className={`p-2 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            item.priority === 'urgent' || item.type === 'sentiment_alert'
+                              ? 'bg-rose-50 text-rose-500'
+                              : 'bg-indigo-50 text-primary'
+                          }`}>
+                            {item.type === 'sentiment_alert' ? (
+                              <MapPin className="w-4 h-4" />
+                            ) : (
+                              <CalendarIcon className="w-4 h-4" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className={`text-[9px] font-bold uppercase tracking-wider mb-0.5 ${
+                              item.priority === 'urgent' || item.type === 'sentiment_alert'
+                                ? 'text-rose-500'
+                                : 'text-primary'
+                            }`}>
+                              {item.priority === 'urgent' ? '紧急' : item.type === 'sentiment_alert' ? '警报' : '日程'}
+                            </h4>
+                            <p className="text-[11px] leading-snug text-slate-800 font-bold truncate">{item.title || '待办项目'}</p>
+                            <p className="text-[9px] text-slate-400 font-medium leading-tight mt-0.5">{item.description}</p>
+                          </div>
                         </div>
-                        <div>
-                          <h4 className="text-[9px] font-bold text-primary uppercase tracking-wider mb-0.5">日程</h4>
-                          <p className="text-[11px] leading-snug text-slate-800 font-bold">待审核的发布草稿</p>
-                          <p className="text-[9px] text-slate-400 font-medium">点击进入发布日历</p>
-                        </div>
+                        <button 
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            if (activeBrand?.id) {
+                              await fetch(`/api/brands/${activeBrand.id}/actions/${item.id}/approve`, { 
+                                method: 'PATCH', 
+                                headers: { 'Content-Type': 'application/json' }, 
+                                body: '{}' 
+                              })
+                              setActionItems(prev => prev.filter(x => x.id !== item.id))
+                            }
+                          }}
+                          className="text-slate-450 hover:text-emerald-500 p-1 cursor-pointer flex items-center justify-center ml-2 flex-shrink-0 transition-colors"
+                          title="标记为已处理"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
                       </div>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setShowScheduleAlert(false)
-                          if (!showMapsAlert) setNotificationsExpanded(false)
-                        }}
-                        className="text-slate-400 hover:text-slate-650 p-1 cursor-pointer flex items-center justify-center ml-2"
-                      >
-                        <span className="material-symbols-outlined text-[14px]">close</span>
-                      </button>
-                    </div>
+                    ))
                   )}
                 </div>
               </motion.div>
@@ -1235,8 +1329,209 @@ export default function BrandOwnerDashboard() {
           )}
 
           {/* Center Space: Either show the Companion Face or show the pending previews grid */}
-          <div className="flex-1 flex flex-col items-center justify-center relative px-6 py-4 overflow-y-auto no-scrollbar">
-            {pendingPreviews.length > 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center relative px-6 py-4 overflow-y-auto no-scrollbar w-full">
+            {generatedDrafts ? (
+              /* Inline Swipeable Generated Draft Previews */
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full max-w-4xl flex flex-col gap-4 pointer-events-auto"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 flex-shrink-0">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-emerald-500 fill-emerald-500/20" />
+                      AI 创作预览 (左右滑动查看全部)
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                      为您生成的多平台推文，已默认全部勾选。
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setGeneratedDrafts(null)
+                      setShowSchedulePicker(false)
+                    }}
+                    className="text-[10px] text-rose-500 hover:text-rose-600 font-extrabold flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" /> 清除重试
+                  </button>
+                </div>
+
+                {/* Swipeable Viewport */}
+                <div className="w-full flex gap-5 overflow-x-auto snap-x snap-mandatory scrollbar-none px-4 py-2 scroll-smooth">
+                  {generatedDrafts.map((draft, idx) => {
+                    const isVid = draft.mediaUrls && draft.mediaUrls.length > 0 && /\.(mp4|mov|avi|webm|ogg|m4v|3gp)(?:\?.*)?$/i.test(draft.mediaUrls[0].split('?')[0]);
+                    const isConnected = draft.isConnected !== false;
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex-shrink-0 w-80 md:w-[350px] snap-center rounded-2xl bg-white border transition-all p-4 flex flex-col justify-between gap-3 shadow-md ${
+                          draft.selected
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/10'
+                            : 'border-slate-200 opacity-60'
+                        }`}
+                      >
+                        {/* Header */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase ${
+                              draft.platform === 'instagram'
+                                ? 'bg-pink-50 text-pink-650'
+                                : draft.platform === 'xiaohongshu'
+                                ? 'bg-rose-50 text-rose-600'
+                                : draft.platform === 'facebook'
+                                ? 'bg-blue-50 text-blue-600'
+                                : 'bg-slate-100 text-slate-650'
+                            }`}>
+                              {draft.platform === 'instagram' ? 'Instagram' : draft.platform === 'xiaohongshu' ? '小红书 / Rednote' : draft.platform === 'facebook' ? 'Facebook' : draft.platform}
+                            </span>
+                            
+                            {/* Connection Badge */}
+                            {isConnected ? (
+                              <span className="flex items-center gap-0.5 text-[9px] text-emerald-600 font-extrabold bg-emerald-50/50 px-1.5 py-0.5 rounded-md">
+                                <span className="w-1 h-1 bg-emerald-500 rounded-full" /> 已连接
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-0.5 text-[9px] text-amber-600 font-extrabold bg-amber-50/50 px-1.5 py-0.5 rounded-md">
+                                <span className="w-1 h-1 bg-amber-500 rounded-full animate-pulse" /> 需手动发布
+                              </span>
+                            )}
+                          </div>
+
+                          <input
+                            type="checkbox"
+                            checked={!!draft.selected}
+                            onChange={(e) => {
+                              setGeneratedDrafts(prev => {
+                                if (!prev) return null
+                                const next = [...prev]
+                                next[idx] = { ...next[idx], selected: e.target.checked }
+                                return next
+                              })
+                            }}
+                            className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                        </div>
+
+                        {/* Media preview */}
+                        {draft.mediaUrls && draft.mediaUrls.length > 0 && (
+                          <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-100 border border-slate-200/40">
+                            {isVid ? (
+                              <video src={draft.mediaUrls[0]} className="w-full h-full object-cover" muted controls />
+                            ) : (
+                              <img src={draft.mediaUrls[0]} alt="media" className="w-full h-full object-cover" />
+                            )}
+                            {draft.mediaUrls.length > 1 && (
+                              <span className="absolute bottom-2 right-2 bg-slate-950/60 text-white text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm">
+                                +{draft.mediaUrls.length - 1} 张图片
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Content description */}
+                        <div className="space-y-1.5 flex-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide">
+                            正文文案
+                          </label>
+                          <textarea
+                            value={draft.caption}
+                            onChange={(e) => {
+                              setGeneratedDrafts(prev => {
+                                if (!prev) return null
+                                const next = [...prev]
+                                next[idx] = { ...next[idx], caption: e.target.value }
+                                return next
+                              })
+                            }}
+                            rows={3}
+                            className="w-full text-[11px] p-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-emerald-500/50 resize-none font-semibold text-slate-700 leading-relaxed scrollbar-thin"
+                          />
+                        </div>
+
+                        {/* Hashtags input */}
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-wide">
+                            Hashtags
+                          </label>
+                          <input
+                            type="text"
+                            value={draft.hashtags.join(', ')}
+                            onChange={(e) => {
+                              setGeneratedDrafts(prev => {
+                                if (!prev) return null
+                                const next = [...prev]
+                                next[idx] = { ...next[idx], hashtags: e.target.value.split(',').map(h => h.trim()).filter(Boolean) }
+                                return next
+                              })
+                            }}
+                            className="w-full text-[11px] px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-emerald-500/50 font-semibold text-slate-650"
+                            placeholder="标签以逗号分隔，例如: tag1, tag2"
+                          />
+                        </div>
+
+                        {/* Manual Copy Button */}
+                        {!isConnected && (
+                          <div className="mt-1 flex flex-col gap-1 p-2 rounded-xl bg-amber-50/50 border border-amber-100/50">
+                            <p className="text-[9px] font-bold text-amber-700 leading-snug">
+                              💡 此平台尚未连接，请在发布后复制文案手动发布。
+                            </p>
+                            <button
+                              onClick={() => {
+                                const textToCopy = `${draft.caption}\n\n${draft.hashtags.map((h: string) => `#${h}`).join(' ')}`
+                                navigator.clipboard.writeText(textToCopy)
+                                showToast('文案与标签已复制！', 'success')
+                              }}
+                              className="flex items-center justify-center gap-1 bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-black py-1 px-2.5 rounded-lg active:scale-95 transition-all cursor-pointer"
+                            >
+                              <Copy className="w-3.5 h-3.5" /> 复制手动发布文案
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="flex flex-col gap-3 px-4 pt-2 border-t border-slate-100 flex-shrink-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500">
+                      已选: <span className="text-slate-800 font-extrabold">{generatedDrafts.filter(d => d.selected).length}</span> / {generatedDrafts.length} 个推文
+                    </span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setGeneratedDrafts(null)
+                        setShowSchedulePicker(false)
+                      }}
+                      disabled={isSubmittingFinalDrafts}
+                      className="flex-1 py-2.5 border border-slate-200 rounded-xl text-xs font-extrabold text-slate-500 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={handleSmartSchedule}
+                      disabled={isSubmittingFinalDrafts}
+                      className="flex-1 py-2.5 bg-indigo-50 border border-indigo-100 text-primary hover:bg-indigo-100/50 rounded-xl text-xs font-black shadow-sm cursor-pointer disabled:opacity-50"
+                    >
+                      智能排期
+                    </button>
+                    <button
+                      onClick={handleDirectPublish}
+                      disabled={isSubmittingFinalDrafts}
+                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/10 cursor-pointer disabled:opacity-50"
+                    >
+                      {isSubmittingFinalDrafts ? '发布中...' : '直接发布'}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            ) : pendingPreviews.length > 0 ? (
               /* Pending Image Previews Grid + Creative Input form */
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -2236,218 +2531,6 @@ export default function BrandOwnerDashboard() {
               </div>
             </motion.div>
           </>
-        )}
-      </AnimatePresence>
-
-      {/* Fullscreen Generated Draft Previews Overlay */}
-      <AnimatePresence>
-        {generatedDrafts && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-md flex flex-col justify-end md:justify-center md:items-center"
-          >
-            <motion.div
-              initial={{ y: '20%', opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: '20%', opacity: 0 }}
-              className="w-full h-[90vh] md:h-[85vh] md:max-w-4xl bg-[#f7f9fb] md:rounded-3xl shadow-2xl flex flex-col overflow-hidden"
-            >
-              {/* Header */}
-              <div className="px-6 py-4 bg-white border-b border-slate-200/50 flex items-center justify-between flex-shrink-0">
-                <div>
-                  <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-emerald-500 fill-emerald-500/20" />
-                    AI 批量生成草稿预览
-                  </h2>
-                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                    为您生成的推文，已为您勾选默认全部发布。支持个性化修改内容与标题。
-                  </p>
-                </div>
-                <button
-                  onClick={() => setGeneratedDrafts(null)}
-                  className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Scrollable Draft Cards List */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {generatedDrafts.map((draft, idx) => {
-                    const isVid = draft.mediaUrls && draft.mediaUrls.length > 0 && /\.(mp4|mov|avi|webm|ogg|m4v|3gp)(?:\?.*)?$/i.test(draft.mediaUrls[0].split('?')[0]);
-                    return (
-                      <div
-                        key={idx}
-                        className={`rounded-2xl bg-white border transition-all p-5 flex flex-col justify-between gap-4 ${
-                          draft.selected
-                            ? 'border-emerald-500 ring-2 ring-emerald-500/10 shadow-lg'
-                            : 'border-slate-200/60 shadow-sm opacity-60'
-                        }`}
-                      >
-                        {/* Draft Card Header */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            {/* Platform badge */}
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide ${
-                              draft.platform === 'instagram'
-                                ? 'bg-pink-50 text-pink-600'
-                                : draft.platform === 'xiaohongshu'
-                                ? 'bg-rose-50 text-rose-600'
-                                : draft.platform === 'facebook'
-                                ? 'bg-blue-50 text-blue-600'
-                                : 'bg-slate-100 text-slate-650'
-                            }`}>
-                              {draft.platform === 'instagram' ? 'Instagram' : draft.platform === 'xiaohongshu' ? '小红书 / Rednote' : draft.platform === 'facebook' ? 'Facebook' : draft.platform}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-bold">
-                              {draft.displayName}
-                            </span>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={!!draft.selected}
-                            onChange={(e) => {
-                              setGeneratedDrafts(prev => {
-                                if (!prev) return null
-                                const next = [...prev]
-                                next[idx] = { ...next[idx], selected: e.target.checked }
-                                return next
-                              })
-                            }}
-                            className="w-4.5 h-4.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                          />
-                        </div>
-
-                        {/* Media preview */}
-                        {draft.mediaUrls && draft.mediaUrls.length > 0 && (
-                          <div className="relative aspect-video rounded-xl overflow-hidden bg-slate-100 border border-slate-200/40">
-                            {isVid ? (
-                              <video src={draft.mediaUrls[0]} className="w-full h-full object-cover" muted controls />
-                            ) : (
-                              <img src={draft.mediaUrls[0]} alt="media" className="w-full h-full object-cover" />
-                            )}
-                            {draft.mediaUrls.length > 1 && (
-                              <span className="absolute bottom-2 right-2 bg-slate-950/60 text-white text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm">
-                                +{draft.mediaUrls.length - 1} 张图片
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Editable caption */}
-                        <div className="space-y-1.5 flex-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">
-                            正文文案
-                          </label>
-                          <textarea
-                            value={draft.caption}
-                            onChange={(e) => {
-                              setGeneratedDrafts(prev => {
-                                if (!prev) return null
-                                const next = [...prev]
-                                next[idx] = { ...next[idx], caption: e.target.value }
-                                return next
-                              })
-                            }}
-                            rows={4}
-                            className="w-full text-xs p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-emerald-500/50 resize-none font-semibold text-slate-700 leading-relaxed"
-                          />
-                        </div>
-
-                        {/* Editable hashtags */}
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-wide">
-                            Hashtags
-                          </label>
-                          <input
-                            type="text"
-                            value={draft.hashtags.join(', ')}
-                            onChange={(e) => {
-                              setGeneratedDrafts(prev => {
-                                if (!prev) return null
-                                const next = [...prev]
-                                next[idx] = { ...next[idx], hashtags: e.target.value.split(',').map(h => h.trim()).filter(Boolean) }
-                                return next
-                              })
-                            }}
-                            className="w-full text-xs px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-emerald-500/50 font-semibold text-slate-650"
-                            placeholder="标签以逗号分隔，例如: tag1, tag2"
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Bottom Actions Bar */}
-              <div className="px-6 py-4 bg-white border-t border-slate-200/50 flex flex-col md:flex-row md:items-center justify-between gap-4 flex-shrink-0">
-                <div className="flex items-center gap-4">
-                  <span className="text-xs font-bold text-slate-500">
-                    已选: <span className="text-slate-800 font-extrabold">{generatedDrafts.filter(d => d.selected).length}</span> / {generatedDrafts.length}
-                  </span>
-                  {showSchedulePicker && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="datetime-local"
-                        value={scheduleTime}
-                        onChange={(e) => setScheduleTime(e.target.value)}
-                        className="text-xs border border-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-primary/50 text-slate-700 font-bold"
-                      />
-                      <button
-                        onClick={handleSchedulePublish}
-                        disabled={isSubmittingFinalDrafts}
-                        className="bg-primary hover:bg-indigo-tint text-white text-xs font-black px-3 py-1.5 rounded-xl shadow-md cursor-pointer disabled:opacity-50"
-                      >
-                        确认排期
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      setGeneratedDrafts(null)
-                      setShowSchedulePicker(false)
-                    }}
-                    disabled={isSubmittingFinalDrafts}
-                    className="px-5 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 cursor-pointer disabled:opacity-50"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowSchedulePicker(prev => !prev)
-                      if (!scheduleTime) {
-                        // Pre-populate with tomorrow at 10:00 AM
-                        const tomorrow = new Date()
-                        tomorrow.setDate(tomorrow.getDate() + 1)
-                        tomorrow.setHours(10, 0, 0, 0)
-                        const pad = (n: number) => String(n).padStart(2, '0')
-                        const formatted = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}T${pad(tomorrow.getHours())}:${pad(tomorrow.getMinutes())}`
-                        setScheduleTime(formatted)
-                      }
-                    }}
-                    disabled={isSubmittingFinalDrafts}
-                    className="px-5 py-2.5 bg-indigo-50 border border-indigo-100 text-primary hover:bg-indigo-100/50 rounded-xl text-xs font-black shadow-sm cursor-pointer disabled:opacity-50"
-                  >
-                    排期发布
-                  </button>
-                  <button
-                    onClick={handleImmediatePublish}
-                    disabled={isSubmittingFinalDrafts}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/10 cursor-pointer disabled:opacity-50"
-                  >
-                    {isSubmittingFinalDrafts ? '发布中...' : '立即发布'}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
         )}
       </AnimatePresence>
 

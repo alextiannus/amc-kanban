@@ -3,6 +3,7 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { callLLM } from '@/lib/llmRouter'
+import { copywriterNode } from '@/agents/nodes/copywriter'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -100,7 +101,31 @@ export async function POST(request: Request, { params }: Params) {
       const account = accounts[i]
       const platform = account.platformId.toLowerCase()
       
-      const prompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
+      let caption = `【${platform}】美味速递！创意想法：${idea}`
+      let hashtags: string[] = []
+
+      try {
+        let targetPlatform = platform
+        if (platform === 'red' || platform === 'xhs') {
+          targetPlatform = 'xiaohongshu'
+        }
+
+        const cwResult = await copywriterNode({
+          brandId,
+          platform: targetPlatform,
+          caption: idea,
+          mediaUrls: mediaUrls || [],
+          assetIds: assetIds || [],
+          copywriteOnly: true
+        })
+
+        if (cwResult && cwResult.caption) {
+          caption = cwResult.caption
+          hashtags = cwResult.hashtags || []
+        }
+      } catch (err) {
+        console.error(`Failed to generate copy via copywriterNode for ${platform}:`, err)
+        const prompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
 Brand Description: ${brand.description || "A premium restaurant/brand."}
 Target Platform: ${platform}
 Language Rule:
@@ -130,22 +155,19 @@ Output ONLY a valid JSON object with the following structure:
 }
 Do not include markdown wrappers around the JSON, return the raw JSON object.
 `
-
-      let caption = `【${platform}】美味速递！创意想法：${idea}`
-      let hashtags: string[] = []
-
-      try {
-        const result = await callLLM("copywriting", prompt, 1000)
-        if (result.text) {
-          const cleanJson = result.text.replace(/```json/g, "").replace(/```/g, "").trim()
-          const parsed = JSON.parse(cleanJson)
-          if (parsed.caption) {
-            caption = parsed.caption
-            hashtags = parsed.hashtags || []
+        try {
+          const result = await callLLM("copywriting", prompt, 1000)
+          if (result.text) {
+            const cleanJson = result.text.replace(/```json/g, "").replace(/```/g, "").trim()
+            const parsed = JSON.parse(cleanJson)
+            if (parsed.caption) {
+              caption = parsed.caption
+              hashtags = parsed.hashtags || []
+            }
           }
+        } catch (fallbackErr) {
+          console.error(`Fallback LLM failed for ${platform}:`, fallbackErr)
         }
-      } catch (err) {
-        console.error(`Failed to generate copy for ${platform}:`, err)
       }
 
       // Schedule at: stagger by 2 hours starting tomorrow 10:00 AM
@@ -162,7 +184,8 @@ Do not include markdown wrappers around the JSON, return the raw JSON object.
         mediaUrls: mediaUrls || [],
         hashtags,
         scheduledAt,
-        assetIds: assetIds || []
+        assetIds: assetIds || [],
+        isConnected: account.handle !== 'unconfigured'
       }
 
       createdDrafts.push(draftPreview)
