@@ -225,7 +225,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'scheduled' | 'done'>('all')
   const [activeView, setActiveView] = useState<'month' | 'week' | 'day' | 'list'>('month')
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
-  const [isBrandsCollapsed, setIsBrandsCollapsed] = useState(false)
+  const [isBrandsCollapsed, setIsBrandsCollapsed] = useState(true)
   const [commentsMap, setCommentsMap] = useState<Record<string, Comment[]>>({})
   const [commentReplyText, setCommentReplyText] = useState<Record<string, string>>({})
   const [designerPromptText, setDesignerPromptText] = useState('')
