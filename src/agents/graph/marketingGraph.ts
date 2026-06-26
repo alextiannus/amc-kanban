@@ -26,6 +26,15 @@ async function complianceCheckNode(state: typeof StateAnnotation.State) {
 
   // If compliance check fails, check retry count
   if (!result.compliancePassed) {
+    if (state.copywriteOnly) {
+      console.log(`Compliance failed during copywriteOnly mode: ${result.complianceReason}. Routing to publisher with aiFailed: true.`);
+      return {
+        compliancePassed: true, // force routing to publisher
+        aiFailed: true,
+        complianceReason: result.complianceReason
+      };
+    }
+
     const currentRetryCount = state.retryCount || 0;
     if (currentRetryCount < 2) {
       console.log(`Compliance failed. Auto-retrying (Attempt ${currentRetryCount + 1}/2). Reason: ${result.complianceReason}`);

@@ -50,12 +50,12 @@ async function login(email: string) {
 }
 
 async function cleanupFixtures() {
-  const fixtureEmails = Object.values(fixtures).map((f) => f.email)
+  const fixtureEmails = Object.values(fixtures).map((f: any) => f.email)
   const users = await prisma.user.findMany({
     where: { email: { in: fixtureEmails } },
     select: { id: true },
   })
-  const userIds = users.map((u) => u.id)
+  const userIds = users.map((u: any) => u.id)
 
   if (userIds.length > 0) {
     // Delete audit logs created during test

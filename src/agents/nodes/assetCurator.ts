@@ -87,7 +87,7 @@ Target Social Platform: ${platform}
 Target Number of Assets: ${target}
 
 Available candidate assets in the brand's library:
-${assets.map((asset, index) => `[Asset ${index + 1}]
+${assets.map((asset: any, index: number) => `[Asset ${index + 1}]
 URL: ${asset.url}
 Filename: ${asset.filename || "N/A"}
 AI Tags: ${asset.aiTags.join(", ") || "N/A"}
@@ -107,7 +107,7 @@ Do NOT write any other explanation or markdown code fences.`;
         const urls = JSON.parse(cleanJson);
         if (Array.isArray(urls)) {
           // Filter to ensure all returned URLs are actual candidates
-          selectedUrls = urls.filter(u => assets.some(a => a.url === u));
+          selectedUrls = urls.filter((u: any) => assets.some((a: any) => a.url === u));
           geminiUsed = true;
           console.log(`Gemini selected ${selectedUrls.length} relevant assets.`);
         }
@@ -119,7 +119,7 @@ Do NOT write any other explanation or markdown code fences.`;
 
   // Fallback: If Gemini wasn't used or returned nothing, select top assets by date
   if (selectedUrls.length === 0 && assets.length > 0) {
-    selectedUrls = assets.slice(0, target).map(a => a.url);
+    selectedUrls = assets.slice(0, target).map((a: any) => a.url);
   }
 
   // 4. Insufficient Assets Check

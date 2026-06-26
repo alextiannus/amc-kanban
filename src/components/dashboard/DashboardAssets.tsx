@@ -137,7 +137,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [targetFolder, setTargetFolder] = useState('素材库')
   const [moveFolder, setMoveFolder] = useState('')
-  const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动'])
+  const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '已使用'])
   const [selectedFolder, setSelectedFolder] = useState<string>('all')
 
   // Image Lightbox Preview State
@@ -206,7 +206,9 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
       if (res.ok) {
         const data = await res.json()
         const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
-        setFolders(['素材库', ...folderNames])
+        const defaults = ['产品', '环境', '活动', '已使用']
+        const customFolders = folderNames.filter((name: string) => !['素材库', ...defaults].includes(name))
+        setFolders(['素材库', ...defaults, ...customFolders])
       }
     } catch (err) {
       console.error('Failed to load folders:', err)
@@ -244,7 +246,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const handleDeleteFolder = async (folderName: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!brandId) return
-    if (['素材库', '产品', '环境', '活动'].includes(folderName)) {
+    if (['素材库', '产品', '环境', '活动', '已使用'].includes(folderName)) {
       alert('系统默认文件夹不可删除')
       return
     }
@@ -1252,7 +1254,7 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
               const isSelected = selectedFolder === f
               const isDragOver = dragOverFolder === f
               const count = assets.filter(a => f === '素材库' ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw') : a.aiCategory === f).length
-              const isDeletable = !['素材库', '产品', '环境', '活动'].includes(f)
+              const isDeletable = !['素材库', '产品', '环境', '活动', '已使用'].includes(f)
 
               return (
                 <button

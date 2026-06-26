@@ -267,7 +267,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [agentNote, setAgentNote] = useState('')
   const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
   const [newUrlInput, setNewUrlInput] = useState('')
-  const [assetTypeFilter, setAssetTypeFilter] = useState<'all' | 'image' | 'video'>('all')
+  const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all' | 'image' | 'video'>('unused')
   const [accounts, setAccounts] = useState<any[]>([])
   const [brandAssets, setBrandAssets] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
@@ -330,9 +330,25 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         generatingDrafts.map(async (draft) => {
           try {
             const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}`)
+            const account = accountOptions.find(a => a.id === draft.accountId)
+            const label = account ? (account.displayName || account.handle) : draft.accountId
+
             if (res.status === 404) {
               if (isMounted) {
                 setDraftStatuses(prev => ({ ...prev, [draft.accountId]: 'failed' }))
+                alert(`【AI 创作失败】账号 [${label}] 的内容生成未成功，数据已清理。`)
+                setCreatedDrafts(prev => prev ? prev.filter(d => d.id !== draft.id) : null)
+                setSelectedAccountIds(prev => prev.filter(id => id !== draft.accountId))
+                setDraftCaptions(prev => {
+                  const next = { ...prev }
+                  delete next[draft.accountId]
+                  return next
+                })
+                setDraftHashtags(prev => {
+                  const next = { ...prev }
+                  delete next[draft.accountId]
+                  return next
+                })
               }
               return
             }
@@ -344,6 +360,24 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               if (updatedDraft.status === 'failed') {
                 if (isMounted) {
                   setDraftStatuses(prev => ({ ...prev, [draft.accountId]: 'failed' }))
+                  const errMsg = updatedDraft.agentNote || '未知错误'
+                  alert(`【AI 创作失败】账号 [${label}] 内容生成失败：\n${errMsg}`)
+                  
+                  // Clean up draft from DB immediately
+                  fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}`, { method: 'DELETE' }).catch(() => {})
+
+                  setCreatedDrafts(prev => prev ? prev.filter(d => d.id !== draft.id) : null)
+                  setSelectedAccountIds(prev => prev.filter(id => id !== draft.accountId))
+                  setDraftCaptions(prev => {
+                    const next = { ...prev }
+                    delete next[draft.accountId]
+                    return next
+                  })
+                  setDraftHashtags(prev => {
+                    const next = { ...prev }
+                    delete next[draft.accountId]
+                    return next
+                  })
                 }
                 return
               }
@@ -366,7 +400,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       isMounted = false
       clearInterval(interval)
     }
-  }, [isAiGenerating, createdDrafts, draftStatuses, activeBrandId])
+  }, [isAiGenerating, createdDrafts, draftStatuses, activeBrandId, accountOptions])
 
   useEffect(() => {
     if (activeBrandId) {
@@ -469,7 +503,12 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
   // Asset filtering helper
   const filteredAssets = useMemo(() => {
-    return brandAssets.filter(asset => {
+    // Sort descending by createdAt to prioritize latest uploaded assets
+    const sorted = [...brandAssets].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return sorted.filter(asset => {
+      if (assetTypeFilter === 'unused') {
+        return asset.usedCount === 0
+      }
       const isVid = asset.mimeType?.startsWith('video/') || isVideoUrl(asset.url)
       if (assetTypeFilter === 'image') return !isVid
       if (assetTypeFilter === 'video') return isVid
@@ -771,18 +810,38 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         attempts++
         try {
           const checkRes = await fetch(`/api/brands/${targetBrandId}/drafts/${draftId}`)
+          if (checkRes.status === 404) {
+            clearInterval(interval)
+            setTriggeringId(null)
+            alert('【AI 创作失败】该渠道的内容生成未成功，数据已清理。')
+            await refreshCalendar()
+            return
+          }
           if (checkRes.ok) {
             const checkData = await checkRes.json()
             const updatedDraft = checkData.draft
-            if (updatedDraft && updatedDraft.caption && updatedDraft.caption !== '【AI 正在创作中...】') {
-              clearInterval(interval)
-              setTriggeringId(null)
-              
-              // Reload final events to show the actual generated caption
-              const reloadRes2 = await fetch(`/api/dashboard/calendar?${query.toString()}`)
-              if (reloadRes2.ok) {
-                const data2 = await reloadRes2.json()
-                setEvents(data2.events || [])
+            if (updatedDraft) {
+              if (updatedDraft.status === 'failed') {
+                clearInterval(interval)
+                setTriggeringId(null)
+                const errMsg = updatedDraft.agentNote || '未知错误'
+                alert(`【AI 创作失败】内容生成失败：\n${errMsg}`)
+                
+                // Clean up draft from DB immediately
+                fetch(`/api/brands/${targetBrandId}/drafts/${draftId}`, { method: 'DELETE' }).catch(() => {})
+                await refreshCalendar()
+                return
+              }
+              if (updatedDraft.caption && updatedDraft.caption !== '【AI 正在创作中...】') {
+                clearInterval(interval)
+                setTriggeringId(null)
+                
+                // Reload final events to show the actual generated caption
+                const reloadRes2 = await fetch(`/api/dashboard/calendar?${query.toString()}`)
+                if (reloadRes2.ok) {
+                  const data2 = await reloadRes2.json()
+                  setEvents(data2.events || [])
+                }
               }
             }
           }
@@ -1801,7 +1860,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">从品牌素材库中选择</label>
                     <div className="flex bg-slate-105 dark:bg-slate-800 p-0.5 rounded-md text-[10px] font-black">
-                      {(['all', 'image', 'video'] as const).map((t) => (
+                      {(['unused', 'all', 'image', 'video'] as const).map((t) => (
                         <button
                           key={t}
                           type="button"
@@ -1812,7 +1871,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                               : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
                           }`}
                         >
-                          {t === 'all' ? '全部' : t === 'image' ? '图片' : '视频'}
+                          {t === 'unused' ? '未使用' : t === 'all' ? '全部' : t === 'image' ? '图片' : '视频'}
                         </button>
                       ))}
                     </div>

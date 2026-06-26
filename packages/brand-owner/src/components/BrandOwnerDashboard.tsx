@@ -1461,14 +1461,14 @@ export default function BrandOwnerDashboard() {
                      companionState === 'thinking' ? '正在思考与组织语言...' :
                      companionState === 'speaking' ? '正在语音回复中...' :
                      emotion === 'effort' ? '正在努力为您生成推文...' :
-                     'AI 创意对讲助手'}
+                     'AI内容运营官'}
                   </h3>
                   <p className="text-[11px] text-slate-400 font-semibold px-8 leading-relaxed max-w-xs mx-auto">
                     {companionState === 'listening' ? '您可以说：“帮我做个关于周末促销的活动文案”' :
                      companionState === 'thinking' ? '正在调用平台数据与创意模型...' :
                      companionState === 'speaking' ? '正在用语音为您播报创作成果...' :
                      emotion === 'effort' ? '已开始处理！正在为您排期并发布内容...' :
-                     '点击下方麦克风说出您的创意想法，或直接上传素材开始批量创作。'}
+                     '上传素材，点击下方麦克风说出您的创意想法，开始批量创作。'}
                   </p>
                 </div>
               </div>

@@ -740,7 +740,13 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
         </div>
         <div className="text-center">
           <p className="text-sm font-bold text-slate-600 dark:text-slate-300">暂无品牌</p>
-          <p className="text-xs text-slate-400 mt-1">请先让 Agent 初始化品牌，或手动创建</p>
+          <p className="text-xs text-slate-400 mt-1 mb-4">请先让 Agent 初始化品牌，或手动创建</p>
+          <button
+            onClick={() => router.push('/profile/principal/brands/new')}
+            className="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs font-bold text-white transition-colors"
+          >
+            手动创建品牌
+          </button>
         </div>
       </div>
     )

@@ -206,7 +206,7 @@ export async function GET(request: Request) {
     where: latestWhere,
     orderBy: { createdAt: 'desc' },
   })
-  const latestActive = await prisma.brandSubscription.findFirst({
+  let latestActive = await prisma.brandSubscription.findFirst({
     where: {
       ...latestWhere,
       status: 'ACTIVE',
@@ -214,6 +214,27 @@ export async function GET(request: Request) {
     },
     orderBy: { createdAt: 'desc' },
   })
+
+  // Fallback: If no direct subscription found for this user, check if any of their owned/legacy-owned brands has an active subscription
+  if (!latestActive && !scopedBrandId) {
+    const ownedBrandIds = await prisma.brand.findMany({
+      where: {
+        OR: [{ ownerId: session.user.id }, { owners: { some: { userId: session.user.id } } }],
+      },
+      select: { id: true }
+    }).then(list => list.map(b => b.id))
+
+    if (ownedBrandIds.length > 0) {
+      latestActive = await prisma.brandSubscription.findFirst({
+        where: {
+          brandId: { in: ownedBrandIds },
+          status: 'ACTIVE',
+          OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+    }
+  }
 
   const latest = latestActive || latestAny
   const hasEffectiveActiveSubscription = Boolean(latestActive)

@@ -63,8 +63,21 @@ export default function MainLayout({
         
         {/* Left Section: Brand Switcher (Stitch-inspired UX) */}
         <div className="flex items-center gap-3 shrink-0">
-          {brands.length > 0 && activeBrand && (
+          {brands.length > 0 && activeBrand ? (
             <BrandSwitcher brands={brands} activeBrand={activeBrand} setActiveBrand={setActiveBrand} />
+          ) : (
+            <button
+              id="brand-switcher-create-btn"
+              onClick={() => router.push('/profile/principal/brands/new')}
+              className="flex items-center gap-2 pl-3 pr-2.5 py-2 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200"
+            >
+              <div className="w-5 h-5 rounded-md bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center shrink-0">
+                <span className="text-[10px] font-black text-white">+</span>
+              </div>
+              <span className="text-sm font-bold text-slate-500 dark:text-slate-400 max-w-[120px] truncate">
+                创建品牌
+              </span>
+            </button>
           )}
         </div>
 

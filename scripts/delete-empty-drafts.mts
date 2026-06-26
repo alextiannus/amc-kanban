@@ -19,7 +19,7 @@ async function main() {
   })
 
   // Filter drafts where caption is empty or only whitespace
-  const emptyDrafts = drafts.filter(draft => !draft.caption || draft.caption.trim() === '')
+  const emptyDrafts = drafts.filter((draft: any) => !draft.caption || draft.caption.trim() === '')
 
   console.log(`Found ${emptyDrafts.length} empty drafts.`)
   if (emptyDrafts.length === 0) {
@@ -36,7 +36,7 @@ async function main() {
   const deleteResult = await prisma.contentDraft.deleteMany({
     where: {
       id: {
-        in: emptyDrafts.map(d => d.id)
+        in: emptyDrafts.map((d: any) => d.id)
       }
     }
   })

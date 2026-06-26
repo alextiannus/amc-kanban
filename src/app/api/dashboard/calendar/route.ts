@@ -84,6 +84,7 @@ export async function GET(request: Request) {
   const drafts = await prisma.contentDraft.findMany({
     where: {
       brandId: { in: scopedBrandIds },
+      status: { in: ['scheduled', 'publishing', 'published', 'pending_review'] },
       OR: [
         { scheduledAt: { gte: rangeStart, lt: rangeEnd } },
         { publishedAt: { gte: rangeStart, lt: rangeEnd } },

@@ -101,8 +101,27 @@ export async function POST(request: Request, { params }: Params) {
     platform,
     caption: originalCaption,
     copywriteOnly: true
-  }, config).catch((err: any) => {
+  }, config).catch(async (err: any) => {
     console.error(`Background copywriter trigger failed for draft ${draftId}:`, err);
+    try {
+      await prisma.contentDraft.update({
+        where: { id: draftId },
+        data: {
+          status: 'failed',
+          agentNote: `AI generation graph error: ${err.message || String(err)}`
+        }
+      });
+    } catch (dbErr) {
+      console.error(`Failed to update draft ${draftId} to failed on error:`, dbErr);
+    }
+    try {
+      await prisma.workUnit.update({
+        where: { id: task.id },
+        data: { status: 'failed', requiredInput: `AI copywriter graph invocation crashed: ${err.message || String(err)}` }
+      });
+    } catch (dbErr) {
+      console.error(`Failed to update task ${task.id} to failed:`, dbErr);
+    }
   })
 
   return NextResponse.json({

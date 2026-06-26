@@ -47,7 +47,7 @@ async function runTests() {
   })
 
   console.log('✅ GameConfig created with prizes:')
-  config.prizes.forEach(p => {
+  config.prizes.forEach((p: any) => {
     console.log(`   - ${p.name} (Prob: ${p.probability}, Stock: ${p.totalInventory ?? 'Unlimited'})`)
   })
 
@@ -105,10 +105,10 @@ async function runTests() {
       take: 30,
       select: { imageMd5s: true },
     })
-    const recentMd5Set = new Set(recentSubmissions.flatMap(s => s.imageMd5s))
+    const recentMd5Set = new Set(recentSubmissions.flatMap((s: any) => s.imageMd5s))
     
     // Assert MD5 is unique
-    userMd5s.forEach(hash => {
+    userMd5s.forEach((hash: string) => {
       assert.ok(!recentMd5Set.has(hash), `MD5 hash ${hash} should not be duplicated in the last 30 submissions!`)
     })
 
@@ -137,7 +137,7 @@ async function runTests() {
       
       // Perform Clerk PIN verification transaction
       const pinCode = '999888'
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         const activeConfig = await tx.gameConfig.findUnique({
           where: { brandId },
         })
@@ -163,7 +163,7 @@ async function runTests() {
     }
 
     // E. Spin the Wheel!
-    const spinResult = await prisma.$transaction(async (tx) => {
+    const spinResult = await prisma.$transaction(async (tx: any) => {
       const s = await tx.gameSession.findUnique({
         where: { id: session.id },
       })
@@ -176,7 +176,7 @@ async function runTests() {
       if (!activeConfig) throw new Error('Config error')
 
       // Select active prizes (inventory check)
-      const activePrizes = activeConfig.prizes.filter(p => {
+      const activePrizes = activeConfig.prizes.filter((p: any) => {
         if (p.totalInventory === null) return true
         return p.claimedCount < p.totalInventory
       })
@@ -186,7 +186,7 @@ async function runTests() {
       }
 
       // Weighted random selection
-      const totalProb = activePrizes.reduce((sum, p) => sum + p.probability, 0)
+      const totalProb = activePrizes.reduce((sum: number, p: any) => sum + p.probability, 0)
       const r = Math.random() * totalProb
       let runningSum = 0
       let selectedPrize = activePrizes[0]
@@ -254,7 +254,7 @@ async function runTests() {
   console.log('✅ Inventory constraint verified successfully (never exceeded stock limit).')
 
   // F. Verification of clean status
-  const totalSpins = Object.values(prizeCounts).reduce((a, b) => a + b, 0)
+  const totalSpins = Object.values(prizeCounts).reduce((a: number, b: number) => a + b, 0)
   assert.equal(totalSpins, 60, 'All 60 spins must be accounted for')
   console.log('✅ All 60 simulations processed and accounted for without a single transaction failure.')
 
@@ -271,7 +271,7 @@ async function runTests() {
       where: { sessionId: { in: createdSessionIds } },
       select: { id: true },
     })
-    const sessionIds = sessions.map(s => s.id)
+    const sessionIds = sessions.map((s: any) => s.id)
     await prisma.gameSession.deleteMany({ where: { id: { in: sessionIds } } })
   }
   await prisma.gamePrize.deleteMany({ where: { gameConfigId: config.id } })

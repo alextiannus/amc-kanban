@@ -220,11 +220,20 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const [mediaOpPrompt, setMediaOpPrompt] = useState('')
   const [mediaProcessingIndex, setMediaProcessingIndex] = useState<number | null>(null)
 
-  const [assetTypeFilter, setAssetTypeFilter] = useState<'all' | 'image' | 'video'>('all')
+  const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all' | 'image' | 'video'>('unused')
   const [assetPageSize, setAssetPageSize] = useState(12)
-  const [brandAssets, setBrandAssets] = useState<Array<{ id: string; url: string; filename?: string | null; mimeType: string }>>([])
+  const [brandAssets, setBrandAssets] = useState<Array<{ id: string; url: string; filename?: string | null; mimeType: string; usedCount?: number; createdAt?: string | Date }>>([])
   const filteredAssets = useMemo(() => {
-    return brandAssets.filter(asset => {
+    // Sort descending by createdAt to prioritize latest uploaded assets
+    const sorted = [...brandAssets].sort((a, b) => {
+      const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return tB - tA
+    })
+    return sorted.filter(asset => {
+      if (assetTypeFilter === 'unused') {
+        return (asset.usedCount ?? 0) === 0
+      }
       const isVid = asset.mimeType.startsWith('video/')
       if (assetTypeFilter === 'image') return !isVid
       if (assetTypeFilter === 'video') return isVid
@@ -804,21 +813,54 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
         attempts++
         try {
           const checkRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}`)
+          if (checkRes.status === 404) {
+            clearInterval(interval)
+            setSaving(false)
+            alert('【AI 创作失败】该渠道的内容生成未成功，数据已清理。')
+            await loadDrafts()
+            if (selectedId === draftId) {
+              setCaption('')
+              setHashtags('')
+              setCreativeHooks('')
+              setSelectedId(null)
+            }
+            return
+          }
           if (checkRes.ok) {
             const checkData = await checkRes.json()
             const updatedDraft = checkData.draft
-            if (updatedDraft && updatedDraft.caption && updatedDraft.caption !== '【AI 正在创作中...】') {
-              clearInterval(interval)
-              setSaving(false)
-              
-              // Reload final draft list
-              await loadDrafts()
-              
-              // If the editor is still open for this draft, load the new content
-              if (selectedId === draftId) {
-                setCaption(updatedDraft.caption)
-                setHashtags(formatTags(updatedDraft.hashtags))
-                setCreativeHooks(updatedDraft.creativeHooks || '')
+            if (updatedDraft) {
+              if (updatedDraft.status === 'failed') {
+                clearInterval(interval)
+                setSaving(false)
+                const errMsg = updatedDraft.agentNote || '未知错误'
+                alert(`【AI 创作失败】内容生成失败：\n${errMsg}`)
+                
+                // Clean up draft from DB immediately
+                fetch(`/api/brands/${brandId}/drafts/${draftId}`, { method: 'DELETE' }).catch(() => {})
+                
+                await loadDrafts()
+                if (selectedId === draftId) {
+                  setCaption('')
+                  setHashtags('')
+                  setCreativeHooks('')
+                  setSelectedId(null)
+                }
+                return
+              }
+              if (updatedDraft.caption && updatedDraft.caption !== '【AI 正在创作中...】') {
+                clearInterval(interval)
+                setSaving(false)
+                
+                // Reload final draft list
+                await loadDrafts()
+                
+                // If the editor is still open for this draft, load the new content
+                if (selectedId === draftId) {
+                  setCaption(updatedDraft.caption)
+                  setHashtags(formatTags(updatedDraft.hashtags))
+                  setCreativeHooks(updatedDraft.creativeHooks || '')
+                }
               }
             }
           }
@@ -1377,39 +1419,20 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">从品牌素材库中选择</label>
                     <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-md text-[10px] font-black">
-                      <button
-                        type="button"
-                        onClick={() => setAssetTypeFilter('all')}
-                        className={`px-2 py-0.5 rounded transition-all ${
-                          assetTypeFilter === 'all'
-                            ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
-                        }`}
-                      >
-                        全部
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAssetTypeFilter('image')}
-                        className={`px-2 py-0.5 rounded transition-all ${
-                          assetTypeFilter === 'image'
-                            ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
-                        }`}
-                      >
-                        图片
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAssetTypeFilter('video')}
-                        className={`px-2 py-0.5 rounded transition-all ${
-                          assetTypeFilter === 'video'
-                            ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
-                        }`}
-                      >
-                        视频
-                      </button>
+                      {(['unused', 'all', 'image', 'video'] as const).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setAssetTypeFilter(t)}
+                          className={`px-2 py-0.5 rounded transition-all ${
+                            assetTypeFilter === t
+                              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                              : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
+                          }`}
+                        >
+                          {t === 'unused' ? '未使用' : t === 'all' ? '全部' : t === 'image' ? '图片' : '视频'}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
