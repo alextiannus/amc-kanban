@@ -221,6 +221,8 @@ interface CalendarEvent {
   platformPostId?: string | null
   type?: 'post' | 'task'
   postUrl?: string | null
+  agentNote?: string | null
+  creativeHooks?: string | null
 }
 
 interface DashboardCalendarProps {
@@ -3331,6 +3333,25 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     {/* AI Actions Section: Copywriter & Designer */}
                     {activeDrawerEvent.status !== 'done' && activeDrawerEvent.type !== 'task' && (
                       <div className="space-y-3 pt-2">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">内容创意 / 生成指令 (AI Idea & Prompt)</label>
+                          <textarea
+                            value={contentIdea}
+                            onChange={(e) => setContentIdea(e.target.value)}
+                            placeholder="输入内容创意或AI生成指令，例如：‘介绍我们的新菜单，突出新鲜食材和南洋风味’，AI将自动按所选平台特性重构文案..."
+                            className="min-h-[50px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">创意 hooks (Creative Hooks)</label>
+                          <textarea
+                            value={creativeHooks}
+                            onChange={(e) => setCreativeHooks(e.target.value)}
+                            placeholder="输入吸睛创意 hooks / 写作思路 / 爆款切入点..."
+                            className="min-h-[50px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                          />
+                        </div>
+
                         <div className="flex gap-2.5">
                           <button
                             onClick={() => handleAIWrite(activeDrawerEvent.brandId, activeDrawerEvent.id)}
