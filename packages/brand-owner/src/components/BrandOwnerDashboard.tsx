@@ -532,7 +532,7 @@ export default function BrandOwnerDashboard() {
       {/* Top App Bar */}
       <header className="fixed top-0 w-full z-40 bg-white/40 backdrop-blur-md h-16 flex items-center justify-between px-4 border-b border-slate-200/20">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-transparent">
+          <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-transparent">
             <img src="/logo.svg" alt="logo" className="w-full h-full object-contain" />
           </div>
           <span className="font-bold text-sm text-slate-800 tracking-wide">
@@ -554,9 +554,10 @@ export default function BrandOwnerDashboard() {
 
           <button 
             onClick={() => setSideMenuOpen(true)}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 transition-all active:scale-95 overflow-hidden"
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 text-slate-650 transition-all active:scale-95 cursor-pointer"
+            title="菜单"
           >
-            <img src="/logo.svg" alt="logo" className="w-6 h-6 object-contain" />
+            <Menu className="h-5 w-5" />
           </button>
 
           {/* Expanded Accordion list dropdown */}
