@@ -56,27 +56,7 @@ export async function copywriterNode(state: any) {
     }
   }
 
-  // Check if draft has no media assets attached
-  if (existingDraftId && draftMediaUrls.length === 0) {
-    console.log(`Copywriter: No media files found in draft ${existingDraftId}. Suspending with warning.`);
-    await prisma.contentDraft.update({
-      where: { id: existingDraftId },
-      data: {
-        caption: "【AI 提示：请先选择或上传配图/视频再进行 AI 创作】"
-      }
-    });
-    await prisma.workUnit.update({
-      where: { id: taskId },
-      data: {
-        status: "pending",
-        requiredInput: "【AI 创作提醒】未检测到配图或视频。请先在草稿中选择或上传配图/视频，然后再点击 AI 创作。"
-      }
-    });
-    return {
-      status: "pending",
-      error: "Missing attached assets"
-    };
-  }
+
 
   let userPrompt = "";
   if (draftObj && draftObj.agentNote && draftObj.agentNote.includes("【AI 生成指令】")) {

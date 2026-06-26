@@ -65,8 +65,8 @@ async function runTest() {
   });
   console.log("3. Created Kanban task with ID:", task.id);
 
-  // 5. Invoke graph with copywriteOnly: true (Expect suspend because mediaUrls is empty)
-  console.log("4. Running graph in copywriteOnly mode with EMPTY media (expecting warning)...");
+  // 5. Invoke graph with copywriteOnly: true (Expect success even if mediaUrls is empty)
+  console.log("4. Running graph in copywriteOnly mode with EMPTY media...");
   const config = { configurable: { thread_id: `${brand.id}-${Date.now()}` } };
   
   const res1 = await marketingGraph.invoke({
@@ -77,7 +77,7 @@ async function runTest() {
     copywriteOnly: true
   }, config) as any;
 
-  console.log("5. Phase 1 invocation completed. Status:", res1.status, "Error:", res1.error);
+  console.log("5. Phase 1 invocation completed. Status:", res1.status);
 
   // Verify DB state for Phase 1
   const draftPhase1 = await prisma.contentDraft.findUnique({ where: { id: draft.id } });
@@ -85,16 +85,20 @@ async function runTest() {
 
   let success = true;
 
-  if (res1.status !== "pending" || res1.error !== "Missing attached assets") {
-    console.error("FAILED: Graph did not suspend or returned incorrect status/error for empty media.");
+  if (res1.status !== "done") {
+    console.error("FAILED: Graph did not complete successfully for empty media.");
     success = false;
   }
-  if (draftPhase1?.caption !== "【AI 提示：请先选择或上传配图/视频再进行 AI 创作】") {
-    console.error("FAILED: Draft caption was not set to the warning text. Got:", draftPhase1?.caption);
+  if (!draftPhase1?.caption || draftPhase1.caption === customPrompt || draftPhase1.caption.includes("AI 提示")) {
+    console.error("FAILED: Draft caption was not generated successfully. Got:", draftPhase1?.caption);
     success = false;
   }
-  if (taskPhase1?.status !== "pending" || !taskPhase1.requiredInput?.includes("未检测到配图或视频")) {
-    console.error("FAILED: Task status was not updated to pending or requiredInput was incorrect.");
+  if (taskPhase1?.status !== "done") {
+    console.error("FAILED: Task status was not updated to done. Got:", taskPhase1?.status);
+    success = false;
+  }
+  if (draftPhase1?.mediaUrls && draftPhase1.mediaUrls.length > 0) {
+    console.error("FAILED: Media urls should remain empty.");
     success = false;
   }
 
@@ -102,8 +106,8 @@ async function runTest() {
     console.log("-> Phase 1 (Empty Media Check) PASSED!");
   } else {
     // Cleanup and exit early if phase 1 failed
-    await prisma.workUnit.delete({ where: { id: task.id } });
-    await prisma.contentDraft.delete({ where: { id: draft.id } });
+    await prisma.workUnit.delete({ where: { id: task.id } }).catch(() => {});
+    await prisma.contentDraft.delete({ where: { id: draft.id } }).catch(() => {});
     process.exit(1);
   }
 
