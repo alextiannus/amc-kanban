@@ -226,6 +226,7 @@ export default function AdminPage() {
     isDefault: false,
     taskTagsStr: '',
   })
+  const [llmFormError, setLlmFormError] = useState<string | null>(null)
 
   const fetchLLMConfigs = async () => {
     setLlmConfigsLoading(true)
@@ -245,6 +246,7 @@ export default function AdminPage() {
   const saveLLMConfig = async (e: React.FormEvent) => {
     e.preventDefault()
     setSavingLLMConfig(true)
+    setLlmFormError(null)
     try {
       const url = editingLLMConfig 
         ? `/api/admin/llm-configs/${editingLLMConfig.id}`
@@ -276,15 +278,16 @@ export default function AdminPage() {
       if (res.ok) {
         setLlmConfigModalOpen(false)
         setEditingLLMConfig(null)
+        setLlmFormError(null)
         void fetchLLMConfigs()
         void fetchSystemLogs()
       } else {
         const errData = await res.json().catch(() => ({}))
-        alert(errData.error || '保存失败，请检查输入')
+        setLlmFormError(errData.error || '保存失败，请检查输入')
       }
     } catch (e) {
       console.error('[saveLLMConfig error]', e)
-      alert('保存失败')
+      setLlmFormError('发生未知网络错误，请稍后重试')
     } finally {
       setSavingLLMConfig(false)
     }
@@ -1256,6 +1259,7 @@ export default function AdminPage() {
                       isDefault: false,
                       taskTagsStr: '',
                     })
+                    setLlmFormError(null)
                     setLlmConfigModalOpen(true)
                   }}
                   className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition flex-shrink-0"
@@ -1360,9 +1364,10 @@ export default function AdminPage() {
                               isDefault: config.isDefault,
                               taskTagsStr: config.taskTags.join(', '),
                             })
+                            setLlmFormError(null)
                             setLlmConfigModalOpen(true)
                           }}
-                          className="text-xs text-slate-600 dark:text-slate-450 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 font-semibold"
+                          className="text-xs text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 font-semibold"
                         >
                           <Edit3 size={13} /> 编辑
                         </button>
@@ -1622,6 +1627,11 @@ export default function AdminPage() {
               每个 API 接口独立运作，出错时系统自动调用可用链中的下一个接口。
             </p>
             <form onSubmit={saveLLMConfig} className="space-y-4">
+              {llmFormError && (
+                <div className="p-3 text-xs bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900 rounded-xl leading-relaxed animate-in fade-in duration-200">
+                  {llmFormError}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label className="space-y-1.5 md:col-span-2">
                   <span className="text-xs font-bold text-slate-500 block font-bold">配置显示名称</span>
@@ -1676,10 +1686,22 @@ export default function AdminPage() {
                   <span className="text-xs font-bold text-slate-500 block font-bold">代理/自定义接口端点 (Base URL)</span>
                   <input
                     value={llmForm.baseUrl}
+                    required={llmForm.provider === 'custom_shim'}
                     onChange={e => setLlmForm(prev => ({ ...prev, baseUrl: e.target.value }))}
-                    placeholder="非必填。留空使用默认的 API 地址"
+                    placeholder={
+                      llmForm.provider === 'custom_shim'
+                        ? "例如: https://my-custom-proxy.com/v1 (必填)"
+                        : "非必填。留空使用官方默认接口"
+                    }
                     className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {llmForm.provider === 'google' && '（可选）留空使用官方接口: https://generativelanguage.googleapis.com'}
+                    {llmForm.provider === 'openai' && '（可选）留空使用官方接口: https://api.openai.com/v1'}
+                    {llmForm.provider === 'anthropic' && '（可选）留空使用官方接口: https://api.anthropic.com/v1'}
+                    {llmForm.provider === 'deepseek' && '（可选）留空使用官方接口: https://api.deepseek.com/v1'}
+                    {llmForm.provider === 'custom_shim' && '（必填）请输入您的自定义中转 API 地址'}
+                  </p>
                 </label>
 
                 <label className="space-y-1.5 md:col-span-2">
@@ -1734,7 +1756,7 @@ export default function AdminPage() {
                   disabled={savingLLMConfig}
                   className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50 font-bold"
                 >
-                  {savingLLMConfig ? '保存中...' : '保存配置'}
+                  {savingLLMConfig ? '正在验证接口并保存...' : '验证并保存配置'}
                 </button>
               </div>
             </form>

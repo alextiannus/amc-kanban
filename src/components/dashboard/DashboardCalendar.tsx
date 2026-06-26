@@ -1667,7 +1667,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                             <button
                               type="button"
                               onClick={() => handleRemoveMedia(index)}
-                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-650 p-1 text-white opacity-90 transition-opacity z-10"
+                              className="absolute top-1 right-1 rounded-full bg-red-500 hover:bg-red-600 p-1 text-white opacity-90 transition-opacity z-10"
                             >
                               <X className="h-3 w-3" />
                             </button>

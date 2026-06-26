@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
+import { validateLLMConfig } from '@/lib/llmRouter'
 
 function maskKey(key: string | null | undefined): string | null {
   if (!key) return null
@@ -65,6 +66,17 @@ export async function POST(request: Request) {
     const cleanApiKey = String(apiKey).trim()
     if (!cleanApiKey) {
       return NextResponse.json({ error: 'API key cannot be empty' }, { status: 400 })
+    }
+
+    // Validate configuration usability
+    const validation = await validateLLMConfig(
+      String(provider).trim(),
+      String(modelName).trim(),
+      cleanApiKey,
+      baseUrl ? String(baseUrl).trim() : null
+    )
+    if (!validation.success) {
+      return NextResponse.json({ error: `大模型配置可用性验证失败: ${validation.error}` }, { status: 400 })
     }
 
     // If marked as default, unset default on other configurations

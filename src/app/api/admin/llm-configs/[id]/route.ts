@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
+import { validateLLMConfig } from '@/lib/llmRouter'
 
 function maskKey(key: string | null | undefined): string | null {
   if (!key) return null
@@ -57,6 +58,16 @@ export async function PATCH(request: Request, { params }: Params) {
       } else {
         nextApiKey = trimmedKey
       }
+    }
+
+    // Validate configuration usability
+    const testProvider = provider !== undefined ? String(provider).trim() : current.provider
+    const testModelName = modelName !== undefined ? String(modelName).trim() : current.modelName
+    const testBaseUrl = baseUrl !== undefined ? (baseUrl ? String(baseUrl).trim() : null) : current.baseUrl
+
+    const validation = await validateLLMConfig(testProvider, testModelName, nextApiKey, testBaseUrl)
+    if (!validation.success) {
+      return NextResponse.json({ error: `大模型配置可用性验证失败: ${validation.error}` }, { status: 400 })
     }
 
     const nextIsDefault = isDefault !== undefined ? Boolean(isDefault) : current.isDefault

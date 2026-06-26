@@ -245,3 +245,33 @@ export async function callLLM(
     error: combinedError
   }
 }
+
+/**
+ * Validates a single LLM configuration by running a probe request.
+ */
+export async function validateLLMConfig(
+  provider: string,
+  modelName: string,
+  apiKey: string,
+  baseUrl: string | null
+): Promise<{ success: boolean; error?: string }> {
+  console.log(`[LLM Router] Validating config for ${provider}/${modelName}...`)
+  const result = await executeSingleLLMCall(
+    provider,
+    modelName,
+    apiKey,
+    baseUrl,
+    "Hello, are you online?",
+    10
+  )
+
+  if (result.text && !result.error) {
+    return { success: true }
+  }
+
+  return { 
+    success: false, 
+    error: result.error || 'Connection check failed (empty response).' 
+  }
+}
+
