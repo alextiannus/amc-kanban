@@ -1884,67 +1884,69 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     </div>
                   ) : (
                     <>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3.5 max-h-[340px] overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-950 scrollbar-thin">
-                        {filteredAssets.slice(0, assetPageSize).map((asset, idx) => {
-                          const isSelected = selectedAssetIds.includes(asset.id)
-                          const isVid = asset.mimeType?.startsWith('video/') || isVideoUrl(asset.url)
-                          return (
-                            <div
-                              key={asset.id}
-                              className={`relative aspect-square rounded-xl overflow-hidden border bg-slate-100 dark:bg-slate-900 transition-all duration-200 group shadow-sm hover:scale-[1.03] hover:shadow-md ${
-                                isSelected 
-                                  ? 'border-emerald-500 ring-2 ring-emerald-500/20' 
-                                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-650'
-                              }`}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleToggleAsset(asset)}
-                                className="absolute inset-0 w-full h-full text-left"
+                      <div className="max-h-[340px] overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-950 scrollbar-thin">
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3.5">
+                          {filteredAssets.slice(0, assetPageSize).map((asset, idx) => {
+                            const isSelected = selectedAssetIds.includes(asset.id)
+                            const isVid = asset.mimeType?.startsWith('video/') || isVideoUrl(asset.url)
+                            return (
+                              <div
+                                key={asset.id}
+                                className={`relative aspect-square rounded-xl overflow-hidden border bg-slate-100 dark:bg-slate-900 transition-all duration-200 group shadow-sm hover:scale-[1.03] hover:shadow-md ${
+                                  isSelected 
+                                    ? 'border-emerald-500 ring-2 ring-emerald-500/20' 
+                                    : 'border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-650'
+                                }`}
                               >
-                                {isVid ? (
-                                  <video src={asset.url} className="h-full w-full object-cover pointer-events-none" muted />
-                                ) : (
-                                  <img src={asset.url} className="h-full w-full object-cover pointer-events-none" alt="" />
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleAsset(asset)}
+                                  className="absolute inset-0 w-full h-full text-left"
+                                >
+                                  {isVid ? (
+                                    <video src={asset.url} className="h-full w-full object-cover pointer-events-none" muted />
+                                  ) : (
+                                    <img src={asset.url} className="h-full w-full object-cover pointer-events-none" alt="" />
+                                  )}
+                                </button>
+
+                                {isSelected && (
+                                  <div className="absolute inset-0 bg-emerald-950/20 backdrop-blur-[0.5px] pointer-events-none" />
                                 )}
-                              </button>
 
-                              {isSelected && (
-                                <div className="absolute inset-0 bg-emerald-950/20 backdrop-blur-[0.5px] pointer-events-none" />
-                              )}
+                                {isSelected && (
+                                  <div className="absolute top-1.5 right-1.5 bg-emerald-500 rounded-full p-0.5 shadow-sm transition-colors z-10">
+                                    <Check className="h-3 w-3 text-white stroke-[3px]" />
+                                  </div>
+                                )}
 
-                              {isSelected && (
-                                <div className="absolute top-1.5 right-1.5 bg-emerald-500 rounded-full p-0.5 shadow-sm transition-colors z-10">
-                                  <Check className="h-3 w-3 text-white stroke-[3px]" />
-                                </div>
-                              )}
+                                {isVid && (
+                                  <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-[2px] p-1 rounded border border-white/10 shadow-sm pointer-events-none">
+                                    <Play className="h-2.5 w-2.5 text-white fill-white" />
+                                  </div>
+                                )}
 
-                              {isVid && (
-                                <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-[2px] p-1 rounded border border-white/10 shadow-sm pointer-events-none">
-                                  <Play className="h-2.5 w-2.5 text-white fill-white" />
-                                </div>
-                              )}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setLightboxIndex(idx)
+                                  }}
+                                  className="absolute bottom-1.5 left-1.5 h-7 w-7 bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 backdrop-blur-md rounded-full shadow-sm flex items-center justify-center pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-200 scale-90 group-hover:scale-100 z-10"
+                                  title="预览大图"
+                                >
+                                  <Maximize2 className="h-3.5 w-3.5" />
+                                </button>
 
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setLightboxIndex(idx)
-                                }}
-                                className="absolute bottom-1.5 left-1.5 h-7 w-7 bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 backdrop-blur-md rounded-full shadow-sm flex items-center justify-center pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-200 scale-90 group-hover:scale-100 z-10"
-                                title="预览大图"
-                              >
-                                <Maximize2 className="h-3.5 w-3.5" />
-                              </button>
-
-                              {asset.filename && (
-                                <div className="absolute top-0 inset-x-0 bg-slate-950/70 p-1 text-[8px] text-white truncate opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                  {asset.filename}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
+                                {asset.filename && (
+                                  <div className="absolute top-0 inset-x-0 bg-slate-950/70 p-1 text-[8px] text-white truncate opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                    {asset.filename}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                       {filteredAssets.length > assetPageSize && (
                         <div className="flex justify-center pt-2">
