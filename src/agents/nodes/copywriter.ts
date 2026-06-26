@@ -64,14 +64,26 @@ export async function copywriterNode(state: any) {
   }
 
   let userPrompt = "";
-  if (draftObj && draftObj.agentNote && draftObj.agentNote.includes("【AI 生成指令】")) {
-    const match = draftObj.agentNote.match(/【AI 生成指令】([\s\S]*?)【\/AI 生成指令】/);
-    if (match) {
-      userPrompt = match[1].trim();
+  let creativeHooks = "";
+  if (draftObj) {
+    if (draftObj.creativeHooks) {
+      creativeHooks = draftObj.creativeHooks.trim();
+    }
+    if (draftObj.agentNote && draftObj.agentNote.includes("【AI 生成指令】")) {
+      const match = draftObj.agentNote.match(/【AI 生成指令】([\s\S]*?)【\/AI 生成指令】/);
+      if (match) {
+        userPrompt = match[1].trim();
+      }
+    }
+    if (!userPrompt && draftCaption && draftCaption !== "【AI 正在创作中...】") {
+      userPrompt = draftCaption.trim();
     }
   }
-  if (!userPrompt && draftCaption && draftCaption !== "【AI 正在创作中...】") {
-    userPrompt = draftCaption.trim();
+  if (!creativeHooks && task && task.description) {
+    const match = task.description.match(/(?:创意\s*hooks|Creative\s*Hooks)\s*:\s*([\s\S]+?)(?:\n|$)/i);
+    if (match) {
+      creativeHooks = match[1].trim();
+    }
   }
 
   // Retrieve attached assets metadata for multi-modal context alignment
@@ -179,7 +191,8 @@ Language Rule:
 - For all other platforms (Instagram, Facebook, TikTok, Google Business Profile / Google Maps): You MUST write the content in English (英文) by default.
 Active Task: "${task.title}"
 Task Details: ${task.description || ""}
-${userPrompt ? `User Custom Theme: "${userPrompt}"` : ""}
+${userPrompt ? `User Custom Theme / Creative Idea: "${userPrompt}"` : ""}
+${creativeHooks ? `Creative Hooks / Writing Angles: "${creativeHooks}"` : ""}
 ${attachedAssetsText}
 ${brandToneText}
 ${brandContactText}
@@ -190,6 +203,9 @@ ${fewShotText}
 ${refinementPromptText}
 
 Goal: Generate 3 different engaging hook variants (opening lines/titles) optimized for "${platform}".
+CRITICAL REQUIREMENT:
+You MUST base the hooks directly on the "User Custom Theme / Creative Idea"${creativeHooks ? ` and "Creative Hooks / Writing Angles"` : ''} provided above. Do NOT write generic hooks. Your generated hooks must strongly reflect these ideas, angles, and specific writing directions. This is the most important constraint.
+
 Rules:
 1. Catchy and high click-through-rate.
 2. Platform-native visual formatting:
@@ -244,7 +260,8 @@ Language Rule:
 - For all other platforms (Instagram, Facebook, TikTok, Google Business Profile / Google Maps): You MUST write the content in English (英文) by default.
 Active Task: "${task.title}"
 Task Details: ${task.description || ""}
-${userPrompt ? `User Custom Theme: "${userPrompt}"` : ""}
+${userPrompt ? `User Custom Theme / Creative Idea: "${userPrompt}"` : ""}
+${creativeHooks ? `Creative Hooks / Writing Angles: "${creativeHooks}"` : ""}
 ${attachedAssetsText}
 ${brandToneText}
 ${brandContactText}
@@ -258,6 +275,9 @@ Here is the approved Hook (opening line/title) generated for this post:
 "${selectedHook}"
 
 Goal: Compose the full social media post caption and hashtags starting with (or directly using) the hook above.
+CRITICAL REQUIREMENT:
+You MUST craft the copywriting to strictly follow and align with the "User Custom Theme / Creative Idea"${creativeHooks ? ` and "Creative Hooks / Writing Angles"` : ''} provided above. Make sure the marketing angle, messaging, and narrative focus directly on these specified ideas. Do not write generic or filler text.
+
 Guidelines:
 1. Tone & Perspective Switch:
    Analyze the Brand Tone/Voice setting. Adopt the requested persona:
@@ -267,7 +287,7 @@ Guidelines:
 2. Brand Context, Location & Image Alignment:
    - You MUST craft the copywriting according to:
      a) The brand context (especially tagline, tone, menu items, slang dictionary).
-     b) The "内容创意 / 生成指令 (AI Idea & Prompt)" (${userPrompt ? `"${userPrompt}"` : 'none'}).
+     b) The "User Custom Theme / Creative Idea" (${userPrompt ? `"${userPrompt}"` : 'none'}) and "Creative Hooks / Writing Angles" (${creativeHooks ? `"${creativeHooks}"` : 'none'}).
      c) The attached images' information (AI tags, categories, visual descriptions/captions).
    - If the attached images show a specific dish/product or location detail, make sure your text references it accurately.
    - If the brand has contact details (phone, website, address, location/neighborhood) or the images specify location tags, you MUST naturally integrate these details into the post content (e.g. in the Call to Action or when inviting customers to visit).

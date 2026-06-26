@@ -61,6 +61,7 @@ type DraftItem = {
   updatedAt: string
   agentNote?: string | null
   rejectionNote?: string | null
+  creativeHooks?: string | null
   accountId?: string | null
   account?: {
     id: string
@@ -213,6 +214,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const [error, setError] = useState<string | null>(null)
 
   const [contentIdea, setContentIdea] = useState('')
+  const [creativeHooks, setCreativeHooks] = useState('')
   const [activeMediaOp, setActiveMediaOp] = useState<{ index: number; action: 'design' | 'video' } | null>(null)
   const [mediaOpPrompt, setMediaOpPrompt] = useState('')
   const [mediaProcessingIndex, setMediaProcessingIndex] = useState<number | null>(null)
@@ -367,16 +369,19 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       setAttachedMedia([])
       setReviewNote('')
       setContentIdea('')
+      setCreativeHooks('')
       setActiveMediaOp(null)
       setMediaOpPrompt('')
       setMediaProcessingIndex(null)
       return
     }
     setContentIdea('')
+    setCreativeHooks('')
     setActiveMediaOp(null)
     setMediaOpPrompt('')
     setMediaProcessingIndex(null)
     setCaption(selectedDraft.caption)
+    setCreativeHooks(selectedDraft.creativeHooks || '')
     setHashtags(formatTags(selectedDraft.hashtags))
     const accId = selectedDraft.accountId || selectedDraft.account?.id || ''
     setAccountId(accId)
@@ -471,6 +476,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setMediaUrlsInput('')
     setAttachedMedia([])
     setReviewNote('')
+    setCreativeHooks('')
   }
 
   const saveDraft = async (nextStatus?: string, captionOverride?: string): Promise<DraftItem[] | null> => {
@@ -511,6 +517,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
             status: nextStatus || selectedDraft.status || 'draft',
             mediaUrls,
             assetIds: selectedAssetIds,
+            creativeHooks: creativeHooks.trim(),
           }),
         })
         const json = await res.json().catch(() => ({}))
@@ -534,6 +541,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   status: nextStatus || 'draft',
                   mediaUrls,
                   assetIds: selectedAssetIds,
+                  creativeHooks: creativeHooks.trim(),
                 }),
               })
               const jsonCreate = await resCreate.json().catch(() => ({}))
@@ -563,6 +571,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                 status: nextStatus || 'draft',
                 mediaUrls,
                 assetIds: selectedAssetIds,
+                creativeHooks: creativeHooks.trim(),
               }),
             })
             const json = await res.json().catch(() => ({}))
@@ -853,6 +862,18 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                     value={contentIdea}
                     onChange={(event) => setContentIdea(event.target.value)}
                     placeholder="输入内容创意或AI生成指令，例如：‘介绍我们的新菜单，突出新鲜食材和南洋风味’，AI将自动按所选平台特性重构文案..."
+                    className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </div>
+              )}
+              
+              {selectedDraft?.status !== 'published' && (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">创意 hooks (Creative Hooks)</label>
+                  <textarea
+                    value={creativeHooks}
+                    onChange={(event) => setCreativeHooks(event.target.value)}
+                    placeholder="输入吸睛创意 hooks / 写作思路 / 爆款切入点，方便保存思路并供 AI 创作时使用..."
                     className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                   />
                 </div>

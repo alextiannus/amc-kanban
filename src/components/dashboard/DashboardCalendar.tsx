@@ -250,6 +250,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   // Draft Creation Workspace states
   const [isCreatingPost, setIsCreatingPost] = useState(false)
   const [contentIdea, setContentIdea] = useState('')
+  const [creativeHooks, setCreativeHooks] = useState('')
   const [caption, setCaption] = useState('')
   const [hashtags, setHashtags] = useState('')
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
@@ -578,6 +579,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               status: nextStatus || 'draft',
               mediaUrls,
               assetIds: selectedAssetIds,
+              creativeHooks: creativeHooks.trim(),
             }),
           })
           const json = await res.json().catch(() => ({}))
@@ -617,6 +619,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 hashtags: Array.isArray(currentHashtags) ? currentHashtags : parseTags(String(currentHashtags || '')),
                 status,
                 scheduledAt: scheduledAtOverride || (scheduledAt ? new Date(scheduledAt).toISOString() : null),
+                creativeHooks: creativeHooks.trim(),
               }),
             })
             const json = await res.json().catch(() => ({}))
@@ -1252,6 +1255,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               setIsCreatingPost(true)
               setCaption('')
               setContentIdea('')
+              setCreativeHooks('')
               setHashtags('')
               setSelectedAccountIds([])
               setScheduledAt('')
@@ -1456,6 +1460,17 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                   value={contentIdea}
                   onChange={(event) => setContentIdea(event.target.value)}
                   placeholder="输入内容创意或AI生成指令，例如：‘介绍我们的新菜单，突出新鲜食材和南洋风味’，AI将自动按所选平台特性重构文案..."
+                  className="min-h-[60px] w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </div>
+
+              {/* Creative Hooks */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">创意 hooks (Creative Hooks)</label>
+                <textarea
+                  value={creativeHooks}
+                  onChange={(event) => setCreativeHooks(event.target.value)}
+                  placeholder="输入吸睛创意 hooks / 写作思路 / 爆款切入点，方便保存思路并供 AI 创作时使用..."
                   className="min-h-[60px] w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 />
               </div>

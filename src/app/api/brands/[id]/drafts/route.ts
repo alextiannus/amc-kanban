@@ -22,6 +22,7 @@ const DRAFT_SELECT = {
   rejectionNote: true,
   platformPostId: true,
   publishedAt: true,
+  creativeHooks: true,
   createdAt: true,
   updatedAt: true,
   account: { select: { id: true, platformId: true, handle: true, displayName: true } },
@@ -166,6 +167,7 @@ export async function POST(request: Request, { params }: Params) {
         status,
         agentId: actor.type === 'AI_AGENT' ? actor.id : typeof body.agentId === 'string' ? body.agentId : null,
         agentNote: typeof body.agentNote === 'string' ? body.agentNote : null,
+        creativeHooks: typeof body.creativeHooks === 'string' ? body.creativeHooks : null,
       },
       select: { id: true },
     })
@@ -236,7 +238,7 @@ export async function POST(request: Request, { params }: Params) {
         : '社媒'
 
       const taskTitle = `【${platformName}排期发布】由 AMC Copywriter 继续完成文案创作与发布`
-      const taskDescription = `基于素材库提交的排期草稿，由平台的 AMC Copywriter 继续完成内容的完整创作（正文、Hashtags）与排期发布。\n\n草稿 ID: ${created.id}\n初始文案: ${caption}`
+      const taskDescription = `基于素材库提交的排期草稿，由平台的 AMC Copywriter 继续完成内容的完整创作（正文、Hashtags）与排期发布。\n\n草稿 ID: ${created.id}\n初始文案: ${caption}${body.creativeHooks ? `\n创意 hooks: ${body.creativeHooks}` : ''}`
 
       newTask = await tx.workUnit.create({
         data: {

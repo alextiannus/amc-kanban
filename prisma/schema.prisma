@@ -401,6 +401,7 @@ model ContentDraft {
   rejectionNote  String?
   platformPostId String?
   publishedAt    DateTime?
+  creativeHooks  String?
 
   actionItem     ActionItem?
   assetRefs      ContentAssetRef[]

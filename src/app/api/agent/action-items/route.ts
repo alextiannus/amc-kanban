@@ -99,6 +99,7 @@ export async function POST(request: Request) {
         status: 'pending_review',
         agentId: agent.id,
         agentNote: draftData.agentNote || null,
+        creativeHooks: draftData.creativeHooks || null,
       },
     })
     draftId = draft.id

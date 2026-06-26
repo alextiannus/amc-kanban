@@ -1602,8 +1602,9 @@ export function createAmcMcpServer(agentApiKey: string) {
       assetIds: z.array(z.string()).optional().describe('MediaAsset IDs to attach to this draft.'),
       agentNote: z.string().optional(),
       captionLang: z.string().optional().default('en'),
+      creativeHooks: z.string().optional(),
     },
-    async ({ brandId, draftId, caption, hashtags, accountId, scheduledAt, mediaUrls, assetIds, agentNote, captionLang }) => {
+    async ({ brandId, draftId, caption, hashtags, accountId, scheduledAt, mediaUrls, assetIds, agentNote, captionLang, creativeHooks }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
@@ -1650,6 +1651,7 @@ export function createAmcMcpServer(agentApiKey: string) {
           if (hashtags !== undefined) updateData.hashtags = hashtags
           if (mediaUrls !== undefined) updateData.mediaUrls = mediaUrls
           if (agentNote !== undefined) updateData.agentNote = agentNote || null
+          if (creativeHooks !== undefined) updateData.creativeHooks = creativeHooks || null
 
           const updated = await tx.contentDraft.update({
             where: { id: draftId },
@@ -1668,6 +1670,7 @@ export function createAmcMcpServer(agentApiKey: string) {
               mediaUrls: mediaUrls ?? [],
               agentNote: agentNote ?? null,
               captionLang: captionLang || 'en',
+              creativeHooks: creativeHooks ?? null,
               status: 'draft',
               agentId: agent.id,
             },

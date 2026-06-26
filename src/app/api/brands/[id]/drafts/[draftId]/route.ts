@@ -20,6 +20,7 @@ const DRAFT_SELECT = {
   rejectionNote: true,
   platformPostId: true,
   publishedAt: true,
+  creativeHooks: true,
   createdAt: true,
   updatedAt: true,
   account: { select: { id: true, platformId: true, handle: true, displayName: true } },
@@ -168,6 +169,7 @@ export async function PATCH(request: Request, { params }: Params) {
         platformPostId: platformPostIdUpdate,
         agentNote: typeof body.agentNote === 'string' ? body.agentNote : undefined,
         rejectionNote: nextStatus === 'pending_review' ? null : typeof body.rejectionNote === 'string' ? body.rejectionNote : undefined,
+        creativeHooks: typeof body.creativeHooks === 'string' ? body.creativeHooks : undefined,
       },
       select: { id: true, caption: true, accountId: true },
     })
