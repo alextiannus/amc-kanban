@@ -102,10 +102,10 @@ async function fetchPostfastPosts(
     }
 
     const accountMap = new Map(
-      asArray<PostfastAccount>(accountsResult.accounts).map((a) => [a.id, a])
+      asArray<PostfastAccount>(accountsResult.accounts).map((a: any) => [a.id, a])
     )
 
-    const posts: AnalyticsPost[] = asArray<PostfastAnalyticsItem>(analyticsResult.posts).map((p) => {
+    const posts: AnalyticsPost[] = asArray<PostfastAnalyticsItem>(analyticsResult.posts).map((p: any) => {
       const m = p.latestMetric
       const likes       = m ? parseInt(m.likes ?? '0', 10) : 0
       const comments    = m ? parseInt(m.comments ?? '0', 10) : 0
@@ -169,7 +169,7 @@ async function fetchInternalDrafts(
     take: 200,
   })
 
-  return drafts.map(d => ({
+  return drafts.map((d: any) => ({
     id: d.id,
     source: 'internal',
     platform: d.account?.platformId ?? 'unknown',
@@ -215,7 +215,7 @@ async function fetchRealGoogleReviews(brand: {
       const accessToken = await getGoogleAccessToken(brand.googleRefreshToken)
       const result = await fetchGoogleGBPReviews(brand.googleAccountId, brand.googleLocationId, accessToken)
       if (!result.error && result.reviews && result.reviews.length > 0) {
-        const reviews: NormalizedReview[] = asArray<JsonObject>(result.reviews).map((r) => ({
+        const reviews: NormalizedReview[] = asArray<JsonObject>(result.reviews).map((r: any) => ({
           reviewerName:
             typeof r.reviewer === 'string'
               ? r.reviewer
@@ -242,7 +242,7 @@ async function fetchRealGoogleReviews(brand: {
     try {
       const result = await fetchGoogleReviews(brand.googlePlaceId, brand.googleApiKey)
       if (!result.error && result.reviews && result.reviews.length > 0) {
-        const reviews: NormalizedReview[] = asArray<JsonObject>(result.reviews).map((r) => ({
+        const reviews: NormalizedReview[] = asArray<JsonObject>(result.reviews).map((r: any) => ({
           reviewerName:
             typeof r.reviewer === 'string'
               ? r.reviewer
@@ -545,7 +545,7 @@ export async function GET(req: Request, { params }: Params) {
 
   const timeSeries = Array.from(dayMap.values())
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map(d => ({ ...d, engRate: d.impressions > 0 ? Number(((d.engagement / d.impressions) * 100).toFixed(2)) : 0 }))
+    .map((d: any) => ({ ...d, engRate: d.impressions > 0 ? Number(((d.engagement / d.impressions) * 100).toFixed(2)) : 0 }))
 
   // ── In-period trend deltas ────────────────────────────────────────────────
   const kpiTrends = {
@@ -570,35 +570,38 @@ export async function GET(req: Request, { params }: Params) {
     ctMap[p.contentType].engagement += p.likes + p.comments + p.shares
     ctMap[p.contentType].impressions += p.impressions
   }
-  const contentTypeBreakdown = Object.entries(ctMap).map(([type, s]) => ({
-    type, count: s.count, engagement: s.engagement, impressions: s.impressions,
-    avgEngRate: s.impressions > 0 ? Number(((s.engagement / s.impressions) * 100).toFixed(2)) : 0,
-  })).sort((a, b) => b.count - a.count)
+  const contentTypeBreakdown = Object.entries(ctMap).map((entry: any) => {
+    const [type, s] = entry;
+    return {
+      type, count: s.count, engagement: s.engagement, impressions: s.impressions,
+      avgEngRate: s.impressions > 0 ? Number(((s.engagement / s.impressions) * 100).toFixed(2)) : 0,
+    }
+  }).sort((a: any, b: any) => b.count - a.count)
 
   // ── Brand Stats (real, for competitor tab) ───────────────────────────────
-  const publishedPosts = posts.filter(p => p.status === 'published')
+  const publishedPosts = posts.filter((p: any) => p.status === 'published')
   const postsPerWeek   = rangeDays > 0 ? Math.round((publishedPosts.length / rangeDays) * 7 * 10) / 10 : 0
   const brandStats = {
     postsPerWeek,
     avgEngRate,
-    followersInstagram: accounts.find(a => a.platformId === 'instagram')?.followerCount ?? null,
-    followersTotal: accounts.reduce((s, a) => s + (a.followerCount ?? 0), 0),
+    followersInstagram: accounts.find((a: any) => a.platformId === 'instagram')?.followerCount ?? null,
+    followersTotal: accounts.reduce((s: any, a: any) => s + (a.followerCount ?? 0), 0),
   }
 
   // ── Conversion events ────────────────────────────────────────────────────
   const totalConversions    = conversions.length
-  const navClickCount       = conversions.filter((c) => c.type === 'nav_click').length
-  const bookingClickCount   = conversions.filter((c) => c.type === 'booking_click').length
-  const couponRedeemCount   = conversions.filter((c) => c.type === 'coupon_redemption').length
+  const navClickCount       = conversions.filter((c: any) => c.type === 'nav_click').length
+  const bookingClickCount   = conversions.filter((c: any) => c.type === 'booking_click').length
+  const couponRedeemCount   = conversions.filter((c: any) => c.type === 'coupon_redemption').length
 
   // Previous period conversion aggregates (for real deltas)
   const prevConvTotal       = prevConversions.length
-  const prevNavClick        = prevConversions.filter((c) => c.type === 'nav_click').length
-  const prevBookingClick    = prevConversions.filter((c) => c.type === 'booking_click').length
-  const prevCouponRedeem    = prevConversions.filter((c) => c.type === 'coupon_redemption').length
+  const prevNavClick        = prevConversions.filter((c: any) => c.type === 'nav_click').length
+  const prevBookingClick    = prevConversions.filter((c: any) => c.type === 'booking_click').length
+  const prevCouponRedeem    = prevConversions.filter((c: any) => c.type === 'coupon_redemption').length
 
   const convDayMap = new Map<string, { date: string; nav_click: number; booking_click: number; coupon_redemption: number; total: number }>()
-  conversions.forEach((c) => {
+  conversions.forEach((c: any) => {
     const key = c.occurredAt.toISOString().slice(0, 10)
     if (!convDayMap.has(key)) convDayMap.set(key, { date: key, nav_click: 0, booking_click: 0, coupon_redemption: 0, total: 0 })
     const day = convDayMap.get(key)!
@@ -620,7 +623,7 @@ export async function GET(req: Request, { params }: Params) {
   const allRatings: number[] = []
 
   // From DB sentiment alerts (includes apify_review type)
-  sentimentAlerts.forEach((item) => {
+  sentimentAlerts.forEach((item: any) => {
     const pl = item.payload && typeof item.payload === 'object'
       ? (item.payload as { rating?: unknown })
       : null
@@ -632,7 +635,7 @@ export async function GET(req: Request, { params }: Params) {
 
   // From Apify cached Google Maps reviews
   const apifyGoogleReviews = asArray<ApifyCachedReview>(apifyMeta.googleReviews)
-  apifyGoogleReviews.forEach((r) => {
+  apifyGoogleReviews.forEach((r: any) => {
     if (typeof r.rating === 'number' && r.rating >= 1 && r.rating <= 5) allRatings.push(r.rating)
   })
 
@@ -649,7 +652,7 @@ export async function GET(req: Request, { params }: Params) {
     ratingOutOfFive = Number((allRatings.reduce((s, r) => s + r, 0) / total).toFixed(1))
   } else {
     // Use DB account rating score as fallback — still real data
-    const dbRating = accounts.find(a => a.platformId === 'google')?.ratingScore ?? null
+    const dbRating = accounts.find((a: any) => a.platformId === 'google')?.ratingScore ?? null
     ratingOutOfFive = dbRating
     if (dbRating !== null) {
       if (dbRating >= 4.8) { positivePct = 88; neutralPct = 9; negativePct = 3 }
@@ -665,7 +668,7 @@ export async function GET(req: Request, { params }: Params) {
   const reviewTexts: string[] = []
 
   // From DB sentiment alerts (includes apify_review type)
-  sentimentAlerts.forEach((item) => {
+  sentimentAlerts.forEach((item: any) => {
     const pl = item.payload && typeof item.payload === 'object'
       ? (item.payload as { reviewText?: unknown })
       : null
@@ -677,15 +680,15 @@ export async function GET(req: Request, { params }: Params) {
   googleResult.reviews.forEach(r => { if (r.text) reviewTexts.push(r.text) })
 
   // From Apify cached Google Maps reviews
-  apifyGoogleReviews.forEach((r) => { if (r.text) reviewTexts.push(r.text) })
+  apifyGoogleReviews.forEach((r: any) => { if (r.text) reviewTexts.push(r.text) })
 
   const realKeywords = extractKeywordsFromTexts(reviewTexts)
 
   // ── Build review feed (DB + Google, no duplicates) ───────────────────────
-  const googleAccount = accounts.find(a => ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(a.platformId.toLowerCase()))
+  const googleAccount = accounts.find((a: any) => ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(a.platformId.toLowerCase()))
   const googleAccountHandle = googleAccount ? (googleAccount.displayName || googleAccount.handle) : null
 
-  const dbReviews = sentimentAlerts.map((item) => {
+  const dbReviews = sentimentAlerts.map((item: any) => {
     const pl = item.payload && typeof item.payload === 'object'
       ? (item.payload as { platform?: unknown; reviewerName?: unknown; rating?: unknown; reviewText?: unknown; replyText?: unknown })
       : null
@@ -704,7 +707,7 @@ export async function GET(req: Request, { params }: Params) {
     }
   })
 
-  const googleReviewFeed = googleResult.reviews.map((r, idx) => ({
+  const googleReviewFeed = googleResult.reviews.map((r: any, idx: number) => ({
     id: `google_${idx}`,
     platform: 'google',
     reviewerName: r.reviewerName,
@@ -718,7 +721,7 @@ export async function GET(req: Request, { params }: Params) {
   }))
 
   // Apify Google Maps cached review feed
-  const apifyReviewFeed = apifyGoogleReviews.map((r, idx: number) => ({
+  const apifyReviewFeed = apifyGoogleReviews.map((r: any, idx: number) => ({
     id: `apify_${idx}`,
     platform: 'google_maps',
     reviewerName: r.reviewerName ?? '匿名顾客',

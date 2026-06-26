@@ -56,7 +56,7 @@ export async function coordinatorNode(state: any) {
   // Detect platform from tags, title, or description
   let platform: string | null = state.platform || null;
   if (!platform && task.tags && task.tags.length > 0) {
-    const matched = task.tags.find(t => ["instagram", "facebook", "google_business", "google_maps", "google", "red", "xiaohongshu", "tiktok"].includes(t.toLowerCase()));
+    const matched = task.tags.find((t: any) => ["instagram", "facebook", "google_business", "google_maps", "google", "red", "xiaohongshu", "tiktok"].includes(t.toLowerCase()));
     if (matched) {
       const lower = matched.toLowerCase();
       platform = lower === "xiaohongshu" ? "red"

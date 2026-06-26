@@ -78,7 +78,7 @@ export async function GET(
       orderBy: { createdAt: 'desc' }
     })
 
-    const taskIds = tasks.map(t => t.id)
+    const taskIds = tasks.map((t: any) => t.id)
     const logs = taskIds.length === 0 ? [] : await prisma.auditLog.findMany({
       where: {
         resourceType: 'WorkUnit',
@@ -100,7 +100,7 @@ export async function GET(
       orderBy: { timestamp: 'asc' }
     })
 
-    const statusEvents = logs.map(log => {
+    const statusEvents = logs.map((log: any) => {
       const oldObj = parseJsonObject(log.oldValue)
       const newObj = parseJsonObject(log.newValue)
       const oldRequiredInput = oldObj?.requiredInput ?? null
@@ -135,8 +135,8 @@ export async function GET(
         weightContribution: metrics.weightContribution,
       },
       completedTasks: tasks
-        .filter(task => task.status === 'done' && task.updatedAt >= weekWindow.start && task.updatedAt <= weekWindow.end)
-        .map(task => ({
+        .filter((task: any) => task.status === 'done' && task.updatedAt >= weekWindow.start && task.updatedAt <= weekWindow.end)
+        .map((task: any) => ({
           id: task.id,
           title: task.title,
           weight: task.weight,

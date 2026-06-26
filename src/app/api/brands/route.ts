@@ -72,7 +72,7 @@ export async function GET(request: Request) {
         },
         orderBy: { createdAt: 'asc' },
       })
-      return NextResponse.json(agentLinks.map(l => l.brand))
+      return NextResponse.json(agentLinks.map((l: any) => l.brand))
     }
 
     // If assignedOnly=true, return only brands that the human user is directly responsible for.
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
         where: { humanId: session.user.id },
         select: { agentId: true },
       })
-      const permittedAgentIds = delegatedAgentPermissions.map((perm) => perm.agentId)
+      const permittedAgentIds = delegatedAgentPermissions.map((perm: any) => perm.agentId)
       const delegatedBrandLinks = permittedAgentIds.length
         ? await prisma.brandAgent.findMany({
             where: {
@@ -94,21 +94,21 @@ export async function GET(request: Request) {
             select: { brandId: true },
           })
         : []
-      const delegatedBrandIds = delegatedBrandLinks.map((link) => link.brandId)
+      const delegatedBrandIds = delegatedBrandLinks.map((link: any) => link.brandId)
 
       // 2. Owned brands (via BrandOwner join table)
       const ownerLinks = await prisma.brandOwner.findMany({
         where: { userId: session.user.id },
         select: { brandId: true },
       })
-      const ownedBrandIds = ownerLinks.map((link) => link.brandId)
+      const ownedBrandIds = ownerLinks.map((link: any) => link.brandId)
 
       // 3. Legacy owned brands (via ownerId field)
       const legacyOwnedBrands = await prisma.brand.findMany({
         where: { ownerId: session.user.id },
         select: { id: true },
       })
-      const legacyOwnedBrandIds = legacyOwnedBrands.map((b) => b.id)
+      const legacyOwnedBrandIds = legacyOwnedBrands.map((b: any) => b.id)
 
       // Combine direct candidate brands (excluding organization-wide unassigned brands)
       const candidateBrandIds = Array.from(
@@ -178,11 +178,11 @@ export async function GET(request: Request) {
     ])
 
     const ownedBrandIds = new Set([
-      ...ownerLinks.map((link) => link.brandId),
-      ...legacyOwnedBrands.map((brand) => brand.id),
+      ...ownerLinks.map((link: any) => link.brandId),
+      ...legacyOwnedBrands.map((brand: any) => brand.id),
     ])
 
-    const permittedAgentIds = delegatedAgentPermissions.map((perm) => perm.agentId)
+    const permittedAgentIds = delegatedAgentPermissions.map((perm: any) => perm.agentId)
     const delegatedBrandLinks = permittedAgentIds.length
       ? await prisma.brandAgent.findMany({
           where: {
@@ -194,8 +194,8 @@ export async function GET(request: Request) {
         })
       : []
 
-    const delegatedBrandIds = Array.from(new Set(delegatedBrandLinks.map((link) => link.brandId)))
-    const organizationOwnerIds = Array.from(new Set(organizationMemberships.map((m) => m.ownerId)))
+    const delegatedBrandIds = Array.from(new Set(delegatedBrandLinks.map((link: any) => link.brandId)))
+    const organizationOwnerIds = Array.from(new Set(organizationMemberships.map((m: any) => m.ownerId)))
     const delegatedBrands = delegatedBrandIds.length
       ? await prisma.brand.findMany({
           where: { id: { in: delegatedBrandIds }, ...activeBrandFilter },
@@ -232,7 +232,7 @@ export async function GET(request: Request) {
       : []
 
     return NextResponse.json([
-      ...ownerLinks.map((link) => link.brand),
+      ...ownerLinks.map((link: any) => link.brand),
       ...legacyOwnedBrands,
       ...delegatedBrands,
       ...organizationBrands,
@@ -328,7 +328,7 @@ export async function POST(request: Request) {
     )
   }
 
-  const creation = await prisma.$transaction(async (tx) => {
+  const creation = await prisma.$transaction(async (tx: any) => {
     const subscriptionToBind = await tx.brandSubscription.findFirst({
       where: {
         id: subscriptionId,

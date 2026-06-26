@@ -9,12 +9,12 @@ async function getAccessibleBrandIds(userId: string, userType: string, role: str
       where: { agentId: userId, active: true },
       select: { brandId: true },
     })
-    return links.map(link => link.brandId)
+    return links.map((link: any) => link.brandId)
   }
 
   if (role === 'ADMIN') {
     const brands = await prisma.brand.findMany({ select: { id: true } })
-    return brands.map(brand => brand.id)
+    return brands.map((brand: any) => brand.id)
   }
 
   // Regular human user
@@ -38,11 +38,11 @@ async function getAccessibleBrandIds(userId: string, userType: string, role: str
   ])
 
   const ownedBrandIds = new Set([
-    ...ownerLinks.map((link) => link.brandId),
-    ...legacyOwnedBrands.map((brand) => brand.id),
+    ...ownerLinks.map((link: any) => link.brandId),
+    ...legacyOwnedBrands.map((brand: any) => brand.id),
   ])
 
-  const permittedAgentIds = delegatedAgentPermissions.map((perm) => perm.agentId)
+  const permittedAgentIds = delegatedAgentPermissions.map((perm: any) => perm.agentId)
   const delegatedBrandLinks = permittedAgentIds.length
     ? await prisma.brandAgent.findMany({
         where: {
@@ -53,8 +53,8 @@ async function getAccessibleBrandIds(userId: string, userType: string, role: str
       })
     : []
 
-  const delegatedBrandIds = delegatedBrandLinks.map((link) => link.brandId)
-  const organizationOwnerIds = organizationMemberships.map((m) => m.ownerId)
+  const delegatedBrandIds = delegatedBrandLinks.map((link: any) => link.brandId)
+  const organizationOwnerIds = organizationMemberships.map((m: any) => m.ownerId)
 
   let organizationBrandIds: string[] = []
   if (organizationOwnerIds.length > 0) {
@@ -74,7 +74,7 @@ async function getAccessibleBrandIds(userId: string, userType: string, role: str
       },
       select: { id: true },
     })
-    organizationBrandIds = organizationBrands.map((brand) => brand.id)
+    organizationBrandIds = organizationBrands.map((brand: any) => brand.id)
   }
 
   return Array.from(new Set([
@@ -117,8 +117,8 @@ export async function GET(request: Request) {
     }),
   ])
 
-  const brandMap = new Map(brands.map(brand => [brand.id, brand.name]))
-  const payload = assets.map(asset => ({
+  const brandMap = new Map(brands.map((brand: any) => [brand.id, brand.name]))
+  const payload = assets.map((asset: any) => ({
     id: asset.id,
     brandId: asset.brandId,
     brandName: brandMap.get(asset.brandId) || asset.brand.name,

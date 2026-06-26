@@ -378,7 +378,7 @@ export async function PATCH(request: Request) {
   const materialParts = currentMaterials.split('\n').filter(Boolean)
 
   // Add post URL if not already present
-  if (!materialParts.find((part) => part.startsWith('发布链接:'))) {
+  if (!materialParts.find((part: string) => part.startsWith('发布链接:'))) {
     materialParts.push(`发布链接: ${postUrl}`)
   }
 

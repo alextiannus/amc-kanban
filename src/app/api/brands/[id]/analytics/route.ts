@@ -69,7 +69,7 @@ async function fetchPostfastPosts(apiKey: string, from: Date, to: Date, brandId:
     const draftMap = new Map<string, { mediaUrls: string[]; hashtags: string[] }>()
     for (const d of dbDrafts) {
       if (d.platformPostId) {
-        const assetUrls = d.assetRefs.map((ref) => ref.asset.url).filter((url): url is string => Boolean(url))
+        const assetUrls = d.assetRefs.map((ref: any) => ref.asset.url).filter((url: any): url is string => Boolean(url))
         draftMap.set(d.platformPostId, {
           mediaUrls: [...d.mediaUrls, ...assetUrls].filter(Boolean),
           hashtags: d.hashtags || [],
@@ -79,10 +79,10 @@ async function fetchPostfastPosts(apiKey: string, from: Date, to: Date, brandId:
 
     // Build a map of socialMediaId → platformId for label enrichment
     const accountMap = new Map(
-      (accountsResult.accounts ?? []).map(a => [a.id, a])
+      (accountsResult.accounts ?? []).map((a: any) => [a.id, a])
     )
 
-    const posts: AnalyticsPost[] = analyticsResult.posts.map(p => {
+    const posts: AnalyticsPost[] = analyticsResult.posts.map((p: any) => {
       const m = p.latestMetric
       const likes       = m ? parseInt(m.likes ?? '0', 10) : 0
       const comments    = m ? parseInt(m.comments ?? '0', 10) : 0
@@ -158,7 +158,7 @@ async function fetchInternalDrafts(brandId: string, from: Date, to: Date, platfo
     take: 200,
   })
 
-  return drafts.map(d => {
+  return drafts.map((d: any) => {
     const bestDate = (d.scheduledAt ?? d.createdAt).toISOString()
     return {
       id: d.id,

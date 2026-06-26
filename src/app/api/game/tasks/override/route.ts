@@ -10,7 +10,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'submissionId and pinCode required' }, { status: 400 })
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Fetch the submission
       const submission = await tx.customerTaskSubmission.findUnique({
         where: { id: submissionId },

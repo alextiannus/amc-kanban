@@ -37,25 +37,25 @@ async function getAccessibleBrandIds(userId: string, userType: string, role: str
       where: { agentId: userId, active: true },
       select: { brandId: true },
     })
-    return links.map(link => link.brandId)
+    return links.map((link: any) => link.brandId)
   }
 
   if (role === 'ADMIN') {
     const brands = await prisma.brand.findMany({ select: { id: true } })
-    return brands.map(brand => brand.id)
+    return brands.map((brand: any) => brand.id)
   }
 
   const ownerLinks = await prisma.brandOwner.findMany({
     where: { userId },
     select: { brandId: true },
   })
-  const ownerBrandIds = ownerLinks.map(link => link.brandId)
+  const ownerBrandIds = ownerLinks.map((link: any) => link.brandId)
   const legacyBrands = await prisma.brand.findMany({
     where: { ownerId: userId, id: { notIn: ownerBrandIds } },
     select: { id: true },
   })
 
-  return [...ownerBrandIds, ...legacyBrands.map(brand => brand.id)]
+  return [...ownerBrandIds, ...legacyBrands.map((brand: any) => brand.id)]
 }
 
 // GET /api/dashboard/calendar?month=YYYY-MM
@@ -101,28 +101,28 @@ export async function GET(request: Request) {
     where: { id: { in: scopedBrandIds } },
     select: { id: true, name: true },
   })
-  const brandNameMap = new Map(brands.map(brand => [brand.id, brand.name]))
+  const brandNameMap = new Map(brands.map((brand: any) => [brand.id, brand.name]))
 
 
   const mediaAssets = await prisma.mediaAsset.findMany({
     where: { brandId: { in: scopedBrandIds } },
     select: { id: true, url: true }
   })
-  const mediaUrlToIdMap = new Map(mediaAssets.map(asset => [asset.url, asset.id]))
+  const mediaUrlToIdMap = new Map(mediaAssets.map((asset: any) => [asset.url, asset.id]))
 
   const conversions = await prisma.conversionEvent.findMany({
     where: { brandId: { in: scopedBrandIds } }
   })
 
   // Dynamically resolve postUrl for published drafts using PostFast
-  const hasPublishedDrafts = drafts.some((d) => d.status === 'published' && d.platformPostId)
+  const hasPublishedDrafts = drafts.some((d: any) => d.status === 'published' && d.platformPostId)
   const draftPostUrlMap = new Map<string, string>()
 
   if (hasPublishedDrafts) {
     const brandIdsWithPublished = Array.from(new Set(
       drafts
-        .filter(d => d.status === 'published' && d.platformPostId)
-        .map(d => d.brandId)
+        .filter((d: any) => d.status === 'published' && d.platformPostId)
+        .map((d: any) => d.brandId)
     ))
 
     if (brandIdsWithPublished.length > 0) {
@@ -147,7 +147,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const events = drafts.map(draft => {
+  const events = drafts.map((draft: any) => {
     const eventAt = draft.status === 'published'
       ? (draft.publishedAt ?? draft.scheduledAt ?? draft.updatedAt)
       : (draft.scheduledAt ?? draft.updatedAt)
@@ -163,9 +163,9 @@ export async function GET(request: Request) {
     const firstMediaUrl = draft.mediaUrls?.[0]
     const mediaAssetId = firstMediaUrl ? mediaUrlToIdMap.get(firstMediaUrl) : null
 
-    const draftConversions = conversions.filter(c => c.referPostId === draft.id || (draft.platformPostId && c.referPostId === draft.platformPostId))
+    const draftConversions = conversions.filter((c: any) => c.referPostId === draft.id || (draft.platformPostId && c.referPostId === draft.platformPostId))
     const clicks = draftConversions.length
-    const roi = draftConversions.reduce((sum, c) => {
+    const roi = draftConversions.reduce((sum: any, c: any) => {
       const meta = c.metadata as any
       const val = meta?.revenue || meta?.value || 0
       return sum + Number(val)

@@ -59,7 +59,7 @@ export async function POST(request: Request) {
         mode: 'agent_to_principals',
         removed: result.count,
         principals: uniqueHumanIds.length,
-        affectedBrands: affectedBrands.map((link) => link.brand),
+        affectedBrands: affectedBrands.map((link: any) => link.brand),
       })
     }
 
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
       success: true,
       mode: 'principal_to_agents',
       agents: uniqueAgentIds.length,
-      affectedBrands: affectedBrands.map((link) => link.brand),
+      affectedBrands: affectedBrands.map((link: any) => link.brand),
     })
   } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

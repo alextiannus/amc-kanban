@@ -78,7 +78,7 @@ export async function PATCH(request: Request, { params }: Params) {
     }
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx: any) => {
     const brand = await tx.brand.update({
       where: { id },
       data: {

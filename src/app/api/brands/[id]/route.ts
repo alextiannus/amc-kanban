@@ -131,7 +131,7 @@ export async function GET(_req: Request, { params }: Params) {
 
         // Prune stale accounts: delete any account that is not in the PostFast synced accounts list,
         // unless it's a direct Google Business Profile account.
-        const postfastPlatformHandles = pfResult.accounts.map(acc => ({
+        const postfastPlatformHandles = pfResult.accounts.map((acc: any) => ({
           platformId: acc.platformId,
           handle: acc.handle
         }))
@@ -148,11 +148,11 @@ export async function GET(_req: Request, { params }: Params) {
 
         const isDirectGoogleConfigured = brandInfo?.googlePreferOAuth && brandInfo?.googleRefreshToken && brandInfo?.googleLocationId
 
-        const accountsToDelete = dbAccounts.filter(dbAcc => {
+        const accountsToDelete = dbAccounts.filter((dbAcc: any) => {
           if (dbAcc.platformId === 'google' && isDirectGoogleConfigured) {
             return false
           }
-          const isMatched = postfastPlatformHandles.some(pfAcc => 
+          const isMatched = postfastPlatformHandles.some((pfAcc: any) => 
             pfAcc.platformId.toLowerCase() === dbAcc.platformId.toLowerCase() &&
             pfAcc.handle.toLowerCase() === dbAcc.handle.toLowerCase()
           )
@@ -160,11 +160,11 @@ export async function GET(_req: Request, { params }: Params) {
         })
 
         if (accountsToDelete.length > 0) {
-          const idsToDelete = accountsToDelete.map(a => a.id)
+          const idsToDelete = accountsToDelete.map((a: any) => a.id)
           await prisma.socialAccount.deleteMany({
             where: { id: { in: idsToDelete } }
           })
-          console.log(`[Sync] Deleted ${accountsToDelete.length} stale social accounts for brand ${id}:`, accountsToDelete.map(a => `${a.platformId}:${a.handle}`))
+          console.log(`[Sync] Deleted ${accountsToDelete.length} stale social accounts for brand ${id}:`, accountsToDelete.map((a: any) => `${a.platformId}:${a.handle}`))
         }
       } else {
         postfastSync = { ok: false, error: pfResult.error }
@@ -300,7 +300,7 @@ export async function GET(_req: Request, { params }: Params) {
               : 0,
           },
           topPosts: recent
-            .map((post) => {
+            .map((post: any) => {
               const likes = post.engagementStats?.likes ?? 0
               const comments = post.engagementStats?.comments ?? 0
               const shares = post.engagementStats?.shares ?? 0
@@ -315,7 +315,7 @@ export async function GET(_req: Request, { params }: Params) {
                 impressions,
               }
             })
-            .sort((a, b) => b.interactions - a.interactions)
+            .sort((a: any, b: any) => b.interactions - a.interactions)
             .slice(0, 5),
         }
       }
@@ -402,7 +402,7 @@ export async function DELETE(_request: Request, { params }: Params) {
     )
   }
 
-  const archived = await prisma.$transaction(async (tx) => {
+  const archived = await prisma.$transaction(async (tx: any) => {
     const updatedBrand = await tx.brand.update({
       where: { id },
       data: { status: 'ARCHIVED' },

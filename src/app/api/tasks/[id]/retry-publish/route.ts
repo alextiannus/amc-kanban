@@ -88,7 +88,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const combinedMediaUrls = Array.from(new Set([
     ...(draft.mediaUrls || []),
-    ...(draft.assetRefs || []).map((ref) => ref.asset.url),
+    ...(draft.assetRefs || []).map((ref: any) => ref.asset.url),
   ].filter(Boolean)))
 
   // Attempt publish

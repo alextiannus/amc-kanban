@@ -72,7 +72,7 @@ export async function canAccessBrandViaOrganization(
       where: { memberId: humanUserId },
       select: { ownerId: true },
     })
-  ).map((m) => m.ownerId)
+  ).map((m: any) => m.ownerId)
 
   if (orgOwnerIds.length === 0) return false
 

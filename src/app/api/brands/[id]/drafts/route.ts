@@ -83,8 +83,8 @@ export async function GET(request: Request, { params }: Params) {
   })
 
   // Dynamically resolve postUrl for published drafts
-  const hasPublishedDrafts = drafts.some((d) => d.status === 'published' && d.platformPostId)
-  let resolvedDrafts = drafts.map((d) => ({ ...d, postUrl: undefined as string | undefined }))
+  const hasPublishedDrafts = drafts.some((d: any) => d.status === 'published' && d.platformPostId)
+  let resolvedDrafts = drafts.map((d: any) => ({ ...d, postUrl: undefined as string | undefined }))
 
   if (hasPublishedDrafts) {
     const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
@@ -92,9 +92,9 @@ export async function GET(request: Request, { params }: Params) {
       const { postfastListPosts } = await import('@/lib/integrations/postfast')
       const pfResult = await postfastListPosts(brand.postfastApiKey, { status: 'published' })
       if (pfResult.success) {
-        resolvedDrafts = drafts.map((d) => {
+        resolvedDrafts = drafts.map((d: any) => {
           if (d.status === 'published' && d.platformPostId) {
-            const pfPost = pfResult.posts.find((p) => p.id === d.platformPostId)
+            const pfPost = pfResult.posts.find((p: any) => p.id === d.platformPostId)
             return { ...d, postUrl: pfPost?.postUrl }
           }
           return { ...d, postUrl: undefined }
@@ -154,7 +154,7 @@ export async function POST(request: Request, { params }: Params) {
 
   let newTask: any = null
 
-  const draft = await prisma.$transaction(async (tx) => {
+  const draft = await prisma.$transaction(async (tx: any) => {
     const created = await tx.contentDraft.create({
       data: {
         brandId,
@@ -173,14 +173,14 @@ export async function POST(request: Request, { params }: Params) {
     })
 
     if (assetIds.length > 0) {
-      const validAssets = await tx.mediaAsset.findMany({
+      const validAssets = (await tx.mediaAsset.findMany({
         where: { id: { in: assetIds }, brandId },
         select: { id: true, aiTags: true },
-      })
-      const validAssetMap = new Map(validAssets.map(a => [a.id, a]))
+      })) as any
+      const validAssetMap = new Map(validAssets.map((a: any) => [a.id, a]))
       let order = 0
       for (const assetId of assetIds) {
-        const asset = validAssetMap.get(assetId)
+        const asset = validAssetMap.get(assetId) as any
         if (asset) {
           await tx.contentAssetRef.create({
             data: { draftId: created.id, assetId: asset.id, order: order++ },
@@ -189,14 +189,15 @@ export async function POST(request: Request, { params }: Params) {
       }
       
       // Sort asset IDs to avoid deadlocks under concurrent transactions
-      const sortedAssets = [...validAssets].sort((a, b) => a.id.localeCompare(b.id))
+      const sortedAssets = [...validAssets].sort((a: any, b: any) => a.id.localeCompare(b.id))
       for (const asset of sortedAssets) {
+        const assetAny = asset as any
         await tx.mediaAsset.update({
-          where: { id: asset.id },
+          where: { id: assetAny.id },
           data: {
             usedCount: { increment: 1 },
             lastUsedAt: new Date(),
-            aiTags: asset.aiTags.filter((t) => t !== '排期发布' && t !== '草稿排期'),
+            aiTags: assetAny.aiTags.filter((t: any) => t !== '排期发布' && t !== '草稿排期'),
           },
         })
       }

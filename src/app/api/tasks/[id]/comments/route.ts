@@ -20,7 +20,7 @@ async function canHumanAccessTask(humanId: string, assigneeId: string | null) {
     return false
   }
 
-  return permissions.some(permission => permission.agentId === assigneeId)
+  return permissions.some((permission: any) => permission.agentId === assigneeId)
 }
 
 export async function GET(
@@ -95,7 +95,7 @@ export async function GET(
       }
     })
 
-    const commentsWithAvatars = comments.map(c => ({
+    const commentsWithAvatars = comments.map((c: any) => ({
       ...c,
       author: c.author ? withResolvedAvatar(c.author) : null
     }))

@@ -91,16 +91,16 @@ export async function POST(req: Request, { params }: Params) {
 
   // Determine what to scrape
   const instagramHandles = brand.accounts
-    .filter(a => a.platformId.toLowerCase() === 'instagram' && a.handle)
-    .map(a => a.handle)
+    .filter((a: any) => a.platformId.toLowerCase() === 'instagram' && a.handle)
+    .map((a: any) => a.handle)
 
   const tiktokHandles = brand.accounts
-    .filter(a => a.platformId.toLowerCase() === 'tiktok' && a.handle)
-    .map(a => a.handle)
+    .filter((a: any) => a.platformId.toLowerCase() === 'tiktok' && a.handle)
+    .map((a: any) => a.handle)
 
   const xiaohongshuHandles = brand.accounts
-    .filter(a => ['xiaohongshu', 'rednote', 'red'].includes(a.platformId.toLowerCase()) && a.handle)
-    .map(a => a.handle)
+    .filter((a: any) => ['xiaohongshu', 'rednote', 'red'].includes(a.platformId.toLowerCase()) && a.handle)
+    .map((a: any) => a.handle)
 
   const googlePlaceId = brand.googlePlaceId
   const googleSearchQuery = !googlePlaceId && brand.name
@@ -241,7 +241,7 @@ export async function POST(req: Request, { params }: Params) {
       take: 200,
     })
     const existingHashes = new Set(
-      existingItems.map((i) => {
+      existingItems.map((i: any) => {
         const payload = i.payload && typeof i.payload === 'object'
           ? (i.payload as { reviewerName?: unknown; reviewText?: unknown })
           : null
@@ -252,17 +252,17 @@ export async function POST(req: Request, { params }: Params) {
     )
 
     const googleAccount = brand.accounts.find(
-      a => ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(a.platformId.toLowerCase())
+      (a: any) => ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(a.platformId.toLowerCase())
     )
 
-    const newReviews = googleResult.reviews.filter(r => {
+    const newReviews = googleResult.reviews.filter((r: any) => {
       const hash = `${r.reviewerName}:${r.text.slice(0, 40)}`
       return !existingHashes.has(hash)
     })
 
     if (newReviews.length > 0) {
       await prisma.actionItem.createMany({
-        data: newReviews.map(r => ({
+        data: newReviews.map((r: any) => ({
           brandId: id,
           accountId: googleAccount?.id || null,
           type: 'apify_review',

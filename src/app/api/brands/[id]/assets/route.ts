@@ -347,11 +347,11 @@ export async function GET(request: Request, { params }: Params) {
     where: { brandId },
     select: { name: true }
   })
-  const dbFolderNames = dbFolders.map(f => f.name)
-  const assetFolderNames = assets.map(asset => asset.aiCategory || '素材库')
+  const dbFolderNames = dbFolders.map((f: any) => f.name)
+  const assetFolderNames = assets.map((asset: any) => asset.aiCategory || '素材库')
   const baseFolders = dbFolderNames.length > 0 ? dbFolderNames : ['产品', '环境', '活动']
   const folders = Array.from(new Set(['素材库', ...baseFolders, ...assetFolderNames]))
-  const mappedAssets = assets.map(asset => ({
+  const mappedAssets = assets.map((asset: any) => ({
     ...asset,
     url: (() => {
       const url = asset.url || ''
@@ -422,7 +422,7 @@ export async function PATCH(request: Request, { params }: Params) {
     
     // Process sequentially to avoid deadlocks under high concurrency
     await prisma.$transaction(
-      assets.map(asset => {
+      assets.map((asset: any) => {
         const merged = Array.from(new Set([...asset.aiTags, ...appendTags]))
         return prisma.mediaAsset.update({
           where: { id: asset.id },

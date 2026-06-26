@@ -58,7 +58,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     })
 
-    const humanIds = users.filter((user) => user.type === 'HUMAN').map((user) => user.id)
+    const humanIds = users.filter((user: any) => user.type === 'HUMAN').map((user: any) => user.id)
     const legacyOwnedBrands = humanIds.length
       ? await prisma.brand.findMany({
           where: { ownerId: { in: humanIds } },
@@ -73,7 +73,7 @@ export async function GET() {
       legacyBrandsByOwner.set(brand.ownerId, existing)
     }
 
-    return NextResponse.json(users.map((user) => ({
+    return NextResponse.json(users.map((user: any) => ({
       ...user,
       legacyOwnedBrands: legacyBrandsByOwner.get(user.id) || [],
     })))

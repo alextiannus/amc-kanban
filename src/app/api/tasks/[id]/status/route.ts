@@ -74,7 +74,7 @@ export async function PATCH(
           }
         }
       })
-      const activeBlockers = blockers.filter(dep => !['done', 'void'].includes(dep.blockerTask.status))
+      const activeBlockers = blockers.filter((dep: any) => !['done', 'void'].includes(dep.blockerTask.status))
       if (activeBlockers.length > 0) {
         return NextResponse.json({ error: 'Forbidden: Task is blocked by unfinished blocker tasks.' }, { status: 400 })
       }

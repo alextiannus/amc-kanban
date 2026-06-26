@@ -48,7 +48,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   }
 
   if (!brand.autoPilot && !input.forcePublish) {
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: any) => {
       const nextDraft = await tx.contentDraft.update({
         where: { id: draft.id },
         data: { status: 'pending_review', rejectionNote: null },
@@ -183,7 +183,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
 
   const mediaUrls = uniq([
     ...draft.mediaUrls,
-    ...draft.assetRefs.map((ref) => ref.asset.url),
+    ...draft.assetRefs.map((ref: any) => ref.asset.url),
   ])
 
   const result = await postfastPublish({

@@ -153,7 +153,7 @@ export function createAmcMcpServer(agentApiKey: string) {
           },
         },
       })
-      return { content: [{ type: 'text' as const, text: JSON.stringify(links.map(l => l.brand), null, 2) }] }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(links.map((l: any) => l.brand), null, 2) }] }
     }
   )
 
@@ -294,7 +294,7 @@ export function createAmcMcpServer(agentApiKey: string) {
             // Prune stale accounts: delete any account that is not in the PostFast synced accounts list,
             // unless it's a direct Google Business Profile account.
             try {
-              const postfastPlatformHandles = pfResult.accounts.map(acc => ({
+              const postfastPlatformHandles = pfResult.accounts.map((acc: any) => ({
                 platformId: acc.platformId,
                 handle: acc.handle
               }))
@@ -311,11 +311,11 @@ export function createAmcMcpServer(agentApiKey: string) {
 
               const isDirectGoogleConfigured = brandInfo?.googlePreferOAuth && brandInfo?.googleRefreshToken && brandInfo?.googleLocationId
 
-              const accountsToDelete = dbAccounts.filter(dbAcc => {
+              const accountsToDelete = dbAccounts.filter((dbAcc: any) => {
                 if (dbAcc.platformId === 'google' && isDirectGoogleConfigured) {
                   return false
                 }
-                const isMatched = postfastPlatformHandles.some(pfAcc => 
+                const isMatched = postfastPlatformHandles.some((pfAcc: any) => 
                   pfAcc.platformId.toLowerCase() === dbAcc.platformId.toLowerCase() &&
                   pfAcc.handle.toLowerCase() === dbAcc.handle.toLowerCase()
                 )
@@ -323,7 +323,7 @@ export function createAmcMcpServer(agentApiKey: string) {
               })
 
               if (accountsToDelete.length > 0) {
-                const idsToDelete = accountsToDelete.map(a => a.id)
+                const idsToDelete = accountsToDelete.map((a: any) => a.id)
                 await prisma.socialAccount.deleteMany({
                   where: { id: { in: idsToDelete } }
                 })
@@ -1631,7 +1631,7 @@ export function createAmcMcpServer(agentApiKey: string) {
         return { content: [{ type: 'text' as const, text: 'Error: scheduledAt must be an ISO 8601 datetime' }], isError: true }
       }
 
-      const draft = await prisma.$transaction(async (tx) => {
+      const draft = await prisma.$transaction(async (tx: any) => {
         let savedId: string
 
         if (draftId) {
@@ -1683,7 +1683,7 @@ export function createAmcMcpServer(agentApiKey: string) {
           await tx.contentAssetRef.deleteMany({ where: { draftId: savedId } })
           if (assetIds.length > 0) {
             const validAssets = await tx.mediaAsset.findMany({ where: { brandId, id: { in: assetIds } }, select: { id: true } })
-            await Promise.all(validAssets.map((asset, order) => tx.contentAssetRef.create({ data: { draftId: savedId, assetId: asset.id, order } })))
+            await Promise.all(validAssets.map((asset: any, order: any) => tx.contentAssetRef.create({ data: { draftId: savedId, assetId: asset.id, order } })))
           }
         }
 
@@ -2152,7 +2152,7 @@ export function createAmcMcpServer(agentApiKey: string) {
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({ ok: true, count: createdTasks.length, tasks: createdTasks.map(t => ({ id: t.id, title: t.title, status: t.status })) }, null, 2)
+          text: JSON.stringify({ ok: true, count: createdTasks.length, tasks: createdTasks.map((t: any) => ({ id: t.id, title: t.title, status: t.status })) }, null, 2)
         }]
       }
     }

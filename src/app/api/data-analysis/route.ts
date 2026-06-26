@@ -57,9 +57,9 @@ export async function GET(request: Request) {
     })
 
     // Format the response for easy consumption by the frontend
-    const results = accounts.map((acc) => {
+    const results = accounts.map((acc: any) => {
       const latestSnapshot = acc.snapshots[0] || null
-      const amcOwners = acc.brand.owners.map((bo) => ({
+      const amcOwners = acc.brand.owners.map((bo: any) => ({
         id: bo.user.id,
         email: bo.user.email,
         nickname: bo.user.nickname || bo.user.email.split('@')[0],

@@ -114,7 +114,7 @@ export async function PATCH(request: Request, { params }: Params) {
         ? false
         : undefined
 
-  const updatedBrand = await prisma.$transaction(async (tx) => {
+  const updatedBrand = await prisma.$transaction(async (tx: any) => {
     const updated = await tx.brand.update({
       where: { id },
       data: {
@@ -215,7 +215,7 @@ export async function DELETE(request: Request, { params }: Params) {
 
   if (!existingBrand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     await tx.brand.delete({ where: { id } })
 
     await tx.auditLog.create({

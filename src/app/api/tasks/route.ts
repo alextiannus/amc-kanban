@@ -74,7 +74,7 @@ export async function GET(request: Request) {
       const permissions = await prisma.agentPermission.findMany({
         where: { humanId: session!.user.id }
       })
-      const permittedAgentIds = permissions.map(p => p.agentId)
+      const permittedAgentIds = permissions.map((p: any) => p.agentId)
 
       if (permittedAgentIds.length > 0) {
         whereClause = { ...whereClause, assigneeId: { in: permittedAgentIds } }
@@ -102,7 +102,7 @@ export async function GET(request: Request) {
         where: { brandId, active: true },
         select: { agentId: true },
       })
-      const brandAgentIds = brandLinks.map(l => l.agentId)
+      const brandAgentIds = brandLinks.map((l: any) => l.agentId)
 
       if (brandAgentIds.length === 0) return NextResponse.json([])
       whereClause.brandId = brandId
@@ -160,7 +160,7 @@ export async function GET(request: Request) {
       },
       ...(limit ? { take: limit, skip: (page - 1) * limit } : {}),
     })
-    const tasksWithAvatar = tasks.map((t) => ({
+    const tasksWithAvatar = tasks.map((t: any) => ({
       ...t,
       assignee: t.assignee ? withResolvedAvatar(t.assignee) : null
     }))

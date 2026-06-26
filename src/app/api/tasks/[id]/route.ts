@@ -21,7 +21,7 @@ async function canHumanAccessTask(humanId: string, assigneeId: string | null) {
     return false
   }
 
-  return permissions.some(permission => permission.agentId === assigneeId)
+  return permissions.some((permission: any) => permission.agentId === assigneeId)
 }
 
 export async function GET(
@@ -121,7 +121,7 @@ export async function GET(
     const taskWithAvatar = {
       ...task,
       assignee: task.assignee ? withResolvedAvatar(task.assignee) : null,
-      comments: task.comments?.map((comment) => ({
+      comments: task.comments?.map((comment: any) => ({
         ...comment,
         author: comment.author ? withResolvedAvatar(comment.author) : null
       }))
@@ -242,7 +242,7 @@ export async function PATCH(
           }
         }
       })
-      const activeBlockers = blockers.filter(dep => !['done', 'void'].includes(dep.blockerTask.status))
+      const activeBlockers = blockers.filter((dep: any) => !['done', 'void'].includes(dep.blockerTask.status))
       if (activeBlockers.length > 0) {
         return NextResponse.json({ error: 'Forbidden: Task is blocked by unfinished blocker tasks.' }, { status: 400 })
       }
@@ -257,7 +257,7 @@ export async function PATCH(
         }),
         ...(validBlockerTaskIds.length > 0 ? [
           prisma.taskDependency.createMany({
-            data: validBlockerTaskIds.map(bid => ({
+            data: validBlockerTaskIds.map((bid: any) => ({
               blockedTaskId: id,
               blockerTaskId: bid
             }))

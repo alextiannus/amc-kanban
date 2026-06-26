@@ -51,7 +51,7 @@ export async function PATCH(request: Request, { params }: Params) {
       ? Array.from(new Set((body.businessRoles as unknown[]).filter((role): role is ValidBusinessRole => typeof role === 'string' && validBusinessRoles.includes(role as ValidBusinessRole))))
       : null
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: any) => {
       const user = Object.keys(data).length
         ? await tx.user.update({
             where: { id },

@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'brandId and sessionId required' }, { status: 400 })
     }
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Fetch GameSession
       const session = await tx.gameSession.findUnique({
         where: { brandId_sessionId: { brandId, sessionId } },
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       }
 
       // 5. Select active prizes (filter out out-of-stock items)
-      const activePrizes = config.prizes.filter(prize => {
+      const activePrizes = config.prizes.filter((prize: any) => {
         if (prize.totalInventory === null) return true // Infinite
         return prize.claimedCount < prize.totalInventory // In stock
       })
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       }
 
       // 6. Server-side weighted random selection
-      const totalProb = activePrizes.reduce((sum, p) => sum + p.probability, 0)
+      const totalProb = activePrizes.reduce((sum: any, p: any) => sum + p.probability, 0)
       if (totalProb <= 0) {
         throw new Error('Prize configuration error: total probability is zero.')
       }

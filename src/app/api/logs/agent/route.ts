@@ -9,25 +9,25 @@ async function getAccessibleBrandIds(userId: string, userType: string, role: str
       where: { agentId: userId, active: true },
       select: { brandId: true },
     })
-    return links.map(link => link.brandId)
+    return links.map((link: any) => link.brandId)
   }
 
   if (role === 'ADMIN') {
     const brands = await prisma.brand.findMany({ select: { id: true } })
-    return brands.map(brand => brand.id)
+    return brands.map((brand: any) => brand.id)
   }
 
   const ownerLinks = await prisma.brandOwner.findMany({
     where: { userId },
     select: { brandId: true },
   })
-  const ownerBrandIds = ownerLinks.map(link => link.brandId)
+  const ownerBrandIds = ownerLinks.map((link: any) => link.brandId)
   const legacyBrands = await prisma.brand.findMany({
     where: { ownerId: userId, id: { notIn: ownerBrandIds } },
     select: { id: true },
   })
 
-  return [...ownerBrandIds, ...legacyBrands.map(brand => brand.id)]
+  return [...ownerBrandIds, ...legacyBrands.map((brand: any) => brand.id)]
 }
 
 function translateStatus(status: string) {
@@ -85,15 +85,15 @@ export async function GET(req: Request) {
     where: { brandId: { in: brandIds } },
     select: { id: true, title: true }
   })
-  const workUnitIds = workUnits.map(w => w.id)
-  const workUnitTitleMap = new Map(workUnits.map(w => [w.id, w.title]))
+  const workUnitIds = workUnits.map((w: any) => w.id)
+  const workUnitTitleMap = new Map<string, string>(workUnits.map((w: any) => [w.id, w.title]))
 
   const drafts = await prisma.contentDraft.findMany({
     where: { brandId: { in: brandIds } },
     select: { id: true, caption: true }
   })
-  const draftIds = drafts.map(d => d.id)
-  const draftCaptionMap = new Map(drafts.map(d => [d.id, d.caption]))
+  const draftIds = drafts.map((d: any) => d.id)
+  const draftCaptionMap = new Map<string, string>(drafts.map((d: any) => [d.id, d.caption]))
 
   // 3. Build AuditLog query
   const whereClause: Prisma.AuditLogWhereInput = {
@@ -133,7 +133,7 @@ export async function GET(req: Request) {
   })
 
   // 4. Map raw logs into user-facing action logs (only what they did, no internal thinking)
-  const formattedLogs = rawLogs.map(log => {
+  const formattedLogs = rawLogs.map((log: any) => {
     let description = '执行了操作'
     let detail = ''
 

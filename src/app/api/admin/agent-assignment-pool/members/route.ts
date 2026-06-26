@@ -7,7 +7,7 @@ import { isAmcOperator } from '@/lib/amcOperator'
 function normalizeTags(values: unknown): string[] {
   if (!Array.isArray(values)) return []
   return values
-    .map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : ''))
+    .map((v: any) => (typeof v === 'string' ? v.trim().toLowerCase() : ''))
     .filter(Boolean)
 }
 
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     orderBy: [{ active: 'desc' }, { priority: 'desc' }, { updatedAt: 'desc' }],
   })
 
-  const agentIds = members.map((m) => m.agentId)
+  const agentIds = members.map((m: any) => m.agentId)
   const [agents, loads] = await Promise.all([
     prisma.user.findMany({
       where: { id: { in: agentIds }, type: 'AI_AGENT' },
@@ -46,24 +46,24 @@ export async function GET(request: Request) {
     }),
   ])
 
-  const agentMap = new Map(agents.map((a) => [a.id, a]))
-  const loadMap = new Map(loads.map((l) => [l.agentId, l._count._all]))
+  const agentMap = new Map(agents.map((a: any) => [a.id, a]))
+  const loadMap = new Map(loads.map((l: any) => [l.agentId, l._count._all]))
 
-  let rows = members.map((m) => {
-    const currentLoad = loadMap.get(m.agentId) || 0
+  let rows = members.map((m: any) => {
+    const currentLoad = Number(loadMap.get(m.agentId) || 0)
     const availableSlots = Math.max(0, m.capacity - currentLoad)
     return {
       ...m,
-      agentNickname: agentMap.get(m.agentId)?.nickname || null,
-      agentEmail: agentMap.get(m.agentId)?.email || null,
+      agentNickname: (agentMap.get(m.agentId) as any)?.nickname || null,
+      agentEmail: (agentMap.get(m.agentId) as any)?.email || null,
       currentLoad,
       availableSlots,
       overloaded: currentLoad >= m.capacity,
     }
   })
 
-  if (overloaded === 'true') rows = rows.filter((r) => r.overloaded)
-  if (overloaded === 'false') rows = rows.filter((r) => !r.overloaded)
+  if (overloaded === 'true') rows = rows.filter((r: any) => r.overloaded)
+  if (overloaded === 'false') rows = rows.filter((r: any) => !r.overloaded)
 
   return NextResponse.json(rows)
 }

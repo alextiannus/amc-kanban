@@ -82,7 +82,7 @@ export async function GET(request: Request) {
         },
       },
     })
-    const safeBrands = links.map((l) => toPublicBrand(l.brand))
+    const safeBrands = links.map((l: any) => toPublicBrand(l.brand))
     return NextResponse.json(safeBrands)
   }
 
@@ -236,11 +236,11 @@ export async function PATCH(request: Request) {
 
           const isDirectGoogleConfigured = brandInfo?.googlePreferOAuth && brandInfo?.googleRefreshToken && brandInfo?.googleLocationId
 
-          const accountsToDelete = dbAccounts.filter(dbAcc => {
+          const accountsToDelete = dbAccounts.filter((dbAcc: any) => {
             if (dbAcc.platformId === 'google' && isDirectGoogleConfigured) {
               return false
             }
-            const isMatched = postfastPlatformHandles.some(pfAcc => 
+            const isMatched = postfastPlatformHandles.some((pfAcc: any) => 
               pfAcc.platformId.toLowerCase() === dbAcc.platformId.toLowerCase() &&
               pfAcc.handle.toLowerCase() === dbAcc.handle.toLowerCase()
             )
@@ -248,7 +248,7 @@ export async function PATCH(request: Request) {
           })
 
           if (accountsToDelete.length > 0) {
-            const idsToDelete = accountsToDelete.map(a => a.id)
+            const idsToDelete = accountsToDelete.map((a: any) => a.id)
             await prisma.socialAccount.deleteMany({
               where: { id: { in: idsToDelete } }
             })

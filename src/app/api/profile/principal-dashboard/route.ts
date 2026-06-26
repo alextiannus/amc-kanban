@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const userRoles = computeEffectiveUserRoles({
     userType: session.user.type,
     systemRole: session.user.role,
-    explicitRoles: explicitRoles.map((role) => role.role),
+    explicitRoles: explicitRoles.map((role: any) => role.role),
     ownerCount: ownerLinksCount + legacyOwnerCount,
     principalCount: principalPermissionCount,
   })
@@ -45,13 +45,13 @@ export async function GET(request: Request) {
     const allBrands = await prisma.brand.findMany({
       select: { id: true },
     })
-    visibleBrandIds = allBrands.map((b) => b.id)
+    visibleBrandIds = allBrands.map((b: any) => b.id)
   } else {
     const permissions = await prisma.agentPermission.findMany({
       where: { humanId: userId },
       select: { agentId: true },
     })
-    const delegatedAgentIds = permissions.map((p) => p.agentId)
+    const delegatedAgentIds = permissions.map((p: any) => p.agentId)
     scopedAgentIds = delegatedAgentIds
     const delegatedBrandLinks = delegatedAgentIds.length
       ? await prisma.brandAgent.findMany({
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
         })
       : []
 
-    visibleBrandIds = uniq(delegatedBrandLinks.map((link) => link.brandId))
+    visibleBrandIds = uniq(delegatedBrandLinks.map((link: any) => link.brandId))
   }
 
   const brandAgentWhere = {
@@ -194,7 +194,7 @@ export async function GET(request: Request) {
       orderBy: { createdAt: 'desc' },
     })
 
-    agents = allAgents.map((agent) => ({
+    agents = allAgents.map((agent: any) => ({
       id: agent.id,
       email: agent.email,
       nickname: agent.nickname,
@@ -218,7 +218,7 @@ export async function GET(request: Request) {
         })
       : []
 
-    agents = scopedAgents.map((agent) => ({
+    agents = scopedAgents.map((agent: any) => ({
       id: agent.id,
       email: agent.email,
       nickname: agent.nickname,

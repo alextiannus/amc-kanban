@@ -383,7 +383,7 @@ export async function designerNode(state: any) {
         let coverTagText = task?.tags && task.tags.length > 0 ? task.tags[0] : "店长推荐";
         // Filter out system tags like platform names to get a nice promotional badge
         const systemTags = ["instagram", "red", "xiaohongshu", "tiktok", "facebook", "google", "google_business"];
-        const promoTags = task?.tags?.filter(t => !systemTags.includes(t.toLowerCase())) || [];
+        const promoTags = task?.tags?.filter((t: any) => !systemTags.includes(t.toLowerCase())) || [];
         if (promoTags.length > 0) {
           coverTagText = promoTags[0];
         }

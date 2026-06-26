@@ -101,7 +101,7 @@ export async function copywriterNode(state: any) {
       });
       if (attachedAssets.length > 0) {
         attachedAssetsText = "\nHere are the attached images for this post. You MUST write the caption and tags based on these images:\n" +
-          attachedAssets.map((asset, idx) => `[Image ${idx + 1}]
+          attachedAssets.map((asset: any, idx: number) => `[Image ${idx + 1}]
 URL: ${asset.url}
 Tags: ${asset.aiTags.join(", ") || "N/A"}
 Category: ${asset.aiCategory || "N/A"}
@@ -129,7 +129,7 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
     if (brand.website) details.push(`Website: ${brand.website}`);
     if (brand.phone) details.push(`Phone: ${brand.phone}`);
     if (details.length > 0) {
-      brandContactText = `\nBrand Contact & Location Information:\n` + details.map(d => `- ${d}`).join("\n") + "\n";
+      brandContactText = `\nBrand Contact & Location Information:\n` + details.map((d: string) => `- ${d}`).join("\n") + "\n";
     }
 
     if (brand.knowledge) {
@@ -140,7 +140,7 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
       if (k.menuItems) {
         const menu = k.menuItems as any[];
         if (menu.length > 0) {
-          menuText = `\nMenu Items Knowledge:\n` + menu.map(item => `- ${item.name} ($${item.price}): ${item.description || ""}`).join("\n") + "\n";
+          menuText = `\nMenu Items Knowledge:\n` + menu.map((item: any) => `- ${item.name} ($${item.price}): ${item.description || ""}`).join("\n") + "\n";
         }
       }
       if (k.slangDict) {
@@ -148,7 +148,7 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
         slangText = `\nTarget Local Slang/Terminology mappings to use:\n` + Object.entries(slang).map(([key, val]) => `- "${key}": ${val}`).join("\n") + "\n";
       }
       if (k.negPrompts && k.negPrompts.length > 0) {
-        negativePromptText = `\nNEVER use the following words or phrases:\n` + k.negPrompts.map(word => `- "${word}"`).join("\n") + "\n";
+        negativePromptText = `\nNEVER use the following words or phrases:\n` + k.negPrompts.map((word: any) => `- "${word}"`).join("\n") + "\n";
       }
     }
   }
@@ -169,7 +169,7 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
       });
       const topShots = sortedShots.slice(0, 3);
       fewShotText = "\n--- BRAND PREFERRED STYLE EXAMPLES (FEW-SHOT CORRECTIONS) ---\n" +
-        topShots.map((shot, idx) => `Example ${idx + 1}:\n[AI Original generated text]: ${shot.originalText}\n[User Preferred published text]: ${shot.correctedText}`).join("\n\n") + "\n";
+        topShots.map((shot: any, idx: number) => `Example ${idx + 1}:\n[AI Original generated text]: ${shot.originalText}\n[User Preferred published text]: ${shot.correctedText}`).join("\n\n") + "\n";
     }
   } catch (err) {
     console.error("Failed to fetch custom few-shot examples:", err);

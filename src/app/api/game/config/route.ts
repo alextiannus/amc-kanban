@@ -166,7 +166,7 @@ export async function POST(request: Request) {
     } = body
 
     // We do a database transaction to update game config and upsert/delete its prizes
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Upsert GameConfig
       const config = await tx.gameConfig.upsert({
         where: { brandId },
@@ -214,7 +214,7 @@ export async function POST(request: Request) {
       const incomingIds = typedPrizes
         .map((p) => (typeof p.id === 'string' ? p.id : null))
         .filter((id): id is string => Boolean(id))
-      const toDeleteIds = currentPrizes.map(p => p.id).filter(id => !incomingIds.includes(id))
+      const toDeleteIds = currentPrizes.map((p: any) => p.id).filter((id: any) => !incomingIds.includes(id))
 
       // Delete removed prizes
       if (toDeleteIds.length > 0) {

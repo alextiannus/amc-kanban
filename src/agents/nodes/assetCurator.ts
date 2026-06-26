@@ -166,7 +166,7 @@ Do NOT write any other explanation or markdown code fences.`;
         },
         orderBy: { createdAt: "desc" }
       });
-      let freshUrls = freshAssets.slice(0, target).map(a => a.url);
+      let freshUrls = freshAssets.slice(0, target).map((a: any) => a.url);
 
       if (freshUrls.length < min) {
         console.warn("Assets still insufficient after retry. Automatically compiling slideshow video to prevent deadlock.");

@@ -92,7 +92,7 @@ export async function GET() {
     const userRoles = computeEffectiveUserRoles({
       userType: user.type,
       systemRole: user.role,
-      explicitRoles: user.businessRoles.map((role) => role.role),
+      explicitRoles: user.businessRoles.map((role: any) => role.role),
       ownerCount: ownerTotal,
       principalCount: user.permittedAgents.length,
     })

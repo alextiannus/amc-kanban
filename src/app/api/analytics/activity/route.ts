@@ -96,17 +96,17 @@ export async function GET(request: Request) {
       permittedAgentIds = [authenticatedAgent.id]
     } else if (session?.user.role === 'ADMIN') {
       const agents = await prisma.user.findMany({ where: { type: 'AI_AGENT' }, select: { id: true } })
-      permittedAgentIds = agents.map(a => a.id)
+      permittedAgentIds = agents.map((a: any) => a.id)
     } else {
       const permissions = await prisma.agentPermission.findMany({
         where: { humanId: session!.user.id },
         select: { agentId: true }
       })
-      permittedAgentIds = permissions.map(p => p.agentId)
+      permittedAgentIds = permissions.map((p: any) => p.agentId)
     }
 
     if (filterAgentId) {
-      permittedAgentIds = permittedAgentIds.filter(id => id === filterAgentId)
+      permittedAgentIds = permittedAgentIds.filter((id: any) => id === filterAgentId)
     }
 
     if (permittedAgentIds.length === 0) {
@@ -130,8 +130,8 @@ export async function GET(request: Request) {
       }
     })
 
-    const taskMap = new Map(tasks.map(t => [t.id, t]))
-    const taskIds = tasks.map(t => t.id)
+    const taskMap = new Map(tasks.map((t: any) => [t.id, t]))
+    const taskIds = tasks.map((t: any) => t.id)
     if (taskIds.length === 0) {
       return NextResponse.json({
         range: { start, end, preset },
@@ -164,8 +164,8 @@ export async function GET(request: Request) {
     })
 
     const projected = logs
-      .map(log => {
-        const task = taskMap.get(log.resourceId)
+      .map((log: any) => {
+        const task = taskMap.get(log.resourceId) as any
         if (!task) return null
 
         const oldObj = parseJsonObject(log.oldValue)
@@ -192,10 +192,10 @@ export async function GET(request: Request) {
           metadata: log.metadata,
         }
       })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .filter(item => !filterActorId || item.actor.id === filterActorId)
-      .filter(item => !filterBehavior || item.behavior === filterBehavior)
-      .filter(item => !filterResult || item.result === filterResult)
+      .filter(Boolean)
+      .filter((item: any) => !filterActorId || item.actor.id === filterActorId)
+      .filter((item: any) => !filterBehavior || item.behavior === filterBehavior)
+      .filter((item: any) => !filterResult || item.result === filterResult)
 
     return NextResponse.json({
       range: { start, end, preset },

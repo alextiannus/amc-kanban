@@ -263,7 +263,7 @@ export async function PATCH(request: Request, { params }: Params) {
         // Prune stale accounts: delete any account that is not in the PostFast synced accounts list,
         // unless it's a direct Google Business Profile account.
         try {
-          const postfastPlatformHandles = pfResult.accounts.map(acc => ({
+          const postfastPlatformHandles = pfResult.accounts.map((acc: any) => ({
             platformId: acc.platformId,
             handle: acc.handle
           }))
@@ -280,11 +280,11 @@ export async function PATCH(request: Request, { params }: Params) {
 
           const isDirectGoogleConfigured = brandInfo?.googlePreferOAuth && brandInfo?.googleRefreshToken && brandInfo?.googleLocationId
 
-          const accountsToDelete = dbAccounts.filter(dbAcc => {
+          const accountsToDelete = dbAccounts.filter((dbAcc: any) => {
             if (dbAcc.platformId === 'google' && isDirectGoogleConfigured) {
               return false
             }
-            const isMatched = postfastPlatformHandles.some(pfAcc => 
+            const isMatched = postfastPlatformHandles.some((pfAcc: any) => 
               pfAcc.platformId.toLowerCase() === dbAcc.platformId.toLowerCase() &&
               pfAcc.handle.toLowerCase() === dbAcc.handle.toLowerCase()
             )
@@ -292,7 +292,7 @@ export async function PATCH(request: Request, { params }: Params) {
           })
 
           if (accountsToDelete.length > 0) {
-            const idsToDelete = accountsToDelete.map(a => a.id)
+            const idsToDelete = accountsToDelete.map((a: any) => a.id)
             await prisma.socialAccount.deleteMany({
               where: { id: { in: idsToDelete } }
             })
@@ -304,7 +304,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
         postfastSync = {
           synced: syncResults.success,
-          accounts: pfResult.accounts.map(a => `${a.platformId}:${a.handle}`),
+          accounts: pfResult.accounts.map((a: any) => `${a.platformId}:${a.handle}`),
         }
         console.log(`[Settings] PostFast sync complete: ${syncResults.success}/${pfResult.accounts.length} accounts synced for brand ${id}` + (syncResults.errors.length > 0 ? ` (${syncResults.failed} failed: ${syncResults.errors.join('; ')})` : ''))
       } else if (!pfResult.success) {

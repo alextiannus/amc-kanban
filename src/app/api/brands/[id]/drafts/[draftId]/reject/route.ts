@@ -20,7 +20,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const draft = await prisma.contentDraft.findFirst({ where: { id: draftId, brandId }, select: { id: true } })
   if (!draft) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const updated = await prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx: any) => {
     const nextDraft = await tx.contentDraft.update({
       where: { id: draftId },
       data: { status: 'draft', rejectionNote: note },

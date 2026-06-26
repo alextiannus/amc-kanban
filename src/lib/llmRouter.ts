@@ -152,7 +152,7 @@ export async function callLLM(
   })
 
   // 2. Fetch all default enabled configurations (excluding those already in matchingConfigs)
-  const matchingIds = matchingConfigs.map(c => c.id)
+  const matchingIds = matchingConfigs.map((c: any) => c.id)
   const defaultConfigs = await prisma.lLMConfig.findMany({
     where: {
       isEnabled: true,

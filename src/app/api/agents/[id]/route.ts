@@ -25,7 +25,7 @@ export async function GET(
         select: { agentId: true }
       })
 
-      const hasPermission = permissions.some(permission => permission.agentId === id)
+      const hasPermission = permissions.some((permission: any) => permission.agentId === id)
       if (!hasPermission) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
@@ -78,7 +78,7 @@ export async function PATCH(
         select: { agentId: true }
       })
 
-      const hasPermission = permissions.some(permission => permission.agentId === id)
+      const hasPermission = permissions.some((permission: any) => permission.agentId === id)
       if (!hasPermission) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
       }
@@ -211,7 +211,7 @@ export async function DELETE(
     const dismissedEmail = `dismissed-${id}-${crypto.randomUUID()}@agent.amc.local`
     const dismissedPassword = `dismissed-${crypto.randomUUID()}`
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const [permissions, brandAgents, assignmentPoolMembers, openTasks, fallbackConfigs, drafts, actionItems] = await Promise.all([
         tx.agentPermission.deleteMany({ where: { agentId: id } }),
         tx.brandAgent.updateMany({ where: { agentId: id, active: true }, data: { active: false } }),

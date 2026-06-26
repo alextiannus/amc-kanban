@@ -21,7 +21,7 @@ export async function GET() {
       orderBy: { updatedAt: 'desc' },
     })
 
-    const maskedConfigs = configs.map((c) => ({
+    const maskedConfigs = configs.map((c: any) => ({
       ...c,
       apiKey: maskKey(c.apiKey),
     }))
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
         baseUrl: baseUrl ? String(baseUrl).trim() : null,
         isEnabled: Boolean(isEnabled),
         isDefault: Boolean(isDefault),
-        taskTags: Array.isArray(taskTags) ? taskTags.map(t => String(t).trim()) : [],
+        taskTags: Array.isArray(taskTags) ? taskTags.map((t: any) => String(t).trim()) : [],
       },
     })
 

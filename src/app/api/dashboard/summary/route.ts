@@ -18,12 +18,12 @@ export async function GET(request: Request) {
       const allAgents = await prisma.user.findMany({
         where: { type: 'AI_AGENT' }
       })
-      permittedAgentIds = allAgents.map(a => a.id)
+      permittedAgentIds = allAgents.map((a: any) => a.id)
     } else {
       const permissions = await prisma.agentPermission.findMany({
         where: { humanId: session.user.id }
       })
-      permittedAgentIds = permissions.map(p => p.agentId)
+      permittedAgentIds = permissions.map((p: any) => p.agentId)
     }
 
     if (brandId) {
@@ -31,8 +31,8 @@ export async function GET(request: Request) {
         where: { brandId, active: true },
         select: { agentId: true },
       })
-      const brandAgentIds = brandLinks.map(l => l.agentId)
-      permittedAgentIds = permittedAgentIds.filter(id => brandAgentIds.includes(id))
+      const brandAgentIds = brandLinks.map((l: any) => l.agentId)
+      permittedAgentIds = permittedAgentIds.filter((id: any) => brandAgentIds.includes(id))
     }
 
     if (permittedAgentIds.length === 0) {
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       }
     })
 
-    const runningAgentIds = activeTasksCountByAgent.map(item => item.assigneeId)
+    const runningAgentIds = activeTasksCountByAgent.map((item: any) => item.assigneeId)
     const collaborativeAgentsCount = permittedAgentIds.length
     const runningAgentsCount = runningAgentIds.length
     const notRunningAgentsCount = permittedAgentIds.length - runningAgentsCount

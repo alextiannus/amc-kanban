@@ -52,7 +52,7 @@ export async function requireAdminAgent(request: Request): Promise<AdminAgentAut
     },
   })
 
-  const authorizedAdminIds = adminPermissions.filter((permission) => permission.human.role === 'ADMIN').map((permission) => permission.human.id)
+  const authorizedAdminIds = adminPermissions.filter((permission: any) => permission.human.role === 'ADMIN').map((permission: any) => permission.human.id)
 
   if (authorizedAdminIds.length === 0) {
     return {

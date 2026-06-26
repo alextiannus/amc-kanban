@@ -113,7 +113,7 @@ export async function researcherNode(state: any) {
       console.log(`Fetching PostFast analytics for Brand: ${brand.name}`);
       const analyticsRes = await postfastGetAnalytics(brand.postfastApiKey);
       if (analyticsRes.success && analyticsRes.posts && analyticsRes.posts.length > 0) {
-        const parsedPosts = analyticsRes.posts.map(p => {
+        const parsedPosts = analyticsRes.posts.map((p: any) => {
           const impressions = parseInt(p.latestMetric?.impressions || "0", 10);
           const likes = parseInt(p.latestMetric?.likes || "0", 10);
           return {
@@ -132,7 +132,7 @@ export async function researcherNode(state: any) {
 
   if (topPosts.length > 0) {
     examplesText = "\nHere are the top-performing historical posts for this brand on this platform to guide you:\n" +
-      topPosts.map((p, idx) => `[Example ${idx + 1}]\nMetrics: Impressions: ${p.impressions}, Likes: ${p.likes}\nContent: "${p.content}"\n`).join("\n");
+      topPosts.map((p: any, idx: number) => `[Example ${idx + 1}]\nMetrics: Impressions: ${p.impressions}, Likes: ${p.likes}\nContent: "${p.content}"\n`).join("\n");
   } else {
     try {
       const historicalDrafts = await prisma.contentDraft.findMany({
@@ -145,7 +145,7 @@ export async function researcherNode(state: any) {
       });
       if (historicalDrafts.length > 0) {
         examplesText = "\nHere are some of the brand's previously published posts to guide your style:\n" +
-          historicalDrafts.map((d, idx) => `[Example ${idx + 1}]\nContent: "${d.caption}"\n`).join("\n");
+          historicalDrafts.map((d: any, idx: number) => `[Example ${idx + 1}]\nContent: "${d.caption}"\n`).join("\n");
       }
     } catch (err) {
       console.error("Failed to fetch historical ContentDrafts in researcherNode:", err);

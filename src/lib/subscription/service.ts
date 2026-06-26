@@ -101,7 +101,7 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
 
   const brandOwnerId = brandOwner?.ok ? brandOwner.user.id : input.ownerId
 
-  const brand = await prisma.$transaction(async (tx) => {
+  const brand = await prisma.$transaction(async (tx: any) => {
     const created = await tx.brand.create({
       data: {
         ownerId: brandOwnerId,

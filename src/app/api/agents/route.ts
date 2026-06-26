@@ -31,8 +31,8 @@ export async function GET() {
 
       const ownedBrandIds = Array.from(
         new Set([
-          ...ownedRows.map((row) => row.brandId),
-          ...legacyOwnedBrands.map((brand) => brand.id),
+          ...ownedRows.map((row: any) => row.brandId),
+          ...legacyOwnedBrands.map((brand: any) => brand.id),
         ])
       )
 
@@ -48,8 +48,8 @@ export async function GET() {
 
       const visibleAgentIds = Array.from(
         new Set([
-          ...permissions.map((p) => p.agentId),
-          ...brandBoundAgentLinks.map((link) => link.agentId),
+          ...permissions.map((p: any) => p.agentId),
+          ...brandBoundAgentLinks.map((link: any) => link.agentId),
         ])
       )
 
@@ -89,7 +89,7 @@ export async function GET() {
     })
 
     // Convert avatar data to data URI and format response
-    const formattedAgents = agents.map((agent) => {
+    const formattedAgents = agents.map((agent: any) => {
       const { tasksAsAssignee, ...rest } = agent
       return {
         ...withResolvedAvatar(rest),

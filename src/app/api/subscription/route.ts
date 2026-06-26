@@ -158,7 +158,7 @@ async function canUserManageSubscription(userId: string, systemRole: string | nu
   const userRoles = computeEffectiveUserRoles({
     userType: 'HUMAN',
     systemRole,
-    explicitRoles: explicitRoles.map(r => r.role),
+    explicitRoles: explicitRoles.map((r: any) => r.role),
     principalCount,
   })
   if (userRoles.includes('AMC_PRINCIPAL')) return true
@@ -222,7 +222,7 @@ export async function GET(request: Request) {
         OR: [{ ownerId: session.user.id }, { owners: { some: { userId: session.user.id } } }],
       },
       select: { id: true }
-    }).then(list => list.map(b => b.id))
+    }).then((list: Array<{ id: string }>) => list.map((b: { id: string }) => b.id))
 
     if (ownedBrandIds.length > 0) {
       latestActive = await prisma.brandSubscription.findFirst({
@@ -294,7 +294,7 @@ export async function GET(request: Request) {
           },
           stores: [],
           socialAccounts: [],
-          ownedBrands: ownedBrands.map((b) => ({ id: b.id, name: b.name, location: b.location })),
+          ownedBrands: ownedBrands.map((b: any) => ({ id: b.id, name: b.name, location: b.location })),
           agent: {
             id: resolvedAgentId,
             apiKey: resolvedAgentKey,
@@ -387,8 +387,8 @@ export async function GET(request: Request) {
     stores,
     socialAccounts: brand.accounts,
     ownedBrands: ownedBrands
-      .filter((b) => b.id !== brand.id)
-      .map((b) => ({ id: b.id, name: b.name, location: b.location })),
+      .filter((b: any) => b.id !== brand.id)
+      .map((b: any) => ({ id: b.id, name: b.name, location: b.location })),
     agent: {
       id: resolvedAgentId,
       apiKey: resolvedAgentKey,
@@ -477,7 +477,7 @@ export async function POST(request: Request) {
   }
 
   const summary = calculatePricing(planId, durationMonths, uniqueAddonIds, addonQuantities)
-  const selectedAddons = SUBSCRIPTION_ADDONS.filter((a) => uniqueAddonIds.includes(a.id)).map((addon) => ({
+  const selectedAddons = SUBSCRIPTION_ADDONS.filter((a: any) => uniqueAddonIds.includes(a.id)).map((addon: any) => ({
     ...addon,
     quantity: addon.id === 'multi_store' ? (addonQuantities['multi_store'] ?? 0) : 1,
   }))

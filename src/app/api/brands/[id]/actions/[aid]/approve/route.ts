@@ -66,11 +66,11 @@ export async function PATCH(request: Request, { params }: Params) {
 
     const parts = (linked.materials ?? '')
       .split('\n')
-      .map((line) => line.trim())
+      .map((line: any) => line.trim())
       .filter(Boolean)
 
     if (input.publishedUrl) {
-      const existingPublishIndex = parts.findIndex((line) => line.startsWith('发布链接:'))
+      const existingPublishIndex = parts.findIndex((line: any) => line.startsWith('发布链接:'))
       const publishLine = `发布链接: ${input.publishedUrl}`
       if (existingPublishIndex >= 0) parts[existingPublishIndex] = publishLine
       else parts.push(publishLine)
@@ -114,7 +114,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
         const combinedMediaUrls = Array.from(new Set([
           ...(draft.mediaUrls || []),
-          ...(draft.assetRefs || []).map((ref) => ref.asset.url),
+          ...(draft.assetRefs || []).map((ref: any) => ref.asset.url),
         ].filter(Boolean)))
 
         if (isDirectGoogle) {

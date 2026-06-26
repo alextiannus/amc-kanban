@@ -160,7 +160,7 @@ Do NOT wrap in markdown code blocks. Output ONLY valid JSON.`
       const generatedTags: string[] = Array.isArray(parsed.aiTags) ? parsed.aiTags : []
       
       // Clean tags: remove the temporary "待确认" tag
-      const filteredOriginalTags = asset.aiTags.filter(t => t !== '待确认')
+      const filteredOriginalTags = asset.aiTags.filter((t: any) => t !== '待确认')
       const mergedTags = Array.from(new Set([...filteredOriginalTags, ...generatedTags, asset.aiCategory || '素材库']))
 
       console.log(`[Platform Designer] Analysis success for ${assetId}. New tags: ${mergedTags.join(', ')}`)

@@ -155,7 +155,7 @@ export async function PATCH(request: Request, { params }: Params) {
     }
   }
 
-  const draft = await prisma.$transaction(async (tx) => {
+  const draft = await prisma.$transaction(async (tx: any) => {
     const updated = await tx.contentDraft.update({
       where: { id: draftId },
       data: {
@@ -177,11 +177,11 @@ export async function PATCH(request: Request, { params }: Params) {
     if (assetIds) {
       await tx.contentAssetRef.deleteMany({ where: { draftId } })
       if (assetIds.length > 0) {
-        const validAssets = await tx.mediaAsset.findMany({ where: { id: { in: assetIds }, brandId }, select: { id: true, aiTags: true } })
-        const validAssetMap = new Map(validAssets.map(a => [a.id, a]))
+        const validAssets = (await tx.mediaAsset.findMany({ where: { id: { in: assetIds }, brandId }, select: { id: true, aiTags: true } })) as any
+        const validAssetMap = new Map(validAssets.map((a: any) => [a.id, a]))
         let order = 0
         for (const assetId of assetIds) {
-          const asset = validAssetMap.get(assetId)
+          const asset = validAssetMap.get(assetId) as any
           if (asset) {
             await tx.contentAssetRef.create({
               data: { draftId, assetId: asset.id, order: order++ },
@@ -190,14 +190,15 @@ export async function PATCH(request: Request, { params }: Params) {
         }
         
         // Sort asset IDs to avoid deadlocks under concurrent transactions
-        const sortedAssets = [...validAssets].sort((a, b) => a.id.localeCompare(b.id))
+        const sortedAssets = [...validAssets].sort((a: any, b: any) => a.id.localeCompare(b.id))
         for (const asset of sortedAssets) {
+          const assetAny = asset as any
           await tx.mediaAsset.update({
-            where: { id: asset.id },
+            where: { id: assetAny.id },
             data: {
               usedCount: { increment: 1 },
               lastUsedAt: new Date(),
-              aiTags: asset.aiTags.filter((t) => t !== '排期发布' && t !== '草稿排期'),
+              aiTags: assetAny.aiTags.filter((t: any) => t !== '排期发布' && t !== '草稿排期'),
             },
           })
         }

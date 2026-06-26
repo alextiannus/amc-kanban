@@ -38,7 +38,7 @@ export async function GET(_req: Request, { params }: Params) {
   })
 
   // Resolve binary avatar data → data URI, same as /api/agents
-  const result = brandAgents.map(ba => ({
+  const result = brandAgents.map((ba: any) => ({
     ...ba,
     agent: ba.agent ? withResolvedAvatar(ba.agent) : null,
   }))

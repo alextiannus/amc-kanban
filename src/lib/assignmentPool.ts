@@ -114,7 +114,7 @@ async function getReferenceScopedAgentIds(referenceCode: string | null | undefin
     select: { agentId: true },
   })
 
-  const agentIds = permissions.map((p) => p.agentId)
+  const agentIds = permissions.map((p: any) => p.agentId)
   return agentIds.length ? agentIds : null
 }
 
@@ -200,7 +200,7 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
   }
   const payloadHash = requestHash(baseHashInput)
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: any) => {
     const config = await getOrCreateConfigWithClient(tx)
 
     if (!config.enabled) {
@@ -236,7 +236,7 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
       },
     })
 
-    const activeAgentIds = allActiveMembers.map((m) => m.agentId)
+    const activeAgentIds = allActiveMembers.map((m: any) => m.agentId)
     if (!activeAgentIds.length) {
       throw new AssignmentError('NO_ELIGIBLE_AGENT', 'No active pool member available', 409)
     }
@@ -248,8 +248,8 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
       },
       select: { id: true },
     })
-    const liveAgentIdSet = new Set(liveAgents.map((a) => a.id))
-    const activeMembers = allActiveMembers.filter((m) => liveAgentIdSet.has(m.agentId))
+    const liveAgentIdSet = new Set(liveAgents.map((a: any) => a.id))
+    const activeMembers = allActiveMembers.filter((m: any) => liveAgentIdSet.has(m.agentId))
 
     if (!activeMembers.length) {
       throw new AssignmentError('NO_ELIGIBLE_AGENT', 'No active AI agent available in pool', 409)
@@ -257,28 +257,28 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
 
     const loadRows = await tx.brandAgent.groupBy({
       by: ['agentId'],
-      where: { active: true, agentId: { in: activeMembers.map((m) => m.agentId) } },
+      where: { active: true, agentId: { in: activeMembers.map((m: any) => m.agentId) } },
       _count: { _all: true },
     })
-    const loadMap = new Map(loadRows.map((r) => [r.agentId, r._count._all]))
+    const loadMap = new Map<string, number>(loadRows.map((r: any) => [r.agentId, r._count._all]))
 
-    const membersWithLoad = activeMembers.map((m) => ({
+    const membersWithLoad = activeMembers.map((m: any) => ({
       ...m,
       currentLoad: loadMap.get(m.agentId) || 0,
     }))
 
     const referenceScopedAgentIds = await getReferenceScopedAgentIds(normalizedReferenceCode)
     const candidateBase = referenceScopedAgentIds?.length
-      ? membersWithLoad.filter((m) => referenceScopedAgentIds.includes(m.agentId))
+      ? membersWithLoad.filter((m: any) => referenceScopedAgentIds.includes(m.agentId))
       : membersWithLoad
 
-    const eligibleByCapacity = candidateBase.filter((m) => m.currentLoad < m.capacity)
+    const eligibleByCapacity = candidateBase.filter((m: any) => m.currentLoad < m.capacity)
 
     const withIndustry = normalizedIndustry
-      ? eligibleByCapacity.filter((m) => m.industries.includes(normalizedIndustry))
+      ? eligibleByCapacity.filter((m: any) => m.industries.includes(normalizedIndustry))
       : []
     const withRegion = normalizedRegion
-      ? eligibleByCapacity.filter((m) => m.regions.includes(normalizedRegion))
+      ? eligibleByCapacity.filter((m: any) => m.regions.includes(normalizedRegion))
       : []
 
     let selected = null as (PoolMember & { currentLoad: number }) | null
@@ -337,7 +337,7 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
       if (config.overflowPolicy === 'pending_queue') {
         reason = 'queued_for_manual_assignment'
       } else if (config.fallbackAgentId) {
-        const fallbackMember = membersWithLoad.find((m) => m.agentId === config.fallbackAgentId)
+        const fallbackMember = membersWithLoad.find((m: any) => m.agentId === config.fallbackAgentId)
         if (fallbackMember) {
           selected = fallbackMember
           matchedBy = 'fallback'

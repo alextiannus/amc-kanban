@@ -267,7 +267,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [agentNote, setAgentNote] = useState('')
   const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
   const [newUrlInput, setNewUrlInput] = useState('')
-  const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all' | 'image' | 'video'>('unused')
+  const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all'>('unused')
   const [accounts, setAccounts] = useState<any[]>([])
   const [brandAssets, setBrandAssets] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
@@ -510,8 +510,9 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         return asset.usedCount === 0
       }
       const isVid = asset.mimeType?.startsWith('video/') || isVideoUrl(asset.url)
-      if (assetTypeFilter === 'image') return !isVid
-      if (assetTypeFilter === 'video') return isVid
+      if (assetTypeFilter === 'all') {
+        return !isVid
+      }
       return true
     })
   }, [brandAssets, assetTypeFilter])
@@ -1859,8 +1860,8 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">从品牌素材库中选择</label>
-                    <div className="flex bg-slate-105 dark:bg-slate-800 p-0.5 rounded-md text-[10px] font-black">
-                      {(['unused', 'all', 'image', 'video'] as const).map((t) => (
+                    <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-md text-[10px] font-black">
+                      {(['unused', 'all'] as const).map((t) => (
                         <button
                           key={t}
                           type="button"
@@ -1871,7 +1872,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                               : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
                           }`}
                         >
-                          {t === 'unused' ? '未使用' : t === 'all' ? '全部' : t === 'image' ? '图片' : '视频'}
+                          {t === 'unused' ? '未使用' : '全部'}
                         </button>
                       ))}
                     </div>

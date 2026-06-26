@@ -220,7 +220,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const [mediaOpPrompt, setMediaOpPrompt] = useState('')
   const [mediaProcessingIndex, setMediaProcessingIndex] = useState<number | null>(null)
 
-  const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all' | 'image' | 'video'>('unused')
+  const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all'>('unused')
   const [assetPageSize, setAssetPageSize] = useState(12)
   const [brandAssets, setBrandAssets] = useState<Array<{ id: string; url: string; filename?: string | null; mimeType: string; usedCount?: number; createdAt?: string | Date }>>([])
   const filteredAssets = useMemo(() => {
@@ -234,9 +234,10 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       if (assetTypeFilter === 'unused') {
         return (asset.usedCount ?? 0) === 0
       }
-      const isVid = asset.mimeType.startsWith('video/')
-      if (assetTypeFilter === 'image') return !isVid
-      if (assetTypeFilter === 'video') return isVid
+      if (assetTypeFilter === 'all') {
+        const isVid = asset.mimeType?.startsWith('video/')
+        return !isVid
+      }
       return true
     })
   }, [brandAssets, assetTypeFilter])
@@ -1419,7 +1420,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-black uppercase tracking-wider text-slate-400">从品牌素材库中选择</label>
                     <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-md text-[10px] font-black">
-                      {(['unused', 'all', 'image', 'video'] as const).map((t) => (
+                      {(['unused', 'all'] as const).map((t) => (
                         <button
                           key={t}
                           type="button"
@@ -1430,7 +1431,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                               : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
                           }`}
                         >
-                          {t === 'unused' ? '未使用' : t === 'all' ? '全部' : t === 'image' ? '图片' : '视频'}
+                          {t === 'unused' ? '未使用' : '全部'}
                         </button>
                       ))}
                     </div>
@@ -1439,7 +1440,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   {filteredAssets.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center dark:border-slate-800">
                       <p className="text-xs text-slate-400">
-                        {assetTypeFilter === 'image' ? '暂无图片素材' : assetTypeFilter === 'video' ? '暂无视频素材' : '品牌素材库中暂无素材'}
+                        {assetTypeFilter === 'all' ? '暂无图片素材' : '品牌素材库中暂无素材'}
                       </p>
                       <p className="mt-1 text-[10px] text-slate-300">请前往“素材”面板上传图片或视频</p>
                     </div>

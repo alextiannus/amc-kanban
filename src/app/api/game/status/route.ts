@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       pointsBalance: session.pointsBalance,
-      unclaimedPrizes: unclaimedSpins.map(log => ({
+      unclaimedPrizes: unclaimedSpins.map((log: any) => ({
         logId: log.id,
         prizeName: log.prize.name,
         prizeType: log.prize.type,

@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       where: { id: session.user.id },
       include: { businessRoles: true },
     })
-    const isOwnerOrAdmin = user?.role === 'ADMIN' || user?.businessRoles.some(r => r.role === 'BRAND_OWNER' || r.role === 'BRAND_DIRECTOR' || r.role === 'AMC_PRINCIPAL')
+    const isOwnerOrAdmin = user?.role === 'ADMIN' || user?.businessRoles.some((r: any) => r.role === 'BRAND_OWNER' || r.role === 'BRAND_DIRECTOR' || r.role === 'AMC_PRINCIPAL')
     if (isOwnerOrAdmin) {
       authorized = true
     }
