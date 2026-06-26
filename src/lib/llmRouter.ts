@@ -47,17 +47,25 @@ export async function callLLM(
   if (config) {
     provider = config.provider
     modelName = config.modelName
-    apiKey = config.apiKey // Assuming decrypted key or decrypt function is called here
+    apiKey = config.apiKey || ''
     baseUrl = config.baseUrl
   } else {
     // 3. Fallback to system env / default config
     provider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || 'google'
     modelName = process.env.SYSTEM_DEFAULT_LLM_MODEL || 'gemini-2.0-flash'
     apiKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
-    
-    // For google, try getting the system key if env key is missing
-    if (provider === 'google' && !apiKey) {
-      apiKey = (await getGeminiApiKey()) || ''
+  }
+
+  // Robust API key fallback if apiKey is missing/empty
+  if (!apiKey) {
+    if (provider === 'google') {
+      apiKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
+    } else if (provider === 'openai') {
+      apiKey = process.env.OPENAI_API_KEY || ''
+    } else if (provider === 'anthropic') {
+      apiKey = process.env.ANTHROPIC_API_KEY || ''
+    } else if (provider === 'deepseek') {
+      apiKey = process.env.DEEPSEEK_API_KEY || ''
     }
   }
 
