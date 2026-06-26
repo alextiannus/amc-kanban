@@ -17,6 +17,10 @@ async function main() {
   await prisma.agentPermission.deleteMany()
   await prisma.workUnit.deleteMany()
   await prisma.auditLog.deleteMany()
+  await prisma.idempotencyRecord.deleteMany()
+  await prisma.assignmentDecisionLog.deleteMany()
+  await prisma.assignmentPoolMember.deleteMany()
+  await prisma.assignmentPoolConfig.deleteMany()
   await prisma.user.deleteMany()
 
   // ── Users ─────────────────────────────────────────────────────────────────
@@ -56,7 +60,19 @@ async function main() {
     },
   })
 
-  console.log('✅ Users created:', admin.email, owner.email, agent.email)
+  // ── Seeding assignment pool member for the agent ─────────────────────────
+  await prisma.assignmentPoolMember.create({
+    data: {
+      agentId: agent.id,
+      active: true,
+      capacity: 30,
+      priority: 100,
+      industries: ['food', 'restaurant', 'beverage'],
+      regions: ['singapore', 'new york', 'us'],
+    },
+  })
+
+  console.log('✅ Users and AssignmentPoolMember created:', admin.email, owner.email, agent.email)
 
   // ── Brands ─────────────────────────────────────────────────────────────────
   const brandA = await prisma.brand.create({

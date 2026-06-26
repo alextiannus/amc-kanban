@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mail, Lock, Eye, EyeOff, User, Globe, Phone, ArrowRight, Loader2, Store } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, Globe, Phone, ArrowRight, Loader2, Store, AlertCircle } from 'lucide-react'
 
 const LABEL_CLASS = 'block font-jetbrains text-xs text-slate-500 mb-2 ml-1'
 const INPUT_CLASS = 'w-full bg-slate-50 border border-slate-200 rounded-lg py-4 pl-12 pr-4 text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all placeholder:text-slate-400 font-hanken text-base shadow-sm'
@@ -299,8 +299,9 @@ export default function BrandOwnerLogin() {
 
           {/* Error Banner */}
           {error && (
-            <div className="text-red-500 text-xs text-center font-medium font-hanken">
-              {error}
+            <div className="text-rose-600 bg-rose-50 border border-rose-100/80 rounded-xl py-3 px-4 text-xs font-semibold font-hanken text-center shadow-sm flex items-center justify-center gap-1.5">
+              <AlertCircle className="h-4 w-4 text-rose-500 flex-shrink-0" />
+              <span>{error}</span>
             </div>
           )}
 

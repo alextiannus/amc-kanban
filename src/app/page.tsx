@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mail, Lock, Eye, EyeOff, User, Globe, Phone, ArrowRight, Loader2, Sparkles, MessageSquare, MapPin } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, Globe, Phone, ArrowRight, Loader2, Sparkles, MessageSquare, MapPin, AlertCircle } from 'lucide-react'
 
 const InstagramIcon = ({ className }: { className?: string }) => (
   <svg
@@ -490,8 +490,9 @@ export default function Login() {
 
               {/* Error Banner */}
               {error && (
-                <div className="text-red-500 text-sm text-center font-medium font-hanken">
-                  {error}
+                <div className="text-rose-600 bg-rose-50 border border-rose-100/80 rounded-xl py-3 px-4 text-xs font-semibold font-hanken text-center shadow-sm flex items-center justify-center gap-1.5 animate-pulse">
+                  <AlertCircle className="h-4 w-4 text-rose-500 flex-shrink-0" />
+                  <span>{error}</span>
                 </div>
               )}
 

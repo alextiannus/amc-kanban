@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useRef } from 'react'
 import {
   Heart,
   MessageCircle,
@@ -822,6 +822,32 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     }
     setTriggeringId(draftId)
     try {
+      const currentEvent = events.find(e => e.id === draftId)
+      let notePayload = ""
+      if (currentEvent) {
+        const originalNote = currentEvent.agentNote || ""
+        const cleanNote = originalNote.replace(/【AI 生成指令】[\s\S]*?【\/AI 生成指令】(?:\r?\n)?/, '').trim()
+        notePayload = contentIdea.trim() 
+          ? `【AI 生成指令】${contentIdea.trim()}【/AI 生成指令】\n${cleanNote}`.trim()
+          : cleanNote
+      } else {
+        notePayload = contentIdea.trim() ? `【AI 生成指令】${contentIdea.trim()}【/AI 生成指令】` : ""
+      }
+
+      const patchRes = await fetch(`/api/brands/${targetBrandId}/drafts/${draftId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentNote: notePayload,
+          creativeHooks: creativeHooks.trim()
+        })
+      })
+
+      if (!patchRes.ok) {
+        const errJson = await patchRes.json().catch(() => ({}))
+        throw new Error(errJson.error || '保存创意想法与指令失败')
+      }
+
       const res = await fetch(`/api/brands/${targetBrandId}/drafts/${draftId}/trigger-copywriter`, {
         method: 'POST',
       })
@@ -1021,6 +1047,34 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const activeEventComments = useMemo(() => {
     return (activeDrawerEvent && commentsMap[activeDrawerEvent.id]) || []
   }, [activeDrawerEvent, commentsMap])
+
+  // Synchronize Content Idea and Creative Hooks when selecting an event in the calendar drawer
+  const lastDrawerEventIdRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (activeDrawerEvent) {
+      if (lastDrawerEventIdRef.current !== activeDrawerEvent.id) {
+        lastDrawerEventIdRef.current = activeDrawerEvent.id
+        
+        const note = activeDrawerEvent.agentNote || ''
+        if (note.includes('【AI 生成指令】')) {
+          const match = note.match(/【AI 生成指令】([\s\S]*?)【\/AI 生成指令】/)
+          if (match) {
+            setContentIdea(match[1].trim())
+          } else {
+            setContentIdea('')
+          }
+        } else {
+          setContentIdea(note)
+        }
+        setCreativeHooks(activeDrawerEvent.creativeHooks || '')
+      }
+    } else {
+      lastDrawerEventIdRef.current = null
+      setContentIdea('')
+      setCreativeHooks('')
+    }
+  }, [activeDrawerEvent])
 
   // Load calendar events
   useEffect(() => {
@@ -1646,6 +1700,33 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                         const saved = await saveDraft('draft', '【AI 正在创作中...】')
                         if (saved && saved.length > 0) {
                           setCreatedDrafts(saved)
+
+                          // Refresh accounts list to populate newly created placeholder account IDs
+                          try {
+                            const accRes = await fetch(`/api/brands/${activeBrandId}/accounts`)
+                            if (accRes.ok) {
+                              const accData = await accRes.json()
+                              const updatedAccounts = accData.accounts || []
+                              setAccounts(updatedAccounts)
+                            }
+                          } catch (accErr) {
+                            console.error('Failed to reload accounts:', accErr)
+                          }
+
+                          // Map selectedAccountIds from unconfigured placeholders to real database account IDs
+                          setSelectedAccountIds(prev =>
+                            prev.map(id => {
+                              if (id === 'unconfigured_red') {
+                                const match = saved.find(d => ['red', 'xiaohongshu', 'xhs'].includes(d.account?.platformId?.toLowerCase()))
+                                return match ? match.accountId : id
+                              }
+                              if (id === 'unconfigured_google_business') {
+                                const match = saved.find(d => ['google_business', 'google', 'google_maps'].includes(d.account?.platformId?.toLowerCase()))
+                                return match ? match.accountId : id
+                              }
+                              return id
+                            })
+                          )
 
                           const newCaptions: Record<string, string> = {}
                           const newHashtags: Record<string, string> = {}
@@ -2635,14 +2716,14 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                           {(platform === 'red' || platform === 'xiaohongshu' || platform === 'xhs') && (
                             <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-white shadow-lg dark:border-slate-955 dark:bg-[#0f0f0f] text-black dark:text-white">
                               {/* XHS Header */}
-                              <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-900">
-                                <div className="flex items-center gap-1.5">
+                              <div className="flex items-center justify-between border-b border-slate-100 px-3.5 py-2.5 dark:border-slate-900">
+                                <div className="flex items-center gap-2">
                                   <div className="h-6 w-6 rounded-full bg-slate-200 overflow-hidden border border-slate-100 dark:border-slate-800">
                                     <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" />
                                   </div>
-                                  <p className="text-[10px] font-bold">{account.displayName || brandDetails?.name || 'Your Brand'}</p>
+                                  <p className="text-[10.5px] font-black tracking-tight">{account.displayName || brandDetails?.name || 'Your Brand'}</p>
                                 </div>
-                                <button className="rounded-full bg-[#ff2442] px-2.5 py-0.5 text-[9px] font-black text-white hover:bg-[#e0203a] transition-colors">关注</button>
+                                <button className="rounded-full bg-[#ff2442] px-3.5 py-0.5 text-[9.5px] font-black text-white hover:bg-[#e0203a] transition-all shadow-sm">关注</button>
                               </div>
 
                               {/* XHS Media */}
@@ -2656,16 +2737,27 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                     )}
                                     {attachedMedia.length > 1 && (
                                       <>
-                                        <span className="absolute right-2 top-2 rounded-full bg-black/50 px-1.5 py-0.5 text-[8px] font-bold text-white z-10">
-                                          {(previewMediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}
-                                        </span>
+                                        {/* Dot Pagination indicators in bottom center */}
+                                        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/25 px-2 py-1 rounded-full backdrop-blur-[2px] z-10">
+                                          {attachedMedia.map((_, dotIdx) => (
+                                            <span
+                                              key={dotIdx}
+                                              className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${
+                                                (previewMediaIndex % attachedMedia.length) === dotIdx
+                                                  ? 'bg-[#ff2442] scale-125'
+                                                  : 'bg-white/60'
+                                              }`}
+                                            />
+                                          ))}
+                                        </div>
+                                        {/* Left/Right buttons */}
                                         <button
                                           type="button"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setPreviewMediaIndex(prev => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
                                           }}
-                                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
+                                          className="absolute left-2.5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/55 text-white rounded-full p-1 transition-colors z-10"
                                         >
                                           <ChevronLeft className="w-3.5 h-3.5" />
                                         </button>
@@ -2675,7 +2767,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                             e.stopPropagation();
                                             setPreviewMediaIndex(prev => (prev + 1) % attachedMedia.length)
                                           }}
-                                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
+                                          className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/55 text-white rounded-full p-1 transition-colors z-10"
                                         >
                                           <ChevronRight className="w-3.5 h-3.5" />
                                         </button>
@@ -2691,39 +2783,64 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                               </div>
 
                               {/* XHS Content */}
-                              <div className="px-3 py-2.5 max-h-32 overflow-y-auto border-b border-slate-50 dark:border-slate-900">
-                                <h4 className="text-[11px] font-black leading-normal text-slate-905 dark:text-white text-left">
-                                  {currentCaption.split('\n')[0]?.slice(0, 30) || 'Untitled Post'}
-                                </h4>
-                                <p className="mt-1 whitespace-pre-wrap text-[10px] leading-normal text-slate-700 dark:text-slate-300 text-left">
-                                  {currentCaption.split('\n').slice(1).join('\n') || currentCaption}
-                                </p>
-                                {currentHashtagsArray.length > 0 && (
-                                  <div className="mt-1.5 flex flex-wrap gap-1">
-                                    {currentHashtagsArray.map((tag) => (
-                                      <span key={tag} className="text-[10px] text-[#3a5b8f] dark:text-[#6a90d0] font-medium hover:underline cursor-pointer">#{tag}</span>
-                                    ))}
+                              {(() => {
+                                const lines = currentCaption.split('\n');
+                                const titleLine = lines[0] || '';
+                                const bodyContent = lines.slice(1).join('\n');
+                                return (
+                                  <div className="px-3.5 py-3 max-h-36 overflow-y-auto border-b border-slate-100 dark:border-slate-900 scrollbar-thin">
+                                    {titleLine && (
+                                      <h4 className="text-[12px] font-black leading-snug text-slate-900 dark:text-white text-left tracking-wide mb-1.5">
+                                        {titleLine}
+                                      </h4>
+                                    )}
+                                    {bodyContent.trim() ? (
+                                      <p className="whitespace-pre-wrap text-[10.5px] leading-relaxed text-slate-700 dark:text-slate-300 text-left">
+                                        {bodyContent}
+                                      </p>
+                                    ) : (
+                                      !titleLine && (
+                                        <p className="whitespace-pre-wrap text-[10.5px] leading-relaxed text-slate-400 dark:text-slate-500 text-left italic">
+                                          暂无内容描述
+                                        </p>
+                                      )
+                                    )}
+                                    {currentHashtagsArray.length > 0 && (
+                                      <div className="mt-2.5 flex flex-wrap gap-x-1.5 gap-y-1">
+                                        {currentHashtagsArray.map((tag) => (
+                                          <span key={tag} className="text-[10.5px] text-[#3a5b8f] dark:text-[#6a90d0] font-bold hover:underline cursor-pointer">
+                                            #{tag}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {brandDetails?.location && (
+                                      <div className="mt-2.5 flex items-center gap-1 text-[9px] text-[#3a5b8f] dark:text-[#6a90d0] font-bold bg-[#3a5b8f]/5 dark:bg-[#6a90d0]/10 px-2 py-0.5 rounded-full w-fit">
+                                        <span>📍</span>
+                                        <span>{brandDetails.location}</span>
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-                              </div>
+                                );
+                              })()}
 
                               {/* XHS Footer bar */}
-                              <div className="flex items-center justify-between px-3 py-2 text-slate-500 dark:text-slate-400 text-[9px]">
-                                <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full px-2.5 py-1 text-slate-450 dark:text-slate-500 text-[9px] mr-2.5 flex items-center">
+                              <div className="flex items-center justify-between px-3.5 py-2.5 text-slate-500 dark:text-slate-400 text-[9px] bg-white dark:bg-[#0f0f0f]">
+                                <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full px-3 py-1.5 text-slate-400 dark:text-slate-500 text-[9.5px] mr-3 flex items-center">
                                   说点什么...
                                 </div>
-                                <div className="flex items-center gap-3 shrink-0">
+                                <div className="flex items-center gap-3.5 shrink-0">
                                   <div className="flex items-center gap-0.5 cursor-pointer">
-                                    <Heart className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 hover:text-[#ff2442] hover:fill-[#ff2442]" />
-                                    <span className="font-bold text-slate-600 dark:text-slate-300">152</span>
+                                    <Heart className="w-4 h-4 text-slate-500 dark:text-slate-400 hover:text-[#ff2442] hover:fill-[#ff2442] transition-colors" />
+                                    <span className="font-extrabold text-[10px] text-slate-600 dark:text-slate-300">152</span>
                                   </div>
                                   <div className="flex items-center gap-0.5 cursor-pointer">
-                                    <Star className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 hover:text-yellow-500 hover:fill-yellow-500" />
-                                    <span className="font-bold text-slate-600 dark:text-slate-300">48</span>
+                                    <Star className="w-4 h-4 text-slate-500 dark:text-slate-400 hover:text-yellow-500 hover:fill-yellow-500 transition-colors" />
+                                    <span className="font-extrabold text-[10px] text-slate-600 dark:text-slate-300">48</span>
                                   </div>
                                   <div className="flex items-center gap-0.5 cursor-pointer">
-                                    <MessageCircle className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                                    <span className="font-bold text-slate-600 dark:text-slate-300">12</span>
+                                    <MessageCircle className="w-4 h-4 text-slate-500 dark:text-slate-400 hover:text-slate-600 transition-colors" />
+                                    <span className="font-extrabold text-[10px] text-slate-600 dark:text-slate-300">12</span>
                                   </div>
                                 </div>
                               </div>

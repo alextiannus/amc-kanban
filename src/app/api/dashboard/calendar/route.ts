@@ -187,7 +187,9 @@ export async function GET(request: Request) {
       roi,
       platformPostId: draft.platformPostId,
       postUrl: draft.platformPostId ? draftPostUrlMap.get(draft.platformPostId) : null,
-      type: 'post'
+      type: 'post',
+      agentNote: draft.agentNote,
+      creativeHooks: draft.creativeHooks,
     }
   })
 

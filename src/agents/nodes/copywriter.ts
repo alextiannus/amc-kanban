@@ -225,8 +225,10 @@ Rules:
      * Must be punchy and fit within 80-125 characters (since Instagram folds captions after 125 characters, the primary message must be visible before the fold).
 3. Brand Context and Visual Integration:
    - Carefully review the brand context details (tone, menu, contact, location) and attached images' metadata (AI tags, category, description).
-   - If the images depict specific menu items, locations, or promotions, align the hooks with these visual assets.
-   - Naturally integrate local neighborhood names or landmark details (like Singapore Clarke Quay, etc.) if mentioned in the brand location/address or image tags.
+   - Carefully inspect if the attached images' tags or description contain any physical locations, neighborhood names, cities, landmarks, or address details.
+   - If any physical location, landmark, neighborhood, or brand address/location is specified in the brand contact info or the attached images' metadata:
+     * You MUST naturally integrate these location/address/neighborhood details into the hook variants (e.g. including Singapore neighborhood name, landmark, or specific store name).
+     * Align the hooks closely with these visual assets.
 4. STRICT Negative prompt: Avoid weird hooks starting with clichés like "Discover the secrets...", "The best...", "The most...", "The top...". Do not use cringy or over-the-top AI language.
 5. Output your response as a JSON array of strings:
    ["Hook 1", "Hook 2", "Hook 3"]
@@ -294,11 +296,12 @@ Guidelines:
    - Else, write in the official brand/corporate perspective ("我们很高兴为您呈献...").
 2. Brand Context, Location & Image Alignment:
    - You MUST craft the copywriting according to:
-     a) The brand context (especially tagline, tone, menu items, slang dictionary).
+     a) The brand context (tagline, tone, menu items, slang dictionary, and especially physical address and location/neighborhood).
      b) The "User Custom Theme / Creative Idea" (${userPrompt ? `"${userPrompt}"` : 'none'}) and "Creative Hooks / Writing Angles" (${creativeHooks ? `"${creativeHooks}"` : 'none'}).
-     c) The attached images' information (AI tags, categories, visual descriptions/captions).
-   - If the attached images show a specific dish/product or location detail, make sure your text references it accurately.
-   - If the brand has contact details (phone, website, address, location/neighborhood) or the images specify location tags, you MUST naturally integrate these details into the post content (e.g. in the Call to Action or when inviting customers to visit).
+     c) The attached images' information (AI tags, categories, visual descriptions/captions, and any location or address details found in image tags or descriptions).
+   - Carefully inspect if the attached images' tags or descriptions contain any physical locations, neighborhood names, cities, landmarks, or addresses (e.g., Singapore Clarke Quay, etc.). If they do, or if the brand's primary address/location is specified in the brand contact info:
+     * You MUST naturally and prominently integrate these location/address/neighborhood details into the post body or Call to Action (e.g., inviting customers to visit, using location pin emoji 📍 like "📍 地址：[Address]", etc.).
+     * Make sure your text references specific visual elements or location details portrayed in the images accurately.
 3. Include a compelling Call to Action (CTA) at the end:
    - For F&B/restaurants/cafes: naturally invite them to book a table, visit the store, check the website, or highlight active promos. Include the address (or landmark/location) and website/phone naturally.
    - For Google Business Profile: Ensure the post is professional, location-centric, and details how to visit or contact (address, website link, phone).
@@ -355,15 +358,21 @@ Please output ONLY a valid JSON object.`;
     const hooksText = creativeHooks ? ` (${creativeHooks})` : "";
 
     // Platform-specific fallback generation
+    const addressStr = brand.address ? `\n\n📍 店铺地址：${brand.address}` : "";
+    let contactStr = "";
+    if (brand.address) contactStr += `\n📍 Address: ${brand.address}`;
+    if (brand.phone) contactStr += `\n📞 Phone: ${brand.phone}`;
+    if (brand.website) contactStr += `\n🌐 Website: ${brand.website}`;
+
     if (platformLower === "xiaohongshu" || platformLower === "red" || platformLower === "xhs") {
-      aiCaption = `🔥 我不允许还有人不知道这家宝藏店铺！\n\n📍 ${brandName} 带来全新企划：${themeText}！${hooksText}\n\n✨ 无论是高颜值环境还是精益求精的出品，都直接封神！！家人们闭眼冲就对了！\n\n📌 记得点赞收藏，防止找不到哦～`;
+      aiCaption = `🔥 我不允许还有人不知道这家宝藏店铺！\n\n📍 ${brandName} 带来全新企划：${themeText}！${hooksText}\n\n✨ 无论是高颜值环境还是精益求精的出品，都直接封神！！家人们闭眼冲就对了！${addressStr}\n\n📌 记得点赞收藏，防止找不到哦～`;
       aiHashtags = ["新加坡打卡", "宝藏店铺", brandName.replace(/\s+/g, "").toLowerCase(), "本地生活"];
     } else if (platformLower === "google_business" || platformLower === "google" || platformLower === "google_maps") {
-      aiCaption = `Update from ${brandName}:\n\nWe are pleased to introduce our latest project: "${themeText}".${creativeHooks ? ` Focus: ${creativeHooks}.` : ""}\n\nExperience premium quality and dedicated local service at our location. Visit our website or contact us to book your reservation.`;
+      aiCaption = `Update from ${brandName}:\n\nWe are pleased to introduce our latest project: "${themeText}".${creativeHooks ? ` Focus: ${creativeHooks}.` : ""}\n\nExperience premium quality and dedicated local service at our location.${contactStr}\n\nVisit our website or contact us to book your reservation.`;
       aiHashtags = [brandName.replace(/\s+/g, "").toLowerCase(), "localbusiness", "singapore"];
     } else {
       // Default to Instagram / Facebook / TikTok (English)
-      aiCaption = `Chope your seats! Something exciting is cooking at ${brandName}: ${themeText}.\n\nSpecial angles: ${creativeHooks || 'Premium experience'}.\n\nTag a friend who needs to try this!`;
+      aiCaption = `Chope your seats! Something exciting is cooking at ${brandName}: ${themeText}.\n\nSpecial angles: ${creativeHooks || 'Premium experience'}.\n\nTag a friend who needs to try this!${contactStr}`;
       
       const strategyLower = (marketingStrategy || "").toLowerCase();
       let detectedIndustry = "general";
