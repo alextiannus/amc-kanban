@@ -547,7 +547,7 @@ export default function BrandOwnerDashboard() {
               className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 text-slate-650 transition-all active:scale-95 cursor-pointer relative"
               title="通知消息"
             >
-              <span className="material-symbols-outlined text-lg">notifications</span>
+              <Bell className="h-5 w-5" />
               <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" />
             </button>
           )}
