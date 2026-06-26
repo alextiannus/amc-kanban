@@ -82,7 +82,13 @@ export async function POST(request: Request, { params }: Params) {
     })
   }
 
-  // 3. Asynchronously invoke marketingGraph workflow in the background
+  // 3. Update draft caption in database to indicate AI is writing
+  await prisma.contentDraft.update({
+    where: { id: draftId },
+    data: { caption: '【AI 正在创作中...】' }
+  })
+
+  // 4. Asynchronously invoke marketingGraph workflow in the background
   const config = { configurable: { thread_id: brandId } }
   const platform = draft.account?.platformId || 'instagram'
   

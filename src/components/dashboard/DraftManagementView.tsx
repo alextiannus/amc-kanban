@@ -674,19 +674,52 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || '触发 AI 创作失败')
-      if (!silent) {
-        alert('AI 创作已在后台启动，您可以稍后查看。')
-        closeEditor()
-        await loadDrafts()
-      }
+      
+      // Update local state and reload list immediately to show the placeholder
+      setCaption('【AI 正在创作中...】')
+      await loadDrafts()
+
+      // Poll every 2 seconds until AI copywriting is complete
+      let attempts = 0
+      const maxAttempts = 15
+      const interval = setInterval(async () => {
+        attempts++
+        try {
+          const checkRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}`)
+          if (checkRes.ok) {
+            const checkData = await checkRes.json()
+            const updatedDraft = checkData.draft
+            if (updatedDraft && updatedDraft.caption && updatedDraft.caption !== '【AI 正在创作中...】') {
+              clearInterval(interval)
+              setSaving(false)
+              
+              // Reload final draft list
+              await loadDrafts()
+              
+              // If the editor is still open for this draft, load the new content
+              if (selectedId === draftId) {
+                setCaption(updatedDraft.caption)
+                setHashtags(formatTags(updatedDraft.hashtags))
+                setCreativeHooks(updatedDraft.creativeHooks || '')
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Polling error:', e)
+        }
+        if (attempts >= maxAttempts) {
+          clearInterval(interval)
+          setSaving(false)
+        }
+      }, 2000)
+
     } catch (e) {
+      setSaving(false)
       if (!silent) {
         setError(e instanceof Error ? e.message : '触发 AI 创作失败')
       } else {
         console.error(`Copywriter trigger failed silently:`, e)
       }
-    } finally {
-      setSaving(false)
     }
   }
 

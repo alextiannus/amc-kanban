@@ -730,19 +730,51 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || '触发 AI 创作失败')
-      alert('AI 创作已成功在后台启动，并会应用最新研究与排期策略，请稍后查看结果！')
       
       const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
       const query = new URLSearchParams({ month })
       if (activeBrandId) query.set('brandId', activeBrandId)
+      
+      // Update calendar immediately to show the placeholder caption
       const reloadRes = await fetch(`/api/dashboard/calendar?${query.toString()}`)
       if (reloadRes.ok) {
         const data = await reloadRes.json()
         setEvents(data.events || [])
       }
+
+      // Poll every 2 seconds until AI copywriting is complete
+      let attempts = 0
+      const maxAttempts = 15 // 30 seconds max
+      const interval = setInterval(async () => {
+        attempts++
+        try {
+          const checkRes = await fetch(`/api/brands/${targetBrandId}/drafts/${draftId}`)
+          if (checkRes.ok) {
+            const checkData = await checkRes.json()
+            const updatedDraft = checkData.draft
+            if (updatedDraft && updatedDraft.caption && updatedDraft.caption !== '【AI 正在创作中...】') {
+              clearInterval(interval)
+              setTriggeringId(null)
+              
+              // Reload final events to show the actual generated caption
+              const reloadRes2 = await fetch(`/api/dashboard/calendar?${query.toString()}`)
+              if (reloadRes2.ok) {
+                const data2 = await reloadRes2.json()
+                setEvents(data2.events || [])
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Polling error:', e)
+        }
+        if (attempts >= maxAttempts) {
+          clearInterval(interval)
+          setTriggeringId(null)
+        }
+      }, 2000)
+
     } catch (e) {
       alert(e instanceof Error ? e.message : '触发 AI 创作失败')
-    } finally {
       setTriggeringId(null)
     }
   }
