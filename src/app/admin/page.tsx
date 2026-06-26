@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users, Store, CreditCard } from 'lucide-react'
+import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users, Store, CreditCard, Sparkles } from 'lucide-react'
 
 interface UserRecord {
   id: string
@@ -39,7 +39,7 @@ interface BrandRecord {
   updatedAt: string
 }
 
-type AdminTab = 'users' | 'brands' | 'agents' | 'pool' | 'system'
+type AdminTab = 'users' | 'brands' | 'agents' | 'pool' | 'system' | 'llm'
 
 interface InvitationResult {
   user: { id: string; email: string; type: string }
@@ -196,6 +196,150 @@ export default function AdminPage() {
     }
   }
 
+  // LLM Configurations state & handlers
+  interface LLMConfigRecord {
+    id: string
+    provider: string
+    displayName: string
+    modelName: string
+    apiKey: string | null
+    baseUrl: string | null
+    isEnabled: boolean
+    isDefault: boolean
+    taskTags: string[]
+    createdAt: string
+    updatedAt: string
+  }
+
+  const [llmConfigs, setLlmConfigs] = useState<LLMConfigRecord[]>([])
+  const [llmConfigsLoading, setLlmConfigsLoading] = useState(false)
+  const [llmConfigModalOpen, setLlmConfigModalOpen] = useState(false)
+  const [editingLLMConfig, setEditingLLMConfig] = useState<LLMConfigRecord | null>(null)
+  const [savingLLMConfig, setSavingLLMConfig] = useState(false)
+  const [llmForm, setLlmForm] = useState({
+    provider: 'google',
+    displayName: '',
+    modelName: '',
+    apiKey: '',
+    baseUrl: '',
+    isEnabled: true,
+    isDefault: false,
+    taskTagsStr: '',
+  })
+
+  const fetchLLMConfigs = async () => {
+    setLlmConfigsLoading(true)
+    try {
+      const res = await fetch('/api/admin/llm-configs')
+      if (res.ok) {
+        const data = await res.json()
+        setLlmConfigs(data.configs || [])
+      }
+    } catch (e) {
+      console.error('[fetchLLMConfigs error]', e)
+    } finally {
+      setLlmConfigsLoading(false)
+    }
+  }
+
+  const saveLLMConfig = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingLLMConfig(true)
+    try {
+      const url = editingLLMConfig 
+        ? `/api/admin/llm-configs/${editingLLMConfig.id}`
+        : '/api/admin/llm-configs'
+      const method = editingLLMConfig ? 'PATCH' : 'POST'
+      
+      const tags = llmForm.taskTagsStr
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean)
+
+      const body = {
+        provider: llmForm.provider,
+        displayName: llmForm.displayName,
+        modelName: llmForm.modelName,
+        apiKey: llmForm.apiKey,
+        baseUrl: llmForm.baseUrl || null,
+        isEnabled: llmForm.isEnabled,
+        isDefault: llmForm.isDefault,
+        taskTags: tags,
+      }
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      if (res.ok) {
+        setLlmConfigModalOpen(false)
+        setEditingLLMConfig(null)
+        void fetchLLMConfigs()
+        void fetchSystemLogs()
+      } else {
+        const errData = await res.json().catch(() => ({}))
+        alert(errData.error || '保存失败，请检查输入')
+      }
+    } catch (e) {
+      console.error('[saveLLMConfig error]', e)
+      alert('保存失败')
+    } finally {
+      setSavingLLMConfig(false)
+    }
+  }
+
+  const deleteLLMConfig = async (id: string) => {
+    if (!confirm('确定要删除这个大模型配置吗？')) return
+    try {
+      const res = await fetch(`/api/admin/llm-configs/${id}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        void fetchLLMConfigs()
+        void fetchSystemLogs()
+      } else {
+        alert('删除失败')
+      }
+    } catch (e) {
+      console.error('[deleteLLMConfig error]', e)
+      alert('删除失败')
+    }
+  }
+
+  const toggleLLMConfigEnabled = async (config: LLMConfigRecord) => {
+    try {
+      const res = await fetch(`/api/admin/llm-configs/${config.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isEnabled: !config.isEnabled }),
+      })
+      if (res.ok) {
+        void fetchLLMConfigs()
+        void fetchSystemLogs()
+      }
+    } catch (e) {
+      console.error('[toggleLLMConfigEnabled error]', e)
+    }
+  }
+
+  const toggleLLMConfigDefault = async (config: LLMConfigRecord) => {
+    try {
+      const res = await fetch(`/api/admin/llm-configs/${config.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isDefault: !config.isDefault }),
+      })
+      if (res.ok) {
+        void fetchLLMConfigs()
+        void fetchSystemLogs()
+      }
+    } catch (e) {
+      console.error('[toggleLLMConfigDefault error]', e)
+    }
+  }
+
   const fetchUsers = async () => {
     setLoading(true)
     const res = await fetch('/api/admin/users')
@@ -266,6 +410,7 @@ export default function AdminPage() {
       void fetchDecisionLogs()
       void fetchSystemConfig()
       void fetchSystemLogs()
+      void fetchLLMConfigs()
     })
   }, [])
 
@@ -657,20 +802,21 @@ export default function AdminPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-black text-slate-900 dark:text-white">Admin Console</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{humans.length} 个人类用户 · {brands.length} 个品牌 · {agents.length} 个 AI Agent</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{humans.length} 个人类用户 · {brands.length} 个品牌 · {agents.length} 个 AI Agent · {llmConfigs.length} 个模型配置</p>
           </div>
           <button onClick={() => router.push('/board')} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition">
             <ArrowLeft size={16} /> 返回看板
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:grid-cols-6">
           {([
             ['users', User, '用户管理'],
             ['brands', Store, '品牌管理'],
             ['agents', Bot, 'AI Agent 管理'],
             ['pool', CreditCard, '分配池'],
             ['system', Shield, '系统设置'],
+            ['llm', Sparkles, '多模型管理'],
           ] as const).map(([id, Icon, label]) => (
             <button
               key={id}
@@ -679,6 +825,9 @@ export default function AdminPage() {
                 if (id === 'system') {
                   void fetchSystemConfig()
                   void fetchSystemLogs()
+                }
+                if (id === 'llm') {
+                  void fetchLLMConfigs()
                 }
               }}
               className={`inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${activeAdminTab === id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}
@@ -1080,6 +1229,158 @@ export default function AdminPage() {
           </div>
         </div>}
 
+        {activeAdminTab === 'llm' && (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Header / Intro Card */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <Sparkles size={18} className="text-blue-500" /> 多模型配置与容灾路由
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                    在此配置平台运行所需的各个 AI API 接口。当调用首选模型遇到故障（如触发 429 频率限制、Token 额度用完、接口密钥失效等）时，
+                    系统会自动启动容灾路由，按顺序尝试下一个匹配标签的配置或默认配置，直至成功，最大程度保证文案创作与后台任务的连续性。
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEditingLLMConfig(null)
+                    setLlmForm({
+                      provider: 'google',
+                      displayName: '',
+                      modelName: '',
+                      apiKey: '',
+                      baseUrl: '',
+                      isEnabled: true,
+                      isDefault: false,
+                      taskTagsStr: '',
+                    })
+                    setLlmConfigModalOpen(true)
+                  }}
+                  className="inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition flex-shrink-0"
+                >
+                  <Plus size={16} /> 新增大模型配置
+                </button>
+              </div>
+            </div>
+
+            {/* Config List */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {llmConfigsLoading ? (
+                <div className="col-span-full py-12 text-center text-slate-500 dark:text-slate-400">
+                  <RefreshCw className="animate-spin inline-block mr-2" size={16} /> 加载配置列表中...
+                </div>
+              ) : llmConfigs.length === 0 ? (
+                <div className="col-span-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center text-slate-500 dark:text-slate-400">
+                  暂无大模型配置，系统目前将回退使用全局设置或服务器环境变量中的默认大模型密钥。
+                </div>
+              ) : (
+                llmConfigs.map((config) => (
+                  <div key={config.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 flex flex-col justify-between hover:border-blue-500/50 dark:hover:border-blue-500/40 transition">
+                    <div className="space-y-4">
+                      {/* Title Bar */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            {config.displayName}
+                          </h3>
+                          <p className="text-xs text-slate-400 mt-1 font-mono uppercase tracking-wider">
+                            {config.provider} / {config.modelName}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {config.isDefault && (
+                            <span className="text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 px-2 py-0.5 rounded-full font-bold">
+                              默认
+                            </span>
+                          )}
+                          <button
+                            onClick={() => toggleLLMConfigEnabled(config)}
+                            className={`text-[10px] px-2 py-0.5 rounded-full font-bold border transition ${
+                              config.isEnabled
+                                ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-450 border-emerald-250 dark:border-emerald-800/50'
+                                : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            {config.isEnabled ? '已启用' : '已禁用'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Content details */}
+                      <div className="text-xs space-y-1.5 border-t border-slate-100 dark:border-slate-800/80 pt-3 text-slate-600 dark:text-slate-400">
+                        {config.baseUrl && (
+                          <div className="flex gap-2">
+                            <span className="text-slate-400 w-16 flex-shrink-0">代理地址:</span>
+                            <span className="font-mono break-all">{config.baseUrl}</span>
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <span className="text-slate-400 w-16 flex-shrink-0">API 密钥:</span>
+                          <span className="font-mono text-slate-500 dark:text-slate-455">{config.apiKey || '未配置'}</span>
+                        </div>
+                        <div className="flex gap-2 items-start">
+                          <span className="text-slate-400 w-16 flex-shrink-0 mt-0.5">任务标签:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {config.taskTags.length === 0 ? (
+                              <span className="text-slate-400 italic">全部任务</span>
+                            ) : (
+                              config.taskTags.map((tag) => (
+                                <span key={tag} className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">
+                                  {tag}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions footer */}
+                    <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800/80 mt-5 pt-4">
+                      <button
+                        onClick={() => toggleLLMConfigDefault(config)}
+                        disabled={config.isDefault}
+                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:no-underline font-semibold"
+                      >
+                        {config.isDefault ? '当前已设为默认' : '设为默认模型'}
+                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => {
+                            setEditingLLMConfig(config)
+                            setLlmForm({
+                              provider: config.provider,
+                              displayName: config.displayName,
+                              modelName: config.modelName,
+                              apiKey: config.apiKey || '',
+                              baseUrl: config.baseUrl || '',
+                              isEnabled: config.isEnabled,
+                              isDefault: config.isDefault,
+                              taskTagsStr: config.taskTags.join(', '),
+                            })
+                            setLlmConfigModalOpen(true)
+                          }}
+                          className="text-xs text-slate-600 dark:text-slate-450 hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1 font-semibold"
+                        >
+                          <Edit3 size={13} /> 编辑
+                        </button>
+                        <button
+                          onClick={() => deleteLLMConfig(config.id)}
+                          className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold"
+                        >
+                          <Trash2 size={13} /> 删除
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
         {activeAdminTab === 'system' && (
           <div className="space-y-6 animate-in fade-in duration-200">
             {/* Global AI API key config */}
@@ -1306,6 +1607,137 @@ export default function AdminPage() {
                 {actionLoading[editingAgent.id + '_edit'] ? '保存中...' : '保存 Agent'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* LLM Config Modal */}
+      {llmConfigModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800">
+            <h2 className="text-base font-black text-slate-900 dark:text-white mb-1">
+              {editingLLMConfig ? '编辑大模型配置' : '新增大模型配置'}
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-5">
+              每个 API 接口独立运作，出错时系统自动调用可用链中的下一个接口。
+            </p>
+            <form onSubmit={saveLLMConfig} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="space-y-1.5 md:col-span-2">
+                  <span className="text-xs font-bold text-slate-500 block font-bold">配置显示名称</span>
+                  <input
+                    required
+                    value={llmForm.displayName}
+                    onChange={e => setLlmForm(prev => ({ ...prev, displayName: e.target.value }))}
+                    placeholder="例如: Google Gemini 2.0 Flash / 生产用备用 DeepSeek"
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                </label>
+
+                <label className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-500 block font-bold">AI 厂商 (Provider)</span>
+                  <select
+                    value={llmForm.provider}
+                    onChange={e => setLlmForm(prev => ({ ...prev, provider: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  >
+                    <option value="google">Google Gemini</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic Claude</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="custom_shim">Custom Shim (OpenAI Format)</option>
+                  </select>
+                </label>
+
+                <label className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-500 block font-bold">模型标识符 (Model ID)</span>
+                  <input
+                    required
+                    value={llmForm.modelName}
+                    onChange={e => setLlmForm(prev => ({ ...prev, modelName: e.target.value }))}
+                    placeholder="例如: gemini-2.0-flash, gpt-4o, claude-3-5-sonnet-20241022"
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                </label>
+
+                <label className="space-y-1.5 md:col-span-2">
+                  <span className="text-xs font-bold text-slate-500 block font-bold">API 密钥 (API Key)</span>
+                  <input
+                    type="password"
+                    required={!editingLLMConfig}
+                    value={llmForm.apiKey}
+                    onChange={e => setLlmForm(prev => ({ ...prev, apiKey: e.target.value }))}
+                    placeholder={editingLLMConfig ? '•••••••• (若未修改请保留此值)' : '输入您的 API 密钥'}
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                </label>
+
+                <label className="space-y-1.5 md:col-span-2">
+                  <span className="text-xs font-bold text-slate-500 block font-bold">代理/自定义接口端点 (Base URL)</span>
+                  <input
+                    value={llmForm.baseUrl}
+                    onChange={e => setLlmForm(prev => ({ ...prev, baseUrl: e.target.value }))}
+                    placeholder="非必填。留空使用默认的 API 地址"
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                </label>
+
+                <label className="space-y-1.5 md:col-span-2">
+                  <span className="text-xs font-bold text-slate-500 block font-bold">匹配的任务类型标签 (Task Tags)</span>
+                  <input
+                    value={llmForm.taskTagsStr}
+                    onChange={e => setLlmForm(prev => ({ ...prev, taskTagsStr: e.target.value }))}
+                    placeholder="用英文逗号隔开，例如: copywriting, reasoning"
+                    className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    支持在后台按任务分类匹配。例如在 Copywriter 中填入 `copywriting`，在 AI 研究员中填入 `reasoning`。
+                  </p>
+                </label>
+              </div>
+
+              <div className="flex gap-4 pt-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={llmForm.isEnabled}
+                    onChange={e => setLlmForm(prev => ({ ...prev, isEnabled: e.target.checked }))}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">启用此配置</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={llmForm.isDefault}
+                    onChange={e => setLlmForm(prev => ({ ...prev, isDefault: e.target.checked }))}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">设为兜底默认模型</span>
+                </label>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLlmConfigModalOpen(false)
+                    setEditingLLMConfig(null)
+                  }}
+                  className="px-4 py-2 text-sm text-slate-600 dark:text-slate-400"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingLLMConfig}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition disabled:opacity-50 font-bold"
+                >
+                  {savingLLMConfig ? '保存中...' : '保存配置'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

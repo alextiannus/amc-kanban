@@ -9,73 +9,16 @@ export interface LLMCallResult {
 }
 
 /**
- * Dynamically routes and calls the appropriate LLM model for a given task tag.
- * Implements the 3-tier fallback logic:
- * 1. Task Tag matching config in DB
- * 2. Default config in DB
- * 3. Environment variables / System config fallback (defaults to Gemini)
+ * Executes a single API call for a specific LLM provider.
  */
-export async function callLLM(
-  taskTag: string,
+async function executeSingleLLMCall(
+  provider: string,
+  modelName: string,
+  apiKey: string,
+  baseUrl: string | null,
   prompt: string,
-  maxTokens: number = 1000
+  maxTokens: number
 ): Promise<LLMCallResult> {
-  // 1. Try to find task-specific configuration in DB
-  let config = await prisma.lLMConfig.findFirst({
-    where: {
-      isEnabled: true,
-      taskTags: { has: taskTag },
-    },
-    orderBy: { updatedAt: 'desc' },
-  })
-
-  // 2. Try to find the default configuration in DB
-  if (!config) {
-    config = await prisma.lLMConfig.findFirst({
-      where: {
-        isEnabled: true,
-        isDefault: true,
-      },
-      orderBy: { updatedAt: 'desc' },
-    })
-  }
-
-  let provider = 'google'
-  let modelName = 'gemini-2.0-flash'
-  let apiKey = ''
-  let baseUrl: string | null = null
-
-  if (config) {
-    provider = config.provider
-    modelName = config.modelName
-    apiKey = config.apiKey || ''
-    baseUrl = config.baseUrl
-  } else {
-    // 3. Fallback to system env / default config
-    provider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || 'google'
-    modelName = process.env.SYSTEM_DEFAULT_LLM_MODEL || 'gemini-2.0-flash'
-    apiKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
-  }
-
-  // Robust API key fallback if apiKey is missing/empty
-  if (!apiKey) {
-    if (provider === 'google') {
-      apiKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
-    } else if (provider === 'openai') {
-      apiKey = process.env.OPENAI_API_KEY || ''
-    } else if (provider === 'anthropic') {
-      apiKey = process.env.ANTHROPIC_API_KEY || ''
-    } else if (provider === 'deepseek') {
-      apiKey = process.env.DEEPSEEK_API_KEY || ''
-    }
-  }
-
-  if (!apiKey) {
-    const errorMsg = `API key missing for provider: ${provider}, model: ${modelName}`
-    console.warn(`[LLM Router] ${errorMsg}. Failed to route.`)
-    return { text: null, provider, modelName, error: errorMsg }
-  }
-
   try {
     let responseText: string | null = null
     let errorMsg: string | undefined = undefined
@@ -186,5 +129,119 @@ export async function callLLM(
     const errorMsg = `Request failed for ${provider}/${modelName}: ${error.message || error}`
     console.error(`[LLM Router]`, error)
     return { text: null, provider, modelName, error: errorMsg }
+  }
+}
+
+/**
+ * Dynamically routes and calls the appropriate LLM model for a given task tag.
+ * Implements a failover fallback chain across all configured models in the DB,
+ * and falls back to system environment variables as a final resort.
+ */
+export async function callLLM(
+  taskTag: string,
+  prompt: string,
+  maxTokens: number = 1000
+): Promise<LLMCallResult> {
+  // 1. Fetch all matching enabled configurations
+  const matchingConfigs = await prisma.lLMConfig.findMany({
+    where: {
+      isEnabled: true,
+      taskTags: { has: taskTag },
+    },
+    orderBy: { updatedAt: 'desc' },
+  })
+
+  // 2. Fetch all default enabled configurations (excluding those already in matchingConfigs)
+  const matchingIds = matchingConfigs.map(c => c.id)
+  const defaultConfigs = await prisma.lLMConfig.findMany({
+    where: {
+      isEnabled: true,
+      isDefault: true,
+      NOT: { id: { in: matchingIds } }
+    },
+    orderBy: { updatedAt: 'desc' },
+  })
+
+  const configsToTry = [...matchingConfigs, ...defaultConfigs]
+  const errors: string[] = []
+
+  // Try each configuration in sequence
+  for (const config of configsToTry) {
+    let apiKey = config.apiKey || ''
+    const provider = config.provider
+    const modelName = config.modelName
+    const baseUrl = config.baseUrl
+
+    // Resolve API key fallbacks if empty
+    if (!apiKey) {
+      if (provider === 'google') {
+        apiKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
+      } else if (provider === 'openai') {
+        apiKey = process.env.OPENAI_API_KEY || ''
+      } else if (provider === 'anthropic') {
+        apiKey = process.env.ANTHROPIC_API_KEY || ''
+      } else if (provider === 'deepseek') {
+        apiKey = process.env.DEEPSEEK_API_KEY || ''
+      }
+    }
+
+    if (!apiKey) {
+      const errorMsg = `API key missing for provider: ${provider}, model: ${modelName}`
+      console.warn(`[LLM Router] Failover warning: ${errorMsg}`)
+      errors.push(`${config.displayName} (${provider}): ${errorMsg}`)
+      continue
+    }
+
+    console.log(`[LLM Router] Trying configuration: ${config.displayName} (${provider}/${modelName})`)
+    const result = await executeSingleLLMCall(provider, modelName, apiKey, baseUrl, prompt, maxTokens)
+
+    if (result.text && !result.error) {
+      console.log(`[LLM Router] Call succeeded using ${config.displayName} (${provider}/${modelName})`)
+      return result
+    }
+
+    const errDetail = result.error || 'Unknown error'
+    console.warn(`[LLM Router] Configuration ${config.displayName} failed: ${errDetail}. Trying next...`)
+    errors.push(`${config.displayName} (${provider}): ${errDetail}`)
+  }
+
+  // 3. Fallback to system env / default config
+  console.log('[LLM Router] All database configurations failed or none found. Trying system default fallback...')
+  
+  const sysProvider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || 'google'
+  const sysModelName = process.env.SYSTEM_DEFAULT_LLM_MODEL || 'gemini-2.0-flash'
+  let sysApiKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
+
+  if (!sysApiKey) {
+    if (sysProvider === 'google') {
+      sysApiKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
+    } else if (sysProvider === 'openai') {
+      sysApiKey = process.env.OPENAI_API_KEY || ''
+    } else if (sysProvider === 'anthropic') {
+      sysApiKey = process.env.ANTHROPIC_API_KEY || ''
+    } else if (sysProvider === 'deepseek') {
+      sysApiKey = process.env.DEEPSEEK_API_KEY || ''
+    }
+  }
+
+  if (sysApiKey) {
+    const result = await executeSingleLLMCall(sysProvider, sysModelName, sysApiKey, null, prompt, maxTokens)
+    if (result.text && !result.error) {
+      console.log(`[LLM Router] Call succeeded using system default fallback (${sysProvider}/${sysModelName})`)
+      return result
+    }
+    errors.push(`System Fallback (${sysProvider}): ${result.error || 'Unknown error'}`)
+  } else {
+    errors.push(`System Fallback (${sysProvider}): API key missing`)
+  }
+
+  const combinedError = `All LLM configurations in fallback chain failed:\n- ` + errors.join('\n- ')
+  console.error(`[LLM Router] ${combinedError}`)
+
+  return {
+    text: null,
+    provider: sysProvider,
+    modelName: sysModelName,
+    error: combinedError
   }
 }
