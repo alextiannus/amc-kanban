@@ -339,33 +339,39 @@ Please output ONLY a valid JSON object.`;
   if (!geminiUsed) {
     console.log("Falling back to rule-based copywriter templates.");
     const brandName = brand.name;
+    const themeText = userPrompt ? userPrompt : "高品质服务与体验";
+    const hooksText = creativeHooks ? ` (${creativeHooks})` : "";
 
-    // Detect industry from strategy content for fallback hashtags selection
-    const strategyLower = (marketingStrategy || "").toLowerCase();
-    let detectedIndustry = "general";
-    if (strategyLower.includes("pilates") || strategyLower.includes("fitness")) {
-      detectedIndustry = "fitness";
-    } else if (strategyLower.includes("renovation") || strategyLower.includes("steel")) {
-      detectedIndustry = "renovation";
-    } else if (strategyLower.includes("winery") || strategyLower.includes("wine")) {
-      detectedIndustry = "winery";
-    }
-
-    aiCaption = `【${platform}风格】Welcome to ${brandName}! Specially crafted for those who seek excellence.`;
-
-    if (detectedIndustry === "fitness") {
-      aiHashtags = ["sgfitness", "sgpilates", "workout", brandName.replace(/\s+/g, "").toLowerCase(), "singaporefit"];
-    } else if (detectedIndustry === "renovation") {
-      aiHashtags = ["sgrenovation", "sginterior", "homedecor", brandName.replace(/\s+/g, "").toLowerCase(), "singaporehome"];
-    } else if (detectedIndustry === "winery") {
-      aiHashtags = ["sgwine", "sgwinery", "winetasting", brandName.replace(/\s+/g, "").toLowerCase(), "singaporewine"];
+    // Platform-specific fallback generation
+    if (platformLower === "xiaohongshu" || platformLower === "red" || platformLower === "xhs") {
+      aiCaption = `🔥 我不允许还有人不知道这家宝藏店铺！\n\n📍 ${brandName} 带来全新企划：${themeText}！${hooksText}\n\n✨ 无论是高颜值环境还是精益求精的出品，都直接封神！！家人们闭眼冲就对了！\n\n📌 记得点赞收藏，防止找不到哦～`;
+      aiHashtags = ["新加坡打卡", "宝藏店铺", brandName.replace(/\s+/g, "").toLowerCase(), "本地生活"];
+    } else if (platformLower === "google_business" || platformLower === "google" || platformLower === "google_maps") {
+      aiCaption = `Update from ${brandName}:\n\nWe are pleased to introduce our latest project: "${themeText}".${creativeHooks ? ` Focus: ${creativeHooks}.` : ""}\n\nExperience premium quality and dedicated local service at our location. Visit our website or contact us to book your reservation.`;
+      aiHashtags = [brandName.replace(/\s+/g, "").toLowerCase(), "localbusiness", "singapore"];
     } else {
-      aiHashtags = ["sgfood", "sgfoodie", "instafood", brandName.replace(/\s+/g, "").toLowerCase(), "singaporeeat"];
-    }
+      // Default to Instagram / Facebook / TikTok (English)
+      aiCaption = `Chope your seats! Something exciting is cooking at ${brandName}: ${themeText}.\n\nSpecial angles: ${creativeHooks || 'Premium experience'}.\n\nTag a friend who needs to try this!`;
+      
+      const strategyLower = (marketingStrategy || "").toLowerCase();
+      let detectedIndustry = "general";
+      if (strategyLower.includes("pilates") || strategyLower.includes("fitness")) {
+        detectedIndustry = "fitness";
+      } else if (strategyLower.includes("renovation") || strategyLower.includes("steel")) {
+        detectedIndustry = "renovation";
+      } else if (strategyLower.includes("winery") || strategyLower.includes("wine")) {
+        detectedIndustry = "winery";
+      }
 
-    const taskTitle = task.title;
-    if (taskTitle.toLowerCase().includes("burgers") || taskTitle.toLowerCase().includes("汉堡")) {
-      aiCaption = `Welcome to ${brandName}! Chope your seats for our mouthwatering Wagyu Burgers. Specially crafted for local foodies who love that authentic taste!`;
+      if (detectedIndustry === "fitness") {
+        aiHashtags = ["sgfitness", "sgpilates", "workout", brandName.replace(/\s+/g, "").toLowerCase(), "singaporefit"];
+      } else if (detectedIndustry === "renovation") {
+        aiHashtags = ["sgrenovation", "sginterior", "homedecor", brandName.replace(/\s+/g, "").toLowerCase(), "singaporehome"];
+      } else if (detectedIndustry === "winery") {
+        aiHashtags = ["sgwine", "sgwinery", "winetasting", brandName.replace(/\s+/g, "").toLowerCase(), "singaporewine"];
+      } else {
+        aiHashtags = ["sgfood", "sgfoodie", "instafood", brandName.replace(/\s+/g, "").toLowerCase(), "singaporeeat"];
+      }
     }
   }
 
