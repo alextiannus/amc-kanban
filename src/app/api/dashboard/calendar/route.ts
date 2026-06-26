@@ -185,7 +185,8 @@ export async function GET(request: Request) {
       captionLang: draft.captionLang,
       mediaAssetId: mediaAssetId || null,
       clicks,
-      roi
+      roi,
+      platformPostId: draft.platformPostId
     }
   })
 

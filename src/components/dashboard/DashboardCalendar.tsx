@@ -27,7 +27,8 @@ import {
   X,
   ChevronDown,
   Check,
-  Maximize2
+  Maximize2,
+  ExternalLink
 } from 'lucide-react'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
@@ -99,6 +100,96 @@ const STATUS_COLORS: Record<string, string> = {
   'scheduled': 'bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/20',
 }
 
+interface Comment {
+  id: string
+  author: string
+  avatar: string
+  content: string
+  time: string
+  reply?: string
+  isAiReply?: boolean
+  isGeneratingReply?: boolean
+}
+
+interface GroupedEvent {
+  id: string
+  brandName: string
+  platform: string
+  title: string
+  cleanTitle: string
+  status: 'done' | 'pending' | 'scheduled'
+  time: string
+  scheduledAt: string
+  mediaUrls?: string[]
+  clicks?: number
+  roi?: number
+  platformPostId?: string | null
+  events: CalendarEvent[]
+}
+
+function getCleanTitle(title: string, platform: string): string {
+  const normPlatform = normalizePlatformLabel(platform)
+  const escapedPlatform = normPlatform.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+  const pattern = new RegExp(`^(\\[?${escapedPlatform}\\]?\\s*·?\\s*|${escapedPlatform}\\s*[:：·]?\\s*|${platform}\\s*[:：·]?\\s*)`, 'i')
+  return title.replace(pattern, '').trim()
+}
+
+function groupEventsByTitle(events: CalendarEvent[]): GroupedEvent[] {
+  const groups: Record<string, GroupedEvent> = {}
+  events.forEach(ev => {
+    const cleanTitle = getCleanTitle(ev.title, ev.platform)
+    const key = `${ev.brandName}|${cleanTitle}`
+    if (!groups[key]) {
+      groups[key] = {
+        id: ev.id,
+        brandName: ev.brandName,
+        platform: ev.platform,
+        title: ev.title,
+        cleanTitle: cleanTitle,
+        status: ev.status,
+        time: ev.time,
+        scheduledAt: ev.scheduledAt,
+        mediaUrls: ev.mediaUrls,
+        clicks: ev.clicks,
+        roi: ev.roi,
+        platformPostId: ev.platformPostId,
+        events: []
+      }
+    }
+    groups[key].events.push(ev)
+    const group = groups[key]
+    if (ev.status === 'done') {
+      group.status = 'done'
+    } else if (ev.status === 'scheduled' && group.status !== 'done') {
+      group.status = 'scheduled'
+    } else if (ev.status === 'pending' && group.status !== 'done' && group.status !== 'scheduled') {
+      group.status = 'pending'
+    }
+    if (ev.clicks) group.clicks = (group.clicks || 0) + ev.clicks
+    if (ev.roi) group.roi = (group.roi || 0) + ev.roi
+  })
+  return Object.values(groups)
+}
+
+function getPostOriginalUrl(platform: string, platformPostId: string | null | undefined): string {
+  const normPlatform = normalizePlatformLabel(platform)
+  const postId = platformPostId || `mock_post_${Date.now()}`
+  switch (normPlatform) {
+    case 'IG':
+      return `https://www.instagram.com/p/${postId}/`
+    case '小红书':
+      return `https://www.xiaohongshu.com/explore/${postId}`
+    case 'TikTok':
+      return `https://www.tiktok.com/video/${postId}`
+    case 'Google':
+      return `https://www.google.com/maps/place/${postId}`
+    case 'Facebook':
+      return `https://www.facebook.com/${postId}`
+    default:
+      return `https://www.google.com/search?q=${encodeURIComponent(normPlatform + ' post ' + postId)}`
+  }
+}
+
 interface CalendarEvent {
   id: string
   brandId: string
@@ -113,6 +204,7 @@ interface CalendarEvent {
   mediaAssetId?: string | null
   clicks?: number
   roi?: number
+  platformPostId?: string | null
 }
 
 interface DashboardCalendarProps {
@@ -133,7 +225,11 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'scheduled' | 'done'>('all')
   const [activeView, setActiveView] = useState<'month' | 'week' | 'day' | 'list'>('month')
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+  const [isBrandsCollapsed, setIsBrandsCollapsed] = useState(false)
+  const [commentsMap, setCommentsMap] = useState<Record<string, Comment[]>>({})
+  const [commentReplyText, setCommentReplyText] = useState<Record<string, string>>({})
   const [designerPromptText, setDesignerPromptText] = useState('')
+  const [assetPageSize, setAssetPageSize] = useState(12)
   const [designerProcessing, setDesignerProcessing] = useState(false)
   const [videoProcessing, setVideoProcessing] = useState(false)
   const [showDesignerPanel, setShowDesignerPanel] = useState<string | null>(null)
@@ -259,6 +355,10 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       setBrandAssets([])
     }
   }, [activeBrandId])
+
+  useEffect(() => {
+    setAssetPageSize(12)
+  }, [activeBrandId, assetTypeFilter, isCreatingPost])
 
   useEffect(() => {
     setActiveBrandId(brandId)
@@ -755,6 +855,135 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     return () => { cancelled = true }
   }, [viewYear, viewMonth, activeBrandId])
 
+  // Load mock comments when selectedEventId changes
+  useEffect(() => {
+    if (!selectedEventId) return
+    if (commentsMap[selectedEventId]) return
+
+    const ev = events.find(e => e.id === selectedEventId)
+    if (!ev || ev.status !== 'done') return
+
+    const normPlatform = normalizePlatformLabel(ev.platform)
+    let initialComments: Comment[] = []
+
+    if (normPlatform === '小红书') {
+      initialComments = [
+        {
+          id: `${selectedEventId}-c1`,
+          author: '小红薯_8829',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop',
+          content: '请问一下这个新品目前在哪个门店能买到呀？想下午去买！',
+          time: '2小时前'
+        },
+        {
+          id: `${selectedEventId}-c2`,
+          author: '美食小分队',
+          avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=80&fit=crop',
+          content: '看着好好吃，周末要和闺蜜一起去打卡！',
+          time: '4小时前',
+          reply: '非常欢迎！建议提前预约或者错峰出行哦，祝你们玩得开心！',
+          isAiReply: true
+        }
+      ]
+    } else if (normPlatform === 'IG') {
+      initialComments = [
+        {
+          id: `${selectedEventId}-c1`,
+          author: 'jane_explorer',
+          avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&fit=crop',
+          content: 'This looks absolutely fantastic! Do you guys open on weekends?',
+          time: '3h ago'
+        },
+        {
+          id: `${selectedEventId}-c2`,
+          author: 'foodie.marcus',
+          avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&fit=crop',
+          content: 'Do you have dairy-free options for this menu item?',
+          time: '5h ago'
+        }
+      ]
+    } else if (normPlatform === 'Google') {
+      initialComments = [
+        {
+          id: `${selectedEventId}-c1`,
+          author: 'Robert Sterling',
+          avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&fit=crop',
+          content: 'Great atmosphere, friendly staff, and the food was delicious. Highly recommend!',
+          time: '1 day ago',
+          reply: 'Thank you so much for the review, Robert! Glad you enjoyed your visit.',
+          isAiReply: true
+        }
+      ]
+    } else {
+      initialComments = [
+        {
+          id: `${selectedEventId}-c1`,
+          author: 'Alice Chen',
+          avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=80&fit=crop',
+          content: '这个活动持续到什么时候？想了解一下详情。',
+          time: '1天前'
+        }
+      ]
+    }
+
+    setCommentsMap(prev => ({
+      ...prev,
+      [selectedEventId]: initialComments
+    }))
+  }, [selectedEventId, events])
+
+  const handleSendManualReply = (eventId: string, commentId: string) => {
+    const text = commentReplyText[commentId]?.trim()
+    if (!text) return
+
+    setCommentsMap(prev => {
+      const list = prev[eventId] || []
+      return {
+        ...prev,
+        [eventId]: list.map(c => c.id === commentId ? { ...c, reply: text } : c)
+      }
+    })
+    setCommentReplyText(prev => ({ ...prev, [commentId]: '' }))
+  }
+
+  const handleGenerateAiReply = (eventId: string, commentId: string, commentContent: string) => {
+    setCommentsMap(prev => {
+      const list = prev[eventId] || []
+      return {
+        ...prev,
+        [eventId]: list.map(c => c.id === commentId ? { ...c, isGeneratingReply: true } : c)
+      }
+    })
+
+    setTimeout(() => {
+      let aiResponse = '感谢您的反馈！我们会继续努力提供更好的产品和服务。'
+      if (commentContent.includes('地址') || commentContent.includes('门店') || commentContent.includes('在哪里')) {
+        aiResponse = '亲亲，我们在上海市静安区南京西路123号设有旗舰店，欢迎您随时来店打卡体验！'
+      } else if (commentContent.includes('预约') || commentContent.includes('排队') || commentContent.includes('周末')) {
+        aiResponse = '周末客流量较大，为了避免您排队，建议您关注我们的小程序提前进行预约排队哦！'
+      } else if (commentContent.includes('好吃') || commentContent.includes('超赞') || commentContent.includes('delicious') || commentContent.includes('amazing')) {
+        aiResponse = '哇，太开心得到您的喜爱！我们会保持品质，期待您的下一次光临！❤️'
+      } else if (commentContent.includes('open') || commentContent.includes('weekend')) {
+        aiResponse = 'Yes, we are open on weekends from 9 AM to 10 PM. Looking forward to welcoming you!'
+      } else if (commentContent.includes('vegan') || commentContent.includes('dairy-free')) {
+        aiResponse = 'Yes, we do have delicious vegan and dairy-free options available! Please ask our staff when you arrive.'
+      }
+
+      setCommentsMap(prev => {
+        const list = prev[eventId] || []
+        return {
+          ...prev,
+          [eventId]: list.map(c => c.id === commentId ? {
+            ...c,
+            reply: aiResponse,
+            isAiReply: true,
+            isGeneratingReply: false
+          } : c)
+        }
+      })
+    }, 1000)
+  }
+
   const prevMonth = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
     else setViewMonth(m => m - 1)
@@ -980,6 +1209,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const formatTime = (value: string) => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
   const activeDrawerEvent = selectedDayEvents.find(e => e.id === selectedEventId) || selectedDayEvents[0]
+  const activeEventComments = (activeDrawerEvent && commentsMap[activeDrawerEvent.id]) || []
 
   // Identify expired connected accounts dynamically
   const expiredAccounts = brandDetails?.accounts?.filter((acc: any) => {
@@ -1037,48 +1267,58 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin">
           {/* Brand List Selection */}
           <div>
-            <div className="flex items-center justify-between mb-3 px-1">
-              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+            <div 
+              onClick={() => setIsBrandsCollapsed(!isBrandsCollapsed)}
+              className="flex items-center justify-between mb-3 px-1 cursor-pointer select-none text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+            >
+              <span className="text-[10px] font-black uppercase tracking-widest">
                 我的品牌 (My Brands)
               </span>
+              {isBrandsCollapsed ? (
+                <ChevronRight className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5" />
+              )}
             </div>
-            {allBrands.length > 0 ? (
-              <ul className="space-y-1.5 mb-6">
-                <li
-                  onClick={() => setActiveBrandId(undefined)}
-                  className={`flex flex-col p-2.5 rounded-xl cursor-pointer transition-all border ${
-                    activeBrandId === undefined
-                      ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold'
-                      : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
-                  }`}
-                >
-                  <span className="text-xs">全部品牌 (All Brands)</span>
-                </li>
-                {allBrands.map((b: any) => {
-                  const isSelected = b.id === activeBrandId
-                  const lacksChannels = !b.accounts || b.accounts.length === 0
-                  return (
-                    <li 
-                      key={b.id} 
-                      onClick={() => setActiveBrandId(b.id)}
-                      className={`flex flex-col p-2.5 rounded-xl cursor-pointer transition-all border ${
-                        isSelected 
-                          ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold' 
-                          : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
-                      }`}
-                    >
-                      <span className="text-xs">{b.name}</span>
-                      {lacksChannels && (
-                        <span className="text-[9px] text-red-500 font-medium mt-1">
-                          ⚠️ 缺失渠道配置
-                        </span>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : (
-              <div className="text-[11px] text-slate-400 italic p-1 mb-6">加载品牌中...</div>
+            {!isBrandsCollapsed && (
+              allBrands.length > 0 ? (
+                <ul className="space-y-1.5 mb-6">
+                  <li
+                    onClick={() => setActiveBrandId(undefined)}
+                    className={`flex flex-col p-2.5 rounded-xl cursor-pointer transition-all border ${
+                      activeBrandId === undefined
+                        ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold'
+                        : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
+                    }`}
+                  >
+                    <span className="text-xs">全部品牌 (All Brands)</span>
+                  </li>
+                  {allBrands.map((b: any) => {
+                    const isSelected = b.id === activeBrandId
+                    const lacksChannels = !b.accounts || b.accounts.length === 0
+                    return (
+                      <li 
+                        key={b.id} 
+                        onClick={() => setActiveBrandId(b.id)}
+                        className={`flex flex-col p-2.5 rounded-xl cursor-pointer transition-all border ${
+                          isSelected 
+                            ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold' 
+                            : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
+                        }`}
+                      >
+                        <span className="text-xs">{b.name}</span>
+                        {lacksChannels && (
+                          <span className="text-[9px] text-red-500 font-medium mt-1">
+                            ⚠️ 缺失渠道配置
+                          </span>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <div className="text-[11px] text-slate-400 italic p-1 mb-6">加载品牌中...</div>
+              )
             )}
           </div>
 
@@ -1552,68 +1792,81 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                       <p className="text-xs text-slate-400">暂无对应素材</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3.5 max-h-[340px] overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-950 scrollbar-thin">
-                      {filteredAssets.map((asset, idx) => {
-                        const isSelected = selectedAssetIds.includes(asset.id)
-                        const isVid = asset.mimeType?.startsWith('video/') || isVideoUrl(asset.url)
-                        return (
-                          <div
-                            key={asset.id}
-                            className={`relative aspect-square rounded-xl overflow-hidden border bg-slate-100 dark:bg-slate-900 transition-all duration-200 group shadow-sm hover:scale-[1.03] hover:shadow-md ${
-                              isSelected 
-                                ? 'border-emerald-500 ring-2 ring-emerald-500/20' 
-                                : 'border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-650'
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleToggleAsset(asset)}
-                              className="absolute inset-0 w-full h-full text-left"
+                    <>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3.5 max-h-[340px] overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-xl p-3 bg-white dark:bg-slate-950 scrollbar-thin">
+                        {filteredAssets.slice(0, assetPageSize).map((asset, idx) => {
+                          const isSelected = selectedAssetIds.includes(asset.id)
+                          const isVid = asset.mimeType?.startsWith('video/') || isVideoUrl(asset.url)
+                          return (
+                            <div
+                              key={asset.id}
+                              className={`relative aspect-square rounded-xl overflow-hidden border bg-slate-100 dark:bg-slate-900 transition-all duration-200 group shadow-sm hover:scale-[1.03] hover:shadow-md ${
+                                isSelected 
+                                  ? 'border-emerald-500 ring-2 ring-emerald-500/20' 
+                                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-650'
+                              }`}
                             >
-                              {isVid ? (
-                                <video src={asset.url} className="h-full w-full object-cover pointer-events-none" muted />
-                              ) : (
-                                <img src={asset.url} className="h-full w-full object-cover pointer-events-none" alt="" />
+                              <button
+                                type="button"
+                                onClick={() => handleToggleAsset(asset)}
+                                className="absolute inset-0 w-full h-full text-left"
+                              >
+                                {isVid ? (
+                                  <video src={asset.url} className="h-full w-full object-cover pointer-events-none" muted />
+                                ) : (
+                                  <img src={asset.url} className="h-full w-full object-cover pointer-events-none" alt="" />
+                                )}
+                              </button>
+
+                              {isSelected && (
+                                <div className="absolute inset-0 bg-emerald-950/20 backdrop-blur-[0.5px] pointer-events-none" />
                               )}
-                            </button>
 
-                            {isSelected && (
-                              <div className="absolute inset-0 bg-emerald-950/20 backdrop-blur-[0.5px] pointer-events-none" />
-                            )}
+                              {isSelected && (
+                                <div className="absolute top-1.5 right-1.5 bg-emerald-500 rounded-full p-0.5 shadow-sm transition-colors z-10">
+                                  <Check className="h-3 w-3 text-white stroke-[3px]" />
+                                </div>
+                              )}
 
-                            {isSelected && (
-                              <div className="absolute top-1.5 right-1.5 bg-emerald-500 rounded-full p-0.5 shadow-sm transition-colors z-10">
-                                <Check className="h-3 w-3 text-white stroke-[3px]" />
-                              </div>
-                            )}
+                              {isVid && (
+                                <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-[2px] p-1 rounded border border-white/10 shadow-sm pointer-events-none">
+                                  <Play className="h-2.5 w-2.5 text-white fill-white" />
+                                </div>
+                              )}
 
-                            {isVid && (
-                              <div className="absolute bottom-1.5 right-1.5 bg-black/60 backdrop-blur-[2px] p-1 rounded border border-white/10 shadow-sm pointer-events-none">
-                                <Play className="h-2.5 w-2.5 text-white fill-white" />
-                              </div>
-                            )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setLightboxIndex(idx)
+                                }}
+                                className="absolute bottom-1.5 left-1.5 h-7 w-7 bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 backdrop-blur-md rounded-full shadow-sm flex items-center justify-center pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-200 scale-90 group-hover:scale-100 z-10"
+                                title="预览大图"
+                              >
+                                <Maximize2 className="h-3.5 w-3.5" />
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setLightboxIndex(idx)
-                              }}
-                              className="absolute bottom-1.5 left-1.5 h-7 w-7 bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 backdrop-blur-md rounded-full shadow-sm flex items-center justify-center pointer-events-auto opacity-0 group-hover:opacity-100 transition-all duration-200 scale-90 group-hover:scale-100 z-10"
-                              title="预览大图"
-                            >
-                              <Maximize2 className="h-3.5 w-3.5" />
-                            </button>
-
-                            {asset.filename && (
-                              <div className="absolute top-0 inset-x-0 bg-slate-950/70 p-1 text-[8px] text-white truncate opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                {asset.filename}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
+                              {asset.filename && (
+                                <div className="absolute top-0 inset-x-0 bg-slate-950/70 p-1 text-[8px] text-white truncate opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                  {asset.filename}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                      {filteredAssets.length > assetPageSize && (
+                        <div className="flex justify-center pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setAssetPageSize(prev => prev + 12)}
+                            className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 py-1.5 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                          >
+                            加载更多素材 (+12)
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -1726,27 +1979,54 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                         
                         <div className="space-y-1 flex-1 flex flex-col justify-end overflow-hidden">
                           {dayEvents.length > 0 ? (
-                            dayEvents.slice(0, 2).map((ev) => {
-                              const normPlatform = normalizePlatformLabel(ev.platform)
-                              const hasVideo = ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频')
-                              return (
-                                <div
-                                  key={ev.id}
-                                  onClick={(e) => { e.stopPropagation(); setSelectedDay(day); setSelectedEventId(ev.id) }}
-                                  className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
-                                    PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
-                                  } ${ev.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
-                                >
-                                  {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
-                                  {ev.status === 'scheduled' && normPlatform === 'Google' && (
-                                    <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
-                                  )}
-                                  <span>
-                                    {!activeBrandId && `[${ev.brandName}] `}
-                                    {normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}
-                                  </span>
-                                </div>
-                              )
+                            groupEventsByTitle(dayEvents).slice(0, 2).map((group) => {
+                              const isGrouped = group.events.length > 1
+                              const normPlatform = normalizePlatformLabel(group.platform)
+                              const hasVideo = group.mediaUrls?.[0] && group.platform === 'IG' && group.title.includes('视频')
+                              
+                              if (!isGrouped) {
+                                return (
+                                  <div
+                                    key={group.id}
+                                    onClick={(e) => { e.stopPropagation(); setSelectedDay(day); setSelectedEventId(group.id) }}
+                                    className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
+                                      PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
+                                    } ${group.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
+                                  >
+                                    {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
+                                    {group.status === 'scheduled' && normPlatform === 'Google' && (
+                                      <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
+                                    )}
+                                    <span>
+                                      {!activeBrandId && `[${group.brandName}] `}
+                                      {normPlatform} · {group.cleanTitle}
+                                    </span>
+                                  </div>
+                                )
+                              } else {
+                                return (
+                                  <div
+                                    key={group.id}
+                                    onClick={(e) => { e.stopPropagation(); setSelectedDay(day); setSelectedEventId(group.id) }}
+                                    className="text-[9px] font-bold px-1.5 py-0.5 rounded-lg border bg-gradient-to-r from-slate-50 to-indigo-50/30 dark:from-slate-800 dark:to-indigo-950/10 border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-350 flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative"
+                                  >
+                                    <div className="flex items-center gap-0.5 shrink-0">
+                                      {group.events.map((e, idx) => {
+                                        const p = normalizePlatformLabel(e.platform)
+                                        return (
+                                          <span key={idx} className="px-0.5 py-0 text-[7px] font-black rounded bg-slate-200/80 dark:bg-slate-700 text-slate-650 dark:text-slate-350 shrink-0">
+                                            {p}
+                                          </span>
+                                        )
+                                      })}
+                                    </div>
+                                    <span className="truncate">
+                                      {!activeBrandId && `[${group.brandName}] `}
+                                      {group.cleanTitle}
+                                    </span>
+                                  </div>
+                                )
+                              }
                             })
                           ) : null}
                         </div>
@@ -1796,27 +2076,54 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     
                     <div className="space-y-1 flex-1 flex flex-col justify-end overflow-y-auto no-scrollbar">
                       {dayEvents.length > 0 ? (
-                        dayEvents.map((ev) => {
-                          const normPlatform = normalizePlatformLabel(ev.platform)
-                          const hasVideo = ev.mediaUrls?.[0] && ev.platform === 'IG' && ev.title.includes('视频')
-                          return (
-                            <div
-                              key={ev.id}
-                              onClick={(e) => { e.stopPropagation(); setSelectedDay(d.getDate()); setSelectedEventId(ev.id) }}
-                              className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
-                                PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
-                              } ${ev.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
-                            >
-                              {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
-                              {ev.status === 'scheduled' && normPlatform === 'Google' && (
-                                <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
-                              )}
-                              <span>
-                                {!activeBrandId && `[${ev.brandName}] `}
-                                {normPlatform} · {ev.title.replace(`${normPlatform} · `, '')}
-                              </span>
-                            </div>
-                          )
+                        groupEventsByTitle(dayEvents).map((group) => {
+                          const isGrouped = group.events.length > 1
+                          const normPlatform = normalizePlatformLabel(group.platform)
+                          const hasVideo = group.mediaUrls?.[0] && group.platform === 'IG' && group.title.includes('视频')
+                          
+                          if (!isGrouped) {
+                            return (
+                              <div
+                                key={group.id}
+                                onClick={(e) => { e.stopPropagation(); setSelectedDay(d.getDate()); setSelectedEventId(group.id) }}
+                                className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
+                                  PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
+                                } ${group.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
+                              >
+                                {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
+                                {group.status === 'scheduled' && normPlatform === 'Google' && (
+                                  <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
+                                )}
+                                <span>
+                                  {!activeBrandId && `[${group.brandName}] `}
+                                  {normPlatform} · {group.cleanTitle}
+                                </span>
+                              </div>
+                            )
+                          } else {
+                            return (
+                              <div
+                                key={group.id}
+                                onClick={(e) => { e.stopPropagation(); setSelectedDay(d.getDate()); setSelectedEventId(group.id) }}
+                                className="text-[9px] font-bold px-1.5 py-1 rounded-lg border bg-gradient-to-r from-slate-50 to-indigo-50/30 dark:from-slate-800 dark:to-indigo-950/10 border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-350 flex flex-col gap-1 transition-transform hover:scale-[1.02] shadow-sm relative"
+                              >
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {group.events.map((e, idx) => {
+                                    const p = normalizePlatformLabel(e.platform)
+                                    return (
+                                      <span key={idx} className="px-1 py-0.2 text-[8px] font-black rounded bg-slate-200 dark:bg-slate-700 text-slate-650 dark:text-slate-350 shrink-0">
+                                        {p}
+                                      </span>
+                                    )
+                                  })}
+                                </div>
+                                <span className="truncate">
+                                  {!activeBrandId && `[${group.brandName}] `}
+                                  {group.cleanTitle}
+                                </span>
+                              </div>
+                            )
+                          }
                         })
                       ) : null}
                     </div>
@@ -1912,9 +2219,23 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                   </span>
                                   <span className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold">{formatTime(ev.time)}</span>
                                 </div>
-                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${STATUS_COLORS[ev.status]}`}>
-                                  {ev.status === 'done' ? '已发布' : ev.status === 'pending' ? '待审核' : '已排期'}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  {ev.status === 'done' && (
+                                    <a
+                                      href={getPostOriginalUrl(ev.platform, ev.platformPostId)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-0.5 text-[9px] font-bold text-indigo-650 hover:text-indigo-750 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                                    >
+                                      <ExternalLink className="w-2.5 h-2.5" />
+                                      <span>查看原文</span>
+                                    </a>
+                                  )}
+                                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${STATUS_COLORS[ev.status]}`}>
+                                    {ev.status === 'done' ? '已发布' : ev.status === 'pending' ? '待审核' : '已排期'}
+                                  </span>
+                                </div>
                               </div>
                               <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-relaxed">
                                 {!activeBrandId && `[${ev.brandName}] `}
@@ -1992,6 +2313,18 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
                           <div className="flex items-center gap-3 shrink-0">
                             <span className="text-[10px] text-slate-400 font-bold">{formatTime(ev.time)}</span>
+                            {ev.status === 'done' && (
+                              <a
+                                href={getPostOriginalUrl(ev.platform, ev.platformPostId)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-0.5 text-[9px] font-bold text-indigo-650 hover:text-indigo-750 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                              >
+                                <ExternalLink className="w-2.5 h-2.5" />
+                                <span>查看原文</span>
+                              </a>
+                            )}
                             <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${STATUS_COLORS[ev.status]}`}>
                               {ev.status === 'done' ? '已发布' : ev.status === 'pending' ? '待审核' : '已排期'}
                             </span>
@@ -2505,9 +2838,98 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                         <span className={`text-[9px] font-black px-2.5 py-0.5 rounded-full border ${STATUS_COLORS[activeDrawerEvent.status]}`}>
                           {activeDrawerEvent.status === 'done' ? '已发布' : activeDrawerEvent.status === 'pending' ? '待审核' : '已排期'}
                         </span>
+                        {activeDrawerEvent.status === 'done' && (
+                          <a
+                            href={getPostOriginalUrl(activeDrawerEvent.platform, activeDrawerEvent.platformPostId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-650 hover:text-indigo-750 dark:text-indigo-400 dark:hover:text-indigo-300 ml-1 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>打开发布原文</span>
+                          </a>
+                        )}
                       </div>
                       <span className="text-[10px] font-black text-slate-400 dark:text-slate-500">{activeDrawerEvent.brandName}</span>
                     </div>
+
+                    {/* Comments & Replies section for published events - Primary card */}
+                    {activeDrawerEvent.status === 'done' && (
+                      <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-850 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                          <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                            <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>评论与回复 (Comments)</span>
+                          </h4>
+                          <span className="text-[9px] font-black text-indigo-650 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 px-2 py-0.5 rounded-full">
+                            {activeEventComments.length} 条评论
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 no-scrollbar">
+                          {activeEventComments.length > 0 ? (
+                            activeEventComments.map(comment => (
+                              <div key={comment.id} className="space-y-2 border-b border-slate-100/50 dark:border-slate-800/40 pb-3 last:border-0 last:pb-0">
+                                <div className="flex items-start gap-2">
+                                  <img src={comment.avatar} className="w-7 h-7 rounded-full object-cover shrink-0 mt-0.5" alt="" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-slate-700 dark:text-slate-350">{comment.author}</span>
+                                      <span className="text-[9px] text-slate-450">{comment.time}</span>
+                                    </div>
+                                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 leading-relaxed">{comment.content}</p>
+                                  </div>
+                                </div>
+
+                                {comment.reply ? (
+                                  <div className="ml-9 bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-[10px] font-black text-indigo-650 dark:text-indigo-400">商家回复 (Owner)</span>
+                                      {comment.isAiReply && (
+                                        <span className="text-[8px] font-bold text-slate-400 bg-slate-200/50 dark:bg-slate-800 px-1 rounded flex items-center gap-0.5">
+                                          <Sparkles className="w-2 h-2 text-indigo-500" />
+                                          AI 自动回复
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-slate-750 dark:text-slate-200 font-medium leading-relaxed">{comment.reply}</p>
+                                  </div>
+                                ) : (
+                                  <div className="ml-9 space-y-2">
+                                    <div className="flex gap-1.5">
+                                      <input
+                                        type="text"
+                                        value={commentReplyText[comment.id] || ''}
+                                        onChange={(e) => setCommentReplyText(prev => ({ ...prev, [comment.id]: e.target.value }))}
+                                        placeholder="输入人工回复内容..."
+                                        className="flex-1 h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-850 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-150"
+                                      />
+                                      <button
+                                        onClick={() => handleSendManualReply(activeDrawerEvent.id, comment.id)}
+                                        className="h-8 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm shrink-0 transition-colors"
+                                      >
+                                        回复
+                                      </button>
+                                      <button
+                                        onClick={() => handleGenerateAiReply(activeDrawerEvent.id, comment.id, comment.content)}
+                                        disabled={comment.isGeneratingReply}
+                                        className="h-8 px-2 border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 font-bold text-xs rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0 flex items-center justify-center gap-1 transition-all"
+                                        title="AI 智能生成回复"
+                                      >
+                                        <Sparkles className={`w-3.5 h-3.5 ${comment.isGeneratingReply ? 'animate-spin' : ''}`} />
+                                        <span>{comment.isGeneratingReply ? '生成中' : 'AI'}</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="py-6 text-center text-slate-400 dark:text-slate-550 text-xs italic">暂无评论记录</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {activeDrawerEvent.mediaUrls && activeDrawerEvent.mediaUrls[0] && (
                       <div className="relative w-full h-44 rounded-2xl overflow-hidden bg-slate-150 border border-slate-200/50 dark:border-slate-800 shadow-sm group">
