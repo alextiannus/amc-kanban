@@ -32,10 +32,17 @@ export async function coordinatorNode(state: any) {
   if (existingDraftId) {
     try {
       const draft = await prisma.contentDraft.findUnique({
-        where: { id: existingDraftId }
+        where: { id: existingDraftId },
+        include: {
+          assetRefs: {
+            include: { asset: true }
+          }
+        }
       });
       if (draft) {
-        draftMediaUrls = draft.mediaUrls || [];
+        const urlAssets = draft.mediaUrls || [];
+        const refAssets = (draft as any).assetRefs?.map((r: any) => r.asset?.url).filter(Boolean) || [];
+        draftMediaUrls = Array.from(new Set([...urlAssets, ...refAssets]));
         if (draftMediaUrls.length > 0) {
           mediaFromDraft = true;
           console.log(`Coordinator: Found ${draftMediaUrls.length} existing media URLs in draft ${existingDraftId}. Preserving.`);
