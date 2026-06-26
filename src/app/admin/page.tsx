@@ -1252,7 +1252,7 @@ export default function AdminPage() {
                     setLlmForm({
                       provider: 'google',
                       displayName: '',
-                      modelName: '',
+                      modelName: 'gemini-2.0-flash',
                       apiKey: '',
                       baseUrl: '',
                       isEnabled: true,
@@ -1648,7 +1648,35 @@ export default function AdminPage() {
                   <span className="text-xs font-bold text-slate-500 block font-bold">AI 厂商 (Provider)</span>
                   <select
                     value={llmForm.provider}
-                    onChange={e => setLlmForm(prev => ({ ...prev, provider: e.target.value }))}
+                    onChange={e => {
+                      const newProvider = e.target.value
+                      setLlmForm(prev => {
+                        const defaults: Record<string, string> = {
+                          google: 'gemini-2.0-flash',
+                          openai: 'gpt-4o',
+                          anthropic: 'claude-3-5-sonnet-20241022',
+                          deepseek: 'deepseek-chat',
+                          custom_shim: 'custom-model',
+                        }
+                        const currentDefaults = [
+                          'gemini-2.0-flash',
+                          'gpt-4o',
+                          'claude-3-5-sonnet-20241022',
+                          'deepseek-chat',
+                          'custom-model',
+                          ''
+                        ]
+                        const modelName = (!prev.modelName || currentDefaults.includes(prev.modelName))
+                          ? (defaults[newProvider] || '')
+                          : prev.modelName
+
+                        return {
+                          ...prev,
+                          provider: newProvider,
+                          modelName,
+                        }
+                      })
+                    }}
                     className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                   >
                     <option value="google">Google Gemini</option>
@@ -1668,6 +1696,112 @@ export default function AdminPage() {
                     placeholder="例如: gemini-2.0-flash, gpt-4o, claude-3-5-sonnet-20241022"
                     className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                   />
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {llmForm.provider === 'google' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setLlmForm(prev => ({ ...prev, modelName: 'gemini-2.0-flash' }))}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+                            llmForm.modelName === 'gemini-2.0-flash'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                              : 'bg-slate-50 dark:bg-slate-950 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                          }`}
+                        >
+                          gemini-2.0-flash (推荐)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLlmForm(prev => ({ ...prev, modelName: 'gemini-1.5-flash' }))}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+                            llmForm.modelName === 'gemini-1.5-flash'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                              : 'bg-slate-50 dark:bg-slate-950 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                          }`}
+                        >
+                          gemini-1.5-flash
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLlmForm(prev => ({ ...prev, modelName: 'gemini-1.5-pro' }))}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+                            llmForm.modelName === 'gemini-1.5-pro'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                              : 'bg-slate-50 dark:bg-slate-950 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                          }`}
+                        >
+                          gemini-1.5-pro
+                        </button>
+                      </>
+                    )}
+                    {llmForm.provider === 'openai' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setLlmForm(prev => ({ ...prev, modelName: 'gpt-4o' }))}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+                            llmForm.modelName === 'gpt-4o'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                              : 'bg-slate-50 dark:bg-slate-950 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                          }`}
+                        >
+                          gpt-4o (推荐)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLlmForm(prev => ({ ...prev, modelName: 'gpt-4o-mini' }))}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+                            llmForm.modelName === 'gpt-4o-mini'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                              : 'bg-slate-50 dark:bg-slate-950 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                          }`}
+                        >
+                          gpt-4o-mini
+                        </button>
+                      </>
+                    )}
+                    {llmForm.provider === 'anthropic' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setLlmForm(prev => ({ ...prev, modelName: 'claude-3-5-sonnet-20241022' }))}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+                            llmForm.modelName === 'claude-3-5-sonnet-20241022'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                              : 'bg-slate-50 dark:bg-slate-950 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                          }`}
+                        >
+                          claude-3-5-sonnet (推荐)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLlmForm(prev => ({ ...prev, modelName: 'claude-3-5-haiku-20241022' }))}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+                            llmForm.modelName === 'claude-3-5-haiku-20241022'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                              : 'bg-slate-50 dark:bg-slate-950 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                          }`}
+                        >
+                          claude-3-5-haiku
+                        </button>
+                      </>
+                    )}
+                    {llmForm.provider === 'deepseek' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setLlmForm(prev => ({ ...prev, modelName: 'deepseek-chat' }))}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+                            llmForm.modelName === 'deepseek-chat'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                              : 'bg-slate-50 dark:bg-slate-950 text-slate-500 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900'
+                          }`}
+                        >
+                          deepseek-chat (V3 / R1)
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </label>
 
                 <label className="space-y-1.5 md:col-span-2">
