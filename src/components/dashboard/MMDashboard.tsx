@@ -1392,7 +1392,7 @@ export default function MMDashboard() {
   }
 
   return (
-    <div className="min-h-screen text-slate-800 bg-[#f7f9fb] selection:bg-primary/10 overflow-hidden h-screen w-screen relative">
+    <div className="text-slate-800 bg-[#f7f9fb] selection:bg-primary/10 overflow-hidden h-[100dvh] w-screen relative flex flex-col">
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -1429,19 +1429,7 @@ export default function MMDashboard() {
 
       {/* Top App Bar */}
       <header className="fixed top-0 w-full z-40 bg-white/40 backdrop-blur-md h-16 flex items-center justify-between px-4 border-b border-slate-200/20">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center bg-transparent">
-            <img 
-              src={activeBrand?.logoUrl || "/logo.svg"} 
-              onError={(e) => { e.currentTarget.src = "/logo.svg" }}
-              alt="logo" 
-              className="w-full h-full object-contain" 
-            />
-          </div>
-          <span className="font-bold text-sm text-slate-800 tracking-wide">
-            {activeBrand ? activeBrand.name : ''}
-          </span>
-        </div>
+        <div className="w-10" />
 
         <div className="flex items-center gap-2 relative">
           <button
@@ -1558,7 +1546,7 @@ export default function MMDashboard() {
 
       {/* Main Content Area - Companion Chat interface */}
       {activeSubPage === null && (
-        <main className="relative z-10 h-full flex flex-col pt-16 pb-safe">
+        <main className="relative z-10 flex-1 flex flex-col pt-16 min-h-0">
           
           {/* Top Info Banner for completed notifications */}
           {completedNotification && (
@@ -1597,7 +1585,7 @@ export default function MMDashboard() {
           )}
 
           {/* Center Space: Either show the Companion Face or show the pending previews grid */}
-          <div className="flex-1 flex flex-col items-center justify-center relative px-6 py-4 overflow-y-auto no-scrollbar w-full">
+          <div className="flex-1 flex flex-col items-center justify-center relative px-6 py-2 overflow-y-auto no-scrollbar w-full min-h-0">
             {generatedDrafts ? (
               /* Inline Swipeable Generated Draft Previews */
               <motion.div 
@@ -1898,7 +1886,7 @@ export default function MMDashboard() {
               /* Centered Voice Companion Visual Interface */
               <div className="flex flex-col items-center justify-center pointer-events-none">
                 {/* Dynamic halo/aura layer */}
-                <div className="relative flex items-center justify-center w-64 h-64">
+                <div className="relative flex items-center justify-center w-44 h-44">
                   <AnimatePresence>
                     {companionState === 'listening' && (
                       <motion.div
@@ -1940,10 +1928,10 @@ export default function MMDashboard() {
 
                   {/* Face base container */}
                   <motion.div 
-                    animate={{ y: [0, -6, 0] }}
+                    animate={{ y: [0, -5, 0] }}
                     transition={{ repeat: Infinity, duration: 3.5, ease: "easeInOut" }}
                     onClick={triggerRandomEmotion}
-                    className="w-48 h-48 flex flex-col items-center justify-center gap-5 relative z-10 cursor-pointer pointer-events-auto"
+                    className="w-36 h-36 flex flex-col items-center justify-center gap-4 relative z-10 cursor-pointer pointer-events-auto"
                     title="点击我试试！"
                   >
                     {/* Sweating drop for effort emotion */}
@@ -2018,15 +2006,15 @@ export default function MMDashboard() {
                 </div>
 
                 {/* Subtitles text display */}
-                <div className="text-center mt-6 space-y-1">
-                  <h3 className="text-sm font-extrabold text-slate-700">
+                <div className="text-center mt-3 space-y-0.5">
+                  <h3 className="text-xs font-extrabold text-slate-700">
                     {companionState === 'listening' ? '正在倾听您的意见...' :
                      companionState === 'thinking' ? '正在思考与组织语言...' :
                      companionState === 'speaking' ? '正在语音回复中...' :
                      emotion === 'effort' ? '正在努力为您生成推文...' :
                      'AI内容运营官'}
                   </h3>
-                  <p className="text-[11px] text-slate-400 font-semibold px-8 leading-relaxed max-w-xs mx-auto">
+                  <p className="text-[10px] text-slate-400 font-semibold px-6 leading-snug max-w-xs mx-auto">
                     {companionState === 'listening' ? '您可以说：“帮我做个关于周末促销的活动文案”' :
                      companionState === 'thinking' ? '正在调用平台数据与创意模型...' :
                      companionState === 'speaking' ? '正在用语音为您播报创作成果...' :
@@ -2039,7 +2027,7 @@ export default function MMDashboard() {
           </div>
 
           {/* Chat Input Console (Voice button & Upload triggers) */}
-          <div className="px-6 pb-10 pt-4 bg-gradient-to-t from-[#f7f9fb] via-[#f7f9fb]/90 to-transparent flex flex-col items-center z-20 pointer-events-auto">
+          <div className="px-6 pb-4 pt-2 bg-gradient-to-t from-[#f7f9fb] via-[#f7f9fb]/90 to-transparent flex flex-col items-center z-20 pointer-events-auto flex-shrink-0">
             
             {/* Draft Approval Action Card — shown when AI is discussing a draft */}
             <AnimatePresence>
@@ -2295,7 +2283,7 @@ export default function MMDashboard() {
             <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
               {activeSubPage === 'calendar' && 'Campaign Calendar'}
               {activeSubPage === 'assets' && 'Media Library'}
-              {activeSubPage === 'market' && 'Add-on Marketplace'}
+              {activeSubPage === 'market' && '预约服务'}
               {activeSubPage === 'settings' && 'AI Character Settings'}
             </h2>
             <div className="w-20" /> {/* Spacer */}
@@ -2538,91 +2526,130 @@ export default function MMDashboard() {
             )}
 
             {activeSubPage === 'market' && (
-              <>
-                {/* Standard Package Card */}
-                <div className="bg-primary p-6 rounded-2xl text-white relative overflow-hidden shadow-lg shadow-primary/20">
-                  <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <span className="text-[9px] bg-white/20 px-2 py-0.5 rounded-full text-white uppercase tracking-wider mb-1.5 inline-block font-bold">Current Plan</span>
-                        <h2 className="text-xl font-bold">Standard Package</h2>
-                      </div>
-                      <ShieldCheck className="w-8 h-8 opacity-75" />
-                    </div>
-                    
-                    <div className="space-y-3 mt-6">
-                      {/* Veo3 Toggle */}
-                      <div className="flex items-center justify-between bg-white/10 p-3 rounded-xl backdrop-blur-md">
-                        <div className="flex items-center gap-3">
-                          <Video className="w-5 h-5" />
-                          <div>
-                            <span className="text-xs font-semibold block">Veo3 Image-to-Video</span>
-                            <span className="text-[9px] text-white/60">Generate high quality marketing reels</span>
-                          </div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={addons.veo3} 
-                            onChange={() => handleToggleAddon('veo3')}
-                            className="sr-only peer" 
-                            disabled={updatingAddons}
-                          />
-                          <div className="w-9 h-5 bg-white/30 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                        </label>
-                      </div>
+              <div className="space-y-4 pb-4">
+                {/* Page Title */}
+                <div className="flex items-center gap-3 pb-1">
+                  <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-black text-slate-800">预约服务</h2>
+                    <p className="text-[10px] text-slate-400 font-medium">选择服务，一键发起预约申请</p>
+                  </div>
+                </div>
 
-                      {/* Dub.co Toggle */}
-                      <div className="flex items-center justify-between bg-white/10 p-3 rounded-xl backdrop-blur-md">
-                        <div className="flex items-center gap-3">
-                          <Link className="w-5 h-5" />
-                          <div>
-                            <span className="text-xs font-semibold block">Dub.co ROI tracking</span>
-                            <span className="text-[9px] text-white/60">Short-link analytics for conversions</span>
-                          </div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={addons.dubco} 
-                            onChange={() => handleToggleAddon('dubco')}
-                            className="sr-only peer" 
-                            disabled={updatingAddons}
-                          />
-                          <div className="w-9 h-5 bg-white/30 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                        </label>
+                {/* 素材拍摄 */}
+                <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-gradient-to-r from-violet-500 to-purple-600 p-4 text-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold">专业素材拍摄</h3>
+                        <p className="text-[10px] text-white/70 mt-0.5">预约摄影团队上门拍摄菜品 / 环境照</p>
                       </div>
                     </div>
                   </div>
-                  <div className="absolute -bottom-8 -right-8 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
-                </div>
-
-                {/* Marketplace Add-ons */}
-                <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
-                  <h3 className="text-sm font-bold text-slate-800">Add-on Services Marketplace</h3>
-                  
-                  <div className="divide-y divide-slate-100">
-                    <div className="py-3 flex justify-between items-center text-xs">
-                      <div>
-                        <p className="font-bold text-slate-700">Custom Domain Mapping</p>
-                        <p className="text-[10px] text-slate-400">Map your own custom short domains</p>
-                      </div>
-                      <button className="bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1.5 rounded-lg font-bold cursor-pointer">
-                        $9/mo
-                      </button>
+                  <div className="p-4 space-y-3">
+                    <div className="space-y-2 text-xs text-slate-600">
+                      {['菜品精修图（最多 20 道菜）', '门店环境 / 氛围照 5 张', '短视频素材（30 秒 Reel 原素材）', '所有素材自动同步至素材库'].map(item => (
+                        <div key={item} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-violet-500 flex-shrink-0" />
+                          {item}
+                        </div>
+                      ))}
                     </div>
-                    <div className="py-3 flex justify-between items-center text-xs">
-                      <div>
-                        <p className="font-bold text-slate-700">Xiaohongshu Publisher API</p>
-                        <p className="text-[10px] text-slate-400">Direct automated push publishing</p>
-                      </div>
-                      <button className="bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1.5 rounded-lg font-bold cursor-pointer">
-                        $19/mo
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => showToast('预约申请已提交，我们的团队将在 24 小时内联系您。', 'success')}
+                      className="w-full bg-violet-500 hover:bg-violet-600 text-white font-bold py-3 rounded-xl text-xs active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-violet-500/20"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      立即预约拍摄
+                    </button>
                   </div>
                 </div>
-              </>
+
+                {/* 大众点评 */}
+                <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-gradient-to-r from-orange-500 to-red-500 p-4 text-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold">大众点评运营</h3>
+                        <p className="text-[10px] text-white/70 mt-0.5">提升口碑评分，优化店铺曝光排名</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div className="space-y-2 text-xs text-slate-600">
+                      {['差评监控与智能回复建议', '好评引导话术 + 二维码物料设计', '每月口碑数据分析报告', '店铺主页优化建议（图片 / 文案）'].map(item => (
+                        <div key={item} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0" />
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => showToast('大众点评运营咨询已提交，顾问将在 1 个工作日内联系您。', 'success')}
+                      className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-xs active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-orange-500/20"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      预约顾问咨询
+                    </button>
+                  </div>
+                </div>
+
+                {/* 预约探店 */}
+                <div className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-4 text-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold">预约探店</h3>
+                        <p className="text-[10px] text-white/70 mt-0.5">邀请 KOL / 达人到店实地探店种草</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div className="space-y-2 text-xs text-slate-600">
+                      {['匹配本地小红书 / 抖音达人', '达人到店体验 + 内容发布排期', '探店笔记审核 + 数据追踪', '曝光保障（粉丝量 &gt; 5000）'].map(item => (
+                        <div key={item} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                          <span dangerouslySetInnerHTML={{ __html: item }} />
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => showToast('探店预约申请已提交，BD 团队将在 24 小时内联系您。', 'success')}
+                      className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl text-xs active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-emerald-500/20"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      预约探店合作
+                    </button>
+                  </div>
+                </div>
+
+                {/* Footer note */}
+                <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 text-center">
+                  <p className="text-[10px] text-slate-500 font-medium">如需定制服务或了解更多套餐详情</p>
+                  <p className="text-xs font-bold text-primary mt-1">联系您的专属运营顾问</p>
+                </div>
+              </div>
             )}
 
             {activeSubPage === 'settings' && (
@@ -2873,7 +2900,7 @@ export default function MMDashboard() {
                   className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
                 >
                   <ShoppingBag className="w-5.5 h-5.5 text-slate-500" />
-                  <span className="font-bold text-sm tracking-wide">店内活动</span>
+                  <span className="font-bold text-sm tracking-wide">预约服务</span>
                 </button>
                 <button 
                   onClick={() => {

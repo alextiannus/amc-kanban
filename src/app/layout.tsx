@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "AMC-MM",
+    title: "AI Staff",
   },
   icons: {
     icon: [

@@ -63,6 +63,8 @@ type ApifyCachedReview = {
   publishedAt?: string
 }
 
+
+
 export interface AnalyticsPost {
   id: string
   source: 'postfast' | 'internal' | string
@@ -656,17 +658,10 @@ export async function GET(req: Request, { params }: Params) {
     negativePct = 100 - positivePct - neutralPct
     ratingOutOfFive = Number((allRatings.reduce((s, r) => s + r, 0) / total).toFixed(1))
   } else {
-    // Use DB account rating score as fallback — still real data
+    // No real review data — return nulls, do NOT fabricate percentages
     const dbRating = accounts.find((a: any) => a.platformId === 'google')?.ratingScore ?? null
     ratingOutOfFive = dbRating
-    if (dbRating !== null) {
-      if (dbRating >= 4.8) { positivePct = 88; neutralPct = 9; negativePct = 3 }
-      else if (dbRating >= 4.5) { positivePct = 82; neutralPct = 12; negativePct = 6 }
-      else if (dbRating >= 4.0) { positivePct = 70; neutralPct = 18; negativePct = 12 }
-      else { positivePct = 55; neutralPct = 25; negativePct = 20 }
-    } else {
-      positivePct = 0; neutralPct = 0; negativePct = 0
-    }
+    positivePct = 0; neutralPct = 0; negativePct = 0
   }
 
   // ── Real keyword extraction from all review texts ────────────────────────

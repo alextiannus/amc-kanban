@@ -213,34 +213,10 @@ export async function fetchGoogleGBPReviews(
   accessToken: string
 ): Promise<GoogleReviewsResult> {
   if (accessToken.startsWith('mock_') || locationId.startsWith('mock_')) {
-    // Generate stable, structured mock reviews for testing
-    const mockReviews: GoogleReview[] = [
-      {
-        reviewId: 'mock_rev_001',
-        reviewer: 'Zhang San (张三)',
-        rating: 5,
-        comment: '这里的招牌麻辣烤鱼特别赞！鱼肉非常鲜嫩，辣度也刚刚好，配菜分量很足。店里环境干净舒适，非常推荐！',
-        createTime: new Date(Date.now() - 3600000 * 2).toISOString(), // 2 hours ago
-      },
-      {
-        reviewId: 'mock_rev_002',
-        reviewer: 'Li Si (李四)',
-        rating: 2,
-        comment: '烤鱼味道还可以，但服务态度太差了！点个饮料等了半个多小时都没上，催了几次服务员很不耐烦，体验糟糕。',
-        createTime: new Date(Date.now() - 3600000 * 12).toISOString(), // 12 hours ago
-      },
-      {
-        reviewId: 'mock_rev_003',
-        reviewer: 'Wang Wu (王五)',
-        rating: 4,
-        comment: 'Nice Sichuan fusion style grilled fish. Spicy and aromatic. Service is decent, will visit again with friends.',
-        createTime: new Date(Date.now() - 3600000 * 28).toISOString(), // 28 hours ago
-        replyText: 'Thank you for your review! We look forward to serving you again soon.',
-        replyTime: new Date(Date.now() - 3600000 * 27).toISOString(),
-      }
-    ];
-    return { reviews: mockReviews };
+    // Mock/test mode: return empty — never fabricate reviews that don't exist
+    return { reviews: [], error: 'mock_mode' }
   }
+
 
   try {
     const accId = accountId.startsWith('accounts/') ? accountId : `accounts/${accountId}`;

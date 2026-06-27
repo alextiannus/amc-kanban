@@ -208,7 +208,7 @@ export async function POST(req: Request, { params }: Params) {
       google:      googleResult.reviews.length > 0,
       instagram:   instagramResult.posts.length > 0,
       tiktok:      tiktokResult.posts.length > 0,
-        xiaohongshu: xiaohongshuResult.posts.length > 0,
+      xiaohongshu: xiaohongshuResult.posts.length > 0,
     },
     totalDurationMs,
     scrapedAt: new Date().toISOString(),

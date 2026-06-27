@@ -1,6 +1,6 @@
 {
-  "name": "AMC AI Marketing Companion",
-  "short_name": "AMC-MM",
+  "name": "AI Staff - AI Marketing Crew",
+  "short_name": "AI Staff",
   "description": "您的专属 AI 营销员工，随时随地帮您管理品牌内容",
   "start_url": "/mock-merchant",
   "scope": "/",
