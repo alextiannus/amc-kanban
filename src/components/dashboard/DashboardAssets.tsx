@@ -10,10 +10,10 @@ import {
   CheckSquare,
 
   X,
-  Grid,
+
   Clock,
-  Archive,
-  TrendingUp,
+
+
 
   Plus,
   Calendar,
@@ -1132,154 +1132,93 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar }: Dashb
       
       {/* MAIN COLUMN: full width mobile-first */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* ── Top Header: title + search + upload ── */}
-        <div className="px-4 pt-4 pb-3 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-10">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h1 className="text-base font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5 min-w-0">
-              <span className="truncate">营销素材库</span>
-              <span className="shrink-0 text-[10px] px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-full font-bold border border-indigo-100/50 dark:border-indigo-900/30">
-                {filtered.length} 项
-              </span>
-            </h1>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <input
-                type="file"
-                ref={fileInputRef}
-                multiple
-                accept="image/*,video/*"
-                className="hidden"
-                onChange={(e) => { if (e.target.files) void uploadFiles(e.target.files) }}
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 shadow-sm active:scale-95 transition-all disabled:opacity-60"
-              >
-                <Upload className="w-4 h-4" />
-                <span className="hidden sm:inline">{uploading ? (uploadProgress || '上传中...') : '上传'}</span>
-              </button>
-            </div>
+        {/* ── Top Toolbar: view dropdown + folder dropdown + search + upload ── */}
+        <div className="px-3 py-2.5 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-10 flex items-center gap-2">
+
+          {/* hidden file input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            multiple
+            accept="image/*,video/*"
+            className="hidden"
+            onChange={(e) => { if (e.target.files) void uploadFiles(e.target.files) }}
+          />
+
+          {/* 资产视图 dropdown */}
+          <div className="relative shrink-0">
+            <select
+              value={viewFilter}
+              onChange={e => setViewFilter(e.target.value as typeof viewFilter)}
+              className="appearance-none pl-2 pr-6 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none cursor-pointer hover:border-indigo-400 transition-all"
+            >
+              <option value="unused">未使用 ({countUnused})</option>
+              <option value="all">全部 ({countAll})</option>
+              <option value="recent">最近 ({countRecent})</option>
+              <option value="high_perf">高表现 ({countHighPerf})</option>
+              <option value="scheduled">草稿排期 ({countScheduled})</option>
+              <option value="images">图片 ({countImages})</option>
+              <option value="videos">视频 ({countVideos})</option>
+            </select>
+            <ChevronRight className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 rotate-90" />
           </div>
 
-          {/* Search bar */}
-          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all">
-            <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          {/* 文件夹 dropdown */}
+          <div className="relative shrink-0">
+            <select
+              value={selectedFolder}
+              onChange={e => {
+                const val = e.target.value
+                setSelectedFolder(val)
+                setTargetFolder(val === 'all' ? '素材库' : val)
+              }}
+              className="appearance-none pl-2 pr-6 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none cursor-pointer hover:border-indigo-400 transition-all"
+            >
+              <option value="all">📁 全部文件夹</option>
+              {folders.map(f => (
+                <option key={f} value={f}>📁 {f}</option>
+              ))}
+            </select>
+            <ChevronRight className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 rotate-90" />
+          </div>
+
+          {/* Search */}
+          <div className="flex-1 flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all min-w-0">
+            <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="搜索标签、描述..."
-              className="flex-1 bg-transparent border-none outline-none text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400"
+              placeholder="搜索..."
+              className="flex-1 bg-transparent border-none outline-none text-xs text-slate-700 dark:text-slate-200 placeholder-slate-400 min-w-0"
             />
             {search && (
               <button onClick={() => setSearch('')}>
-                <X className="w-4 h-4 text-slate-400 hover:text-slate-600" />
+                <X className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600" />
               </button>
             )}
           </div>
+
+          {/* Upload button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white rounded-lg bg-indigo-600 hover:bg-indigo-700 shadow-sm active:scale-95 transition-all disabled:opacity-60 shrink-0"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{uploading ? (uploadProgress || '上传中...') : '上传'}</span>
+          </button>
+
+          {/* New folder button */}
+          <button
+            onClick={handleCreateFolder}
+            title="新建文件夹"
+            className="flex items-center p-1.5 text-xs font-bold text-slate-500 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 hover:text-indigo-600 transition-all shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
         </div>
-
-        {/* ── View Filter Pills ── */}
-        <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <div className="flex gap-1.5 px-3 py-2.5 overflow-x-auto scrollbar-hide">
-            {[
-              { key: 'unused',   label: '未使用',  icon: <Archive className="w-3.5 h-3.5" />, count: countUnused },
-              { key: 'all',      label: '全部',    icon: <Grid className="w-3.5 h-3.5" />,    count: countAll },
-              { key: 'recent',   label: '最近',    icon: <Clock className="w-3.5 h-3.5" />,   count: countRecent },
-              { key: 'high_perf',label: '高表现',  icon: <TrendingUp className="w-3.5 h-3.5" />, count: countHighPerf },
-              { key: 'scheduled',label: '草稿排期', icon: <Calendar className="w-3.5 h-3.5" />, count: countScheduled },
-              { key: 'images',   label: '图片',    icon: <ImageIcon className="w-3.5 h-3.5" />, count: countImages },
-              { key: 'videos',   label: '视频',    icon: <Video className="w-3.5 h-3.5" />,   count: countVideos },
-            ].map(v => (
-              <button
-                key={v.key}
-                onClick={() => setViewFilter(v.key as typeof viewFilter)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
-                  viewFilter === v.key
-                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                {v.icon}
-                <span>{v.label}</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${viewFilter === v.key ? 'bg-white/20 text-white' : 'bg-white dark:bg-slate-700 text-slate-500'}`}>{v.count}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Folder Pills ── */}
-        <div className="bg-slate-50/80 dark:bg-slate-950/80 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <div className="flex gap-1.5 px-3 py-2 overflow-x-auto scrollbar-hide items-center">
-            {/* All folders */}
-            <button
-              onClick={() => { setSelectedFolder('all'); setTargetFolder('素材库'); }}
-              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-              onDragEnter={() => setDragOverFolder('all')}
-              onDragLeave={() => setDragOverFolder(null)}
-              onDrop={(e) => handleDropOnFolder('素材库', e)}
-              className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 border-2 ${
-                dragOverFolder === 'all'
-                  ? 'border-indigo-400 bg-indigo-100 text-indigo-700'
-                  : selectedFolder === 'all'
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
-                  : 'border-transparent bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
-              }`}
-            >
-              <span>📁</span>
-              <span>全部</span>
-            </button>
-
-            {folders.map(f => {
-              const isSelected = selectedFolder === f
-              const isDragOver = dragOverFolder === f
-              const count = assets.filter(a => f === '素材库' ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw') : a.aiCategory === f).length
-              const isDeletable = !['素材库', '产品', '环境', '活动', '已使用'].includes(f)
-              return (
-                <div key={f} className="relative group shrink-0">
-                  <button
-                    onClick={() => { setSelectedFolder(f); setTargetFolder(f); }}
-                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                    onDragEnter={() => setDragOverFolder(f)}
-                    onDragLeave={() => setDragOverFolder(null)}
-                    onDrop={(e) => handleDropOnFolder(f, e)}
-                    className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all border-2 pr-${isDeletable ? '5' : '3'} ${
-                      isDragOver
-                        ? 'border-indigo-400 bg-indigo-100 text-indigo-700'
-                        : isSelected
-                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
-                        : 'border-transparent bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span>📁</span>
-                    <span>{f}</span>
-                    <span className="text-[9px] text-slate-400 ml-0.5">{count}</span>
-                  </button>
-                  {isDeletable && (
-                    <button
-                      onClick={(e) => handleDeleteFolder(f, e)}
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-slate-200 dark:bg-slate-700 rounded-full items-center justify-center text-slate-500 hover:bg-rose-500 hover:text-white transition-all hidden group-hover:flex"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-
-            {/* Add folder button */}
-            <button
-              onClick={handleCreateFolder}
-              className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:border-indigo-400 hover:text-indigo-600"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>新建</span>
-            </button>
-          </div>
-        </div>
-
-
 
         {/* Scrollable grid wrapper */}
         <div 
