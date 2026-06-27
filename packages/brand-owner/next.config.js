@@ -1,25 +1,12 @@
-const path = require('path')
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: [
-    'react-markdown',
-    'remark-gfm',
-    'micromark-extension-gfm',
-    'micromark-extension-gfm-strikethrough',
-    'micromark-extension-gfm-autolink-literal',
-    'micromark-extension-gfm-footnote',
-    'micromark-extension-gfm-table',
-    'micromark-extension-gfm-tagfilter',
-    'micromark-util-combine-extensions',
-    'micromark-util-subtokenize'
-  ],
-  experimental: {
-    serverActions: { bodySizeLimit: '10mb' },
-  },
+  // brand-owner does not use react-markdown or micromark — those live
+  // in the root package only. Listing packages here that are not in
+  // this package's own node_modules causes build failures when deployed
+  // standalone (rootDir: packages/brand-owner on Render).
 
-  // Proxy all /api/* requests to the main AMC Kanban app (port 3000)
-  // This allows the brand-owner app (port 3001) to share the same
+  // Proxy all /api/* requests to the main AMC Kanban app
+  // This allows brand-owner (amc-mm) to share the same
   // authentication, session cookies, and backend APIs.
   async rewrites() {
     const mainAppUrl = process.env.MAIN_APP_URL || 'http://localhost:3000'
