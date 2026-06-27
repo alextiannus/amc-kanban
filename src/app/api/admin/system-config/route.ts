@@ -10,6 +10,14 @@ function maskKey(key: string | null | undefined): string | null {
   return `••••••${key.slice(-4)}`
 }
 
+function resolveField(body: Record<string, any>, field: string, current: string | null): string | null | undefined {
+  if (!(field in body)) return undefined
+  const val = body[field]
+  if (typeof val === 'string' && val.startsWith('••••••')) return current  // masked placeholder
+  if (val === '' || val === null) return null
+  return String(val).trim()
+}
+
 // GET /api/admin/system-config
 export async function GET() {
   const session = await getSession()
@@ -20,7 +28,10 @@ export async function GET() {
   return NextResponse.json({
     id: config.id,
     geminiApiKey: maskKey(config.geminiApiKey),
-    configured: !!config.geminiApiKey,
+    geminiConfigured: !!config.geminiApiKey,
+    azureSpeechKey: maskKey(config.azureSpeechKey),
+    azureSpeechRegion: config.azureSpeechRegion || '',
+    azureSpeechConfigured: !!config.azureSpeechKey,
     createdAt: config.createdAt,
     updatedAt: config.updatedAt,
   })
@@ -41,31 +52,31 @@ export async function PATCH(request: Request) {
   }
 
   const current = await ensureSystemConfig()
-  let nextKey: string | null | undefined = undefined
 
-
-  if ('geminiApiKey' in body) {
-    const inputKey = body.geminiApiKey
-    if (typeof inputKey === 'string' && inputKey.startsWith('••••••')) {
-      // Masked placeholder sent, keep original value
-      nextKey = current.geminiApiKey
-    } else if (inputKey === '' || inputKey === null) {
-      nextKey = null
-    } else {
-      nextKey = String(inputKey).trim()
-    }
-  }
+  const nextGeminiKey     = resolveField(body, 'geminiApiKey', current.geminiApiKey)
+  const nextAzureKey      = resolveField(body, 'azureSpeechKey', current.azureSpeechKey)
+  const nextAzureRegion   = resolveField(body, 'azureSpeechRegion', current.azureSpeechRegion)
 
   const updated = await prisma.systemConfig.update({
     where: { id: 'default' },
     data: {
-      ...(nextKey !== undefined && { geminiApiKey: nextKey }),
+      ...(nextGeminiKey   !== undefined && { geminiApiKey: nextGeminiKey }),
+      ...(nextAzureKey    !== undefined && { azureSpeechKey: nextAzureKey }),
+      ...(nextAzureRegion !== undefined && { azureSpeechRegion: nextAzureRegion }),
     },
   })
 
   // Prevent credentials from leaking in the audit log
-  const maskedOld = { ...current, geminiApiKey: maskKey(current.geminiApiKey) }
-  const maskedNew = { ...updated, geminiApiKey: maskKey(updated.geminiApiKey) }
+  const maskedOld = {
+    ...current,
+    geminiApiKey: maskKey(current.geminiApiKey),
+    azureSpeechKey: maskKey(current.azureSpeechKey),
+  }
+  const maskedNew = {
+    ...updated,
+    geminiApiKey: maskKey(updated.geminiApiKey),
+    azureSpeechKey: maskKey(updated.azureSpeechKey),
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -83,7 +94,10 @@ export async function PATCH(request: Request) {
   return NextResponse.json({
     id: updated.id,
     geminiApiKey: maskKey(updated.geminiApiKey),
-    configured: !!updated.geminiApiKey,
+    geminiConfigured: !!updated.geminiApiKey,
+    azureSpeechKey: maskKey(updated.azureSpeechKey),
+    azureSpeechRegion: updated.azureSpeechRegion || '',
+    azureSpeechConfigured: !!updated.azureSpeechKey,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   })

@@ -140,7 +140,13 @@ export default function AdminPage() {
     reason: string | null
     metadata: any
   }
-  const [systemConfig, setSystemConfig] = useState<{ geminiApiKey: string; configured: boolean } | null>(null)
+  const [systemConfig, setSystemConfig] = useState<{
+    geminiApiKey: string
+    geminiConfigured: boolean
+    azureSpeechKey: string
+    azureSpeechRegion: string
+    azureSpeechConfigured: boolean
+  } | null>(null)
   const [systemLogs, setSystemLogs] = useState<SystemConfigAuditLog[]>([])
   const [systemLogsLoading, setSystemLogsLoading] = useState(false)
   const [savingSystemConfig, setSavingSystemConfig] = useState(false)
@@ -178,7 +184,11 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/system-config', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ geminiApiKey: systemConfig.geminiApiKey }),
+        body: JSON.stringify({
+          geminiApiKey: systemConfig.geminiApiKey,
+          azureSpeechKey: systemConfig.azureSpeechKey,
+          azureSpeechRegion: systemConfig.azureSpeechRegion,
+        }),
       })
       if (res.ok) {
         const updated = await res.json()
@@ -1405,8 +1415,8 @@ export default function AdminPage() {
                   <input
                     type="password"
                     value={systemConfig?.geminiApiKey ?? ''}
-                    onChange={e => setSystemConfig(prev => prev ? { ...prev, geminiApiKey: e.target.value } : { geminiApiKey: e.target.value, configured: false })}
-                    placeholder="请输入 Gemini API Key (例如 AI_API_TOKEN)"
+                    onChange={e => setSystemConfig(prev => prev ? { ...prev, geminiApiKey: e.target.value } : { geminiApiKey: e.target.value, geminiConfigured: false, azureSpeechKey: '', azureSpeechRegion: 'eastasia', azureSpeechConfigured: false })}
+                    placeholder="请输入 Gemini API Key"
                     className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                   />
                   <button
@@ -1418,7 +1428,40 @@ export default function AdminPage() {
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  说明：系统调用 AI 模块（如自动评论回复）时，将优先使用此处配置的全局 Key。若此处留空，系统将退回使用服务器环境变量 (process.env.GEMINI_API_KEY)。
+                  说明：系统调用 AI 模块时优先使用此 Key。留空则退回 process.env.GEMINI_API_KEY。
+                </p>
+              </div>
+
+              {/* Azure Speech TTS */}
+              <div className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block">
+                  Microsoft Azure Speech TTS
+                  {systemConfig?.azureSpeechConfigured && (
+                    <span className="ml-2 text-emerald-500">● 已配置</span>
+                  )}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={systemConfig?.azureSpeechKey ?? ''}
+                    onChange={e => setSystemConfig(prev => prev ? { ...prev, azureSpeechKey: e.target.value } : null)}
+                    placeholder="Azure Speech Key 1（留空则使用浏览器内置 TTS）"
+                    className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  />
+                  <select
+                    value={systemConfig?.azureSpeechRegion ?? 'eastasia'}
+                    onChange={e => setSystemConfig(prev => prev ? { ...prev, azureSpeechRegion: e.target.value } : null)}
+                    className="w-40 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  >
+                    <option value="eastasia">East Asia（香港）</option>
+                    <option value="southeastasia">SE Asia（新加坡）</option>
+                    <option value="eastus">East US</option>
+                    <option value="westeurope">West Europe</option>
+                  </select>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  配置后 amc-mm 语音助手将使用 Azure XiaoxiaoNeural（高质量中文女声）。
+                  免费层：每月 5 小时 Neural TTS（F0 定价）。Key 存储于数据库，不写入 Render 环境变量。
                 </p>
               </div>
             </div>

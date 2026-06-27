@@ -217,3 +217,54 @@
 *   **全量加载原则**：在 `amc-mm` 专属控制台首页，取消 `assignedOnly=true` 的强行过滤，以匹配品牌主/餐饮老板的视点。
 *   **业务逻辑**：根据当前登录账户，加载该用户作为直接拥有者（`ownerId`）、联合拥有者（`BrandOwner` 表中关联）或者具备管理权限的所有品牌，确保老板登录后能够一屏掌控名下所有的餐饮品牌。
 
+---
+
+## 系统配置架构决策 (System Config Architecture)
+
+### 核心原则：所有 AI 模型与第三方服务的 API Key 必须存储在数据库 SystemConfig，不写入 Render 环境变量
+
+**背景**：早期实现中，Gemini API Key 等凭证被放入 Render 服务的 Environment 变量中。但这种方式有以下问题：
+- 凭证更新需要重新部署（延迟高）
+- 多服务实例之间无法共享配置
+- 无审计追踪（无法知道谁在什么时间修改了哪个 Key）
+- 开发人员/AI Agent 容易误以为需要修改 Render 配置，产生职责混乱
+
+**架构决策（2026-06-27 确认）**：
+
+| 配置项 | 存储位置 | 访问方式 | 禁止位置 |
+|--------|----------|----------|----------|
+| Gemini API Key | `SystemConfig.geminiApiKey`（DB） | `getGeminiApiKey()` | ❌ Render env |
+| Azure Speech Key | `SystemConfig.azureSpeechKey`（DB） | `getAzureSpeechConfig()` | ❌ Render env |
+| Azure Speech Region | `SystemConfig.azureSpeechRegion`（DB） | `getAzureSpeechConfig()` | ❌ Render env |
+| 未来新增 LLM/模型 Key | `SystemConfig.*ApiKey`（DB） | 对应 `get*Config()` 函数 | ❌ Render env |
+
+**唯一例外**：`DATABASE_URL`、`JWT_SECRET`、`NEXTAUTH_SECRET` 等基础设施级别的机密，仍放在 Render 环境变量中（这些无法从数据库读取，因为数据库连接本身需要它们）。
+
+### SystemConfig 数据模型
+
+```prisma
+model SystemConfig {
+  id                 String   @id @default("default")
+  geminiApiKey       String?  // Google Gemini API Key
+  azureSpeechKey     String?  // Microsoft Azure Speech TTS Key
+  azureSpeechRegion  String?  // Azure Region: eastasia / southeastasia / eastus
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+```
+
+### 管理入口
+- **后台路径**：`/admin` → 全局 AI 接口配置面板
+- **API**：`PATCH /api/admin/system-config`（Admin only，带 AuditLog）
+- **读取函数**（`src/lib/systemConfig.ts`）：
+  - `getGeminiApiKey()` — 返回 Gemini Key 或 null
+  - `getAzureSpeechConfig()` — 返回 `{ key, region }` 或 null
+
+### Azure Speech TTS 配置说明
+- **服务**：Microsoft Azure Cognitive Speech
+- **推荐 Voice**：`zh-CN-XiaoxiaoNeural`（高质量中文女声）
+- **免费层**：F0 定价，每月 5 小时 Neural TTS 免费
+- **申请地址**：[portal.azure.com](https://portal.azure.com) → 搜索 "Speech service" → Create
+- **推荐区域**：`eastasia`（香港，延迟最低）或 `southeastasia`（新加坡）
+- **Key 类型**：复制 KEY 1（`Ocp-Apim-Subscription-Key`）
+- **降级策略**：若 Azure Key 未配置，amc-mm 自动使用浏览器内置 `window.speechSynthesis`（已做智能声音选择优化）
