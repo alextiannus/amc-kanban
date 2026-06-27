@@ -49,22 +49,3 @@ services:
       - key: BRAND_OWNER_URL
         sync: false
 
-  # ── Brand-Owner Frontend: amc-mm.immedi.ai ───────────────────────────────
-  - type: web
-    name: amc-mm
-    env: node
-    rootDir: packages/brand-owner
-    # Only redeploy when brand-owner files change
-    paths:
-      - "packages/brand-owner/**"
-      - "render.yaml"
-      - "prisma/**"
-    buildCommand: npm install && npm run build
-    startCommand: npm run start -- --port $PORT
-    envVars:
-      # Points to the main amc-kanban service so API proxying works
-      - key: MAIN_APP_URL
-        value: https://amc-kanban.immedi.ai
-      # JWT_SECRET must match the main app — set manually in Render Dashboard
-      - key: JWT_SECRET
-        sync: false
