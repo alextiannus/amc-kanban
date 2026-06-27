@@ -75,14 +75,14 @@ function buildReason(lastPublishedAt: Date | null, gapDays: number | null): stri
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ brandId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession()
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { brandId } = await params
+  const { id: brandId } = await params
 
   // Verify brand access
   if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
