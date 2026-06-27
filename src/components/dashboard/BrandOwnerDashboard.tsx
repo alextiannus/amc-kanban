@@ -2538,10 +2538,9 @@ export default function BrandOwnerDashboard() {
                   </button>
                   <button 
                     onClick={() => {
-                      const logoutUrl = getMainAppUrl(
-                        `/api/auth/logout?redirectTo=${encodeURIComponent(window.location.origin + '/')}`
-                      )
-                      window.location.href = logoutUrl
+                      // proxy.ts intercepts /api/auth/logout on amc-mm.* domain,
+                      // clears the cookie, and redirects to /login on this domain.
+                      window.location.href = '/api/auth/logout'
                     }}
                     className="w-full flex items-center gap-4 text-rose-600 hover:text-rose-700 transition-colors py-2 text-left cursor-pointer"
                   >

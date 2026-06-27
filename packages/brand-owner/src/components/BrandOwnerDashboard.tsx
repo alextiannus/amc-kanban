@@ -2544,11 +2544,10 @@ export default function BrandOwnerDashboard() {
                   </button>
                   <button 
                     onClick={() => {
-                      // Navigate to the brand-owner's own local logout handler.
-                      // This route lives in src/app/api/logout/route.ts and is
-                      // NOT proxied to the main app, so it always redirects back
-                      // to /login on amc-mm.immedi.ai.
-                      window.location.href = '/api/logout'
+                      // proxy.ts on the main app intercepts /api/auth/logout for
+                      // amc-mm.* domain: clears the session cookie and redirects
+                      // back to /login on this same brand-owner domain.
+                      window.location.href = '/api/auth/logout'
                     }}
                     className="w-full flex items-center gap-4 text-rose-600 hover:text-rose-700 transition-colors py-2 text-left cursor-pointer"
                   >

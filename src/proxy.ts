@@ -25,13 +25,28 @@ export default async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const sessionExists = await hasValidSession(request)
 
-  const isPublicPage = pathname === '/game' || pathname.startsWith('/game/')
-  const isApiRoute = pathname.startsWith('/api')
+  // For brand-owner subdomain: intercept /api/auth/logout here so we can
+  // clear the cookie AND redirect back to the brand-owner login page,
+  // instead of letting the main app's logout handler redirect to immedi.ai.
+  if (isBrandOwnerDomain && pathname === '/api/auth/logout') {
+    const brandOwnerOrigin = `${request.nextUrl.protocol}//${hostname}`
+    const loginUrl = new URL('/login', brandOwnerOrigin)
+    const response = NextResponse.redirect(loginUrl)
+    // Clear the session cookie across all relevant domain variants
+    const cookieOpts = 'Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly; SameSite=Lax'
+    response.headers.append('Set-Cookie', `session=; ${cookieOpts}`)
+    response.headers.append('Set-Cookie', `session=; ${cookieOpts}; Secure`)
+    response.headers.append('Set-Cookie', `session=; ${cookieOpts}; Domain=${hostname}`)
+    response.headers.append('Set-Cookie', `session=; ${cookieOpts}; Domain=.immedi.ai`)
+    response.headers.append('Set-Cookie', `session=; ${cookieOpts}; Secure; Domain=.immedi.ai`)
+    return response
+  }
 
   // Bypass API and public routes
   if (isApiRoute || isPublicPage) {
     return NextResponse.next()
   }
+
 
   // Route brand owner subdomain requests to the brand-owner sub-app
   if (isBrandOwnerDomain) {
