@@ -38,10 +38,14 @@ export default async function proxy(request: NextRequest) {
     })
   }
 
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || 'localhost:3000'
+  const protocol = request.headers.get('x-forwarded-proto') || 'http'
+  const baseUrl = `${protocol}://${host}`
+
   // Root path (Login page): redirect to dashboard if logged in
   if (pathname === '/') {
     if (sessionExists) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
+      return NextResponse.redirect(new URL('/dashboard', baseUrl))
     }
     return NextResponse.next()
   }
@@ -49,14 +53,14 @@ export default async function proxy(request: NextRequest) {
   // Protected dashboard paths: redirect to login if not logged in
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
     if (!sessionExists) {
-      return NextResponse.redirect(new URL('/', request.url))
+      return NextResponse.redirect(new URL('/', baseUrl))
     }
     return NextResponse.next()
   }
 
   // Fallback redirect to login
   if (!sessionExists) {
-    return NextResponse.redirect(new URL('/', request.url))
+    return NextResponse.redirect(new URL('/', baseUrl))
   }
 
   return NextResponse.next()
