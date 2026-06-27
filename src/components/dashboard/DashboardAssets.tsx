@@ -8,16 +8,16 @@ import {
   Video,
   Check,
   CheckSquare,
-  Sparkles,
+
   X,
   Grid,
   Clock,
   Archive,
   TrendingUp,
-  Bot,
+
   Plus,
   Calendar,
-  BarChart2,
+
   AlertTriangle,
   Play,
   RefreshCw,
@@ -27,7 +27,7 @@ import {
   ChevronRight,
   Eye,
   MoreVertical,
-  FileText,
+
   ChevronLeft,
   Heart,
   MessageCircle,
@@ -122,7 +122,7 @@ interface DashboardAssetsProps {
 
 export default function DashboardAssets({ brandId, onNavigateToCalendar }: DashboardAssetsProps) {
   const [activeCategory, setActiveCategory] = useState('all')
-  const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos' | 'scheduled'>('all')
+  const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos' | 'scheduled'>('unused')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [isBatchSelectMode, setIsBatchSelectMode] = useState(false)
@@ -400,10 +400,6 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar }: Dashb
   }
 
 
-
-  // Bulk Tagging simulator state
-  const [bulkTaggingActive, setBulkTaggingActive] = useState(false)
-  const [bulkTagProgress, setBulkTagProgress] = useState(0)
 
   // Batch Tags Input
   const [batchTagsText, setBatchTagsText] = useState('')
@@ -794,52 +790,6 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar }: Dashb
 
   const activeAsset = assets.find(a => a.id === activeAssetId) || filtered[0] || assets[0]
 
-  // Batch mark pending assets as ready by syncing to backend.
-  const startBulkTagging = async () => {
-    if (!brandId) {
-      setError('请先选择品牌')
-      return
-    }
-    const pendingIds = assets.filter(a => 
-      !a.aiReady || 
-      a.aiTags.length === 0 || 
-      a.aiTags.includes('待确认') || 
-      a.aiTags.includes('待打标') ||
-      !a.aiCaption
-    ).map(a => a.id)
-    
-    if (pendingIds.length === 0) {
-      setBulkTagProgress(100)
-      return
-    }
-
-    setBulkTaggingActive(true)
-    setBulkTagProgress(0)
-    setError(null)
-
-    let completed = 0
-    try {
-      for (const assetId of pendingIds) {
-        const res = await fetch(`/api/brands/${brandId}/assets/${assetId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ aiReady: true, triggerAiTagging: true }),
-        })
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({}))
-          throw new Error(json.error || '批量确认失败')
-        }
-        completed += 1
-        setBulkTagProgress(Math.round((completed / pendingIds.length) * 100))
-      }
-      await loadAssets()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '批量确认失败')
-    } finally {
-      setBulkTaggingActive(false)
-    }
-  }
-
 
 
   const uploadFiles = async (files: FileList | File[]) => {
@@ -1180,233 +1130,46 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar }: Dashb
   return (
     <div className="flex h-full w-full overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans relative">
       
-      {/* 1. LEFT SIDEBAR: Views & Tag Browser */}
-      <aside className="w-64 border-r border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col p-4 shrink-0 h-full overflow-y-auto hidden lg:flex select-none">
-        <div className="mb-6">
-          <h3 className="px-3 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">资产视图</h3>
-          <nav className="space-y-1">
-            <button
-              onClick={() => { setViewFilter('all'); setActiveCategory('all'); }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${viewFilter === 'all' && activeCategory === 'all' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <div className="flex items-center gap-3">
-                <Grid className="w-4 h-4" />
-                <span>全部素材</span>
-              </div>
-              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countAll}</span>
-            </button>
-
-            <button
-              onClick={() => setViewFilter('recent')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${viewFilter === 'recent' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <div className="flex items-center gap-3">
-                <Clock className="w-4 h-4" />
-                <span>最近上传</span>
-              </div>
-              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countRecent}</span>
-            </button>
-
-            <button
-              onClick={() => setViewFilter('unused')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${viewFilter === 'unused' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <div className="flex items-center gap-3">
-                <Archive className="w-4 h-4" />
-                <span>未使用</span>
-              </div>
-              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countUnused}</span>
-            </button>
-
-            <button
-              onClick={() => setViewFilter('high_perf')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${viewFilter === 'high_perf' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <div className="flex items-center gap-3">
-                <TrendingUp className="w-4 h-4" />
-                <span>高表现</span>
-              </div>
-              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countHighPerf}</span>
-            </button>
-
-            <button
-              onClick={() => setViewFilter('ai_pending')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${viewFilter === 'ai_pending' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <div className="flex items-center gap-3">
-                <Bot className="w-4 h-4" />
-                <span>AI 待处理</span>
-              </div>
-              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countAiPending}</span>
-            </button>
-
-            <button
-              onClick={() => setViewFilter('scheduled')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${viewFilter === 'scheduled' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <div className="flex items-center gap-3">
-                <Calendar className="w-4 h-4" />
-                <span>草稿排期</span>
-              </div>
-              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countScheduled}</span>
-            </button>
-
-            <div className="h-[1px] bg-slate-100 dark:bg-slate-800 my-2 mx-3"></div>
-
-            <button
-              onClick={() => setViewFilter('images')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${viewFilter === 'images' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <div className="flex items-center gap-3">
-                <ImageIcon className="w-4 h-4" />
-                <span>图片素材</span>
-              </div>
-              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countImages}</span>
-            </button>
-
-            <button
-              onClick={() => setViewFilter('videos')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${viewFilter === 'videos' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-            >
-              <div className="flex items-center gap-3">
-                <Video className="w-4 h-4" />
-                <span>视频素材</span>
-              </div>
-              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{countVideos}</span>
-            </button>
-          </nav>
-        </div>
-
-        <div className="mb-6 border-t border-slate-100 dark:border-slate-800 pt-4">
-          <h3 className="px-3 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span>文件夹</span>
-            <Plus
-              className="w-3.5 h-3.5 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-              onClick={handleCreateFolder}
-            />
-          </h3>
-          <nav className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
-            {/* 全部文件夹 */}
-            <button
-              onClick={() => { setSelectedFolder('all'); setTargetFolder('素材库'); }}
-              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-              onDragEnter={() => setDragOverFolder('all')}
-              onDragLeave={() => setDragOverFolder(null)}
-              onDrop={(e) => handleDropOnFolder('素材库', e)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all group ${dragOverFolder === 'all' ? 'bg-indigo-100 dark:bg-indigo-900/50 border-2 border-indigo-500 scale-[1.02]' : selectedFolder === 'all' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold border-2 border-transparent' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border-2 border-transparent'}`}
-            >
-              <div className="flex items-center gap-3 truncate">
-                <span className="shrink-0 text-md">📁</span>
-                <span className="truncate">全部文件夹 (显示所有)</span>
-              </div>
-              <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{assets.length}</span>
-            </button>
-
-            {folders.map(f => {
-              const isSelected = selectedFolder === f
-              const isDragOver = dragOverFolder === f
-              const count = assets.filter(a => f === '素材库' ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw') : a.aiCategory === f).length
-              const isDeletable = !['素材库', '产品', '环境', '活动', '已使用'].includes(f)
-
-              return (
-                <button
-                  key={f}
-                  onClick={() => { setSelectedFolder(f); setTargetFolder(f); }}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-                  onDragEnter={() => setDragOverFolder(f)}
-                  onDragLeave={() => setDragOverFolder(null)}
-                  onDrop={(e) => handleDropOnFolder(f, e)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all group ${isDragOver ? 'bg-indigo-100 dark:bg-indigo-900/50 border-2 border-indigo-500 scale-[1.02]' : isSelected ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold border-2 border-transparent' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border-2 border-transparent'}`}
-                >
-                  <div className="flex items-center gap-3 truncate">
-                    <span className="shrink-0 text-md">📁</span>
-                    <span className="truncate">{f}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-0.5 rounded-full">{count}</span>
-                    {isDeletable && (
-                      <X
-                        className="w-3 h-3 text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shrink-0"
-                        onClick={(e) => handleDeleteFolder(f, e)}
-                      />
-                    )}
-                  </div>
-                </button>
-              )
-            })}
-          </nav>
-        </div>
-
-
-        <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">Powered by Immedi.AI</p>
-        </div>
-      </aside>
-
-      {/* 2. CENTER COLUMN: Media Grid */}
+      {/* MAIN COLUMN: full width mobile-first */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header bar */}
-        <div className="p-6 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 shadow-sm z-10">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-950 dark:text-white flex items-center gap-2">
-              <span>营销素材知识库</span>
-              <span className="text-xs px-2.5 py-1 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-full font-bold border border-indigo-100/50 dark:border-indigo-900/30">
-                📁 {selectedFolder === 'all' ? '全部文件夹' : selectedFolder}
+        {/* ── Top Header: title + search + upload ── */}
+        <div className="px-4 pt-4 pb-3 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-10">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h1 className="text-base font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-1.5 min-w-0">
+              <span className="truncate">营销素材库</span>
+              <span className="shrink-0 text-[10px] px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-full font-bold border border-indigo-100/50 dark:border-indigo-900/30">
+                {filtered.length} 项
               </span>
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              AI 自动理解素材内容，一键生成多平台营销帖子与动态视频
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={startBulkTagging}
-              disabled={bulkTaggingActive || assets.length === 0}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl transition-all border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/50 hover:bg-indigo-50 text-indigo-600 dark:text-indigo-400 disabled:opacity-50"
-            >
-              {bulkTaggingActive ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>处理中 {bulkTagProgress}%</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>AI 批量打标</span>
-                </>
-              )}
-            </button>
-            
-            <input
-              type="file"
-              ref={fileInputRef}
-              multiple
-              accept="image/*,video/*"
-              className="hidden"
-              onChange={(e) => { if (e.target.files) void uploadFiles(e.target.files) }}
-            />
-            
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 active:scale-95 transition-all"
-            >
-              <Upload className="w-4 h-4" />
-              <span>{uploading ? (uploadProgress || '上传中...') : '上传素材'}</span>
-            </button>
-          </div>
-        </div>
 
-        {/* Filter / Search Bar */}
-        <div className="px-6 py-4 bg-slate-50/80 dark:bg-slate-950/80 border-b border-slate-200/60 dark:border-slate-800 flex items-center gap-3 shrink-0">
-          <div className="flex-1 flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl px-4 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all">
+            <div className="flex items-center gap-2 shrink-0">
+              <input
+                type="file"
+                ref={fileInputRef}
+                multiple
+                accept="image/*,video/*"
+                className="hidden"
+                onChange={(e) => { if (e.target.files) void uploadFiles(e.target.files) }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-white rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 shadow-sm active:scale-95 transition-all disabled:opacity-60"
+              >
+                <Upload className="w-4 h-4" />
+                <span className="hidden sm:inline">{uploading ? (uploadProgress || '上传中...') : '上传'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all">
             <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
             <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="搜索标签、AI 描述..."
+              placeholder="搜索标签、描述..."
               className="flex-1 bg-transparent border-none outline-none text-sm text-slate-700 dark:text-slate-200 placeholder-slate-400"
             />
             {search && (
@@ -1415,66 +1178,108 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar }: Dashb
               </button>
             )}
           </div>
-          
-          <select
-            value={selectedFolder}
-            onChange={(e) => {
-              const val = e.target.value
-              setSelectedFolder(val)
-              setTargetFolder(val === 'all' ? '素材库' : val)
-            }}
-            className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none hover:bg-slate-50 transition-all cursor-pointer"
-          >
-            <option value="all">全部文件夹 (所有素材)</option>
-            {folders.map(f => (
-              <option key={f} value={f}>
-                {f === '素材库' ? '根目录 (素材库)' : `${f} 目录`}
-              </option>
-            ))}
-          </select>
-
-          {selected.length > 0 && (
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  const visibleIds = filtered.map(a => a.id)
-                  const allVisibleSelected = visibleIds.every(id => selected.includes(id))
-                  if (allVisibleSelected) {
-                    setSelected(prev => prev.filter(id => !visibleIds.includes(id)))
-                  } else {
-                    setSelected(prev => Array.from(new Set([...prev, ...visibleIds])))
-                  }
-                }}
-                className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 outline-none hover:bg-slate-50 transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
-              >
-                <Check className="w-4 h-4 text-indigo-500" strokeWidth={3} />
-                <span>{filtered.every(a => selected.includes(a.id)) ? '取消全选' : '全选'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => markForSchedule(selected)}
-                className="rounded-xl border border-emerald-100 dark:border-emerald-900/30 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-900/35 px-3.5 py-2 text-sm font-semibold text-emerald-600 dark:text-emerald-450 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
-              >
-                <Calendar className="w-4 h-4" />
-                <span>准备草稿排期(idea)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelected([])
-                  setIsBatchSelectMode(false)
-                }}
-                className="rounded-xl border border-rose-100 dark:border-rose-900/30 bg-rose-50/50 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-900/35 px-3.5 py-2 text-sm font-semibold text-rose-600 dark:text-rose-455 outline-none transition-all cursor-pointer flex items-center gap-1.5 select-none shrink-0"
-              >
-                <X className="w-4 h-4" />
-                <span>取消选择 ({selected.length})</span>
-              </button>
-            </div>
-          )}
         </div>
+
+        {/* ── View Filter Pills ── */}
+        <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="flex gap-1.5 px-3 py-2.5 overflow-x-auto scrollbar-hide">
+            {[
+              { key: 'unused',   label: '未使用',  icon: <Archive className="w-3.5 h-3.5" />, count: countUnused },
+              { key: 'all',      label: '全部',    icon: <Grid className="w-3.5 h-3.5" />,    count: countAll },
+              { key: 'recent',   label: '最近',    icon: <Clock className="w-3.5 h-3.5" />,   count: countRecent },
+              { key: 'high_perf',label: '高表现',  icon: <TrendingUp className="w-3.5 h-3.5" />, count: countHighPerf },
+              { key: 'scheduled',label: '草稿排期', icon: <Calendar className="w-3.5 h-3.5" />, count: countScheduled },
+              { key: 'images',   label: '图片',    icon: <ImageIcon className="w-3.5 h-3.5" />, count: countImages },
+              { key: 'videos',   label: '视频',    icon: <Video className="w-3.5 h-3.5" />,   count: countVideos },
+            ].map(v => (
+              <button
+                key={v.key}
+                onClick={() => setViewFilter(v.key as typeof viewFilter)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 ${
+                  viewFilter === v.key
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                {v.icon}
+                <span>{v.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${viewFilter === v.key ? 'bg-white/20 text-white' : 'bg-white dark:bg-slate-700 text-slate-500'}`}>{v.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Folder Pills ── */}
+        <div className="bg-slate-50/80 dark:bg-slate-950/80 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="flex gap-1.5 px-3 py-2 overflow-x-auto scrollbar-hide items-center">
+            {/* All folders */}
+            <button
+              onClick={() => { setSelectedFolder('all'); setTargetFolder('素材库'); }}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+              onDragEnter={() => setDragOverFolder('all')}
+              onDragLeave={() => setDragOverFolder(null)}
+              onDrop={(e) => handleDropOnFolder('素材库', e)}
+              className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 border-2 ${
+                dragOverFolder === 'all'
+                  ? 'border-indigo-400 bg-indigo-100 text-indigo-700'
+                  : selectedFolder === 'all'
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
+                  : 'border-transparent bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+              }`}
+            >
+              <span>📁</span>
+              <span>全部</span>
+            </button>
+
+            {folders.map(f => {
+              const isSelected = selectedFolder === f
+              const isDragOver = dragOverFolder === f
+              const count = assets.filter(a => f === '素材库' ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw') : a.aiCategory === f).length
+              const isDeletable = !['素材库', '产品', '环境', '活动', '已使用'].includes(f)
+              return (
+                <div key={f} className="relative group shrink-0">
+                  <button
+                    onClick={() => { setSelectedFolder(f); setTargetFolder(f); }}
+                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+                    onDragEnter={() => setDragOverFolder(f)}
+                    onDragLeave={() => setDragOverFolder(null)}
+                    onDrop={(e) => handleDropOnFolder(f, e)}
+                    className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all border-2 pr-${isDeletable ? '5' : '3'} ${
+                      isDragOver
+                        ? 'border-indigo-400 bg-indigo-100 text-indigo-700'
+                        : isSelected
+                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
+                        : 'border-transparent bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>📁</span>
+                    <span>{f}</span>
+                    <span className="text-[9px] text-slate-400 ml-0.5">{count}</span>
+                  </button>
+                  {isDeletable && (
+                    <button
+                      onClick={(e) => handleDeleteFolder(f, e)}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-slate-200 dark:bg-slate-700 rounded-full items-center justify-center text-slate-500 hover:bg-rose-500 hover:text-white transition-all hidden group-hover:flex"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Add folder button */}
+            <button
+              onClick={handleCreateFolder}
+              className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-all shrink-0 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 hover:border-indigo-400 hover:text-indigo-600"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>新建</span>
+            </button>
+          </div>
+        </div>
+
+
 
         {/* Scrollable grid wrapper */}
         <div 
