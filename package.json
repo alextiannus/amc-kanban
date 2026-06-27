@@ -22,7 +22,7 @@
     "sync:role-roster": "node --experimental-strip-types scripts/sync-user-role-roster.mts",
     "verify:permissions": "node scripts/verify-permissions.mjs",
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",
-    "postinstall": "npx prisma generate && npx prisma db push --accept-data-loss"
+    "postinstall": "node -e \"if(!process.env.RENDER && !process.env.CI) { require('child_process').execSync('npx prisma generate && npx prisma db push --accept-data-loss', {stdio:'inherit'}) }\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
