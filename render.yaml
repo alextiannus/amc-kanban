@@ -11,6 +11,9 @@ services:
     env: node
     buildCommand: npm install && npx prisma db push --accept-data-loss && npm run build
     startCommand: npm run start
+    # Only redeploy when main app files change (ignore brand-owner changes)
+    paths:
+      - "!packages/brand-owner/**"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -52,6 +55,11 @@ services:
   - type: web
     name: amc-mm
     env: node
+    # Only redeploy when brand-owner files change
+    paths:
+      - "packages/brand-owner/**"
+      - "render.yaml"
+      - "prisma/**"
     buildCommand: npm install && npm run build --workspace=packages/brand-owner
     startCommand: sh -c 'node node_modules/next/dist/bin/next start packages/brand-owner -p $PORT'
     envVars:
