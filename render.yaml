@@ -56,7 +56,7 @@ services:
     envVars:
       # Points to the main amc-kanban service so API proxying works
       - key: MAIN_APP_URL
-        value: https://immedi.ai
+        value: https://amc-kanban.immedi.ai
       # JWT_SECRET must match the main app — set manually in Render Dashboard
       - key: JWT_SECRET
         sync: false
