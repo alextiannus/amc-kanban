@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getBrandAccessType } from '@/lib/brandAccess'
 
@@ -17,12 +16,12 @@ export async function GET(
 ) {
   const { id: brandId } = await params
 
-  const session = await getServerSession(authOptions)
+  const session = await getSession()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const accessType = await getBrandAccessType(brandId, session.user.id, (session.user as any).userType || 'HUMAN')
+  const accessType = await getBrandAccessType(brandId, session.user.id, session.user.type || 'HUMAN')
   if (!accessType) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
