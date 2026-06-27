@@ -136,12 +136,21 @@ export async function POST(request: Request, { params }: Params) {
       where: { brandId, platformId, handle: 'unconfigured' }
     })
     if (!placeholderAccount) {
+      const getDisplayName = (pId: string) => {
+        const lower = pId.toLowerCase()
+        if (lower === 'google_business' || lower === 'google') return 'Google Business (未配置)'
+        if (lower === 'xiaohongshu' || lower === 'rednote' || lower === 'red' || lower === 'xhs') return '小红书 / Rednote (未配置)'
+        if (lower === 'instagram') return 'Instagram (未配置)'
+        if (lower === 'facebook') return 'Facebook (未配置)'
+        if (lower === 'tiktok') return 'TikTok (未配置)'
+        return `${pId.charAt(0).toUpperCase() + pId.slice(1)} (未配置)`
+      }
       placeholderAccount = await prisma.socialAccount.create({
         data: {
           brandId,
           platformId,
           handle: 'unconfigured',
-          displayName: platformId === 'google_business' ? 'Google Business (未配置)' : '小红书 / Rednote (未配置)',
+          displayName: getDisplayName(platformId),
         }
       })
     }

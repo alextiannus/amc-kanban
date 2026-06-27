@@ -158,6 +158,8 @@ function formatCardTime(value: string) {
 
 function platformLabel(platformId?: string | null) {
   if (!platformId) return 'Channel'
+  const lower = platformId.toLowerCase()
+  if (['red', 'xhs', 'xiaohongshu', 'rednote'].includes(lower)) return '小红书'
   return platformId.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
@@ -301,6 +303,9 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     // Add unconfigured placeholder accounts if they are not already in accounts
     const hasGoogle = list.some(a => ['google', 'google_business'].includes(a.platformId.toLowerCase()))
     const hasRednote = list.some(a => ['red', 'xiaohongshu', 'xhs'].includes(a.platformId.toLowerCase()))
+    const hasInstagram = list.some(a => a.platformId.toLowerCase() === 'instagram')
+    const hasFacebook = list.some(a => a.platformId.toLowerCase() === 'facebook')
+    const hasTiktok = list.some(a => a.platformId.toLowerCase() === 'tiktok')
 
     // Check if the currently selected draft belongs to an unconfigured account that is already in the database
     const selectedDraftAccount = selectedDraft?.account
@@ -315,7 +320,14 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
           id: selectedDraftAccount.id,
           platformId: selectedDraftAccount.platformId,
           handle: 'unconfigured',
-          displayName: selectedDraftAccount.displayName || (isGoogle ? 'Google Business (未配置)' : '小红书 / Rednote (未配置)'),
+          displayName: selectedDraftAccount.displayName || (
+            isGoogle ? 'Google Business (未配置)' 
+            : isRed ? '小红书 / Rednote (未配置)'
+            : pId === 'instagram' ? 'Instagram (未配置)'
+            : pId === 'facebook' ? 'Facebook (未配置)'
+            : pId === 'tiktok' ? 'TikTok (未配置)'
+            : `${selectedDraftAccount.platformId.charAt(0).toUpperCase() + selectedDraftAccount.platformId.slice(1)} (未配置)`
+          ),
           autoPilot: false,
           profileUrl: null
         } as any)
@@ -339,6 +351,36 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
         platformId: 'red',
         handle: 'unconfigured',
         displayName: '小红书 (未配置)',
+        autoPilot: false,
+        profileUrl: null
+      } as any)
+    }
+    if (!hasInstagram && !list.some(a => a.id === 'unconfigured_instagram' || (a.handle === 'unconfigured' && a.platformId.toLowerCase() === 'instagram'))) {
+      list.push({
+        id: 'unconfigured_instagram',
+        platformId: 'instagram',
+        handle: 'unconfigured',
+        displayName: 'Instagram (未配置)',
+        autoPilot: false,
+        profileUrl: null
+      } as any)
+    }
+    if (!hasFacebook && !list.some(a => a.id === 'unconfigured_facebook' || (a.handle === 'unconfigured' && a.platformId.toLowerCase() === 'facebook'))) {
+      list.push({
+        id: 'unconfigured_facebook',
+        platformId: 'facebook',
+        handle: 'unconfigured',
+        displayName: 'Facebook (未配置)',
+        autoPilot: false,
+        profileUrl: null
+      } as any)
+    }
+    if (!hasTiktok && !list.some(a => a.id === 'unconfigured_tiktok' || (a.handle === 'unconfigured' && a.platformId.toLowerCase() === 'tiktok'))) {
+      list.push({
+        id: 'unconfigured_tiktok',
+        platformId: 'tiktok',
+        handle: 'unconfigured',
+        displayName: 'TikTok (未配置)',
         autoPilot: false,
         profileUrl: null
       } as any)
@@ -645,7 +687,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
         results.forEach(d => { if (d) savedDrafts.push(d) })
       }
 
-      await loadDrafts()
+      await Promise.all([loadDrafts(), loadAccounts()])
       if (savedDrafts.length > 0) {
         setSelectedId(savedDrafts[0].id)
       }

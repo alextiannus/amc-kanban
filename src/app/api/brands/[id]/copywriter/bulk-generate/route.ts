@@ -49,21 +49,34 @@ export async function POST(request: Request, { params }: Params) {
       where: { brandId }
     })
 
-    // If no accounts, let's create unconfigured placeholders for instagram, xiaohongshu, facebook
-    if (accounts.length === 0) {
-      const defaultPlatforms = ['instagram', 'xiaohongshu', 'facebook']
-      for (const platformId of defaultPlatforms) {
+    // Ensure placeholders exist for standard platforms (instagram, xiaohongshu, facebook) if they are not configured
+    const defaultPlatforms = ['instagram', 'xiaohongshu', 'facebook']
+    for (const platformId of defaultPlatforms) {
+      const exists = accounts.some((a: any) => {
+        const pId = a.platformId.toLowerCase()
+        if (platformId === 'xiaohongshu') {
+          return ['xiaohongshu', 'rednote', 'red', 'xhs'].includes(pId)
+        }
+        return pId === platformId
+      })
+      if (!exists) {
         const handle = 'unconfigured'
         let placeholderAccount = await prisma.socialAccount.findFirst({
           where: { brandId, platformId, handle }
         })
         if (!placeholderAccount) {
+          const getDisplayName = (pId: string) => {
+            if (pId === 'xiaohongshu') return '小红书 / Rednote (未配置)'
+            if (pId === 'instagram') return 'Instagram (未配置)'
+            if (pId === 'facebook') return 'Facebook (未配置)'
+            return `${pId.charAt(0).toUpperCase() + pId.slice(1)} (未配置)`
+          }
           placeholderAccount = await prisma.socialAccount.create({
             data: {
               brandId,
               platformId,
               handle,
-              displayName: platformId === 'xiaohongshu' ? '小红书 / Rednote (未配置)' : platformId === 'instagram' ? 'Instagram (未配置)' : 'Facebook (未配置)'
+              displayName: getDisplayName(platformId)
             }
           })
         }

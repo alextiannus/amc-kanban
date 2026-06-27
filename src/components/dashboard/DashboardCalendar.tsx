@@ -61,9 +61,12 @@ function normalizePlatformLabel(platform: string) {
     ig: 'IG',
     xiaohongshu: '小红书',
     rednote: '小红书',
+    red: '小红书',
     xhs: '小红书',
     tiktok: 'TikTok',
     google: 'Google',
+    google_business: 'Google',
+    google_maps: 'Google',
     facebook: 'Facebook',
     fb: 'Facebook',
     email: 'Email',
@@ -292,6 +295,9 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     const list = [...accounts]
     const hasGoogle = accounts.some(a => ['google', 'google_business'].includes(a.platformId.toLowerCase()))
     const hasRednote = accounts.some(a => ['red', 'xiaohongshu', 'xhs'].includes(a.platformId.toLowerCase()))
+    const hasInstagram = accounts.some(a => a.platformId.toLowerCase() === 'instagram')
+    const hasFacebook = accounts.some(a => a.platformId.toLowerCase() === 'facebook')
+    const hasTiktok = accounts.some(a => a.platformId.toLowerCase() === 'tiktok')
 
     if (!hasGoogle) {
       list.push({
@@ -309,6 +315,36 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         platformId: 'red',
         handle: 'unconfigured',
         displayName: '小红书 (未配置)',
+        autoPilot: false,
+        profileUrl: null
+      })
+    }
+    if (!hasInstagram) {
+      list.push({
+        id: 'unconfigured_instagram',
+        platformId: 'instagram',
+        handle: 'unconfigured',
+        displayName: 'Instagram (未配置)',
+        autoPilot: false,
+        profileUrl: null
+      })
+    }
+    if (!hasFacebook) {
+      list.push({
+        id: 'unconfigured_facebook',
+        platformId: 'facebook',
+        handle: 'unconfigured',
+        displayName: 'Facebook (未配置)',
+        autoPilot: false,
+        profileUrl: null
+      })
+    }
+    if (!hasTiktok) {
+      list.push({
+        id: 'unconfigured_tiktok',
+        platformId: 'tiktok',
+        handle: 'unconfigured',
+        displayName: 'TikTok (未配置)',
         autoPilot: false,
         profileUrl: null
       })
@@ -1724,6 +1760,18 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                               }
                               if (id === 'unconfigured_google_business') {
                                 const match = saved.find(d => ['google_business', 'google', 'google_maps'].includes(d.account?.platformId?.toLowerCase()))
+                                return match ? match.accountId : id
+                              }
+                              if (id === 'unconfigured_instagram') {
+                                const match = saved.find(d => d.account?.platformId?.toLowerCase() === 'instagram')
+                                return match ? match.accountId : id
+                              }
+                              if (id === 'unconfigured_facebook') {
+                                const match = saved.find(d => d.account?.platformId?.toLowerCase() === 'facebook')
+                                return match ? match.accountId : id
+                              }
+                              if (id === 'unconfigured_tiktok') {
+                                const match = saved.find(d => d.account?.platformId?.toLowerCase() === 'tiktok')
                                 return match ? match.accountId : id
                               }
                               return id
