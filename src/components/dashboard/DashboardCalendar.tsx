@@ -802,15 +802,30 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
   const handleSchedulePublish = async () => {
     if (!activeBrandId) return
-    const day = selectedDay || new Date().getDate()
-    const targetDate = new Date(viewYear, viewMonth, day, 10, 0, 0)
-    const targetDateISO = targetDate.toISOString()
-
-    const draftsList = await saveOrUpdateDrafts('scheduled', targetDateISO)
-    if (!draftsList || draftsList.length === 0) return
 
     setSaving(true)
     try {
+      // Call unified smart scheduling API to get recommended publish time
+      let targetDateISO: string
+      try {
+        const schedRes = await fetch(`/api/brands/${activeBrandId}/scheduling/recommend`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform: null, numberOfPosts: 1, urgency: 'normal' }),
+        })
+        if (schedRes.ok) {
+          const schedData = await schedRes.json()
+          targetDateISO = schedData.recommendations?.[0]?.recommendedAt ?? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+        } else {
+          targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+        }
+      } catch {
+        targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+      }
+
+      const draftsList = await saveOrUpdateDrafts('scheduled', targetDateISO)
+      if (!draftsList || draftsList.length === 0) { setSaving(false); return }
+
       await Promise.all(
         draftsList.map(async (draft) => {
           const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}/submit`, {
@@ -823,7 +838,11 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         })
       )
 
-      alert('排期发布成功！系统已自动为您提交排期。')
+      const dt = new Date(targetDateISO)
+      const timeStr = dt.toLocaleString('zh-CN', {
+        month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      })
+      alert(`智能排期成功！系统已为您安排在 ${timeStr} 发布。`)
       setIsCreatingPost(false)
       setShowPublishOptionModal(false)
       await refreshCalendar()
@@ -833,6 +852,8 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       setSaving(false)
     }
   }
+
+
 
   const handlePublishImmediately = async () => {
     if (!activeBrandId) return

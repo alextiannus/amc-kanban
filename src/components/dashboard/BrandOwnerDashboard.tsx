@@ -666,14 +666,12 @@ export default function BrandOwnerDashboard() {
       }
 
       if (unconnectedDrafts.length > 0) {
-        // Keep only unconnected drafts in the preview list
         setGeneratedDrafts(unconnectedDrafts)
         setCompanionState('speaking')
         setEmotion('wink')
         speakText('部分未连接平台需要您手动复制发布，文案已保留在屏幕上，您可以点击复制按钮进行手动发布。')
         showToast('有部分平台需手动发布，文案已保留', 'info')
       } else {
-        // All done
         setGeneratedDrafts(null)
         setPendingImages([])
         setPendingPreviews([])
@@ -683,9 +681,9 @@ export default function BrandOwnerDashboard() {
         speakText('搞定，老板！文案已经一键发布到了所有已连接平台。')
       }
 
-      const draftsRes = await fetch(`/api/brands/${activeBrand.id}/drafts`)
-      if (draftsRes.ok) {
-        const resData = await draftsRes.json()
+      const draftsRes0 = await fetch(`/api/brands/${activeBrand.id}/drafts`)
+      if (draftsRes0.ok) {
+        const resData = await draftsRes0.json()
         setDrafts(Array.isArray(resData) ? resData : resData.drafts || [])
       }
     } catch (err: any) {
@@ -705,11 +703,24 @@ export default function BrandOwnerDashboard() {
     }
 
     setIsSubmittingFinalDrafts(true)
-    showToast('正在提交草稿到后台...', 'info')
+    showToast('正在计算最佳发布时间...', 'info')
 
     try {
+      // Call unified scheduling API
+      let recommendedAt: string = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+      try {
+        const schedRes = await fetch(`/api/brands/${activeBrand.id}/scheduling/recommend`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform: null, numberOfPosts: selected.length, urgency: 'normal' }),
+        })
+        if (schedRes.ok) {
+          const schedData = await schedRes.json()
+          recommendedAt = schedData.recommendations?.[0]?.recommendedAt ?? recommendedAt
+        }
+      } catch { /* fall through to default */ }
+
       for (const draft of selected) {
-        // Create draft in database with status 'draft' and keep it there
         const createRes = await fetch(`/api/brands/${activeBrand.id}/drafts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -719,9 +730,9 @@ export default function BrandOwnerDashboard() {
             hashtags: draft.hashtags,
             mediaUrls: draft.mediaUrls,
             assetIds: draft.assetIds,
-            status: 'draft',
-            scheduledAt: draft.scheduledAt,
-          })
+            status: 'scheduled',
+            scheduledAt: recommendedAt,
+          }),
         })
         if (!createRes.ok) {
           const err = await createRes.json().catch(() => ({}))
@@ -729,10 +740,12 @@ export default function BrandOwnerDashboard() {
         }
       }
 
-      showToast('已提交草稿并加入系统排期！', 'success')
+      const dt = new Date(recommendedAt)
+      const timeStr = dt.toLocaleString('zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+      showToast(`智能排期成功！已安排在 ${timeStr} 发布。`, 'success')
       setCompanionState('speaking')
       setEmotion('smile')
-      speakText('老板，我已经把所有生成的推文草稿提交并加入系统排期了。')
+      speakText(`老板，我已经把所有推文草稿排期在${timeStr}发布了！`)
 
       setGeneratedDrafts(null)
       setPendingImages([])
@@ -746,7 +759,7 @@ export default function BrandOwnerDashboard() {
       }
     } catch (err: any) {
       console.error(err)
-      showToast(`保存草稿失败: ${err.message}`, 'error')
+      showToast(`智能排期失败: ${err.message}`, 'error')
     } finally {
       setIsSubmittingFinalDrafts(false)
     }
