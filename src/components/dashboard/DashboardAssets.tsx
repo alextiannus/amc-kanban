@@ -2227,13 +2227,13 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar }: Dashb
             
             <div className="w-px h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />
 
-            {/* 跳转发布日历 */}
+            {/* 跳转发布日历 — 新建发布 */}
             <button
               onClick={() => markForSchedule(selected)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 active:scale-95 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-all shadow-sm"
             >
-              <Calendar className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">发布日历</span>
+              <Plus className="w-3.5 h-3.5" />
+              <span>新建发布</span>
             </button>
 
             {/* 添加标签 */}
