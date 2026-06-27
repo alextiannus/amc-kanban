@@ -54,3 +54,6 @@ next-env.d.ts
 public/uploads/optimized/opt-cmqs6ln6n0003skc8obblqric-3-1782314410364.jpg
 public/uploads/optimized/opt-cmqs6ln6n0003skc8obblqric-2-1782314410200.jpg
 public/uploads/optimized/opt-cmqs6ln6n0003skc8obblqric-1-1782314409974.jpg
+
+# Local Docker dev — production DB dump (contains real data, never commit)
+docker/prod-dump.sql
