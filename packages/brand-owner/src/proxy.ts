@@ -42,8 +42,16 @@ export default async function proxy(request: NextRequest) {
   const protocol = request.headers.get('x-forwarded-proto') || 'http'
   const baseUrl = `${protocol}://${host}`
 
-  // Root path (Login page): redirect to dashboard if logged in
+  // Root path: redirect to dashboard if logged in, otherwise redirect to login
   if (pathname === '/') {
+    if (sessionExists) {
+      return NextResponse.redirect(new URL('/dashboard', baseUrl))
+    }
+    return NextResponse.redirect(new URL('/login', baseUrl))
+  }
+
+  // Guest paths: redirect to dashboard if already logged in
+  if (pathname === '/login' || pathname === '/register') {
     if (sessionExists) {
       return NextResponse.redirect(new URL('/dashboard', baseUrl))
     }
@@ -53,14 +61,14 @@ export default async function proxy(request: NextRequest) {
   // Protected dashboard paths: redirect to login if not logged in
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
     if (!sessionExists) {
-      return NextResponse.redirect(new URL('/', baseUrl))
+      return NextResponse.redirect(new URL('/login', baseUrl))
     }
     return NextResponse.next()
   }
 
   // Fallback redirect to login
   if (!sessionExists) {
-    return NextResponse.redirect(new URL('/', baseUrl))
+    return NextResponse.redirect(new URL('/login', baseUrl))
   }
 
   return NextResponse.next()
