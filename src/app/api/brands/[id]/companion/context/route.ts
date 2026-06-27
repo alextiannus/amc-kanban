@@ -66,7 +66,7 @@ export async function GET(
   return NextResponse.json({
     pendingActions,
     todayScheduled: todayDrafts.length,
-    todayDrafts: todayDrafts.map((d) => ({
+    todayDrafts: todayDrafts.map((d: { id: string; platform: string; scheduledAt: Date | null; status: string }) => ({
       id: d.id,
       platform: d.platform,
       scheduledAt: d.scheduledAt?.toISOString(),
