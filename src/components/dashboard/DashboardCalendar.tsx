@@ -837,8 +837,11 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const handlePublishImmediately = async () => {
     if (!activeBrandId) return
 
-    // For immediate publish, scheduledAt should be null so that it gets published right now
-    const draftsList = await saveOrUpdateDrafts('published', null)
+    // For immediate publish, scheduledAt should be null so that it gets published right now.
+    // Use 'draft' as intermediate status — submitDraftForDelivery decides the final status
+    // (either 'published', 'scheduled', or 'failed'). Pre-setting 'published' caused a
+    // status inconsistency when PostFast API key was missing or delivery failed.
+    const draftsList = await saveOrUpdateDrafts('draft', null)
     if (!draftsList || draftsList.length === 0) return
 
     setSaving(true)
@@ -2859,20 +2862,40 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                           )}
 
                           {(platform === 'red' || platform === 'xiaohongshu' || platform === 'xhs') && (
-                            <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-white shadow-lg dark:border-slate-955 dark:bg-[#0f0f0f] text-black dark:text-white">
-                              {/* XHS Header */}
-                              <div className="flex items-center justify-between border-b border-slate-100 px-3.5 py-2.5 dark:border-slate-900">
+                            <div className="relative mx-auto w-full max-w-[310px] overflow-hidden rounded-[32px] border-[10px] border-slate-900 bg-white shadow-2xl dark:border-slate-950 dark:bg-[#0a0a0a] text-black dark:text-white">
+                              {/* XHS Status Bar */}
+                              <div className="flex items-center justify-between bg-white dark:bg-[#0a0a0a] px-3.5 pt-2 pb-0.5">
+                                <span className="text-[9px] font-black text-slate-900 dark:text-white">2:11</span>
+                                <div className="flex items-center gap-1.5">
+                                  <div className="flex items-end gap-[2px] h-2.5">
+                                    {[2,3,4,5].map(h => <div key={h} className="w-[2px] bg-slate-900 dark:bg-white rounded-sm" style={{height: `${h}px`}} />)}
+                                  </div>
+                                  <div className="w-3.5 h-2.5 rounded-sm border border-slate-900 dark:border-white relative">
+                                    <div className="absolute left-0.5 top-0.5 bottom-0.5 right-1 bg-slate-900 dark:bg-white rounded-sm" />
+                                    <div className="absolute -right-0.5 top-[3px] bottom-[3px] w-0.5 bg-slate-900 dark:bg-white rounded-r-sm" />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* XHS Nav Bar */}
+                              <div className="flex items-center justify-between px-3 py-2 bg-white dark:bg-[#0a0a0a]">
+                                <button className="text-slate-700 dark:text-slate-300 text-xs font-bold">&lt;</button>
                                 <div className="flex items-center gap-2">
-                                  <div className="h-6 w-6 rounded-full bg-slate-200 overflow-hidden border border-slate-100 dark:border-slate-800">
+                                  <div className="h-6 w-6 rounded-full bg-gradient-to-br from-rose-400 to-orange-300 overflow-hidden border-2 border-white dark:border-slate-800 shadow-sm">
                                     <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" />
                                   </div>
-                                  <p className="text-[10.5px] font-black tracking-tight">{account.displayName || brandDetails?.name || 'Your Brand'}</p>
+                                  <p className="text-[10px] font-black text-slate-900 dark:text-white tracking-tight">{account.displayName || brandDetails?.name || '你的品牌'}</p>
                                 </div>
-                                <button className="rounded-full bg-[#ff2442] px-3.5 py-0.5 text-[9.5px] font-black text-white hover:bg-[#e0203a] transition-all shadow-sm">关注</button>
+                                <div className="flex items-center gap-2">
+                                  <button className="rounded-full border border-[#ff2442] px-2.5 py-0.5 text-[9px] font-black text-[#ff2442] hover:bg-[#ff2442] hover:text-white transition-all">关注</button>
+                                  <button className="text-slate-500 dark:text-slate-400">
+                                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-none stroke-current stroke-2"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+                                  </button>
+                                </div>
                               </div>
 
                               {/* XHS Media */}
-                              <div className="relative aspect-[3/4] w-full bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+                              <div className="relative aspect-[3/4] w-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center overflow-hidden">
                                 {attachedMedia.length > 0 ? (
                                   <>
                                     {isVideoUrl(attachedMedia[previewMediaIndex % attachedMedia.length]?.url) ? (
@@ -2880,41 +2903,46 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                     ) : (
                                       <img src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
                                     )}
+                                    {/* 实况 badge top-left */}
+                                    <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1 bg-black/30 backdrop-blur-sm rounded-full px-2 py-0.5">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                      <span className="text-[8.5px] font-black text-white">实况</span>
+                                      <svg viewBox="0 0 12 12" className="w-2 h-2 fill-white/70"><path d="M4.5 3l4.5 3-4.5 3V3z"/></svg>
+                                    </div>
+                                    {/* Photo count top-right */}
+                                    {attachedMedia.length > 1 && (
+                                      <div className="absolute top-2.5 right-2.5 z-10 bg-black/40 backdrop-blur-sm rounded-full px-2 py-0.5">
+                                        <span className="text-[8.5px] font-black text-white">{(previewMediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}</span>
+                                      </div>
+                                    )}
+                                    {/* Dot indicators bottom-center */}
                                     {attachedMedia.length > 1 && (
                                       <>
-                                        {/* Dot Pagination indicators in bottom center */}
-                                        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-black/25 px-2 py-1 rounded-full backdrop-blur-[2px] z-10">
+                                        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 z-10">
                                           {attachedMedia.map((_, dotIdx) => (
                                             <span
                                               key={dotIdx}
-                                              className={`h-1.5 w-1.5 rounded-full transition-all duration-300 ${
+                                              className={`rounded-full transition-all duration-300 ${
                                                 (previewMediaIndex % attachedMedia.length) === dotIdx
-                                                  ? 'bg-[#ff2442] scale-125'
-                                                  : 'bg-white/60'
+                                                  ? 'h-1.5 w-3 bg-[#ff2442]'
+                                                  : 'h-1 w-1 bg-white/50'
                                               }`}
                                             />
                                           ))}
                                         </div>
-                                        {/* Left/Right buttons */}
                                         <button
                                           type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setPreviewMediaIndex(prev => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
-                                          }}
-                                          className="absolute left-2.5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/55 text-white rounded-full p-1 transition-colors z-10"
+                                          onClick={(e) => { e.stopPropagation(); setPreviewMediaIndex(prev => (prev > 0 ? prev - 1 : attachedMedia.length - 1)) }}
+                                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/25 hover:bg-black/50 text-white rounded-full p-1 transition-colors z-10"
                                         >
-                                          <ChevronLeft className="w-3.5 h-3.5" />
+                                          <svg viewBox="0 0 16 16" className="w-3 h-3 fill-white"><path d="M10 3L5 8l5 5V3z"/></svg>
                                         </button>
                                         <button
                                           type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setPreviewMediaIndex(prev => (prev + 1) % attachedMedia.length)
-                                          }}
-                                          className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/55 text-white rounded-full p-1 transition-colors z-10"
+                                          onClick={(e) => { e.stopPropagation(); setPreviewMediaIndex(prev => (prev + 1) % attachedMedia.length) }}
+                                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/25 hover:bg-black/50 text-white rounded-full p-1 transition-colors z-10"
                                         >
-                                          <ChevronRight className="w-3.5 h-3.5" />
+                                          <svg viewBox="0 0 16 16" className="w-3 h-3 fill-white"><path d="M6 3l5 5-5 5V3z"/></svg>
                                         </button>
                                       </>
                                     )}
@@ -2928,167 +2956,180 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                               </div>
 
                               {/* XHS Content */}
-                              {(() => {
-                                const lines = currentCaption.split('\n');
-                                const titleLine = lines[0] || '';
-                                const bodyContent = lines.slice(1).join('\n');
-                                return (
-                                  <div className="px-3.5 py-3 max-h-36 overflow-y-auto border-b border-slate-100 dark:border-slate-900 scrollbar-thin">
-                                    {titleLine && (
-                                      <h4 className="text-[12px] font-black leading-snug text-slate-900 dark:text-white text-left tracking-wide mb-1.5">
-                                        {titleLine}
-                                      </h4>
-                                    )}
-                                    {bodyContent.trim() ? (
-                                      <p className="whitespace-pre-wrap text-[10.5px] leading-relaxed text-slate-700 dark:text-slate-300 text-left">
-                                        {bodyContent}
-                                      </p>
-                                    ) : (
-                                      !titleLine && (
-                                        <p className="whitespace-pre-wrap text-[10.5px] leading-relaxed text-slate-400 dark:text-slate-500 text-left italic">
-                                          暂无内容描述
+                              <div className="bg-white dark:bg-[#0a0a0a] px-3.5 pt-3 pb-2">
+                                {(() => {
+                                  const lines = currentCaption.split('\n');
+                                  const titleLine = lines[0] || '';
+                                  const bodyContent = lines.slice(1).join('\n');
+                                  return (
+                                    <div className="max-h-28 overflow-y-auto scrollbar-thin">
+                                      {titleLine && (
+                                        <h4 className="text-[12.5px] font-black leading-snug text-slate-900 dark:text-white text-left tracking-wide mb-1.5">
+                                          {titleLine}
+                                        </h4>
+                                      )}
+                                      {bodyContent.trim() ? (
+                                        <p className="whitespace-pre-wrap text-[10px] leading-relaxed text-slate-600 dark:text-slate-400 text-left">
+                                          {bodyContent}
                                         </p>
-                                      )
-                                    )}
-                                    {currentHashtagsArray.length > 0 && (
-                                      <div className="mt-2.5 flex flex-wrap gap-x-1.5 gap-y-1">
-                                        {currentHashtagsArray.map((tag) => (
-                                          <span key={tag} className="text-[10.5px] text-[#3a5b8f] dark:text-[#6a90d0] font-bold hover:underline cursor-pointer">
-                                            #{tag}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {brandDetails?.location && (
-                                      <div className="mt-2.5 flex items-center gap-1 text-[9px] text-[#3a5b8f] dark:text-[#6a90d0] font-bold bg-[#3a5b8f]/5 dark:bg-[#6a90d0]/10 px-2 py-0.5 rounded-full w-fit">
-                                        <span>📍</span>
-                                        <span>{brandDetails.location}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
+                                      ) : (
+                                        !titleLine && (
+                                          <p className="text-[10px] text-slate-400 italic">暂无内容描述</p>
+                                        )
+                                      )}
+                                      {currentHashtagsArray.length > 0 && (
+                                        <div className="mt-1.5 flex flex-wrap gap-x-1 gap-y-0.5">
+                                          {currentHashtagsArray.map((tag) => (
+                                            <span key={tag} className="text-[9.5px] text-[#1a5f9e] dark:text-[#5a9fd4] font-bold">#{tag}</span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
 
-                              {/* XHS Footer bar */}
-                              <div className="flex items-center justify-between px-3.5 py-2.5 text-slate-500 dark:text-slate-400 text-[9px] bg-white dark:bg-[#0f0f0f]">
-                                <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full px-3 py-1.5 text-slate-400 dark:text-slate-500 text-[9.5px] mr-3 flex items-center">
-                                  说点什么...
-                                </div>
-                                <div className="flex items-center gap-3.5 shrink-0">
-                                  <div className="flex items-center gap-0.5 cursor-pointer">
-                                    <Heart className="w-4 h-4 text-slate-500 dark:text-slate-400 hover:text-[#ff2442] hover:fill-[#ff2442] transition-colors" />
-                                    <span className="font-extrabold text-[10px] text-slate-600 dark:text-slate-300">152</span>
+                                {/* XHS Footer */}
+                                <div className="mt-2.5 flex items-center gap-2 border-t border-slate-100 dark:border-slate-800 pt-2">
+                                  <div className="flex-1 flex items-center bg-slate-100 dark:bg-slate-800 rounded-full px-2.5 py-1.5 gap-1">
+                                    <svg viewBox="0 0 16 16" className="w-3 h-3 fill-none stroke-slate-400 stroke-[1.5]"><path d="M2 14l3-1h9V3H2v11z"/></svg>
+                                    <span className="text-[9px] text-slate-400">说点什么...</span>
                                   </div>
-                                  <div className="flex items-center gap-0.5 cursor-pointer">
-                                    <Star className="w-4 h-4 text-slate-500 dark:text-slate-400 hover:text-yellow-500 hover:fill-yellow-500 transition-colors" />
-                                    <span className="font-extrabold text-[10px] text-slate-600 dark:text-slate-300">48</span>
-                                  </div>
-                                  <div className="flex items-center gap-0.5 cursor-pointer">
-                                    <MessageCircle className="w-4 h-4 text-slate-500 dark:text-slate-400 hover:text-slate-600 transition-colors" />
-                                    <span className="font-extrabold text-[10px] text-slate-600 dark:text-slate-300">12</span>
+                                  <div className="flex items-center gap-2.5 shrink-0">
+                                    <div className="flex items-center gap-0.5 cursor-pointer">
+                                      <Heart className="w-3.5 h-3.5 text-slate-400 hover:text-[#ff2442] hover:fill-[#ff2442] transition-colors" />
+                                      <span className="text-[9px] font-bold text-slate-500">24</span>
+                                    </div>
+                                    <div className="flex items-center gap-0.5 cursor-pointer">
+                                      <Star className="w-3.5 h-3.5 text-slate-400 hover:text-yellow-500 hover:fill-yellow-500 transition-colors" />
+                                      <span className="text-[9px] font-bold text-slate-500">14</span>
+                                    </div>
+                                    <div className="flex items-center gap-0.5 cursor-pointer">
+                                      <MessageCircle className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600 transition-colors" />
+                                      <span className="text-[9px] font-bold text-slate-500">10</span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
                           )}
 
+
                           {platform === 'facebook' && (
-                            <div className="mx-auto w-full max-w-[340px] rounded-xl border border-slate-205 bg-white p-3 shadow-lg dark:border-slate-805 dark:bg-slate-900 text-black dark:text-white">
+                            <div className="mx-auto w-full max-w-[320px] rounded-xl bg-white shadow-lg dark:bg-[#242526] text-black dark:text-white border border-slate-200 dark:border-slate-700 overflow-hidden">
                               {/* FB Header */}
-                              <div className="flex items-center justify-between">
+                              <div className="flex items-start justify-between p-3 pb-2">
                                 <div className="flex items-center gap-2">
-                                  <div className="h-8 w-8 rounded-full bg-slate-200 overflow-hidden border border-slate-100 dark:border-slate-800">
+                                  <div className="relative h-9 w-9 rounded-full bg-slate-200 overflow-hidden border-2 border-white dark:border-slate-700 shadow-sm shrink-0">
                                     <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" />
+                                    {/* Online green dot */}
+                                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border-[1.5px] border-white dark:border-[#242526]" />
                                   </div>
                                   <div>
-                                    <p className="text-[10px] font-bold text-slate-900 dark:text-white text-left">{account.displayName || account.handle || brandDetails?.name || 'Your Brand'}</p>
-                                    <p className="text-[8px] text-slate-550 flex items-center gap-1 mt-0.5">
-                                      Just now · <Globe className="w-2.5 h-2.5 text-slate-400" />
+                                    <p className="text-[11px] font-bold text-slate-900 dark:text-white text-left leading-tight">{account.displayName || account.handle || brandDetails?.name || 'Your Brand'}</p>
+                                    <p className="text-[8.5px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                      <span>1天</span>
+                                      <span>·</span>
+                                      <Globe className="w-2.5 h-2.5 text-slate-400" />
                                     </p>
                                   </div>
                                 </div>
-                                <MoreVertical className="h-4 w-4 text-slate-400" />
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <MoreVertical className="h-4 w-4 text-slate-500 cursor-pointer" />
+                                  <button className="text-slate-400 hover:text-slate-600 transition-colors">
+                                    <svg viewBox="0 0 16 16" className="w-3.5 h-3.5 fill-current"><path d="M2 4h12v1.5H2zm0 3h12v1.5H2zm0 3h8v1.5H2z"/></svg>
+                                  </button>
+                                </div>
                               </div>
 
                               {/* FB Text */}
-                              <div className="mt-2 text-[10px] leading-relaxed text-slate-850 dark:text-slate-200 text-left">
+                              <div className="px-3 pb-2 text-[11px] leading-relaxed text-slate-800 dark:text-slate-200 text-left">
                                 <p className="whitespace-pre-wrap">{currentCaption}</p>
                                 {currentHashtagsArray.length > 0 && (
-                                  <p className="mt-1 text-blue-600 dark:text-blue-400 font-medium">
+                                  <p className="mt-1 text-blue-600 dark:text-blue-400 font-medium text-[10px]">
                                     {currentHashtagsArray.map(tag => `#${tag}`).join(' ')}
                                   </p>
                                 )}
                               </div>
 
-                              {/* FB Collage Layout */}
-                              <div className="mt-2 overflow-hidden rounded-lg border border-slate-100 bg-slate-50 dark:border-slate-805 dark:bg-slate-955 relative">
+                              {/* FB Image — portrait 4:5 like the screenshot */}
+                              <div className="relative w-full overflow-hidden bg-slate-100 dark:bg-slate-900" style={{aspectRatio: '4/5'}}>
                                 {attachedMedia.length === 0 ? (
-                                  <div className="flex h-32 flex-col items-center justify-center gap-1.5 text-slate-400">
-                                    <ImageIcon className="h-8 w-8 text-slate-305" />
+                                  <div className="flex h-full flex-col items-center justify-center gap-1.5 text-slate-400">
+                                    <ImageIcon className="h-8 w-8 text-slate-300" />
                                     <span className="text-[10px] font-semibold">暂无媒体文件</span>
                                   </div>
                                 ) : (
-                                  <div className="relative aspect-video w-full">
+                                  <>
                                     {isVideoUrl(attachedMedia[previewMediaIndex % attachedMedia.length]?.url) ? (
                                       <video src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
                                     ) : (
                                       <img src={attachedMedia[previewMediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
                                     )}
-                                    <span className="absolute right-2 top-2 rounded-full bg-black/65 px-1.5 py-0.5 text-[8px] font-black text-white z-10">
-                                      {(previewMediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setPreviewMediaIndex(prev => (prev > 0 ? prev - 1 : attachedMedia.length - 1))
-                                      }}
-                                      className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
-                                    >
-                                      <ChevronLeft className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setPreviewMediaIndex(prev => (prev + 1) % attachedMedia.length)
-                                      }}
-                                      className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 transition-colors z-10"
-                                    >
-                                      <ChevronRight className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
+                                    {/* Gift button bottom-left overlaid on image */}
+                                    <div className="absolute bottom-3 left-3 z-10">
+                                      <div className="flex items-center gap-1.5 bg-black/70 backdrop-blur-sm rounded-full px-2.5 py-1.5 text-white">
+                                        <svg viewBox="0 0 16 16" className="w-3 h-3 fill-white"><path d="M8 1a2 2 0 00-2 2H2v2h1l1 8h8l1-8h1V3h-4a2 2 0 00-2-2zM6 3a2 2 0 014 0H6zm-1 4h6l-.75 6H5.75L5 7z"/></svg>
+                                        <span className="text-[9px] font-black">送礼物</span>
+                                      </div>
+                                    </div>
+                                    {/* Image count */}
+                                    {attachedMedia.length > 1 && (
+                                      <>
+                                        <div className="absolute top-2.5 right-2.5 z-10 bg-black/50 rounded-full px-1.5 py-0.5">
+                                          <span className="text-[8px] font-bold text-white">{(previewMediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}</span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); setPreviewMediaIndex(prev => (prev > 0 ? prev - 1 : attachedMedia.length - 1)) }}
+                                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/35 hover:bg-black/55 text-white rounded-full p-1 transition-colors z-10"
+                                        >
+                                          <ChevronLeft className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => { e.stopPropagation(); setPreviewMediaIndex(prev => (prev + 1) % attachedMedia.length) }}
+                                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/35 hover:bg-black/55 text-white rounded-full p-1 transition-colors z-10"
+                                        >
+                                          <ChevronRight className="w-3 h-3" />
+                                        </button>
+                                      </>
+                                    )}
+                                  </>
                                 )}
                               </div>
 
-                              {/* FB Reactions bar */}
-                              <div className="mt-2.5 flex items-center justify-between border-b border-slate-100 pb-2 text-[9px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                              {/* FB Reactions count */}
+                              <div className="px-3 pt-2 pb-1 flex items-center justify-between text-[9.5px] text-slate-500 dark:text-slate-400">
                                 <div className="flex items-center gap-1">
-                                  <span className="flex items-center justify-center w-4 h-4 rounded-full bg-blue-500 text-white text-[8px] font-bold">👍</span>
-                                  <span className="flex items-center justify-center w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold -ml-2">❤️</span>
-                                  <span className="font-semibold ml-0.5">45 likes</span>
+                                  <div className="flex -space-x-1">
+                                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-[#1877f2] text-white text-[7px] shadow-sm">👍</span>
+                                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-[#f02849] text-white text-[7px] shadow-sm">❤️</span>
+                                  </div>
+                                  <span className="ml-1 font-medium text-slate-600 dark:text-slate-300">82</span>
                                 </div>
                                 <div className="flex gap-2">
-                                  <span>12 comments</span>
-                                  <span>·</span>
-                                  <span>3 shares</span>
+                                  <span className="cursor-pointer hover:underline">9条评论</span>
                                 </div>
                               </div>
 
+                              {/* FB divider */}
+                              <div className="mx-3 border-t border-slate-200 dark:border-slate-700" />
+
                               {/* FB Actions */}
-                              <div className="mt-1 flex items-center justify-around text-xs font-semibold text-slate-600 dark:text-slate-400">
-                                <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 p-1.5 rounded flex-1 justify-center transition-colors">
-                                  <ThumbsUp className="w-3.5 h-3.5" /> Like
-                                </span>
-                                <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 p-1.5 rounded flex-1 justify-center transition-colors">
-                                  <MessageCircle className="w-3.5 h-3.5" /> Comment
-                                </span>
-                                <span className="flex items-center gap-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 p-1.5 rounded flex-1 justify-center transition-colors">
-                                  <Share2 className="w-3.5 h-3.5" /> Share
-                                </span>
+                              <div className="flex items-center justify-around py-1 px-1 text-[10px] font-semibold text-slate-600 dark:text-slate-400">
+                                <button className="flex items-center gap-1.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg flex-1 justify-center transition-colors">
+                                  <ThumbsUp className="w-3.5 h-3.5" /> <span>赞</span>
+                                </button>
+                                <button className="flex items-center gap-1.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg flex-1 justify-center transition-colors">
+                                  <MessageCircle className="w-3.5 h-3.5" /> <span>评论</span>
+                                </button>
+                                <button className="flex items-center gap-1.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg flex-1 justify-center transition-colors">
+                                  <Share2 className="w-3.5 h-3.5" /> <span>分享</span>
+                                </button>
                               </div>
                             </div>
                           )}
+
 
                           {platform === 'tiktok' && (
                             <div className="relative mx-auto w-full max-w-[340px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-black shadow-lg dark:border-slate-955 text-white">

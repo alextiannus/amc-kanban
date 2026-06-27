@@ -97,17 +97,19 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   }
 
   if (draft.account.handle === 'unconfigured') {
-    const scheduled = isFuture(draft.scheduledAt)
-    const nextStatus = brand.autoPilot
-      ? (scheduled ? 'scheduled' : 'published')
+    // Unconfigured accounts (e.g. 小红书/Facebook not yet connected) cannot publish
+    // to a real platform, so they always land in 'scheduled' — never 'published'.
+    // publishedAt is always null because no actual post was created.
+    const nextStatus = (brand.autoPilot || input.forcePublish)
+      ? 'scheduled'
       : 'pending_review'
 
     const updated = await prisma.contentDraft.update({
       where: { id: draft.id },
       data: {
         status: nextStatus,
-        publishedAt: (!scheduled && nextStatus === 'published') ? new Date() : null,
-        agentNote: '未配置发布渠道，已自动进入排期，需要手动发布。',
+        publishedAt: null,
+        agentNote: '未配置发布渠道，已进入排期，需要手动完成发布。',
         rejectionNote: null,
       },
       include: {
@@ -140,14 +142,14 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
           resolvedNote: null,
         },
       })
-    } else if (nextStatus === 'published' || nextStatus === 'scheduled') {
+    } else {
       await prisma.actionItem.updateMany({
         where: { draftId: draft.id, brandId: input.brandId, status: 'pending' },
         data: {
           status: 'approved',
           resolvedAt: new Date(),
           resolvedBy: input.actorId,
-          resolvedNote: input.note || (brand.autoPilot ? '自动排期准备发布' : '主理人批准发布'),
+          resolvedNote: input.note || '已排期，等待手动发布到未配置渠道',
         },
       })
     }
@@ -158,7 +160,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
 
     return {
       ok: true as const,
-      mode: (nextStatus === 'pending_review' ? 'approval_required' : nextStatus) as any,
+      mode: nextStatus as any,
       draft: updated,
     }
   }
