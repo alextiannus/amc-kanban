@@ -21,7 +21,7 @@ To resolve issues in the brand owner portal (`amc-mm`) where:
   - Implemented a full-permutation cookie clearance helper function that generates headers for all browser cookie configurations:
     - SameSite: Lax, None, Strict, and Default fallback.
     - Security: Secure and Non-Secure variants (essential for clearing secure cookies set in production HTTPS environments).
-    - Scope: Scoped to host-only, resolved parent domain (e.g. `localhost` or `immedi.ai`), and dotted parent domain (e.g. `.localhost` or `.immedi.ai`).
+    - Scope: Scoped to host-only, resolved parent domain (e.g. `localhost` or `immedi.ai`), dotted parent domain (e.g. `.localhost` or `.immedi.ai`), exact request hostname (e.g. `amc-mm.localhost` or `amc-mm.immedi.ai`), and dotted request hostname (e.g. `.amc-mm.localhost` or `.amc-mm.immedi.ai`).
   - Added parent domain resolution logic to handle local development `.localhost` suffixes correctly.
 
 ### B. Dynamically Resolved Subdomain Redirection URL

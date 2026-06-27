@@ -26,21 +26,27 @@ export async function POST(request: Request) {
   // A. Clear on host-only (no domain specified)
   appendDeleteCookies()
 
-  // B. Resolve parent domain if current host is a subdomain
   const host = request.headers.get('host') || ''
   const hostname = host.split(':')[0]
   
-  if (hostname.includes('.')) {
-    const parts = hostname.split('.')
-    if (parts.length >= 2) {
-      const isLocalhost = parts[parts.length - 1] === 'localhost'
-      const parentDomain = isLocalhost ? 'localhost' : parts.slice(-2).join('.')
-      
-      // Clear on parent domain
-      appendDeleteCookies(parentDomain)
-      
-      // Clear on dotted parent domain
-      appendDeleteCookies(`.${parentDomain}`)
+  if (hostname) {
+    // B. Clear on the exact hostname and dotted hostname (e.g. amc-mm.localhost, .amc-mm.localhost)
+    appendDeleteCookies(hostname)
+    appendDeleteCookies(`.${hostname}`)
+
+    // C. Resolve parent domain if current host is a subdomain
+    if (hostname.includes('.')) {
+      const parts = hostname.split('.')
+      if (parts.length >= 2) {
+        const isLocalhost = parts[parts.length - 1] === 'localhost'
+        const parentDomain = isLocalhost ? 'localhost' : parts.slice(-2).join('.')
+        
+        // Clear on parent domain
+        appendDeleteCookies(parentDomain)
+        
+        // Clear on dotted parent domain
+        appendDeleteCookies(`.${parentDomain}`)
+      }
     }
   }
 
