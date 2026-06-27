@@ -1006,6 +1006,53 @@ export default function MMDashboard() {
     }, 2200)
   }
 
+  // --- Text Chat Send Handler (multi-turn aware) ---
+  const handleSendText = async () => {
+    const text = chatInput.trim()
+    if (!text || !activeBrand || companionState === 'thinking') return
+    setChatInput('')
+
+    const userTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    setMessages(prev => [...prev, { sender: 'user', text, time: userTime }])
+    setCompanionState('thinking')
+    setEmotion('effort')
+
+    try {
+      const res = await fetch(`/api/brands/${activeBrand.id}/copywriter/voice-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          history: conversationHistory.slice(-20),
+          context: { activeDraftId, pendingDraftIds },
+        }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        const aiTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        if (data.reply) {
+          setMessages(prev => [...prev, { sender: 'ai', text: data.reply, time: aiTime }])
+          speakText(data.reply)
+        }
+        addToHistory(text, data.reply || '', data.action, data.params?.draftId)
+        if (data.action === 'GENERATE_AND_PUBLISH') {
+          handleVoiceTriggerGenerateAndPublish(postIdea || text, true)
+        } else if (data.action === 'APPROVE_DRAFT' && data.params?.draftId) {
+          setActiveDraftId(null)
+          setPendingDraftIds(prev => prev.filter(id => id !== data.params.draftId))
+        }
+      } else {
+        setCompanionState('idle')
+        setEmotion('confused')
+        setTimeout(() => setEmotion('normal'), 2000)
+      }
+    } catch (err) {
+      console.error('[handleSendText]', err)
+      setCompanionState('idle')
+    }
+  }
+
   // --- Dynamic Eye Renderer ---
   const renderEye = (isLeft: boolean) => {
     // Determine Eyebrow animation/style
@@ -1901,6 +1948,64 @@ export default function MMDashboard() {
           {/* Chat Input Console (Voice button & Upload triggers) */}
           <div className="px-6 pb-10 pt-4 bg-gradient-to-t from-[#f7f9fb] via-[#f7f9fb]/90 to-transparent flex flex-col items-center z-20 pointer-events-auto">
             
+            {/* Draft Approval Action Cards — shown when AI presents a draft */}
+            {activeDraftId && (
+              <div className="w-full max-w-sm mb-4 p-3.5 bg-white border border-indigo-100 rounded-2xl shadow-sm">
+                <p className="text-xs font-bold text-slate-500 mb-2.5 uppercase tracking-wider">草稿审批</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={async () => {
+                      const res = await fetch(`/api/brands/${activeBrand?.id}/copywriter/voice-chat`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: `我同意发布这篇草稿`, history: conversationHistory.slice(-10), context: { activeDraftId } })
+                      })
+                      if (res.ok) {
+                        const d = await res.json()
+                        const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        setMessages(prev => [...prev, { sender: 'ai', text: d.reply || '已批准！', time: t }])
+                        speakText(d.reply || '已批准发布')
+                        setActiveDraftId(null)
+                        addToHistory('我同意发布这篇草稿', d.reply || '已批准！', 'APPROVE_DRAFT', activeDraftId)
+                      }
+                    }}
+                    className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold hover:bg-emerald-100 active:scale-95 transition-all"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>批准</span>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const res = await fetch(`/api/brands/${activeBrand?.id}/copywriter/voice-chat`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: `这篇草稿不行，请重新写一版`, history: conversationHistory.slice(-10), context: { activeDraftId } })
+                      })
+                      if (res.ok) {
+                        const d = await res.json()
+                        const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        setMessages(prev => [...prev, { sender: 'ai', text: d.reply || '好的，我来重写一版。', time: t }])
+                        speakText(d.reply || '好的，我来重写一版。')
+                        setActiveDraftId(null)
+                        addToHistory('这篇草稿不行，请重新写一版', d.reply || '', 'REJECT_DRAFT', activeDraftId)
+                      }
+                    }}
+                    className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold hover:bg-rose-100 active:scale-95 transition-all"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>拒绝</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setChatInput('我想把这篇推迟到明天晑10点发布')
+                    }}
+                    className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold hover:bg-amber-100 active:scale-95 transition-all"
+                  >
+                    <CalendarIcon className="w-3.5 h-3.5" />
+                    <span>调时间</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Voice Assistant Panel */}
             <div className="w-full max-w-sm flex items-center justify-between gap-6 px-4">
               {/* Left Column: Upload button */}
@@ -2012,10 +2117,36 @@ export default function MMDashboard() {
                 </motion.div>
               </div>
  
-              {/* Right Column: Balanced empty space spacer */}
-              <div className="w-12 h-12 flex-shrink-0" />
+              {/* Right Column: Send button (for text input) */}
+              <button
+                type="button"
+                onClick={handleSendText}
+                disabled={!chatInput.trim() || companionState === 'thinking' || generatingBulk}
+                className="w-12 h-12 rounded-full bg-white border border-slate-200/80 shadow-md flex items-center justify-center text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 hover:border-indigo-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 cursor-pointer flex-shrink-0"
+                title="发送消息"
+              >
+                <Send className="w-5 h-5" />
+              </button>
             </div>
- 
+
+            {/* Text input field for typed messages */}
+            <div className="w-full max-w-sm mt-3">
+              <div className="flex items-center gap-2 bg-white border border-slate-200/80 rounded-2xl shadow-sm px-4 py-2.5 focus-within:border-indigo-300 focus-within:shadow-indigo-100 transition-all">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendText() } }}
+                  placeholder="打字或语音指令..."
+                  disabled={companionState === 'thinking' || generatingBulk}
+                  className="flex-1 text-sm text-slate-700 placeholder-slate-400 bg-transparent outline-none disabled:opacity-50"
+                />
+                {companionState === 'thinking' && (
+                  <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin flex-shrink-0" />
+                )}
+              </div>
+            </div>
+
           </div>
         </main>
       )}
