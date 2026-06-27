@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Store, Send, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Store, Send, CheckCircle2, AlertTriangle, Loader2, LogOut } from 'lucide-react'
 
 interface MockReview {
   id: string
@@ -55,6 +56,7 @@ export default function MockMerchantPage() {
   const [triggeringReviewId, setTriggeringReviewId] = useState<string | null>(null)
   const [customReply, setCustomReply] = useState<Record<string, string>>({})
   const [alertInfo, setAlertInfo] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const router = useRouter()
 
   // Fetch human user's brands list to associate the simulated action
   useEffect(() => {
@@ -71,15 +73,22 @@ export default function MockMerchantPage() {
       })
       .catch((e) => {
         console.error(e)
-        setAlertInfo({
-          type: 'error',
-          message: '未检测到登录会话。请先在另一标签页中登录 AI Marketing Crew，然后刷新此页面。',
-        })
+        router.push('/mock-merchant/login')
       })
       .finally(() => {
         setLoadingBrands(false)
       })
-  }, [])
+  }, [router])
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      router.push('/mock-merchant/login')
+      router.refresh()
+    } catch (e) {
+      console.error('Logout failed:', e)
+    }
+  }
 
   // Handle local text inputs (updates UI when the extension simulates typing)
   const handleReplyChange = (id: string, text: string) => {
@@ -161,29 +170,43 @@ export default function MockMerchantPage() {
           </p>
         </div>
 
-        {/* Brand Selector for Testing */}
-        <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800 flex-shrink-0">
-          <Store className="w-4 h-4 text-slate-400" />
-          <span className="text-xs font-bold text-slate-300">关联测试品牌:</span>
-          {loadingBrands ? (
-            <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>载入中...</span>
-            </div>
-          ) : brands.length > 0 ? (
-            <select
-              value={selectedBrandId}
-              onChange={(e) => setSelectedBrandId(e.target.value)}
-              className="bg-slate-950 border border-slate-700 text-xs rounded-xl px-3 py-1.5 text-slate-200 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Brand Selector for Testing */}
+          <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800 flex-shrink-0">
+            <Store className="w-4 h-4 text-slate-400" />
+            <span className="text-xs font-bold text-slate-300">关联测试品牌:</span>
+            {loadingBrands ? (
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>载入中...</span>
+              </div>
+            ) : brands.length > 0 ? (
+              <select
+                value={selectedBrandId}
+                onChange={(e) => setSelectedBrandId(e.target.value)}
+                className="bg-slate-950 border border-slate-700 text-xs rounded-xl px-3 py-1.5 text-slate-200 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              >
+                {brands.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.id.substring(0, 6)}...)
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-xs text-rose-400 font-bold">请先登录</span>
+            )}
+          </div>
+
+          {/* Log Out Button */}
+          {brands.length > 0 && (
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl text-xs font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition active:scale-95 shadow-sm"
+              title="退出登录"
             >
-              {brands.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.id.substring(0, 6)}...)
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="text-xs text-rose-400 font-bold">请先登录</span>
+              <LogOut className="w-4 h-4" />
+              <span>退出登录</span>
+            </button>
           )}
         </div>
       </div>

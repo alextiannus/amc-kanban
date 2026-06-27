@@ -293,11 +293,40 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
   const accountOptions = useMemo(() => {
     const list = [...accounts]
-    const hasGoogle = accounts.some(a => ['google', 'google_business'].includes(a.platformId.toLowerCase()))
-    const hasRednote = accounts.some(a => ['red', 'xiaohongshu', 'xhs'].includes(a.platformId.toLowerCase()))
-    const hasInstagram = accounts.some(a => a.platformId.toLowerCase() === 'instagram')
-    const hasFacebook = accounts.some(a => a.platformId.toLowerCase() === 'facebook')
-    const hasTiktok = accounts.some(a => a.platformId.toLowerCase() === 'tiktok')
+
+    // Add unconfigured placeholder accounts from createdDrafts if any
+    if (createdDrafts && createdDrafts.length > 0) {
+      createdDrafts.forEach(d => {
+        if (d.account && d.account.handle === 'unconfigured') {
+          if (!list.some(a => a.id === d.account.id)) {
+            const pId = d.account.platformId.toLowerCase()
+            const isGoogle = ['google', 'google_business'].includes(pId)
+            const isRed = ['red', 'xiaohongshu', 'xhs'].includes(pId)
+            list.push({
+              id: d.account.id,
+              platformId: d.account.platformId,
+              handle: 'unconfigured',
+              displayName: d.account.displayName || (
+                isGoogle ? 'Google Business (未配置)'
+                : isRed ? '小红书 (未配置)'
+                : pId === 'instagram' ? 'Instagram (未配置)'
+                : pId === 'facebook' ? 'Facebook (未配置)'
+                : pId === 'tiktok' ? 'TikTok (未配置)'
+                : `${d.account.platformId.charAt(0).toUpperCase() + d.account.platformId.slice(1)} (未配置)`
+              ),
+              autoPilot: false,
+              profileUrl: null
+            } as any)
+          }
+        }
+      })
+    }
+
+    const hasGoogle = list.some(a => ['google', 'google_business'].includes(a.platformId.toLowerCase()))
+    const hasRednote = list.some(a => ['red', 'xiaohongshu', 'xhs'].includes(a.platformId.toLowerCase()))
+    const hasInstagram = list.some(a => a.platformId.toLowerCase() === 'instagram')
+    const hasFacebook = list.some(a => a.platformId.toLowerCase() === 'facebook')
+    const hasTiktok = list.some(a => a.platformId.toLowerCase() === 'tiktok')
 
     if (!hasGoogle) {
       list.push({
@@ -307,7 +336,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         displayName: 'Google Business (未配置)',
         autoPilot: false,
         profileUrl: null
-      })
+      } as any)
     }
     if (!hasRednote) {
       list.push({
@@ -317,7 +346,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         displayName: '小红书 (未配置)',
         autoPilot: false,
         profileUrl: null
-      })
+      } as any)
     }
     if (!hasInstagram) {
       list.push({
@@ -327,7 +356,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         displayName: 'Instagram (未配置)',
         autoPilot: false,
         profileUrl: null
-      })
+      } as any)
     }
     if (!hasFacebook) {
       list.push({
@@ -337,7 +366,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         displayName: 'Facebook (未配置)',
         autoPilot: false,
         profileUrl: null
-      })
+      } as any)
     }
     if (!hasTiktok) {
       list.push({
@@ -347,10 +376,10 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         displayName: 'TikTok (未配置)',
         autoPilot: false,
         profileUrl: null
-      })
+      } as any)
     }
     return list
-  }, [accounts])
+  }, [accounts, createdDrafts])
 
   useEffect(() => {
     if (!isAiGenerating || !createdDrafts || createdDrafts.length === 0) return
