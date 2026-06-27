@@ -81,7 +81,7 @@ async function executeTool(
         }
 
         const summary = items
-          .map((i) => `- [${i.type}] ${i.description?.slice(0, 60) ?? ''}`)
+          .map((i: { id: string; type: string; description: string | null; createdAt: Date }) => `- [${i.type}] ${i.description?.slice(0, 60) ?? ''}`)
           .join('\n')
         return { resultText: `有 ${items.length} 个待处理事项：\n${summary}` }
       }
