@@ -30,3 +30,13 @@ To resolve issues in the brand owner portal (`amc-mm`) where:
   - Extracted the incoming hostname and protocol dynamically using the request's `x-forwarded-host`, `host`, and `x-forwarded-proto` headers.
   - Constructed the absolute base URL (`baseUrl`) dynamically, preserving the parent proxy hostname (e.g. `amc-mm.localhost:3000` or `amc-mm.immedi.ai`).
   - Updated all internal Next.js `NextResponse.redirect` calls to use the resolved `baseUrl` instead of the downstream Next.js server's `request.url` (which contains the downstream port `3001`), preventing port leakage in the browser.
+
+### C. Redirection-Based Logout for Single-Label TLDs (Localhost Compatibility)
+- **Files Modified**: 
+  - [route.ts](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/app/api/auth/logout/route.ts)
+  - [BrandOwnerDashboard.tsx (sub-package)](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/packages/brand-owner/src/components/BrandOwnerDashboard.tsx)
+  - [BrandOwnerDashboard.tsx (parent package)](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/components/dashboard/BrandOwnerDashboard.tsx)
+- **Changes**:
+  - Added a `GET` request handler in `src/app/api/auth/logout/route.ts` that clears cookies and performs a 307 redirect using a `redirectTo` query parameter.
+  - Resolved local development cookie restrictions: since `localhost` is a single-label TLD/public suffix, browsers reject subdomain writes or deletions on `localhost` (e.g., `Domain=localhost`).
+  - Updated `BrandOwnerDashboard.tsx` to log out by redirecting the browser (top-level navigation) to the parent domain logout URL (resolved via `getMainAppUrl`), which clears the parent `localhost` cookie and redirects the browser back to the subdomain `/`.

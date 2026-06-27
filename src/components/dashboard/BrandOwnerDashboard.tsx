@@ -2537,17 +2537,11 @@ export default function BrandOwnerDashboard() {
                     <span className="font-bold text-sm tracking-wide">系统设置</span>
                   </button>
                   <button 
-                    onClick={async () => {
-                      try {
-                        const res = await fetch('/api/auth/logout', { method: 'POST' })
-                        if (res.ok) {
-                          await res.json().catch(() => ({}))
-                        }
-                        window.location.href = '/'
-                      } catch (e) {
-                        console.error('[BrandOwnerDashboard] logout error', e)
-                        window.location.href = '/'
-                      }
+                    onClick={() => {
+                      const logoutUrl = getMainAppUrl(
+                        `/api/auth/logout?redirectTo=${encodeURIComponent(window.location.origin + '/')}`
+                      )
+                      window.location.href = logoutUrl
                     }}
                     className="w-full flex items-center gap-4 text-rose-600 hover:text-rose-700 transition-colors py-2 text-left cursor-pointer"
                   >

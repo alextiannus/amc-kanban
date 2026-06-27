@@ -1,26 +1,26 @@
 import { NextResponse } from 'next/server'
 
-export async function POST(request: Request) {
-  const response = NextResponse.json({ success: true })
-
+function getDeleteCookieHeaders(request: Request) {
+  const headers = new Headers()
+  
   const appendDeleteCookies = (domain?: string) => {
     const domainStr = domain ? `; Domain=${domain}` : ''
     const base = `session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly${domainStr}`
     
     // 1. SameSite=Lax (Standard)
-    response.headers.append('Set-Cookie', `${base}; SameSite=Lax`)
-    response.headers.append('Set-Cookie', `${base}; SameSite=Lax; Secure`)
+    headers.append('Set-Cookie', `${base}; SameSite=Lax`)
+    headers.append('Set-Cookie', `${base}; SameSite=Lax; Secure`)
     
     // 2. SameSite=None (Cross-site / Embedded)
-    response.headers.append('Set-Cookie', `${base}; SameSite=None; Secure`)
+    headers.append('Set-Cookie', `${base}; SameSite=None; Secure`)
     
     // 3. SameSite=Strict
-    response.headers.append('Set-Cookie', `${base}; SameSite=Strict`)
-    response.headers.append('Set-Cookie', `${base}; SameSite=Strict; Secure`)
+    headers.append('Set-Cookie', `${base}; SameSite=Strict`)
+    headers.append('Set-Cookie', `${base}; SameSite=Strict; Secure`)
 
     // 4. Default SameSite (Browser fallback)
-    response.headers.append('Set-Cookie', `${base}`)
-    response.headers.append('Set-Cookie', `${base}; Secure`)
+    headers.append('Set-Cookie', `${base}`)
+    headers.append('Set-Cookie', `${base}; Secure`)
   }
 
   // A. Clear on host-only (no domain specified)
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   const hostname = host.split(':')[0]
   
   if (hostname) {
-    // B. Clear on the exact hostname and dotted hostname (e.g. amc-mm.localhost, .amc-mm.localhost)
+    // B. Clear on the exact hostname and dotted hostname
     appendDeleteCookies(hostname)
     appendDeleteCookies(`.${hostname}`)
 
@@ -41,17 +41,34 @@ export async function POST(request: Request) {
         const isLocalhost = parts[parts.length - 1] === 'localhost'
         const parentDomain = isLocalhost ? 'localhost' : parts.slice(-2).join('.')
         
-        // Clear on parent domain
+        // Clear on parent domain and dotted parent domain
         appendDeleteCookies(parentDomain)
-        
-        // Clear on dotted parent domain
         appendDeleteCookies(`.${parentDomain}`)
       }
     }
   }
-
-  return response
+  
+  return headers
 }
+
+export async function POST(request: Request) {
+  const headers = getDeleteCookieHeaders(request)
+  return new NextResponse(JSON.stringify({ success: true }), {
+    status: 200,
+    headers,
+  })
+}
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const redirectTo = searchParams.get('redirectTo') || '/'
+  const headers = getDeleteCookieHeaders(request)
+  
+  return NextResponse.redirect(new URL(redirectTo, request.url), {
+    headers,
+  })
+}
+
 
 
 
