@@ -5,6 +5,7 @@ databases:
     user: amc_user
 
 services:
+  # ── Main App: API + Kanban Frontend + AI Agents ───────────────────────────
   - type: web
     name: amc-kanban
     env: node
@@ -40,4 +41,22 @@ services:
       - key: APP_BASE_URL
         sync: false
       - key: FRONTEND_ORIGINS
+        sync: false
+      # URL of the brand-owner Next.js service (set after amc-mm deploys)
+      - key: BRAND_OWNER_URL
+        sync: false
+
+  # ── Brand-Owner Frontend: amc-mm.immedi.ai ───────────────────────────────
+  - type: web
+    name: amc-mm
+    env: node
+    rootDir: packages/brand-owner
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      # Points to the main amc-kanban service so API proxying works
+      - key: MAIN_APP_URL
+        value: https://immedi.ai
+      # JWT_SECRET must match the main app — set manually in Render Dashboard
+      - key: JWT_SECRET
         sync: false

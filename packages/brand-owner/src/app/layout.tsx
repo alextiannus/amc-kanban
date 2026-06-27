@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Hanken_Grotesk, Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@root/components/ThemeProvider";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
