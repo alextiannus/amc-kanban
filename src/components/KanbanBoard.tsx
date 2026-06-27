@@ -344,7 +344,11 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
         </div>
       ) : currentView === 'assets' ? (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-hidden">
-          <DashboardAssets key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} />
+          <DashboardAssets
+            key={activeBrand?.id ?? 'no-brand'}
+            brandId={activeBrand?.id}
+            onNavigateToCalendar={(_assetIds) => setCurrentView('calendar')}
+          />
         </div>
       ) : currentView === 'dataAnalysis' ? (
         <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">

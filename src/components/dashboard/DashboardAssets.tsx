@@ -37,6 +37,7 @@ import {
   Star,
   Globe,
   Store
+, Tag, FolderOpen
 } from 'lucide-react'
 
 // Category definitions
@@ -116,9 +117,10 @@ function parseTags(value: string) {
 
 interface DashboardAssetsProps {
   brandId?: string
+  onNavigateToCalendar?: (assetIds: string[]) => void
 }
 
-export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
+export default function DashboardAssets({ brandId, onNavigateToCalendar }: DashboardAssetsProps) {
   const [activeCategory, setActiveCategory] = useState('all')
   const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos' | 'scheduled'>('all')
   const [search, setSearch] = useState('')
@@ -406,6 +408,12 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   // Batch Tags Input
   const [batchTagsText, setBatchTagsText] = useState('')
 
+  // Floating bottom bar inline tag/folder state
+  const [floatingTagInput, setFloatingTagInput] = useState('')
+  const [floatingFolderSelect, setFloatingFolderSelect] = useState('')
+  const [showFloatingTag, setShowFloatingTag] = useState(false)
+  const [showFloatingFolder, setShowFloatingFolder] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadAssets = useCallback(async (cancelled = false) => {
@@ -556,6 +564,14 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   const markForSchedule = (assetIds: string | string[]) => {
     const ids = Array.isArray(assetIds) ? assetIds : [assetIds]
     if (ids.length === 0) return
+    if (onNavigateToCalendar) {
+      // Navigate to calendar with selected assets to open new content creation
+      onNavigateToCalendar(ids)
+      setSelected([])
+      setIsBatchSelectMode(false)
+      return
+    }
+    // Fallback: open schedule modal if no navigation callback provided
     setScheduleTargetIds(ids)
     setScheduleCaption('')
     setScheduleHashtags('')
@@ -973,6 +989,42 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
   }
 
   // Update tags or info of single asset
+  const handleFloatingTagAdd = async () => {
+    if (!floatingTagInput.trim() || selected.length === 0 || !brandId) return
+    const newTags = floatingTagInput.trim().split(/[#,，\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean)
+    for (const id of selected) {
+      const asset = assets.find(a => a.id === id)
+      if (!asset) continue
+      const combined = Array.from(new Set([...asset.aiTags, ...newTags]))
+      await fetch(`/api/brands/${brandId}/assets/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aiTags: combined }),
+      })
+    }
+    setAssets(prev => prev.map(a => selected.includes(a.id)
+      ? { ...a, aiTags: Array.from(new Set([...a.aiTags, ...newTags])) }
+      : a
+    ))
+    setFloatingTagInput('')
+    setShowFloatingTag(false)
+  }
+
+  const handleFloatingFolderMove = async () => {
+    if (!floatingFolderSelect || selected.length === 0 || !brandId) return
+    for (const id of selected) {
+      await fetch(`/api/brands/${brandId}/assets/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: floatingFolderSelect, aiCategory: floatingFolderSelect }),
+      })
+    }
+    setAssets(prev => prev.map(a => selected.includes(a.id) ? { ...a, aiCategory: floatingFolderSelect } : a))
+    setFloatingFolderSelect('')
+    setShowFloatingFolder(false)
+    await loadAssets()
+  }
+
   const updateAssetTags = async (assetId: string, updatedTags: string[]) => {
     setAssets(prev => prev.map(a => a.id === assetId ? { ...a, aiTags: updatedTags } : a))
     if (!brandId) return
@@ -1578,490 +1630,6 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
         </div>
       </main>
 
-      {/* 3. RIGHT SIDEBAR: AI Detail & Batch Drawer */}
-      <aside className="w-80 border-l border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col shrink-0 h-full overflow-hidden hidden xl:flex">
-        {selected.length > 1 ? (
-          
-          /* DRAWER: BATCH OPERATIONS MODE */
-          <div className="flex flex-col h-full overflow-hidden">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/30">
-              <div>
-                <h2 className="text-md font-bold text-slate-900 dark:text-slate-100">批量操作</h2>
-                <p className="text-[11px] text-slate-400 mt-0.5">已选择 {selected.length} 个素材</p>
-              </div>
-              <button
-                onClick={() => {
-                  setSelected([])
-                  setIsBatchSelectMode(false)
-                }}
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-5 flex-1 overflow-y-auto space-y-6 custom-scrollbar">
-              {/* Selected Thumbnails Carousel */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
-                  已选素材预览
-                </h4>
-                <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
-                  {selected.map(id => {
-                    const matched = assets.find(a => a.id === id)
-                    if (!matched) return null
-                    return (
-                      <div
-                        key={id}
-                        onClick={() => setSelected(prev => prev.filter(x => x !== id))}
-                        className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-800 hover:border-red-500 hover:opacity-80 transition-all cursor-pointer group"
-                        title="点击移除选择"
-                      >
-                        <img src={matched.url} alt="thumbnail" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-red-600/75 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <X className="w-4 h-4 text-white" />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Batch Tags Input */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  批量添加标签
-                </h4>
-                <input
-                  type="text"
-                  value={batchTagsText}
-                  onChange={e => setBatchTagsText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      void applyBatchChanges()
-                    }
-                  }}
-                  placeholder="添加标签 (逗号或空格分隔)"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100"
-                />
-                
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {['+ 招牌推荐', '+ 节日限定', '+ 探店必点', '+ 夏季新品'].map(chip => (
-                    <button
-                      key={chip}
-                      onClick={() => {
-                        const tag = chip.replace('+ ', '')
-                        setBatchTagsText(prev => {
-                          const existing = prev.split(/[,，\s]+/).map(x => x.trim()).filter(Boolean)
-                          if (existing.includes(tag)) return prev
-                          return [...existing, tag].join(', ')
-                        })
-                      }}
-                      className="px-2 py-1 bg-indigo-50/70 hover:bg-indigo-100/80 dark:bg-indigo-950/20 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[10px] rounded font-bold transition-all"
-                    >
-                      {chip}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Move to folder inside batch drawer */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  移动分类文件夹
-                </h4>
-                <select
-                  value={moveFolder}
-                  onChange={(e) => setMoveFolder(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-slate-800 dark:text-slate-100 cursor-pointer"
-                >
-                  <option value="">选择目标文件夹...</option>
-                  {folders.map(f => (
-                    <option key={f} value={f}>
-                      {f === '素材库' ? '根目录 (素材库)' : f}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Set usage plan */}
-              <div className="space-y-2 pt-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  使用排期排程
-                </h4>
-                <button
-                  onClick={() => markForSchedule(selected)}
-                  className="w-full py-2.5 border border-indigo-100 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-all flex items-center justify-center gap-2"
-                >
-                  <Calendar className="w-4 h-4" />
-                  <span>准备草稿排期(idea)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Bottom actions container */}
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex flex-col gap-2">
-              <button
-                onClick={applyBatchChanges}
-                disabled={uploading}
-                className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 py-2.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
-              >
-                <Check className="w-4 h-4" />
-                <span>{uploading ? '提交中...' : '应用更改'}</span>
-              </button>
-
-              <button
-                onClick={handleBatchDeleteAssets}
-                disabled={uploading || selected.length === 0}
-                className="w-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>批量删除素材 (Delete 键)</span>
-              </button>
-            </div>
-          </div>
-        ) : activeAsset ? (
-
-          /* DRAWER: SINGLE ASSET INSIGHT MODE */
-          <div className="flex flex-col h-full overflow-hidden">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/30">
-              <h2 className="text-md font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <Bot className="w-4 h-4 text-indigo-500" />
-                <span>AI 素材洞察</span>
-              </h2>
-              {/* Check status badge */}
-              {!activeAsset.aiReady && (
-                <button
-                  onClick={() => handleApproveAsset(activeAsset.id)}
-                  className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-600 rounded text-[10px] font-bold transition-all"
-                >
-                  确认入库
-                </button>
-              )}
-            </div>
-
-            <div className="p-5 flex-1 overflow-y-auto space-y-6 custom-scrollbar">
-              {/* Asset Preview Thumbnail card */}
-              <div className="rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 shadow-sm">
-                <div
-                  onClick={() => setPreviewImageUrl(activeAsset.url)}
-                  className="aspect-[4/3] w-full bg-slate-200 dark:bg-slate-800 relative flex items-center justify-center cursor-zoom-in group/preview"
-                  title="点击查看原图"
-                >
-                  {isPreviewable(activeAsset) ? (
-                    activeAsset.mimeType.startsWith('video/') ? (
-                      <video src={`${activeAsset.url}#t=0.1`} preload="metadata" muted className="w-full h-full object-cover" />
-                    ) : (
-                      <img src={activeAsset.url} alt="detail asset" className="w-full h-full object-cover" />
-                    )
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center">
-                      {activeAsset.mimeType.startsWith('video/') ? (
-                        <Video className="w-12 h-12 text-slate-400" />
-                      ) : (
-                        <ImageIcon className="w-12 h-12 text-slate-400" />
-                      )}
-                    </div>
-                  )}
-                  {activeAsset.mimeType.startsWith('video/') && isPreviewable(activeAsset) && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                      <Play className="w-8 h-8 text-white fill-white" />
-                    </div>
-                  )}
-                  {/* Hover magnifying overlay */}
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-opacity">
-                    <div className="flex items-center gap-1.5 text-white bg-black/60 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm">
-                      <Maximize2 className="w-3.5 h-3.5" />
-                      <span>查看原图</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-3.5">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate flex-1 mr-2">
-                      {activeAsset.filename || '未命名素材'}
-                    </h3>
-                    <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                      {activeAsset.mimeType.split('/')[1]?.toUpperCase() || 'RAW'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800/60">
-                    {activeAsset.aiCaption || 'AI 尚未生成图析描述。可以点击批量打标来分析。'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Designer AI Chat Section */}
-              <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Designer AI 智能修改助手</span>
-                </div>
-                {activeAsset.mimeType.startsWith('video/') ? (
-                  <div className="p-4 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60 rounded-2xl text-center space-y-1">
-                    <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto" />
-                    <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300">仅支持图片素材</h5>
-                    <p className="text-[10px] text-slate-400 leading-normal">Designer AI 智能操作目前仅支持对图片进行裁剪、水印、滤镜、亮度等调整。</p>
-                  </div>
-                ) : (
-                  <div className="bg-slate-50/80 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200/55 dark:border-slate-800/80 rounded-2xl p-4 space-y-3.5 shadow-sm">
-                    {/* Message Log */}
-                    <div className="max-h-60 overflow-y-auto space-y-3 pr-1 custom-scrollbar text-xs">
-                      {getChatMessages(activeAsset.id).map((msg, idx) => (
-                        <div
-                          key={idx}
-                          className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} items-start gap-2`}
-                        >
-                          {msg.sender === 'ai' && (
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-xs">
-                              <Bot className="w-3.5 h-3.5 text-white" />
-                            </div>
-                          )}
-                          <div className="flex flex-col max-w-[85%]">
-                            <div
-                              className={`p-2.5 rounded-2xl leading-relaxed ${
-                                msg.sender === 'user'
-                                  ? 'bg-gradient-to-br from-indigo-500 to-indigo-600 text-white rounded-tr-none shadow-xs'
-                                  : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 text-slate-700 dark:text-slate-200 rounded-tl-none'
-                              }`}
-                            >
-                              {msg.text}
-                            </div>
-                            {msg.sender === 'ai' && msg.newAssetUrl && (
-                              <div
-                                onClick={() => {
-                                  if (msg.newAssetId) {
-                                    setActiveAssetId(msg.newAssetId)
-                                  }
-                                }}
-                                className="mt-1.5 p-1.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] shadow-xs"
-                              >
-                                <img
-                                  src={msg.newAssetUrl}
-                                  alt="designed result"
-                                  className="w-10 h-10 object-cover rounded-lg shrink-0 border border-slate-100 dark:border-slate-800"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate">查看生成的新图</p>
-                                  <p className="text-[9px] text-slate-400">点击在此面板预览</p>
-                                </div>
-                                <ChevronRight className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Quick Command Chips */}
-                    {getChatMessages(activeAsset.id).length === 1 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {[
-                          { label: '裁剪 1:1', prompt: '裁剪为 1:1 正方形' },
-                          { label: '添加水印', prompt: '添加品牌水印' },
-                          { label: '黑白滤镜', prompt: '将图片转换为黑白' },
-                          { label: '调亮画面', prompt: '将图片调亮' },
-                          { label: '添加“店长推荐”标签', prompt: '在图片中添加“店长推荐”封面标签' },
-                        ].map((chip) => (
-                          <button
-                            key={chip.label}
-                            type="button"
-                            onClick={() => handleSendDesignerCommand(chip.prompt)}
-                            disabled={aiProcessing}
-                            className="px-2.5 py-1 bg-white hover:bg-indigo-50 dark:bg-slate-900 dark:hover:bg-indigo-950/30 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-350 text-[10px] rounded-lg font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-                          >
-                            + {chip.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Chat Input Field */}
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={designerPromptText}
-                        disabled={aiProcessing}
-                        onChange={(e) => setDesignerPromptText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !aiProcessing) {
-                            e.preventDefault()
-                            void handleSendDesignerCommand()
-                          }
-                        }}
-                        placeholder={aiProcessing ? "Designer AI 正在生成中..." : "告诉 Designer AI 如何修改此图片..."}
-                        className="flex-1 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-100"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleSendDesignerCommand()}
-                        disabled={aiProcessing || !designerPromptText.trim()}
-                        className="px-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-100 dark:disabled:bg-slate-800 text-white disabled:text-slate-400 rounded-xl flex items-center justify-center transition-all cursor-pointer active:scale-95 shrink-0"
-                      >
-                        {aiProcessing ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Send className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Folder selection for single asset */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  分类文件夹
-                </h4>
-                <select
-                  value={activeAsset.aiCategory || '素材库'}
-                  onChange={async (e) => {
-                    const nextFolder = e.target.value
-                    setAssets(prev => prev.map(a => a.id === activeAsset.id ? { ...a, aiCategory: nextFolder } : a))
-                    if (!brandId) return
-                    try {
-                      const res = await fetch(`/api/brands/${brandId}/assets/${activeAsset.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ folder: nextFolder }),
-                      })
-                      if (!res.ok) throw new Error('Failed to update folder')
-                      await loadAssets()
-                    } catch (err) {
-                      console.error(err)
-                      alert('修改文件夹失败')
-                    }
-                  }}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 dark:text-slate-100 cursor-pointer"
-                >
-                  {folders.map(f => (
-                    <option key={f} value={f}>
-                      {f === '素材库' ? '根目录 (素材库)' : f}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Tag confirmations */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    AI 标签确认
-                  </h4>
-                  <span className="text-[10px] text-indigo-500 font-bold">{activeAsset.aiTags.length} 个已生成</span>
-                </div>
-                
-                <div className="space-y-1.5">
-                  {activeAsset.aiTags.map(tag => (
-                    <div
-                      key={tag}
-                      className="flex items-center justify-between px-3 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800/60 group hover:border-indigo-400/40 transition-all"
-                    >
-                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">#{tag}</span>
-                      <button
-                        onClick={() => handleRemoveTag(tag)}
-                        className="p-0.5 hover:bg-rose-50 text-rose-500 rounded transition-colors opacity-0 group-hover:opacity-100"
-                        title="删除该标签"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                  
-                  {/* Quick Add Tag Inline */}
-                  <div className="flex gap-2 items-center pt-1">
-                    <input
-                      type="text"
-                      placeholder="回车新增标签..."
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const val = e.currentTarget.value.trim()
-                          if (val) {
-                            const newTags = val
-                              .split(/[#,，\s]+/)
-                              .map(t => t.trim().replace(/^#/, ''))
-                              .filter(Boolean)
-                            
-                            if (newTags.length > 0) {
-                              const combined = Array.from(new Set([...activeAsset.aiTags, ...newTags]))
-                              void updateAssetTags(activeAsset.id, combined)
-                              e.currentTarget.value = ''
-                            }
-                          }
-                        }
-                      }}
-                      className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Performance Summary (real data only) */}
-              <div className="bg-indigo-50/50 dark:bg-indigo-950/20 p-4 rounded-2xl border border-indigo-100/60 dark:border-indigo-900/30">
-                <div className="flex items-center gap-2 mb-3">
-                  <BarChart2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <h4 className="text-xs font-black text-indigo-900 dark:text-indigo-300">素材表现概览</h4>
-                </div>
-
-                <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
-                  <p>累计使用次数：{activeAsset.usedCount}</p>
-                  <p>最近一次使用：{activeAsset.lastUsedAt ? relativeDate(activeAsset.lastUsedAt) : '暂无记录'}</p>
-                  {!activeAsset.aiReady && (
-                    <div className="flex items-start gap-2 text-[11px] bg-white/80 dark:bg-slate-900 p-2.5 rounded-lg border border-indigo-100/50 dark:border-indigo-900/30 text-slate-500 dark:text-slate-400">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                      <span className="leading-normal">该素材尚未确认入库，建议先完成标签确认与分组。</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Publication History */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  渠道分发历史
-                </h4>
-                
-                {activeAsset.usedCount > 0 ? (
-                  <div className="space-y-2 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-xs text-xs text-slate-600 dark:text-slate-300">
-                    <p>累计发布次数：{activeAsset.usedCount}</p>
-                    <p>最近使用时间：{activeAsset.lastUsedAt ? relativeDate(activeAsset.lastUsedAt) : '暂无记录'}</p>
-                    <p className="text-[11px] text-slate-400">渠道明细将在接入发布平台回流后展示。</p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">该素材尚未发布至任何平台</p>
-                )}
-              </div>
-            </div>
-
-            {/* Bottom CTAs */}
-            <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex flex-col gap-2">
-              <button
-                onClick={() => markForSchedule(activeAsset.id)}
-                className="w-full bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 py-2.5 rounded-xl text-white font-bold flex items-center justify-center gap-2 shadow-md shadow-indigo-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all"
-              >
-                <Calendar className="w-4 h-4" />
-                <span>准备草稿排期(idea)</span>
-              </button>
-
-              <button
-                onClick={() => handleDeleteAsset(activeAsset.id)}
-                className="w-full bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 dark:hover:bg-rose-900/30 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span>删除素材 (Delete 键)</span>
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full p-6 text-center text-slate-400">
-            <Bot className="w-10 h-10 text-slate-300 dark:text-slate-700 mb-3" />
-            <p className="text-sm font-bold">点击卡片查看 AI 分析</p>
-            <p className="text-xs mt-1">选择单张素材展示 AI 智能标签与图生视频操作</p>
-          </div>
-        )}
-      </aside>
 
       {/* Lightbox original media preview modal */}
       {previewImageUrl && (
@@ -2808,41 +2376,101 @@ export default function DashboardAssets({ brandId }: DashboardAssetsProps) {
 
       {/* Floating Bottom Bar for selection operations */}
       {selected.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[40] flex items-center gap-3 px-5 py-3 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-2xl transition-all duration-355 transform scale-100 whitespace-nowrap select-none">
-          <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">
-            已选择 <span className="text-indigo-600 dark:text-indigo-400 text-sm font-black">{selected.length}</span> 项
-          </span>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[40] flex flex-col items-center gap-2 select-none" style={{maxWidth: 'calc(100vw - 32px)'}}>
           
-          <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />
-          
-          <button
-            onClick={() => markForSchedule(selected)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 active:scale-95 transition-all"
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>准备草稿排期(idea)</span>
-          </button>
-          
-          <button
-            onClick={handleBatchDeleteAssets}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-95 transition-all"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>批量删除</span>
-          </button>
-          
-          <div className="w-[1px] h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />
-          
-          <button
-            onClick={() => {
-              setSelected([])
-              setIsBatchSelectMode(false)
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-black rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-850 dark:hover:bg-slate-700 text-white active:scale-95 transition-all shadow-sm flex items-center justify-center cursor-pointer"
-          >
-            <X className="w-3.5 h-3.5" strokeWidth={2.5} />
-            <span>取消选择</span>
-          </button>
+          {/* Expanded tag input row */}
+          {showFloatingTag && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 shadow-xl backdrop-blur-md">
+              <Tag className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <input
+                autoFocus
+                type="text"
+                value={floatingTagInput}
+                onChange={e => setFloatingTagInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') void handleFloatingTagAdd(); if (e.key === 'Escape') setShowFloatingTag(false) }}
+                placeholder="输入标签，回车确认（支持逗号分隔多个）"
+                className="text-xs outline-none bg-transparent text-slate-700 dark:text-slate-200 w-56 placeholder:text-slate-400"
+              />
+              <button onClick={() => void handleFloatingTagAdd()} className="px-2.5 py-1 bg-indigo-500 text-white text-[11px] font-bold rounded-lg active:scale-95 cursor-pointer">确认</button>
+              <button onClick={() => setShowFloatingTag(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+            </div>
+          )}
+
+          {/* Expanded folder select row */}
+          {showFloatingFolder && (
+            <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900 shadow-xl backdrop-blur-md">
+              <FolderOpen className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <select
+                value={floatingFolderSelect}
+                onChange={e => setFloatingFolderSelect(e.target.value)}
+                className="text-xs outline-none bg-transparent text-slate-700 dark:text-slate-200 w-36"
+                autoFocus
+              >
+                <option value="">-- 选择文件夹 --</option>
+                {folders.map(f => <option key={f} value={f}>{f === '素材库' ? '根目录 (素材库)' : f}</option>)}
+              </select>
+              <button onClick={() => void handleFloatingFolderMove()} disabled={!floatingFolderSelect} className="px-2.5 py-1 bg-amber-500 disabled:bg-slate-200 text-white text-[11px] font-bold rounded-lg active:scale-95 cursor-pointer disabled:cursor-not-allowed">移动</button>
+              <button onClick={() => setShowFloatingFolder(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+            </div>
+          )}
+
+          {/* Main action bar */}
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-2xl whitespace-nowrap">
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">
+              已选 <span className="text-indigo-600 dark:text-indigo-400 font-black">{selected.length}</span>
+            </span>
+            
+            <div className="w-px h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />
+
+            {/* 跳转发布日历 */}
+            <button
+              onClick={() => markForSchedule(selected)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 active:scale-95 transition-all"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">发布日历</span>
+            </button>
+
+            {/* 添加标签 */}
+            <button
+              onClick={() => { setShowFloatingTag(v => !v); setShowFloatingFolder(false) }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all active:scale-95 ${showFloatingTag ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+              <Tag className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">添加标签</span>
+            </button>
+
+            {/* 转移文件夹 */}
+            <button
+              onClick={() => { setShowFloatingFolder(v => !v); setShowFloatingTag(false) }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all active:scale-95 ${showFloatingFolder ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+              <FolderOpen className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">转移文件夹</span>
+            </button>
+
+            <div className="w-px h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />
+
+            {/* 批量删除 */}
+            <button
+              onClick={handleBatchDeleteAssets}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:scale-95 transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">删除</span>
+            </button>
+
+            <div className="w-px h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />
+
+            {/* 取消 */}
+            <button
+              onClick={() => { setSelected([]); setIsBatchSelectMode(false); setShowFloatingTag(false); setShowFloatingFolder(false) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-700 text-white active:scale-95 transition-all cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" strokeWidth={2.5} />
+              <span>取消</span>
+            </button>
+          </div>
         </div>
       )}
 
