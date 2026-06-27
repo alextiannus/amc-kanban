@@ -52,7 +52,7 @@ services:
     env: node
     rootDir: packages/brand-owner
     buildCommand: npm install && npm run build
-    startCommand: npm run start
+    startCommand: npx next start -p $PORT
     envVars:
       # Points to the main amc-kanban service so API proxying works
       - key: MAIN_APP_URL
