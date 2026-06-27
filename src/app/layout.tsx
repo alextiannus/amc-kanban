@@ -26,14 +26,26 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "AI Marketing Crew",
   description: "AI Marketing Content · 智能内容营销协作平台",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "AMC-MM",
+  },
   icons: {
     icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
       { url: "/logo.svg", type: "image/svg+xml" },
       { url: "/favicon.ico", sizes: "any" },
     ],
-    shortcut: "/logo.svg",
+    apple: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    shortcut: "/icons/icon-192.png",
   },
 };
+
 
 import { ThemeProvider } from "../components/ThemeProvider";
 

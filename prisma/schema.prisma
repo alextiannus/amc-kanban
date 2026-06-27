@@ -310,6 +310,7 @@ model Brand {
   folders      BrandFolder[]
   knowledge   BrandKnowledge?
   corrections UserCorrectionFeedback[]
+  companionMessages CompanionMessage[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -772,3 +773,19 @@ model UserCorrectionFeedback {
 }
 
 
+
+model CompanionMessage {
+  id        String   @id @default(cuid())
+  brandId   String
+  userId    String
+  role      String   // 'user' | 'assistant'
+  content   String
+  action    String?  // action AI performed, e.g. 'APPROVE_DRAFT', 'QUERY_CALENDAR'
+  draftId   String?  // related draft ID for approval flows
+  createdAt DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, userId])
+  @@index([createdAt])
+}

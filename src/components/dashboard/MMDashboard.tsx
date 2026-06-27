@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { ChatTurn } from '@/lib/gemini-chat'
 import { 
   Sparkles, Mic, Image as ImageIcon, Calendar as CalendarIcon, 
   ShoppingBag, Trash2, CheckCircle2, AlertCircle, Plus, 
@@ -79,6 +80,11 @@ export default function MMDashboard() {
   const [chatInput, setChatInput] = useState('')
   const [companionState, setCompanionState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle')
   const [emotion, setEmotion] = useState<'normal' | 'smile' | 'laugh' | 'effort' | 'confused' | 'wink' | 'excited'>('normal')
+
+  // Multi-turn conversation history (for API)
+  const [conversationHistory, setConversationHistory] = useState<ChatTurn[]>([])
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null)
+  const [pendingDraftIds, setPendingDraftIds] = useState<string[]>([])
 
   // Assets upload state
   const [assets, setAssets] = useState<MediaAsset[]>([])
@@ -209,16 +215,63 @@ export default function MMDashboard() {
         if (detailRes.ok) {
           const detailData = await detailRes.json()
           setActionItems(detailData.actionItems || [])
-          
-          // Set dynamic greeting based on active brand details
-          setMessages([
-            { 
-              sender: 'ai', 
-              text: `你好！我是 ${detailData.name || activeBrand?.name || ''} 的 AI 语音助手。随时可以开始和我说出您的内容创意。`, 
-              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-            }
-          ])
         }
+
+        // Load history from localStorage first (instant)
+        const localKey = `companion_history_${id}`
+        const cached = localStorage.getItem(localKey)
+        const localHistory: ChatTurn[] = cached ? JSON.parse(cached) : []
+        if (localHistory.length > 0) setConversationHistory(localHistory)
+
+        // Fetch companion context → generate proactive greeting (Feature D)
+        try {
+          const ctxRes = await fetch(`/api/brands/${id}/companion/context`)
+          if (ctxRes.ok) {
+            const ctx = await ctxRes.json()
+            const greetingCtx = [
+              ctx.pendingActions > 0 ? `有 ${ctx.pendingActions} 个待处理事项` : '',
+              ctx.todayScheduled > 0 ? `今天有 ${ctx.todayScheduled} 篇内容排期发布` : '今天暂无排期内容',
+            ].filter(Boolean).join('；')
+
+            const greetingRes = await fetch(`/api/brands/${id}/copywriter/voice-chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: `[开场白请求] 根据以下状态生成一句简短的中文开场白问候，不超过30个字：${greetingCtx}`,
+                history: localHistory.slice(-6),
+                context: {},
+              }),
+            })
+            if (greetingRes.ok) {
+              const greetingData = await greetingRes.json()
+              const greetingText = greetingData.reply || `你好！我是 ${detailData?.name || activeBrand?.name || ''} 的 AI 助手，随时为您服务！`
+              const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              setMessages([{ sender: 'ai', text: greetingText, time: timeStr }])
+              speakText(greetingText)
+              // Add to history
+              setConversationHistory(prev => [...prev, { role: 'model', content: greetingText }])
+            }
+          }
+        } catch (ctxErr) {
+          console.error('Failed to load companion context:', ctxErr)
+          const fallback = `你好！我是 ${activeBrand?.name || ''} 的 AI 助手，随时为您服务！`
+          setMessages([{ sender: 'ai', text: fallback, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
+        }
+
+        // Async: sync history from DB (overwrites local if DB has more)
+        fetch(`/api/brands/${id}/companion/history`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (data?.messages && data.messages.length > localHistory.length) {
+              const dbHistory: ChatTurn[] = data.messages.map((m: any) => ({
+                role: m.role === 'assistant' ? 'model' : 'user',
+                content: m.content,
+              }))
+              setConversationHistory(dbHistory)
+              localStorage.setItem(localKey, JSON.stringify(dbHistory.slice(-100)))
+            }
+          })
+          .catch(() => {})
       } catch (err) {
         console.error('Failed to load brand details:', err)
       }
@@ -226,23 +279,23 @@ export default function MMDashboard() {
     loadBrandDetails(currentBrandId)
   }, [activeBrand])
 
-  // --- Text to Speech (TTS) ---
+  // --- Text to Speech (TTS) --- (truncated to 100 chars for UX)
   const speakText = (text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return
     window.speechSynthesis.cancel()
 
-    // Clean text of markdown and brackets
+    // Clean text of markdown and brackets; truncate to 100 chars for TTS
     const cleanedText = text.replace(/\[.*?\]/g, '').replace(/[*#_`]/g, '').trim()
-    if (!cleanedText) return
+    const ttsText = cleanedText.length > 100 ? cleanedText.slice(0, 100) + '...' : cleanedText
+    if (!ttsText) return
 
-    const utterance = new SpeechSynthesisUtterance(cleanedText)
+    const utterance = new SpeechSynthesisUtterance(ttsText)
     utterance.lang = 'zh-CN'
     utterance.rate = 1.0
 
     utterance.onstart = () => {
       setCompanionState('speaking')
-      // Scan content to select funny/smiling emotion
-      const lower = cleanedText.toLowerCase()
+      const lower = ttsText.toLowerCase()
       if (lower.includes('哈') || lower.includes('喜') || lower.includes('棒') || lower.includes('好') || lower.includes('完成') || lower.includes('成功') || lower.includes('日历')) {
         setEmotion('laugh')
       } else {
@@ -262,6 +315,29 @@ export default function MMDashboard() {
 
     window.speechSynthesis.speak(utterance)
   }
+
+  // --- Helper: append a message to history + persist ---
+  const addToHistory = useCallback((userText: string, aiText: string, action?: string, draftId?: string) => {
+    if (!activeBrand) return
+    const userTurn: ChatTurn = { role: 'user', content: userText }
+    const aiTurn: ChatTurn = { role: 'model', content: aiText }
+    setConversationHistory(prev => {
+      const updated = [...prev, userTurn, aiTurn].slice(-100)
+      localStorage.setItem(`companion_history_${activeBrand.id}`, JSON.stringify(updated))
+      return updated
+    })
+    // Fire-and-forget DB sync
+    fetch(`/api/brands/${activeBrand.id}/companion/history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          { role: 'user', content: userText },
+          { role: 'assistant', content: aiText, action, draftId },
+        ],
+      }),
+    }).catch(() => {})
+  }, [activeBrand])
 
   // --- Voice Assist Activation (STT & TTS Chat integration) ---
   const startVoiceAssist = () => {
@@ -338,20 +414,31 @@ export default function MMDashboard() {
 
       setCompanionState('thinking')
       try {
+        const userTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        setMessages(prev => [...prev, { sender: 'user', text: transcript, time: userTime }])
+
         const res = await fetch(`/api/brands/${activeBrand?.id}/copywriter/voice-chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: transcript })
+          body: JSON.stringify({
+            message: transcript,
+            history: conversationHistory.slice(-20),
+            context: { activeDraftId, pendingDraftIds },
+          })
         })
         if (res.ok) {
           const data = await res.json()
+          const aiTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           if (data.reply) {
+            setMessages(prev => [...prev, { sender: 'ai', text: data.reply, time: aiTime }])
             speakText(data.reply)
           }
+          addToHistory(transcript, data.reply || '', data.action, data.params?.draftId)
           if (data.action === 'GENERATE_AND_PUBLISH') {
             handleVoiceTriggerGenerateAndPublish(postIdea || '美食新品发布', true)
-          } else {
-            if (!data.reply) setCompanionState('idle')
+          } else if (data.action === 'APPROVE_DRAFT' && data.params?.draftId) {
+            setActiveDraftId(null)
+            setPendingDraftIds(prev => prev.filter(id => id !== data.params.draftId))
           }
         } else {
           setCompanionState('idle')

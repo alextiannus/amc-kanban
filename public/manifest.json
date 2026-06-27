@@ -1,0 +1,42 @@
+{
+  "name": "AMC AI Marketing Companion",
+  "short_name": "AMC-MM",
+  "description": "您的专属 AI 营销员工，随时随地帮您管理品牌内容",
+  "start_url": "/mock-merchant",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "lang": "zh-CN",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "打开 AI 对话",
+      "short_name": "AI 助手",
+      "description": "直接与您的 AI 营销员工对话",
+      "url": "/mock-merchant"
+    }
+  ]
+}
