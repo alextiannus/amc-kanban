@@ -1,0 +1,88 @@
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: amc_local_db
+    environment:
+      POSTGRES_DB: amc
+      POSTGRES_USER: amc_user
+      POSTGRES_PASSWORD: amc_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amc_user -d amc"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - amc_local_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"     # expose for local DB tools (TablePlus etc.)
+
+  # ── AMC Kanban (main app + API backend) ───────────────────────────────────
+  amc-kanban:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+      target: kanban
+    container_name: amc_local_kanban
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://amc_user:amc_password@db:5432/amc
+      JWT_SECRET: local-dev-jwt-secret-amc-2026
+      API_KEY: local-openclaw-key
+      AI_SINGLE_AGENT_MODE: "false"
+      BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+      BOOTSTRAP_ADMIN_INITIAL_PASSWORD: password123
+      NODE_ENV: production
+      # Allow amc-mm to access API (CORS)
+      FRONTEND_ORIGINS: "http://amc-mm.localhost,http://localhost:3001"
+      APP_BASE_URL: "http://amc-kanban.localhost"
+      # proxy.ts: brand-owner URL for subdomain routing
+      BRAND_OWNER_URL: "http://amc-mm:3001"
+    command: >
+      sh -c "
+      npx prisma generate &&
+      npx prisma db push --accept-data-loss &&
+      node node_modules/next/dist/bin/next start -p 3000
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/meta/openapi > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    ports:
+      - "3000:3000"     # also accessible directly at localhost:3000
+
+  # ── AMC-MM Brand Owner Frontend ────────────────────────────────────────────
+  amc-mm:
+    build:
+      context: .                                # monorepo root (has package-lock.json)
+      dockerfile: packages/brand-owner/Dockerfile
+    container_name: amc_local_mm
+    depends_on:
+      amc-kanban:
+        condition: service_healthy
+    environment:
+      # Proxy all /api/* calls to the main app
+      MAIN_APP_URL: "http://amc-kanban:3000"
+      JWT_SECRET: local-dev-jwt-secret-amc-2026
+      NODE_ENV: production
+    ports:
+      - "3001:3001"     # also accessible directly at localhost:3001
+
+  # ── Nginx Reverse Proxy (simulates subdomain routing) ─────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: amc_local_nginx
+    depends_on:
+      - amc-kanban
+      - amc-mm
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"         # http://amc-kanban.localhost  /  http://amc-mm.localhost
+
+volumes:
+  amc_local_pgdata:
