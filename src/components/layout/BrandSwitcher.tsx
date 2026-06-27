@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Plus } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 export interface Brand {
   id: string
@@ -25,6 +26,7 @@ interface BrandSwitcherProps {
 export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: BrandSwitcherProps) {
   const [showBrandMenu, setShowBrandMenu] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const router = useRouter()
 
   const getSubscriptionMeta = (brand: Brand) => {
     const subscription = brand.subscriptions?.[0]
@@ -116,6 +118,18 @@ export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: B
               </button>
               )
             })}
+          </div>
+          {/* Add New Brand */}
+          <div className="px-1.5 pb-1.5 pt-0.5 border-t border-slate-100 dark:border-slate-800">
+            <button
+              onClick={() => { setShowBrandMenu(false); router.push('/board/subscription') }}
+              className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-left transition-colors hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400"
+            >
+              <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 flex items-center justify-center shrink-0">
+                <Plus size={14} className="text-blue-500" />
+              </div>
+              <span className="text-sm font-bold">添加新品牌</span>
+            </button>
           </div>
         </div>
       )}

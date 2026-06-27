@@ -395,7 +395,7 @@ export default function Login() {
                   !isRegister ? 'bg-white text-slate-800 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Sign In
+                Meet Your AI Staff
               </button>
               <button
                 type="button"
@@ -404,7 +404,7 @@ export default function Login() {
                   isRegister ? 'bg-white text-slate-800 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Create Account
+                Meet Your AI Staff
               </button>
             </div>
 
@@ -506,7 +506,7 @@ export default function Login() {
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    {isRegister ? 'Create Account' : 'Launch Dashboard'}
+                    Meet Your AI Staff
                     <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
@@ -515,7 +515,7 @@ export default function Login() {
 
             <div className="mt-8 text-center">
               <p className="font-jetbrains text-[10px] text-slate-400 uppercase tracking-wider">
-                Secure access via <span className="text-slate-700">SSO</span> is enabled.
+                powered by <span className="text-slate-700">Immedi.ai</span>
               </p>
             </div>
           </div>

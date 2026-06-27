@@ -162,6 +162,21 @@ export default function MMDashboard() {
     }
   }, [queryBrandId, brands, activeBrand?.id])
 
+  // --- Reusable: fetch & update drafts list for active brand ---
+  const fetchDrafts = useCallback(async (brandId?: string) => {
+    const id = brandId || activeBrand?.id
+    if (!id) return
+    try {
+      const res = await fetch(`/api/brands/${id}/drafts`)
+      if (res.ok) {
+        const resData = await res.json()
+        setDrafts(Array.isArray(resData) ? resData : resData.drafts || [])
+      }
+    } catch (err) {
+      console.error('[fetchDrafts] failed:', err)
+    }
+  }, [activeBrand?.id])
+
   // --- Load Assets & Drafts for Active Brand ---
   useEffect(() => {
     if (!activeBrand) return
@@ -212,8 +227,9 @@ export default function MMDashboard() {
 
         // Fetch brand details to get actionItems
         const detailRes = await fetch(`/api/brands/${id}`)
+        let detailData: any = null
         if (detailRes.ok) {
-          const detailData = await detailRes.json()
+          detailData = await detailRes.json()
           setActionItems(detailData.actionItems || [])
         }
 
@@ -228,16 +244,32 @@ export default function MMDashboard() {
           const ctxRes = await fetch(`/api/brands/${id}/companion/context`)
           if (ctxRes.ok) {
             const ctx = await ctxRes.json()
-            const greetingCtx = [
-              ctx.pendingActions > 0 ? `有 ${ctx.pendingActions} 个待处理事项` : '',
+
+            // Bug 2 fix: detect platforms silent for 3+ days
+            const now = Date.now()
+            const stalePlatforms: string[] = []
+            if (ctx.lastPublishedByPlatform) {
+              for (const [platform, lastISO] of Object.entries(ctx.lastPublishedByPlatform as Record<string, string | null>)) {
+                if (!lastISO) {
+                  stalePlatforms.push(platform)
+                } else {
+                  const daysSince = (now - new Date(lastISO).getTime()) / (1000 * 60 * 60 * 24)
+                  if (daysSince >= 3) stalePlatforms.push(`${platform}（${Math.floor(daysSince)}天未发布）`)
+                }
+              }
+            }
+
+            const greetingParts = [
+              ctx.pendingActions > 0 ? `有 ${ctx.pendingActions} 个草稿等待您审核` : '',
               ctx.todayScheduled > 0 ? `今天有 ${ctx.todayScheduled} 篇内容排期发布` : '今天暂无排期内容',
+              stalePlatforms.length > 0 ? `以下平台内容已过久未更新：${stalePlatforms.join('、')}` : '',
             ].filter(Boolean).join('；')
 
             const greetingRes = await fetch(`/api/brands/${id}/copywriter/voice-chat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                message: `[开场白请求] 根据以下状态生成一句简短的中文开场白问候，不超过30个字：${greetingCtx}`,
+                message: `[开场白请求] 根据以下状态生成一句简短的中文开场白问候，不超过35个字，如有异常平台必须提到：${greetingParts}`,
                 history: localHistory.slice(-6),
                 context: {},
               }),
@@ -248,7 +280,6 @@ export default function MMDashboard() {
               const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               setMessages([{ sender: 'ai', text: greetingText, time: timeStr }])
               speakText(greetingText)
-              // Add to history
               setConversationHistory(prev => [...prev, { role: 'model', content: greetingText }])
             }
           }
@@ -439,6 +470,7 @@ export default function MMDashboard() {
           } else if (data.action === 'APPROVE_DRAFT' && data.params?.draftId) {
             setActiveDraftId(null)
             setPendingDraftIds(prev => prev.filter(id => id !== data.params.draftId))
+            fetchDrafts() // Bug 1 fix: refresh drafts list in UI
           }
         } else {
           setCompanionState('idle')
@@ -1041,6 +1073,7 @@ export default function MMDashboard() {
         } else if (data.action === 'APPROVE_DRAFT' && data.params?.draftId) {
           setActiveDraftId(null)
           setPendingDraftIds(prev => prev.filter(id => id !== data.params.draftId))
+          fetchDrafts() // Bug 1 fix: refresh drafts list in UI
         }
       } else {
         setCompanionState('idle')
@@ -1948,63 +1981,99 @@ export default function MMDashboard() {
           {/* Chat Input Console (Voice button & Upload triggers) */}
           <div className="px-6 pb-10 pt-4 bg-gradient-to-t from-[#f7f9fb] via-[#f7f9fb]/90 to-transparent flex flex-col items-center z-20 pointer-events-auto">
             
-            {/* Draft Approval Action Cards — shown when AI presents a draft */}
-            {activeDraftId && (
-              <div className="w-full max-w-sm mb-4 p-3.5 bg-white border border-indigo-100 rounded-2xl shadow-sm">
-                <p className="text-xs font-bold text-slate-500 mb-2.5 uppercase tracking-wider">草稿审批</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={async () => {
-                      const res = await fetch(`/api/brands/${activeBrand?.id}/copywriter/voice-chat`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: `我同意发布这篇草稿`, history: conversationHistory.slice(-10), context: { activeDraftId } })
-                      })
-                      if (res.ok) {
-                        const d = await res.json()
-                        const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        setMessages(prev => [...prev, { sender: 'ai', text: d.reply || '已批准！', time: t }])
-                        speakText(d.reply || '已批准发布')
-                        setActiveDraftId(null)
-                        addToHistory('我同意发布这篇草稿', d.reply || '已批准！', 'APPROVE_DRAFT', activeDraftId)
-                      }
-                    }}
-                    className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold hover:bg-emerald-100 active:scale-95 transition-all"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>批准</span>
-                  </button>
-                  <button
-                    onClick={async () => {
-                      const res = await fetch(`/api/brands/${activeBrand?.id}/copywriter/voice-chat`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: `这篇草稿不行，请重新写一版`, history: conversationHistory.slice(-10), context: { activeDraftId } })
-                      })
-                      if (res.ok) {
-                        const d = await res.json()
-                        const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        setMessages(prev => [...prev, { sender: 'ai', text: d.reply || '好的，我来重写一版。', time: t }])
-                        speakText(d.reply || '好的，我来重写一版。')
-                        setActiveDraftId(null)
-                        addToHistory('这篇草稿不行，请重新写一版', d.reply || '', 'REJECT_DRAFT', activeDraftId)
-                      }
-                    }}
-                    className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold hover:bg-rose-100 active:scale-95 transition-all"
-                  >
-                    <AlertCircle className="w-3.5 h-3.5" />
-                    <span>拒绝</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setChatInput('我想把这篇推迟到明天晑10点发布')
-                    }}
-                    className="flex items-center justify-center gap-1 py-2 px-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold hover:bg-amber-100 active:scale-95 transition-all"
-                  >
-                    <CalendarIcon className="w-3.5 h-3.5" />
-                    <span>调时间</span>
-                  </button>
-                </div>
-              </div>
-            )}
+            {/* Draft Approval Action Card — shown when AI is discussing a draft */}
+            <AnimatePresence>
+              {(activeDraftId || pendingDraftIds.length > 0) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="w-full max-w-sm mb-4"
+                >
+                  <div className="bg-white border border-indigo-100/80 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-3.5 pt-3 pb-2 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                          草稿审批{pendingDraftIds.length > 0 && !activeDraftId ? ` · ${pendingDraftIds.length} 篇等待` : ''}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => { setActiveDraftId(null); setPendingDraftIds([]) }}
+                        className="text-slate-300 hover:text-slate-500 transition-colors cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 p-3">
+                      <button
+                        onClick={async () => {
+                          const draftIdToApprove = activeDraftId || pendingDraftIds[0]
+                          if (!draftIdToApprove || !activeBrand) return
+                          setCompanionState('thinking')
+                          const res = await fetch(`/api/brands/${activeBrand.id}/copywriter/voice-chat`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              message: '我同意发布这篇草稿',
+                              history: conversationHistory.slice(-10),
+                              context: { activeDraftId: draftIdToApprove },
+                            })
+                          })
+                          if (res.ok) {
+                            const d = await res.json()
+                            const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            setMessages(prev => [...prev, { sender: 'ai', text: d.reply || '已批准！', time: t }])
+                            speakText(d.reply || '已批准发布')
+                            setActiveDraftId(null)
+                            setPendingDraftIds(prev => prev.filter(id => id !== draftIdToApprove))
+                            addToHistory('我同意发布这篇草稿', d.reply || '已批准！', 'APPROVE_DRAFT', draftIdToApprove)
+                            fetchDrafts()
+                          } else { setCompanionState('idle') }
+                        }}
+                        className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-xs font-bold hover:bg-emerald-100 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>批准发布</span>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const draftIdToReject = activeDraftId || pendingDraftIds[0]
+                          if (!draftIdToReject || !activeBrand) return
+                          setCompanionState('thinking')
+                          const res = await fetch(`/api/brands/${activeBrand.id}/copywriter/voice-chat`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              message: '这篇草稿不行，请重新写一版',
+                              history: conversationHistory.slice(-10),
+                              context: { activeDraftId: draftIdToReject },
+                            })
+                          })
+                          if (res.ok) {
+                            const d = await res.json()
+                            const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            setMessages(prev => [...prev, { sender: 'ai', text: d.reply || '好的，我来重写一版。', time: t }])
+                            speakText(d.reply || '好的，我来重写一版。')
+                            setActiveDraftId(null)
+                            addToHistory('这篇草稿不行，请重新写一版', d.reply || '', 'REJECT_DRAFT', draftIdToReject)
+                          } else { setCompanionState('idle') }
+                        }}
+                        className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl bg-rose-50 border border-rose-200/80 text-rose-700 text-xs font-bold hover:bg-rose-100 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <AlertCircle className="w-4 h-4" />
+                        <span>拒绝重写</span>
+                      </button>
+                      <button
+                        onClick={() => setChatInput('把这篇推迟到明天上午10点发布')}
+                        className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-700 text-xs font-bold hover:bg-amber-100 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <CalendarIcon className="w-4 h-4" />
+                        <span>调整时间</span>
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Voice Assistant Panel */}
             <div className="w-full max-w-sm flex items-center justify-between gap-6 px-4">
