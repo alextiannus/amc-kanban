@@ -259,6 +259,8 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
   const [activeBrandId, setActiveBrandId] = useState(brandId)
   const [allBrands, setAllBrands] = useState<any[]>([])
+  // Map of brandId → lastPublishedAt ISO string (or null)
+  const [brandActivityMap, setBrandActivityMap] = useState<Record<string, string | null>>({})
 
   // Draft Creation Workspace states
   const [isCreatingPost, setIsCreatingPost] = useState(false)
@@ -504,6 +506,22 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       .then(data => {
         if (Array.isArray(data)) {
           setAllBrands(data)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // Fetch brand activity (last published date) for color-coded health status
+  useEffect(() => {
+    fetch('/api/dashboard/brand-activity')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data.brands)) {
+          const map: Record<string, string | null> = {}
+          data.brands.forEach((b: { id: string; lastPublishedAt: string | null }) => {
+            map[b.id] = b.lastPublishedAt
+          })
+          setBrandActivityMap(map)
         }
       })
       .catch(() => {})
@@ -1542,42 +1560,98 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               )}
             </div>
             {!isBrandsCollapsed && (
-              allBrands.length > 0 ? (
-                <ul className="space-y-1.5 mb-6">
-                  <li
-                    onClick={() => setActiveBrandId(undefined)}
-                    className={`flex flex-col p-2.5 rounded-xl cursor-pointer transition-all border ${
-                      activeBrandId === undefined
-                        ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold'
-                        : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
-                    }`}
-                  >
-                    <span className="text-xs">全部品牌 (All Brands)</span>
-                  </li>
-                  {allBrands.map((b: any) => {
-                    const isSelected = b.id === activeBrandId
-                    const lacksChannels = !b.accounts || b.accounts.length === 0
-                    return (
-                      <li 
-                        key={b.id} 
-                        onClick={() => setActiveBrandId(b.id)}
-                        className={`flex flex-col p-2.5 rounded-xl cursor-pointer transition-all border ${
-                          isSelected 
-                            ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold' 
-                            : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
-                        }`}
-                      >
-                        <span className="text-xs">{b.name}</span>
-                        {lacksChannels && (
-                          <span className="text-[9px] text-red-500 font-medium mt-1">
-                            ⚠️ 缺失渠道配置
-                          </span>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-              ) : (
+              allBrands.length > 0 ? (() => {
+                const now = new Date()
+
+                // Compute health status per brand
+                const getBrandHealth = (brandId: string): 'red' | 'yellow' | 'green' | 'unknown' => {
+                  if (!(brandId in brandActivityMap)) return 'unknown'
+                  const lastPub = brandActivityMap[brandId]
+                  if (!lastPub) return 'red'
+                  const daysSince = Math.floor((now.getTime() - new Date(lastPub).getTime()) / (1000 * 60 * 60 * 24))
+                  if (daysSince <= 2) return 'green'
+                  if (daysSince === 3) return 'yellow'
+                  return 'red'
+                }
+
+                const healthOrder: Record<string, number> = { red: 0, yellow: 1, green: 2, unknown: 3 }
+                const sortedBrands = [...allBrands].sort((a, b) => {
+                  return (healthOrder[getBrandHealth(a.id)] ?? 3) - (healthOrder[getBrandHealth(b.id)] ?? 3)
+                })
+
+                const healthDot: Record<string, string> = {
+                  red: 'bg-red-500',
+                  yellow: 'bg-amber-400',
+                  green: 'bg-emerald-500',
+                  unknown: 'bg-slate-300 dark:bg-slate-600',
+                }
+
+                const healthLabel: Record<string, string> = {
+                  red: '超过2天未发布',
+                  yellow: '第3天未发布',
+                  green: '3天内有发布',
+                  unknown: '暂无数据',
+                }
+
+                return (
+                  <ul className="space-y-1.5 mb-6">
+                    <li
+                      onClick={() => setActiveBrandId(undefined)}
+                      className={`flex flex-col p-2.5 rounded-xl cursor-pointer transition-all border ${
+                        activeBrandId === undefined
+                          ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold'
+                          : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
+                      }`}
+                    >
+                      <span className="text-xs">全部品牌 (All Brands)</span>
+                    </li>
+                    {sortedBrands.map((b: any) => {
+                      const isSelected = b.id === activeBrandId
+                      const lacksChannels = !b.accounts || b.accounts.length === 0
+                      const health = getBrandHealth(b.id)
+                      return (
+                        <li
+                          key={b.id}
+                          onClick={() => setActiveBrandId(b.id)}
+                          className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${
+                            isSelected
+                              ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold'
+                              : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
+                          }`}
+                        >
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs truncate">{b.name}</span>
+                            {lacksChannels && (
+                              <span className="text-[9px] text-red-500 font-medium mt-0.5">
+                                ⚠️ 缺失渠道配置
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-0.5 ml-2 shrink-0">
+                            <span
+                              className={`w-2 h-2 rounded-full shrink-0 ${
+                                health === 'red' ? 'bg-red-500 animate-pulse' :
+                                health === 'yellow' ? 'bg-amber-400' :
+                                health === 'green' ? 'bg-emerald-500' :
+                                'bg-slate-300 dark:bg-slate-600'
+                              }`}
+                              title={healthLabel[health]}
+                            />
+                            <span className={`text-[8px] font-semibold ${
+                              health === 'red' ? 'text-red-500' :
+                              health === 'yellow' ? 'text-amber-500' :
+                              health === 'green' ? 'text-emerald-600 dark:text-emerald-400' :
+                              'text-slate-400'
+                            }`}>
+                              {healthLabel[health]}
+                            </span>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )
+              })() : (
                 <div className="text-[11px] text-slate-400 italic p-1 mb-6">加载品牌中...</div>
               )
             )}
