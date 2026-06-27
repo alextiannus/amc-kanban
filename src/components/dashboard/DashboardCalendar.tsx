@@ -1766,61 +1766,60 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
                         const saved = await saveDraft('draft', '【AI 正在创作中...】')
                         if (saved && saved.length > 0) {
-                          setCreatedDrafts(saved)
+                          // === CRITICAL: Batch ALL state updates synchronously before any further await ===
+                          // If we call setCreatedDrafts and then await (e.g. accounts fetch) before calling
+                          // setSelectedAccountIds, React flushes an intermediate render where accountOptions
+                          // has already dropped 'unconfigured_xxx' (because createdDrafts now has the real
+                          // DB account) but selectedAccountIds still references the old placeholder ID →
+                          // preview panel entry disappears. Fix: compute newSelectedIds eagerly from `saved`
+                          // and batch everything in one synchronous block, with no await in between.
 
-                          // Refresh accounts list to populate newly created placeholder account IDs
-                          try {
-                            const accRes = await fetch(`/api/brands/${activeBrandId}/accounts`)
-                            if (accRes.ok) {
-                              const accData = await accRes.json()
-                              const updatedAccounts = accData.accounts || []
-                              setAccounts(updatedAccounts)
+                          const newSelectedIds = selectedAccountIds.map(id => {
+                            if (id === 'unconfigured_red') {
+                              const match = saved.find(d => ['red', 'xiaohongshu', 'xhs'].includes(d.account?.platformId?.toLowerCase()))
+                              return match ? match.accountId : id
                             }
-                          } catch (accErr) {
-                            console.error('Failed to reload accounts:', accErr)
-                          }
-
-                          // Map selectedAccountIds from unconfigured placeholders to real database account IDs
-                          setSelectedAccountIds(prev =>
-                            prev.map(id => {
-                              if (id === 'unconfigured_red') {
-                                const match = saved.find(d => ['red', 'xiaohongshu', 'xhs'].includes(d.account?.platformId?.toLowerCase()))
-                                return match ? match.accountId : id
-                              }
-                              if (id === 'unconfigured_google_business') {
-                                const match = saved.find(d => ['google_business', 'google', 'google_maps'].includes(d.account?.platformId?.toLowerCase()))
-                                return match ? match.accountId : id
-                              }
-                              if (id === 'unconfigured_instagram') {
-                                const match = saved.find(d => d.account?.platformId?.toLowerCase() === 'instagram')
-                                return match ? match.accountId : id
-                              }
-                              if (id === 'unconfigured_facebook') {
-                                const match = saved.find(d => d.account?.platformId?.toLowerCase() === 'facebook')
-                                return match ? match.accountId : id
-                              }
-                              if (id === 'unconfigured_tiktok') {
-                                const match = saved.find(d => d.account?.platformId?.toLowerCase() === 'tiktok')
-                                return match ? match.accountId : id
-                              }
-                              return id
-                            })
-                          )
+                            if (id === 'unconfigured_google_business') {
+                              const match = saved.find(d => ['google_business', 'google', 'google_maps'].includes(d.account?.platformId?.toLowerCase()))
+                              return match ? match.accountId : id
+                            }
+                            if (id === 'unconfigured_instagram') {
+                              const match = saved.find(d => d.account?.platformId?.toLowerCase() === 'instagram')
+                              return match ? match.accountId : id
+                            }
+                            if (id === 'unconfigured_facebook') {
+                              const match = saved.find(d => d.account?.platformId?.toLowerCase() === 'facebook')
+                              return match ? match.accountId : id
+                            }
+                            if (id === 'unconfigured_tiktok') {
+                              const match = saved.find(d => d.account?.platformId?.toLowerCase() === 'tiktok')
+                              return match ? match.accountId : id
+                            }
+                            return id
+                          })
 
                           const newCaptions: Record<string, string> = {}
                           const newHashtags: Record<string, string> = {}
                           const newStatuses: Record<string, 'generating' | 'completed' | 'failed'> = {}
-
                           saved.forEach(d => {
                             newCaptions[d.accountId] = '【AI 正在创作中...】'
                             newHashtags[d.accountId] = ''
                             newStatuses[d.accountId] = 'generating'
                           })
 
+                          // All state updates in one synchronous block → single batched render
+                          setCreatedDrafts(saved)
+                          setSelectedAccountIds(newSelectedIds)
                           setDraftCaptions(newCaptions)
                           setDraftHashtags(newHashtags)
                           setDraftStatuses(newStatuses)
                           setIsAiGenerating(true)
+
+                          // Refresh accounts list in background (fire-and-forget, non-blocking)
+                          fetch(`/api/brands/${activeBrandId}/accounts`)
+                            .then(r => r.ok ? r.json() : null)
+                            .then(data => { if (data?.accounts) setAccounts(data.accounts) })
+                            .catch(e => console.error('Failed to reload accounts:', e))
 
                           await Promise.all(
                             saved.map(draft => triggerCopywriter(draft.id, true))
