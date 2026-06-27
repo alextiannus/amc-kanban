@@ -2539,10 +2539,14 @@ export default function BrandOwnerDashboard() {
                   <button 
                     onClick={async () => {
                       try {
-                        await fetch('/api/auth/logout', { method: 'POST' })
+                        const res = await fetch('/api/auth/logout', { method: 'POST' })
+                        if (res.ok) {
+                          await res.json().catch(() => ({}))
+                        }
                         window.location.href = '/'
                       } catch (e) {
                         console.error('[BrandOwnerDashboard] logout error', e)
+                        window.location.href = '/'
                       }
                     }}
                     className="w-full flex items-center gap-4 text-rose-600 hover:text-rose-700 transition-colors py-2 text-left cursor-pointer"
