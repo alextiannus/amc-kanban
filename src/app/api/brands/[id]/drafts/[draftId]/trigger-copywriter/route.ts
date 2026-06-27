@@ -90,7 +90,10 @@ export async function POST(request: Request, { params }: Params) {
   })
 
   // 4. Asynchronously invoke marketingGraph workflow in the background
-  const config = { configurable: { thread_id: brandId } }
+  // Use a draft-scoped thread_id so each draft gets its own isolated checkpoint.
+  // This prevents stale state (error, status, aiFailed) from previous runs on the
+  // same brand from polluting this draft's copywriting run.
+  const config = { configurable: { thread_id: `draft_${draftId}` } }
   const platform = draft.account?.platformId || 'instagram'
   
   const { marketingGraph } = await import('@/agents/graph/marketingGraph.ts')
@@ -100,7 +103,11 @@ export async function POST(request: Request, { params }: Params) {
     draftId,
     platform,
     caption: originalCaption,
-    copywriteOnly: true
+    copywriteOnly: true,
+    // Explicitly reset fields that could be stale from a previous checkpoint
+    status: 'in_progress',
+    error: '',
+    aiFailed: false,
   }, config).catch(async (err: any) => {
     console.error(`Background copywriter trigger failed for draft ${draftId}:`, err);
     try {

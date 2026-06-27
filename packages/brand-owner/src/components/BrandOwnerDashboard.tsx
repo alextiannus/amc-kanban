@@ -10,7 +10,7 @@ import {
   Utensils, Copy
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 const getMainAppUrl = (path: string) => {
   if (typeof window === 'undefined') return path
@@ -61,6 +61,7 @@ interface ContentDraft {
 export default function BrandOwnerDashboard() {
   const searchParams = useSearchParams()
   const queryBrandId = searchParams?.get('brandId')
+  const router = useRouter()
   const now = new Date()
 
   // --- States ---
@@ -127,6 +128,11 @@ export default function BrandOwnerDashboard() {
     async function loadInitialData() {
       try {
         const res = await fetch('/api/brands')
+        // If the session cookie is missing or expired, redirect to login
+        if (res.status === 401 || res.status === 403) {
+          router.replace('/login')
+          return
+        }
         if (res.ok) {
           const list = await res.json()
           setBrands(list)
@@ -144,7 +150,7 @@ export default function BrandOwnerDashboard() {
       }
     }
     loadInitialData()
-  }, [queryBrandId])
+  }, [queryBrandId, router])
 
   // Sync active brand when query param changes
   useEffect(() => {
@@ -2537,11 +2543,14 @@ export default function BrandOwnerDashboard() {
                     <span className="font-bold text-sm tracking-wide">系统设置</span>
                   </button>
                   <button 
-                    onClick={() => {
-                      const logoutUrl = getMainAppUrl(
-                        `/api/auth/logout?redirectTo=${encodeURIComponent(window.location.origin + '/')}`
-                      )
-                      window.location.href = logoutUrl
+                    onClick={async () => {
+                      try {
+                        await fetch('/api/auth/logout', { method: 'POST' })
+                      } catch {
+                        // Ignore errors — we still want to redirect
+                      }
+                      router.push('/login')
+                      router.refresh()
                     }}
                     className="w-full flex items-center gap-4 text-rose-600 hover:text-rose-700 transition-colors py-2 text-left cursor-pointer"
                   >
