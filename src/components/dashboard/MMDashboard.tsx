@@ -1392,7 +1392,7 @@ export default function MMDashboard() {
   }
 
   return (
-    <div className="text-slate-800 bg-[#f7f9fb] selection:bg-primary/10 overflow-hidden h-[100dvh] w-screen relative flex flex-col">
+    <div className="text-slate-800 dark:text-slate-100 bg-[#f7f9fb] dark:bg-slate-950 selection:bg-primary/10 overflow-hidden h-[100dvh] w-screen relative flex flex-col">
       <input 
         type="file" 
         ref={fileInputRef} 
@@ -1428,13 +1428,17 @@ export default function MMDashboard() {
 
 
       {/* Top App Bar */}
-      <header className="fixed top-0 w-full z-40 bg-white/40 backdrop-blur-md h-16 flex items-center justify-between px-4 border-b border-slate-200/20">
-        <div className="w-10" />
+      <header className="fixed top-0 w-full z-40 bg-white/40 dark:bg-slate-900/60 backdrop-blur-md h-16 flex items-center justify-between px-4 border-b border-slate-200/20 dark:border-slate-800/40">
+        {/* Logo + Name */}
+        <div className="flex items-center gap-2">
+          <img src="/icons/icon-192.png" alt="AI Staff" className="w-7 h-7 rounded-lg object-cover" />
+          <span className="text-xs font-black text-slate-700 dark:text-slate-200 tracking-tight leading-none">AI Staff<span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 ml-0.5"> - AMC</span></span>
+        </div>
 
         <div className="flex items-center gap-2 relative">
           <button
             onClick={() => setNotificationsExpanded(prev => !prev)}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 text-slate-650 transition-all active:scale-95 cursor-pointer relative"
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 dark:hover:bg-slate-800/60 text-slate-650 dark:text-slate-300 transition-all active:scale-95 cursor-pointer relative"
             title="通知消息"
           >
             <Bell className="h-5 w-5" />
@@ -1445,7 +1449,7 @@ export default function MMDashboard() {
 
           <button 
             onClick={() => setSideMenuOpen(true)}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 text-slate-650 transition-all active:scale-95 cursor-pointer"
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-200/50 dark:hover:bg-slate-800/60 text-slate-650 dark:text-slate-300 transition-all active:scale-95 cursor-pointer"
             title="菜单"
           >
             <Menu className="h-5 w-5" />
@@ -1459,9 +1463,9 @@ export default function MMDashboard() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="absolute right-0 top-12 w-80 bg-white/95 backdrop-blur-lg border border-slate-200/50 rounded-2xl p-4 shadow-xl space-y-3 z-50 text-left"
+                className="absolute right-0 top-12 w-80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border border-slate-200/50 dark:border-slate-700/50 rounded-2xl p-4 shadow-xl space-y-3 z-50 text-left"
               >
-                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
                   <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">通知与待办项目</span>
                   <button 
                     onClick={() => setNotificationsExpanded(false)}
@@ -2270,17 +2274,17 @@ export default function MMDashboard() {
 
       {/* Sub-page overlay views */}
       {activeSubPage !== null && (
-        <div className="fixed inset-0 z-50 bg-[#f7f9fb] overflow-y-auto pb-10 flex flex-col">
+        <div className="fixed inset-0 z-50 bg-[#f7f9fb] dark:bg-slate-950 overflow-y-auto pb-10 flex flex-col">
           {/* Subpage Header */}
-          <header className="sticky top-0 w-full z-40 bg-[#f7f9fb]/90 backdrop-blur-md shadow-sm h-16 flex items-center justify-between px-4 border-b border-slate-200/50">
+          <header className="sticky top-0 w-full z-40 bg-[#f7f9fb]/90 dark:bg-slate-950/90 backdrop-blur-md shadow-sm h-16 flex items-center justify-between px-4 border-b border-slate-200/50 dark:border-slate-800/50">
             <button 
               onClick={() => setActiveSubPage(null)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200/50 active:scale-95 transition-all"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 active:scale-95 transition-all"
             >
               <ArrowRight className="w-4 h-4 rotate-180" />
               <span>Back to Chat</span>
             </button>
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">
               {activeSubPage === 'calendar' && 'Campaign Calendar'}
               {activeSubPage === 'assets' && 'Media Library'}
               {activeSubPage === 'market' && '预约服务'}
@@ -2293,7 +2297,7 @@ export default function MMDashboard() {
             {activeSubPage === 'calendar' && (
               <>
                 {/* Campaign Calendar */}
-                <section className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-4">
+                <section className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-4">
                   <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-2">
                     {now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                   </h3>
@@ -2329,7 +2333,7 @@ export default function MMDashboard() {
                               ? 'bg-primary text-white font-bold shadow-md shadow-primary/20 scale-105'
                               : isToday
                                 ? 'bg-indigo-50 border border-primary/30 text-primary font-bold'
-                                : 'bg-slate-50 text-slate-700 hover:bg-slate-100'
+                                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
                           }`}
                         >
                           <span>{day}</span>
@@ -2348,7 +2352,7 @@ export default function MMDashboard() {
                       </div>
                     ) : (
                       monthDrafts.map(draft => (
-                        <div key={draft.id} className="p-3 bg-slate-50 rounded-xl flex items-center justify-between text-xs mb-1.5 last:mb-0">
+                        <div key={draft.id} className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-between text-xs mb-1.5 last:mb-0">
                           <span className="font-medium text-slate-700 truncate max-w-[200px]">{draft.caption || 'Campaign Post'}</span>
                           <span className="text-[10px] text-slate-400 font-semibold uppercase">
                             {new Date(draft.scheduledAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -2368,7 +2372,7 @@ export default function MMDashboard() {
                     </span>
                   </div>
 
-                  <div className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm space-y-4">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-4">
                     {/* Horizontal days slider */}
                     <div className="flex justify-between overflow-x-auto gap-2 no-scrollbar">
                       {weekDates.map(day => {
@@ -2382,7 +2386,7 @@ export default function MMDashboard() {
                             className={`flex flex-col items-center gap-1.5 px-3.5 py-2.5 rounded-xl transition-all ${
                               isSelected
                                 ? 'bg-primary text-white shadow-md shadow-primary/20 scale-105'
-                                : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                                : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
                             }`}
                           >
                             <span className="text-[9px] font-extrabold uppercase opacity-80">{day.dayName}</span>
@@ -2402,7 +2406,7 @@ export default function MMDashboard() {
                         selectedDayDrafts.map(draft => (
                           <div 
                             key={draft.id}
-                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50/50 border border-slate-100 hover:bg-slate-50 transition-colors"
+                            className="flex items-center justify-between p-3 rounded-xl bg-slate-50/50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                           >
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-primary">
@@ -2781,7 +2785,7 @@ export default function MMDashboard() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed right-0 top-0 h-full w-[280px] bg-[#f7f9fb] shadow-2xl z-50 flex flex-col p-8 border-l border-slate-200/50"
+              className="fixed right-0 top-0 h-full w-[280px] bg-[#f7f9fb] dark:bg-slate-900 shadow-2xl z-50 flex flex-col p-8 border-l border-slate-200/50 dark:border-slate-800/50"
             >
               <div className="flex justify-between items-center mb-10">
                 <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-transparent">
@@ -2802,11 +2806,11 @@ export default function MMDashboard() {
               </div>
 
               {/* Brand Switcher / Info inside Drawer Menu */}
-              <div className="mb-6 border-b border-slate-200/50 pb-6">
+              <div className="mb-6 border-b border-slate-200/50 dark:border-slate-700/50 pb-6">
                 <div className="relative">
                   <button 
                     onClick={() => setBrandDropdownOpen(prev => !prev)}
-                    className="w-full flex items-center justify-between p-3 bg-white border border-slate-200/60 rounded-xl text-left hover:bg-slate-50 transition-all cursor-pointer outline-none"
+                    className="w-full flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 rounded-xl text-left hover:bg-slate-50 dark:hover:bg-slate-700 transition-all cursor-pointer outline-none"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-primary overflow-hidden flex items-center justify-center text-white flex-shrink-0">
@@ -2822,7 +2826,7 @@ export default function MMDashboard() {
                         )}
                       </div>
                       <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-xs text-slate-800 truncate">
+                        <span className="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">
                           {activeBrand ? activeBrand.name : (loading ? 'Loading Brand...' : '暂无品牌')}
                         </span>
                         {activeBrand?.autoPilot && (
@@ -2844,7 +2848,7 @@ export default function MMDashboard() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 10 }}
-                        className="absolute left-0 right-0 mt-2 bg-white rounded-xl shadow-lg border border-slate-200/60 overflow-hidden z-50 max-h-48 overflow-y-auto"
+                        className="absolute left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200/60 dark:border-slate-700 overflow-hidden z-50 max-h-48 overflow-y-auto"
                       >
                         {brands.map(b => (
                           <button
@@ -2853,8 +2857,8 @@ export default function MMDashboard() {
                               setActiveBrand(b)
                               setBrandDropdownOpen(false)
                             }}
-                            className={`w-full text-left px-4 py-2.5 flex items-center justify-between text-xs hover:bg-slate-50 transition-colors ${
-                              activeBrand?.id === b.id ? 'bg-indigo-50/50 text-primary font-bold' : 'text-slate-600'
+                            className={`w-full text-left px-4 py-2.5 flex items-center justify-between text-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors ${
+                              activeBrand?.id === b.id ? 'bg-indigo-50/50 dark:bg-indigo-900/30 text-primary font-bold' : 'text-slate-600 dark:text-slate-300'
                             }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
@@ -2881,13 +2885,13 @@ export default function MMDashboard() {
                 </div>
               </div>
 
-              <nav className="space-y-6">
+              <nav className="space-y-6 text-slate-700 dark:text-slate-200">
                 <button 
                   onClick={() => {
                     setActiveSubPage('calendar')
                     setSideMenuOpen(false)
                   }}
-                  className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
+                  className="w-full flex items-center gap-4 text-slate-650 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 transition-colors py-2 text-left cursor-pointer"
                 >
                   <CalendarIcon className="w-5.5 h-5.5 text-slate-500" />
                   <span className="font-bold text-sm tracking-wide">发布日历</span>
@@ -2897,7 +2901,7 @@ export default function MMDashboard() {
                     setActiveSubPage('market')
                     setSideMenuOpen(false)
                   }}
-                  className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
+                  className="w-full flex items-center gap-4 text-slate-650 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 transition-colors py-2 text-left cursor-pointer"
                 >
                   <ShoppingBag className="w-5.5 h-5.5 text-slate-500" />
                   <span className="font-bold text-sm tracking-wide">预约服务</span>
@@ -2907,18 +2911,18 @@ export default function MMDashboard() {
                     setActiveSubPage('assets')
                     setSideMenuOpen(false)
                   }}
-                  className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
+                  className="w-full flex items-center gap-4 text-slate-650 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 transition-colors py-2 text-left cursor-pointer"
                 >
                   <ImageIcon className="w-5.5 h-5.5 text-slate-500" />
                   <span className="font-bold text-sm tracking-wide">素材库</span>
                 </button>
-                <div className="pt-6 mt-6 border-t border-slate-200/50 space-y-4">
+                <div className="pt-6 mt-6 border-t border-slate-200/50 dark:border-slate-700/50 space-y-4">
                   <button 
                     onClick={() => {
                       setActiveSubPage('settings')
                       setSideMenuOpen(false)
                     }}
-                    className="w-full flex items-center gap-4 text-slate-650 hover:text-primary transition-colors py-2 text-left cursor-pointer"
+                    className="w-full flex items-center gap-4 text-slate-650 dark:text-slate-300 hover:text-primary dark:hover:text-indigo-400 transition-colors py-2 text-left cursor-pointer"
                   >
                     <Settings className="w-5.5 h-5.5 text-slate-500" />
                     <span className="font-bold text-sm tracking-wide">系统设置</span>
