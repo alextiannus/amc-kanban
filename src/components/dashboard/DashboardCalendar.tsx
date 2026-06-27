@@ -1603,7 +1603,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                           : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
                       }`}
                     >
-                      <span className="text-xs">全部品牌 (All Brands)</span>
+                      <span className="text-xs text-slate-700 dark:text-slate-200">全部品牌 (All Brands)</span>
                     </li>
                     {sortedBrands.map((b: any) => {
                       const isSelected = b.id === activeBrandId
@@ -1615,12 +1615,16 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                           onClick={() => setActiveBrandId(b.id)}
                           className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border ${
                             isSelected
-                              ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-400 font-bold'
+                              ? 'bg-indigo-50/50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-800/40 font-bold'
                               : 'bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30'
                           }`}
                         >
                           <div className="flex flex-col min-w-0">
-                            <span className="text-xs truncate">{b.name}</span>
+                            <span className={`text-xs truncate ${
+                              isSelected
+                                ? 'text-indigo-700 dark:text-indigo-400'
+                                : 'text-slate-700 dark:text-slate-200'
+                            }`}>{b.name}</span>
                             {lacksChannels && (
                               <span className="text-[9px] text-red-500 font-medium mt-0.5">
                                 ⚠️ 缺失渠道配置

@@ -97,19 +97,16 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   }
 
   if (draft.account.handle === 'unconfigured') {
-    // Unconfigured accounts (e.g. 小红书/Facebook not yet connected) cannot publish
-    // to a real platform, so they always land in 'scheduled' — never 'published'.
-    // publishedAt is always null because no actual post was created.
-    const nextStatus = (brand.autoPilot || input.forcePublish)
-      ? 'scheduled'
-      : 'pending_review'
-
+    // Unconfigured accounts (e.g. 小红书/Facebook not yet connected) cannot be
+    // auto-published. Content is saved as a plain 'draft' so it does NOT appear
+    // in the calendar. Users must manually export and publish to the platform.
     const updated = await prisma.contentDraft.update({
       where: { id: draft.id },
       data: {
-        status: nextStatus,
+        status: 'draft',
         publishedAt: null,
-        agentNote: '未配置发布渠道，已进入排期，需要手动完成发布。',
+        scheduledAt: null,
+        agentNote: '该平台尚未配置发布渠道，内容已保存为草稿，请手动复制内容发布到对应平台。',
         rejectionNote: null,
       },
       include: {
@@ -118,52 +115,17 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
       },
     })
 
-    if (nextStatus === 'pending_review') {
-      await prisma.actionItem.upsert({
-        where: { draftId: draft.id },
-        create: {
-          brandId: input.brandId,
-          accountId: draft.accountId,
-          type: 'content_approval',
-          priority: 'normal',
-          title: `审核草稿：${draft.caption.slice(0, 36)}`,
-          description: draft.caption,
-          status: 'pending',
-          agentId: draft.agentId,
-          draftId: draft.id,
-        },
-        update: {
-          accountId: draft.accountId,
-          title: `审核草稿：${draft.caption.slice(0, 36)}`,
-          description: draft.caption,
-          status: 'pending',
-          resolvedAt: null,
-          resolvedBy: null,
-          resolvedNote: null,
-        },
-      })
-    } else {
-      await prisma.actionItem.updateMany({
-        where: { draftId: draft.id, brandId: input.brandId, status: 'pending' },
-        data: {
-          status: 'approved',
-          resolvedAt: new Date(),
-          resolvedBy: input.actorId,
-          resolvedNote: input.note || '已排期，等待手动发布到未配置渠道',
-        },
-      })
-    }
-
     void persistDraftSnapshotToObs({ brandId: input.brandId, draftId: draft.id, data: updated }).catch((error) => {
-      console.error('[submitDraftForDelivery] OBS delivered snapshot failed:', error)
+      console.error('[submitDraftForDelivery] OBS draft snapshot failed:', error)
     })
 
     return {
       ok: true as const,
-      mode: nextStatus as any,
+      mode: 'draft' as any,
       draft: updated,
     }
   }
+
 
   if (!brand.postfastApiKey) {
     await prisma.contentDraft.update({ where: { id: draft.id }, data: { status: 'failed', agentNote: '发布失败：品牌尚未配置 PostFast API Key。' } })

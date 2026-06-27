@@ -84,7 +84,7 @@ export async function GET(request: Request) {
   const drafts = await prisma.contentDraft.findMany({
     where: {
       brandId: { in: scopedBrandIds },
-      status: { in: ['scheduled', 'publishing', 'published', 'pending_review'] },
+      status: { in: ['scheduled', 'publishing', 'published'] },
       OR: [
         { scheduledAt: { gte: rangeStart, lt: rangeEnd } },
         { publishedAt: { gte: rangeStart, lt: rangeEnd } },
@@ -154,11 +154,7 @@ export async function GET(request: Request) {
     const platform = draft.account?.platformId || '全平台'
     const status = draft.status === 'published'
       ? 'done'
-      : draft.status === 'publishing'
-        ? 'scheduled'
-        : draft.status === 'pending_review'
-          ? 'pending'
-          : 'scheduled'
+      : 'scheduled'
 
     const firstMediaUrl = draft.mediaUrls?.[0]
     const mediaAssetId = firstMediaUrl ? mediaUrlToIdMap.get(firstMediaUrl) : null

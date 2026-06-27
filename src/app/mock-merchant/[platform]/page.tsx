@@ -157,9 +157,9 @@ export default function MockPlatformMerchantPage() {
   const currentTheme = themes[platform] || themes.dianping
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Top Banner */}
-      <div className="bg-slate-950 border-b border-slate-800 p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="bg-slate-900/80 border-b border-slate-800/80 p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-2.5">
             <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${currentTheme.bg}`}>
@@ -197,7 +197,7 @@ export default function MockPlatformMerchantPage() {
       {/* Main Grid */}
       <div className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-6">
+          <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6">
             <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">
               待处理消息 & 评价
             </h2>
@@ -340,7 +340,7 @@ export default function MockPlatformMerchantPage() {
 
         {/* Right Info Box */}
         <div className="space-y-6">
-          <div className="bg-slate-950/60 border border-slate-800 rounded-3xl p-6 space-y-6">
+          <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 space-y-6">
             <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest">
               ⚙️ 调试控制台
             </h2>

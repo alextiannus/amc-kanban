@@ -482,11 +482,11 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">活动说明</label>
               <textarea
-                rows={2}
+                rows={5}
                 value={config.description || ''}
                 onChange={(e) => setConfig({ ...config, description: e.target.value })}
                 placeholder="活动规则及奖品介绍说明..."
-                className="w-full px-3 py-2 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition resize-none"
+                className="w-full px-3 py-2 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition resize-y min-h-[100px]"
               />
             </div>
 
