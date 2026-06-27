@@ -377,11 +377,8 @@ export default function MMDashboard() {
   // --- Helper: build Gemini system prompt from current brand state ---
   const buildSystemPrompt = useCallback(() => {
     if (!activeBrand) return ''
-    const menuText = activeBrand.menuItems
-      ? `菜单/产品：\n${(activeBrand.menuItems as any[]).map((m: any) => `- ${m.name}: ${m.description ?? ''}`).join('\n')}`
-      : ''
-    const slangText = activeBrand.slangDict
-      ? `本地用语：\n${Object.entries(activeBrand.slangDict as Record<string, string>).map(([a, b]) => `- "${a}": ${b}`).join('\n')}`
+    const slangText = Object.keys(slangDict).length > 0
+      ? `本地用语：\n${Object.entries(slangDict).map(([a, b]) => `- "${a}": ${b}`).join('\n')}`
       : ''
     const draftCtx = activeDraftId
       ? `当前正在讨论的草稿 ID: ${activeDraftId}`
@@ -393,12 +390,12 @@ export default function MMDashboard() {
       activeBrand.description ? `品牌简介：${activeBrand.description}` : '',
       activeBrand.location ? `位置：${activeBrand.location}` : '',
       brandTone ? `品牌风格：${brandTone}` : '',
-      menuText,
       slangText,
       draftCtx,
       `你可以主动调用工具查询数据或执行操作。对话要简洁、积极，如同一位得力的 AI 员工。`,
     ].filter(Boolean).join('\n')
-  }, [activeBrand, activeDraftId, pendingDraftIds, brandTone])
+  }, [activeBrand, activeDraftId, pendingDraftIds, brandTone, slangDict])
+
 
   // --- Voice Assist Activation (STT & TTS Chat integration) ---
   const startVoiceAssist = () => {
