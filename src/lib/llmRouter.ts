@@ -8,6 +8,39 @@ export interface LLMCallResult {
   error?: string
 }
 
+// ============================================================
+// In-memory Circuit Breaker
+// Tracks providers that have recently returned 429 / rate limit
+// errors. They are skipped for RATE_LIMIT_COOLDOWN_MS to allow
+// quota to recover, enabling seamless transparent switching.
+// ============================================================
+const rateLimitedUntil = new Map<string, number>()
+const RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000 // 5 minutes
+
+function circuitKey(provider: string, modelName: string): string {
+  return `${provider}/${modelName}`
+}
+
+function isCircuitOpen(provider: string, modelName: string): boolean {
+  const key = circuitKey(provider, modelName)
+  const until = rateLimitedUntil.get(key)
+  if (!until) return false
+  if (Date.now() >= until) {
+    rateLimitedUntil.delete(key)
+    console.log(`[LLM Router] Circuit reset for ${key} — cooling period expired.`)
+    return false
+  }
+  const remaining = Math.ceil((until - Date.now()) / 1000)
+  console.log(`[LLM Router] Circuit OPEN for ${key} — skipping (${remaining}s remaining).`)
+  return true
+}
+
+function tripCircuit(provider: string, modelName: string): void {
+  const key = circuitKey(provider, modelName)
+  rateLimitedUntil.set(key, Date.now() + RATE_LIMIT_COOLDOWN_MS)
+  console.warn(`[LLM Router] Circuit tripped for ${key} — rate-limited for ${RATE_LIMIT_COOLDOWN_MS / 60000} min.`)
+}
+
 /**
  * Executes a single API call for a specific LLM provider.
  */
@@ -18,10 +51,11 @@ async function executeSingleLLMCall(
   baseUrl: string | null,
   prompt: string,
   maxTokens: number
-): Promise<LLMCallResult> {
+): Promise<LLMCallResult & { rateLimited?: boolean }> {
   try {
     let responseText: string | null = null
     let errorMsg: string | undefined = undefined
+    let rateLimited = false
 
     if (provider === 'google') {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
@@ -40,6 +74,7 @@ async function executeSingleLLMCall(
       } else {
         const errText = await response.text().catch(() => '')
         if (response.status === 429) {
+          rateLimited = true
           errorMsg = `Gemini API quota/token limit exceeded (Rate limit / 429). Please check your billing or limit settings.`
         } else if (response.status === 400) {
           errorMsg = `Gemini API error (400 Bad Request / Token limit exceeded). Details: ${errText.slice(0, 150)}`
@@ -48,10 +83,10 @@ async function executeSingleLLMCall(
         }
         console.error(`[LLM Router] ${errorMsg}`)
       }
-    } 
+    }
     else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim') {
-      const defaultEndpoint = provider === 'deepseek' 
-        ? 'https://api.deepseek.com/v1' 
+      const defaultEndpoint = provider === 'deepseek'
+        ? 'https://api.deepseek.com/v1'
         : 'https://api.openai.com/v1'
       const endpoint = `${baseUrl || defaultEndpoint}/chat/completions`
 
@@ -74,7 +109,8 @@ async function executeSingleLLMCall(
       } else {
         const errText = await response.text().catch(() => '')
         if (response.status === 429) {
-          errorMsg = `${provider.toUpperCase()} API quota/token limit exceeded (Rate limit / 429). Please check your billing or limit settings.`
+          rateLimited = true
+          errorMsg = `CUSTOM_SHIM API quota/token limit exceeded (Rate limit / 429). Please check your billing or limit settings.`
         } else if (response.status === 400) {
           errorMsg = `${provider.toUpperCase()} API error (400 Bad Request / Token limit exceeded). Details: ${errText.slice(0, 150)}`
         } else {
@@ -82,7 +118,7 @@ async function executeSingleLLMCall(
         }
         console.error(`[LLM Router] ${errorMsg}`)
       }
-    } 
+    }
     else if (provider === 'anthropic') {
       const endpoint = `${baseUrl || 'https://api.anthropic.com/v1'}/messages`
       const response = await fetch(endpoint, {
@@ -105,6 +141,7 @@ async function executeSingleLLMCall(
       } else {
         const errText = await response.text().catch(() => '')
         if (response.status === 429) {
+          rateLimited = true
           errorMsg = `Anthropic API rate/token limit exceeded (429).`
         } else if (response.status === 400) {
           errorMsg = `Anthropic API error (400 Bad Request). Details: ${errText.slice(0, 150)}`
@@ -113,7 +150,7 @@ async function executeSingleLLMCall(
         }
         console.error(`[LLM Router] ${errorMsg}`)
       }
-    } 
+    }
     else {
       errorMsg = `Unsupported LLM provider: ${provider}`
       console.error(`[LLM Router] ${errorMsg}`)
@@ -124,34 +161,43 @@ async function executeSingleLLMCall(
       provider,
       modelName,
       error: errorMsg,
+      rateLimited,
     }
   } catch (error: any) {
     const errorMsg = `Request failed for ${provider}/${modelName}: ${error.message || error}`
     console.error(`[LLM Router]`, error)
-    return { text: null, provider, modelName, error: errorMsg }
+    return { text: null, provider, modelName, error: errorMsg, rateLimited: false }
   }
 }
 
 /**
  * Dynamically routes and calls the appropriate LLM model for a given task tag.
- * Implements a failover fallback chain across all configured models in the DB,
- * and falls back to system environment variables as a final resort.
+ *
+ * Implements a transparent failover chain:
+ * 1. DB configs tagged with taskTag, sorted by priority DESC
+ * 2. DB configs marked isDefault (not already included), sorted by priority DESC
+ * 3. System env-var fallback
+ *
+ * Rate-limited providers (429) are instantly skipped via an in-memory circuit
+ * breaker and won't be retried for RATE_LIMIT_COOLDOWN_MS (5 min). This makes
+ * LLM switching completely seamless to the caller when at least one fallback
+ * provider is healthy.
  */
 export async function callLLM(
   taskTag: string,
   prompt: string,
   maxTokens: number = 1000
 ): Promise<LLMCallResult> {
-  // 1. Fetch all matching enabled configurations
+  // 1. Fetch all matching enabled configurations, sorted by priority DESC
   const matchingConfigs = await prisma.lLMConfig.findMany({
     where: {
       isEnabled: true,
       taskTags: { has: taskTag },
     },
-    orderBy: { updatedAt: 'desc' },
+    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
   })
 
-  // 2. Fetch all default enabled configurations (excluding those already in matchingConfigs)
+  // 2. Fetch default enabled configurations not already matched, sorted by priority DESC
   const matchingIds = matchingConfigs.map((c: any) => c.id)
   const defaultConfigs = await prisma.lLMConfig.findMany({
     where: {
@@ -159,18 +205,25 @@ export async function callLLM(
       isDefault: true,
       NOT: { id: { in: matchingIds } }
     },
-    orderBy: { updatedAt: 'desc' },
+    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
   })
 
   const configsToTry = [...matchingConfigs, ...defaultConfigs]
   const errors: string[] = []
 
-  // Try each configuration in sequence
+  // Try each configuration in sequence (circuit breaker skips rate-limited ones)
   for (const config of configsToTry) {
-    let apiKey = config.apiKey || ''
     const provider = config.provider
     const modelName = config.modelName
     const baseUrl = config.baseUrl
+
+    // Skip immediately if circuit is open (recent 429)
+    if (isCircuitOpen(provider, modelName)) {
+      errors.push(`${config.displayName} (${provider}): skipped — circuit open (rate-limited)`)
+      continue
+    }
+
+    let apiKey = config.apiKey || ''
 
     // Resolve API key fallbacks if empty
     if (!apiKey) {
@@ -192,22 +245,27 @@ export async function callLLM(
       continue
     }
 
-    console.log(`[LLM Router] Trying configuration: ${config.displayName} (${provider}/${modelName})`)
+    console.log(`[LLM Router] Trying: ${config.displayName} (${provider}/${modelName})`)
     const result = await executeSingleLLMCall(provider, modelName, apiKey, baseUrl, prompt, maxTokens)
 
     if (result.text && !result.error) {
-      console.log(`[LLM Router] Call succeeded using ${config.displayName} (${provider}/${modelName})`)
+      console.log(`[LLM Router] \u2705 Success via ${config.displayName} (${provider}/${modelName})`)
       return result
     }
 
+    // Trip circuit on rate limit so this provider is skipped for the next 5 min
+    if (result.rateLimited) {
+      tripCircuit(provider, modelName)
+    }
+
     const errDetail = result.error || 'Unknown error'
-    console.warn(`[LLM Router] Configuration ${config.displayName} failed: ${errDetail}. Trying next...`)
+    console.warn(`[LLM Router] ${config.displayName} failed: ${errDetail}. Trying next...`)
     errors.push(`${config.displayName} (${provider}): ${errDetail}`)
   }
 
   // 3. Fallback to system env / default config
-  console.log('[LLM Router] All database configurations failed or none found. Trying system default fallback...')
-  
+  console.log('[LLM Router] All database configurations exhausted. Trying system env fallback...')
+
   const sysProvider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || 'google'
   const sysModelName = process.env.SYSTEM_DEFAULT_LLM_MODEL || 'gemini-2.0-flash'
   let sysApiKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
@@ -225,12 +283,19 @@ export async function callLLM(
   }
 
   if (sysApiKey) {
-    const result = await executeSingleLLMCall(sysProvider, sysModelName, sysApiKey, null, prompt, maxTokens)
-    if (result.text && !result.error) {
-      console.log(`[LLM Router] Call succeeded using system default fallback (${sysProvider}/${sysModelName})`)
-      return result
+    if (isCircuitOpen(sysProvider, sysModelName)) {
+      errors.push(`System Fallback (${sysProvider}): skipped — circuit open (rate-limited)`)
+    } else {
+      const result = await executeSingleLLMCall(sysProvider, sysModelName, sysApiKey, null, prompt, maxTokens)
+      if (result.text && !result.error) {
+        console.log(`[LLM Router] \u2705 Success via system env fallback (${sysProvider}/${sysModelName})`)
+        return result
+      }
+      if (result.rateLimited) {
+        tripCircuit(sysProvider, sysModelName)
+      }
+      errors.push(`System Fallback (${sysProvider}): ${result.error || 'Unknown error'}`)
     }
-    errors.push(`System Fallback (${sysProvider}): ${result.error || 'Unknown error'}`)
   } else {
     errors.push(`System Fallback (${sysProvider}): API key missing`)
   }
@@ -269,9 +334,19 @@ export async function validateLLMConfig(
     return { success: true }
   }
 
-  return { 
-    success: false, 
-    error: result.error || 'Connection check failed (empty response).' 
+  return {
+    success: false,
+    error: result.error || 'Connection check failed (empty response).'
   }
 }
 
+/**
+ * Expose circuit breaker status for admin/diagnostics.
+ */
+export function getCircuitBreakerStatus(): Record<string, { rateLimitedUntil: string }> {
+  const status: Record<string, { rateLimitedUntil: string }> = {}
+  for (const [key, until] of rateLimitedUntil.entries()) {
+    status[key] = { rateLimitedUntil: new Date(until).toISOString() }
+  }
+  return status
+}
