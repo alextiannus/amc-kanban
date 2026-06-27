@@ -144,18 +144,20 @@ async function fetchPostfastPosts(
   }
 }
 
-// ── Fetch internal drafts ────────────────────────────────────────────────────
+// ── Fetch published internal posts (have been posted to a platform) ──────────
+// Only includes posts with a real platformPostId — no drafts, pending, or scheduled.
 async function fetchInternalDrafts(
   brandId: string,
   from: Date,
   to: Date,
   platformFilter: string
 ): Promise<AnalyticsPost[]> {
-  const drafts = await prisma.contentDraft.findMany({
+  const published = await prisma.contentDraft.findMany({
     where: {
       brandId,
-      platformPostId: null,
-      status: { in: ['draft', 'pending_review', 'scheduled'] },
+      // Must have a platform post ID confirming it was actually published
+      platformPostId: { not: null },
+      status: 'published',
       OR: [
         { createdAt: { gte: from, lte: to } },
         { scheduledAt: { gte: from, lte: to } },
@@ -166,19 +168,19 @@ async function fetchInternalDrafts(
     },
     include: { account: { select: { platformId: true, handle: true } } },
     orderBy: { createdAt: 'desc' },
-    take: 200,
+    take: 500,
   })
 
-  return drafts.map((d: any) => ({
+  return published.map((d: any) => ({
     id: d.id,
     source: 'internal',
     platform: d.account?.platformId ?? 'unknown',
     handle: d.account?.handle ?? '',
     caption: d.caption,
-    postUrl: null,
+    postUrl: d.platformPostId ?? null,
     publishedAt: (d.scheduledAt ?? d.createdAt).toISOString(),
     contentType: detectContentType(d.caption, d.mediaUrls ?? [], d.hashtags ?? []),
-    status: d.status,
+    status: 'published',
     hashtags: d.hashtags ?? [],
     mediaUrls: d.mediaUrls ?? [],
     scheduledAt: d.scheduledAt?.toISOString() ?? null,
@@ -509,7 +511,10 @@ export async function GET(req: Request, { params }: Params) {
   const hasApifyData = apifyPosts.length > 0 || asArray<ApifyCachedReview>(apifyMeta.googleReviews).length > 0
 
   // ── KPI aggregates ───────────────────────────────────────────────────────
-  const totalPosts      = posts.length
+  // Only count posts that were actually published (have real engagement data or status=published)
+  const publishedOnly   = posts.filter(p => p.status === 'published')
+  const totalPosts      = publishedOnly.length
+  // Engagement KPIs computed over all posts (PostFast/Apify have real metrics)
   const totalEngagement = posts.reduce((s, p) => s + p.likes + p.comments + p.shares, 0)
   const totalImpressions= posts.reduce((s, p) => s + p.impressions, 0)
   const totalLikes      = posts.reduce((s, p) => s + p.likes, 0)

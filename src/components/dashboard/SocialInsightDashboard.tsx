@@ -644,7 +644,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
               {/* KPI Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                 {[
-                  { label: '总内容发布', value: String(kpis.totalPosts ?? 0), delta: `共 ${kpis.totalPosts ?? 0} 篇`, key: 'postCount' as MetricKey },
+                  { label: '真实发布帖数', value: String(kpis.totalPosts ?? 0), delta: `已发布 ${kpis.totalPosts ?? 0} 篇`, key: 'postCount' as MetricKey },
                   { label: '总互动数', value: fmtNum(kpis.totalEngagement ?? 0), delta: formatTrend(kpiTrends.engagement), key: 'engagement' as MetricKey },
                   { label: '曝光总量', value: fmtNum(kpis.totalImpressions ?? 0), delta: formatTrend(kpiTrends.impressions), key: 'impressions' as MetricKey },
                   { label: '平均触达', value: fmtNum(kpis.avgReach ?? 0), delta: formatTrend(kpiTrends.reach), key: 'reach' as MetricKey },
@@ -831,7 +831,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
                               <span className="capitalize">{acc.platformId}</span>
                             </td>
                             <td className="py-4 px-4 text-slate-500 font-medium">{acc.handle}</td>
-                            <td className="py-4 px-4 font-black">{totalPosts > 0 ? Math.round(totalPosts / accounts.length) : 0} 篇</td>
+                            <td className="py-4 px-4 font-black text-slate-400">{totalPosts > 0 ? totalPosts : '—'} 篇</td>
                             <td className="py-4 px-4 font-black">{acc.followerCount ? fmtNum(acc.followerCount) : '—'}</td>
                             <td className="py-4 px-4 font-bold text-slate-650 dark:text-slate-350">{acc.platformId === 'google' ? '—' : fmtNum(Math.round((kpis.totalEngagement ?? 0) / accounts.length))}</td>
                             <td className="py-4 px-4 text-emerald-500 font-black">+{acc.followerDelta || 0}</td>
