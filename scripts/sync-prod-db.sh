@@ -58,15 +58,20 @@ if ! docker ps --format '{{.Names}}' | grep -q "amc_local_db"; then
 fi
 
 echo ""
-echo "🔄 Restoring dump to local database..."
-PGPASSWORD="amc_password" psql \
-  --host=localhost \
-  --port=5432 \
-  --username=amc_user \
-  --dbname=amc \
-  -f "$DUMP_FILE" \
-  --quiet 2>&1 | grep -v "^NOTICE\|^$" || true
+echo "🔄 Restoring dump to local Docker database (postgres:18)..."
+docker run --rm \
+  -e PGPASSWORD="amc_password" \
+  -v "$REPO_ROOT/docker:/dump" \
+  --network amc-kanban_default \
+  postgres:18 \
+  psql \
+    --host=amc_local_db \
+    --port=5432 \
+    --username=amc_user \
+    --dbname=amc \
+    -f /dump/prod-dump.sql \
+    --quiet 2>&1 | grep -v "^NOTICE\|^$" || true
 
 echo ""
 echo "✅ Production data restored to local Docker Postgres."
-echo "   Connect: psql '$LOCAL_URL'"
+echo "   DB URL: $LOCAL_URL"

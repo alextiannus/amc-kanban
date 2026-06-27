@@ -2,7 +2,7 @@ services:
 
   # ── PostgreSQL ─────────────────────────────────────────────────────────────
   db:
-    image: postgres:16-alpine
+    image: postgres:18         # matches production Render DB version
     container_name: amc_local_db
     environment:
       POSTGRES_DB: amc
@@ -15,8 +15,6 @@ services:
       retries: 20
     volumes:
       - amc_local_pgdata:/var/lib/postgresql/data
-      # If prod-dump.sql exists, Postgres auto-restores it on first boot
-      - ./docker/prod-dump.sql:/docker-entrypoint-initdb.d/01-prod-dump.sql:ro
     ports:
       - "5432:5432"     # expose for local DB tools (TablePlus etc.)
 
