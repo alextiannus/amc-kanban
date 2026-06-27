@@ -13,6 +13,12 @@ import { prisma } from "../../lib/prisma.ts";
 
 // 1. Define the compliance evaluation node with HIL Interrupt support
 async function complianceCheckNode(state: typeof StateAnnotation.State) {
+  // Short-circuit: if AI copywriting already failed, skip compliance and route to publisher to handle cleanup
+  if (state.aiFailed) {
+    console.log("Compliance check bypassed: aiFailed=true, routing to publisher for cleanup.");
+    return { compliancePassed: true };
+  }
+
   // If it was already approved by human (but redirected for redesign), bypass compliance check
   if (state.complianceReason && state.complianceReason.startsWith("Approved by Human")) {
     console.log("Compliance check bypassed: Human approved in previous step.");
@@ -125,7 +131,15 @@ const workflow = new StateGraph(StateAnnotation)
   .addEdge("coordinator", "researcher")
   .addEdge("researcher", "strategist")
   .addEdge("strategist", "copywriter")
-  .addEdge("copywriter", "assetCurator")
+  // Conditional router after copywriter: if AI failed, skip to publisher immediately
+  .addConditionalEdges(
+    "copywriter",
+    (state: any) => state.aiFailed ? "failed" : "continue",
+    {
+      failed: "publisher",
+      continue: "assetCurator"
+    }
+  )
   .addEdge("assetCurator", "designer")
   .addEdge("designer", "complianceCheck")
   

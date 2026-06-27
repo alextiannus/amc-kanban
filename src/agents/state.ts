@@ -67,5 +67,9 @@ export const StateAnnotation = Annotation.Root({
   retryCount: Annotation<number>({
     reducer: (x, y) => y ?? x,
     default: () => 0
+  }),
+  aiFailed: Annotation<boolean>({
+    reducer: (x, y) => y !== undefined ? y : x,
+    default: () => false
   })
 });
