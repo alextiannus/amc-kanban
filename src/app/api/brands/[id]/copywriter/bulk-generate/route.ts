@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    const { assetIds, mediaUrls, idea } = await request.json().catch(() => ({}))
+    const { assetIds, mediaUrls, idea, accountId: singleAccountId } = await request.json().catch(() => ({}))
     if (!idea || typeof idea !== 'string') {
       return NextResponse.json({ error: 'idea is required' }, { status: 400 })
     }
@@ -82,6 +82,11 @@ export async function POST(request: Request, { params }: Params) {
         }
         accounts.push(placeholderAccount)
       }
+    }
+
+    // Single-account mode: only generate for the specified account
+    if (singleAccountId) {
+      accounts = accounts.filter((a: any) => a.id === singleAccountId)
     }
 
     let brandToneText = ""
