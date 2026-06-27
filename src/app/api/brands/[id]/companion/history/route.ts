@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { checkBrandAccess } from '@/lib/brandAccess'
+import { getBrandAccessType } from '@/lib/brandAccess'
 
 /**
  * GET /api/brands/[id]/companion/history
@@ -21,8 +21,8 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const hasAccess = await checkBrandAccess(session.user.id, brandId)
-  if (!hasAccess) {
+  const accessType = await getBrandAccessType(brandId, session.user.id, (session.user as any).userType || 'HUMAN')
+  if (!accessType) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -62,8 +62,8 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const hasAccess = await checkBrandAccess(session.user.id, brandId)
-  if (!hasAccess) {
+  const accessType2 = await getBrandAccessType(brandId, session.user.id, (session.user as any).userType || 'HUMAN')
+  if (!accessType2) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
