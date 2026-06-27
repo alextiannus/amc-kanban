@@ -61,7 +61,7 @@ async function executeTool(
 
         const summary = drafts
           .map(
-            (d) =>
+            (d: { platform: string; caption: string | null; status: string; scheduledAt: Date | null }) =>
               `${d.platform}: "${d.caption?.slice(0, 40)}..." (${d.status}, ${d.scheduledAt?.toLocaleDateString('zh-CN') ?? '未排期'})`,
           )
           .join('\n')
