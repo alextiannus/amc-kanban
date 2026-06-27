@@ -50,18 +50,17 @@ services:
         sync: false
 
   # ── Brand-Owner Frontend: amc-mm.immedi.ai ───────────────────────────────
-  # NOTE: No rootDir — build must run from repo root so npm workspaces can
-  # hoist node_modules (including `next`) to the root node_modules folder.
   - type: web
     name: amc-mm
     env: node
+    rootDir: packages/brand-owner
     # Only redeploy when brand-owner files change
     paths:
       - "packages/brand-owner/**"
       - "render.yaml"
       - "prisma/**"
-    buildCommand: npm install --ignore-scripts && npx prisma generate && npm run build --workspace=packages/brand-owner
-    startCommand: sh -c 'node node_modules/next/dist/bin/next start packages/brand-owner -p $PORT'
+    buildCommand: npm install && npm run build
+    startCommand: npm run start -- --port $PORT
     envVars:
       # Points to the main amc-kanban service so API proxying works
       - key: MAIN_APP_URL
