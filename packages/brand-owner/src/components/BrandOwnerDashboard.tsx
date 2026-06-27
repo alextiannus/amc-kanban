@@ -2543,14 +2543,12 @@ export default function BrandOwnerDashboard() {
                     <span className="font-bold text-sm tracking-wide">系统设置</span>
                   </button>
                   <button 
-                    onClick={async () => {
-                      try {
-                        await fetch('/api/auth/logout', { method: 'POST' })
-                      } catch {
-                        // Ignore errors — we still want to redirect
-                      }
-                      router.push('/login')
-                      router.refresh()
+                    onClick={() => {
+                      // Navigate to the brand-owner's own local logout handler.
+                      // This route lives in src/app/api/logout/route.ts and is
+                      // NOT proxied to the main app, so it always redirects back
+                      // to /login on amc-mm.immedi.ai.
+                      window.location.href = '/api/logout'
                     }}
                     className="w-full flex items-center gap-4 text-rose-600 hover:text-rose-700 transition-colors py-2 text-left cursor-pointer"
                   >
