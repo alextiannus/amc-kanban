@@ -60,7 +60,7 @@ services:
       - "packages/brand-owner/**"
       - "render.yaml"
       - "prisma/**"
-    buildCommand: npm install && npm run build --workspace=packages/brand-owner
+    buildCommand: npm install --ignore-scripts && npx prisma generate && npm run build --workspace=packages/brand-owner
     startCommand: sh -c 'node node_modules/next/dist/bin/next start packages/brand-owner -p $PORT'
     envVars:
       # Points to the main amc-kanban service so API proxying works
