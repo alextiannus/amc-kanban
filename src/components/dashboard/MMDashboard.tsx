@@ -58,7 +58,7 @@ interface ContentDraft {
   platform: string
 }
 
-export default function BrandOwnerDashboard() {
+export default function MMDashboard() {
   const searchParams = useSearchParams()
   const queryBrandId = searchParams?.get('brandId')
   const now = new Date()
