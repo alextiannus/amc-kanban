@@ -3,10 +3,30 @@ import { NextResponse } from 'next/server'
 export async function POST(request: Request) {
   const response = NextResponse.json({ success: true })
 
-  // 1. Delete cookie on current host
-  response.headers.append('Set-Cookie', 'session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly; SameSite=Lax')
+  const appendDeleteCookies = (domain?: string) => {
+    const domainStr = domain ? `; Domain=${domain}` : ''
+    const base = `session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; HttpOnly${domainStr}`
+    
+    // 1. SameSite=Lax (Standard)
+    response.headers.append('Set-Cookie', `${base}; SameSite=Lax`)
+    response.headers.append('Set-Cookie', `${base}; SameSite=Lax; Secure`)
+    
+    // 2. SameSite=None (Cross-site / Embedded)
+    response.headers.append('Set-Cookie', `${base}; SameSite=None; Secure`)
+    
+    // 3. SameSite=Strict
+    response.headers.append('Set-Cookie', `${base}; SameSite=Strict`)
+    response.headers.append('Set-Cookie', `${base}; SameSite=Strict; Secure`)
 
-  // 2. Resolve parent domain if current host is a subdomain
+    // 4. Default SameSite (Browser fallback)
+    response.headers.append('Set-Cookie', `${base}`)
+    response.headers.append('Set-Cookie', `${base}; Secure`)
+  }
+
+  // A. Clear on host-only (no domain specified)
+  appendDeleteCookies()
+
+  // B. Resolve parent domain if current host is a subdomain
   const host = request.headers.get('host') || ''
   const hostname = host.split(':')[0]
   
@@ -16,21 +36,16 @@ export async function POST(request: Request) {
       const isLocalhost = parts[parts.length - 1] === 'localhost'
       const parentDomain = isLocalhost ? 'localhost' : parts.slice(-2).join('.')
       
-      // Delete on parent domain
-      response.headers.append(
-        'Set-Cookie',
-        `session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Domain=${parentDomain}; HttpOnly; SameSite=Lax`
-      )
+      // Clear on parent domain
+      appendDeleteCookies(parentDomain)
       
-      // Delete on dotted parent domain
-      response.headers.append(
-        'Set-Cookie',
-        `session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Domain=.${parentDomain}; HttpOnly; SameSite=Lax`
-      )
+      // Clear on dotted parent domain
+      appendDeleteCookies(`.${parentDomain}`)
     }
   }
 
   return response
 }
+
 
 

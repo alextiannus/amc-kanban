@@ -14,14 +14,14 @@ To resolve issues in the brand owner portal (`amc-mm`) where:
 
 ## 2. Implementations
 
-### A. Multi-Domain Cookie Clearance on Logout
+### A. Multi-Domain & Multi-Permutation Cookie Clearance on Logout
 - **File Modified**: [route.ts](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/app/api/auth/logout/route.ts)
 - **Changes**:
   - Replaced Next.js key-based `cookies().delete()` with raw `NextResponse.headers.append` calls to prevent key overwriting when clearing the same cookie across multiple domains.
-  - Appended multiple `Set-Cookie` deletion headers targeting:
-    - The current subdomain request host (e.g. `amc-mm.localhost`).
-    - The parent domain (e.g. `localhost` or `immedi.ai`).
-    - The dotted parent domain (e.g. `.localhost` or `.immedi.ai`).
+  - Implemented a full-permutation cookie clearance helper function that generates headers for all browser cookie configurations:
+    - SameSite: Lax, None, Strict, and Default fallback.
+    - Security: Secure and Non-Secure variants (essential for clearing secure cookies set in production HTTPS environments).
+    - Scope: Scoped to host-only, resolved parent domain (e.g. `localhost` or `immedi.ai`), and dotted parent domain (e.g. `.localhost` or `.immedi.ai`).
   - Added parent domain resolution logic to handle local development `.localhost` suffixes correctly.
 
 ### B. Dynamically Resolved Subdomain Redirection URL
