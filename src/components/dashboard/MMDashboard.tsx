@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { ChatTurn } from '@/lib/gemini-chat'
+import { callGeminiDirect, getClientGeminiKey } from '@/lib/gemini-direct'
 import { 
   Sparkles, Mic, Image as ImageIcon, Calendar as CalendarIcon, 
   ShoppingBag, Trash2, CheckCircle2, AlertCircle, Plus, 
@@ -161,6 +162,9 @@ export default function MMDashboard() {
       }
     }
   }, [queryBrandId, brands, activeBrand?.id])
+
+  // --- Prefetch Gemini key for direct browser calls (Option C) ---
+  useEffect(() => { getClientGeminiKey() }, [])
 
   // --- Reusable: fetch & update drafts list for active brand ---
   const fetchDrafts = useCallback(async (brandId?: string) => {
@@ -370,6 +374,32 @@ export default function MMDashboard() {
     }).catch(() => {})
   }, [activeBrand])
 
+  // --- Helper: build Gemini system prompt from current brand state ---
+  const buildSystemPrompt = useCallback(() => {
+    if (!activeBrand) return ''
+    const menuText = activeBrand.menuItems
+      ? `菜单/产品：\n${(activeBrand.menuItems as any[]).map((m: any) => `- ${m.name}: ${m.description ?? ''}`).join('\n')}`
+      : ''
+    const slangText = activeBrand.slangDict
+      ? `本地用语：\n${Object.entries(activeBrand.slangDict as Record<string, string>).map(([a, b]) => `- "${a}": ${b}`).join('\n')}`
+      : ''
+    const draftCtx = activeDraftId
+      ? `当前正在讨论的草稿 ID: ${activeDraftId}`
+      : pendingDraftIds.length > 0
+      ? `待审批草稿 IDs: ${pendingDraftIds.join(', ')}`
+      : ''
+    return [
+      `你是品牌"${activeBrand.name}"的专属 AI 营销伴侣，用中英文混合方式沟通（中文为主）。`,
+      activeBrand.description ? `品牌简介：${activeBrand.description}` : '',
+      activeBrand.location ? `位置：${activeBrand.location}` : '',
+      brandTone ? `品牌风格：${brandTone}` : '',
+      menuText,
+      slangText,
+      draftCtx,
+      `你可以主动调用工具查询数据或执行操作。对话要简洁、积极，如同一位得力的 AI 员工。`,
+    ].filter(Boolean).join('\n')
+  }, [activeBrand, activeDraftId, pendingDraftIds, brandTone])
+
   // --- Voice Assist Activation (STT & TTS Chat integration) ---
   const startVoiceAssist = () => {
     if (!activeBrand) {
@@ -448,32 +478,50 @@ export default function MMDashboard() {
         const userTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         setMessages(prev => [...prev, { sender: 'user', text: transcript, time: userTime }])
 
-        const res = await fetch(`/api/brands/${activeBrand?.id}/copywriter/voice-chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: transcript,
-            history: conversationHistory.slice(-20),
-            context: { activeDraftId, pendingDraftIds },
+        // ⚡ Direct browser → Gemini (Option C: bypasses Render for speed)
+        const data = await callGeminiDirect(
+          buildSystemPrompt(),
+          conversationHistory.slice(-20),
+          transcript,
+        )
+
+        const aiTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        if (data.reply) {
+          setMessages(prev => [...prev, { sender: 'ai', text: data.reply, time: aiTime }])
+          speakText(data.reply)
+        }
+        addToHistory(transcript, data.reply || '', data.action, data.params?.draftId)
+
+        if (data.action === 'GENERATE_AND_PUBLISH') {
+          handleVoiceTriggerGenerateAndPublish(postIdea || '美食新品发布', true)
+        } else if (data.toolCallName && activeBrand) {
+          // Tool call needs DB — relay to server
+          const toolRes = await fetch(`/api/brands/${activeBrand.id}/copywriter/voice-chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: transcript,
+              history: conversationHistory.slice(-20),
+              context: { activeDraftId, pendingDraftIds },
+            }),
           })
-        })
-        if (res.ok) {
-          const data = await res.json()
-          const aiTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          if (data.reply) {
-            setMessages(prev => [...prev, { sender: 'ai', text: data.reply, time: aiTime }])
-            speakText(data.reply)
+          if (toolRes.ok) {
+            const toolData = await toolRes.json()
+            const tTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            if (toolData.reply) {
+              setMessages(prev => [...prev, { sender: 'ai', text: toolData.reply, time: tTime }])
+              speakText(toolData.reply)
+            }
+            if (toolData.action === 'APPROVE_DRAFT' && toolData.params?.draftId) {
+              setActiveDraftId(null)
+              setPendingDraftIds(prev => prev.filter(id => id !== toolData.params.draftId))
+              fetchDrafts()
+            }
           }
-          addToHistory(transcript, data.reply || '', data.action, data.params?.draftId)
-          if (data.action === 'GENERATE_AND_PUBLISH') {
-            handleVoiceTriggerGenerateAndPublish(postIdea || '美食新品发布', true)
-          } else if (data.action === 'APPROVE_DRAFT' && data.params?.draftId) {
-            setActiveDraftId(null)
-            setPendingDraftIds(prev => prev.filter(id => id !== data.params.draftId))
-            fetchDrafts() // Bug 1 fix: refresh drafts list in UI
-          }
-        } else {
-          setCompanionState('idle')
+        } else if (data.action === 'APPROVE_DRAFT' && data.params?.draftId) {
+          setActiveDraftId(null)
+          setPendingDraftIds(prev => prev.filter(id => id !== data.params!.draftId))
+          fetchDrafts()
         }
       } catch (err) {
         console.error(err)
@@ -1050,35 +1098,50 @@ export default function MMDashboard() {
     setEmotion('effort')
 
     try {
-      const res = await fetch(`/api/brands/${activeBrand.id}/copywriter/voice-chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          history: conversationHistory.slice(-20),
-          context: { activeDraftId, pendingDraftIds },
-        }),
-      })
+      // ⚡ Direct browser → Gemini (Option C: bypasses Render for speed)
+      const data = await callGeminiDirect(
+        buildSystemPrompt(),
+        conversationHistory.slice(-20),
+        text,
+      )
 
-      if (res.ok) {
-        const data = await res.json()
-        const aiTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        if (data.reply) {
-          setMessages(prev => [...prev, { sender: 'ai', text: data.reply, time: aiTime }])
-          speakText(data.reply)
+      const aiTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      if (data.reply) {
+        setMessages(prev => [...prev, { sender: 'ai', text: data.reply, time: aiTime }])
+        speakText(data.reply)
+      }
+      addToHistory(text, data.reply || '', data.action, data.params?.draftId)
+
+      if (data.action === 'GENERATE_AND_PUBLISH') {
+        handleVoiceTriggerGenerateAndPublish(postIdea || text, true)
+      } else if (data.toolCallName && activeBrand) {
+        // Tool call needs DB — relay to server
+        const toolRes = await fetch(`/api/brands/${activeBrand.id}/copywriter/voice-chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            history: conversationHistory.slice(-20),
+            context: { activeDraftId, pendingDraftIds },
+          }),
+        })
+        if (toolRes.ok) {
+          const toolData = await toolRes.json()
+          const tTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          if (toolData.reply) {
+            setMessages(prev => [...prev, { sender: 'ai', text: toolData.reply, time: tTime }])
+            speakText(toolData.reply)
+          }
+          if (toolData.action === 'APPROVE_DRAFT' && toolData.params?.draftId) {
+            setActiveDraftId(null)
+            setPendingDraftIds(prev => prev.filter(id => id !== toolData.params.draftId))
+            fetchDrafts()
+          }
         }
-        addToHistory(text, data.reply || '', data.action, data.params?.draftId)
-        if (data.action === 'GENERATE_AND_PUBLISH') {
-          handleVoiceTriggerGenerateAndPublish(postIdea || text, true)
-        } else if (data.action === 'APPROVE_DRAFT' && data.params?.draftId) {
-          setActiveDraftId(null)
-          setPendingDraftIds(prev => prev.filter(id => id !== data.params.draftId))
-          fetchDrafts() // Bug 1 fix: refresh drafts list in UI
-        }
-      } else {
-        setCompanionState('idle')
-        setEmotion('confused')
-        setTimeout(() => setEmotion('normal'), 2000)
+      } else if (data.action === 'APPROVE_DRAFT' && data.params?.draftId) {
+        setActiveDraftId(null)
+        setPendingDraftIds(prev => prev.filter(id => id !== data.params!.draftId))
+        fetchDrafts()
       }
     } catch (err) {
       console.error('[handleSendText]', err)
