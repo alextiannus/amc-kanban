@@ -36,6 +36,7 @@ interface GameConfig {
 interface Props {
   brandId: string
   brandName: string
+  kanbanBaseUrl?: string
 }
 
 function allocateGridSlots(prizesList: Prize[]): Prize[] {
@@ -115,7 +116,9 @@ function allocateGridSlots(prizesList: Prize[]): Prize[] {
   }
 }
 
-export default function GameSettingsDashboard({ brandId, brandName }: Props) {
+export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUrl }: Props) {
+  const getBase = () => kanbanBaseUrl || (typeof window !== 'undefined' ? window.location.origin : '')
+
   const [config, setConfig] = useState<GameConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -159,7 +162,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       if (data.brand?.googleBusinessUrl) setGoogleBusinessUrl(data.brand.googleBusinessUrl)
 
       // Generate QR Code
-      const gameUrl = `${window.location.origin}/game/${brandId}`
+      const gameUrl = `${getBase()}/game/${brandId}`
       const qrDataUrl = await QRCode.toDataURL(gameUrl, {
         width: 300,
         margin: 1,
@@ -278,14 +281,14 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   }
 
   const copyGameLink = () => {
-    const gameUrl = `${window.location.origin}/game/${brandId}`
+    const gameUrl = `${getBase()}/game/${brandId}`
     navigator.clipboard.writeText(gameUrl)
     setCopiedLink(true)
     setTimeout(() => setCopiedLink(false), 2000)
   }
 
   const openPosterPrint = () => {
-    const printUrl = `/board/game/poster/${brandId}?title=${encodeURIComponent(posterTitle)}&desc=${encodeURIComponent(posterDesc)}&theme=${stickerTheme}`
+    const printUrl = `${getBase()}/board/game/poster/${brandId}?title=${encodeURIComponent(posterTitle)}&desc=${encodeURIComponent(posterDesc)}&theme=${stickerTheme}`
     window.open(printUrl, '_blank')
   }
 
@@ -356,141 +359,146 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   const isProbValid = Math.abs(sumOfProbabilities - 1.0) < 0.001
 
   return (
-    <div className="flex-1 w-full max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-3 duration-300">
-      
-      {/* Header bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">店内活动设置</h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            配置扫码抽奖游戏，吸引店内顾客提交谷歌地图/小红书/Instagram评价或分享，快速沉淀UGC素材。
+    <div className="w-full space-y-4 pb-24 animate-in fade-in slide-in-from-bottom-3 duration-300">
+
+      {/* ── Compact Header ── */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-base font-black text-slate-800 dark:text-slate-100 leading-tight">店内活动设置</h2>
+          <p className="text-[10px] text-slate-400 mt-0.5 hidden sm:block">
+            配置扫码抽奖游戏，吸引顾客提交评价或分享，沉淀UGC素材。
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={copyGameLink}
-            className="flex items-center gap-2 px-3 py-2 border rounded-xl transition bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-350 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 text-xs font-bold shadow-sm"
+            className="flex items-center gap-1.5 px-2.5 py-2 border rounded-xl transition bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 hover:border-blue-300 hover:text-blue-600 text-xs font-bold shadow-sm"
           >
             {copiedLink ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-            {copiedLink ? '链接已复制' : '复制顾客游戏页链接'}
+            <span className="hidden sm:inline">{copiedLink ? '已复制' : '复制链接'}</span>
           </button>
           <a
-            href={`/game/${brandId}`}
+            href={`${getBase()}/game/${brandId}`}
+
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-sm transition"
+            className="flex items-center gap-1.5 px-2.5 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-sm transition"
           >
             <Eye size={14} />
-            预览顾客端 H5
+            <span className="hidden sm:inline">预览 H5</span>
           </a>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Left Column: Config Forms */}
-        <div className="lg:col-span-8 space-y-8">
-          
-          {/* Section 1: Basic Game Rules Config */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-6">
-            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
-              游戏主体配置
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">游戏界面模版</label>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Wheel option */}
-                  <button
-                    type="button"
-                    onClick={() => setConfig({ ...config, templateType: 'WHEEL' })}
-                    className={`flex flex-col items-center justify-center p-5 rounded-2xl border text-center transition-all duration-300 ${
-                      config.templateType === 'WHEEL' || !config.templateType
-                        ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500/20 shadow-md'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-3">
-                      <RefreshCw size={24} className="text-blue-500" />
-                    </div>
-                    <span className="text-sm font-extrabold">幸运大轮盘</span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">经典的转盘式抽奖，霓虹渐变与LED闪烁效果</span>
-                  </button>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-                  {/* Grid option */}
-                  <button
-                    type="button"
-                    onClick={() => setConfig({ ...config, templateType: 'GRID' })}
-                    className={`flex flex-col items-center justify-center p-5 rounded-2xl border text-center transition-all duration-300 ${
-                      config.templateType === 'GRID'
-                        ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500/20 shadow-md'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center mb-3">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-blue-500">
-                        <rect x="3" y="3" width="6" height="6" rx="1" />
-                        <rect x="15" y="3" width="6" height="6" rx="1" />
-                        <rect x="9" y="9" width="6" height="6" rx="1" />
-                        <rect x="3" y="15" width="6" height="6" rx="1" />
-                        <rect x="15" y="15" width="6" height="6" rx="1" />
-                      </svg>
-                    </div>
-                    <span className="text-sm font-extrabold">九宫格抽奖</span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">3x3 网格依次点亮减速动画，高概率奖品占多格</span>
-                  </button>
-                </div>
+        {/* ── LEFT: Config Forms ── */}
+        <div className="lg:col-span-8 space-y-4">
+
+          {/* Section 1: Game Rules */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 shadow-sm space-y-4">
+            <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">游戏配置</h3>
+
+            {/* Template Type */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">游戏界面模版</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, templateType: 'WHEEL' })}
+                  className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all duration-200 ${
+                    config.templateType === 'WHEEL' || !config.templateType
+                      ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500/20'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                    <RefreshCw size={16} className="text-blue-500" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-extrabold block">幸运大转盘</span>
+                    <span className="text-[9px] text-slate-400 leading-tight">霓虹渐变效果</span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, templateType: 'GRID' })}
+                  className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all duration-200 ${
+                    config.templateType === 'GRID'
+                      ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 ring-2 ring-blue-500/20'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-blue-500">
+                      <rect x="3" y="3" width="6" height="6" rx="1" />
+                      <rect x="15" y="3" width="6" height="6" rx="1" />
+                      <rect x="9" y="9" width="6" height="6" rx="1" />
+                      <rect x="3" y="15" width="6" height="6" rx="1" />
+                      <rect x="15" y="15" width="6" height="6" rx="1" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="text-xs font-extrabold block">九宫格抽奖</span>
+                    <span className="text-[9px] text-slate-400 leading-tight">跑马灯发光动画</span>
+                  </div>
+                </button>
               </div>
+            </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">游戏主标题</label>
+            {/* Title + Theme Color side by side */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">游戏标题</label>
                 <input
                   type="text"
                   value={config.title}
                   onChange={(e) => setConfig({ ...config, title: e.target.value })}
                   placeholder="幸运大轮盘"
-                  className="w-full px-4 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
+                  className="w-full px-3 py-2 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
                 />
               </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">游戏主题色</label>
-                <div className="flex gap-2">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">主题色</label>
+                <div className="flex gap-2 items-center">
                   <input
                     type="color"
                     value={config.themeColor}
                     onChange={(e) => setConfig({ ...config, themeColor: e.target.value })}
-                    className="w-12 h-10 p-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer"
+                    className="w-10 h-9 p-0.5 bg-transparent border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer shrink-0"
                   />
                   <input
                     type="text"
                     value={config.themeColor}
                     onChange={(e) => setConfig({ ...config, themeColor: e.target.value })}
                     placeholder="#3b82f6"
-                    className="flex-1 px-4 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition font-mono"
+                    className="flex-1 min-w-0 px-2 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition font-mono"
                   />
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">活动规则及说明描述</label>
-                <textarea
-                  rows={2}
-                  value={config.description || ''}
-                  onChange={(e) => setConfig({ ...config, description: e.target.value })}
-                  placeholder="请输入对顾客展示的活动规则及奖品介绍说明..."
-                  className="w-full px-4 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition resize-none"
-                />
-              </div>
+            {/* Description */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">活动说明</label>
+              <textarea
+                rows={2}
+                value={config.description || ''}
+                onChange={(e) => setConfig({ ...config, description: e.target.value })}
+                placeholder="活动规则及奖品介绍说明..."
+                className="w-full px-3 py-2 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition resize-none"
+              />
+            </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  店员现场核销授权码 (6位数字)
+            {/* PIN + Spins per day side by side */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                  店员核销码
                   <span className="group relative text-slate-400 cursor-help">
-                    <HelpCircle size={13} />
-                    <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1.5 hidden group-hover:block w-48 p-2 rounded bg-slate-950 text-[10px] text-white leading-normal z-50 shadow-xl">
-                      若AI未能核实截图，店员在顾客手机上输入此密码可以直接人工发放积分。
+                    <HelpCircle size={11} />
+                    <span className="absolute bottom-full left-0 mb-1.5 hidden group-hover:block w-44 p-2 rounded bg-slate-950 text-[10px] text-white leading-normal z-50 shadow-xl">
+                      AI无法核实截图时，店员输入此密码可人工发放积分
                     </span>
                   </span>
                 </label>
@@ -500,313 +508,238 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                   value={config.clerkPin}
                   onChange={(e) => setConfig({ ...config, clerkPin: e.target.value.replace(/\D/g, '') })}
                   placeholder="123456"
-                  className="w-full px-4 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition font-mono tracking-widest text-center text-lg font-bold"
+                  className="w-full px-3 py-2 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition font-mono tracking-widest text-center font-bold"
                 />
               </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">每位用户每日最大抽奖次数</label>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">每日最大次数</label>
                 <input
                   type="number"
                   min={1}
                   max={20}
                   value={config.maxSpinsPerUserDay}
                   onChange={(e) => setConfig({ ...config, maxSpinsPerUserDay: parseInt(e.target.value) || 3 })}
-                  className="w-full px-4 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition font-bold"
+                  className="w-full px-3 py-2 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition font-bold"
                 />
-              </div>
-
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-2">可做任务社交媒体平台 (至少保留一个)</label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Google Maps toggle */}
-                  <label className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer select-none transition-all duration-300 ${
-                    config.taskGoogleMapsEnabled
-                      ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 ring-2 ring-blue-500/10'
-                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-700'
-                  }`}>
-                    <input
-                      type="checkbox"
-                      checked={config.taskGoogleMapsEnabled}
-                      onChange={(e) => setConfig({ ...config, taskGoogleMapsEnabled: e.target.checked })}
-                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black">Google Maps</span>
-                      <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">谷歌地图评价推广</span>
-                    </div>
-                  </label>
-
-                  {/* Xiaohongshu toggle */}
-                  <label className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer select-none transition-all duration-300 ${
-                    config.taskXiaohongshuEnabled
-                      ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 ring-2 ring-blue-500/10'
-                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-700'
-                  }`}>
-                    <input
-                      type="checkbox"
-                      checked={config.taskXiaohongshuEnabled}
-                      onChange={(e) => setConfig({ ...config, taskXiaohongshuEnabled: e.target.checked })}
-                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black">小红书 (Xiaohongshu)</span>
-                      <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">小红书图文分享推广</span>
-                    </div>
-                  </label>
-
-                  {/* Instagram toggle */}
-                  <label className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer select-none transition-all duration-300 ${
-                    config.taskInstagramEnabled
-                      ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 ring-2 ring-blue-500/10'
-                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-700'
-                  }`}>
-                    <input
-                      type="checkbox"
-                      checked={config.taskInstagramEnabled}
-                      onChange={(e) => setConfig({ ...config, taskInstagramEnabled: e.target.checked })}
-                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
-                    <div className="flex flex-col">
-                      <span className="text-xs font-black">Instagram</span>
-                      <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">Instagram 帖子分享推广</span>
-                    </div>
-                  </label>
-                </div>
-
-                {config.taskGoogleMapsEnabled && (
-                  <div className="mt-4 p-4 rounded-2xl border border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50 space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Review URL (优先直达评价页)</label>
-                      <input
-                        type="url"
-                        placeholder="https://search.google.com/local/writereview?placeid=..."
-                        value={googleReviewUrl}
-                        onChange={(e) => setGoogleReviewUrl(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
-                      />
-                      <p className="text-[9.5px] text-slate-400 dark:text-slate-500 leading-normal">
-                        顾客点击“Google Maps 直达”时会优先打开这里配置的链接。可填写 Google 写评链接；如你拿到能直接拉起手机 Google Maps App 的专属链接，也可以直接填这里。
-                      </p>
-                    </div>
-
-                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Place ID (谷歌商家 ID)</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="例如: ChIJ4ab_0xmX2jER0mYbefR79PI"
-                        value={googlePlaceId}
-                        onChange={(e) => setGooglePlaceId(e.target.value)}
-                        className="flex-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition font-mono"
-                      />
-                      <a 
-                        href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-slate-805 dark:hover:bg-slate-750 dark:text-slate-300 rounded-xl text-[10px] font-bold flex items-center transition"
-                      >
-                        查找 ID
-                      </a>
-                    </div>
-                    <p className="text-[9.5px] text-slate-400 dark:text-slate-500 leading-normal">
-                      当上方未填写 Review URL 时，系统会用 Place ID 自动生成评价页链接。建议先点击“查找 ID”获取您店铺的标准 ID（如 <code>ChI...</code> 格式）。
-                    </p>
-
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Business URL (商家主页兜底链接)</label>
-                      <input
-                        type="url"
-                        placeholder="https://maps.google.com/..."
-                        value={googleBusinessUrl}
-                        onChange={(e) => setGoogleBusinessUrl(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
-                      />
-                      <p className="text-[9.5px] text-slate-400 dark:text-slate-500 leading-normal">
-                        当 Review URL 和 Place ID 都不可用时，活动页会回退到这个商家主页链接，避免用户点击后无响应。
-                      </p>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
+            {/* Platform toggles — compact chips */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">可做任务平台</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { key: 'taskGoogleMapsEnabled' as const, label: 'Google Maps', icon: '📍' },
+                  { key: 'taskXiaohongshuEnabled' as const, label: '小红书', icon: '📕' },
+                  { key: 'taskInstagramEnabled' as const, label: 'Instagram', icon: '📸' },
+                ].map(({ key, label, icon }) => (
+                  <label
+                    key={key}
+                    className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border cursor-pointer select-none transition-all duration-200 text-center ${
+                      config[key]
+                        ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 ring-2 ring-blue-500/10'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-500 hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={config[key]}
+                      onChange={(e) => setConfig({ ...config, [key]: e.target.checked })}
+                      className="sr-only"
+                    />
+                    <span className="text-base">{icon}</span>
+                    <span className="text-[9px] font-bold leading-tight">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Google Maps expanded config */}
+            {config.taskGoogleMapsEnabled && (
+              <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Review URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://search.google.com/local/writereview?placeid=..."
+                    value={googleReviewUrl}
+                    onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Place ID</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="例: ChIJ4ab_0xmX2jER0mYbefR79PI"
+                      value={googlePlaceId}
+                      onChange={(e) => setGooglePlaceId(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition font-mono"
+                    />
+                    <a
+                      href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-bold flex items-center transition shrink-0"
+                    >查找 ID</a>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">兜底商家主页 URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://maps.google.com/..."
+                    value={googleBusinessUrl}
+                    onChange={(e) => setGoogleBusinessUrl(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Section 2: Prizes and Probabilities Config */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-6">
+          {/* Section 2: Prizes */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 shadow-sm space-y-3">
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
-                  奖品池与中奖概率设置
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-1">设置转盘奖品名称、中奖概率（百分比）以及库存数量限制。</p>
+                <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">奖品池与中奖概率</h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">设置奖品名称、中奖概率与库存数量。</p>
               </div>
               <button
                 type="button"
                 onClick={handleAddPrize}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold rounded-xl transition"
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold rounded-xl transition"
               >
-                <Plus size={14} /> 添加奖品
+                <Plus size={13} /> 添加
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-2">
               {config.prizes.map((prize, idx) => (
-                <div 
+                <div
                   key={prize.id || idx}
-                  className="flex flex-col md:flex-row items-start md:items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 rounded-2xl animate-in fade-in duration-200"
+                  className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/80 rounded-xl animate-in fade-in duration-200 space-y-2"
                 >
-                  {/* Prize Name Input */}
-                  <div className="flex-1 w-full space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">奖品名称</label>
-                    <input
-                      type="text"
-                      value={prize.name}
-                      onChange={(e) => handleUpdatePrize(idx, { name: e.target.value })}
-                      placeholder="Free Iced Latte"
-                      className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  {/* Prize Type */}
-                  <div className="w-full md:w-32 space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">奖品类型</label>
-                    <select
-                      value={prize.type}
-                      onChange={(e) => handleUpdatePrize(idx, { type: e.target.value as Prize['type'] })}
-                      className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                    >
-                      <option value="COUPON">优惠券 (COUPON)</option>
-                      <option value="PHYSICAL">实物礼品 (PHYSICAL)</option>
-                      <option value="POINTS">额外积分 (POINTS)</option>
-                      <option value="THANKS">安慰奖 (THANKS)</option>
-                    </select>
-                  </div>
-
-                  {/* Probability */}
-                  <div className="w-24 space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">中奖率 (%)</label>
-                    <div className="relative flex items-center">
+                  {/* Row 1: Name + Type */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-0.5">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">奖品名称</label>
                       <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        value={(prize.probability * 100).toFixed(1)}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value) || 0
-                          handleUpdatePrize(idx, { probability: Math.max(0, Math.min(1, val / 100)) })
-                        }}
-                        className="w-full pr-6 pl-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-right focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
+                        type="text"
+                        value={prize.name}
+                        onChange={(e) => handleUpdatePrize(idx, { name: e.target.value })}
+                        placeholder="Free Iced Latte"
+                        className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       />
-                      <span className="absolute right-2.5 text-xs text-slate-400 font-bold">%</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">奖品类型</label>
+                      <select
+                        value={prize.type}
+                        onChange={(e) => handleUpdatePrize(idx, { type: e.target.value as Prize['type'] })}
+                        className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                      >
+                        <option value="COUPON">🎫 优惠券</option>
+                        <option value="PHYSICAL">🎁 实物</option>
+                        <option value="POINTS">🪙 积分</option>
+                        <option value="THANKS">🌸 安慰奖</option>
+                      </select>
                     </div>
                   </div>
-
-                  {/* Inventory */}
-                  <div className="w-28 space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest flex justify-between">
-                      <span>总库存</span>
-                      {prize.claimedCount !== undefined && prize.claimedCount > 0 && (
-                        <span className="text-blue-500 font-semibold lowercase">已兑:{prize.claimedCount}</span>
-                      )}
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="无限"
-                      value={prize.totalInventory === null ? '' : prize.totalInventory}
-                      onChange={(e) => {
-                        const val = e.target.value === '' ? null : parseInt(e.target.value)
-                        handleUpdatePrize(idx, { totalInventory: val === null || isNaN(val) ? null : val })
-                      }}
-                      className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
-                    />
-                  </div>
-
-                  {/* Remove Button */}
-                  <div className="self-end md:self-center pt-2 md:pt-4">
+                  {/* Row 2: Probability + Inventory + Delete */}
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 space-y-0.5">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">中奖率</label>
+                      <div className="relative flex items-center">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          value={(prize.probability * 100).toFixed(1)}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0
+                            handleUpdatePrize(idx, { probability: Math.max(0, Math.min(1, val / 100)) })
+                          }}
+                          className="w-full pr-5 pl-2.5 py-1.5 rounded-lg text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-right focus:outline-none focus:ring-1 focus:ring-blue-500 font-bold"
+                        />
+                        <span className="absolute right-2 text-[10px] text-slate-400 font-bold">%</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-0.5">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex justify-between">
+                        <span>库存</span>
+                        {prize.claimedCount !== undefined && prize.claimedCount > 0 && (
+                          <span className="text-blue-500 normal-case">已兑:{prize.claimedCount}</span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="∞"
+                        value={prize.totalInventory === null ? '' : prize.totalInventory}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? null : parseInt(e.target.value)
+                          handleUpdatePrize(idx, { totalInventory: val === null || isNaN(val) ? null : val })
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                      />
+                    </div>
                     <button
                       type="button"
                       disabled={config.prizes.length <= 2}
                       onClick={() => handleRemovePrize(idx)}
-                      className="p-2 text-slate-400 hover:text-red-500 disabled:opacity-30 disabled:hover:text-slate-400 rounded-lg hover:bg-slate-150 dark:hover:bg-slate-700 transition-colors"
-                      title="删除此奖项"
+                      className="p-2 text-slate-400 hover:text-red-500 disabled:opacity-30 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors shrink-0 mb-0.5"
+                      title="删除"
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Validation bar */}
-            <div className={`p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border text-xs font-bold ${
+            {/* Probability validation */}
+            <div className={`p-3 rounded-xl flex items-center gap-2.5 border text-xs font-bold ${
               isProbValid
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-400'
                 : 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900/50 dark:text-amber-400'
             }`}>
-              <div className="flex items-center gap-2">
-                <span className="text-base">{isProbValid ? '✅' : '⚠️'}</span>
-                <span>
-                  当前中奖概率总和：<span className="font-extrabold text-base font-mono">{(sumOfProbabilities * 100).toFixed(1)}%</span>
-                  {!isProbValid && ' (请将所有奖项中奖概率调整为总和 100.0% 保证算法完全一致)'}
-                </span>
-              </div>
-              {isProbValid && <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 px-2 py-0.5 rounded-full">配置平衡</span>}
+              <span>{isProbValid ? '✅' : '⚠️'}</span>
+              <span className="flex-1">
+                概率总和：<span className="font-extrabold font-mono">{(sumOfProbabilities * 100).toFixed(1)}%</span>
+                {!isProbValid && ' (请调至总和 100%)'}
+              </span>
+              {isProbValid && <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 px-2 py-0.5 rounded-full">✓ 正确</span>}
             </div>
-
           </div>
 
-          {/* Submit/Save Controls */}
-          {error && <div className="p-4 bg-red-50/90 dark:bg-red-950/25 border border-red-200 text-xs font-bold text-red-500 rounded-2xl">{error}</div>}
-
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={fetchConfig}
-              disabled={saving}
-              className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-sm font-bold transition hover:bg-slate-50 dark:hover:bg-slate-800"
-            >
-              放弃更改
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition shadow-md shadow-blue-500/20 disabled:opacity-60"
-            >
-              {saving ? (
-                <><Loader2 size={16} className="animate-spin" /> 保存中...</>
-              ) : saved ? (
-                <><Check size={16} /> 已保存</>
-              ) : (
-                <><Save size={16} /> 保存配置</>
-              )}
-            </button>
-          </div>
+          {/* Error display */}
+          {error && <div className="p-3 bg-red-50/90 dark:bg-red-950/25 border border-red-200 text-xs font-bold text-red-500 rounded-xl">{error}</div>}
 
         </div>
 
-        {/* Right Column: Wheel Preview & Poster Download */}
-        <div className="lg:col-span-4 space-y-8">
-          
-          {/* Wheel Real-time preview */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm flex flex-col items-center gap-4 text-center">
+        {/* ── RIGHT: Preview + Poster ── */}
+        <div className="lg:col-span-4 space-y-4">
+
+          {/* Live Preview */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 shadow-sm flex flex-col items-center gap-3 text-center">
             <div className="w-full flex items-center justify-between">
-              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
-                {config.templateType === 'GRID' ? '九宫格实机效果预览' : '转盘实机效果预览'}
+              <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
+                {config.templateType === 'GRID' ? '九宫格预览' : '转盘预览'}
               </h3>
-              <button 
+              <button
                 onClick={triggerPreviewSpin}
                 disabled={isPreviewSpinning || config.prizes.length === 0}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-250 transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 transition-colors"
                 title="模拟旋转"
               >
-                <RefreshCw size={15} className={isPreviewSpinning ? 'animate-spin text-blue-500' : ''} />
+                <RefreshCw size={14} className={isPreviewSpinning ? 'animate-spin text-blue-500' : ''} />
               </button>
             </div>
 
             {config.templateType === 'GRID' ? (
-              <div className="relative w-60 h-60 my-3 p-3 bg-slate-950 rounded-2xl border-4 border-slate-900/60 shadow-[0_0_25px_rgba(219,39,119,0.2)]">
-                {/* Blinking outer lights/border */}
+              <div className="relative w-52 h-52 p-3 bg-slate-950 rounded-2xl border-4 border-slate-900/60 shadow-[0_0_25px_rgba(219,39,119,0.2)]">
                 <style dangerouslySetInnerHTML={{ __html: `
                   @keyframes grid-led-blink-odd {
                     0%, 100% { background-color: #ffffff; box-shadow: 0 0 2px #fff, 0 0 4px #db2777; }
@@ -816,15 +749,9 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                     0%, 100% { background-color: #fbbf24; box-shadow: 0 0 2px #fbbf24, 0 0 6px #d97706; }
                     50% { background-color: #ffffff; box-shadow: 0 0 2px #fff, 0 0 4px #db2777; }
                   }
-                  .grid-led-odd {
-                    animation: grid-led-blink-odd 1.2s infinite;
-                  }
-                  .grid-led-even {
-                    animation: grid-led-blink-even 1.2s infinite;
-                  }
+                  .grid-led-odd { animation: grid-led-blink-odd 1.2s infinite; }
+                  .grid-led-even { animation: grid-led-blink-even 1.2s infinite; }
                 `}} />
-
-                {/* 12 small led dots around the border of the 9-grid */}
                 <div className="absolute top-1 left-4 right-4 flex justify-between">
                   <span className="w-1.5 h-1.5 rounded-full grid-led-odd" />
                   <span className="w-1.5 h-1.5 rounded-full grid-led-even" />
@@ -845,22 +772,18 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                   <span className="w-1.5 h-1.5 rounded-full grid-led-odd" />
                   <span className="w-1.5 h-1.5 rounded-full grid-led-even" />
                 </div>
-
                 <div className="grid grid-cols-3 gap-1.5 h-full w-full">
                   {(() => {
                     const slots = allocateGridSlots(config.prizes);
                     const gridIndices = [0, 1, 2, 5, 8, 7, 6, 3];
                     return Array.from({ length: 9 }).map((_, gIdx) => {
                       if (gIdx === 4) {
-                        // SPIN button in center
                         return (
                           <button
                             key={gIdx}
                             onClick={triggerPreviewSpin}
                             disabled={isPreviewSpinning || config.prizes.length === 0}
-                            style={{
-                              background: `radial-gradient(circle, ${config.themeColor || '#db2777'} 0%, #4c0519 100%)`,
-                            }}
+                            style={{ background: `radial-gradient(circle, ${config.themeColor || '#db2777'} 0%, #4c0519 100%)` }}
                             className="rounded-xl flex flex-col items-center justify-center text-white active:scale-95 transition shadow-lg border border-slate-700/50"
                           >
                             <span className="text-[10px] font-black tracking-wider drop-shadow-md">点击</span>
@@ -868,19 +791,12 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                           </button>
                         );
                       }
-                      
                       const slotIdx = gridIndices.indexOf(gIdx);
                       const prize = slots[slotIdx];
                       const isActive = previewActiveSlot === slotIdx;
-                      
                       if (!prize) {
-                        return (
-                          <div key={gIdx} className="bg-slate-900/60 rounded-xl border border-slate-800/80 flex items-center justify-center text-[10px] text-slate-650">
-                            无奖品
-                          </div>
-                        );
+                        return <div key={gIdx} className="bg-slate-900/60 rounded-xl border border-slate-800/80 flex items-center justify-center text-[10px] text-slate-650">无</div>;
                       }
-
                       return (
                         <div
                           key={gIdx}
@@ -889,17 +805,13 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                             backgroundColor: isActive ? `${config.themeColor || '#db2777'}1a` : 'rgba(15, 23, 42, 0.6)',
                             boxShadow: isActive ? `0 0 12px ${config.themeColor || '#db2777'}` : 'none',
                           }}
-                          className={`rounded-xl border transition-all duration-150 flex flex-col items-center justify-center p-1 text-center overflow-hidden`}
+                          className="rounded-xl border transition-all duration-150 flex flex-col items-center justify-center p-1 text-center overflow-hidden"
                         >
-                          <span className="text-base mb-0.5">
+                          <span className="text-sm mb-0.5">
                             {prize.type === 'COUPON' ? '🎫' : prize.type === 'POINTS' ? '🪙' : prize.type === 'PHYSICAL' ? '🎁' : '🌸'}
                           </span>
-                          <span className="text-[9px] font-bold text-slate-200 truncate w-full leading-tight">
-                            {prize.name}
-                          </span>
-                          <span className="text-[7.5px] font-semibold text-amber-400 mt-0.5 leading-none">
-                            {(prize.probability * 100).toFixed(0)}% 概率
-                          </span>
+                          <span className="text-[9px] font-bold text-slate-200 truncate w-full leading-tight">{prize.name}</span>
+                          <span className="text-[7.5px] font-semibold text-amber-400 mt-0.5">{(prize.probability * 100).toFixed(0)}%</span>
                         </div>
                       );
                     });
@@ -907,8 +819,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                 </div>
               </div>
             ) : (
-              /* Simulated Wheel (matches client CSS design) */
-              <div className="relative w-56 h-56 flex items-center justify-center my-3">
+              <div className="relative w-48 h-48 flex items-center justify-center">
                 <style dangerouslySetInnerHTML={{ __html: `
                   @keyframes preview-led-blink-odd {
                     0%, 100% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #e87b1e); }
@@ -918,18 +829,11 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                     0%, 100% { fill: #f3e8d0; filter: drop-shadow(0 0 1px #f3e8d0); }
                     50% { fill: #ffffff; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 2px #e87b1e); }
                   }
-                  .preview-led-blink-odd {
-                    animation: preview-led-blink-odd 1.2s infinite;
-                  }
-                  .preview-led-blink-even {
-                    animation: preview-led-blink-even 1.2s infinite;
-                  }
+                  .preview-led-blink-odd { animation: preview-led-blink-odd 1.2s infinite; }
+                  .preview-led-blink-even { animation: preview-led-blink-even 1.2s infinite; }
                 `}} />
-
                 <div className="absolute inset-[-10px] rounded-full border-[5px] border-white/90 shadow-[0_4px_16px_rgba(0,0,0,0.3)] pointer-events-none" />
                 <div className="absolute inset-[-4px] rounded-full border border-[#e87b1e]/40 pointer-events-none" />
-                
-                {/* Top pointer - dark brown matching reference */}
                 <div className="absolute top-[-12px] z-30 w-6 h-7 flex items-center justify-center filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]">
                   <svg width="18" height="22" viewBox="0 0 18 22" fill="none">
                     <path d="M9 22L1 6C1 6 4.5 0 9 0C13.5 0 17 6 17 6L9 22Z" fill="#3d2010" stroke="#ffffff" strokeWidth="1.2" />
@@ -937,57 +841,40 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                     <circle cx="9" cy="7" r="1.6" fill="#3d2010" />
                   </svg>
                 </div>
-
-                {/* Central spin trigger - white matching reference */}
-                <button 
+                <button
                   onClick={triggerPreviewSpin}
                   disabled={isPreviewSpinning || config.prizes.length === 0}
-                  className="absolute z-20 w-12 h-12 rounded-full border-[3px] border-white bg-white text-[#3d2010] flex items-center justify-center font-extrabold text-[9px] shadow-lg active:scale-95 transition"
+                  className="absolute z-20 w-11 h-11 rounded-full border-[3px] border-white bg-white text-[#3d2010] flex items-center justify-center font-extrabold text-[9px] shadow-lg active:scale-95 transition"
                 >
                   SPIN
                 </button>
-
-                {/* Slices container */}
-                <div 
+                <div
                   className="w-full h-full rounded-full overflow-hidden border-[4px] border-white transition-transform duration-[5000ms] ease-[cubic-bezier(0.1,0.8,0.1,1)]"
-                  style={{
-                    transform: `rotate(${wheelRotation}deg)`,
-                  }}
+                  style={{ transform: `rotate(${wheelRotation}deg)` }}
                 >
                   {config.prizes.length > 0 ? (
                     <svg viewBox="0 0 100 100" className="w-full h-full">
-                      <defs>
-                        {/* Warm earthy palette matching reference */}
-                      </defs>
-
                       {config.prizes.map((p, idx) => {
                         const segments = config.prizes.length
                         const angle = 360 / segments
                         const startAngle = idx * angle
                         const endAngle = startAngle + angle
-
-                        // Polar coords
                         const r = 50
-                        const angleInRadians1 = ((startAngle - 90) * Math.PI) / 180.0
-                        const angleInRadians2 = ((endAngle - 90) * Math.PI) / 180.0
-                        const p1 = { x: 50 + r * Math.cos(angleInRadians1), y: 50 + r * Math.sin(angleInRadians1) }
-                        const p2 = { x: 50 + r * Math.cos(angleInRadians2), y: 50 + r * Math.sin(angleInRadians2) }
-
+                        const a1 = ((startAngle - 90) * Math.PI) / 180.0
+                        const a2 = ((endAngle - 90) * Math.PI) / 180.0
+                        const p1 = { x: 50 + r * Math.cos(a1), y: 50 + r * Math.sin(a1) }
+                        const p2 = { x: 50 + r * Math.cos(a2), y: 50 + r * Math.sin(a2) }
                         const SLICE_COLORS = ['#3d2010', '#e87b1e', '#f3e8d0', '#8da628', '#4a6b1e', '#c0392b', '#e87b1e', '#8da628']
                         const fillColor = SLICE_COLORS[idx % SLICE_COLORS.length]
-
                         const textAngle = startAngle + (angle / 2)
                         const textAngleInRad = ((textAngle - 90) * Math.PI) / 180.0
                         const textPos = { x: 50 + 28 * Math.cos(textAngleInRad), y: 50 + 28 * Math.sin(textAngleInRad) }
-
-                        // Keep text right-side up
                         const normAngle = textAngle % 360
                         const isUpsideDown = normAngle > 90 && normAngle < 270
                         const displayRotation = isUpsideDown ? textAngle + 180 : textAngle
-
                         return (
                           <g key={idx}>
-                            <path 
+                            <path
                               d={`M 50 50 L ${p1.x} ${p1.y} A 50 50 0 ${angle <= 180 ? '0' : '1'} 1 ${p2.x} ${p2.y} Z`}
                               fill={fillColor}
                               stroke="#ffffff"
@@ -1006,9 +893,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                               strokeWidth="0.4"
                               transform={`rotate(${displayRotation}, ${textPos.x}, ${textPos.y})`}
                             >
-                              <tspan x={textPos.x} dy="-0.5em">
-                                {p.name.length > 8 ? p.name.substring(0, 6) + '..' : p.name}
-                              </tspan>
+                              <tspan x={textPos.x} dy="-0.5em">{p.name.length > 8 ? p.name.substring(0, 6) + '..' : p.name}</tspan>
                               <tspan x={textPos.x} dy="1.1em" fontSize="2.2" fill={fillColor === '#f3e8d0' ? '#8da628' : '#f3e8d0'} fontWeight="bold">
                                 {Number((p.probability * 100).toFixed(1))}%
                               </tspan>
@@ -1021,29 +906,18 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                     <div className="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs text-slate-500">无奖品</div>
                   )}
                 </div>
-
-                {/* Static Outer Rim with Blinking LED Lights */}
                 <div className="absolute inset-0 pointer-events-none z-10 w-full h-full">
                   <svg viewBox="0 0 100 100" className="w-full h-full">
-                    {/* Outer border / rim - clean white matching reference */}
                     <circle cx="50" cy="50" r="49" fill="none" stroke="#ffffff" strokeWidth="2" />
                     <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="0.4" />
-                    {/* 24 Blinking LEDs */}
                     {Array.from({ length: 24 }).map((_, i) => {
                       const dotAngle = (i * 360) / 24
                       const dotAngleRad = (dotAngle * Math.PI) / 180
                       const r = 48
                       const cx = 50 + r * Math.cos(dotAngleRad)
                       const cy = 50 + r * Math.sin(dotAngleRad)
-                      const isOdd = i % 2 === 0
                       return (
-                        <circle 
-                          key={i}
-                          cx={cx}
-                          cy={cy}
-                          r="1.2"
-                          className={isOdd ? 'preview-led-blink-odd' : 'preview-led-blink-even'}
-                        />
+                        <circle key={i} cx={cx} cy={cy} r="1.2" className={i % 2 === 0 ? 'preview-led-blink-odd' : 'preview-led-blink-even'} />
                       )
                     })}
                   </svg>
@@ -1052,51 +926,30 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
             )}
 
             <p className="text-[10px] text-slate-400">
-              {config.templateType === 'GRID' ? '九宫格在移动端会以流畅的跑马灯发光动画呈现给您的顾客。' : '大转盘在移动端会以亮丽的霓虹渐变效果呈现给您的顾客。'}
+              {config.templateType === 'GRID' ? '九宫格跑马灯动画效果' : '霓虹渐变大转盘效果'}
             </p>
           </div>
 
-          {/* Marketing Sticker customizer & printing */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm space-y-5">
-            <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
-              宣传贴纸生成与打印
-            </h3>
-            
-            <div className="space-y-3">
+          {/* Poster + QR */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 shadow-sm space-y-3">
+            <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">宣传贴纸打印</h3>
+
+            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">贴纸主标题</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">贴纸标题</label>
                 <input
                   type="text"
                   value={posterTitle}
                   onChange={(e) => setPosterTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
+                  className="w-full px-2.5 py-1.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
                 />
               </div>
-
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">贴纸引导语</label>
-                <textarea
-                  rows={2}
-                  value={posterDesc}
-                  onChange={(e) => setPosterDesc(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 resize-none"
-                />
-              </div>
-
-              {/* Color Scheme Picker */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">贴纸配色方案</label>
-                <div className="grid grid-cols-5 gap-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">配色方案</label>
+                <div className="flex gap-1">
                   {(['black', 'blue', 'green', 'purple', 'gold'] as const).map((t) => {
-                    const labelMap = {
-                      black: '曜石黑',
-                      blue: '极光蓝',
-                      green: '森林绿',
-                      purple: '紫罗兰',
-                      gold: '琥珀金',
-                    }
                     const dotMap = {
-                      black: 'bg-slate-900 dark:bg-slate-100',
+                      black: 'bg-slate-900',
                       blue: 'bg-blue-600',
                       green: 'bg-emerald-600',
                       purple: 'bg-purple-600',
@@ -1107,90 +960,51 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                         key={t}
                         type="button"
                         onClick={() => setStickerTheme(t)}
-                        className={`flex flex-col items-center justify-center py-2 rounded-xl border text-[9px] font-bold transition-all ${
-                          stickerTheme === t
-                            ? 'border-blue-500 bg-blue-50/40 text-blue-600 dark:text-blue-450 ring-1 ring-blue-500/25 shadow-sm'
-                            : 'border-slate-250/60 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 hover:border-slate-350 dark:hover:border-slate-700'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full mb-1 ${dotMap[t]}`} />
-                        <span>{labelMap[t]}</span>
-                      </button>
+                        className={`w-6 h-6 rounded-full border-2 transition-all ${dotMap[t]} ${stickerTheme === t ? 'border-blue-500 scale-110 ring-2 ring-blue-400/30' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                        title={t}
+                      />
                     )
                   })}
                 </div>
               </div>
             </div>
 
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">引导语</label>
+              <textarea
+                rows={2}
+                value={posterDesc}
+                onChange={(e) => setPosterDesc(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 resize-none"
+              />
+            </div>
+
             {/* Sticker mini-preview */}
             <div className="w-full flex justify-center">
               {(() => {
                 const colorThemes = {
-                  black: {
-                    badge: 'bg-slate-900 text-white dark:bg-slate-800 dark:text-slate-150',
-                    title: 'text-slate-950 dark:text-white',
-                    borderAccent: 'border-slate-900/10 dark:border-slate-100/10',
-                    borderDouble: 'border-slate-900 dark:border-slate-300',
-                  },
-                  blue: {
-                    badge: 'bg-blue-600 text-white',
-                    title: 'text-slate-950 dark:text-white',
-                    borderAccent: 'border-blue-600/10',
-                    borderDouble: 'border-blue-600',
-                  },
-                  green: {
-                    badge: 'bg-emerald-600 text-white',
-                    title: 'text-slate-950 dark:text-white',
-                    borderAccent: 'border-emerald-600/10',
-                    borderDouble: 'border-emerald-600',
-                  },
-                  purple: {
-                    badge: 'bg-purple-600 text-white',
-                    title: 'text-slate-950 dark:text-white',
-                    borderAccent: 'border-purple-600/10',
-                    borderDouble: 'border-purple-600',
-                  },
-                  gold: {
-                    badge: 'bg-amber-500 text-white',
-                    title: 'text-slate-950 dark:text-white',
-                    borderAccent: 'border-amber-500/10',
-                    borderDouble: 'border-amber-500',
-                  },
+                  black: { badge: 'bg-slate-900 text-white', title: 'text-slate-950', borderAccent: 'border-slate-900/10', borderDouble: 'border-slate-900' },
+                  blue:  { badge: 'bg-blue-600 text-white',  title: 'text-slate-950', borderAccent: 'border-blue-600/10',  borderDouble: 'border-blue-600' },
+                  green: { badge: 'bg-emerald-600 text-white', title: 'text-slate-950', borderAccent: 'border-emerald-600/10', borderDouble: 'border-emerald-600' },
+                  purple:{ badge: 'bg-purple-600 text-white', title: 'text-slate-950', borderAccent: 'border-purple-600/10', borderDouble: 'border-purple-600' },
+                  gold:  { badge: 'bg-amber-500 text-white',  title: 'text-slate-950', borderAccent: 'border-amber-500/10',  borderDouble: 'border-amber-500' },
                 }
                 const currentTheme = colorThemes[stickerTheme]
-
                 return (
-                  <div className="border border-slate-200/60 dark:border-slate-800 p-3.5 rounded-2xl bg-white dark:bg-slate-950 flex flex-col items-center justify-between text-center aspect-square w-full max-w-[220px] relative overflow-hidden shadow-sm">
-                    {/* Modern Border Accent */}
+                  <div className="border border-slate-200/60 p-3 rounded-2xl bg-white flex flex-col items-center justify-between text-center aspect-square w-full max-w-[180px] relative overflow-hidden shadow-sm">
                     <div className={`absolute inset-1.5 border-2 ${currentTheme.borderAccent} pointer-events-none rounded-lg`} />
                     <div className={`absolute inset-2 border ${currentTheme.borderDouble} pointer-events-none rounded-md`} />
-                    
-                    <span className={`text-[7.5px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider select-none mt-1 ${currentTheme.badge}`}>
-                      {brandName}
-                    </span>
-
-                    <h4 className={`text-xs font-black leading-tight mt-1 uppercase truncate w-full px-2 ${currentTheme.title}`}>
-                      {posterTitle}
-                    </h4>
-                    
-                    <p className="text-[8.5px] text-slate-500 dark:text-slate-400 max-w-[180px] leading-tight mt-0.5 truncate w-full px-1 z-10">
-                      {posterDesc}
-                    </p>
-
-                    {/* QR Image */}
+                    <span className={`text-[7px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wider select-none mt-1 ${currentTheme.badge}`}>{brandName}</span>
+                    <h4 className={`text-[10px] font-black leading-tight mt-1 uppercase truncate w-full px-2 ${currentTheme.title}`}>{posterTitle}</h4>
+                    <p className="text-[8px] text-slate-500 max-w-full leading-tight mt-0.5 truncate w-full px-1 z-10">{posterDesc}</p>
                     {qrCodeUrl ? (
-                      <div className={`p-1 bg-white rounded-lg shadow border z-10 my-1`}>
-                        <img src={qrCodeUrl} alt="Store Game QR Code" className="w-18 h-18 object-contain" />
+                      <div className="p-1 bg-white rounded-lg shadow border z-10 my-1">
+                        <img src={qrCodeUrl} alt="QR" className="w-16 h-16 object-contain" />
                       </div>
                     ) : (
-                      <div className="w-18 h-18 bg-white border border-slate-200/50 rounded-lg flex items-center justify-center text-[9px] text-slate-400 my-1 z-10">
-                        正在生成...
-                      </div>
+                      <div className="w-16 h-16 bg-white border border-slate-200/50 rounded-lg flex items-center justify-center text-[9px] text-slate-400 my-1 z-10">生成中...</div>
                     )}
-
-                    <p className="text-[7px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 z-10">
-                      Scan to Spin & Claim Rewards
-                    </p>
+                    <p className="text-[6.5px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 z-10">Scan to Spin & Claim Rewards</p>
                   </div>
                 )
               })()}
@@ -1202,13 +1016,36 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow shadow-blue-600/10 active:scale-[0.98] disabled:opacity-50"
             >
               <Printer size={13} />
-              打印桌贴/包装贴纸 (80mm x 80mm)
+              打印贴纸 (80mm × 80mm)
             </button>
           </div>
-        </div>
 
+        </div>
+      </div>
+
+      {/* ── Sticky Save Bar ── */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center gap-2 shadow-lg">
+        {error && <p className="flex-1 text-xs font-bold text-red-500 truncate">{error}</p>}
+        {!error && <p className="flex-1 text-[10px] text-slate-400 truncate">更改将在保存后同步至顾客端</p>}
+        <button
+          onClick={fetchConfig}
+          disabled={saving}
+          className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-bold transition hover:bg-slate-50 shrink-0"
+        >
+          放弃
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-md shadow-blue-500/20 disabled:opacity-60 shrink-0"
+        >
+          {saving ? <><Loader2 size={14} className="animate-spin" /> 保存中...</> :
+           saved  ? <><Check size={14} /> 已保存</> :
+                    <><Save size={14} /> 保存配置</>}
+        </button>
       </div>
 
     </div>
   )
 }
+

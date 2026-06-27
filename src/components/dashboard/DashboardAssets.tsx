@@ -118,9 +118,10 @@ function parseTags(value: string) {
 interface DashboardAssetsProps {
   brandId?: string
   onNavigateToCalendar?: (assetIds: string[]) => void
+  onBack?: () => void
 }
 
-export default function DashboardAssets({ brandId, onNavigateToCalendar }: DashboardAssetsProps) {
+export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack }: DashboardAssetsProps) {
   const [activeCategory, setActiveCategory] = useState('all')
   const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos' | 'scheduled'>('unused')
   const [search, setSearch] = useState('')
@@ -1135,6 +1136,17 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar }: Dashb
 
         {/* ── Top Toolbar: view dropdown + folder dropdown + search + upload ── */}
         <div className="px-3 py-2.5 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-10 flex items-center gap-2">
+
+          {/* Back button — shown when embedded in amc-mm */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition-all shrink-0 -ml-1"
+              title="返回"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
 
           {/* hidden file input */}
           <input
