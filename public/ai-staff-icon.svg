@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <!-- Background gradient: warm golden-orange -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFD700"/>
+      <stop offset="100%" stop-color="#FF8C00"/>
+    </linearGradient>
+    <!-- Petal gradient -->
+    <linearGradient id="petalOuter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFE44D"/>
+      <stop offset="100%" stop-color="#FFC200"/>
+    </linearGradient>
+    <linearGradient id="petalInner" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFD840"/>
+      <stop offset="100%" stop-color="#FFAA00"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect width="512" height="512" rx="110" fill="url(#bgGrad)"/>
+
+  <!-- ── PETALS (outer ring, 16 petals) ─────────────────────────── -->
+  <!-- Each petal is an ellipse centered at origin, rotated to position -->
+  <g transform="translate(256,256)">
+    <!-- Petal template: ellipse 48x130, center at (0,-188) before rotation -->
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(0)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(22.5)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(45)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(67.5)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(90)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(112.5)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(135)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(157.5)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(180)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(202.5)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(225)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(247.5)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(270)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(292.5)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(315)"/>
+    <ellipse rx="44" ry="120" cx="0" cy="-184" fill="url(#petalOuter)" transform="rotate(337.5)"/>
+
+    <!-- Inner ring petals (shorter, different shade) -->
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(11.25)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(33.75)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(56.25)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(78.75)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(101.25)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(123.75)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(146.25)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(168.75)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(191.25)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(213.75)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(236.25)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(258.75)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(281.25)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(303.75)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(326.25)"/>
+    <ellipse rx="32" ry="90" cx="0" cy="-158" fill="url(#petalInner)" transform="rotate(348.75)"/>
+  </g>
+
+  <!-- ── WHITE FACE CIRCLE ──────────────────────────────────────── -->
+  <circle cx="256" cy="256" r="148" fill="white"/>
+
+  <!-- ── LEFT EYE: uppercase "A" ──────────────────────────────── -->
+  <!-- Centered at approx (210, 228) -->
+  <text
+    x="210"
+    y="245"
+    font-family="'Arial Rounded MT Bold', 'Arial Black', Arial, sans-serif"
+    font-size="72"
+    font-weight="900"
+    fill="#3D1C00"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    letter-spacing="-2"
+  >A</text>
+
+  <!-- ── RIGHT EYE: lowercase "i" rotated 90° clockwise ─────────── -->
+  <!-- Rotated i looks like: dot on right, stem horizontal = ─● -->
+  <!-- We draw: a short thick horizontal line + a circle dot on the right end -->
+  <!-- Positioned at approx (315, 228) -->
+  <g transform="translate(315,228)">
+    <!-- Horizontal stem of "i" -->
+    <rect x="-36" y="-8" width="52" height="16" rx="8" fill="#3D1C00"/>
+    <!-- Dot of "i" (on the right end, slightly above center — now on right since rotated) -->
+    <circle cx="28" cy="-26" r="11" fill="#3D1C00"/>
+  </g>
+
+  <!-- ── SMILE ───────────────────────────────────────────────────── -->
+  <path
+    d="M 200 295 Q 256 345 312 295"
+    stroke="#3D1C00"
+    stroke-width="14"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <!-- ── BLUSH CHEEKS ────────────────────────────────────────────── -->
+  <ellipse cx="175" cy="300" rx="36" ry="24" fill="#FFB3C6" opacity="0.65"/>
+  <ellipse cx="337" cy="300" rx="36" ry="24" fill="#FFB3C6" opacity="0.65"/>
+</svg>
