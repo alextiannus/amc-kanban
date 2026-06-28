@@ -170,6 +170,199 @@ async function executeSingleLLMCall(
   }
 }
 
+// ============================================================
+// Multi-turn Chat types and callLLMChat()
+// Supports history + system prompt, works with Gemini and any
+// OpenAI-compatible provider (GLM-4-Flash, DeepSeek, etc.)
+// ============================================================
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export interface LLMChatResult {
+  text: string | null
+  provider: string
+  modelName: string
+  error?: string
+  rateLimited?: boolean
+}
+
+/**
+ * Execute a multi-turn chat call against a single provider.
+ * - Google → Gemini generateContent format
+ * - openai / deepseek / custom_shim (GLM etc.) → OpenAI messages format
+ * - anthropic → Anthropic messages format
+ */
+async function executeSingleLLMChatCall(
+  provider: string,
+  modelName: string,
+  apiKey: string,
+  baseUrl: string | null,
+  messages: ChatMessage[],
+  maxTokens: number,
+): Promise<LLMChatResult & { rateLimited?: boolean }> {
+  try {
+    let responseText: string | null = null
+    let errorMsg: string | undefined
+    let rateLimited = false
+
+    if (provider === 'google') {
+      // Convert OpenAI-style messages → Gemini contents format
+      const contents: Array<{ role: string; parts: Array<{ text: string }> }> = []
+      const sysMsg = messages.find(m => m.role === 'system')
+      if (sysMsg) {
+        contents.push({ role: 'user', parts: [{ text: `[System]\n${sysMsg.content}` }] })
+        contents.push({ role: 'model', parts: [{ text: '好的，了解。' }] })
+      }
+      for (const m of messages.filter(m => m.role !== 'system')) {
+        contents.push({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] })
+      }
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
+      const res = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents, generationConfig: { maxOutputTokens: maxTokens } }),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        responseText = json.candidates?.[0]?.content?.parts?.[0]?.text || null
+      } else {
+        const errText = await res.text().catch(() => '')
+        if (res.status === 429) { rateLimited = true; errorMsg = `Gemini 429 rate-limited` }
+        else errorMsg = `Gemini ${res.status}: ${errText.slice(0, 120)}`
+        console.error(`[LLM Chat] ${errorMsg}`)
+      }
+    }
+    else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim') {
+      // OpenAI-compatible — works for GLM-4-Flash, DeepSeek, and any OpenAI-format endpoint
+      const defaultBase = provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1'
+      const endpoint = `${baseUrl || defaultBase}/chat/completions`
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ model: modelName, messages, max_tokens: maxTokens }),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        responseText = json.choices?.[0]?.message?.content || null
+      } else {
+        const errText = await res.text().catch(() => '')
+        if (res.status === 429) { rateLimited = true; errorMsg = `${provider} 429 rate-limited` }
+        else errorMsg = `${provider} ${res.status}: ${errText.slice(0, 120)}`
+        console.error(`[LLM Chat] ${errorMsg}`)
+      }
+    }
+    else if (provider === 'anthropic') {
+      const sysContent = messages.find(m => m.role === 'system')?.content
+      const chatMsgs = messages.filter(m => m.role !== 'system').map(m => ({
+        role: m.role as 'user' | 'assistant', content: m.content,
+      }))
+      const endpoint = `${baseUrl || 'https://api.anthropic.com/v1'}/messages`
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: modelName, max_tokens: maxTokens, ...(sysContent ? { system: sysContent } : {}), messages: chatMsgs }),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        responseText = json.content?.[0]?.text || null
+      } else {
+        const errText = await res.text().catch(() => '')
+        if (res.status === 429) { rateLimited = true; errorMsg = `Anthropic 429 rate-limited` }
+        else errorMsg = `Anthropic ${res.status}: ${errText.slice(0, 120)}`
+        console.error(`[LLM Chat] ${errorMsg}`)
+      }
+    }
+    else {
+      errorMsg = `Unsupported provider for chat: ${provider}`
+      console.error(`[LLM Chat] ${errorMsg}`)
+    }
+
+    return { text: responseText?.trim() || null, provider, modelName, error: errorMsg, rateLimited }
+  } catch (err: any) {
+    return { text: null, provider, modelName, error: `Chat request failed: ${err.message}`, rateLimited: false }
+  }
+}
+
+/**
+ * callLLMChat — Multi-turn chat with automatic model failover.
+ *
+ * Same failover chain as callLLM() but accepts OpenAI-style messages[]
+ * (system + user + assistant history) instead of a plain prompt.
+ *
+ * How to add GLM to the fallback chain (Admin → LLM Config):
+ *   provider:   "openai"   (OpenAI-compatible endpoint)
+ *   baseUrl:    "https://open.bigmodel.cn/api/paas/v4"
+ *   modelName:  "glm-4-flash"
+ *   taskTags:   ["companion", "copywriting", "default"]
+ *   isDefault:  true
+ *   priority:   80  (below Gemini at 100 → Gemini tried first)
+ */
+export async function callLLMChat(
+  taskTag: string,
+  messages: ChatMessage[],
+  maxTokens = 500,
+): Promise<LLMChatResult> {
+  // 1. Task-tagged configs sorted by priority
+  const matchingConfigs = await prisma.lLMConfig.findMany({
+    where: { isEnabled: true, taskTags: { has: taskTag } },
+    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+  })
+  const matchingIds = matchingConfigs.map((c: any) => c.id)
+
+  // 2. Default configs not already matched
+  const defaultConfigs = await prisma.lLMConfig.findMany({
+    where: { isEnabled: true, isDefault: true, NOT: { id: { in: matchingIds } } },
+    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+  })
+
+  const configsToTry = [...matchingConfigs, ...defaultConfigs]
+  const errors: string[] = []
+
+  for (const config of configsToTry) {
+    const { provider, modelName, baseUrl } = config
+    if (isCircuitOpen(provider, modelName)) { errors.push(`${config.displayName}: circuit open`); continue }
+
+    let apiKey = config.apiKey || ''
+    if (!apiKey) {
+      if (provider === 'google') apiKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
+      else if (provider === 'openai') apiKey = process.env.OPENAI_API_KEY || ''
+      else if (provider === 'anthropic') apiKey = process.env.ANTHROPIC_API_KEY || ''
+      else if (provider === 'deepseek') apiKey = process.env.DEEPSEEK_API_KEY || ''
+    }
+    if (!apiKey) { errors.push(`${config.displayName}: no API key`); continue }
+
+    console.log(`[LLM Chat] Trying: ${config.displayName} (${provider}/${modelName})`)
+    const result = await executeSingleLLMChatCall(provider, modelName, apiKey, baseUrl, messages, maxTokens)
+    if (result.text && !result.error) {
+      console.log(`[LLM Chat] ✅ Success via ${config.displayName}`)
+      return result
+    }
+    if (result.rateLimited) tripCircuit(provider, modelName)
+    errors.push(`${config.displayName}: ${result.error}`)
+    console.warn(`[LLM Chat] ${config.displayName} failed, trying next…`)
+  }
+
+  // 3. System env fallback
+  const sysProvider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || 'google'
+  const sysModel = process.env.SYSTEM_DEFAULT_LLM_MODEL || 'gemini-2.0-flash'
+  let sysKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
+  if (!sysKey && sysProvider === 'google') sysKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
+
+  if (sysKey && !isCircuitOpen(sysProvider, sysModel)) {
+    const result = await executeSingleLLMChatCall(sysProvider, sysModel, sysKey, null, messages, maxTokens)
+    if (result.text && !result.error) {
+      console.log(`[LLM Chat] ✅ System env fallback success`)
+      return result
+    }
+    if (result.rateLimited) tripCircuit(sysProvider, sysModel)
+    errors.push(`System fallback: ${result.error}`)
+  }
+
+  console.error('[LLM Chat] All providers failed:', errors)
+  return { text: null, provider: sysProvider, modelName: sysModel, error: errors.join('; ') }
+}
+
 /**
  * Dynamically routes and calls the appropriate LLM model for a given task tag.
  *
