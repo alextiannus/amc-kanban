@@ -3,7 +3,7 @@ export const SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.01'
 export const SUBSCRIPTION_TERMS_TITLE = 'AMC 社交媒体代运营服务协议（完整版）'
 
 export const SUBSCRIPTION_TERMS_FULL_TEXT = `
-AMC — Your AI Marketing Crew
+AMC-AI Marketing Crew
 Deliverychinatown Pte. Ltd.  |  amc.immedi.ai
 
 社交媒体代运营服务协议
@@ -14,7 +14,7 @@ Social Media Management Services Agreement
 
 一、合同主体
 甲方为下单并接受服务的品牌或其授权主体。
-乙方为 Deliverychinatown Pte. Ltd.，服务品牌为 AMC — Your AI Marketing Crew，联系邮箱为 service@deliverychinatown.com。
+乙方为 Deliverychinatown Pte. Ltd.，服务品牌为 AMC-AI Marketing Crew，联系邮箱为 service@deliverychinatown.com。
 
 二、服务套餐
 甲方可选择 STARTER、ESSENTIAL 套餐，并可按需加购增值服务（含多门店运营支持、KOL 探店分发包等 Add-on）。

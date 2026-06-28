@@ -1625,11 +1625,20 @@ export default function BrandSubscriptionPage() {
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-3xl rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
             <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-black text-slate-900 dark:text-white leading-none">{data.termsTitle}</h3>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5 block font-bold uppercase tracking-wider">
-                  版本: {data.termsVersion}
-                </span>
+              <div className="flex items-center gap-3">
+                {/* Sunflower logo */}
+                <img
+                  src="/icons/icon-192.png"
+                  alt="AMC-AI Marketing Crew"
+                  className="w-11 h-11 rounded-2xl object-cover flex-shrink-0 shadow-sm"
+                />
+                <div>
+                  <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-0.5">AMC-AI Marketing Crew</p>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white leading-none">{data.termsTitle}</h3>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 block font-bold uppercase tracking-wider">
+                    版本: {data.termsVersion}
+                  </span>
+                </div>
               </div>
               <button
                 onClick={() => setShowTerms(false)}
