@@ -29,7 +29,7 @@ export async function GET() {
     const configs = await prisma.lLMConfig.findMany({
       where: {
         isEnabled: true,
-        provider: { in: ['custom_shim', 'openai', 'deepseek'] },
+        provider: { in: ['custom-shim', 'custom_shim', 'openai', 'deepseek'] },
       },
       orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
       take: 1,
