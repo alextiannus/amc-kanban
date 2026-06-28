@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { User as UserIcon, BookOpen, Settings, Shield, Inbox, LogOut, GraduationCap, Camera, Activity } from 'lucide-react'
+import { User as UserIcon, BookOpen, Settings, Shield, Inbox, LogOut, GraduationCap, Camera, Activity, Bot, LayoutDashboard } from 'lucide-react'
 
 interface UserMenuProps {
   user: {
@@ -33,11 +33,14 @@ export default function UserMenu({
   onTasksCleared,
 }: UserMenuProps) {
   const [showProfile, setShowProfile] = useState(false)
+  const [principalOpening, setPrincipalOpening] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const userRoles = user?.userRoles || (user?.role === 'ADMIN' ? ['ADMIN'] : user?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : user?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : [])
   const isAdmin = userRoles.includes('ADMIN')
   const isPrincipal = userRoles.includes('AMC_PRINCIPAL')
+  const canSeeAgents = userRoles.includes('BRAND_OWNER')
+  const canSeePrincipalDashboard = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL')
   const roleLabel = userRoles.length > 0
     ? userRoles.map((roleName) => ({ ADMIN: 'Admin', BRAND_OWNER: 'Brand Owner', AMC_PRINCIPAL: 'AMC Principal', AMC_AGENT: 'AMC Agent' }[roleName] || roleName)).join(' / ')
     : 'Standard User'
@@ -106,6 +109,31 @@ export default function UserMenu({
             >
               <Settings size={16} /> 设置中心
             </button>
+
+            {canSeeAgents && (
+              <button
+                onClick={() => { setShowProfile(false); setCurrentView('agents') }}
+                className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
+                  currentView === 'agents'
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+                id="nav-agents"
+              >
+                <Bot size={16} /> AI 序列
+              </button>
+            )}
+
+            {canSeePrincipalDashboard && (
+              <button
+                onClick={() => { setShowProfile(false); setPrincipalOpening(true); router.push('/profile/principal') }}
+                disabled={principalOpening}
+                className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-70"
+                id="nav-principal-dashboard"
+              >
+                <LayoutDashboard size={16} /> {principalOpening ? '打开中...' : '主理人看板'}
+              </button>
+            )}
 
             {isAdmin && (
               <button

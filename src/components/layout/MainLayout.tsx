@@ -1,10 +1,10 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { Store, Calendar, Sun, Moon, Gift, Activity, Bot, LayoutDashboard, FileText, Images } from 'lucide-react'
+import { Store, Calendar, Sun, Moon, Gift, Activity, FileText, Images } from 'lucide-react'
 import BrandSwitcher, { Brand } from './BrandSwitcher'
 import UserMenu from './UserMenu'
 
@@ -45,16 +45,8 @@ export default function MainLayout({
 }: MainLayoutProps) {
   const router = useRouter()
   const { theme, resolvedTheme, setTheme } = useTheme()
-  const [principalOpening, setPrincipalOpening] = useState(false)
-
-  useEffect(() => {
-    router.prefetch('/profile/principal')
-  }, [router])
-
   const userRoles = user?.userRoles || (user?.role === 'ADMIN' ? ['ADMIN'] : user?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : user?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : [])
   const canSeeSocialInsight = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL')
-  const canSeeAgentsWorkflow = userRoles.includes('BRAND_OWNER')
-  const canSeePrincipalDashboard = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL')
   const currentTheme = resolvedTheme || theme || 'light'
 
   return (
@@ -150,30 +142,7 @@ export default function MainLayout({
           >
             <Gift size={16} /> 店内活动
           </button>
-          {canSeeAgentsWorkflow && (
-            <button
-              onClick={() => setCurrentView('agents')}
-              className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
-                currentView === 'agents'
-                  ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-              }`}
-              id="nav-agents"
-            >
-              <Bot size={16} /> AI 序列
-            </button>
-          )}
 
-          {canSeePrincipalDashboard && (
-            <button
-              onClick={() => { setPrincipalOpening(true); router.push('/profile/principal') }}
-              disabled={principalOpening}
-              className="flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50 disabled:opacity-70"
-              id="nav-principal-dashboard"
-            >
-              <LayoutDashboard size={16} /> {principalOpening ? '打开中...' : '主理人看板'}
-            </button>
-          )}
         </div>
 
         {/* Spacer to align center menu */}

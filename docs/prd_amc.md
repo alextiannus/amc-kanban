@@ -295,6 +295,21 @@ model SystemConfig {
 
 ## Changelog
 
+### v1.4 — 2026-06-29 主菜单导航精简（AI 序列 + 主理人看板移入 Profile 下拉菜单）
+
+**需求**：将主导航栏中的「AI 序列」和「主理人看板」两个入口从顶部导航 Tab 区域移除，改为放置在右上角 Profile 下拉菜单中，以精简主菜单视觉噪声。
+
+**变更内容**：
+1. **修改** `src/components/layout/MainLayout.tsx`：从顶部 Tab 菜单中移除 `canSeeAgentsWorkflow`（AI 序列）和 `canSeePrincipalDashboard`（主理人看板）两个条件渲染按钮。
+2. **修改** `src/components/layout/UserMenu.tsx`：在 Profile 下拉菜单中新增两个入口：
+   - 「AI 序列」：仅对 `BRAND_OWNER` 显示，点击调用 `setCurrentView('agents')`。
+   - 「主理人看板」：仅对 `ADMIN` 或 `AMC_PRINCIPAL` 显示，点击跳转 `/profile/principal`。
+   - 两个入口均放置在现有「设置中心」条目之后。
+
+**冲突检查**：无冲突。本次变更仅调整入口位置，不影响实际功能逻辑与权限控制。
+
+---
+
 ### v1.3 — 2026-06-28 品牌主看板重设计（Brand Profile View）
 
 **需求**：将 kanban 品牌主看板重设计为最佳展示品牌故事与品牌设定的方式，保留现有配置功能。
