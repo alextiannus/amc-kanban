@@ -250,7 +250,7 @@ export async function POST(request: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, location, timezone, industry, region, referenceCode } = body
+  const { name, location, timezone, industry, region, referenceCode, googlePlaceId, address, lat, lng } = body
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
@@ -273,6 +273,8 @@ export async function POST(request: Request) {
         name: name.trim(),
         location: location?.trim() || null,
         timezone: timezone || 'America/New_York',
+        ...(address ? { address: address.trim() } : {}),
+        ...(googlePlaceId ? { googlePlaceId } : {}),
       },
     })
 
@@ -349,6 +351,8 @@ export async function POST(request: Request) {
         name: name.trim(),
         location: location?.trim() || null,
         timezone: timezone || 'America/New_York',
+        ...(address ? { address: address.trim() } : {}),
+        ...(googlePlaceId ? { googlePlaceId } : {}),
       },
     })
 
