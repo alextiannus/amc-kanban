@@ -30,10 +30,11 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    const { assetIds, mediaUrls, idea, accountId: singleAccountId } = await request.json().catch(() => ({}))
-    if (!idea || typeof idea !== 'string') {
-      return NextResponse.json({ error: 'idea is required' }, { status: 400 })
+    const { assetIds, mediaUrls, idea: rawIdea, accountId: singleAccountId, targetPlatform } = await request.json().catch(() => ({}))
+    if (typeof rawIdea !== 'string' && rawIdea !== undefined) {
+      return NextResponse.json({ error: 'idea must be a string' }, { status: 400 })
     }
+    // Allow empty idea — will fall back to brand name + context below
 
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
@@ -84,9 +85,22 @@ export async function POST(request: Request, { params }: Params) {
       }
     }
 
+    // Build effective idea — fall back to brand name if caller didn't provide one
+    const idea: string = (rawIdea && rawIdea.trim()) ? rawIdea.trim() : `${brand.name}品牌内容创作`
+
     // Single-account mode: only generate for the specified account
     if (singleAccountId) {
       accounts = accounts.filter((a: any) => a.id === singleAccountId)
+    } else if (targetPlatform) {
+      // targetPlatform mode: limit to one specific platform (e.g. xiaohongshu)
+      const aliases: Record<string, string[]> = {
+        xiaohongshu: ['xiaohongshu', 'rednote', 'red', 'xhs'],
+        instagram: ['instagram'],
+        facebook: ['facebook'],
+        tiktok: ['tiktok'],
+      }
+      const allowed = aliases[targetPlatform.toLowerCase()] ?? [targetPlatform.toLowerCase()]
+      accounts = accounts.filter((a: any) => allowed.includes(a.platformId.toLowerCase()))
     }
 
     let brandToneText = ""
