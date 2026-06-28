@@ -268,3 +268,25 @@ model SystemConfig {
 - **推荐区域**：`eastasia`（香港，延迟最低）或 `southeastasia`（新加坡）
 - **Key 类型**：复制 KEY 1（`Ocp-Apim-Subscription-Key`）
 - **降级策略**：若 Azure Key 未配置，amc-mm 自动使用浏览器内置 `window.speechSynthesis`（已做智能声音选择优化）
+
+---
+
+## 📋 Changelog
+
+### v1.1.0 — 2026-06-28
+
+#### 功能变更：移除 AI 泳道池 + 工作日志状态过滤
+
+**决策背景**：运营看板 Dashboard 首页的"AI 活动战报 — 品牌泳道工作看板"（BrandKanbanLane）区域在实际使用中被认为冗余，且信息与工作日志重叠。同时工作日志缺乏按任务状态筛查的能力。
+
+**变更内容**：
+1. **移除 AI 泳道池**：从 `DashboardHome.tsx` 移除"AI 活动战报"section，删除 `BrandKanbanLane` 组件引用。`BrandKanbanLane.tsx` 文件保留（不删除组件文件），以供未来扩展使用。
+
+2. **工作日志记录全操作**：`/api/logs/agent` 路由移除 `actorType: 'AI_AGENT'` 的限制，改为记录所有类型操作者（人工 + AI）的 AuditLog，实现真正意义上的"全工作日志"。
+
+3. **工作日志状态多选 Filter**：在 `AgentLogsView.tsx` 过滤栏顶部新增泳道状态多选胶囊组（todo / in_progress / pending / done / void），支持多选。
+   - 未选中任何状态 = 显示全部日志
+   - 选中状态 = 仅显示 `STATUS_CHANGED` 类型日志中 `newValue.status` 匹配的记录（其他类型日志如 TASK_CREATED、DRAFT_CREATED 始终显示）
+   - "重置筛选"按钮同步清空状态选择
+
+**冲突检查**：无冲突。本次变更不影响 PRD 核心功能（内容创作、发布日历、素材管理）。

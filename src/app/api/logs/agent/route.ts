@@ -95,9 +95,8 @@ export async function GET(req: Request) {
   const draftIds = drafts.map((d: any) => d.id)
   const draftCaptionMap = new Map<string, string>(drafts.map((d: any) => [d.id, d.caption]))
 
-  // 3. Build AuditLog query
+  // 3. Build AuditLog query — record all actors (human + AI)
   const whereClause: Prisma.AuditLogWhereInput = {
-    actorType: 'AI_AGENT',
     OR: [
       { resourceType: 'WorkUnit', resourceId: { in: workUnitIds } },
       { resourceType: 'ContentDraft', resourceId: { in: draftIds } }

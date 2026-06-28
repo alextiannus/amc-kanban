@@ -7,7 +7,6 @@ import {
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
 import { BrandKnowledgePanel } from './BrandKnowledgePanel'
-import BrandKanbanLane from '../BrandKanbanLane'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { fmtFollower, normalizeDashboardPlatformId, toCardType } from './dashboardHomeUtils'
 import { ActionCard, AgentAvatar } from './DashboardHomeCards'
@@ -1068,23 +1067,6 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
         )
       })()}
 
-      {/* ── AI 活动战报 — 品牌泳道工作看板 ──────────────────────────── */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <Zap className="w-4 h-4 text-amber-500" />
-          <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-            AI 活动战报
-          </h3>
-        </div>
-        {activeBrand ? (
-          <BrandKanbanLane brandId={activeBrand.id} />
-        ) : (
-          <div className="flex flex-col items-center justify-center py-10 gap-2.5 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-            <Zap className="w-8 h-8 text-slate-200 dark:text-slate-700" />
-            <p className="text-sm font-bold text-slate-400">请先选择品牌</p>
-          </div>
-        )}
-      </section>
 
       {/* ROI / Conversion tracking removed as requested */}
 
