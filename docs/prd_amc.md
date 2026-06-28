@@ -290,3 +290,24 @@ model SystemConfig {
    - "重置筛选"按钮同步清空状态选择
 
 **冲突检查**：无冲突。本次变更不影响 PRD 核心功能（内容创作、发布日历、素材管理）。
+
+---
+
+## Changelog
+
+### v1.3 — 2026-06-28 品牌主看板重设计（Brand Profile View）
+
+**需求**：将 kanban 品牌主看板重设计为最佳展示品牌故事与品牌设定的方式，保留现有配置功能。
+
+**实现**：
+- **新建** `src/components/dashboard/BrandProfileView.tsx`：全屏覆盖式品牌档案页，4-tab 结构：
+  - **品牌故事 Tab**：品牌 Logo（可上传）、名称/简介/地址编辑、AI 语气风格、俚语词典
+  - **社交账号 Tab**：PostFast / Google Business / Lark 三平台卡片，点击调起 BrandSettingsPanel 配置弹窗
+  - **品牌上下文 Tab**：知识库说明卡片 + 门店配置入口，调起 BrandKnowledgePanel
+  - **订阅计划 Tab**：当前套餐展示、Add-on 状态、跳转订阅管理页链接
+- **修改** `src/components/dashboard/MMDashboard.tsx`：
+  - `activeSubPage` 类型新增 `'brand'`
+  - 侧边菜单顶部新增「品牌档案」入口（琥珀色高亮，排在所有功能菜单最前）
+  - 集成 `BrandProfileView`、`BrandSettingsPanel`、`BrandKnowledgePanel` 渲染逻辑
+
+**保留功能**：社交媒体配置、品牌上下文查看/修改、品牌订阅计划查看（均通过各自 Panel/链接调起）

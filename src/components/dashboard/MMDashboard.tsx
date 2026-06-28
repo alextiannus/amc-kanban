@@ -9,10 +9,13 @@ import {
   Send, RefreshCw, Layers, ShieldCheck, ChevronDown, Check,
   Play, BarChart2, Star, Video, Link, ArrowRight,
   Bell, Menu, Upload, X, ChevronUp, MapPin, Settings, LogOut,
-  Utensils, Copy
+  Utensils, Copy, BookOpen, User
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams } from 'next/navigation'
+import BrandProfileView from './BrandProfileView'
+import { BrandSettingsPanel } from './BrandSettingsPanel'
+import { BrandKnowledgePanel } from './BrandKnowledgePanel'
 
 const getMainAppUrl = (path: string) => {
   if (typeof window === 'undefined') return path
@@ -71,8 +74,10 @@ export default function MMDashboard() {
   const [loading, setLoading] = useState(true)
   
   // Sub-pages overlay view state
-  const [activeSubPage, setActiveSubPage] = useState<'calendar' | 'market' | 'assets' | 'settings' | null>(null)
+  const [activeSubPage, setActiveSubPage] = useState<'calendar' | 'market' | 'assets' | 'settings' | 'brand' | null>(null)
   const [sideMenuOpen, setSideMenuOpen] = useState(false)
+  const [showBrandSettings, setShowBrandSettings] = useState(false)
+  const [showKnowledgePanel, setShowKnowledgePanel] = useState(false)
   const [actionItems, setActionItems] = useState<any[]>([])
   const [notificationsExpanded, setNotificationsExpanded] = useState(false)
   
@@ -2888,6 +2893,16 @@ export default function MMDashboard() {
               <nav className="space-y-6 text-slate-700 dark:text-slate-200">
                 <button 
                   onClick={() => {
+                    setActiveSubPage('brand')
+                    setSideMenuOpen(false)
+                  }}
+                  className="w-full flex items-center gap-4 text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors py-2 text-left cursor-pointer"
+                >
+                  <User className="w-5.5 h-5.5 text-amber-500" />
+                  <span className="font-bold text-sm tracking-wide">品牌档案</span>
+                </button>
+                <button 
+                  onClick={() => {
                     setActiveSubPage('calendar')
                     setSideMenuOpen(false)
                   }}
@@ -2965,6 +2980,44 @@ export default function MMDashboard() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Brand Profile View */}
+      <AnimatePresence>
+        {activeSubPage === 'brand' && activeBrand && (
+          <BrandProfileView
+            brand={activeBrand}
+            brandTone={brandTone}
+            setBrandTone={setBrandTone}
+            slangDict={slangDict}
+            setSlangDict={setSlangDict}
+            subscriptionPlan={subscriptionPlan}
+            addons={addons}
+            onClose={() => setActiveSubPage(null)}
+            showToast={showToast}
+            onOpenSettings={() => setShowBrandSettings(true)}
+            onOpenKnowledge={() => setShowKnowledgePanel(true)}
+            subscriptionHref={activeBrand?.id ? getMainAppUrl(`/board/subscription/${activeBrand.id}`) : '#'}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* BrandSettingsPanel Modal */}
+      {showBrandSettings && activeBrand && (
+        <BrandSettingsPanel
+          brandId={activeBrand.id}
+          open={showBrandSettings}
+          onClose={() => setShowBrandSettings(false)}
+        />
+      )}
+
+      {/* BrandKnowledgePanel Modal */}
+      {showKnowledgePanel && activeBrand && (
+        <BrandKnowledgePanel
+          brandId={activeBrand.id}
+          open={showKnowledgePanel}
+          onClose={() => setShowKnowledgePanel(false)}
+        />
+      )}
 
     </div>
   )
