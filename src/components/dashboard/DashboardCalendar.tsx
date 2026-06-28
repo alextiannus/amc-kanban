@@ -36,7 +36,8 @@ import {
   ChevronDown,
   Check,
   Maximize2,
-  ExternalLink
+  ExternalLink,
+  Save
 } from 'lucide-react'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
@@ -2779,19 +2780,19 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                     className="absolute right-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-top-2 duration-150"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {/* Immediate publish */}
+                    {/* Save as draft */}
                     <button
                       type="button"
                       disabled={saving}
-                      onClick={() => { setShowPublishDropdown(false); handlePublishImmediately() }}
-                      className="w-full text-left px-3.5 py-2.5 flex items-center gap-3 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors group"
+                      onClick={() => { setShowPublishDropdown(false); saveDraft('draft') }}
+                      className="w-full text-left px-3.5 py-2.5 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group"
                     >
-                      <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">
-                        <Zap className="w-3.5 h-3.5 fill-current" />
+                      <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 group-hover:scale-110 transition-transform">
+                        <Save className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">立刻发布</p>
-                        <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">直接推送到社交平台</p>
+                        <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-slate-50 transition-colors">保存草稿</p>
+                        <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">保存到草稿箱，稍后发布</p>
                       </div>
                     </button>
 
@@ -3886,22 +3887,22 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
             {/* Options Selection */}
             <div className="mt-5 space-y-4">
-              {/* Option 1: Publish Immediately */}
+              {/* Option 1: Save as Draft */}
               <button
                 type="button"
-                onClick={handlePublishImmediately}
+                onClick={() => saveDraft('draft')}
                 disabled={saving}
-                className="w-full text-left p-4 rounded-2xl border border-slate-150 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/10 dark:hover:bg-emerald-950/10 transition-all flex items-start gap-4 group active:scale-[0.99] disabled:opacity-50"
+                className="w-full text-left p-4 rounded-2xl border border-slate-150 dark:border-slate-800 hover:border-slate-500 dark:hover:border-slate-500 hover:bg-slate-50/20 dark:hover:bg-slate-800/20 transition-all flex items-start gap-4 group active:scale-[0.99] disabled:opacity-50"
               >
-                <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">
-                  <Zap className="w-5 h-5 fill-current" />
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 group-hover:scale-110 transition-transform">
+                  <Save className="w-5 h-5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-xs font-black text-slate-800 dark:text-slate-150 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                    立刻发布 (Publish Now)
+                  <h4 className="text-xs font-black text-slate-800 dark:text-slate-150 group-hover:text-slate-900 dark:group-hover:text-slate-50 transition-colors">
+                    保存草稿 (Save as Draft)
                   </h4>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
-                    立刻将审核通过的内容发布推送到绑定的社交平台渠道。
+                    保存到草稿箱，随时在发布日历中查看和安排发布时间。
                   </p>
                 </div>
               </button>
