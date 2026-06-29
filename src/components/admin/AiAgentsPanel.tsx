@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { 
-  Bot, Plus, Search, Edit3, Trash2, Key, RefreshCw, FolderOpen, Link, Save, Users, Info
+  Bot, Plus, Search, Edit3, Trash2, Key, RefreshCw, FolderOpen, Link, Save, Users, Info, Bot as BotIcon, AlertCircle
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
 import { type AssignmentPoolMember } from '@/components/shared/types'
@@ -47,7 +47,13 @@ export default function AiAgentsPanel({
   onCreatePoolMember
 }: AiAgentsPanelProps) {
   const [searchTerm, setSearchTerm] = useState('')
-  const [email, setEmail] = useState('')
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+  
+  // Modals state
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newEmail, setNewEmail] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
   const [editingAgent, setEditingAgent] = useState<UserRecord | null>(null)
   const [agentDraft, setAgentDraft] = useState({
     nickname: '',
@@ -60,7 +66,7 @@ export default function AiAgentsPanel({
   })
 
   // Supervisor Selection State
-  const [selectedAgent, setSelectedAgent] = useState<UserRecord | null>(null)
+  const [selectedAgentForPrincipals, setSelectedAgentForPrincipals] = useState<UserRecord | null>(null)
   const [selectedAgentHumanIds, setSelectedAgentHumanIds] = useState<string[]>([])
 
   const humans = users.filter(u => u.type === 'HUMAN')
@@ -71,12 +77,14 @@ export default function AiAgentsPanel({
     (u.nickname && u.nickname.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const selectedAgent = agents.find(a => a.id === selectedAgentId)
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.trim()) return
-    onCreateUser(email.trim(), 'AI_AGENT', 'USER').then(() => {
-      setEmail('')
-    })
+    if (!newEmail.trim()) return
+    await onCreateUser(newEmail.trim(), 'AI_AGENT', 'USER')
+    setNewEmail('')
+    setShowCreateModal(false)
   }
 
   const poolMemberForAgent = (agentId: string) => poolMembers.find(member => member.agentId === agentId)
@@ -93,16 +101,17 @@ export default function AiAgentsPanel({
     return brandsList.length > max ? `${head} 等 ${brandsList.length} 个` : head
   }
 
-  const handleOpenAgentEditor = (agent: UserRecord) => {
-    setEditingAgent(agent)
+  const handleOpenAgentEditor = () => {
+    if (!selectedAgent) return
+    setEditingAgent(selectedAgent)
     setAgentDraft({
-      nickname: agent.nickname || '',
-      insights: agent.insights || '',
-      introduction: agent.introduction || '',
-      workflow: agent.workflow || '',
-      themeColor: agent.themeColor || '#6366f1',
-      chatLink: agent.chatLink || '',
-      driveFolder: agent.driveFolder || '',
+      nickname: selectedAgent.nickname || '',
+      insights: selectedAgent.insights || '',
+      introduction: selectedAgent.introduction || '',
+      workflow: selectedAgent.workflow || '',
+      themeColor: selectedAgent.themeColor || '#6366f1',
+      chatLink: selectedAgent.chatLink || '',
+      driveFolder: selectedAgent.driveFolder || '',
     })
   }
 
@@ -114,170 +123,253 @@ export default function AiAgentsPanel({
     }
   }
 
-  const handleOpenPrincipalsModal = (agent: UserRecord) => {
-    setSelectedAgent(agent)
-    setSelectedAgentHumanIds(agent.assignedToHumans.map(link => link.human.id))
+  const handleOpenPrincipalsModal = () => {
+    if (!selectedAgent) return
+    setSelectedAgentForPrincipals(selectedAgent)
+    setSelectedAgentHumanIds(selectedAgent.assignedToHumans.map(link => link.human.id))
   }
 
   const handleSavePrincipalsLocal = async () => {
+    if (!selectedAgentForPrincipals) return
+    await onSaveAgentPrincipals(selectedAgentForPrincipals.id, selectedAgentHumanIds)
+    setSelectedAgentForPrincipals(null)
+  }
+
+  const handleDeleteAgentLocal = async () => {
     if (!selectedAgent) return
-    await onSaveAgentPrincipals(selectedAgent.id, selectedAgentHumanIds)
-    setSelectedAgent(null)
+    await onDeleteUser(selectedAgent)
+    setSelectedAgentId(null)
+    setShowDeleteConfirm(false)
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200">
-      {/* Left: Create Agent form */}
-      <div className="lg:col-span-1">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-205 dark:border-slate-800 p-6 shadow-sm sticky top-6 space-y-4">
-          <h3 className="text-sm font-black text-slate-855 dark:text-slate-100 flex items-center gap-2">
-            <Plus size={16} className="text-blue-500" />
-            <span>添加新 AI Agent 序列</span>
-          </h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Agent 标识邮箱</label>
-              <input 
-                required 
-                type="email" 
-                value={email} 
-                onChange={e => setEmail(e.target.value)} 
-                placeholder="例如: copywriter-ny@openclaw.ai" 
-                className="w-full border border-slate-200 dark:border-slate-700 bg-slate-55 dark:bg-slate-850 dark:text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-            <button 
-              type="submit" 
-              disabled={creating} 
-              className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-blue-650 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold text-xs transition-all shadow-sm rounded-xl cursor-pointer"
-            >
-              {creating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Plus size={13} />}
-              <span>{creating ? '初始化序列中...' : '注册 AI 序列账号'}</span>
-            </button>
-          </form>
-          <p className="text-[10px] text-slate-405 leading-relaxed font-semibold">
-            提示：注册完成后，系统会为该 Agent 分配专有的 API 授权 Key，可用于对接外部 MCP 服务或者在多模型调度池中执行派单任务。
-          </p>
-        </div>
-      </div>
-
-      {/* Right: AI Agents list */}
-      <div className="lg:col-span-2 space-y-4">
-        {/* Search filter */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-202 dark:border-slate-800 p-4 shadow-sm flex items-center gap-3">
-          <Search size={16} className="text-slate-400" />
+    <div className="space-y-4">
+      {/* Top Action Toolbar */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Search */}
+        <div className="relative flex-1 max-w-md">
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
             type="text" 
             placeholder="搜索 AI 昵称、服务标识..." 
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="flex-1 bg-transparent text-sm focus:outline-none dark:text-white"
+            className="w-full pl-9 pr-4 py-2 bg-slate-55 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-200"
           />
         </div>
 
-        {/* List */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-202 dark:border-slate-800 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
-            <span className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Bot size={15} className="text-blue-500" /> AI 代理人设序列 ({filteredAgents.length})
-            </span>
-          </div>
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Create Button */}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center gap-1 px-3.5 py-2 bg-blue-650 hover:bg-blue-700 text-white font-extrabold text-xs transition-all shadow-sm rounded-xl cursor-pointer"
+          >
+            <Plus size={13} />
+            <span>新建 AI 序列</span>
+          </button>
 
-          {loading ? (
-            <div className="p-12 text-center text-sm text-slate-450">
-              <RefreshCw className="animate-spin inline-block mr-2 text-slate-400" size={16} />
-              加载 AI 员工中...
-            </div>
-          ) : filteredAgents.length === 0 ? (
-            <div className="p-12 text-center text-sm text-slate-450">
-              没有找到符合条件的 AI 代理
-            </div>
-          ) : (
-            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredAgents.map(agent => {
-                const member = poolMemberForAgent(agent.id)
-                const operatingBrands = uniqueBrandsFromAgentLinks(agent.brandMemberships)
-                const isDeleting = !!actionLoading[agent.id + '_del']
+          {/* Edit Prompt Button */}
+          <button
+            onClick={handleOpenAgentEditor}
+            disabled={!selectedAgentId}
+            className="inline-flex items-center gap-1 px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-350 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 disabled:opacity-40 transition-all cursor-pointer shadow-sm"
+          >
+            <Edit3 size={13} className="text-blue-500" />
+            <span>配置人设指令</span>
+          </button>
 
-                return (
-                  <li key={agent.id} className="px-6 py-4 space-y-4 hover:bg-slate-50/30 dark:hover:bg-slate-850/10 transition-colors">
-                    <div className="flex items-start gap-4 flex-col sm:flex-row justify-between">
-                      <div className="flex items-start gap-3.5 min-w-0">
-                        <div 
-                          className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-inner"
-                          style={{ backgroundColor: agent.themeColor || '#6366f1' }}
-                        >
-                          <Bot size={18} className="text-white" />
-                        </div>
-                        <div className="space-y-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-black text-slate-850 dark:text-white leading-none">{agent.nickname || '未命名 Agent'}</h4>
-                            {member && (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 border border-emerald-100 dark:border-emerald-900/30">
-                                派单池在线: {member.currentLoad}/{member.capacity}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-slate-400 font-mono leading-none truncate">{agent.email}</p>
-                          <div className="space-y-0.5 pt-1 text-[10px] text-slate-450 font-bold">
-                            <p>
-                              <span>指派主理人:</span>{' '}
-                              <span className="text-slate-700 dark:text-slate-300">
-                                {agent.assignedToHumans.length 
-                                  ? agent.assignedToHumans.map(link => link.human.nickname || link.human.email).join('、') 
-                                  : '未指定'
-                                }
-                              </span>
-                            </p>
-                            <p>
-                              <span>绑定品牌:</span>{' '}
-                              <span className="text-slate-700 dark:text-slate-300">{formatBrandNames(operatingBrands)}</span>
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+          {/* Delegate Principal Button */}
+          <button
+            onClick={handleOpenPrincipalsModal}
+            disabled={!selectedAgentId}
+            className="inline-flex items-center gap-1 px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-350 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 disabled:opacity-40 transition-all cursor-pointer shadow-sm"
+          >
+            <Users size={13} className="text-indigo-500" />
+            <span>委派主理人</span>
+          </button>
 
-                      <div className="flex items-center gap-1.5 self-end sm:self-auto flex-shrink-0">
-                        <button
-                          onClick={() => handleOpenPrincipalsModal(agent)}
-                          className="px-2 py-1 bg-white hover:bg-slate-50 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-bold text-slate-700 dark:text-slate-350 dark:bg-slate-900 dark:hover:bg-slate-800 transition-all cursor-pointer"
-                        >
-                          委派主理人
-                        </button>
-
-                        <button 
-                          onClick={() => handleOpenAgentEditor(agent)} 
-                          className="p-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
-                          title="编辑人设与系统指令"
-                        >
-                          <Edit3 size={12} />
-                        </button>
-                        
-                        <button 
-                          onClick={() => onDeleteUser(agent)}
-                          disabled={isDeleting}
-                          className="p-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-450 hover:text-rose-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
-                          title="删除 Agent"
-                        >
-                          <Trash2 size={12} className={isDeleting ? 'animate-spin' : ''} />
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
+          {/* Delete Button */}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={!selectedAgentId || !!actionLoading[selectedAgentId + '_del']}
+            className="inline-flex items-center gap-1 px-3.5 py-2 border border-rose-150 dark:border-rose-955 bg-rose-50 hover:bg-rose-100 dark:bg-rose-955/20 text-rose-600 dark:text-rose-455 disabled:opacity-40 transition-all shadow-sm rounded-xl cursor-pointer"
+          >
+            <Trash2 size={13} />
+            <span>删除序列</span>
+          </button>
         </div>
       </div>
 
-      {/* Editing Dialog Modal */}
+      {/* Selection Active Banner */}
+      {selectedAgent && (
+        <div className="bg-blue-50/50 dark:bg-slate-900/30 border border-blue-100 dark:border-slate-800 px-4 py-2.5 rounded-xl text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center justify-between gap-3 animate-in slide-in-from-top-2 duration-200">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-550 animate-ping" />
+            已选择 AI 序列：<strong className="text-slate-850 dark:text-slate-200">{selectedAgent.nickname || selectedAgent.email}</strong>（{selectedAgent.email}）
+          </span>
+          <button onClick={() => setSelectedAgentId(null)} className="text-blue-650 hover:underline dark:text-blue-400 cursor-pointer">清除选择</button>
+        </div>
+      )}
+
+      {/* Main Table List */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-202 dark:border-slate-800 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center text-xs text-slate-450">
+            <RefreshCw className="animate-spin inline-block mr-2 text-slate-400" size={16} />
+            正在载入 AI 序列列表...
+          </div>
+        ) : filteredAgents.length === 0 ? (
+          <div className="p-12 text-center text-xs text-slate-450">
+            暂无 AI 员工代理序列数据，请在上方“新建 AI 序列”
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-905 text-slate-400 font-extrabold uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                <tr>
+                  <th className="w-12 px-4 py-3 text-center">选择</th>
+                  <th className="text-left px-4 py-3">昵称 / 人设名称</th>
+                  <th className="text-left px-4 py-3">服务识别邮箱</th>
+                  <th className="text-left px-4 py-3">指派人类主理人</th>
+                  <th className="text-left px-4 py-3">绑定托管品牌</th>
+                  <th className="text-left px-4 py-3">智能派单负荷</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-650 dark:text-slate-300">
+                {filteredAgents.map(agent => {
+                  const isSelected = selectedAgentId === agent.id
+                  const member = poolMemberForAgent(agent.id)
+                  const operatingBrands = uniqueBrandsFromAgentLinks(agent.brandMemberships)
+
+                  return (
+                    <tr
+                      key={agent.id}
+                      onClick={() => setSelectedAgentId(isSelected ? null : agent.id)}
+                      className={`cursor-pointer transition-colors ${
+                        isSelected 
+                          ? 'bg-blue-50/30 dark:bg-slate-800/40 border-l-2 border-l-blue-600' 
+                          : 'hover:bg-slate-50/30 dark:hover:bg-slate-850/10'
+                      }`}
+                    >
+                      {/* Checkbox */}
+                      <td className="px-4 py-3.5 text-center">
+                        <input 
+                          type="radio" 
+                          checked={isSelected}
+                          onChange={() => {}} // Controlled by row onClick
+                          className="w-3.5 h-3.5 text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+                        />
+                      </td>
+
+                      {/* Nickname & Avatar */}
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-5.5 h-5.5 rounded-lg flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: agent.themeColor || '#6366f1' }}
+                          >
+                            <Bot size={11} className="text-white" />
+                          </div>
+                          <span className="font-black text-slate-850 dark:text-white">
+                            {agent.nickname || '未命名 Agent'}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Email */}
+                      <td className="px-4 py-3.5 font-mono text-slate-400">
+                        {agent.email}
+                      </td>
+
+                      {/* Supervisors */}
+                      <td className="px-4 py-3.5 font-bold text-slate-700 dark:text-slate-350">
+                        {agent.assignedToHumans.length 
+                          ? agent.assignedToHumans.map(link => link.human.nickname || link.human.email).join('、') 
+                          : '未指定主理人'
+                        }
+                      </td>
+
+                      {/* Operating Brands */}
+                      <td className="px-4 py-3.5 font-medium text-slate-405">
+                        {formatBrandNames(operatingBrands)}
+                      </td>
+
+                      {/* Load */}
+                      <td className="px-4 py-3.5">
+                        {member ? (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30">
+                            在线: {member.currentLoad}/{member.capacity}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">池外</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Modal 1: 新建 AI 序列 */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div>
+              <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                <BotIcon size={16} className="text-blue-500" />
+                <span>注册 AI 代理人设序列</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">设置专有的标识邮箱以创建全新的 AI 员工序列，注册后系统会自动发放 API 授权凭证。</p>
+            </div>
+
+            <form onSubmit={handleCreateSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Agent 标识邮箱</label>
+                <input 
+                  required 
+                  type="email" 
+                  value={newEmail} 
+                  onChange={e => setNewEmail(e.target.value)} 
+                  placeholder="例如: brand-assistant@openclaw.ai" 
+                  className="w-full border border-slate-200 dark:border-slate-700 bg-slate-55 dark:bg-slate-850 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-555 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="px-5 py-2 rounded-xl text-xs font-black bg-blue-650 hover:bg-blue-700 text-white disabled:opacity-50 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  {creating ? '初始化中...' : '注册 AI 序列'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: 详情人设修改 */}
       {editingAgent && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-5 scrollbar-thin">
             <div>
-              <h2 className="text-base font-black text-slate-900 dark:text-white">配置【{editingAgent.nickname}】人设参数</h2>
-              <p className="text-xs text-slate-400 mt-1">设置此 Agent 运行时的基调、系统指令及托管参数：</p>
+              <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Edit3 size={15} className="text-indigo-500" />
+                <span>配置【{editingAgent.nickname || editingAgent.email}】人设与系统指令</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">设置此 Agent 运行时的语气人设、敏感规避以及系统指令：</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -286,7 +378,7 @@ export default function AiAgentsPanel({
                 <input 
                   value={agentDraft.nickname} 
                   onChange={e => setAgentDraft(prev => ({ ...prev, nickname: e.target.value }))} 
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none" 
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs dark:text-white focus:outline-none" 
                 />
               </label>
               <label className="space-y-1.5 block">
@@ -295,7 +387,7 @@ export default function AiAgentsPanel({
                   value={agentDraft.themeColor} 
                   onChange={e => setAgentDraft(prev => ({ ...prev, themeColor: e.target.value }))} 
                   placeholder="#6366f1"
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none" 
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs dark:text-white focus:outline-none" 
                 />
               </label>
               <label className="space-y-1.5 md:col-span-2 block">
@@ -304,7 +396,7 @@ export default function AiAgentsPanel({
                   value={agentDraft.chatLink} 
                   onChange={e => setAgentDraft(prev => ({ ...prev, chatLink: e.target.value }))} 
                   placeholder="https://example.com/bot"
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none" 
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs dark:text-white focus:outline-none" 
                 />
               </label>
               <label className="space-y-1.5 md:col-span-2 block">
@@ -313,7 +405,7 @@ export default function AiAgentsPanel({
                   value={agentDraft.driveFolder} 
                   onChange={e => setAgentDraft(prev => ({ ...prev, driveFolder: e.target.value }))} 
                   placeholder="请输入 Google Drive Folder ID"
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none" 
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs dark:text-white focus:outline-none" 
                 />
               </label>
               <label className="space-y-1.5 md:col-span-2 block">
@@ -321,8 +413,8 @@ export default function AiAgentsPanel({
                 <textarea 
                   value={agentDraft.insights} 
                   onChange={e => setAgentDraft(prev => ({ ...prev, insights: e.target.value }))} 
-                  rows={3} 
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2 text-sm dark:text-white focus:outline-none" 
+                  rows={2} 
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2 text-xs dark:text-white focus:outline-none resize-none" 
                 />
               </label>
               <label className="space-y-1.5 md:col-span-2 block">
@@ -330,8 +422,8 @@ export default function AiAgentsPanel({
                 <textarea 
                   value={agentDraft.introduction} 
                   onChange={e => setAgentDraft(prev => ({ ...prev, introduction: e.target.value }))} 
-                  rows={3} 
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2 text-sm dark:text-white focus:outline-none" 
+                  rows={2} 
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2 text-xs dark:text-white focus:outline-none" 
                 />
               </label>
               <label className="space-y-1.5 md:col-span-2 block">
@@ -349,7 +441,7 @@ export default function AiAgentsPanel({
               <button
                 type="button"
                 onClick={() => setEditingAgent(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-550 dark:text-slate-350 hover:bg-slate-105 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-555 dark:text-slate-350 hover:bg-slate-105 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
               >
                 取消
               </button>
@@ -358,19 +450,22 @@ export default function AiAgentsPanel({
                 disabled={!!actionLoading[editingAgent.id + '_edit']}
                 className="px-5 py-2 rounded-xl text-xs font-black bg-blue-650 hover:bg-blue-700 text-white disabled:opacity-50 shadow-sm transition-all cursor-pointer"
               >
-                {actionLoading[editingAgent.id + '_edit'] ? '保存中...' : '保存 Agent'}
+                {actionLoading[editingAgent.id + '_edit'] ? '保存中...' : '保存配置'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delegate Supervisors Modal */}
-      {selectedAgent && (
+      {/* Modal 3: Delegate Supervisors Modal */}
+      {selectedAgentForPrincipals && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-4">
             <div>
-              <h2 className="text-base font-black text-slate-900 dark:text-white">配置【{selectedAgent.nickname || selectedAgent.email}】的主理人</h2>
+              <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Users size={16} className="text-blue-500" />
+                <span>配置【{selectedAgentForPrincipals.nickname || selectedAgentForPrincipals.email}】的主理人</span>
+              </h2>
               <p className="text-xs text-slate-400 mt-1">选择指派监管此 Agent 的人类运营主理人：</p>
             </div>
 
@@ -410,8 +505,8 @@ export default function AiAgentsPanel({
             <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
-                onClick={() => setSelectedAgent(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-550 dark:text-slate-350 hover:bg-slate-105 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
+                onClick={() => setSelectedAgentForPrincipals(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-555 dark:text-slate-355 hover:bg-slate-105 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
               >
                 取消
               </button>
@@ -421,6 +516,36 @@ export default function AiAgentsPanel({
                 className="px-5 py-2 rounded-xl text-xs font-black bg-blue-650 hover:bg-blue-700 text-white disabled:opacity-50 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 {savingPerms ? '保存中...' : '保存主理人'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 4: 删除 Agent 确认 */}
+      {showDeleteConfirm && selectedAgent && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center gap-2 text-rose-500">
+              <AlertCircle size={20} />
+              <h2 className="text-base font-black">删除 AI 序列确认</h2>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed font-medium">
+              确认要彻底删除 AI 员工序列账户 <strong className="text-slate-850 dark:text-white">{selectedAgent.nickname || selectedAgent.email}</strong> 吗？
+              删除后其绑定的派单关系和人设将彻底被清除，此操作不可恢复。
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-555 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDeleteAgentLocal}
+                className="px-5 py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition-all cursor-pointer"
+              >
+                确认删除
               </button>
             </div>
           </div>
