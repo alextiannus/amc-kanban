@@ -366,3 +366,50 @@ model SystemConfig {
 - `src/components/CopywriterLogPanel.tsx`（新建）
 - `src/app/admin/page.tsx`（新 tab + 导出按钮）
 - kanban Copywriter 路由（集成日志上报）
+
+---
+
+## Changelog v1.7 — 2026-06-29
+
+### Scheduler 智能排期巡检系统
+
+**背景与决策**：
+- 触发方式：定时（Cron，每天 09:00）+ 手动触发（Admin/Coordinator）
+- 发布标准：系统统一标准（暂不支持 per-brand 自定义频率）
+- 重复检测：主题级别（关键词 Jaccard 相似度），30 天时间窗口，阈值 0.45
+- 未绑定平台跳过频率检查（只检查已连接的 SocialAccount）
+- 重复告警为**警告提醒**，不阻止发布
+
+**AI Staff 角色体系对齐**：
+- Copywriter（内容运营官）：amc-kanban 核心，已实现
+- VideoCreator（视频运营官）：amc-kanban，节点存在，功能待扩展
+- Scheduler（智能排期官）：amc-kanban，**本次实现**
+- Designer（素材加工官）：amc-kanban，已实现
+
+**Scheduler 发布频率标准（系统默认值）**：
+| 平台 | 最低频率 | 沉默告警阈值 |
+|------|---------|------------|
+| Instagram | ≥ 2 篇/周 | 4 天无发布 |
+| 小红书 | ≥ 2 篇/周 | 4 天无发布 |
+| Google | ≥ 1 篇/周 | 4 天无发布 |
+| Facebook | ≥ 1 篇/周 | 4 天无发布 |
+| TikTok | ≥ 1 篇/周 | 4 天无发布 |
+
+**告警类型（ActionItem.type）**：
+- `scheduler_silence_alert`（high）：某平台超 4 天未发布
+- `scheduler_frequency_low`（normal）：本周发布量低于标准
+- `scheduler_topic_duplicate`（normal）：待发草稿与 30 天内内容主题相似度 > 45%
+- `scheduler_publish_failed`（high）：草稿发布失败未处理
+
+**新增文件**：
+- `src/lib/topicExtractor.ts`：关键词萃取 + Jaccard 相似度（无外部 API）
+- `src/agents/nodes/scheduler.ts`：Scheduler 巡检主节点
+- `src/app/api/scheduler/daily-check/route.ts`：巡检触发 API（POST/GET）
+- `src/app/api/scheduler/reports/route.ts`：历史报告查询 API
+- `src/components/admin/SchedulerPanel.tsx`：Admin 巡检管理面板
+
+**修改文件**：
+- `prisma/schema.prisma`：ContentDraft + topicKeywords、SystemConfig + publishingStandards、新增 SchedulerReport 表
+- `src/lib/systemConfig.ts`：新增 getPublishingStandards() + PublishingStandards 类型
+- `src/agents/nodes/publisher.ts`：草稿创建时写入 topicKeywords + 重复警告
+- `src/app/admin/page.tsx`：接入 SchedulerPanel

@@ -41,3 +41,49 @@ export async function getAzureSpeechConfig(): Promise<{ key: string; region: str
     return null
   }
 }
+
+/** ─── Publishing Standards ─────────────────────────────────────────────────
+ * 系统统一发布频率标准。
+ * Admin → System Config UI 中可覆盖，否则使用 DEFAULT_PUBLISHING_STANDARDS。
+ */
+export interface PlatformStandard {
+  minPerWeek: number   // 每周最低发布篇数
+}
+
+export interface PublishingStandards {
+  maxDaysSilent: number                        // 某平台超过N天无发布即告警
+  minTotalPerWeek: number                      // 全平台汇总每周最低总篇数
+  platforms: Record<string, PlatformStandard>  // per-platform 标准，key = platform slug
+}
+
+export const DEFAULT_PUBLISHING_STANDARDS: PublishingStandards = {
+  maxDaysSilent: 4,
+  minTotalPerWeek: 3,
+  platforms: {
+    instagram:    { minPerWeek: 2 },
+    xiaohongshu:  { minPerWeek: 2 },
+    google:       { minPerWeek: 1 },
+    facebook:     { minPerWeek: 1 },
+    tiktok:       { minPerWeek: 1 },
+  },
+}
+
+export async function getPublishingStandards(): Promise<PublishingStandards> {
+  try {
+    const config = await ensureSystemConfig()
+    if (config.publishingStandards) {
+      const stored = config.publishingStandards as Partial<PublishingStandards>
+      return {
+        ...DEFAULT_PUBLISHING_STANDARDS,
+        ...stored,
+        platforms: {
+          ...DEFAULT_PUBLISHING_STANDARDS.platforms,
+          ...(stored.platforms ?? {}),
+        },
+      }
+    }
+    return DEFAULT_PUBLISHING_STANDARDS
+  } catch {
+    return DEFAULT_PUBLISHING_STANDARDS
+  }
+}

@@ -405,6 +405,7 @@ model ContentDraft {
   platformPostId String?
   publishedAt    DateTime?
   creativeHooks  String?
+  topicKeywords  String[]       @default([]) // 主题关键词，用于30天重复检测
 
   actionItem     ActionItem?
   assetRefs      ContentAssetRef[]
@@ -703,12 +704,25 @@ model BrandAgentCheckpoint {
 }
 
 model SystemConfig {
-  id                 String   @id @default("default")
-  geminiApiKey       String?
-  azureSpeechKey     String?  // Microsoft Azure Speech TTS key
-  azureSpeechRegion  String?  // e.g. "eastasia", "southeastasia"
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                   String   @id @default("default")
+  geminiApiKey         String?
+  azureSpeechKey       String?  // Microsoft Azure Speech TTS key
+  azureSpeechRegion    String?  // e.g. "eastasia", "southeastasia"
+  publishingStandards  Json?    // 系统统一发布频率标准，见 getPublishingStandards()
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// Scheduler 每次巡检的报告记录
+model SchedulerReport {
+  id          String   @id @default(cuid())
+  triggeredBy String   // 'cron' | userId (手动触发者)
+  runAt       DateTime @default(now())
+  summary     Json     // { totalBrands, alertsGenerated, duration }
+  details     Json     // 完整巡检结果数组
+  status      String   @default("completed") // completed | failed
+
+  @@index([runAt])
 }
 
 model SocialAccountSnapshot {

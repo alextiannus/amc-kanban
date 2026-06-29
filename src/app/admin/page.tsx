@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users, Store, CreditCard, Sparkles, MessageSquare } from 'lucide-react'
 import TrainingDataSection from '@/components/TrainingDataSection'
+import SchedulerPanel from '@/components/admin/SchedulerPanel'
 
 interface UserRecord {
   id: string
@@ -1466,6 +1467,11 @@ export default function AdminPage() {
                   免费层：每月 5 小时 Neural TTS（F0 定价）。Key 存储于数据库，不写入 Render 环境变量。
                 </p>
               </div>
+            </div>
+
+            {/* Scheduler 智能排期巡检面板 */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6">
+              <SchedulerPanel />
             </div>
 
             {/* Detailed System Logs */}

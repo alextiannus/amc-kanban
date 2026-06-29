@@ -55,7 +55,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "caniuse-lite": "^1.0.30001799",
-    "dotenv": "^17.4.2",
+    "dotenv": "^16.6.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "js-yaml": "^4.1.1",
