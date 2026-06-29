@@ -197,6 +197,14 @@ export default function Sidebar({
   }
 
   const menuGroups: MenuGroupDef[] = getMenuGroups(userRoles)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+
+  const toggleGroup = (label: string) => {
+    setCollapsedGroups(prev => ({
+      ...prev,
+      [label]: !prev[label]
+    }))
+  }
 
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardSuccess, setWizardSuccess] = useState<{ brandName: string } | null>(null)
@@ -245,99 +253,120 @@ export default function Sidebar({
 
       {/* ── Menu Groups ───────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto py-2 space-y-0.5 scrollbar-thin scrollbar-thumb-slate-100 dark:scrollbar-thumb-slate-800">
-        {menuGroups.map((group, gi) => (
-          <div key={gi}>
-            {/* ── Group separator (not the first group) */}
-            {gi > 0 && (
-              <div className="mx-3 my-2 h-px bg-slate-100 dark:bg-slate-800" />
-            )}
+        {menuGroups.map((group, gi) => {
+          const labelKey = group.groupLabel || String(gi)
+          const isGroupCollapsed = !collapsed && !!collapsedGroups[labelKey]
 
-            {/* ── Group label or Brand-section header ─────────────── */}
-            {group.isBrandSection ? (
-              /* Brand section: label above + switcher below */
-              <div>
-                {!collapsed && (
-                  <p className="px-4 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 dark:text-slate-500 select-none">
-                    {group.groupLabel}
-                  </p>
-                )}
-                <div className="px-2 pb-1">
-                  <InlineBrandSwitcher
-                    brands={brands}
-                    activeBrand={activeBrand}
-                    setActiveBrand={setActiveBrand}
-                    collapsed={collapsed}
-                  />
-                </div>
-              </div>
-            ) : group.groupLabel ? (
-              !collapsed ? (
-                <p className="px-4 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 dark:text-slate-500 select-none">
-                  {group.groupLabel}
-                  {group.isComingSoon && (
-                    <span className="ml-1.5 text-[9px] font-bold bg-amber-50 dark:bg-amber-900/30 text-amber-500 rounded px-1 py-px">即将上线</span>
+          return (
+            <div key={gi}>
+              {/* ── Group separator (not the first group) */}
+              {gi > 0 && (
+                <div className="mx-3 my-2 h-px bg-slate-100 dark:bg-slate-800" />
+              )}
+
+              {/* ── Group label or Brand-section header ─────────────── */}
+              {group.isBrandSection ? (
+                /* Brand section: label above + switcher below */
+                <div className="space-y-1">
+                  {!collapsed && (
+                    <button
+                      onClick={() => toggleGroup(labelKey)}
+                      className="w-full flex items-center justify-between px-4 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-300 transition-colors select-none text-left cursor-pointer"
+                    >
+                      <span>{group.groupLabel}</span>
+                      <span className="text-slate-400 dark:text-slate-650">
+                        {isGroupCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
+                      </span>
+                    </button>
                   )}
-                </p>
-              ) : null
-            ) : null}
-
-            {/* ── Menu items ──────────────────────────────────────── */}
-            {group.items.map(item => {
-              const isActive = !item.comingSoon && !item.href && currentView === item.view
-              return (
-                <div key={item.id} className="relative group/item px-2">
-                  <button
-                    onClick={() => handleItemClick(item)}
-                    disabled={!!item.comingSoon}
-                    title={collapsed ? item.label : undefined}
-                    className={`
-                      w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium
-                      transition-all duration-150 text-left
-                      ${item.comingSoon
-                        ? 'opacity-35 cursor-not-allowed text-slate-400 dark:text-slate-600'
-                        : isActive
-                          ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold'
-                          : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
-                      }
-                      ${collapsed ? 'justify-center' : ''}
-                    `}
-                  >
-                    {/* Active indicator bar */}
-                    {isActive && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-500 rounded-r-full" />
-                    )}
-
-                    <span className="shrink-0">
-                      <NavIcon name={item.icon} size={16} />
-                    </span>
-
-                    {!collapsed && (
-                      <span className="flex-1 truncate">{item.label}</span>
-                    )}
-
-                    {item.comingSoon && !collapsed && (
-                      <Lock size={11} className="shrink-0 text-slate-300 dark:text-slate-600" />
-                    )}
-                  </button>
-
-                  {/* Tooltip for collapsed mode */}
-                  {collapsed && (
-                    <div className="
-                      absolute left-full top-1/2 -translate-y-1/2 ml-3
-                      bg-slate-800 dark:bg-slate-700 text-white text-xs font-semibold
-                      px-2.5 py-1.5 rounded-lg whitespace-nowrap
-                      opacity-0 group-hover/item:opacity-100
-                      pointer-events-none transition-opacity duration-150 z-50 shadow-lg
-                    ">
-                      {item.label}{item.comingSoon ? ' (即将上线)' : ''}
-                      <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-800 dark:border-r-slate-700" />
+                  {!isGroupCollapsed && (
+                    <div className="px-2 pb-1">
+                      <InlineBrandSwitcher
+                        brands={brands}
+                        activeBrand={activeBrand}
+                        setActiveBrand={setActiveBrand}
+                        collapsed={collapsed}
+                      />
                     </div>
                   )}
                 </div>
-              )
-            })}
-          </div>
-        ))}
+              ) : group.groupLabel ? (
+                !collapsed ? (
+                  <button
+                    onClick={() => toggleGroup(labelKey)}
+                    className="w-full flex items-center justify-between px-4 pt-3 pb-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-300 transition-colors select-none text-left cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1">
+                      {group.groupLabel}
+                      {group.isComingSoon && (
+                        <span className="normal-case font-bold text-[9px] bg-amber-50 dark:bg-amber-900/30 text-amber-500 rounded px-1 py-px">即将上线</span>
+                      )}
+                    </span>
+                    <span className="text-slate-400 dark:text-slate-650">
+                      {isGroupCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
+                    </span>
+                  </button>
+                ) : null
+              ) : null}
+
+              {/* ── Menu items ──────────────────────────────────────── */}
+              {!isGroupCollapsed && group.items.map(item => {
+                const isActive = !item.comingSoon && !item.href && currentView === item.view
+                return (
+                  <div key={item.id} className="relative group/item px-2">
+                    <button
+                      onClick={() => handleItemClick(item)}
+                      disabled={!!item.comingSoon}
+                      title={collapsed ? item.label : undefined}
+                      className={`
+                        w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium
+                        transition-all duration-150 text-left
+                        ${item.comingSoon
+                          ? 'opacity-35 cursor-not-allowed text-slate-400 dark:text-slate-600'
+                          : isActive
+                            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
+                        }
+                        ${collapsed ? 'justify-center' : ''}
+                      `}
+                    >
+                      {/* Active indicator bar */}
+                      {isActive && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-blue-500 rounded-r-full" />
+                      )}
+
+                      <span className="shrink-0">
+                        <NavIcon name={item.icon} size={16} />
+                      </span>
+
+                      {!collapsed && (
+                        <span className="flex-1 truncate">{item.label}</span>
+                      )}
+
+                      {item.comingSoon && !collapsed && (
+                        <Lock size={11} className="shrink-0 text-slate-300 dark:text-slate-600" />
+                      )}
+                    </button>
+
+                    {/* Tooltip for collapsed mode */}
+                    {collapsed && (
+                      <div className="
+                        absolute left-full top-1/2 -translate-y-1/2 ml-3
+                        bg-slate-800 dark:bg-slate-700 text-white text-xs font-semibold
+                        px-2.5 py-1.5 rounded-lg whitespace-nowrap
+                        opacity-0 group-hover/item:opacity-100
+                        pointer-events-none transition-opacity duration-150 z-50 shadow-lg
+                      ">
+                        {item.label}{item.comingSoon ? ' (即将上线)' : ''}
+                        <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-800 dark:border-r-slate-700" />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })}
       </nav>
 
       {/* ── New Brand Button (for Principal / BD / Admin) ──────────── */}
