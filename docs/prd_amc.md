@@ -667,3 +667,19 @@ RolePermission 表：
 
 ### 影响文件
 - `src/components/dashboard/DashboardCalendar.tsx`
+
+---
+
+## Changelog v1.8.4 — 2026-06-29（统一发布预览看板看板及 AI 创作默认包含小红书）
+
+### 统一发布预览看板与多渠道 AI 创作流程优化
+- **提取 PostPreviewModal 独立通用组件**：将之前内嵌于 `DashboardCalendar` 中用于渲染五大平台 Mockup 预览的几百行复杂页面代码拆分并重构为一个独立的高内聚 `PostPreviewModal` 组件。支持针对各个平台设置独立的媒体滑块（图片轮播 / 视频播放）以及平台专属 caption / hashtags 的专属行内编辑弹窗。
+- **日历与 Post 视图统一接入**：将 `DashboardCalendar` 的内嵌预览弹窗替换为 `<PostPreviewModal>`。在 `DraftManagementView` 中引入同样的新组件，将 AI 创作交互从原先的“直接关闭抽屉 + alert 提示”重构为“直接呼起多平台预览模态窗并在其中轮询 AI 状态，允许行内编辑和审核”。
+- **三按钮集成与智能排期**：模态框底部固定渲染“取消创作”、“保存草稿”及“智能排期”三个主操作按钮。其中“取消创作”将物理清空 DB 中已生成的草稿，“保存草稿”为正常保存，“智能排期”自动请求品牌智能排期时段推荐 API 获得最合时宜的建议发布时刻，并直接提交至发布审查系统。
+- **小红书默认强制创作**：在日历和草稿管理页面的“✨ AI 创作” / “✨ AI 重新创作”点击逻辑中，在触发 save/trigger 之前，自动检测并补齐所选发布渠道中的小红书（已授权账号则补足对应账号，未配置时自动补齐 unconfigured_red 虚拟占位符），实现 AI 撰写必定包含小红书内容的心智要求。
+
+### 影响文件
+- `src/components/dashboard/PostPreviewModal.tsx`
+- `src/components/dashboard/DashboardCalendar.tsx`
+- `src/components/dashboard/DraftManagementView.tsx`
+- `docs/prd_amc.md`
