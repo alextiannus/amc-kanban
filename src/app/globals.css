@@ -18,6 +18,16 @@
   --font-hanken: var(--font-hanken-next), "Hanken Grotesk", sans-serif;
   --font-manrope: var(--font-manrope-next), "Manrope", sans-serif;
   --font-jetbrains: var(--font-jetbrains-next), "JetBrains Mono", monospace;
+
+  /* Custom Slate Color Scale Extensions (for compatibility with legacy codebase layout tokens) */
+  --color-slate-150: #f1f5f9;
+  --color-slate-350: #94a3b8;
+  --color-slate-450: #64748b;
+  --color-slate-550: #475569;
+  --color-slate-650: #334155;
+  --color-slate-655: #334155;
+  --color-slate-750: #1e293b;
+  --color-slate-850: #0f172a;
 }
 
 @media (prefers-color-scheme: dark) {

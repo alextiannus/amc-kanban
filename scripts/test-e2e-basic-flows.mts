@@ -76,7 +76,7 @@ async function main() {
     where: { email: { in: allEmails } },
     select: { id: true }
   })
-  const existingUserIds = existingUsers.map(u => u.id)
+  const existingUserIds = existingUsers.map((u: { id: string }) => u.id)
 
   if (existingUserIds.length > 0) {
     await prisma.promoCodeUsage.deleteMany({ where: { userId: { in: existingUserIds } } })
@@ -320,7 +320,7 @@ async function main() {
       where: { email: { in: allEmails } },
       select: { id: true }
     })
-    const cleanupIds = cleanupUsers.map(u => u.id)
+    const cleanupIds = cleanupUsers.map((u: { id: string }) => u.id)
 
     if (cleanupIds.length > 0) {
       await prisma.promoCodeUsage.deleteMany({ where: { userId: { in: cleanupIds } } })
