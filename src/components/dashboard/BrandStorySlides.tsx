@@ -165,26 +165,6 @@ function buildSlides(params: {
     })
   }
 
-  // ── Slide 6: 服务套餐 ──────────────────────────────────────────────────
-  const isActive = subscription?.status === 'ACTIVE'
-  const expiry = subscription?.contractEndDate
-    ? new Date(subscription.contractEndDate).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
-    : null
-  slides.push({
-    id: 'subscription',
-    emoji: '💎',
-    label: '服务套餐',
-    headline: subscription?.planName ?? '暂无套餐',
-    body: isActive
-      ? expiry ? `服务有效期至 ${expiry}` : '订阅已激活，AI 团队全力运转中'
-      : '套餐待激活，请联系 AMC 服务团队完成收款确认',
-    gradient: isActive
-      ? 'from-amber-500 via-yellow-500 to-orange-500'
-      : 'from-slate-600 via-slate-700 to-slate-800',
-    glowColor: isActive ? 'rgba(245,158,11,0.4)' : 'rgba(100,116,139,0.3)',
-    icon: Shield,
-  })
-
   return slides
 }
 

@@ -10,6 +10,7 @@ import {
   Briefcase, TrendingUp,
   ChevronLeft, ChevronRight, ChevronDown,
   Lock, Plus,
+  BookOpen,
 } from 'lucide-react'
 import { type BoardView, type MenuGroupDef, type AppRole, getMenuGroups } from '@/lib/permissions'
 import { type Brand } from './BrandSwitcher'
@@ -22,6 +23,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Users, Inbox,
   Bot, Shield,
   Briefcase, TrendingUp,
+  BookOpen,
 }
 
 function NavIcon({ name, size = 16 }: { name: string; size?: number }) {

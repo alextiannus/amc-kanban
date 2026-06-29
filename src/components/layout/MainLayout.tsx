@@ -32,7 +32,7 @@ interface MainLayoutProps {
 }
 
 const VIEW_LABEL_MAP: Record<BoardView, string> = {
-  dashboard: '品牌主看板',
+  dashboard: '品牌故事',
   calendar: '发布日历',
   drafts: '发布内容 (Post)',
   assets: '素材库',

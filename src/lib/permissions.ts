@@ -117,7 +117,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
   // ── 2. 品牌主 (Brand-level ops — inline brand switcher as header) ─
   if (canBrandOps) {
     const brandItems: MenuItemDef[] = [
-      { id: 'dashboard',    view: 'dashboard',    label: '品牌主看板',      icon: 'LayoutDashboard' },
+      { id: 'dashboard',    view: 'dashboard',    label: '品牌故事',      icon: 'BookOpen' },
       { id: 'calendar',     view: 'calendar',     label: '发布日历',        icon: 'Calendar' },
       { id: 'drafts',       view: 'drafts',       label: '发布内容 (Post)', icon: 'FileText' },
       { id: 'assets',       view: 'assets',       label: '素材库',          icon: 'Images' },
