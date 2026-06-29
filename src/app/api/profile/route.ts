@@ -24,6 +24,7 @@ export async function GET() {
         nickname: true,
         introduction: true,
         avatar: true,
+        inviteCode: true,
         organizationMembers: {
           orderBy: { createdAt: 'asc' },
           include: {
@@ -85,6 +86,16 @@ export async function GET() {
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    if (!user.inviteCode) {
+      const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase()
+      const code = `AMC-${randomStr}`
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { inviteCode: code }
+      })
+      user.inviteCode = code
     }
 
     const legacyOwnerCount = await prisma.brand.count({ where: { ownerId: user.id } })
