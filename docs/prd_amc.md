@@ -633,9 +633,12 @@ RolePermission 表：
 - **清除历史布局残留**：废除了硬编码的 `h-[calc(100vh-140px)]` 及负边距，所有视图完美自适应新的垂直侧边栏页面布局。
 
 - **侧边栏遮挡重叠修复**：移除 Desktop 侧边栏外部无宽度的包裹 `div`，直接由 `Sidebar` (传入 `hidden lg:flex`) 充当 flex item，修复展开/折叠时主内容被侧边栏盖住的布局引擎 bug。
-- **太阳花 Logo 替换**：将侧边栏左上角临时手写的蓝色 `AMC` 圆圈，替换为系统正式的太阳花 Logo (`/logo.svg`)，在展开模式下水平排列 Icon 与 `AI Marketing Crew` 文本。
+- **太阳花 Logo 替换**：将侧边栏左上角临时手写的蓝色 `AMC` 圆圈，替换为系统正式 of 太阳花 Logo (`/logo.svg`)，在展开模式下水平排列 Icon 与 `AI Marketing Crew` 文本。
+- **二级菜单自动折叠主菜单**：若页面内包含二级菜单（如日历页的托管渠道面板），用户进入页面 3 秒后主侧边栏将自动向左折叠收起，提供更多的主视口使用面积。
+- **下线 AI 一键排期提案**：清除了发布日历中左侧托管渠道头部的“AI 一键排期提案”渐变彩色大按钮，回归纯排期功能。
 
 ### 影响文件
 - `src/components/layout/MainLayout.tsx`
 - `src/components/layout/Sidebar.tsx`
+- `src/components/dashboard/DashboardCalendar.tsx`
 - `src/components/KanbanBoard.tsx`

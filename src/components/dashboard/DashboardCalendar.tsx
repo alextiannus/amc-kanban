@@ -1542,16 +1542,6 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
           <h2 className="text-sm font-black text-slate-800 dark:text-slate-200 mb-4 tracking-wider">托管渠道 (Channels)</h2>
           
           <button
-            onClick={handleAIProposal}
-            disabled={aiProposalGenerating || !activeBrandId}
-            className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 disabled:opacity-50 text-white py-3 px-4 rounded-xl flex items-center justify-center gap-2 mb-3 shadow-lg active:scale-[0.98] transition-all font-black text-xs"
-            title={!activeBrandId ? "请先选择特定品牌" : "AI 一键排期提案"}
-          >
-            <Sparkles className="w-4 h-4 text-white animate-pulse" />
-            <span>{aiProposalGenerating ? '排期分析中...' : 'AI 一键排期提案'}</span>
-          </button>
-          
-          <button
             onClick={() => {
               if (!activeBrandId) {
                 alert('请在左侧选择特定品牌后再新建发布草稿。')

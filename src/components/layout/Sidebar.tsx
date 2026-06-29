@@ -173,6 +173,19 @@ export default function Sidebar({
     } catch {/* ignore */}
   }, [])
 
+  useEffect(() => {
+    // If the page has a secondary menu (currently 'calendar' is the main page with a secondary menu),
+    // wait 3 seconds and automatically collapse the main menu.
+    const viewsWithSubMenu: BoardView[] = ['calendar']
+    if (viewsWithSubMenu.includes(currentView) && !collapsed) {
+      const timer = setTimeout(() => {
+        setCollapsed(true)
+        try { localStorage.setItem(COLLAPSED_KEY, 'true') } catch {/* ignore */}
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [currentView, collapsed])
+
   const toggleCollapsed = () => {
     setCollapsed(prev => {
       const next = !prev
