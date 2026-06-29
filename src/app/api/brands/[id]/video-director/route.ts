@@ -165,8 +165,8 @@ export async function POST(request: Request, { params }: Params) {
     : []
 
   const assetImageUrls = assets
-    .filter(a => a.mimeType?.startsWith('image/'))
-    .map(a => a.url)
+    .filter((a: { mimeType?: string | null; url: string }) => a.mimeType?.startsWith('image/'))
+    .map((a: { mimeType?: string | null; url: string }) => a.url)
 
   const mergedImageUrls = Array.from(new Set([...imageUrls, ...assetImageUrls])).slice(0, 9)
   if (mergedImageUrls.length === 0) {
@@ -237,7 +237,7 @@ export async function POST(request: Request, { params }: Params) {
   const publicUrl = `/uploads/video-director/${filename}`
 
   const mergedTags = Array.from(new Set([
-    ...assets.flatMap(a => a.aiTags || []),
+    ...assets.flatMap((a: { aiTags?: string[] | null }) => a.aiTags || []),
     'AI视频',
     'VideoDirector',
   ]))
