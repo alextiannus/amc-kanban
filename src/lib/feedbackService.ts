@@ -106,3 +106,67 @@ export async function getFewShotExamples(
     return []
   }
 }
+
+/**
+ * Closed-loop feedback: Processes completed drafts to curate SFT/DPO dataset entries.
+ */
+export async function processDraftCuration(
+  brandId: string,
+  draftId: string,
+  finalCaption: string
+): Promise<void> {
+  try {
+    // 1. Find the latest CopywriterLog for this draftId
+    const log = await prisma.copywriterLog.findFirst({
+      where: { draftId, brandId },
+      orderBy: { createdAt: 'desc' }
+    })
+    if (!log) {
+      console.log(`[Curation] No CopywriterLog found for draft ${draftId}. Skipping.`)
+      return
+    }
+
+    // 2. Parse the AI's original generated caption
+    let originalCaption = ""
+    try {
+      const cleanJson = log.rawOutput.replace(/```json/g, "").replace(/```/g, "").trim()
+      const parsed = JSON.parse(cleanJson)
+      originalCaption = parsed.caption || log.rawOutput
+    } catch {
+      originalCaption = log.rawOutput
+    }
+
+    if (!originalCaption) return
+
+    // 3. Compute difference ratio
+    const diffRatio = calculateDiffRatio(originalCaption, finalCaption)
+    const isDpo = diffRatio >= 0.2
+    const tag = isDpo ? 'needs_rewrite' : 'include' // DPO vs SFT
+
+    // 4. Update the CopywriterLog to mark it as annotated training data
+    await prisma.copywriterLog.update({
+      where: { id: log.id },
+      data: {
+        correctedContent: finalCaption,
+        isAnnotated: true,
+        trainingTag: tag
+      }
+    })
+
+    // 5. Create or update UserCorrectionFeedback for few-shot adaptation
+    await prisma.userCorrectionFeedback.create({
+      data: {
+        brandId,
+        originalText: originalCaption,
+        correctedText: finalCaption,
+        diffRatio,
+        isApproved: true, // auto-approve so it is instantly active in the few-shot search
+        vectorStatus: 'PENDING'
+      }
+    })
+
+    console.log(`[Curation] Processed draft ${draftId}. Diff ratio: ${diffRatio.toFixed(2)}. Saved as SFT/DPO sample (tag: ${tag}).`)
+  } catch (err) {
+    console.error(`[Curation] Error processing curation for draft ${draftId}:`, err)
+  }
+}

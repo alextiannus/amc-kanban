@@ -25,6 +25,15 @@ export async function copywriterNode(state: any) {
     throw new Error("Brand not found in database.");
   }
 
+  const systemCopywriter = await prisma.user.findFirst({
+    where: { email: 'copywriter@platform.amc', type: 'AI_AGENT' }
+  });
+  const customPersona = systemCopywriter?.introduction ? `[Platform AI persona]:\n${systemCopywriter.introduction}\n` : "";
+  const customSystemPrompt = systemCopywriter?.workflow ? `[Platform AI system instructions]:\n${systemCopywriter.workflow}\n` : "";
+  const dbPromptInstructions = (customPersona || customSystemPrompt) 
+    ? `${customPersona}\n${customSystemPrompt}\n`
+    : "";
+
   const task = taskId ? await prisma.workUnit.findUnique({
     where: { id: taskId }
   }) : null;
@@ -187,7 +196,7 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
   let geminiUsed = false;
 
   // --- STAGE 1: HOOK GENERATION ---
-  const hookPrompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
+  const hookPrompt = `${dbPromptInstructions}You are a professional social media manager and copywriter for the brand "${brand.name}".
 Brand Description: ${brand.description || "A premium brand."}
 Target Platform: ${platform}
 Language Rule:
@@ -262,7 +271,7 @@ Please output ONLY a valid JSON array of strings.`;
   const selectedHook = generatedHooks[0];
 
   // --- STAGE 2: BODY & CTA GENERATION ---
-  const bodyPrompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
+  const bodyPrompt = `${dbPromptInstructions}You are a professional social media manager and copywriter for the brand "${brand.name}".
 Brand Description: ${brand.description || "A premium brand."}
 Target Platform: ${platform}
 Language Rule:
@@ -344,6 +353,24 @@ Please output ONLY a valid JSON object.`;
         aiHashtags = parsed.hashtags || [];
         geminiUsed = true;
         console.log(`AI Copywriter Body stage generated decoupled content successfully using: ${bodyResult.provider}/${bodyResult.modelName}`);
+
+        // Record log to database
+        const finalRawOutput = JSON.stringify({ caption: aiCaption, hashtags: aiHashtags });
+        prisma.copywriterLog.create({
+          data: {
+            brandId,
+            userId: state.assigneeId || 'copywriter@platform.amc',
+            systemPrompt: bodyPrompt.slice(0, 20000),
+            userInput: (userPrompt || task?.title || 'Unknown Theme').slice(0, 5000),
+            rawOutput: finalRawOutput,
+            modelId: bodyResult.modelName || 'gemini',
+            platform: platform || 'all',
+            draftId: existingDraftId || null,
+            promptVersion: systemCopywriter?.updatedAt ? `platform_${systemCopywriter.updatedAt.getTime()}` : 'platform_v1',
+          }
+        }).catch((err: any) => {
+          console.error('[CopywriterLog] background save failed:', err);
+        });
       }
     }
   } catch (error) {

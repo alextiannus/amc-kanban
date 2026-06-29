@@ -172,48 +172,100 @@ export async function GET(request: NextRequest) {
     for (const log of cwLogs) {
       if (log.trainingTag === 'exclude') continue
 
-      const assistantContent = log.correctedContent ?? log.rawOutput
-
-      const jsonlEntry = {
-        messages: [
-          { role: 'system',    content: log.systemPrompt },
-          { role: 'user',      content: log.userInput },
-          { role: 'assistant', content: assistantContent },
-        ],
-        metadata: {
-          source:        'copywriter',
-          brandId:       log.brandId,
-          logId:         log.id,
-          rating:        log.rating,
-          trainingTag:   log.trainingTag,
-          platform:      log.platform,
-          promptVersion: log.promptVersion,
-          isCorrected:   !!log.correctedContent,
-          createdAt:     log.createdAt.toISOString(),
-        },
+      let rejectedText = log.rawOutput
+      try {
+        const cleanJson = log.rawOutput.replace(/```json/g, "").replace(/```/g, "").trim()
+        const parsed = JSON.parse(cleanJson)
+        rejectedText = parsed.caption || log.rawOutput
+      } catch {
+        rejectedText = log.rawOutput
       }
 
-      records.push({
-        type: 'copywriter',
-        jsonl: jsonlEntry,
-        csv: {
-          type:          'copywriter',
-          id:            log.id,
-          brandId:       log.brandId,
-          brandName:     log.brand.name,
-          promptVersion: log.promptVersion ?? '',
-          platform:      log.platform ?? '',
-          modelId:       log.modelId ?? '',
-          rating:        String(log.rating ?? ''),
-          trainingTag:   log.trainingTag ?? '',
-          isCorrected:   log.correctedContent ? 'yes' : 'no',
-          adminNote:     log.adminNote ?? '',
-          system:        log.systemPrompt,
-          user:          log.userInput,
-          assistant:     assistantContent,
-          createdAt:     log.createdAt.toISOString(),
-        },
-      })
+      const chosenText = log.correctedContent ?? rejectedText
+
+      if (format === 'jsonl_dpo') {
+        const jsonlEntry = {
+          prompt: log.userInput,
+          system: log.systemPrompt,
+          chosen: chosenText,
+          rejected: rejectedText,
+          metadata: {
+            source:        'copywriter_dpo',
+            brandId:       log.brandId,
+            logId:         log.id,
+            rating:        log.rating,
+            trainingTag:   log.trainingTag,
+            platform:      log.platform,
+            promptVersion: log.promptVersion,
+            createdAt:     log.createdAt.toISOString(),
+          }
+        }
+
+        records.push({
+          type: 'copywriter_dpo',
+          jsonl: jsonlEntry,
+          csv: {
+            type:          'copywriter_dpo',
+            id:            log.id,
+            brandId:       log.brandId,
+            brandName:     log.brand.name,
+            promptVersion: log.promptVersion ?? '',
+            platform:      log.platform ?? '',
+            modelId:       log.modelId ?? '',
+            rating:        String(log.rating ?? ''),
+            trainingTag:   log.trainingTag ?? '',
+            isCorrected:   log.correctedContent ? 'yes' : 'no',
+            adminNote:     log.adminNote ?? '',
+            system:        log.systemPrompt,
+            user:          log.userInput,
+            assistant:     chosenText,
+            createdAt:     log.createdAt.toISOString(),
+          }
+        })
+      } else {
+        const assistantContent = log.correctedContent ?? log.rawOutput
+
+        const jsonlEntry = {
+          messages: [
+            { role: 'system',    content: log.systemPrompt },
+            { role: 'user',      content: log.userInput },
+            { role: 'assistant', content: assistantContent },
+          ],
+          metadata: {
+            source:        'copywriter',
+            brandId:       log.brandId,
+            logId:         log.id,
+            rating:        log.rating,
+            trainingTag:   log.trainingTag,
+            platform:      log.platform,
+            promptVersion: log.promptVersion,
+            isCorrected:   !!log.correctedContent,
+            createdAt:     log.createdAt.toISOString(),
+          },
+        }
+
+        records.push({
+          type: 'copywriter',
+          jsonl: jsonlEntry,
+          csv: {
+            type:          'copywriter',
+            id:            log.id,
+            brandId:       log.brandId,
+            brandName:     log.brand.name,
+            promptVersion: log.promptVersion ?? '',
+            platform:      log.platform ?? '',
+            modelId:       log.modelId ?? '',
+            rating:        String(log.rating ?? ''),
+            trainingTag:   log.trainingTag ?? '',
+            isCorrected:   log.correctedContent ? 'yes' : 'no',
+            adminNote:     log.adminNote ?? '',
+            system:        log.systemPrompt,
+            user:          log.userInput,
+            assistant:     assistantContent,
+            createdAt:     log.createdAt.toISOString(),
+          },
+        })
+      }
     }
   }
 

@@ -110,13 +110,18 @@ export async function triggerDesignerAutoTag(assetId: string): Promise<void> {
     const base64Data = await downloadToBase64(asset.url)
 
     // 4. Construct prompt and request Gemini Multimodal analysis
+    const systemDesigner = await prisma.user.findFirst({
+      where: { email: 'designer@platform.amc', type: 'AI_AGENT' }
+    });
+    const dbDesignerInstructions = systemDesigner?.workflow ? `[Platform AI system instructions]:\n${systemDesigner.workflow}\n` : "";
+
     const brandContext = brand 
       ? `Brand Name: ${brand.name}
 Brand Description: ${brand.description || `A premium brand in ${detectedIndustry} industry.`}
 Brand Location: ${brand.address || brand.location || "Singapore"}`
       : "";
 
-    const prompt = `You are an AI Designer and Image Curator specialized in Singapore brand marketing for the "${detectedIndustry}" industry.
+    const prompt = `${dbDesignerInstructions}You are an AI Designer and Image Curator specialized in Singapore brand marketing for the "${detectedIndustry}" industry.
 Analyze the uploaded image and generate metadata tailored to the brand's context.
 
 ${brandContext}

@@ -248,6 +248,12 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         resolvedNote: input.note || (brand.autoPilot ? '自动驾驶模式提交发布' : '主理人批准发布'),
       },
     })
+
+    // Closed-loop feedback: process and save SFT/DPO dataset
+    const { processDraftCuration } = await import('./feedbackService')
+    processDraftCuration(input.brandId, draft.id, draft.caption).catch((err) => {
+      console.error('[submitDraftForDelivery] feedback curation loop failed:', err)
+    })
   }
 
   void persistDraftSnapshotToObs({ brandId: input.brandId, draftId: draft.id, data: updated }).catch((error) => {
