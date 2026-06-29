@@ -11,6 +11,7 @@ import { fmtFollower, normalizeDashboardPlatformId, toCardType } from './dashboa
 import { ActionCard, AgentAvatar } from './DashboardHomeCards'
 import BrandHeroCard from './BrandHeroCard'
 import BrandStorySlides from './BrandStorySlides'
+import { parseBrandProfile, type BrandProfileData } from './parseBrandProfile'
 
 // ── Platform Catalog ──────────────────────────────────────────────────
 const ALL_PLATFORMS = [
@@ -588,6 +589,20 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
     if (r.ok) setBrandAgents(await r.json())
   }, [])
 
+  // Brand profile markdown (for BrandStorySlides)
+  const [profileData, setProfileData] = useState<BrandProfileData>({})
+  const loadProfile = useCallback(async (id: string) => {
+    try {
+      const r = await fetch(`/api/brands/${id}/profile`)
+      if (r.ok) {
+        const data = await r.json()
+        if (typeof data?.markdown === 'string') {
+          setProfileData(parseBrandProfile(data.markdown))
+        }
+      }
+    } catch {/* non-fatal */}
+  }, [])
+
   // ── Local UI state ───────────────────────────────────────────────────────
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set())
   const [autoPilot, setAutoPilot] = useState(false)
@@ -602,12 +617,14 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
         setBrandDetail(null)
         setBrandSettings(null)
         setBrandAgents([])
+        setProfileData({})
         setDismissedIds(new Set())
         setAutoPilot(false)
         // Load new brand data
         loadDetail(activeBrand.id)
         loadSettings(activeBrand.id)
         loadAgents(activeBrand.id)
+        loadProfile(activeBrand.id)
       })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -773,6 +790,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
         brandName={activeBrand.name}
         brandLocation={activeBrand.location as string | null}
         brandDetail={brandDetail as Parameters<typeof BrandStorySlides>[0]['brandDetail']}
+        profileData={profileData}
         accounts={connectedAccounts}
         subscription={currentBrandSubscription ?? null}
         onShowSettings={() => setShowSettings(true)}

@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, MapPin, Globe, Star, Users, Sparkles, Shield } from 'lucide-react'
+import { type BrandProfileData } from './parseBrandProfile'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ interface BrandStorySlidesProps {
   brandName: string
   brandLocation?: string | null
   brandDetail: SlidesBrandDetail | null
+  profileData?: BrandProfileData
   accounts: Account[]
   subscription: Subscription | null
   onShowSettings: () => void
@@ -58,60 +60,75 @@ function buildSlides(params: {
   brandName: string
   brandLocation?: string | null
   brandDetail: SlidesBrandDetail | null
+  profileData?: BrandProfileData
   accounts: Account[]
   subscription: Subscription | null
 }): Slide[] {
-  const { brandName, brandLocation, brandDetail, accounts, subscription } = params
+  const { brandName, brandLocation, brandDetail, profileData, accounts, subscription } = params
   const slides: Slide[] = []
 
-  // Slide 1 — 品牌故事
-  const descParts = (brandDetail?.description ?? '').split(/[。！？.!?\n]/).filter(Boolean)
-  const storyBody = descParts.slice(1, 4).join('。').trim()
+  // ── Slide 1: 品牌使命 & 故事 ─────────────────────────────────────────
+  const storyHeadline =
+    profileData?.valueProp || profileData?.mission || brandName
+  const storyBody =
+    profileData?.mission && profileData?.vision
+      ? `使命：${profileData.mission}　　愿景：${profileData.vision}`
+      : profileData?.mission ?? profileData?.vision ?? profileData?.valueProp
+      ?? (brandDetail?.description?.split(/[。！？.!?\n]/)[0] ?? '')
+  const storyEmpty = !profileData?.mission && !profileData?.vision && !profileData?.valueProp && !brandDetail?.description
   slides.push({
     id: 'story',
     emoji: '🏮',
-    label: '品牌故事',
-    headline: brandName,
-    body: storyBody || (brandDetail?.description ? brandDetail.description.slice(0, 100) : '点击"配置"完善品牌介绍，让 AI 团队更好地了解您的品牌故事'),
+    label: '品牌使命',
+    headline: storyHeadline,
+    body: storyBody || '点击"配置"完善品牌介绍，让 AI 团队更好地了解您的品牌',
     gradient: 'from-orange-600 via-red-600 to-rose-700',
     glowColor: 'rgba(234,88,12,0.4)',
     icon: Sparkles,
-    isEmpty: !brandDetail?.description,
+    isEmpty: storyEmpty,
   })
 
-  // Slide 2 — 目标客群 (从 description 里启发性提取，或空状态引导)
-  const audienceKeywords = ['客群', '顾客', '适合', '年轻', '家庭', '白领', '华人', '本地', '留学生', '商务']
-  const audienceSentence = (brandDetail?.description ?? '').split(/[。！？.!?\n]/)
-    .find(s => audienceKeywords.some(k => s.includes(k)))
+  // ── Slide 2: 目标客群 ──────────────────────────────────────────────────
+  // Primary: profile 10.3 targetAudience; fallback: keyword scan in description
+  const audienceContent = profileData?.targetAudience ?? (() => {
+    const keywords = ['客群', '顾客', '适合', '年轻', '家庭', '白领', '华人', '本地', '留学生', '商务']
+    return (brandDetail?.description ?? '').split(/[。！？.!?\n]/)
+      .find(s => keywords.some(k => s.includes(k))) ?? null
+  })()
   slides.push({
     id: 'audience',
     emoji: '🎯',
     label: '目标客群',
-    headline: audienceSentence ? '精准触达目标受众' : '客群定位',
-    body: audienceSentence ?? '在品牌知识库中补充目标客群信息，AI 将为您精准策划每一条内容',
+    headline: audienceContent ? '精准触达目标受众' : '客群定位待完善',
+    body: audienceContent ?? '在品牌知识库中补充目标客群信息，AI 将精准策划每一条内容',
     gradient: 'from-blue-600 via-indigo-600 to-violet-700',
     glowColor: 'rgba(99,102,241,0.4)',
     icon: Users,
-    isEmpty: !audienceSentence,
+    isEmpty: !audienceContent,
   })
 
-  // Slide 3 — 品牌特色
-  const featKeywords = ['特色', '独特', '招牌', '老字号', '传统', '正宗', '秘方', '创新', '地道', '经典']
-  const featSentence = (brandDetail?.description ?? '').split(/[。！？.!?\n]/)
-    .find(s => featKeywords.some(k => s.includes(k)))
+  // ── Slide 3: 品牌个性 & 内容支柱 ─────────────────────────────────────
+  // Primary: toneOfVoice + personality; secondary: contentPillars; fallback: keyword scan
+  const toneContent = [profileData?.toneOfVoice, profileData?.personality].filter(Boolean).join('　') || null
+  const pillarsContent = profileData?.contentPillars ?? null
+  const highlightBody = toneContent ?? pillarsContent ?? (() => {
+    const keywords = ['特色', '独特', '招牌', '老字号', '传统', '正宗', '秘方', '创新', '地道', '经典']
+    return (brandDetail?.description ?? '').split(/[。！？.!?\n]/)
+      .find(s => keywords.some(k => s.includes(k))) ?? null
+  })()
   slides.push({
     id: 'highlights',
     emoji: '✨',
-    label: '品牌特色',
-    headline: featSentence ? '独特竞争优势' : '核心竞争力',
-    body: featSentence ?? '完善品牌资料后，AI 团队将提炼您的核心差异化卖点，制作专属内容策略',
+    label: toneContent ? '品牌声音' : (pillarsContent ? '内容支柱' : '品牌个性'),
+    headline: toneContent ? '语气 & 人格' : (pillarsContent ? '内容支柱' : '核心竞争力'),
+    body: highlightBody ?? '完善品牌资料后，AI 将提炼您的核心差异化卖点，制作专属内容策略',
     gradient: 'from-emerald-600 via-teal-600 to-cyan-700',
     glowColor: 'rgba(16,185,129,0.4)',
     icon: Star,
-    isEmpty: !featSentence,
+    isEmpty: !highlightBody,
   })
 
-  // Slide 4 — 门店地址
+  // ── Slide 4: 门店地址 ──────────────────────────────────────────────────
   if (brandLocation || brandDetail?.address) {
     const mapQuery = encodeURIComponent(brandDetail?.address ?? brandLocation ?? brandName)
     slides.push({
@@ -128,7 +145,7 @@ function buildSlides(params: {
     })
   }
 
-  // Slide 5 — 官网 & 社交主页
+  // ── Slide 5: 官网 & 社交账号 ──────────────────────────────────────────
   const topAccounts = accounts.slice(0, 3)
   if (brandDetail?.website || topAccounts.length > 0) {
     const platformNames = topAccounts.map(a => `@${a.handle}`).join(' · ')
@@ -148,7 +165,7 @@ function buildSlides(params: {
     })
   }
 
-  // Slide 6 — 服务套餐
+  // ── Slide 6: 服务套餐 ──────────────────────────────────────────────────
   const isActive = subscription?.status === 'ACTIVE'
   const expiry = subscription?.contractEndDate
     ? new Date(subscription.contractEndDate).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -170,6 +187,7 @@ function buildSlides(params: {
 
   return slides
 }
+
 
 // ─── Individual Slide ─────────────────────────────────────────────────────────
 
@@ -250,6 +268,7 @@ export default function BrandStorySlides({
   brandName,
   brandLocation,
   brandDetail,
+  profileData,
   accounts,
   subscription,
   onShowSettings,
@@ -258,7 +277,7 @@ export default function BrandStorySlides({
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(true)
 
-  const slides = buildSlides({ brandName, brandLocation, brandDetail, accounts, subscription })
+  const slides = buildSlides({ brandName, brandLocation, brandDetail, profileData, accounts, subscription })
 
   const checkScroll = useCallback(() => {
     const el = scrollRef.current
