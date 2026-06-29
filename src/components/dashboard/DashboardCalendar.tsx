@@ -1946,6 +1946,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                           setDraftHashtags(newHashtags)
                           setDraftStatuses(newStatuses)
                           setIsAiGenerating(true)
+                          setPreviewModalOpen(true)
 
                           // Refresh accounts list in background (fire-and-forget, non-blocking)
                           fetch(`/api/brands/${activeBrandId}/accounts`)
