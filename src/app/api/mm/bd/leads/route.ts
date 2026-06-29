@@ -77,3 +77,55 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal Server Error', details: String(err) }, { status: 500 })
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  const session = await getSession()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Verify role: BD or ADMIN
+  const userRoles = await prisma.userBusinessRole.findMany({
+    where: { userId: session.user.id },
+    select: { role: true }
+  })
+  const roles = userRoles.map((r: { role: string }) => r.role)
+  const isBD = roles.includes('BD')
+  const isAdmin = session.user.role === 'ADMIN'
+
+  if (!isBD && !isAdmin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  try {
+    const body = await req.json()
+    const { id, status } = body
+
+    if (!id || !status) {
+      return NextResponse.json({ error: 'Missing required parameters: id, status' }, { status: 400 })
+    }
+
+    // Verify lead ownership (Admins can bypass)
+    const existingLead = await prisma.salesLead.findUnique({
+      where: { id }
+    })
+
+    if (!existingLead) {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
+    }
+
+    if (existingLead.bdUserId !== session.user.id && !isAdmin) {
+      return NextResponse.json({ error: 'Forbidden: You do not own this lead' }, { status: 403 })
+    }
+
+    const updated = await prisma.salesLead.update({
+      where: { id },
+      data: { status }
+    })
+
+    return NextResponse.json({ lead: updated })
+  } catch (err: any) {
+    console.error('[bd_leads_api] PATCH failed:', err)
+    return NextResponse.json({ error: 'Internal Server Error', details: String(err) }, { status: 500 })
+  }
+}
