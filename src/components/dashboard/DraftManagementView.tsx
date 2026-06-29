@@ -1015,6 +1015,36 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     }
   }
 
+  const handleRegenerate = async () => {
+    if (!createdDrafts || createdDrafts.length === 0) return
+    setSaving(true)
+    try {
+      const newCaptions: Record<string, string> = {}
+      const newHashtags: Record<string, string> = {}
+      const newStatuses: Record<string, 'generating' | 'completed' | 'failed'> = {}
+
+      createdDrafts.forEach(d => {
+        const accId = d.accountId || ''
+        newCaptions[accId] = '【AI 正在重新创作中...】'
+        newHashtags[accId] = ''
+        newStatuses[accId] = 'generating'
+      })
+
+      setDraftCaptions(newCaptions)
+      setDraftHashtags(newHashtags)
+      setDraftStatuses(newStatuses)
+      setIsAiGenerating(true)
+
+      await Promise.all(
+        createdDrafts.map(d => triggerCopywriter(d.id, true))
+      )
+    } catch (e) {
+      console.error('Failed to regenerate drafts:', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const triggerCopywriter = async (draftId: string, silent = false) => {
     if (!brandId) return
     setSaving(true)
@@ -2024,6 +2054,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
         onCancel={handleCancelCreation}
         onSaveDraft={handleSaveDraftsFromModal}
         onSchedule={handleSmartScheduleFromModal}
+        onRegenerate={handleRegenerate}
       />
 
       {/* Lightbox Preview Modal */}

@@ -16,7 +16,8 @@ import {
   Clock,
   Save,
   Trash2,
-  Video
+  Video,
+  RefreshCw
 } from 'lucide-react'
 
 // Helper function to check video file extensions
@@ -63,6 +64,7 @@ interface PostPreviewModalProps {
   onCancel: () => void
   onSaveDraft: () => void
   onSchedule: () => void
+  onRegenerate: () => void
 }
 
 export default function PostPreviewModal({
@@ -81,7 +83,8 @@ export default function PostPreviewModal({
   attachedMedia,
   onCancel,
   onSaveDraft,
-  onSchedule
+  onSchedule,
+  onRegenerate
 }: PostPreviewModalProps) {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
 
@@ -145,7 +148,7 @@ export default function PostPreviewModal({
           )}
         </div>
 
-        {/* Modal Footer - Three Core Action Buttons */}
+        {/* Modal Footer - Core Action Buttons */}
         <div className="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4 flex items-center justify-between shrink-0 gap-3">
           {/* Cancel generation */}
           <button
@@ -159,6 +162,21 @@ export default function PostPreviewModal({
           </button>
 
           <div className="flex items-center gap-3">
+            {/* Try again / Regenerate */}
+            <button
+              type="button"
+              disabled={saving || isAiGenerating}
+              onClick={onRegenerate}
+              className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all bg-white dark:bg-slate-900 flex items-center gap-1.5"
+            >
+              {saving && isAiGenerating ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5 text-orange-500" />
+              )}
+              <span>再试一下</span>
+            </button>
+
             {/* Save Draft */}
             <button
               type="button"
@@ -166,7 +184,7 @@ export default function PostPreviewModal({
               onClick={onSaveDraft}
               className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all bg-white dark:bg-slate-900 flex items-center gap-1.5"
             >
-              {saving ? (
+              {saving && !isAiGenerating ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
                 <Save className="w-3.5 h-3.5 text-indigo-500" />
@@ -174,7 +192,7 @@ export default function PostPreviewModal({
               <span>保存草稿</span>
             </button>
 
-            {/* Smart scheduling */}
+            {/* Smart publish */}
             <button
               type="button"
               disabled={saving || isAiGenerating}
@@ -186,7 +204,7 @@ export default function PostPreviewModal({
               ) : (
                 <Clock className="w-3.5 h-3.5" />
               )}
-              <span>智能排期</span>
+              <span>智能发布</span>
             </button>
           </div>
         </div>

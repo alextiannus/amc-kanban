@@ -679,6 +679,36 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     setAttachedMedia([])
   }
 
+  const handleRegenerate = async () => {
+    if (!createdDrafts || createdDrafts.length === 0) return
+    setSaving(true)
+    try {
+      const newCaptions: Record<string, string> = {}
+      const newHashtags: Record<string, string> = {}
+      const newStatuses: Record<string, 'generating' | 'completed' | 'failed'> = {}
+
+      createdDrafts.forEach(d => {
+        const accId = d.accountId || ''
+        newCaptions[accId] = '【AI 正在重新创作中...】'
+        newHashtags[accId] = ''
+        newStatuses[accId] = 'generating'
+      })
+
+      setDraftCaptions(newCaptions)
+      setDraftHashtags(newHashtags)
+      setDraftStatuses(newStatuses)
+      setIsAiGenerating(true)
+
+      await Promise.all(
+        createdDrafts.map(d => triggerCopywriter(d.id, true))
+      )
+    } catch (e) {
+      console.error('Failed to regenerate drafts:', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleMediaAIDesign = async (index: number, assetId: string, actionType: 'design' | 'video') => {
     if (!mediaOpPrompt.trim()) {
       alert('请输入操作提示词')
@@ -2936,6 +2966,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         onCancel={handleCancelCreation}
         onSaveDraft={() => saveOrUpdateDrafts('draft')}
         onSchedule={handleSchedulePublish}
+        onRegenerate={handleRegenerate}
       />
 
       {!isCreatingPost && selectedDay && (
