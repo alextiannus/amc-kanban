@@ -312,6 +312,7 @@ model Brand {
   corrections UserCorrectionFeedback[]
   companionMessages CompanionMessage[]
   companionSessions CompanionSession[]
+  copywriterLogs    CopywriterLog[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -808,10 +809,49 @@ model CompanionMessage {
   tokenEstimate  Int?     // estimated token count (role='assistant' only)
   intentDetected String?  // detected intent: 'GENERATE_AND_PUBLISH' | 'QUERY_CALENDAR' | 'NONE'
 
+  // Annotation fields for AI training (Admin only)
+  rating           Int?     // 1=bad 2=ok 3=good
+  adminNote        String?  // admin free-text annotation
+  correctedContent String?  // what the correct response should have been
+  isAnnotated      Boolean  @default(false)
+  trainingTag      String?  // 'include' | 'exclude' | 'needs_rewrite'
+
   brand   Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
   session CompanionSession? @relation(fields: [sessionId], references: [id])
 
   @@index([brandId, userId])
   @@index([sessionId])
   @@index([createdAt])
+  @@index([isAnnotated])
+  @@index([trainingTag])
+}
+
+model CopywriterLog {
+  id             String   @id @default(cuid())
+  brandId        String
+  userId         String   // AI Agent or Human who triggered generation
+  promptVersion  String?  // optional prompt version tag, e.g. 'v2.1_food_zh'
+  systemPrompt   String   // full system prompt (primary training artifact)
+  userInput      String   // topic / creative brief from user
+  rawOutput      String   // full LLM output (all platforms)
+  modelId        String?  // model used, e.g. 'glm-4-flash'
+  latencyMs      Int?     // response latency in ms
+  tokenEstimate  Int?     // estimated token count
+  platform       String?  // target platform: 'instagram' | 'xiaohongshu' | 'tiktok' | 'all'
+  draftId        String?  // related ContentDraft.id (if applicable)
+  createdAt      DateTime @default(now())
+
+  // Annotation fields for AI training (Admin only)
+  rating           Int?     // 1=bad 2=ok 3=good
+  adminNote        String?  // admin free-text annotation
+  correctedContent String?  // what the correct output should have been
+  isAnnotated      Boolean  @default(false)
+  trainingTag      String?  // 'include' | 'exclude' | 'needs_rewrite'
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+  @@index([createdAt])
+  @@index([isAnnotated])
+  @@index([trainingTag])
 }

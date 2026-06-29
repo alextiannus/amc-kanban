@@ -326,3 +326,43 @@ model SystemConfig {
   - 集成 `BrandProfileView`、`BrandSettingsPanel`、`BrandKnowledgePanel` 渲染逻辑
 
 **保留功能**：社交媒体配置、品牌上下文查看/修改、品牌订阅计划查看（均通过各自 Panel/链接调起）
+
+---
+
+### v1.5 — 2026-06-29 · Feature: AI 训练数据采集与标注系统
+
+**背景**：AI 对话日志（v1.6 amc-mm side）只是被动存档。本功能将其升级为 AI 矫正与训练数据平台，覆盖：
+1. Companion 对话（语音/文字问答）
+2. Copywriter 文案生成（system prompt + 用户输入 + 模型输出）
+
+**核心目的**：Admin 标注 AI 的好/坏回复，并导出为 JSONL 供 fine-tuning 使用。
+
+**架构决策**：
+- 标注权限：Admin only
+- 导出格式：JSONL（OpenAI fine-tuning 标准）+ CSV（人工审阅）
+- Copywriter 日志范围：kanban Copywriter 模块 + amc-mm 伴侣触发的文案生成
+- Prompt 版本：存原始内容，不强制版本号（可后加）
+
+**DB Schema 变更**：
+- `CompanionMessage`：+5 标注字段（rating, adminNote, correctedContent, isAnnotated, trainingTag）
+- `CopywriterLog`：全新模型（15 字段，含 systemPrompt, userInput, rawOutput, 标注字段）
+
+**新增 API**：
+- `PATCH /api/admin/companion-messages/[id]/annotate`（标注对话消息）
+- `POST /api/brands/[id]/copywriter-log`（文案日志上报，202 非阻塞）
+- `GET /api/admin/copywriter-logs`（文案日志列表，Admin only）
+- `PATCH /api/admin/copywriter-logs/[id]/annotate`（标注文案日志）
+- `GET /api/admin/training-export`（导出 JSONL/CSV）
+
+**Kanban UI**：
+- ConversationLogPanel：消息气泡旁新增标注工具栏（评分/批注/纠正/训练标签）
+- Admin 页新增「Copywriter 日志」子面板（system prompt 展开 + 标注）
+- 导出按钮：筛选日期/品牌/类型/标签后生成 JSONL
+
+**影响文件**：
+- `prisma/schema.prisma`（CompanionMessage 扩展 + CopywriterLog 新建）
+- 新增 API 路由（5 个）
+- `src/components/ConversationLogPanel.tsx`（标注工具栏）
+- `src/components/CopywriterLogPanel.tsx`（新建）
+- `src/app/admin/page.tsx`（新 tab + 导出按钮）
+- kanban Copywriter 路由（集成日志上报）

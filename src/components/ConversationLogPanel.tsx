@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { MessageSquare, ChevronDown, ChevronUp, Clock, Mic, Keyboard, Zap, Bot, RefreshCw, BarChart2 } from 'lucide-react'
+import MessageAnnotationBar from '@/components/MessageAnnotationBar'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface ConversationSession {
@@ -26,6 +27,12 @@ interface ConversationMessage {
   action?: string
   createdAt: string
   userId: string
+  // Annotation fields
+  rating?:           number | null
+  adminNote?:        string | null
+  correctedContent?: string | null
+  isAnnotated?:      boolean
+  trainingTag?:      string | null
 }
 
 interface ConversationStats {
@@ -129,43 +136,58 @@ const SessionRow = ({
           {loading && <div className="text-xs text-slate-400 text-center py-4">加载中...</div>}
           {!loading && messages.length === 0 && <div className="text-xs text-slate-400 text-center py-4">暂无消息记录</div>}
           {messages.map(msg => (
-            <div
-              key={msg.id}
-              className={`flex gap-2 ${msg.role === 'assistant' ? 'flex-row-reverse' : ''}`}
-            >
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0 ${
-                msg.role === 'user'
-                  ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600'
-                  : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600'
-              }`}>
-                {msg.role === 'user' ? '👤' : <Bot size={12} />}
-              </div>
-              <div className={`max-w-[80%] rounded-xl px-3 py-2 text-xs ${
-                msg.role === 'user'
-                  ? 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                  : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-              }`}>
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  {msg.role === 'user' && <InputTypeBadge inputType={msg.inputType} />}
-                  {msg.role === 'assistant' && msg.modelId && (
-                    <span className="text-[10px] text-slate-400">{msg.modelId}</span>
-                  )}
-                  {msg.role === 'assistant' && msg.latencyMs && (
-                    <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400">
-                      <Clock size={8} /> {msg.latencyMs}ms
+            <div key={msg.id} className="space-y-1">
+              <div
+                className={`flex gap-2 ${msg.role === 'assistant' ? 'flex-row-reverse' : ''}`}
+              >
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs flex-shrink-0 ${
+                  msg.role === 'user'
+                    ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600'
+                    : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600'
+                }`}>
+                  {msg.role === 'user' ? '👤' : <Bot size={12} />}
+                </div>
+                <div className={`max-w-[80%] rounded-xl px-3 py-2 text-xs ${
+                  msg.role === 'user'
+                    ? 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                    : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                }`}>
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {msg.role === 'user' && <InputTypeBadge inputType={msg.inputType} />}
+                    {msg.role === 'assistant' && msg.modelId && (
+                      <span className="text-[10px] text-slate-400">{msg.modelId}</span>
+                    )}
+                    {msg.role === 'assistant' && msg.latencyMs && (
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400">
+                        <Clock size={8} /> {msg.latencyMs}ms
+                      </span>
+                    )}
+                    {msg.role === 'assistant' && msg.intentDetected && msg.intentDetected !== 'NONE' && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                        <Zap size={8} /> {msg.intentDetected}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-slate-300 dark:text-slate-600 ml-auto">
+                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
-                  )}
-                  {msg.role === 'assistant' && msg.intentDetected && msg.intentDetected !== 'NONE' && (
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
-                      <Zap size={8} /> {msg.intentDetected}
-                    </span>
-                  )}
-                  <span className="text-[10px] text-slate-300 dark:text-slate-600 ml-auto">
-                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  </div>
                 </div>
               </div>
+              {/* Annotation toolbar — only for assistant messages */}
+              {msg.role === 'assistant' && (
+                <div className="ml-8">
+                  <MessageAnnotationBar
+                    messageId={msg.id}
+                    apiPath={`/api/admin/companion-messages/${msg.id}/annotate`}
+                    initialRating={msg.rating}
+                    initialTag={msg.trainingTag}
+                    initialNote={msg.adminNote}
+                    initialCorrected={msg.correctedContent}
+                    isAnnotated={msg.isAnnotated}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>

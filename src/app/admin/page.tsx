@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users, Store, CreditCard, Sparkles, MessageSquare } from 'lucide-react'
-import ConversationLogPanel from '@/components/ConversationLogPanel'
+import TrainingDataSection from '@/components/TrainingDataSection'
 
 interface UserRecord {
   id: string
@@ -1944,7 +1944,7 @@ export default function AdminPage() {
       )}
 
       {activeAdminTab === 'conversation-log' && (
-        <ConversationLogPanel brands={brands.map(b => ({ id: b.id, name: b.name }))} />
+        <TrainingDataSection brands={brands.map(b => ({ id: b.id, name: b.name }))} />
       )}
 
       {invitationData && (

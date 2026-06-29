@@ -5,6 +5,33 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { callLLM } from '@/lib/llmRouter'
 import { copywriterNode } from '@/agents/nodes/copywriter'
 
+// Non-blocking copywriter log helper (fire-and-forget)
+function logCopywriterOutput(opts: {
+  brandId: string
+  userId: string
+  systemPrompt: string
+  userInput: string
+  rawOutput: string
+  modelId?: string
+  latencyMs?: number
+  platform?: string
+}) {
+  prisma.copywriterLog.create({
+    data: {
+      brandId:      opts.brandId,
+      userId:       opts.userId,
+      systemPrompt: opts.systemPrompt.slice(0, 20000),
+      userInput:    opts.userInput.slice(0, 5000),
+      rawOutput:    opts.rawOutput.slice(0, 20000),
+      modelId:      opts.modelId  ?? null,
+      latencyMs:    opts.latencyMs ?? null,
+      platform:     opts.platform  ?? null,
+    },
+  }).catch((err: unknown) => {
+    console.error('[CopywriterLog] non-critical write failed:', err)
+  })
+}
+
 type Params = { params: Promise<{ id: string }> }
 
 async function getActor(request: Request) {
@@ -154,6 +181,15 @@ export async function POST(request: Request, { params }: Params) {
         if (cwResult && cwResult.caption) {
           caption = cwResult.caption
           hashtags = cwResult.hashtags || []
+          // Non-blocking log: copywriterNode path
+          logCopywriterOutput({
+            brandId,
+            userId: actor.id,
+            systemPrompt: '[via copywriterNode — see src/agents/nodes/copywriter.ts bodyPrompt]',
+            userInput: idea,
+            rawOutput: JSON.stringify({ caption, hashtags }),
+            platform,
+          })
         }
       } catch (err) {
         console.error(`Failed to generate copy via copywriterNode for ${platform}:`, err)
@@ -195,6 +231,16 @@ Do not include markdown wrappers around the JSON, return the raw JSON object.
             if (parsed.caption) {
               caption = parsed.caption
               hashtags = parsed.hashtags || []
+              // Non-blocking log: fallback direct callLLM path (full prompt captured)
+              logCopywriterOutput({
+                brandId,
+                userId: actor.id,
+                systemPrompt: prompt,
+                userInput: idea,
+                rawOutput: JSON.stringify({ caption, hashtags }),
+                modelId: result.modelName ?? result.provider ?? undefined,
+                platform,
+              })
             }
           }
         } catch (fallbackErr) {
