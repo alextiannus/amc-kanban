@@ -8,6 +8,8 @@ type SubmitDraftInput = {
   actorId: string
   forcePublish?: boolean
   note?: string | null
+  /** Override auto-scheduling urgency. 'urgent' = publish ASAP; default 'normal' = smart slot */
+  urgency?: 'normal' | 'urgent'
 }
 
 function isFuture(value?: Date | null) {
@@ -16,6 +18,37 @@ function isFuture(value?: Date | null) {
 
 function uniq(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)))
+}
+
+/**
+ * Auto-fetch a smart recommended publish time from the scheduling API.
+ * Called when a draft has no scheduledAt set — ensures all content goes
+ * through the unified scheduling algorithm (2-day gap, preferred slots).
+ *
+ * Returns null if the API is unavailable (caller should handle gracefully).
+ */
+async function fetchRecommendedScheduleTime(
+  brandId: string,
+  platform: string,
+  urgency: 'normal' | 'urgent' = 'normal',
+): Promise<Date | null> {
+  try {
+    const appBase = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    const res = await fetch(`${appBase}/api/brands/${brandId}/scheduling/recommend`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-forwarded-for': 'internal', // internal bypass — no session needed
+      },
+      body: JSON.stringify({ platform, numberOfPosts: 1, urgency }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const iso = data.recommendations?.[0]?.recommendedAt
+    return iso ? new Date(iso) : null
+  } catch {
+    return null
+  }
 }
 
 export async function submitDraftForDelivery(input: SubmitDraftInput) {
@@ -145,6 +178,30 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
 
   await prisma.contentDraft.update({ where: { id: draft.id }, data: { status: 'publishing', rejectionNote: null } })
 
+  // ── Auto-schedule: if no scheduledAt, get the optimal time from the scheduling API ──
+  // This is the unified enforcement point: ALL submissions (AI, human, voice, bulk)
+  // go through the smart scheduling algorithm. Only urgency='urgent' gets a near-slot.
+  let resolvedScheduledAt = draft.scheduledAt
+  if (!isFuture(resolvedScheduledAt)) {
+    const recommended = await fetchRecommendedScheduleTime(
+      input.brandId,
+      draft.account.platformId,
+      input.urgency ?? 'normal',
+    )
+    if (recommended) {
+      resolvedScheduledAt = recommended
+      // Persist the recommended time back to DB for visibility/audit trail
+      await prisma.contentDraft.update({
+        where: { id: draft.id },
+        data: { scheduledAt: resolvedScheduledAt },
+      })
+      console.log(`[submitDraftForDelivery] Auto-scheduled ${draft.id} → ${resolvedScheduledAt.toISOString()} (platform: ${draft.account.platformId})`)
+    } else {
+      // Recommend API unavailable — fall through to immediate publish (graceful degradation)
+      console.warn(`[submitDraftForDelivery] Could not get schedule recommendation for draft ${draft.id}, publishing immediately`)
+    }
+  }
+
   const mediaUrls = uniq([
     ...draft.mediaUrls,
     ...draft.assetRefs.map((ref: any) => ref.asset.url),
@@ -157,10 +214,10 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     caption: draft.caption,
     mediaUrls,
     hashtags: draft.hashtags,
-    scheduledAt: draft.scheduledAt?.toISOString(),
+    scheduledAt: resolvedScheduledAt?.toISOString(),
   })
 
-  const scheduled = isFuture(draft.scheduledAt)
+  const scheduled = isFuture(resolvedScheduledAt)
   const updated = await prisma.contentDraft.update({
     where: { id: draft.id },
     data: result.success

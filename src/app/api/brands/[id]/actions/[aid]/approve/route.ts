@@ -6,6 +6,24 @@ import { postfastPublish, postfastReplyReview } from '@/lib/integrations/postfas
 import { sendLarkWebhookNotification } from '@/lib/integrations/lark'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 
+/** Fetch smart schedule recommendation — mirrors the helper in draftSubmission.ts */
+async function fetchRecommendedScheduleTime(brandId: string, platform: string): Promise<Date | null> {
+  try {
+    const appBase = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    const res = await fetch(`${appBase}/api/brands/${brandId}/scheduling/recommend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-forwarded-for': 'internal' },
+      body: JSON.stringify({ platform, numberOfPosts: 1, urgency: 'normal' }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const iso = data.recommendations?.[0]?.recommendedAt
+    return iso ? new Date(iso) : null
+  } catch {
+    return null
+  }
+}
+
 type Params = { params: Promise<{ id: string; aid: string }> }
 
 // PATCH /api/brands/[id]/actions/[aid]/approve
@@ -148,27 +166,50 @@ export async function PATCH(request: Request, { params }: Params) {
             result = { success: false, error: message }
           }
         } else {
+          // Auto-schedule: if no scheduledAt on this draft, get recommended time first
+          let resolvedScheduledAt = draft.scheduledAt ? new Date(draft.scheduledAt) : null
+          const isScheduledFuture = resolvedScheduledAt && resolvedScheduledAt > new Date()
+
+          if (!isScheduledFuture) {
+            const recommended = await fetchRecommendedScheduleTime(brandId, platformName!)
+            if (recommended) {
+              resolvedScheduledAt = recommended
+              // Write back to DB so the calendar reflects the new time
+              await prisma.contentDraft.update({
+                where: { id: draft.id },
+                data: { scheduledAt: resolvedScheduledAt },
+              })
+            }
+          }
+
           result = await postfastPublish({
             apiKey: brand.postfastApiKey!,
             platform: platformName!,
             caption: draft.caption,
             mediaUrls: combinedMediaUrls,
             hashtags: draft.hashtags,
-            scheduledAt: draft.scheduledAt?.toISOString(),
+            scheduledAt: resolvedScheduledAt?.toISOString(),
           })
         }
+
+        const finalScheduledAt = draft.scheduledAt ? new Date(draft.scheduledAt) : null
+        const isScheduled = !isDirectGoogle && finalScheduledAt && finalScheduledAt > new Date()
 
         await prisma.contentDraft.update({
           where: { id: draft.id },
           data: result.success
-            ? { status: 'published', publishedAt: new Date(), platformPostId: result.postId ?? null }
+            ? {
+                status: isScheduled ? 'scheduled' : 'published',
+                publishedAt: isScheduled ? null : new Date(),
+                platformPostId: result.postId ?? null,
+              }
             : { status: 'draft', agentNote: `发布失败: ${result.error}` },
         })
 
-        const isScheduledFuture = !isDirectGoogle && draft.scheduledAt && new Date(draft.scheduledAt) > new Date()
+        const isScheduledFutureForWorkUnit = !isDirectGoogle && draft.scheduledAt && new Date(draft.scheduledAt) > new Date()
         await updateLinkedWorkUnit(
           result.success
-            ? { status: isScheduledFuture ? 'in_progress' : 'done', requiredInput: null, publishedUrl: result.url ?? null }
+            ? { status: isScheduledFutureForWorkUnit ? 'in_progress' : 'done', requiredInput: null, publishedUrl: result.url ?? null }
             : { status: 'pending', requiredInput: `自动发布失败：${result.error ?? 'unknown error'}。请协助排查原因。` }
         )
 

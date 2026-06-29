@@ -147,7 +147,7 @@ export function buildLaunchInstruction(params: { context: LaunchInstructionConte
     '- [ ] **自动轮询例行任务**：建议每 30 分钟轮询唤醒一次，每次被唤醒时对所有关联品牌自动执行以下检查：',
     '      1. **查询评论并自动回复**：调用 `get_brand_reviews` 抓取未处理评论。比对订阅包权益（Starter 仅监控，Essential/Advanced 需在 24h 内回复）。在 `autoPilot = true` 且授权正常时，调用回复接口执行 AI 自动回复；若遇到 ≤2 星差评，创建 `require_input` 任务提醒主理人人工介入。',
     '      2. **自检待发布内容**：检查看板中处于待发布状态的内容草稿，若发布时间已到且通过审核或开启了自动驾驶（`autoPilot = true`），调用发布接口执行社媒分发，发布成功后回填真实 URL 并流转任务状态至 `done`。',
-    '      3. **内容创作与自动排期自检**：对比月度订阅发帖配额，若发现已发布与未来已排期草稿总数落后，或未来 3 天内无排期内容，**自动触发内容创作工作流**。从 TopicFeed 选题库与素材库中提取内容，调用 `board_save_draft` 生成草稿并设置发布时间 `scheduledAt`，最后调用 `board_submit_draft` 提交（自动排期）。',
+    '      3. **内容创作与智能排期自检**：对比月度订阅发帖配额，若发现已发布与未来已排期草稿总数落后，或未来 3 天内无排期内容，**自动触发内容创作工作流**。从 TopicFeed 选题库与素材库中提取内容，调用 `board_save_draft` 生成草稿（**不要设置 scheduledAt**），然后调用 `board_get_schedule_recommendation` 获取系统推荐发布时间，最后调用 `board_submit_draft` 提交——系统会自动按推荐时间排期。',
     '      4. **素材与探店承诺保障**：调用 `get_brand_subscription` 查看订阅服务清单与额度（发帖配额、探店安排等）。对比素材库 `list_brand_assets` 发现素材不足，或者本月承诺的博主探店仍未开展时，**主动在看板创建 `require_input` 任务**催促/引导主理人：“[订阅承诺] 需要补充素材或安排达人探店活动”，提供具体的拍摄及探店建议，确保订阅承诺达标。',
     '- [ ] **每日 07:00 深度循环**：每日 07:00（换算为品牌当地 timezone）执行一次完整的「SOP 每日循环」，生成 Daily Memory 日志并同步看板。',
     '- [ ] 若运行环境确实不支持自动调度，必须以最高优先级提示品牌主理人，配置外部唤醒服务。',
@@ -180,9 +180,14 @@ Agent 应每 30 分钟被定期调度唤醒一次。每次唤醒时，针对所�
    - 在 \`autoPilot = true\` 时，AI 自动生成符合风格的回复并通过 \`board_reply_review\` 或 \`execute_brand_action\` 执行回复；若为非自动驾驶状态或收到 ≤2 星差评，创建 \`require_input\` 类型的挂起任务引导主理人处理。
 2. **内容排期与自检发布 (完成发布自检)**：
    - 检查是否有到期需要发布的内容或任务，如草稿审核已通过（或处于自动驾驶模式 \`autoPilot = true\`），执行 \`publish\` 动作将内容分发至对应社交平台，并将真实发帖链接更新至任务，归档任务为 \`done\`。
-3. **内容创作与自动排期自检 (完成发帖配额承诺)**：
+3. **内容创作与智能排期自检 (完成发帖配额承诺)**：
    - 自动对比当月订阅的发帖配额（如 Starter 每月 30 条发帖，约每日 1 条；Essential 每月 20 条图文 + 8 条视频）。统计本月已发布与未来已排期（\`scheduled\`）的草稿总数。
-   - 若发现发帖进度滞后或未来 3 天没有排期发布的内容，**自动触发内容创作工作流**：从 TopicFeed 选题库和素材库（\`list_brand_assets\`）提取内容，调用 \`board_save_draft\` 保存草稿，设置黄金发布时间 \`scheduledAt\` 并调用 \`board_submit_draft\` 提交排期。
+   - 若发现发帖进度滞后或未来 3 天没有排期发布的内容，**自动触发内容创作工作流**：从 TopicFeed 选题库和素材库（\`list_brand_assets\`）提取内容。
+   - **严禁自行设定 \`scheduledAt\`**，必须按以下标准工作流执行：
+     1. \`board_save_draft\`（保存草稿，**不传 scheduledAt**）
+     2. \`board_get_schedule_recommendation\`（获取系统推荐发布时间，基于平台历史与最小间隔规则）
+     3. \`board_submit_draft\`（提交，系统自动按推荐时间排期）
+   - 系统会在提交时自动为草稿计算并设置最优发布时间（平台最小 2 天间隔，优先时段：11:30 / 14:00 / 18:30 / 20:00）。
 4. **素材收集与探店活动催促 (完成素材及探店承诺)**：
    - 根据订阅套餐要求（如 Starter 承诺每月 30 篇发帖、4 次探店；Essential 每季度 24 次探店等），分析当前发帖及探店配额的执行进度。
    - 若素材库 \`list_brand_assets\` 素材不足以支持发布配额，或本月订阅内承诺的探店任务未完成，**主动在看板创建 \`require_input\` 任务**，文案格式为：\`[订阅承诺] 需要补充素材 / 安排达人探店活动\`，并在任务描述中详细列出所需的拍摄画面要求或博主探店策划方案，督促并引导主理人上传素材或确认活动。
@@ -194,8 +199,8 @@ Agent 应每 30 分钟被定期调度唤醒一次。每次唤醒时，针对所�
    - 步骤 1 — 调用 \`get_brand_subscription\` 获取订阅详情，解析 \`included_services\` 自适应分解目标。
    - 步骤 2 — 计算品牌完整度，调用 \`google_get_place_info\` 与 \`fetch_public_social_profile\` 补充公开信息。信息不足时生成 \`require_input\` 调研任务。
    - 步骤 3 — 以专业专家视角设计 3 个月度推广方案，通过 \`save_local_document\` + \`sync_to_kanban\` 同步到看板，并挂载任务与主理人确认。
-   - 步骤 4 — 素材库检查并进入内容生产，所有草稿通过 \`board_save_draft\` (\`accountId\` 为必填项) 并 \`board_submit_draft\` 提交。
-   - 步骤 5 — 发布与排期，\`autoPilot = true\` 直接发布，\`false\` 时进入 require_input 审核。
+   - 步骤 4 — 素材库检查并进入内容生产，草稿通过 \`board_save_draft\`（\`accountId\` 为必填项，**不传 scheduledAt**）保存，再用 \`board_get_schedule_recommendation\` 获取推荐时间后调用 \`board_submit_draft\` 提交。
+   - 步骤 5 — 发布与排期：\`autoPilot = true\` 时系统自动按推荐时间排期发布，\`false\` 时进入 require_input 审核，审核批准后系统自动排期。
    - 步骤 6 — 每日回采数据、回复评论并生成 Daily Memory，每周生成周度自我评估报告（\`save_local_document\` + \`sync_to_kanban\`）。
 
 ### 核心 MCP 工具列表
