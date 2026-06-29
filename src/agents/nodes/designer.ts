@@ -214,6 +214,7 @@ export async function designerNode(state: any) {
 
   const watermarkUrl = brand.watermarkUrl || brand.logoUrl;
   const processedMediaUrls: string[] = [];
+  let coverAspectRatio: number | null = null;
 
   try {
     for (let i = 0; i < mediaUrls.length; i++) {
@@ -489,15 +490,36 @@ export async function designerNode(state: any) {
           sourceTypeFallback: "designer"
         });
         processedMediaUrls.push(publicUrl);
+        coverAspectRatio = coverWidth / coverHeight;
 
       } else {
-        // SECONDARY IMAGE OPTIMIZATION (contrast, saturation, sharpen)
+        // SECONDARY IMAGE OPTIMIZATION (contrast, saturation, sharpen, uniform crop)
         const secondarySharp = sharp(assetBuffer);
         const metadata = await secondarySharp.metadata();
-        const width = metadata.width || 1200;
-        const height = metadata.height || 1200;
+        let width = metadata.width || 1200;
+        let height = metadata.height || 1200;
 
-        const optimizedBuffer = await sharp(assetBuffer)
+        let processedSecondarySharp = sharp(assetBuffer);
+        if (coverAspectRatio) {
+          // Crop to match cover's aspect ratio
+          if (width / height > coverAspectRatio) {
+            // Original is wider: crop width
+            height = height;
+            width = Math.round(height * coverAspectRatio);
+          } else {
+            // Original is taller: crop height
+            width = width;
+            height = Math.round(width / coverAspectRatio);
+          }
+          console.log(`[Designer Node] Cropping secondary image ${i} to ${width}x${height} to match cover aspect ratio.`);
+          processedSecondarySharp = sharp(assetBuffer).resize(width, height, {
+            fit: 'cover',
+            position: 'attention'
+          });
+        }
+
+        const croppedSecondaryBuffer = await processedSecondarySharp.toBuffer();
+        const optimizedBuffer = await sharp(croppedSecondaryBuffer)
           .normalize()
           .modulate({
             saturation: 1.08,
