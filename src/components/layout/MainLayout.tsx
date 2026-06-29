@@ -1,17 +1,18 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 
-import React from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState, useEffect, useRef } from 'react'
 import { useTheme } from 'next-themes'
-import { Store, Calendar, Sun, Moon, Gift, Activity, FileText, Images } from 'lucide-react'
-import BrandSwitcher, { Brand } from './BrandSwitcher'
+import { Sun, Moon } from 'lucide-react'
+import Sidebar from './Sidebar'
 import UserMenu from './UserMenu'
+import { type Brand } from './BrandSwitcher'
+import { resolveRoles, type BoardView } from '@/lib/permissions'
 
 interface MainLayoutProps {
   children: React.ReactNode
-  currentView: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'dataAnalysis' | 'logs'
-  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'dataAnalysis' | 'logs') => void
+  currentView: BoardView
+  setCurrentView: (view: BoardView) => void
   brands: Brand[]
   activeBrand: Brand | null
   setActiveBrand: (brand: Brand) => void
@@ -43,194 +44,118 @@ export default function MainLayout({
   onNewAgentKeyGenerated,
   onTasksCleared,
 }: MainLayoutProps) {
-  const router = useRouter()
   const { theme, resolvedTheme, setTheme } = useTheme()
-  const userRoles = user?.userRoles || (user?.role === 'ADMIN' ? ['ADMIN'] : user?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : user?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : [])
-  const canSeeSocialInsight = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL')
   const currentTheme = resolvedTheme || theme || 'light'
+  const userRoles = resolveRoles(user)
+
+  // Mobile: sidebar drawer state
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const drawerRef = useRef<HTMLDivElement>(null)
+
+  // Close drawer on outside click
+  useEffect(() => {
+    if (!mobileSidebarOpen) return
+    const handler = (e: MouseEvent) => {
+      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) {
+        setMobileSidebarOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [mobileSidebarOpen])
+
+  // Suppress unused prop warnings (kept for API compatibility)
+  void onShowSettings; void onShowSystemLog; void onNewAgentKeyGenerated; void onTasksCleared
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex flex-col font-sans transition-colors duration-300">
-      <div className="relative flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
-        
-        {/* Left Section: Brand Switcher (Stitch-inspired UX) */}
-        <div className="flex items-center gap-3 shrink-0">
-          {brands.length > 0 && activeBrand ? (
-            <BrandSwitcher brands={brands} activeBrand={activeBrand} setActiveBrand={setActiveBrand} />
-          ) : (
-            <button
-              id="brand-switcher-create-btn"
-              onClick={() => router.push('/profile/principal/brands/new')}
-              className="flex items-center gap-2 pl-3 pr-2.5 py-2 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200"
-            >
-              <div className="w-5 h-5 rounded-md bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center shrink-0">
-                <span className="text-[10px] font-black text-white">+</span>
-              </div>
-              <span className="text-sm font-bold text-slate-500 dark:text-slate-400 max-w-[120px] truncate">
-                创建品牌
-              </span>
-            </button>
-          )}
-        </div>
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
 
-        {/* Top Navigation Menu */}
-        <div className="hidden lg:flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mx-auto overflow-x-auto max-w-full">
-          <button
-            onClick={() => setCurrentView('dashboard')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
-              currentView === 'dashboard'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-            }`}
-          >
-            <Store size={16} /> 品牌主看板
-          </button>
-          <button
-            onClick={() => setCurrentView('calendar')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
-              currentView === 'calendar'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-            }`}
-            id="nav-calendar"
-          >
-            <Calendar size={16} /> 发布日历
-          </button>
-          <button
-            onClick={() => setCurrentView('drafts')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
-              currentView === 'drafts'
-                ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-            }`}
-            id="nav-drafts"
-          >
-            <FileText size={16} /> 发布内容（Post）
-          </button>
-          <button
-            onClick={() => setCurrentView('assets')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
-              currentView === 'assets'
-                ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-            }`}
-            id="nav-assets"
-          >
-            <Images size={16} /> 素材库
-          </button>
-          {canSeeSocialInsight && (
-            <button
-              onClick={() => setCurrentView('socialInsight')}
-              className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
-                currentView === 'socialInsight'
-                  ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-              }`}
-              id="nav-social-insight"
-            >
-              <Activity size={16} /> 数据分析
-            </button>
-          )}
-          <button
-            onClick={() => setCurrentView('game')}
-            className={`flex items-center gap-2 px-6 py-2 text-sm font-bold rounded-lg transition-all duration-300 whitespace-nowrap ${
-              currentView === 'game'
-                ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
-            }`}
-            id="nav-game-settings"
-          >
-            <Gift size={16} /> 店内活动
-          </button>
-
-        </div>
-
-        {/* Spacer to align center menu */}
-        <div className="flex-1 hidden lg:block" />
-
-        {/* Toolbar controls (Theme & User menu) */}
-        <div className="absolute right-4 top-8 z-40 flex items-center gap-2 lg:static lg:right-auto lg:top-auto">
-          <button
-            onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
-          >
-            {currentTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-
-          <UserMenu
-            user={user}
-            currentView={currentView}
-            setCurrentView={setCurrentView}
-            onShowSettings={onShowSettings}
-            onShowSystemLog={onShowSystemLog}
-            onNewAgentKeyGenerated={onNewAgentKeyGenerated}
-            onTasksCleared={onTasksCleared}
-          />
-        </div>
+      {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
+      <div className="hidden lg:flex shrink-0">
+        <Sidebar
+          userRoles={userRoles}
+          currentView={currentView}
+          setCurrentView={setCurrentView}
+          brands={brands}
+          activeBrand={activeBrand}
+          setActiveBrand={setActiveBrand}
+        />
       </div>
 
-      {/* View Contents */}
-      <div className="flex-1 pb-20 lg:pb-0">
-        {children}
+      {/* ── Mobile: Drawer backdrop ─────────────────────────────────── */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden" />
+      )}
+
+      {/* ── Mobile: Drawer ──────────────────────────────────────────── */}
+      <div
+        ref={drawerRef}
+        className={`
+          fixed inset-y-0 left-0 z-50 lg:hidden
+          transition-transform duration-300 ease-in-out
+          ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+      >
+        <Sidebar
+          userRoles={userRoles}
+          currentView={currentView}
+          setCurrentView={(v) => { setCurrentView(v); setMobileSidebarOpen(false) }}
+          brands={brands}
+          activeBrand={activeBrand}
+          setActiveBrand={setActiveBrand}
+        />
       </div>
 
-      {/* Sticky Bottom Navigation Bar for Mobile */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-3 py-2 flex items-center justify-around shadow-[0_-4px_12px_rgba(0,0,0,0.03)] dark:shadow-[0_-4px_12px_rgba(0,0,0,0.2)]">
-        <button
-          onClick={() => setCurrentView('dashboard')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-extrabold transition-colors duration-300 ${
-            currentView === 'dashboard'
-              ? 'text-blue-600 dark:text-blue-400'
-              : 'text-slate-400 hover:text-slate-650 dark:hover:text-slate-305'
-          }`}
-        >
-          <Store size={18} />
-          <span>看板</span>
-        </button>
-        <button
-          onClick={() => setCurrentView('calendar')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-extrabold transition-colors duration-300 ${
-            currentView === 'calendar'
-              ? 'text-indigo-600 dark:text-indigo-400'
-              : 'text-slate-400 hover:text-slate-650 dark:hover:text-slate-305'
-          }`}
-        >
-          <Calendar size={18} />
-          <span>日历</span>
-        </button>
-        <button
-          onClick={() => setCurrentView('drafts')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-extrabold transition-colors duration-300 ${
-            currentView === 'drafts'
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-slate-400 hover:text-slate-650 dark:hover:text-slate-305'
-          }`}
-        >
-          <FileText size={18} />
-          <span>发布内容</span>
-        </button>
-        <button
-          onClick={() => setCurrentView('assets')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-extrabold transition-colors duration-300 ${
-            currentView === 'assets'
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : 'text-slate-400 hover:text-slate-650 dark:hover:text-slate-305'
-          }`}
-        >
-          <Images size={18} />
-          <span>素材</span>
-        </button>
-        <button
-          onClick={() => setCurrentView('game')}
-          className={`flex flex-col items-center gap-1 py-1 px-3 text-xs font-extrabold transition-colors duration-300 ${
-            currentView === 'game'
-              ? 'text-blue-600 dark:text-blue-400'
-              : 'text-slate-400 hover:text-slate-650 dark:hover:text-slate-305'
-          }`}
-        >
-          <Gift size={18} />
-          <span>活动</span>
-        </button>
+      {/* ── Main Content Area ────────────────────────────────────────── */}
+      <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
+
+        {/* Topbar (thin strip: hamburger + theme + user) */}
+        <header className="shrink-0 flex items-center justify-between px-4 py-2.5 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+          {/* Mobile hamburger */}
+          <button
+            className="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            onClick={() => setMobileSidebarOpen(true)}
+            aria-label="打开菜单"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="2" y1="4.5" x2="16" y2="4.5" />
+              <line x1="2" y1="9" x2="16" y2="9" />
+              <line x1="2" y1="13.5" x2="16" y2="13.5" />
+            </svg>
+          </button>
+
+          {/* Page title on mobile */}
+          <span className="lg:hidden text-sm font-bold text-slate-700 dark:text-slate-200 truncate mx-2" />
+
+          {/* Spacer for desktop */}
+          <div className="hidden lg:block flex-1" />
+
+          {/* Right controls */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="切换主题"
+            >
+              {currentTheme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+
+            <UserMenu
+              user={user}
+              currentView={currentView}
+              setCurrentView={setCurrentView}
+              onShowSettings={onShowSettings}
+              onShowSystemLog={onShowSystemLog}
+              onNewAgentKeyGenerated={onNewAgentKeyGenerated}
+              onTasksCleared={onTasksCleared}
+            />
+          </div>
+        </header>
+
+        {/* Scrollable content */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+          {children}
+        </main>
       </div>
     </div>
   )

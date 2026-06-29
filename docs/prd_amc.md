@@ -588,3 +588,37 @@ RolePermission 表：
 | AI 语音伴侣 | ✅ | ✅ | ❌ | ✅ |
 
 > 📅 = BD 相关功能未进入开发排期
+
+---
+
+## 左侧导航栏重构 — 2026-06-29
+
+### 变更决策
+
+将 amc-kanban 的导航栏从顶部水平 Tab 栏重构为左侧垂直侧边栏，实现按角色的菜单分组与访问控制。
+
+**已确认的权限细化决策**：
+- **Q1 品牌主数据分析**：✅ 品牌主可见数据分析（`socialInsight`），自动过滤为自己的品牌数据。`dataAnalysis`（账号快照）仅 Admin/主理人可见。
+- **Q2 主理人 AI 序列**：✅ 主理人也可见 AI 序列（`agents`），用于配置代运营品牌的 AI Agent。
+- **Q3 侧边栏折叠**：✅ 支持折叠（宽 224px / 窄 64px 图标模式），状态持久化到 localStorage。
+
+### 实现文件
+
+| 文件 | 变更类型 | 说明 |
+|------|---------|------|
+| `src/lib/permissions.ts` | 新建 | 集中角色解析（`resolveRoles`）、视图访问检查（`canAccessView`）、菜单分组定义（`getMenuGroups`） |
+| `src/components/layout/Sidebar.tsx` | 新建 | 侧边栏组件，按角色动态渲染菜单分组，支持折叠/展开，BD coming-soon 占位 |
+| `src/components/layout/MainLayout.tsx` | 重构 | 布局从 `flex-col`（顶部导航）改为 `flex-row`（左侧导航），移动端改为抽屉式侧边栏 |
+| `src/components/layout/UserMenu.tsx` | 简化 | 只保留用户信息 + 设置中心 + 退出，其余菜单项已迁移至 Sidebar |
+| `src/components/KanbanBoard.tsx` | 更新 | 使用 `permissions.ts` 中的 `BoardView` 类型，新增 `managementOverview` 视图（占位） |
+
+### 侧边栏菜单分组结构
+
+| 分组 | 菜单项 | 可见角色 |
+|------|--------|---------|
+| 运营 | 品牌主看板、发布日历、发布内容、素材库、店内活动 | Admin、主理人、品牌主 |
+| 数据 | 数据分析、账号快照*、工作日志 | Admin、主理人、品牌主（*快照仅前两者）|
+| 管理 | 主理人总览（占位）、归档 | Admin、主理人 |
+| AI 工具 | AI 序列 | Admin、主理人、品牌主 |
+| 商务 | BD 工作台、客户汇总、收入总览（Coming Soon）| BD |
+| 系统 | Admin 控制台（跳转 /admin）| Admin |

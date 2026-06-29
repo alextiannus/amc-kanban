@@ -3,7 +3,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { User as UserIcon, BookOpen, Settings, Shield, Inbox, LogOut, GraduationCap, Camera, Activity, Bot, LayoutDashboard } from 'lucide-react'
+import { User as UserIcon, Settings, LogOut } from 'lucide-react'
+import { resolveRoles, type BoardView } from '@/lib/permissions'
 
 interface UserMenuProps {
   user: {
@@ -15,50 +16,50 @@ interface UserMenuProps {
     nickname?: string | null
     avatar?: string | null
   } | null
-  currentView: string
-  setCurrentView: (view: 'dashboard' | 'calendar' | 'agents' | 'archive' | 'game' | 'socialInsight' | 'drafts' | 'assets' | 'dataAnalysis' | 'logs') => void
+  currentView: BoardView
+  setCurrentView: (view: BoardView) => void
   onShowSettings: () => void
   onShowSystemLog: () => void
   onNewAgentKeyGenerated: (key: string) => void
   onTasksCleared: () => void
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN:         'Admin',
+  BRAND_OWNER:   '品牌主',
+  AMC_PRINCIPAL: '主理人',
+  BD:            '商务拓展',
+  AMC_AGENT:     'AMC Agent',
+}
+
 export default function UserMenu({
   user,
-  currentView,
-  setCurrentView,
-  onShowSettings,
-  onShowSystemLog,
-  onNewAgentKeyGenerated,
-  onTasksCleared,
+  // keep unused props in signature for API compatibility:
+  setCurrentView: _setCurrentView,
+  onShowSettings: _onShowSettings,
+  onShowSystemLog: _onShowSystemLog,
+  onNewAgentKeyGenerated: _onNewAgentKeyGenerated,
+  onTasksCleared: _onTasksCleared,
 }: UserMenuProps) {
-  const [showProfile, setShowProfile] = useState(false)
-  const [principalOpening, setPrincipalOpening] = useState(false)
+  const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-  const userRoles = user?.userRoles || (user?.role === 'ADMIN' ? ['ADMIN'] : user?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : user?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : [])
-  const isAdmin = userRoles.includes('ADMIN')
-  const isPrincipal = userRoles.includes('AMC_PRINCIPAL')
-  const canSeeAgents = userRoles.includes('BRAND_OWNER')
-  const canSeePrincipalDashboard = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL')
-  const roleLabel = userRoles.length > 0
-    ? userRoles.map((roleName) => ({ ADMIN: 'Admin', BRAND_OWNER: 'Brand Owner', AMC_PRINCIPAL: 'AMC Principal', AMC_AGENT: 'AMC Agent' }[roleName] || roleName)).join(' / ')
-    : 'Standard User'
-  void onShowSettings
-  void onShowSystemLog
-  void onNewAgentKeyGenerated
-  void onTasksCleared
+
+  const roles = resolveRoles(user)
+  const roleLabel = roles.length > 0
+    ? roles.map(r => ROLE_LABELS[r] || r).join(' / ')
+    : '用户'
 
   useEffect(() => {
-    if (!showProfile) return
+    if (!open) return
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShowProfile(false)
+        setOpen(false)
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [showProfile])
+  }, [open])
 
   const handleLogout = async () => {
     try {
@@ -70,136 +71,49 @@ export default function UserMenu({
     }
   }
 
-  const handleOpenSettingsCenter = () => {
-    setShowProfile(false)
-    router.push('/profile')
-  }
-
-  const handleOpenAdmin = () => {
-    setShowProfile(false)
-    router.push('/admin')
-  }
-
   return (
     <div className="relative" ref={containerRef}>
       <button
-        onClick={() => setShowProfile(!showProfile)}
-        className="flex items-center justify-center w-11 h-11 md:w-10 md:h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:shadow-md hover:scale-105 transition-all duration-300 border border-slate-200 dark:border-slate-700 overflow-hidden"
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:shadow-md hover:scale-105 transition-all duration-200 border border-slate-200 dark:border-slate-700 overflow-hidden"
       >
         {user?.avatar ? (
-          <img src={user.avatar} alt="User avatar" className="w-full h-full object-cover" />
+          <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
         ) : user ? (
           (user.nickname || user.email).charAt(0).toUpperCase()
         ) : (
-          <UserIcon size={18} />
+          <UserIcon size={16} />
         )}
       </button>
 
-      {showProfile && (
-        <div className="absolute right-0 mt-3 w-[calc(100vw-2rem)] max-w-64 sm:w-64 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/50 dark:border-slate-700/50 overflow-hidden transform transition-all z-50 max-h-[70vh] overflow-y-auto">
-          <div className="p-4 border-b border-slate-100/50 dark:border-slate-800">
-            <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{user?.nickname || user?.email}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{user?.email}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{roleLabel}</p>
+      {open && (
+        <div className="absolute right-0 mt-2 w-56 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden z-50">
+          {/* User info */}
+          <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+              {user?.nickname || user?.email}
+            </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">{user?.email}</p>
+            <span className="inline-block mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+              {roleLabel}
+            </span>
           </div>
-          <div className="p-2 space-y-1">
+
+          <div className="p-2 space-y-0.5">
             <button
-              onClick={handleOpenSettingsCenter}
+              onClick={() => { setOpen(false); router.push('/profile') }}
               className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
             >
-              <Settings size={16} /> 设置中心
+              <Settings size={15} /> 设置中心
             </button>
 
-            {canSeeAgents && (
-              <button
-                onClick={() => { setShowProfile(false); setCurrentView('agents') }}
-                className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
-                  currentView === 'agents'
-                    ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                }`}
-                id="nav-agents"
-              >
-                <Bot size={16} /> AI 序列
-              </button>
-            )}
-
-            {canSeePrincipalDashboard && (
-              <button
-                onClick={() => { setShowProfile(false); setPrincipalOpening(true); router.push('/profile/principal') }}
-                disabled={principalOpening}
-                className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-70"
-                id="nav-principal-dashboard"
-              >
-                <LayoutDashboard size={16} /> {principalOpening ? '打开中...' : '主理人看板'}
-              </button>
-            )}
-
-            {isAdmin && (
-              <button
-                onClick={handleOpenAdmin}
-                className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-              >
-                <Shield size={16} /> Admin 控制台
-              </button>
-            )}
-
-            {(isAdmin || isPrincipal) && (
-              <>
-                <button
-                  onClick={() => { setShowProfile(false); setCurrentView('dataAnalysis') }}
-                  className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
-                    currentView === 'dataAnalysis'
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Camera size={16} /> 账号快照
-                </button>
-                <button
-                  onClick={() => { setShowProfile(false); setCurrentView('archive') }}
-                  className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
-                    currentView === 'archive'
-                      ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 font-bold'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <Inbox size={16} /> 归档
-                </button>
-              </>
-            )}
+            <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
 
             <button
-              onClick={() => { setShowProfile(false); router.push('/learn') }}
-              className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-xl transition-colors"
-            >
-              <GraduationCap size={16} /> AMC 学习中心
-            </button>
-
-            <button
-              onClick={() => { setShowProfile(false); setCurrentView('logs') }}
-              className={`flex items-center gap-3 px-3 py-2 w-full text-left text-sm rounded-xl transition-colors ${
-                currentView === 'logs'
-                  ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-bold'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Activity size={16} /> 工作日志
-            </button>
-
-            <button
-              onClick={() => { setShowProfile(false); router.push('/connect') }}
-              className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl transition-colors"
-            >
-              <BookOpen size={16} /> 查看MCP和Skills
-            </button>
-
-            <div className="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
-            <button 
-              onClick={handleLogout} 
+              onClick={handleLogout}
               className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
             >
-              <LogOut size={16} /> 退出登录
+              <LogOut size={15} /> 退出登录
             </button>
           </div>
         </div>
