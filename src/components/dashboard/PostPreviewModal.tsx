@@ -204,7 +204,7 @@ export default function PostPreviewModal({
               ) : (
                 <Clock className="w-3.5 h-3.5" />
               )}
-              <span>智能发布</span>
+              <span>智能排期</span>
             </button>
           </div>
         </div>
