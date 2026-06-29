@@ -3,6 +3,8 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { callGeminiChat, ChatTurn } from '@/lib/gemini-chat'
+import { submitDraftForDelivery } from '@/lib/draftSubmission'
+import { postfastDeletePost } from '@/lib/integrations/postfast'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -87,27 +89,78 @@ async function executeTool(
       }
 
       case 'approve_draft': {
+        // Approve = actually submit to Postfast (schedule or publish based on scheduledAt)
+        // This replaces the old DB-only status update which left Postfast out of sync
         const { draftId, note } = args
-        await prisma.contentDraft.update({
-          where: { id: draftId },
-          data: {
-            status: 'scheduled',
-            updatedAt: new Date(),
-          },
+        const result = await submitDraftForDelivery({
+          brandId,
+          draftId,
+          actorId: 'voice-chat',
+          forcePublish: true,
+          note: note || '语音批准',
         })
+        if (!result.ok) {
+          return {
+            resultText: `批准失败：${result.error}`,
+            actionReply: `批准时出了些问题：${result.error}，请稍后再试。`,
+          }
+        }
+        const mode = (result as any).mode
+        const isScheduled = mode === 'scheduled' || mode === undefined && (result as any).draft?.status === 'scheduled'
         return {
-          resultText: `草稿 ${draftId} 已批准。`,
-          actionReply: `好的，老板！内容已批准，将按计划时间发布。${note ? `备注已记录：${note}` : ''}`,
+          resultText: `草稿 ${draftId} 已批准并${isScheduled ? '安排排期' : '发布'}。`,
+          actionReply: `好的，老板！内容已批准，${isScheduled ? '将按计划时间发布' : '现在已发布'}。${note ? `备注：${note}` : ''}`,
         }
       }
 
       case 'reschedule_draft': {
         const { draftId, scheduledAt } = args
         const newTime = new Date(scheduledAt)
-        await prisma.contentDraft.update({
-          where: { id: draftId },
-          data: { scheduledAt: newTime, updatedAt: new Date() },
+        if (Number.isNaN(newTime.getTime())) {
+          return { resultText: '无效的时间格式，请提供正确的日期时间。' }
+        }
+
+        // Load draft to check if it already has a Postfast post ID
+        const draft = await prisma.contentDraft.findFirst({
+          where: { id: draftId, brandId },
+          include: { account: { select: { platformId: true, handle: true } } },
         })
+        if (!draft) return { resultText: `找不到草稿 ${draftId}。` }
+
+        const brand = await prisma.brand.findUnique({
+          where: { id: brandId },
+          select: { postfastApiKey: true },
+        })
+
+        // If already scheduled in Postfast, cancel old and re-schedule
+        if (draft.platformPostId && brand?.postfastApiKey && draft.account?.handle !== 'unconfigured') {
+          await postfastDeletePost(brand.postfastApiKey, draft.platformPostId)
+          // Re-submit with the new time via submitDraftForDelivery after updating scheduledAt
+          await prisma.contentDraft.update({
+            where: { id: draftId },
+            data: { scheduledAt: newTime, platformPostId: null, status: 'draft' },
+          })
+          const resubmit = await submitDraftForDelivery({
+            brandId,
+            draftId,
+            actorId: 'voice-chat',
+            forcePublish: true,
+            note: `语音调整排期至 ${newTime.toLocaleString('zh-CN')}`,
+          })
+          if (!resubmit.ok) {
+            return {
+              resultText: `调整排期失败：${resubmit.error}`,
+              actionReply: `调整时出了问题：${resubmit.error}，发布时间未更改。`,
+            }
+          }
+        } else {
+          // Not yet in Postfast — just update DB time
+          await prisma.contentDraft.update({
+            where: { id: draftId },
+            data: { scheduledAt: newTime, updatedAt: new Date() },
+          })
+        }
+
         const timeStr = newTime.toLocaleString('zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
         return {
           resultText: `草稿 ${draftId} 已调整发布时间至 ${timeStr}。`,

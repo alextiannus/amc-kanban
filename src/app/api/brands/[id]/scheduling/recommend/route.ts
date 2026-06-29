@@ -73,20 +73,38 @@ function buildReason(lastPublishedAt: Date | null, gapDays: number | null): stri
   return `距离上次发布已 ${gapDays?.toFixed(1)} 天，建议在最近的最佳时段发布`
 }
 
+import { getAgentFromKey } from '@/lib/partner/mcp/server'
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession()
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   const { id: brandId } = await params
 
-  // Verify brand access
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
-    return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+  // Auth: three paths supported:
+  //   1. Human session (UI users)
+  //   2. Agent API key via x-agent-key header (MCP agents)
+  //   3. Internal server-side calls via x-forwarded-for: internal (bulk-generate, etc.)
+  const internalCall = req.headers.get('x-forwarded-for') === 'internal'
+  const agentKeyHeader = req.headers.get('x-agent-key') ?? req.headers.get('authorization')
+
+  if (internalCall) {
+    // Internal call: just verify brand exists
+    const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } })
+    if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+  } else if (agentKeyHeader) {
+    const agent = await getAgentFromKey(agentKeyHeader)
+    if (!agent) return NextResponse.json({ error: 'Invalid agent key' }, { status: 401 })
+    const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } })
+    if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+  } else {
+    const session = await getSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+      return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+    }
   }
 
   const body = await req.json().catch(() => ({}))

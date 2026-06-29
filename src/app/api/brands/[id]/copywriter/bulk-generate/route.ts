@@ -150,11 +150,27 @@ export async function POST(request: Request, { params }: Params) {
 
     // Generate content for each platform/account
     const createdDrafts = []
-    
-    // We will stagger the scheduled date starting tomorrow
-    const baseDate = new Date()
-    baseDate.setDate(baseDate.getDate() + 1) // Tomorrow
-    baseDate.setMinutes(0, 0, 0)
+
+    // Scheduling recommendation helper — calls the unified smart scheduling API
+    // Each platform queries independently so gaps are respected per-platform
+    const getRecommendedTime = async (platformId: string): Promise<Date | null> => {
+      try {
+        const appBase = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+        const res = await fetch(`${appBase}/api/brands/${brandId}/scheduling/recommend`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-forwarded-for': 'internal' },
+          // Use internal header so the recommend API accepts system-level calls
+          // (will fall through to the brand-exists check since no session/agentKey)
+          body: JSON.stringify({ platform: platformId, numberOfPosts: 1, urgency: 'normal' }),
+        })
+        if (!res.ok) return null
+        const data = await res.json()
+        const rec = data.recommendations?.[0]?.recommendedAt
+        return rec ? new Date(rec) : null
+      } catch {
+        return null
+      }
+    }
 
     for (let i = 0; i < accounts.length; i++) {
       const account = accounts[i]
@@ -248,9 +264,9 @@ Do not include markdown wrappers around the JSON, return the raw JSON object.
         }
       }
 
-      // Schedule at: stagger by 2 hours starting tomorrow 10:00 AM
-      const scheduledAt = new Date(baseDate)
-      scheduledAt.setHours(10 + i * 2)
+      // Get smart recommended publish time for this platform
+      // Falls back to null (immediate) if recommend API unavailable
+      const scheduledAt = await getRecommendedTime(platform)
 
       // Return draft preview details
       const draftPreview = {

@@ -95,7 +95,10 @@ export async function POST(request: Request) {
         captionLang: draftData.captionLang || 'en',
         mediaUrls: draftData.mediaUrls || [],
         hashtags: draftData.hashtags || [],
-        scheduledAt: draftData.scheduledAt ? new Date(draftData.scheduledAt) : null,
+        // scheduledAt intentionally set to null here — time must be determined by the
+        // scheduling/recommend API to avoid conflicts. Agents should call
+        // board_get_schedule_recommendation before board_submit_draft.
+        scheduledAt: null,
         status: 'pending_review',
         agentId: agent.id,
         agentNote: draftData.agentNote || null,

@@ -1590,21 +1590,20 @@ export function createAmcMcpServer(agentApiKey: string) {
 
   server.tool(
     'board_save_draft',
-    'Create or update a brand content draft. Save first, then call board_submit_draft when ready.',
+    'Create or update a brand content draft. Save first. To schedule content, call board_get_schedule_recommendation BEFORE board_submit_draft — never set a time yourself. Agents must NOT hardcode scheduledAt.',
     {
       brandId: z.string(),
       draftId: z.string().optional().describe('Pass to update an existing draft. Omit to create a new draft.'),
       caption: z.string().optional().describe('Caption body. Required when creating a new draft.'),
       hashtags: z.array(z.string()).optional(),
       accountId: z.string().optional().describe('Platform account ID. Required when creating a new draft.'),
-      scheduledAt: z.string().optional().describe('ISO 8601 UTC datetime. Omit or empty for immediate publish on submit.'),
       mediaUrls: z.array(z.string()).optional(),
       assetIds: z.array(z.string()).optional().describe('MediaAsset IDs to attach to this draft.'),
       agentNote: z.string().optional(),
       captionLang: z.string().optional().default('en'),
       creativeHooks: z.string().optional(),
     },
-    async ({ brandId, draftId, caption, hashtags, accountId, scheduledAt, mediaUrls, assetIds, agentNote, captionLang, creativeHooks }) => {
+    async ({ brandId, draftId, caption, hashtags, accountId, mediaUrls, assetIds, agentNote, captionLang, creativeHooks }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
@@ -1626,11 +1625,6 @@ export function createAmcMcpServer(agentApiKey: string) {
         }
       }
 
-      const parsedScheduledAt = scheduledAt ? new Date(scheduledAt) : null
-      if (scheduledAt && Number.isNaN(parsedScheduledAt?.getTime())) {
-        return { content: [{ type: 'text' as const, text: 'Error: scheduledAt must be an ISO 8601 datetime' }], isError: true }
-      }
-
       const draft = await prisma.$transaction(async (tx: any) => {
         let savedId: string
 
@@ -1647,7 +1641,7 @@ export function createAmcMcpServer(agentApiKey: string) {
           if (caption !== undefined) updateData.caption = caption.trim()
           if (captionLang !== undefined) updateData.captionLang = captionLang
           if (accountId !== undefined) updateData.accountId = accountId
-          if (scheduledAt !== undefined) updateData.scheduledAt = parsedScheduledAt
+          // scheduledAt intentionally NOT accepted from agent — use board_get_schedule_recommendation
           if (hashtags !== undefined) updateData.hashtags = hashtags
           if (mediaUrls !== undefined) updateData.mediaUrls = mediaUrls
           if (agentNote !== undefined) updateData.agentNote = agentNote || null
@@ -1666,7 +1660,7 @@ export function createAmcMcpServer(agentApiKey: string) {
               caption: caption!.trim(),
               hashtags: hashtags ?? [],
               accountId: accountId || null,
-              scheduledAt: parsedScheduledAt,
+              scheduledAt: null, // Always null on save — set by board_get_schedule_recommendation
               mediaUrls: mediaUrls ?? [],
               agentNote: agentNote ?? null,
               captionLang: captionLang || 'en',
@@ -1715,6 +1709,52 @@ export function createAmcMcpServer(agentApiKey: string) {
       const result = await submitDraftForDelivery({ brandId, draftId, actorId: agent.id, note: note || null })
       if (!result.ok) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
+    }
+  )
+
+  // ── Scheduling recommendation tool ─────────────────────────────────────────
+  server.tool(
+    'board_get_schedule_recommendation',
+    'Get the recommended publish time for a brand on a given platform. MUST be called before board_submit_draft when scheduling content. Uses the unified smart scheduling algorithm (respects minimum gap between posts, preferred time slots). Do NOT hardcode scheduledAt — always use this tool.',
+    {
+      brandId: z.string(),
+      platform: z.string().nullable().optional().describe('Platform ID (e.g. instagram, xiaohongshu). Null = cross-platform aggregate.'),
+      numberOfPosts: z.number().int().min(1).max(10).optional().default(1).describe('How many consecutive posts to schedule. Returns N recommended time slots.'),
+      urgency: z.enum(['normal', 'urgent']).optional().default('normal'),
+    },
+    async ({ brandId, platform, numberOfPosts, urgency }) => {
+      const agent = await resolveAgent()
+      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, agent.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+
+      // Call the internal scheduling recommend logic directly (same algorithm as HTTP endpoint)
+      const appBase = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+      const res = await fetch(`${appBase}/api/brands/${brandId}/scheduling/recommend`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-key': agentApiKey,
+        },
+        body: JSON.stringify({ platform: platform ?? null, numberOfPosts: numberOfPosts ?? 1, urgency: urgency ?? 'normal' }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+        return { content: [{ type: 'text' as const, text: `Error: ${err.error ?? res.statusText}` }], isError: true }
+      }
+
+      const data = await res.json()
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            ok: true,
+            recommendations: data.recommendations,
+            instruction: 'Use recommendations[0].recommendedAt as scheduledAt when calling board_submit_draft. Prefer the recommended slot; only use alternativeSlots if the user requests a different time.',
+          }, null, 2),
+        }],
+      }
     }
   )
 
