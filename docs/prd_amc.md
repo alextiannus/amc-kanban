@@ -721,4 +721,22 @@ RolePermission 表：
 - `src/agents/nodes/copywriter.ts`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.7 — 2026-06-30（推广邀请码与分成归因系统设计）
+
+### 统一邀请码与分成归因系统 (Referral & Invitation Code System)
+- **概念模型区分**：区分单次有效的激活 Token（`Invitation`表，用于团队与特定客户 onboarding）与多次分享的公开推荐邀请码（`User.inviteCode`，每个用户独享）。
+- **注册链路与层级关联**：新商户使用带有推荐码的 URL (`/register?ref=CODE`) 注册时，后端 API 自动在 `User` 表建立 `referredById` 树状层级关系。
+- **角色差异化收益归因**：
+  - **BD 与主理人**：推荐码作为销售渠道标识，关联该推荐链条下的商户订阅与增值服务流水，在 `Revenue` 表进行佣金业绩归因。
+  - **普通品牌商户**：推荐码作为自传播裂变，双方在注册或充值时触发系统推广福利（如优惠券或 AI 额度赠送）。
+
+### 影响文件
+- `prisma/schema.prisma`
+- `src/app/api/auth/register/route.ts`
+- `docs/prd_amc.md`
+- `docs/design_invitation_system.md`
+
+
 
