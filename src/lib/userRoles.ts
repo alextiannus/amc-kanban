@@ -1,4 +1,4 @@
-export type BusinessRole = 'BRAND_OWNER' | 'AMC_PRINCIPAL'
+export type BusinessRole = 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD'
 export type EffectiveUserRole = 'ADMIN' | BusinessRole | 'AMC_AGENT'
 
 export function computeEffectiveUserRoles(input: {
@@ -18,6 +18,7 @@ export function computeEffectiveUserRoles(input: {
   if (input.systemRole === 'ADMIN') roles.add('ADMIN')
   if (explicitRoles.includes('BRAND_OWNER') || ownerCount > 0) roles.add('BRAND_OWNER')
   if (explicitRoles.includes('AMC_PRINCIPAL') || principalCount > 0) roles.add('AMC_PRINCIPAL')
+  if (explicitRoles.includes('BD')) roles.add('BD')
 
   return Array.from(roles)
 }

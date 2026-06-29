@@ -136,3 +136,27 @@ npm run verify:oss
     git push origin main
     ```
 3.  登录 Render 控制台 (`dashboard.render.com`)，查看 `amc-kanban` 服务的 Build 日志，确信 `npx prisma db push` 架构自动同步完成，没有发生 runtime panic。
+
+---
+
+## 5. E2E Browser Testing for All User Flows (端到端浏览器自动化测试)
+
+项目内置了基于 Playwright 的 E2E 自动化测试用例，用以校验以下三大用户角色的基本端到端交互链路。
+
+### 5.1 测试范围与用户角色链路
+1. **商家 / 主理人 (Merchant Owner)**:
+   - 登录系统 -> 重定向进入商家看板 `/board`，核查基本图表与看板任务栏。
+   - 进入个人主页 `/profile`，校验专属推荐邀请码以及个人海报等信息，尝试编辑并保存个人信息。
+2. **业务开发人员 (BD / Principal)**:
+   - 登录系统 -> 进入新品牌开户向导 `/board/subscription`（未绑定品牌时默认加载此界面）。
+   - 录入品牌详细配置，进入套餐时长与套餐等级选择界面。
+   - 输入并核销优惠码，验证优惠价格重新计算（如 10% 或 50% 折让），检验总支付费用的变动。
+   - 确认激活并生成待支付订阅账单。
+3. **系统管理员 (Admin / Operator)**:
+   - 登录系统 -> 进入 `/admin` 管理控制台，校验 API 配置以及系统审计日志（AuditLog）的显示。
+
+### 5.2 运行测试命令
+测试脚本会自动在本地数据库进行种子初始化、拉起 Chromium 无头浏览器交互并在测试结束后清理数据库。
+```bash
+npm run test:e2e-basic
+```

@@ -107,12 +107,10 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'advanced',
-    name: '流量扩张版',
-    monthlyUsd: 3600,
-    // 软下架（2026-06-20）：不再作为独立订阅档位展示给新签约商家，内容拆解为可加购包（定价待定，由商家自行决定是否加购）。
-    // 既有订阅、按 id 查找的历史逻辑（POST 校验、admin 手动设置）仍然有效，不受影响。
-    visible: false,
-    description: '把品牌势能转化为持续营收，建立忠诚客户群体',
+    name: '全域增长版',
+    monthlyUsd: 5800,
+    visible: true,
+    description: '全平台覆盖，私域运营，精准拉新转化',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · AI 私域运营官 · AI 客服 · 品牌主理人',
     suitableFor: '已有线上基础，希望通过付费投流快速放大曝光、头部 KOL 精准种草、私域沉淀顾客资产，系统提升全链路转化率的商家',
     services: [
@@ -221,7 +219,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
   },
 ]
 
-export const ALLOWED_DURATIONS = [3, 6, 12] as const
+export const ALLOWED_DURATIONS = [1, 3, 6, 12] as const
 
 export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.01'
 
@@ -258,7 +256,13 @@ export function calculatePricing(
     }, 0)
   const monthlyBaseUsd = plan.promoMonthlyUsd ?? plan.monthlyUsd
   const recurringSubtotalUsd = (monthlyBaseUsd + recurringAddonsUsd) * durationMonths
-  const discountPercent = durationMonths === 12 ? 10 : 0
+  
+  // Align discounts with wizard: 3mo=5%, 6mo=10%, 12mo=15%
+  const discountPercent = 
+    durationMonths === 3 ? 5 :
+    durationMonths === 6 ? 10 :
+    durationMonths === 12 ? 15 : 0;
+
   const recurringAfterDiscountUsd = Math.round(recurringSubtotalUsd * (1 - discountPercent / 100))
   const discountUsd = recurringSubtotalUsd - recurringAfterDiscountUsd
 

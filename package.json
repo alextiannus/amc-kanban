@@ -19,6 +19,7 @@
     "sync:role-roster": "node --experimental-strip-types scripts/sync-user-role-roster.mts",
     "verify:permissions": "node scripts/verify-permissions.mjs",
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",
+    "test:e2e-basic": "node --experimental-strip-types scripts/test-e2e-basic-flows.mts",
     "postinstall": "node -e \"if(!process.env.RENDER && !process.env.CI) { require('child_process').execSync('npx prisma generate && npx prisma db push --accept-data-loss', {stdio:'inherit'}) }\""
   },
   "dependencies": {

@@ -51,6 +51,10 @@ model User {
   sentInvitations  Invitation[] @relation("InvitationInviter")
   receivedInvitations Invitation[] @relation("InvitationInvitee")
   schoolItems      SchoolItem[] @relation("AgentSchoolItems")
+  
+  // Relations to Marketing Promo Codes
+  createdCampaigns CampaignPromoCode[] @relation("CreatedPromoCodes")
+  ownedCampaigns   CampaignPromoCode[] @relation("OwnedPromoCodes")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -894,5 +898,47 @@ model MessageTemplate {
   placeholders String   // Comma-separated list of variables, e.g. "nickname,temporaryPassword,invitationLink"
   updatedAt    DateTime @updatedAt
   updatedBy    String?
+}
+
+// ── Independent Marketing/Campaign Promo Codes ──────────────────────────────
+model CampaignPromoCode {
+  id            String    @id @default(cuid())
+  code          String    @unique           // e.g. "SUMMER10", "12EAT_PROMO"
+  name          String                      // Campaign Name
+  description   String?
+  
+  // Discount Configuration
+  discountType  String    @default("PERCENT") // "PERCENT" or "FIXED_AMOUNT"
+  discountValue Float                       // The actual numerical value
+  applyDuration String    @default("ONCE")    // "ONCE", "FOREVER", or "MULTIPLE_MONTHS"
+  durationMonths Int?                       // Null unless applyDuration is "MULTIPLE_MONTHS"
+  
+  // Constraints
+  maxUses       Int?                        // Maximum number of times this code can be used (null = unlimited)
+  usedCount     Int       @default(0)
+  expiresAt     DateTime?                   // Expiration date
+  isActive      Boolean   @default(true)
+  
+  // Creators & Owners
+  createdById   String
+  createdBy     User      @relation("CreatedPromoCodes", fields: [createdById], references: [id])
+  ownerId       String?                     // The BD or Principal who owns this campaign
+  owner         User?     @relation("OwnedPromoCodes", fields: [ownerId], references: [id])
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ── Track Code Usage & Attributed Subscriptions ────────────────────────────
+model PromoCodeUsage {
+  id             String    @id @default(cuid())
+  userId         String                      // The merchant user who redeemed the code
+  codeUsed       String                      // The literal code typed
+  codeType       String                      // "USER_INVITE" | "CAMPAIGN_PROMO"
+  referredById   String?                     // User ID who gets credit
+  campaignCodeId String?                     // Campaign ID (if CAMPAIGN_PROMO)
+  subscriptionId String                      // The BrandSubscription that was discounted
+  discountAmount Float                       // Calculated discount applied in USD
+  createdAt      DateTime  @default(now())
 }
 

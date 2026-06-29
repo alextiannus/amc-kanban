@@ -253,7 +253,7 @@ export async function POST(request: Request) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name, location, timezone, industry, region, referenceCode, googlePlaceId, address, lat, lng } = body
+  const { name, location, timezone, industry, region, referenceCode, googlePlaceId, address, lat, lng, promoCode } = body
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
@@ -356,6 +356,41 @@ export async function POST(request: Request) {
     const oneTimeAddonsUsd   = typeof body.oneTimeAddonsUsd   === 'number' ? body.oneTimeAddonsUsd   : 0
     const totalDueUsd        = typeof body.totalDueUsd        === 'number' ? body.totalDueUsd        : 0
 
+    // Validate and resolve promoCode/inviteCode attributes
+    let finalReferredById: string | null = null
+    let campaignId: string | null = null
+    let promoDiscountAmount = 0
+    let promoCodeType: string | null = null
+
+    if (promoCode && typeof promoCode === 'string' && promoCode.trim()) {
+      const normalizedCode = promoCode.trim().toUpperCase()
+      
+      // 1. Try campaign promo code
+      const campaign = await prisma.campaignPromoCode.findUnique({
+        where: { code: normalizedCode }
+      })
+      if (campaign && campaign.isActive && (!campaign.expiresAt || new Date(campaign.expiresAt) > new Date()) && (campaign.maxUses === null || campaign.usedCount < campaign.maxUses)) {
+        campaignId = campaign.id
+        finalReferredById = campaign.ownerId
+        promoCodeType = 'CAMPAIGN_PROMO'
+        if (campaign.discountType === 'PERCENT') {
+          promoDiscountAmount = totalDueUsd * (campaign.discountValue / 100)
+        } else {
+          promoDiscountAmount = campaign.discountValue * durationMonths
+        }
+      } else {
+        // 2. Try user inviteCode
+        const userReferrer = await prisma.user.findUnique({
+          where: { inviteCode: normalizedCode }
+        })
+        if (userReferrer && userReferrer.id !== owner.id) {
+          finalReferredById = userReferrer.id
+          promoCodeType = 'USER_INVITE'
+          promoDiscountAmount = totalDueUsd * 0.10
+        }
+      }
+    }
+
     const wizardResult = await prisma.$transaction(async (tx: any) => {
       const brand = await tx.brand.create({
         data: {
@@ -392,10 +427,44 @@ export async function POST(request: Request) {
           monthlyBaseUsd,
           recurringAddonsUsd,
           oneTimeAddonsUsd,
-          totalDueUsd,
+          totalDueUsd: Math.max(0, Math.round(totalDueUsd - promoDiscountAmount)),
           status: 'PENDING',
         },
       })
+
+      if (campaignId) {
+        await tx.campaignPromoCode.update({
+          where: { id: campaignId },
+          data: { usedCount: { increment: 1 } }
+        })
+      }
+
+      if (finalReferredById) {
+        const u = await tx.user.findUnique({
+          where: { id: owner.id },
+          select: { referredById: true }
+        })
+        if (u && !u.referredById) {
+          await tx.user.update({
+            where: { id: owner.id },
+            data: { referredById: finalReferredById }
+          })
+        }
+      }
+
+      if (promoCodeType) {
+        await tx.promoCodeUsage.create({
+          data: {
+            userId: owner.id,
+            codeUsed: promoCode.trim().toUpperCase(),
+            codeType: promoCodeType,
+            referredById: promoCodeType === 'USER_INVITE' ? finalReferredById : null,
+            campaignCodeId: promoCodeType === 'CAMPAIGN_PROMO' ? campaignId : null,
+            subscriptionId: subscription.id,
+            discountAmount: Math.round(promoDiscountAmount)
+          }
+        })
+      }
 
       return { brand, subscription }
     })

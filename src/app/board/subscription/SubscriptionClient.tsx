@@ -326,6 +326,22 @@ export default function BrandSubscriptionPage() {
   const [agentCreationMode, setAgentCreationMode] = useState<AgentCreationMode>('create')
   const instructionCardRef = useRef<HTMLElement | null>(null)
 
+  // Promo code states
+  const [promoCode, setPromoCode] = useState('')
+  const [promoDiscountType, setPromoDiscountType] = useState<'PERCENT' | 'FIXED_AMOUNT' | null>(null)
+  const [promoDiscountValue, setPromoDiscountValue] = useState<number>(0)
+  const [promoValid, setPromoValid] = useState<boolean>(false)
+  const [promoValidationMsg, setPromoValidationMsg] = useState<string | null>(null)
+  const [validatingPromo, setValidatingPromo] = useState<boolean>(false)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+
+  useEffect(() => {
+    fetch('/api/profile')
+      .then(res => res.json())
+      .then(data => setCurrentUser(data))
+      .catch(err => console.error('Fetch profile err:', err))
+  }, [])
+
   const success = searchParams?.get('success') === '1'
   const canceled = searchParams?.get('canceled') === '1'
   const checkoutSessionId = searchParams?.get('sid') || ''
@@ -485,8 +501,6 @@ export default function BrandSubscriptionPage() {
     return () => window.clearTimeout(closeTimer)
   }, [agentCreationDone])
 
-  const billingCycle: 'quarterly' | 'yearly' = durationMonths === 12 ? 'yearly' : 'quarterly'
-
   const selectedPlan = useMemo(() => data?.plans.find((p) => p.id === planId), [data?.plans, planId])
   const currentPlanId = useMemo(() => resolveCurrentPlanId(data), [data])
   const recommendedPlanId = !data?.plans?.length
@@ -553,6 +567,44 @@ export default function BrandSubscriptionPage() {
     }
   }
 
+  const handleValidatePromo = async () => {
+    if (!promoCode.trim()) {
+      setPromoValid(false)
+      setPromoDiscountType(null)
+      setPromoDiscountValue(0)
+      setPromoValidationMsg('请输入有效的验证码')
+      return
+    }
+
+    setValidatingPromo(true)
+    try {
+      const res = await fetch('/api/promo/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoCode })
+      })
+      const data = await res.json()
+      if (res.ok && data.valid) {
+        setPromoValid(true)
+        setPromoDiscountType(data.discountType)
+        setPromoDiscountValue(data.discountValue)
+        setPromoValidationMsg(`✅ 已应用：${data.description}`)
+      } else {
+        setPromoValid(false)
+        setPromoDiscountType(null)
+        setPromoDiscountValue(0)
+        setPromoValidationMsg(`❌ ${data.error || '验证失败'}`)
+      }
+    } catch {
+      setPromoValid(false)
+      setPromoDiscountType(null)
+      setPromoDiscountValue(0)
+      setPromoValidationMsg('❌ 网络错误，请重试')
+    } finally {
+      setValidatingPromo(false)
+    }
+  }
+
   const startCheckout = async () => {
     if (!selectedPlan || !data) return
     setSubmitting(true)
@@ -571,12 +623,13 @@ export default function BrandSubscriptionPage() {
           returnTo: returnTo || undefined,
           planId: selectedPlan.id,
           durationMonths,
-          addonIds,
-          addonQuantities: { multi_store: multiStoreQty },
+          addonIds: [],
+          addonQuantities: {},
           paymentMode,
           timezone: brandTimezone,
           agreedToTerms,
           termsVersion: data.termsVersion,
+          promoCode: promoValid ? promoCode.trim().toUpperCase() : undefined
         }),
       })
       const json = await res.json()
@@ -614,11 +667,26 @@ export default function BrandSubscriptionPage() {
   const pricingSummary = useMemo(() => {
     if (!data || !selectedPlan) return null
     try {
-      return calculatePricing(planId, durationMonths, addonIds, { multi_store: multiStoreQty })
+      const baseSummary = calculatePricing(planId, durationMonths, [], {})
+      
+      let promoDiscountAmount = 0
+      if (promoValid && promoDiscountType === 'PERCENT') {
+        promoDiscountAmount = baseSummary.recurringAfterDiscountUsd * (promoDiscountValue / 100)
+      } else if (promoValid && promoDiscountType === 'FIXED_AMOUNT') {
+        promoDiscountAmount = promoDiscountValue * durationMonths
+      }
+      
+      const totalDue = Math.max(0, Math.round(baseSummary.recurringAfterDiscountUsd - promoDiscountAmount))
+      
+      return {
+        ...baseSummary,
+        promoDiscountAmount,
+        totalDueUsd: totalDue
+      }
     } catch {
       return null
     }
-  }, [data, selectedPlan, planId, durationMonths, addonIds, multiStoreQty])
+  }, [data, selectedPlan, planId, durationMonths, promoValid, promoDiscountType, promoDiscountValue])
 
   // Stepper Header
   const renderStepper = () => {
@@ -1134,33 +1202,38 @@ export default function BrandSubscriptionPage() {
                   </p>
                 </div>
                 
-                {/* Duration Toggle */}
-                <div className="flex justify-center">
-                  <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-800/80 p-1">
+                {/* Duration Buttons */}
+                <div className="grid grid-cols-4 gap-2 shrink-0 w-full md:w-auto max-w-sm">
+                  {[
+                    { months: 1,  label: '1 个月',  discount: 0 },
+                    { months: 3,  label: '3 个月',  discount: 5 },
+                    { months: 6,  label: '6 个月',  discount: 10 },
+                    { months: 12, label: '12 个月', discount: 15, badge: '最优惠' },
+                  ].map(d => (
                     <button
-                      onClick={() => setDurationMonths(3)}
-                      className={`rounded-full px-5 py-2 text-xs font-bold transition-all ${
-                        billingCycle === 'quarterly'
-                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      key={d.months}
+                      onClick={() => setDurationMonths(d.months)}
+                      className={`relative rounded-xl border-2 py-2 px-3 text-center transition-all cursor-pointer ${
+                        durationMonths === d.months
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30 shadow-inner'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-700 bg-white dark:bg-slate-900'
                       }`}
                     >
-                      季度订阅
+                      {d.badge && (
+                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-indigo-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full whitespace-nowrap uppercase leading-none scale-90">
+                          {d.badge}
+                        </span>
+                      )}
+                      <div className={`text-xs font-black ${durationMonths === d.months ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-650 dark:text-slate-350'}`}>
+                        {d.label}
+                      </div>
+                      {d.discount > 0 && (
+                        <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-black">
+                          -{d.discount}%
+                        </div>
+                      )}
                     </button>
-                    <button
-                      onClick={() => setDurationMonths(12)}
-                      className={`relative rounded-full px-5 py-2 text-xs font-bold transition-all ${
-                        billingCycle === 'yearly'
-                          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      年度订阅
-                      <span className="absolute -top-2 -right-3 rounded-full bg-amber-400 px-1.5 py-0.5 text-[8px] font-black text-white leading-none shadow-sm uppercase">
-                        -10%
-                      </span>
-                    </button>
-                  </div>
+                  ))}
                 </div>
               </div>
 
@@ -1171,8 +1244,14 @@ export default function BrandSubscriptionPage() {
                   const isCurrentPlan = currentPlanId === p.id
                   const isRecommended = p.id === recommendedPlanId
                   const baseMonthly = p.promoMonthlyUsd ?? p.monthlyUsd
-                  const cycleMonthly = billingCycle === 'yearly' ? Math.round(baseMonthly * 0.9) : baseMonthly
-                  const cycleTotal = cycleMonthly * (billingCycle === 'yearly' ? 12 : 3)
+                  
+                  const discountPct = 
+                    durationMonths === 3 ? 5 :
+                    durationMonths === 6 ? 10 :
+                    durationMonths === 12 ? 15 : 0;
+                  
+                  const cycleMonthly = Math.round(baseMonthly * (1 - discountPct / 100))
+                  const cycleTotal = cycleMonthly * durationMonths
 
                   // Render active crew icons for this specific plan in cards
                   const activeRolesPills = crewRoles.filter((r) => r.activeIn.includes(p.id))
@@ -1222,9 +1301,9 @@ export default function BrandSubscriptionPage() {
                             </span>
                           </div>
                           <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                            {billingCycle === 'yearly' 
-                              ? `年付 $${cycleTotal} / 12 个月 (省 $${Math.round(baseMonthly * 1.2 * 10)} USD)` 
-                              : `季度付 $${cycleTotal} / 3 个月`}
+                            {durationMonths === 1 
+                              ? '单月订阅' 
+                              : `${durationMonths}个月总计 $${cycleTotal} (已扣减折扣)`}
                           </p>
                         </div>
 
@@ -1298,129 +1377,48 @@ export default function BrandSubscriptionPage() {
               </div>
             </section>
 
-            {/* Addons Grid */}
-            <section className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
-              <div>
-                <h3 className="text-sm font-black tracking-widest text-slate-700 dark:text-slate-300 uppercase flex items-center gap-2">
-                  <Sparkles size={16} className="text-indigo-600" /> 3) 增值增效加购服务
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  根据店铺特定的营销节点，可选择按月代运营或单次执行的服务。
-                </p>
-              </div>
+            {/* Promo Code Option (Only for principal & BD when creating a new brand) */}
+            {(() => {
+              const userRoles = currentUser?.userRoles || []
+              const isPrincipalOrBDOrAdmin = userRoles.includes('AMC_PRINCIPAL') || userRoles.includes('BD') || currentUser?.role === 'ADMIN'
+              if (effectiveBrandId || !isPrincipalOrBDOrAdmin) return null
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Monthly Addons */}
-                {monthlyAddons.map((a) => {
-                  const isChecked = addonIds.includes(a.id)
-                  return (
-                    <div
-                      key={a.id}
-                      onClick={() => toggleAddon(a.id)}
-                      className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 flex flex-col justify-between ${
-                        isChecked
-                          ? 'border-indigo-600 bg-indigo-50/20 dark:bg-indigo-950/10 shadow-sm ring-2 ring-indigo-600/10'
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/10 hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
+              return (
+                <section className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm space-y-4">
+                  <div>
+                    <h3 className="text-sm font-black tracking-widest text-slate-700 dark:text-slate-300 uppercase flex items-center gap-2">
+                      <Sparkles size={16} className="text-indigo-600" /> 3) 邀请码 / 优惠码
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      为主理人或 BD 新建品牌输入邀请码以计算折扣后的合同金额。
+                    </p>
+                  </div>
+                  
+                  <div className="flex gap-2 max-w-md">
+                    <input
+                      type="text"
+                      placeholder="请输入邀请码或营销优惠码"
+                      value={promoCode}
+                      onChange={e => setPromoCode(e.target.value)}
+                      className="flex-1 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400 font-semibold uppercase"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleValidatePromo}
+                      disabled={validatingPromo}
+                      className="px-5 py-2.5 bg-slate-900 hover:bg-slate-850 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-black transition-all disabled:opacity-50"
                     >
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm font-black text-slate-950 dark:text-white leading-snug">{a.name}</p>
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              e.stopPropagation()
-                              toggleAddon(a.id)
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="mt-0.5 accent-indigo-600 w-4 h-4 cursor-pointer"
-                          />
-                        </div>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">{a.description}</p>
-                        
-                        {a.id === 'multi_store' && (
-                          <div className="flex items-center gap-3 mt-2 mb-2" onClick={(e) => e.stopPropagation()}>
-                            <label className="text-xs text-slate-500 dark:text-slate-400 font-medium">增加门店数量</label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={multiStoreQty}
-                              onChange={(e) => handleMultiStoreQtyChange(parseInt(e.target.value) || 0)}
-                              className="w-20 px-2 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg font-mono text-xs focus:ring-1 focus:ring-indigo-500 outline-none text-slate-900 dark:text-white"
-                            />
-                          </div>
-                        )}
-
-                        <ul className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-slate-800/40">
-                          {a.details.map((d) => (
-                            <li key={d} className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">• {d}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="pt-3 text-right">
-                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
-                          {a.id === 'multi_store'
-                            ? `每个新增门店$${a.usd}`
-                            : `+$${a.usd} / 月`
-                          }
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-
-                {/* One Time Addons */}
-                {oneTimeAddonItems.map((a) => {
-                  const isChecked = addonIds.includes(a.id)
-                  return (
-                    <div
-                      key={a.id}
-                      onClick={() => toggleAddon(a.id)}
-                      className={`group cursor-pointer rounded-2xl border p-4 transition-all duration-200 flex flex-col justify-between ${
-                        isChecked
-                          ? 'border-indigo-600 bg-indigo-50/20 dark:bg-indigo-950/10 shadow-sm ring-2 ring-indigo-600/10'
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/10 hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm font-black text-slate-950 dark:text-white leading-snug">{a.name}</p>
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              e.stopPropagation()
-                              toggleAddon(a.id)
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            className="mt-0.5 accent-indigo-600 w-4 h-4 cursor-pointer"
-                          />
-                        </div>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">{a.description}</p>
-                        <ul className="space-y-1 pt-1.5 border-t border-slate-100 dark:border-slate-800/40">
-                          {a.details.map((d) => (
-                            <li key={d} className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1">• {d}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div className="pt-3 text-right">
-                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
-                          {a.id === 'onsite_photo'
-                            ? `+$${a.usd} / 次 (含后期)`
-                            : a.id === 'influencer_visit'
-                              ? `+$${a.usd} / 季 (保曝光)`
-                              : a.id === 'dianping_ops'
-                                ? `+$${a.usd} / 年`
-                                : `+$${a.usd} / 单次`
-                          }
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
+                      {validatingPromo ? '验证中...' : '核销优惠'}
+                    </button>
+                  </div>
+                  {promoValidationMsg && (
+                    <p className={`text-xs font-bold ${promoValid ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                      {promoValidationMsg}
+                    </p>
+                  )}
+                </section>
+              )
+            })()}
 
             {/* Split Grid: Left side details check, Right side Billing receipt summary calculator */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1544,48 +1542,22 @@ export default function BrandSubscriptionPage() {
                         </span>
                       </div>
 
-                      {/* Addon details in breakdown */}
-                      {addonIds.length > 0 && (
-                        <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3">
-                          <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wide">
-                            加购服务明细:
-                          </p>
-                          {addonIds.map((id) => {
-                            const add = data.addons.find((a) => a.id === id)
-                            if (!add) return null
-                            const qty = id === 'multi_store' ? multiStoreQty : 1
-                            const totalAddon = add.pricing === 'monthly' ? add.usd * durationMonths * qty : add.usd * qty
-                            return (
-                              <div key={id} className="flex items-start justify-between text-[11px]">
-                                <div>
-                                  <p className="font-medium text-slate-600 dark:text-slate-400">{add.name}</p>
-                                  <p className="text-[9px] text-slate-400">
-                                    {add.id === 'dianping_ops'
-                                      ? `按年计费 (一次性): $${add.usd} / 年`
-                                      : add.pricing === 'monthly'
-                                        ? `按月 recurring: $${add.usd} × ${durationMonths}月${id === 'multi_store' ? ` × ${qty}店` : ''}`
-                                        : `按次一次性结算`}
-                                  </p>
-                                </div>
-                                <span className="font-bold text-slate-800 dark:text-slate-200">
-                                  ${totalAddon}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-
                       {/* contract duration details */}
                       <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-1">
                         <div className="flex justify-between text-[11px] font-medium text-slate-600 dark:text-slate-400">
                           <span>合同签约周期:</span>
-                          <span>{durationMonths} 个月 ({billingCycle === 'yearly' ? '年付' : '季付'})</span>
+                          <span>{durationMonths} 个月</span>
                         </div>
                         {pricingSummary.discountPercent > 0 && (
                           <div className="flex justify-between text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                            <span>签约折扣 (-{pricingSummary.discountPercent}%):</span>
+                            <span>签约周期折扣 (-{pricingSummary.discountPercent}%):</span>
                             <span>- ${pricingSummary.discountUsd}</span>
+                          </div>
+                        )}
+                        {promoValid && (
+                          <div className="flex justify-between text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+                            <span>邀请/优惠折扣 ({promoDiscountType === 'PERCENT' ? `-${promoDiscountValue}%` : `-$${promoDiscountValue}/月`}):</span>
+                            <span>- ${Math.round(pricingSummary.promoDiscountAmount)}</span>
                           </div>
                         )}
                       </div>

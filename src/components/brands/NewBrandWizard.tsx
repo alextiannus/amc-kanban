@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   X, ChevronRight, ChevronLeft, Store, Mail, Phone, MapPin,
   Check, Loader2, Sparkles, Building2, Zap, Crown,
@@ -30,6 +30,12 @@ interface WizardState {
   planName: string
   monthlyBaseUsd: number
   durationMonths: number
+  // Promo code
+  promoCode: string
+  promoDiscountType: 'PERCENT' | 'FIXED_AMOUNT' | null
+  promoDiscountValue: number
+  promoValid: boolean
+  promoValidationMsg: string | null
   // Computed
   totalDueUsd: number
 }
@@ -221,11 +227,18 @@ function Step1({ state, onChange }: {
 
 // ─── Step 2: 套餐选择 ─────────────────────────────────────────────────────────
 
-function Step2({ state, onPlan, onDuration }: {
+function Step2({ state, onPlan, onDuration, currentUser, onChange, onValidatePromo, validatingPromo }: {
   state: WizardState
   onPlan: (planId: string, planName: string, monthlyUsd: number) => void
   onDuration: (months: number) => void
+  currentUser: any
+  onChange: (k: keyof WizardState, v: string) => void
+  onValidatePromo: () => void
+  validatingPromo: boolean
 }) {
+  const userRoles = currentUser?.userRoles || []
+  const isPrincipalOrBDOrAdmin = userRoles.includes('AMC_PRINCIPAL') || userRoles.includes('BD') || currentUser?.role === 'ADMIN'
+
   return (
     <div className="space-y-5">
       {/* Plan cards */}
@@ -318,6 +331,37 @@ function Step2({ state, onPlan, onDuration }: {
           ))}
         </div>
       </div>
+
+      {/* Promo Code Option (Only for principal & BD) */}
+      {isPrincipalOrBDOrAdmin && (
+        <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+            邀请码 / 优惠码
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="请输入优惠码或主理人/BD邀请码"
+              value={state.promoCode}
+              onChange={e => onChange('promoCode', e.target.value)}
+              className="flex-1 px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400 font-semibold uppercase"
+            />
+            <button
+              type="button"
+              onClick={onValidatePromo}
+              disabled={validatingPromo}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-black transition-all disabled:opacity-50"
+            >
+              {validatingPromo ? '验证中...' : '核销优惠'}
+            </button>
+          </div>
+          {state.promoValidationMsg && (
+            <p className={`text-xs font-bold ${state.promoValid ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+              {state.promoValidationMsg}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -328,8 +372,17 @@ function Step3({ state }: { state: WizardState }) {
   const plan = PLANS.find(p => p.id === state.planId)
   const duration = DURATIONS.find(d => d.months === state.durationMonths)
   const discountPct = duration?.discount ?? 0
-  const discountedMonthly = state.monthlyBaseUsd * (1 - discountPct / 100)
-  const totalDue = Math.round(discountedMonthly * state.durationMonths)
+  const baseDiscountedMonthly = state.monthlyBaseUsd * (1 - discountPct / 100)
+  
+  let promoDiscountVal = 0
+  if (state.promoValid && state.promoDiscountType === 'PERCENT') {
+    promoDiscountVal = baseDiscountedMonthly * (state.promoDiscountValue / 100)
+  } else if (state.promoValid && state.promoDiscountType === 'FIXED_AMOUNT') {
+    promoDiscountVal = state.promoDiscountValue
+  }
+
+  const discountedMonthly = Math.max(0, Math.round(baseDiscountedMonthly - promoDiscountVal))
+  const totalDue = discountedMonthly * state.durationMonths
 
   const rows = [
     { label: '品牌名称',  value: state.brandName },
@@ -337,7 +390,12 @@ function Step3({ state }: { state: WizardState }) {
     { label: '所在城市',  value: state.location || '—' },
     { label: '套餐',     value: plan?.name ?? '—' },
     { label: '合同时长',  value: duration?.label ?? '—' },
-    { label: '月费',     value: `$${discountedMonthly.toLocaleString()} USD${discountPct ? ` (${discountPct}% 折)` : ''}` },
+    { 
+      label: '月费',     
+      value: state.promoValid 
+        ? `$${discountedMonthly.toLocaleString()} USD (折上折: 已应用优惠)`
+        : `$${discountedMonthly.toLocaleString()} USD${discountPct ? ` (${discountPct}% 折)` : ''}` 
+    },
     { label: '合同总额',  value: `$${totalDue.toLocaleString()} USD` },
   ]
 
@@ -371,6 +429,8 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [validatingPromo, setValidatingPromo] = useState(false)
 
   const [state, setState] = useState<WizardState>({
     brandName: '',
@@ -381,8 +441,20 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
     planName: '品牌建设版',
     monthlyBaseUsd: 2800,
     durationMonths: 3,
+    promoCode: '',
+    promoDiscountType: null,
+    promoDiscountValue: 0,
+    promoValid: false,
+    promoValidationMsg: null,
     totalDueUsd: 0,
   })
+
+  useEffect(() => {
+    fetch('/api/profile')
+      .then(res => res.json())
+      .then(data => setCurrentUser(data))
+      .catch(err => console.error('Fetch profile err:', err))
+  }, [])
 
   function onChange(k: keyof WizardState, v: string) {
     setState(prev => ({ ...prev, [k]: v }))
@@ -399,8 +471,67 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
   // Compute derived totals
   const duration = DURATIONS.find(d => d.months === state.durationMonths)
   const discountPct = duration?.discount ?? 0
-  const discountedMonthly = Math.round(state.monthlyBaseUsd * (1 - discountPct / 100))
+  const baseDiscountedMonthly = state.monthlyBaseUsd * (1 - discountPct / 100)
+  
+  let promoDiscountVal = 0
+  if (state.promoValid && state.promoDiscountType === 'PERCENT') {
+    promoDiscountVal = baseDiscountedMonthly * (state.promoDiscountValue / 100)
+  } else if (state.promoValid && state.promoDiscountType === 'FIXED_AMOUNT') {
+    promoDiscountVal = state.promoDiscountValue
+  }
+
+  const discountedMonthly = Math.max(0, Math.round(baseDiscountedMonthly - promoDiscountVal))
   const totalDue = discountedMonthly * state.durationMonths
+
+  async function handleValidatePromoCode() {
+    if (!state.promoCode.trim()) {
+      setState(prev => ({
+        ...prev,
+        promoValid: false,
+        promoDiscountType: null,
+        promoDiscountValue: 0,
+        promoValidationMsg: '请输入邀请码/优惠码'
+      }))
+      return
+    }
+
+    setValidatingPromo(true)
+    try {
+      const res = await fetch('/api/promo/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: state.promoCode })
+      })
+      const data = await res.json()
+      if (res.ok && data.valid) {
+        setState(prev => ({
+          ...prev,
+          promoValid: true,
+          promoDiscountType: data.discountType,
+          promoDiscountValue: data.discountValue,
+          promoValidationMsg: `✅ 已应用：${data.description}`
+        }))
+      } else {
+        setState(prev => ({
+          ...prev,
+          promoValid: false,
+          promoDiscountType: null,
+          promoDiscountValue: 0,
+          promoValidationMsg: `❌ ${data.error || '验证失败'}`
+        }))
+      }
+    } catch {
+      setState(prev => ({
+        ...prev,
+        promoValid: false,
+        promoDiscountType: null,
+        promoDiscountValue: 0,
+        promoValidationMsg: '❌ 网络错误，请重新验证'
+      }))
+    } finally {
+      setValidatingPromo(false)
+    }
+  }
 
   function validateStep1(): string | null {
     if (!state.brandName.trim()) return '请填写品牌名称'
@@ -443,8 +574,9 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
           planId: state.planId,
           planName: state.planName,
           durationMonths: state.durationMonths,
-          monthlyBaseUsd: discountedMonthly,
-          totalDueUsd: totalDue,
+          monthlyBaseUsd: state.monthlyBaseUsd, // Pass base monthly fee
+          totalDueUsd: baseDiscountedMonthly * state.durationMonths, // Pass un-promo due amount
+          promoCode: state.promoValid ? state.promoCode.trim().toUpperCase() : undefined,
           _tempPassword: tempPassword,
         }),
       })
@@ -492,7 +624,17 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6">
           {step === 1 && <Step1 state={state} onChange={onChange} />}
-          {step === 2 && <Step2 state={state} onPlan={onPlan} onDuration={onDuration} />}
+          {step === 2 && (
+            <Step2 
+              state={state} 
+              onPlan={onPlan} 
+              onDuration={onDuration} 
+              currentUser={currentUser}
+              onChange={onChange}
+              onValidatePromo={handleValidatePromoCode}
+              validatingPromo={validatingPromo}
+            />
+          )}
           {step === 3 && <Step3 state={{ ...state, totalDueUsd: totalDue }} />}
 
           {error && (

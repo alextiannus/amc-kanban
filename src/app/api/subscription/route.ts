@@ -443,6 +443,7 @@ export async function POST(request: Request) {
 
   const planId = String(body.planId ?? '')
   const durationMonths = Number(body.durationMonths)
+  const promoCode = body.promoCode ? String(body.promoCode).trim().toUpperCase() : undefined
   const addonIds: string[] = Array.isArray(body.addonIds) ? body.addonIds.map((v: unknown) => String(v)) : []
   const uniqueAddonIds: string[] = Array.from(new Set(addonIds))
   const rawMode = body.paymentMode
@@ -482,6 +483,41 @@ export async function POST(request: Request) {
     quantity: addon.id === 'multi_store' ? (addonQuantities['multi_store'] ?? 0) : 1,
   }))
 
+  // Resolve promo code / invite code
+  let finalReferredById: string | null = null
+  let campaignId: string | null = null
+  let promoDiscountAmount = 0
+  let promoCodeType: string | null = null
+
+  if (promoCode) {
+    // 1. Try campaign promo code
+    const campaign = await prisma.campaignPromoCode.findUnique({
+      where: { code: promoCode }
+    })
+    if (campaign && campaign.isActive && (!campaign.expiresAt || new Date(campaign.expiresAt) > new Date()) && (campaign.maxUses === null || campaign.usedCount < campaign.maxUses)) {
+      campaignId = campaign.id
+      finalReferredById = campaign.ownerId
+      promoCodeType = 'CAMPAIGN_PROMO'
+      if (campaign.discountType === 'PERCENT') {
+        promoDiscountAmount = summary.totalDueUsd * (campaign.discountValue / 100)
+      } else {
+        promoDiscountAmount = campaign.discountValue * durationMonths
+      }
+    } else {
+      // 2. Try user inviteCode
+      const userReferrer = await prisma.user.findUnique({
+        where: { inviteCode: promoCode }
+      })
+      if (userReferrer && userReferrer.id !== session.user.id) {
+        finalReferredById = userReferrer.id
+        promoCodeType = 'USER_INVITE'
+        promoDiscountAmount = summary.totalDueUsd * 0.10
+      }
+    }
+  }
+
+  const finalTotalDue = Math.max(0, Math.round(summary.totalDueUsd - promoDiscountAmount))
+
   const pending = await prisma.brandSubscription.create({
     data: {
       brandId,
@@ -492,7 +528,7 @@ export async function POST(request: Request) {
       monthlyBaseUsd: summary.monthlyBaseUsd,
       recurringAddonsUsd: summary.recurringAddonsUsd,
       oneTimeAddonsUsd: summary.oneTimeAddonsUsd,
-      totalDueUsd: summary.totalDueUsd,
+      totalDueUsd: finalTotalDue,
       status: 'PENDING',
       paymentProvider: paymentMode === 'ONLINE' ? 'STRIPE' : paymentMode,
       selectedAddons: selectedAddons as unknown as Prisma.InputJsonValue,
@@ -501,6 +537,53 @@ export async function POST(request: Request) {
       createdById: session.user.id,
     },
   })
+
+  if (campaignId) {
+    await prisma.campaignPromoCode.update({
+      where: { id: campaignId },
+      data: { usedCount: { increment: 1 } }
+    })
+  }
+
+  // Resolve target merchant owner user ID to bind referredById
+  let targetUserId: string | null = null
+  if (brandId) {
+    const brand = await prisma.brand.findUnique({
+      where: { id: brandId },
+      select: { ownerId: true }
+    })
+    targetUserId = brand?.ownerId || null
+  } else {
+    // If brand is not created yet, target user is the one creating it (or the one bound later)
+    targetUserId = session.user.id
+  }
+
+  if (finalReferredById && targetUserId) {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { referredById: true }
+    })
+    if (targetUser && !targetUser.referredById) {
+      await prisma.user.update({
+        where: { id: targetUserId },
+        data: { referredById: finalReferredById }
+      })
+    }
+  }
+
+  if (promoCodeType) {
+    await prisma.promoCodeUsage.create({
+      data: {
+        userId: targetUserId || session.user.id,
+        codeUsed: promoCode,
+        codeType: promoCodeType,
+        referredById: promoCodeType === 'USER_INVITE' ? finalReferredById : null,
+        campaignCodeId: promoCodeType === 'CAMPAIGN_PROMO' ? campaignId : null,
+        subscriptionId: pending.id,
+        discountAmount: Math.round(promoDiscountAmount)
+      }
+    })
+  }
 
   if (paymentMode === 'BILLING') {
     const activationData = buildBillingActivationData(summary.durationMonths)
