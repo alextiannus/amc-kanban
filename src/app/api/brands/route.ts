@@ -410,7 +410,7 @@ export async function POST(request: Request) {
         industry: typeof industry === 'string' ? industry : null,
         region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
         referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
-        createdBy: 'principal',
+        createdBy: 'admin',
       })
       assignment = { selectedAgentId: result.selectedAgentId, matchedBy: result.matchedBy, decisionId: result.decisionId }
     } catch {/* non-fatal */}

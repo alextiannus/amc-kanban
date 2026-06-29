@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { type BoardView, type MenuGroupDef, type AppRole, getMenuGroups } from '@/lib/permissions'
 import { type Brand } from './BrandSwitcher'
+import NewBrandWizard from '@/components/brands/NewBrandWizard'
 
 // ─── Icon resolver ────────────────────────────────────────────────────────────
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -180,6 +181,19 @@ export default function Sidebar({
 
   const menuGroups: MenuGroupDef[] = getMenuGroups(userRoles)
 
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardSuccess, setWizardSuccess] = useState<{ brandName: string } | null>(null)
+
+  const canCreateBrand = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL') || userRoles.includes('BD')
+
+  function handleWizardSuccess(brandId: string, brandName: string) {
+    setWizardOpen(false)
+    setWizardSuccess({ brandName })
+    setTimeout(() => setWizardSuccess(null), 4000)
+    // Refresh page to show new brand in switcher
+    router.refresh()
+  }
+
   const handleItemClick = (item: { view: BoardView; comingSoon?: boolean; href?: string }) => {
     if (item.comingSoon) return
     if (item.href) { router.push(item.href); return }
@@ -187,6 +201,7 @@ export default function Sidebar({
   }
 
   return (
+    <>
     <aside className={`
       relative flex flex-col shrink-0 h-screen
       bg-white dark:bg-slate-900
@@ -305,6 +320,33 @@ export default function Sidebar({
         ))}
       </nav>
 
+      {/* ── New Brand Button (for Principal / BD / Admin) ──────────── */}
+      {canCreateBrand && (
+        <div className="shrink-0 px-2 pb-1">
+          <button
+            id="sidebar-new-brand"
+            onClick={() => setWizardOpen(true)}
+            title={collapsed ? '新建品牌' : undefined}
+            className={`
+              w-full flex items-center gap-2 px-3 py-2 rounded-xl transition-colors
+              bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40
+              text-indigo-700 dark:text-indigo-300 text-xs font-semibold
+              ${collapsed ? 'justify-center' : ''}
+            `}
+          >
+            <Plus size={14} className="shrink-0" />
+            {!collapsed && <span>新建品牌</span>}
+          </button>
+        </div>
+      )}
+
+      {/* ── Success toast ─────────────────────────────────────────── */}
+      {wizardSuccess && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-50 whitespace-nowrap bg-green-600 text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-lg">
+          ✅ {wizardSuccess.brandName} 已创建
+        </div>
+      )}
+
       {/* ── Collapse toggle ───────────────────────────────────────── */}
       <div className="shrink-0 border-t border-slate-100 dark:border-slate-800 p-2">
         <button
@@ -316,5 +358,14 @@ export default function Sidebar({
         </button>
       </div>
     </aside>
+
+    {/* ── New Brand Wizard Modal ─────────────────────────────────── */}
+    {wizardOpen && (
+      <NewBrandWizard
+        onClose={() => setWizardOpen(false)}
+        onSuccess={handleWizardSuccess}
+      />
+    )}
+    </>
   )
 }
