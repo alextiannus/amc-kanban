@@ -696,9 +696,10 @@ export default function AdminPage() {
             onToggleBusinessRole={toggleBusinessRole}
             onResetPassword={handleResetPassword}
             onDeleteUser={handleDeleteUser}
-            onEditUser={setEditingUser}
             onSavePermissions={handleSavePermissions}
             savingPerms={savingPerms}
+            brands={brands}
+            onFetchBrands={fetchBrands}
             
             // AI Agent specific props
             poolMembers={poolMembers}
