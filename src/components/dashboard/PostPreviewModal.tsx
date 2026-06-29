@@ -174,7 +174,7 @@ export default function PostPreviewModal({
               ) : (
                 <RefreshCw className="w-3.5 h-3.5 text-orange-500" />
               )}
-              <span>再试一下</span>
+              <span>重新生成</span>
             </button>
 
             {/* Save Draft */}
