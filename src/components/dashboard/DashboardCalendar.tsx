@@ -1553,7 +1553,12 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
               setContentIdea('')
               setCreativeHooks('')
               setHashtags('')
-              setSelectedAccountIds(accounts.map(a => a.id))
+              const hasRed = accounts.some(a => ['red', 'xiaohongshu', 'xhs'].includes(a.platformId.toLowerCase()))
+              const initialSelected = accounts.map(a => a.id)
+              if (!hasRed) {
+                initialSelected.push('unconfigured_red')
+              }
+              setSelectedAccountIds(initialSelected)
               setScheduledAt('')
               setAgentNote('')
               setAttachedMedia([])
