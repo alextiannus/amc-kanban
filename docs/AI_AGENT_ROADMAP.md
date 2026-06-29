@@ -97,4 +97,23 @@ This role structure has been validated against [usercase.md](file:///Users/alext
 5.  **Review Response & Crisis Handling (UC-A4/UC-A5/UC-H3)**: Bridge between the **Platform Researcher** (detecting reviews) and the **User's AMC Agent** (auto-replying to $\ge 4$-star reviews, generating HIL crisis cards for $\le 3$-star reviews).
 6.  **Task Automation & Delivery (UC-A3)**: Coordinated by the **User's AMC Agent** to handle PostFast APIs, schedule/post immediately, and update Kanban card statuses.
 
+---
+
+## 6. Prompt Engineering & Dataset Fine-Tuning Pipeline (Prompt与微调语料演进)
+
+Following alignment on LLM Ops lifecycle, the system will implement the following two phases:
+
+### Phase 1: Platform-Controlled Prompt Versioning & Observability
+- **Database-Backed Prompts**: Migrate the system instructions of all platform-level AI agents (Copywriter, Designer, Researcher) to database storage (aligned).
+- **Dynamic Context Injection**: Allow immediate updates to prompts in the admin console, which are injected dynamically into the execution nodes of the LangGraph workflow.
+- **Observability tracing**: Trace execution variables (Input parameters, structured metadata, intermediate outputs, and latency/token counts) using step logs to enable auditability.
+
+### Phase 2: Human-in-the-Loop Dataset Curation & Export
+- **Feedback Loop**: Capture merchant edits via `UserCorrectionFeedback` records whenever content is modified before publication.
+- **SFT & DPO Dataset Processing**:
+  - **SFT (Supervised Fine-tuning)**: Approved/published posts without edits serve as positive samples.
+  - **DPO (Direct Preference Optimization)**: Posts with >20% human edit differences are paired as chosen vs. rejected.
+- **JSONL Export**: Expose standard ChatML format dataset generation and packaging under the "Platform AI & Learning" panel, enabling downstream offline fine-tuning pipelines.
+
+
 

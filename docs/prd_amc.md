@@ -683,3 +683,27 @@ RolePermission 表：
 - `src/components/dashboard/DashboardCalendar.tsx`
 - `src/components/dashboard/DraftManagementView.tsx`
 - `docs/prd_amc.md`
+
+---
+
+## Changelog v1.8.5 — 2026-06-29（智能语料管理与 Prompt 优化生命周期）
+
+### 1. 基于 平台控制的统一 Prompt 管理与 Trace 埋点 (Prompt Lifecycle)
+- **统一人设指令控制**：将底层原子大模型服务（Platform AI）与应用管理层（AMC MM/Agent）的 System Prompt/工作流流程指令集中抽象并存储在数据库中，支持前台直接编辑保存。
+- **动态 Prompt 注入与缓存**：AI 推理执行端（如文案创作、设计师分析）在执行前动态获取配置，并在本地实现内存/缓存控制，确保指令更改秒级生效。
+- **全链路玻璃盒日志追踪 (Observability & Tracing)**：记录生成任务的 Input (输入偏好/原始素材) 与 Output (生成文案)，以 Trace 方式分步骤详细记录中间分析链条（分析主题 -> 提取 Hook -> 翻译 -> 审核），方便后续进行审计与评估。
+
+### 2. 人机协同语料精炼与 Few-Shot 数据池构建 (Corpus Curation)
+- **自动对齐标注 (Alignment & Feedback Loop)**：自动捕捉并记录商户对 AI 生成内容的真实编辑痕迹（`UserCorrectionFeedback` 表）。
+- **微调偏好数据集（SFT & DPO）自动生成**：
+  - **正样本 SFT 语料**：无修改或微调即发布的文案。
+  - **DPO/RLHF 偏好对**：记录用户大幅度编辑（Diff > 20%）的文案，以 chosen (用户最终版) 与 rejected (AI 初始版) 配对。
+- **微调语料标准导出**：在后台管理面板（`平台AI与语料学习`）提供导出功能，支持选择托管品牌并一键导出为标准的 ChatML-JSONL 语料包，可用于下发给微调机器。
+
+### 影响文件
+- `src/components/admin/PlatformAiTab.tsx`
+- `src/components/admin/UsersTab.tsx`
+- `src/app/admin/page.tsx`
+- `src/lib/permissions.ts`
+- `docs/prd_amc.md`
+
