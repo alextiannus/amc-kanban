@@ -109,7 +109,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       groupLabel: '主理人',
       items: [
         { id: 'managementOverview', view: 'managementOverview', label: '主理人总览', icon: 'Users' },
-        { id: 'archive',            view: 'archive',            label: '归档',       icon: 'Inbox' },
+        { id: 'dataAnalysis',       view: 'dataAnalysis',       label: '账号快照',   icon: 'Camera' },
       ],
     })
   }
@@ -124,14 +124,6 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       { id: 'game',         view: 'game',         label: '店内活动',        icon: 'Gift' },
       { id: 'socialInsight',view: 'socialInsight',label: '数据分析',        icon: 'BarChart2' },
     ]
-    // Snapshot only for admin/principal
-    if (isAdmin || isPrincipal) {
-      brandItems.push({ id: 'dataAnalysis', view: 'dataAnalysis', label: '账号快照', icon: 'Camera' })
-    }
-    brandItems.push(
-      { id: 'agents', view: 'agents', label: 'AI 序列',  icon: 'Bot' },
-      { id: 'logs',   view: 'logs',   label: '工作日志', icon: 'Activity' },
-    )
     groups.push({
       groupLabel: '品牌主',
       isBrandSection: true,
@@ -157,7 +149,10 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
     groups.push({
       groupLabel: '系统',
       items: [
-        { id: 'admin', view: 'dashboard', label: 'Admin 控制台', icon: 'Shield', href: '/admin' },
+        { id: 'agents',  view: 'agents',  label: 'AI 序列',      icon: 'Bot' },
+        { id: 'logs',    view: 'logs',    label: '工作日志',   icon: 'Activity' },
+        { id: 'archive', view: 'archive', label: '归档',         icon: 'Inbox' },
+        { id: 'admin',   view: 'dashboard', label: 'Admin 控制台', icon: 'Shield', href: '/admin' },
       ],
     })
   }
