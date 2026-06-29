@@ -29,6 +29,12 @@ model User {
   avatarMimeType String? // MIME type: image/jpeg, image/png, etc
   apiKey       String?  @unique // Each AI Agent has its own API key
   
+  // Referral / Invite Code System
+  inviteCode   String?  @unique
+  referredById String?
+  referredBy   User?    @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals    User[]   @relation("UserReferrals")
+  
   // 关系映射
   tasksAsAssignee  WorkUnit[]        @relation("TaskAssignee")
   ownedBrands      BrandOwner[]      @relation("BrandOwners")
