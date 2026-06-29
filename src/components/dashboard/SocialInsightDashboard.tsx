@@ -8,6 +8,17 @@ import {
   DollarSign, Percent, Star, RefreshCw, FileSearch
 } from 'lucide-react'
 import HotTopicsView from './ResearchTopicFeedView'
+import {
+  ResponsiveContainer,
+  AreaChart as RechartsAreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  CartesianGrid,
+  LineChart as RechartsLineChart,
+  Line
+} from 'recharts'
 
 // ── Colour palette for platforms ────────────────────────────────────────────
 const PLATFORM_COLORS: Record<string, string> = {
@@ -172,179 +183,174 @@ function AreaChart({ series, activeMetric }: {
   series: InsightSeriesPoint[]
   activeMetric: MetricKey
 }) {
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string; value: string } | null>(null)
-  const W = 900; const H = 220; const PAD = { t: 25, r: 20, b: 35, l: 50 }
-  const metricColor = METRIC_OPTIONS.find(m => m.key === activeMetric)?.color ?? '#c084fc'
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   if (!series || series.length === 0) return (
     <div className="h-48 flex items-center justify-center text-slate-300 dark:text-slate-700 text-sm">暂无趋势数据</div>
   )
 
-  const vals = series.map(d => (d[activeMetric] ?? 0) as number)
-  const maxV = Math.max(...vals, 1)
-  const xStep = (W - PAD.l - PAD.r) / (series.length - 1 || 1)
+  if (!mounted) {
+    return <div className="h-56 animate-pulse bg-slate-100/60 dark:bg-slate-900/40 rounded-2xl" />
+  }
 
-  const toX = (i: number) => PAD.l + i * xStep
-  const toY = (v: number) => PAD.t + (H - PAD.t - PAD.b) * (1 - v / maxV)
+  const metricColor = METRIC_OPTIONS.find(m => m.key === activeMetric)?.color ?? '#c084fc'
 
-  const points = series.map((d, i) => ({ x: toX(i), y: toY((d[activeMetric] ?? 0) as number), d }))
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
-  const areaPath = `${linePath} L${points[points.length - 1].x},${H - PAD.b} L${points[0].x},${H - PAD.b} Z`
+  // Format data for Recharts
+  const chartData = series.map(d => ({
+    name: fmtDate(d.date),
+    value: d[activeMetric] ?? 0,
+    rawDate: d.date
+  }))
 
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(r => ({ y: PAD.t + (H - PAD.t - PAD.b) * (1 - r), v: maxV * r }))
-  const xTickStep = Math.max(1, Math.floor(series.length / 6))
-  const xTicks = series.filter((_, i) => i % xTickStep === 0 || i === series.length - 1)
+  const formatYAxis = (value: number) => {
+    if (activeMetric === 'engRate') return `${value.toFixed(1)}%`
+    return fmtNum(value)
+  }
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload
+      const val = data.value
+      const formattedVal = activeMetric === 'engRate' ? `${val.toFixed(2)}%` : fmtNum(val)
+      return (
+        <div className="bg-slate-950/90 dark:bg-slate-850/90 text-white text-[11px] font-bold px-3 py-2 rounded-xl shadow-xl border border-slate-700/30 backdrop-blur-sm">
+          <p className="text-slate-400 font-normal">{fmtDate(data.rawDate)}</p>
+          <span className="text-sm font-black text-white">{formattedVal}</span>
+        </div>
+      )
+    }
+    return null
+  }
 
   return (
-    <div className="relative w-full overflow-hidden">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        className="w-full h-56"
-        onMouseLeave={() => setTooltip(null)}
-        onMouseMove={e => {
-          const rect = svgRef.current?.getBoundingClientRect()
-          if (!rect) return
-          const svgX = ((e.clientX - rect.left) / rect.width) * W
-          let closest = points[0]; let minD = Infinity
-          for (const p of points) { const d = Math.abs(p.x - svgX); if (d < minD) { minD = d; closest = p } }
-          setTooltip({
-            x: (closest.x / W) * 100,
-            y: (closest.y / H) * 100,
-            label: fmtDate(closest.d.date),
-            value: activeMetric === 'engRate' ? `${((closest.d[activeMetric] ?? 0) as number).toFixed(2)}%` : fmtNum((closest.d[activeMetric] ?? 0) as number),
-          })
-        }}
-      >
-        <defs>
-          <linearGradient id="metricAreaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={metricColor} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={metricColor} stopOpacity="0.01" />
-          </linearGradient>
-        </defs>
-        {yTicks.map((t, i) => (
-          <g key={i}>
-            <line x1={PAD.l} y1={t.y} x2={W - PAD.r} y2={t.y} stroke="#e2e8f0" strokeWidth="0.5" strokeDasharray="4,4" className="dark:stroke-slate-800" />
-            <text x={PAD.l - 8} y={t.y + 3} textAnchor="end" fontSize="9" fontWeight="bold" fill="#94a3b8">{activeMetric === 'engRate' ? `${t.v.toFixed(1)}%` : fmtNum(Math.round(t.v))}</text>
-          </g>
-        ))}
-        {xTicks.map((d, i) => {
-          const idx = series.indexOf(d)
-          return <text key={i} x={toX(idx)} y={H - PAD.b + 18} textAnchor="middle" fontSize="9" fontWeight="bold" fill="#94a3b8">{fmtDate(d.date)}</text>
-        })}
-        <path d={areaPath} fill="url(#metricAreaGrad)" />
-        <path d={linePath} fill="none" stroke={metricColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        {points.map((p, i) => (
-          <circle
-            key={i} cx={p.x} cy={p.y}
-            r={3}
-            fill={metricColor}
-            stroke="white" strokeWidth="1.5"
-            className="hover:r-5 transition-all cursor-pointer dark:stroke-slate-900"
+    <div className="w-full h-56 mt-2">
+      <ResponsiveContainer width="100%" height="100%">
+        <RechartsAreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <defs>
+            <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={metricColor} stopOpacity={0.3}/>
+              <stop offset="95%" stopColor={metricColor} stopOpacity={0.01}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
+          <XAxis 
+            dataKey="name" 
+            tickLine={false} 
+            axisLine={false}
+            tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 'bold' }}
+            dy={8}
           />
-        ))}
-      </svg>
-      {tooltip && (
-        <div
-          className="absolute pointer-events-none bg-slate-950/90 dark:bg-slate-800/90 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap border border-slate-700/30 backdrop-blur-sm"
-          style={{ left: `${tooltip.x}%`, top: `${tooltip.y}%`, transform: 'translate(-50%, -130%)' }}
-        >
-          <p className="text-slate-400 font-normal">{tooltip.label}</p>
-          <span className="text-sm font-black">{tooltip.value}</span>
-        </div>
-      )}
+          <YAxis 
+            tickFormatter={formatYAxis}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 'bold' }}
+            dx={-8}
+          />
+          <RechartsTooltip content={<CustomTooltip />} />
+          <Area 
+            type="monotone" 
+            dataKey="value" 
+            stroke={metricColor} 
+            strokeWidth={2.5} 
+            fillOpacity={1} 
+            fill="url(#colorMetric)" 
+            dot={{ stroke: metricColor, strokeWidth: 1.5, fill: '#fff', r: 3 }}
+            activeDot={{ stroke: metricColor, strokeWidth: 2, fill: '#fff', r: 5 }}
+          />
+        </RechartsAreaChart>
+      </ResponsiveContainer>
     </div>
   )
 }
 
 // ── SVG Conversions Chart for ROI tab ────────────────────────────────────────
 function ConversionsChart({ series }: { series: ConversionSeriesPoint[] }) {
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string; nav: number; booking: number; coupon: number } | null>(null)
-  const W = 900; const H = 220; const PAD = { t: 25, r: 20, b: 35, l: 50 }
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   if (!series || series.length === 0) return (
     <div className="h-48 flex items-center justify-center text-slate-300 dark:text-slate-700 text-sm">暂无趋势数据</div>
   )
 
-  const maxVal = Math.max(...series.map(d => d.total), 1)
-  const xStep = (W - PAD.l - PAD.r) / (series.length - 1 || 1)
+  if (!mounted) {
+    return <div className="h-56 animate-pulse bg-slate-100/60 dark:bg-slate-900/40 rounded-2xl" />
+  }
 
-  const toX = (i: number) => PAD.l + i * xStep
-  const toY = (v: number) => PAD.t + (H - PAD.t - PAD.b) * (1 - v / maxVal)
+  const chartData = series.map(d => ({
+    name: fmtDate(d.date),
+    nav: d.nav_click,
+    booking: d.booking_click,
+    coupon: d.coupon_redemption,
+    rawDate: d.date
+  }))
 
-  // 3 lines: nav_click (blue #3b82f6), booking_click (green #10b981), coupon_redemption (pink #ec4899)
-  const navPoints = series.map((d, i) => ({ x: toX(i), y: toY(d.nav_click) }))
-  const bookingPoints = series.map((d, i) => ({ x: toX(i), y: toY(d.booking_click) }))
-  const couponPoints = series.map((d, i) => ({ x: toX(i), y: toY(d.coupon_redemption) }))
-
-  const navPath = navPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
-  const bookingPath = bookingPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
-  const couponPath = couponPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
-
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(r => ({ y: PAD.t + (H - PAD.t - PAD.b) * (1 - r), v: maxVal * r }))
-  const xTickStep = Math.max(1, Math.floor(series.length / 6))
-  const xTicks = series.filter((_, i) => i % xTickStep === 0 || i === series.length - 1)
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload
+      return (
+        <div className="bg-slate-950/90 dark:bg-slate-850/90 text-white text-[11px] font-bold px-3 py-2.5 rounded-xl shadow-xl border border-slate-700/30 backdrop-blur-sm space-y-1.5">
+          <p className="text-slate-400 font-normal border-b border-slate-700/30 pb-1 mb-1">{fmtDate(data.rawDate)}</p>
+          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500" /><span>导航点击: {data.nav}</span></div>
+          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500" /><span>预订点击: {data.booking}</span></div>
+          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-pink-500" /><span>优惠券核销: {data.coupon}</span></div>
+        </div>
+      )
+    }
+    return null
+  }
 
   return (
-    <div className="relative w-full overflow-hidden">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${W} ${H}`}
-        preserveAspectRatio="none"
-        className="w-full h-56"
-        onMouseLeave={() => setTooltip(null)}
-        onMouseMove={e => {
-          const rect = svgRef.current?.getBoundingClientRect()
-          if (!rect) return
-          const svgX = ((e.clientX - rect.left) / rect.width) * W
-          let idx = 0; let minD = Infinity
-          series.forEach((d, i) => {
-            const x = toX(i)
-            const dist = Math.abs(x - svgX)
-            if (dist < minD) { minD = dist; idx = i }
-          })
-          const activeItem = series[idx]
-          setTooltip({
-            x: (toX(idx) / W) * 100,
-            y: (toY(activeItem.total) / H) * 100,
-            label: fmtDate(activeItem.date),
-            nav: activeItem.nav_click,
-            booking: activeItem.booking_click,
-            coupon: activeItem.coupon_redemption,
-          })
-        }}
-      >
-        {yTicks.map((t, i) => (
-          <g key={i}>
-            <line x1={PAD.l} y1={t.y} x2={W - PAD.r} y2={t.y} stroke="#e2e8f0" strokeWidth="0.5" strokeDasharray="4,4" className="dark:stroke-slate-800" />
-            <text x={PAD.l - 8} y={t.y + 3} textAnchor="end" fontSize="9" fontWeight="bold" fill="#94a3b8">{fmtNum(Math.round(t.v))}</text>
-          </g>
-        ))}
-        {xTicks.map((d, i) => {
-          const idx = series.indexOf(d)
-          return <text key={i} x={toX(idx)} y={H - PAD.b + 18} textAnchor="middle" fontSize="9" fontWeight="bold" fill="#94a3b8">{fmtDate(d.date)}</text>
-        })}
-
-        {/* Lines */}
-        <path d={navPath} fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
-        <path d={bookingPath} fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" />
-        <path d={couponPath} fill="none" stroke="#ec4899" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-
-      {tooltip && (
-        <div
-          className="absolute pointer-events-none bg-slate-950/90 dark:bg-slate-800/90 text-white text-[11px] font-bold px-3 py-2 rounded-xl shadow-xl whitespace-nowrap border border-slate-700/30 backdrop-blur-sm space-y-1"
-          style={{ left: `${tooltip.x}%`, top: `${tooltip.y}%`, transform: 'translate(-50%, -120%)' }}
-        >
-          <p className="text-slate-400 font-normal border-b border-slate-700/30 pb-1 mb-1">{tooltip.label}</p>
-          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500" /><span>导航点击: {tooltip.nav}</span></div>
-          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500" /><span>预订点击: {tooltip.booking}</span></div>
-          <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-pink-500" /><span>优惠券核销: {tooltip.coupon}</span></div>
-        </div>
-      )}
+    <div className="w-full h-56 mt-2">
+      <ResponsiveContainer width="100%" height="100%">
+        <RechartsLineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
+          <XAxis 
+            dataKey="name" 
+            tickLine={false} 
+            axisLine={false}
+            tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 'bold' }}
+            dy={8}
+          />
+          <YAxis 
+            tickFormatter={fmtNum}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 'bold' }}
+            dx={-8}
+          />
+          <RechartsTooltip content={<CustomTooltip />} />
+          <Line 
+            type="monotone" 
+            dataKey="nav" 
+            stroke="#3b82f6" 
+            strokeWidth={2} 
+            dot={{ stroke: '#3b82f6', strokeWidth: 1.5, fill: '#fff', r: 3 }}
+            activeDot={{ stroke: '#3b82f6', strokeWidth: 2, fill: '#fff', r: 4 }}
+          />
+          <Line 
+            type="monotone" 
+            dataKey="booking" 
+            stroke="#10b981" 
+            strokeWidth={2} 
+            dot={{ stroke: '#10b981', strokeWidth: 1.5, fill: '#fff', r: 3 }}
+            activeDot={{ stroke: '#10b981', strokeWidth: 2, fill: '#fff', r: 4 }}
+          />
+          <Line 
+            type="monotone" 
+            dataKey="coupon" 
+            stroke="#ec4899" 
+            strokeWidth={2} 
+            dot={{ stroke: '#ec4899', strokeWidth: 1.5, fill: '#fff', r: 3 }}
+            activeDot={{ stroke: '#ec4899', strokeWidth: 2, fill: '#fff', r: 4 }}
+          />
+        </RechartsLineChart>
+      </ResponsiveContainer>
     </div>
   )
 }
