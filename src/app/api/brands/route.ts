@@ -5,6 +5,9 @@ import { isAmcOperator } from '@/lib/amcOperator'
 import { resolveAssignment } from '@/lib/assignmentPool'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 import { findOrCreateBrandOwnerAccount } from '@/lib/brandOwnerAccount'
+import { sendBrandOnboardingWelcomeEmail } from '@/lib/email'
+import { generateInvitationLink } from '@/lib/invitation'
+import { computeEffectiveUserRoles } from '@/lib/userRoles'
 
 // GET /api/brands — list brands for the logged-in user
 // Only return brands that have at least one active AI Agent assigned.
@@ -316,6 +319,137 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ...brand, assignment, subscription: null }, { status: 201 })
+  }
+
+  // ── Wizard path: AMC_PRINCIPAL or BD creates a brand on behalf of a merchant ──
+  const dbRoles = await prisma.userBusinessRole.findMany({
+    where: { userId: session.user.id },
+    select: { role: true },
+  })
+  const roleNames = dbRoles.map((r: { role: string }) => r.role)
+  const isAdminUser = session.user.role === 'ADMIN'
+  const canWizardCreate = isAdminUser || roleNames.includes('AMC_PRINCIPAL') || roleNames.includes('BD')
+
+  if (canWizardCreate) {
+    const ownerEmail = typeof body.ownerEmail === 'string' ? body.ownerEmail.trim().toLowerCase() : ''
+    if (!ownerEmail) {
+      return NextResponse.json({ error: '请填写品牌主邮箱' }, { status: 400 })
+    }
+
+    const ownerResult = await findOrCreateBrandOwnerAccount(ownerEmail)
+    if (!ownerResult.ok) {
+      return NextResponse.json(
+        { error: ownerResult.reason === 'invalid_email' ? '品牌主邮箱格式无效' : '该邮箱已被非普通用户账号使用' },
+        { status: 400 }
+      )
+    }
+
+    const { user: owner, created: ownerCreated } = ownerResult
+    const tempPassword = typeof body._tempPassword === 'string' ? body._tempPassword : ''
+
+    // Parse plan info from body (wizard supplies planId, planName, durationMonths etc.)
+    const planId   = typeof body.planId   === 'string' ? body.planId.trim()   : 'starter'
+    const planName = typeof body.planName === 'string' ? body.planName.trim() : 'Starter'
+    const durationMonths    = typeof body.durationMonths    === 'number' ? body.durationMonths    : 1
+    const monthlyBaseUsd    = typeof body.monthlyBaseUsd    === 'number' ? body.monthlyBaseUsd    : 0
+    const recurringAddonsUsd = typeof body.recurringAddonsUsd === 'number' ? body.recurringAddonsUsd : 0
+    const oneTimeAddonsUsd   = typeof body.oneTimeAddonsUsd   === 'number' ? body.oneTimeAddonsUsd   : 0
+    const totalDueUsd        = typeof body.totalDueUsd        === 'number' ? body.totalDueUsd        : 0
+
+    const wizardResult = await prisma.$transaction(async (tx: any) => {
+      const brand = await tx.brand.create({
+        data: {
+          ownerId: owner.id,
+          name: name.trim(),
+          location: location?.trim() || null,
+          timezone: timezone || 'America/New_York',
+          ...(address ? { address: address.trim() } : {}),
+          ...(googlePlaceId ? { googlePlaceId } : {}),
+        },
+      })
+
+      await tx.brandOwner.upsert({
+        where: { brandId_userId: { brandId: brand.id, userId: owner.id } },
+        create: { brandId: brand.id, userId: owner.id, role: 'owner' },
+        update: { role: 'owner' },
+      })
+
+      await tx.userBusinessRole.upsert({
+        where: { userId_role: { userId: owner.id, role: 'BRAND_OWNER' } },
+        create: { userId: owner.id, role: 'BRAND_OWNER' },
+        update: {},
+      })
+
+      // Create PENDING subscription — Admin activates after offline payment
+      const subscription = await tx.brandSubscription.create({
+        data: {
+          brandId: brand.id,
+          createdById: session.user.id,
+          planId,
+          planName,
+          durationMonths,
+          billedMonths: durationMonths,
+          monthlyBaseUsd,
+          recurringAddonsUsd,
+          oneTimeAddonsUsd,
+          totalDueUsd,
+          status: 'PENDING',
+        },
+      })
+
+      return { brand, subscription }
+    })
+
+    try { await ensureBrandWorkspace(wizardResult.brand.id) } catch {/* non-fatal */}
+
+    let assignment = null
+    try {
+      const result = await resolveAssignment({
+        subjectType: 'brand_create',
+        subjectId: wizardResult.brand.id,
+        industry: typeof industry === 'string' ? industry : null,
+        region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
+        referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
+        createdBy: 'principal',
+      })
+      assignment = { selectedAgentId: result.selectedAgentId, matchedBy: result.matchedBy, decisionId: result.decisionId }
+    } catch {/* non-fatal */}
+
+    // Send welcome email with amc-mm invite link (only for newly created accounts)
+    if (ownerCreated && tempPassword) {
+      try {
+        const mmHost = process.env.NEXT_PUBLIC_MM_HOST || 'https://amc-mm.immedi.ai'
+        const { link: mmInviteLink } = generateInvitationLink(
+          owner.email,
+          tempPassword,
+          ownerEmail.split('@')[0],
+          mmHost,
+          { expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 }
+        )
+        await sendBrandOnboardingWelcomeEmail({
+          to: owner.email,
+          nickname: ownerEmail.split('@')[0],
+          brandName: name.trim(),
+          temporaryPassword: tempPassword,
+          mmInviteLink,
+          planName,
+        })
+      } catch (emailErr) {
+        console.error('[POST /api/brands] wizard welcome email failed:', emailErr)
+      }
+    }
+
+    return NextResponse.json({
+      ...wizardResult.brand,
+      assignment,
+      subscription: {
+        id: wizardResult.subscription.id,
+        planId: wizardResult.subscription.planId,
+        planName: wizardResult.subscription.planName,
+        status: wizardResult.subscription.status,
+      },
+      ownerCreated,
+    }, { status: 201 })
   }
 
   const subscriptionId = typeof body.subscriptionId === 'string' ? body.subscriptionId.trim() : ''

@@ -284,3 +284,141 @@ export async function sendWelcomeEmail(params: {
     html,
   })
 }
+
+/**
+ * 品牌入驻欢迎邮件（新建品牌时发送给品牌主）
+ *
+ * CTA 指向 amc-mm（品牌主移动端），实现从邮件 → 首次登录的完整闭环。
+ */
+export async function sendBrandOnboardingWelcomeEmail(params: {
+  to: string
+  nickname: string
+  brandName: string
+  temporaryPassword: string
+  /** 指向 amc-mm /invite/{token} 的链接 */
+  mmInviteLink: string
+  /** 套餐名称 */
+  planName?: string
+}): Promise<EmailResult> {
+  const { to, nickname, brandName, temporaryPassword, mmInviteLink, planName } = params
+
+  const html = `
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>欢迎加入 AMC</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f0f4ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .wrap { max-width: 580px; margin: 40px auto; }
+    .card { background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(99,102,241,0.10); }
+    .hero { background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%); padding: 40px; text-align: center; }
+    .hero-emoji { font-size: 48px; margin-bottom: 12px; }
+    .hero h1 { margin: 0; color: #fff; font-size: 24px; font-weight: 800; }
+    .hero p  { margin: 6px 0 0; color: rgba(255,255,255,0.8); font-size: 14px; }
+    .body { padding: 36px 40px; }
+    .body p { color: #374151; font-size: 15px; line-height: 1.7; margin: 0 0 14px; }
+    .brand-badge { display: inline-flex; align-items: center; gap: 8px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 16px; margin: 4px 0 20px; }
+    .brand-badge span { font-size: 14px; font-weight: 700; color: #1d4ed8; }
+    .creds { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px 24px; margin: 20px 0; }
+    .creds .row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 12px; }
+    .creds .row:last-child { margin-bottom: 0; }
+    .creds .lbl { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; margin-top: 2px; }
+    .creds .val { font-size: 14px; font-weight: 600; color: #0f172a; font-family: 'SF Mono','Monaco',monospace; word-break: break-all; text-align: right; }
+    .cta-wrap { text-align: center; margin: 28px 0; }
+    .cta { display: inline-block; padding: 16px 36px; background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; letter-spacing: 0.01em; }
+    .notice { background: #fefce8; border-left: 3px solid #fbbf24; padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 20px 0; }
+    .notice p { color: #78350f; font-size: 13px; margin: 0; }
+    .steps { margin: 24px 0; }
+    .step { display: flex; gap: 14px; margin-bottom: 16px; align-items: flex-start; }
+    .step-num { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg,#6366f1,#0ea5e9); color: #fff; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .step-text { color: #374151; font-size: 14px; line-height: 1.6; }
+    .step-text strong { color: #1e293b; }
+    .footer { background: #f8fafc; padding: 20px 40px; border-top: 1px solid #e2e8f0; }
+    .footer p { font-size: 12px; color: #94a3b8; margin: 0; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="hero">
+        <div class="hero-emoji">🎉</div>
+        <h1>您的品牌账号已就绪！</h1>
+        <p>AI Marketing Crew — 智能营销团队</p>
+      </div>
+      <div class="body">
+        <p>你好 <strong>${nickname}</strong>，</p>
+        <p>恭喜您！您的 AMC 品牌账号已成功创建：</p>
+
+        <div class="brand-badge">
+          <span>🏪 ${brandName}${planName ? ` &nbsp;·&nbsp; ${planName}` : ''}</span>
+        </div>
+
+        <div class="creds">
+          <div class="row">
+            <div class="lbl">登录邮箱</div>
+            <div class="val">${to}</div>
+          </div>
+          <div class="row">
+            <div class="lbl">临时密码</div>
+            <div class="val">${temporaryPassword}</div>
+          </div>
+        </div>
+
+        <div class="cta-wrap">
+          <a href="${mmInviteLink}" class="cta">📱 立即打开 AMC 商家端 →</a>
+        </div>
+
+        <div class="notice">
+          <p>⚠️ 此链接有效期为 <strong>7 天</strong>，首次登录后请立即修改密码。</p>
+        </div>
+
+        <p style="margin-top:24px;font-weight:600;color:#1e293b;">接下来怎么做？</p>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-text">点击上方按钮，<strong>用临时密码完成首次登录</strong></div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-text"><strong>修改密码</strong>，完善品牌资料（餐厅介绍、菜单、门店地址）</div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-text"><strong>授权社交媒体账号</strong>（Instagram、Google Business 等），让 AI 团队开始工作</div>
+          </div>
+        </div>
+      </div>
+      <div class="footer">
+        <p>如有任何问题，请联系您的 AMC 服务团队。此邮件由系统自动发送，请勿直接回复。</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+`
+
+  const text = `
+欢迎加入 AI Marketing Crew！
+
+你好 ${nickname}，
+
+您的品牌账号「${brandName}」已成功创建。
+
+登录邮箱：${to}
+临时密码：${temporaryPassword}
+
+请点击以下链接完成首次登录：
+${mmInviteLink}
+
+此链接有效期为 7 天，请尽快登录并修改密码。
+`.trim()
+
+  return sendEmail({
+    to,
+    subject: `【AMC】🎉 ${brandName} 的 AI 营销账号已就绪 — 点击立即开始`,
+    html,
+    text,
+  })
+}
