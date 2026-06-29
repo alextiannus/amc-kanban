@@ -31,6 +31,20 @@ interface MainLayoutProps {
   onTasksCleared: () => void
 }
 
+const VIEW_LABEL_MAP: Record<BoardView, string> = {
+  dashboard: '品牌主看板',
+  calendar: '发布日历',
+  drafts: '发布内容 (Post)',
+  assets: '素材库',
+  game: '店内活动',
+  socialInsight: '数据分析',
+  dataAnalysis: '账号快照',
+  agents: 'AI 序列',
+  logs: '工作日志',
+  archive: '归档',
+  managementOverview: '主理人总览',
+}
+
 export default function MainLayout({
   children,
   currentView,
@@ -124,11 +138,13 @@ export default function MainLayout({
             </svg>
           </button>
 
-          {/* Page title on mobile */}
-          <span className="lg:hidden text-sm font-bold text-slate-700 dark:text-slate-200 truncate mx-2" />
+          {/* Page title on desktop & mobile */}
+          <span className="text-sm lg:text-base font-extrabold text-slate-800 dark:text-slate-100 truncate mx-2 lg:mx-4">
+            {VIEW_LABEL_MAP[currentView] || 'AI Marketing Crew'}
+          </span>
 
-          {/* Spacer for desktop */}
-          <div className="hidden lg:block flex-1" />
+          {/* Spacer to push controls to the right */}
+          <div className="flex-1" />
 
           {/* Right controls */}
           <div className="flex items-center gap-2">
@@ -152,8 +168,8 @@ export default function MainLayout({
           </div>
         </header>
 
-        {/* Scrollable content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        {/* Scrollable content (non-scrolling wrapper so children can scroll themselves) */}
+        <main className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-50 dark:bg-slate-950">
           {children}
         </main>
       </div>

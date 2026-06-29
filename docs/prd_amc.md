@@ -622,3 +622,16 @@ RolePermission 表：
 | AI 工具 | AI 序列 | Admin、主理人、品牌主 |
 | 商务 | BD 工作台、客户汇总、收入总览（Coming Soon）| BD |
 | 系统 | Admin 控制台（跳转 /admin）| Admin |
+
+---
+
+## Changelog v1.8.1 — 2026-06-29（页面布局与导航头优化）
+
+### 页面布局与导航头优化
+- **顶部栏动态页标题**：在桌面端和移动端顶部栏左侧增加当前视图标题（如“发布日历”、“数据分析”等）。
+- **双重滚动条消除**：将 `<main>` 容器的 `overflow-y-auto` 改为 `overflow-hidden`，由具体子页面容器各自负责是否有滚动或高度铺满，消除了嵌套滚动问题。
+- **清除历史布局残留**：废除了硬编码的 `h-[calc(100vh-140px)]` 及负边距，所有视图完美自适应新的垂直侧边栏页面布局。
+
+### 影响文件
+- `src/components/layout/MainLayout.tsx`
+- `src/components/KanbanBoard.tsx`

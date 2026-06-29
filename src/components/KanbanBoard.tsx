@@ -309,20 +309,22 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       }}
     >
       {currentView === 'agents' ? (
-        <AgentsWorkflowView
-          onOpenDashboard={() => setCurrentView('dashboard')}
-          onCreateAgent={createAgentKey}
-        />
+        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <AgentsWorkflowView
+            onOpenDashboard={() => setCurrentView('dashboard')}
+            onCreateAgent={createAgentKey}
+          />
+        </div>
       ) : currentView === 'archive' ? (
-        <div className="flex-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-2 duration-300 h-full">
           <ArchiveView onTaskClick={setSelectedTask} />
         </div>
       ) : currentView === 'calendar' ? (
-        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           <DashboardCalendar key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} />
         </div>
       ) : currentView === 'socialInsight' ? (
-        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           {canAccessAnalytics && activeBrand ? (
             <SocialInsightDashboard key={activeBrand.id} brandId={activeBrand.id} brandName={activeBrand.name} />
           ) : !activeBrand ? (
@@ -332,7 +334,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
           )}
         </div>
       ) : currentView === 'game' ? (
-        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto p-4 md:p-8">
+        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full p-4 md:p-8">
           {activeBrand ? (
             <GameSettingsDashboard key={activeBrand.id} brandId={activeBrand.id} brandName={activeBrand.name} />
           ) : (
@@ -340,11 +342,11 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
           )}
         </div>
       ) : currentView === 'drafts' ? (
-        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           <DraftManagementView key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} brandName={activeBrand?.name} />
         </div>
       ) : currentView === 'assets' ? (
-        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-hidden">
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           <DashboardAssets
             key={activeBrand?.id ?? 'no-brand'}
             brandId={activeBrand?.id}
@@ -352,7 +354,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
           />
         </div>
       ) : currentView === 'dataAnalysis' ? (
-        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           {canAccessAnalytics ? (
             <DataAnalysisView />
           ) : (
@@ -360,11 +362,11 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
           )}
         </div>
       ) : currentView === 'logs' ? (
-        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           <AgentLogsView brandId={activeBrand?.id} />
         </div>
       ) : currentView === 'managementOverview' ? (
-        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto p-4 md:p-8">
+        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full p-4 md:p-8">
           {/* TODO: ManagementOverviewDashboard — multi-brand summary for Admin/Principal */}
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-400 to-blue-600 flex items-center justify-center">
@@ -377,7 +379,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
           </div>
         </div>
       ) : (
-        <div className="flex-1 -mx-4 md:-mx-8 -mb-4 md:-mb-8 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-[calc(100vh-140px)] bg-slate-50 dark:bg-slate-950 overflow-y-auto">
+        <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           <MobileLayout>
             <Suspense fallback={
               <div className="p-8 flex items-center justify-center min-h-[60vh]">
