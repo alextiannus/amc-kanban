@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users, Store, CreditCard, Sparkles, MessageSquare } from 'lucide-react'
 import TrainingDataSection from '@/components/TrainingDataSection'
 import SchedulerPanel from '@/components/admin/SchedulerPanel'
+import EditUserModal from '@/components/admin/EditUserModal'
+import EmailConfigPanel from '@/components/admin/EmailConfigPanel'
 
 interface UserRecord {
   id: string
@@ -101,7 +103,8 @@ export default function AdminPage() {
 
   // Modals
   const [invitationData, setInvitationData] = useState<InvitationResult | null>(null)
-  const [resetData, setResetData] = useState<{ email: string; temporaryPassword: string; invitationLink: string } | null>(null)
+  const [resetData, setResetData] = useState<{ email: string; temporaryPassword: string; invitationLink: string; emailSent?: boolean } | null>(null)
+  const [editingUser, setEditingUser] = useState<{ id: string; email: string; nickname: string | null; role: string; type: string } | null>(null)
   const [selectedHuman, setSelectedHuman] = useState<UserRecord | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<UserRecord | null>(null)
   const [selectedAgentHumanIds, setSelectedAgentHumanIds] = useState<string[]>([])
@@ -148,6 +151,15 @@ export default function AdminPage() {
     azureSpeechKey: string
     azureSpeechRegion: string
     azureSpeechConfigured: boolean
+    // SMTP
+    smtpHost: string
+    smtpPort: number | null
+    smtpUser: string
+    smtpPassword: string
+    smtpFrom: string
+    smtpFromName: string
+    smtpSecure: boolean
+    smtpConfigured: boolean
   } | null>(null)
   const [systemLogs, setSystemLogs] = useState<SystemConfigAuditLog[]>([])
   const [systemLogsLoading, setSystemLogsLoading] = useState(false)
@@ -627,7 +639,7 @@ export default function AdminPage() {
       })
       if (res.ok) {
         const data = await res.json()
-        setResetData({ email: user.email, temporaryPassword: data.temporaryPassword, invitationLink: data.invitationLink })
+        setResetData({ email: user.email, temporaryPassword: data.temporaryPassword, invitationLink: data.invitationLink, emailSent: data.emailSent })
       }
     } finally { setActionLoading(p => { const n = { ...p }; delete n[user.id + '_reset']; return n }) }
   }
@@ -937,6 +949,9 @@ export default function AdminPage() {
                         </button>
                         <button onClick={() => handleRoleToggle(user)} disabled={!!actionLoading[user.id + '_role']} className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition disabled:opacity-50">
                           {actionLoading[user.id + '_role'] ? '...' : user.role === 'ADMIN' ? '移除 System Admin' : '授予 System Admin'}
+                        </button>
+                        <button onClick={() => setEditingUser({ id: user.id, email: user.email, nickname: user.nickname, role: user.role, type: user.type })} title="编辑用户信息" className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition">
+                          <Edit3 size={14} />
                         </button>
                         <button onClick={() => handleResetPassword(user)} disabled={!!actionLoading[user.id + '_reset']} title="重置密码" className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition disabled:opacity-50">
                           <RefreshCw size={14} className={actionLoading[user.id + '_reset'] ? 'animate-spin' : ''} />
@@ -1418,7 +1433,7 @@ export default function AdminPage() {
                   <input
                     type="password"
                     value={systemConfig?.geminiApiKey ?? ''}
-                    onChange={e => setSystemConfig(prev => prev ? { ...prev, geminiApiKey: e.target.value } : { geminiApiKey: e.target.value, geminiConfigured: false, azureSpeechKey: '', azureSpeechRegion: 'eastasia', azureSpeechConfigured: false })}
+                    onChange={e => setSystemConfig(prev => prev ? { ...prev, geminiApiKey: e.target.value } : { geminiApiKey: e.target.value, geminiConfigured: false, azureSpeechKey: '', azureSpeechRegion: 'eastasia', azureSpeechConfigured: false, smtpHost: '', smtpPort: null, smtpUser: '', smtpPassword: '', smtpFrom: '', smtpFromName: '', smtpSecure: true, smtpConfigured: false })}
                     placeholder="请输入 Gemini API Key"
                     className="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                   />
@@ -1467,6 +1482,14 @@ export default function AdminPage() {
                   免费层：每月 5 小时 Neural TTS（F0 定价）。Key 存储于数据库，不写入 Render 环境变量。
                 </p>
               </div>
+            </div>
+
+            {/* 邮件通知配置面板 */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6">
+              <EmailConfigPanel
+                config={systemConfig}
+                onSaved={(smtp) => setSystemConfig(prev => prev ? { ...prev, ...smtp } : null)}
+              />
             </div>
 
             {/* Scheduler 智能排期巡检面板 */}
@@ -1957,8 +1980,29 @@ export default function AdminPage() {
         renderInviteModal({ title: '用户创建成功！', data: { email: invitationData.user.email, temporaryPassword: invitationData.temporaryPassword, invitationLink: invitationData.invitationLink }, onClose: () => setInvitationData(null) })
       )}
       {resetData && (
-        renderInviteModal({ title: '密码已重置', data: resetData, onClose: () => setResetData(null) })
+        <div>
+          {renderInviteModal({ title: '密码已重置', data: resetData, onClose: () => setResetData(null) })}
+          {resetData.emailSent !== undefined && (
+            <div className={`fixed bottom-6 right-6 z-[200] flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl text-sm font-medium ${
+              resetData.emailSent
+                ? 'bg-emerald-600 text-white'
+                : 'bg-slate-700 text-slate-200'
+            }`}>
+              {resetData.emailSent ? '📧 密码重置邮件已发送至用户邮箱' : '📭 SMTP 未配置，请手动将密码发送给用户'}
+            </div>
+          )}
+        </div>
       )}
+
+      {/* EditUserModal */}
+      <EditUserModal
+        user={editingUser}
+        onClose={() => setEditingUser(null)}
+        onSaved={(updated) => {
+          setUsers(prev => prev.map(u => u.id === updated.id ? { ...u, email: updated.email, nickname: updated.nickname, role: updated.role } as UserRecord : u))
+          setEditingUser(null)
+        }}
+      />
     </div>
   )
 }

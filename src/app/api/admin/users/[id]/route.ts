@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { generateInvitationLink } from '@/lib/invitation'
+import { sendPasswordResetEmail } from '@/lib/email'
 import type { Prisma } from '@prisma/client'
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -205,7 +206,24 @@ export async function PATCH(request: Request, { params }: Params) {
       },
     })
 
-    return NextResponse.json({ ok: true, temporaryPassword, invitationLink })
+    // Attempt to send password reset email (non-blocking)
+    let emailSent = false
+    let emailError: string | undefined
+    try {
+      const emailResult = await sendPasswordResetEmail({
+        to: target.email,
+        nickname: target.nickname ?? target.email.split('@')[0],
+        temporaryPassword,
+        invitationLink,
+        adminEmail: session.user.email ?? undefined,
+      })
+      emailSent = emailResult.success
+      if (!emailResult.success) emailError = emailResult.error
+    } catch (e: any) {
+      emailError = e?.message ?? 'Email send error'
+    }
+
+    return NextResponse.json({ ok: true, temporaryPassword, invitationLink, emailSent, emailError })
   }
 
   return NextResponse.json({ error: 'No valid operation' }, { status: 400 })

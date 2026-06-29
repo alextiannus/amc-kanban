@@ -709,6 +709,14 @@ model SystemConfig {
   azureSpeechKey       String?  // Microsoft Azure Speech TTS key
   azureSpeechRegion    String?  // e.g. "eastasia", "southeastasia"
   publishingStandards  Json?    // 系统统一发布频率标准，见 getPublishingStandards()
+  // SMTP email configuration
+  smtpHost             String?  // e.g. smtp.gmail.com
+  smtpPort             Int?     // e.g. 465 (SSL) or 587 (STARTTLS)
+  smtpUser             String?  // SMTP login username
+  smtpPassword         String?  // SMTP login password (stored encrypted in DB)
+  smtpFrom             String?  // From address, e.g. noreply@yourapp.com
+  smtpFromName         String?  // From display name, e.g. "AMC Staff"
+  smtpSecure           Boolean? // true = SSL/TLS (port 465), false = STARTTLS (port 587)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }

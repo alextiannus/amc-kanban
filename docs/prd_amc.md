@@ -450,3 +450,47 @@ model SystemConfig {
 - `src/agents/nodes/publisher.ts`：`enrichDraftData` 简化为同步函数，移除重复检查逻辑
 - `src/components/admin/SchedulerPanel.tsx`：更新巡检时间显示
 - `src/app/api/scheduler/daily-check/route.ts`：更新 Cron 配置注释
+
+---
+
+## Changelog v1.8 — 2026-06-29（用户管理完善 + 邮件通知模块）
+
+### 功能范围
+本次迭代仅针对 **amc-kanban**，仅 **ADMIN** 用户可见/可操作。
+
+### 用户管理增强
+
+**编辑用户**（新功能）：
+- 用户列表每行新增 ✏️ 编辑按钮，打开 `EditUserModal`
+- 可编辑字段：昵称（nickname）、邮箱（email）、系统角色（ADMIN/USER）
+
+**密码重置增强**：
+- 重置后 Toast 通知：SMTP 已配置则"邮件已发送"，否则"请手动发送密码"
+- API 返回 `emailSent: boolean`
+
+### 邮件通知模块
+
+**后端**：
+- `SystemConfig` 新增 7 个 SMTP 字段（`smtpHost/Port/User/Password/From/FromName/Secure`）
+- `src/lib/email.ts`：nodemailer 封装（sendEmail / sendPasswordResetEmail / sendWelcomeEmail）
+- `GET/PATCH /api/admin/system-config`：支持 SMTP 读写（密码掩码）
+- `POST /api/admin/email/test`：测试邮件 API（Admin-only）
+
+**前端**：
+- `EmailConfigPanel.tsx`：SMTP 配置表单（含密码切换显示、SSL/TLS 选择、测试邮件）
+- 集成在 Admin → System 标签页（AI 配置面板之后）
+
+**技术原则**：
+- SMTP 凭证存于 DB，不写 Render 环境变量
+- 密码在 AuditLog 中始终掩码
+- 邮件失败不阻断主流程（non-blocking）
+
+### 影响文件
+- `prisma/schema.prisma`：SystemConfig 新增 SMTP 字段（已 db push）
+- `src/lib/email.ts`：[NEW]
+- `src/app/api/admin/system-config/route.ts`：扩展 SMTP 读写
+- `src/app/api/admin/email/test/route.ts`：[NEW]
+- `src/app/api/admin/users/[id]/route.ts`：密码重置集成发邮件
+- `src/components/admin/EditUserModal.tsx`：[NEW]
+- `src/components/admin/EmailConfigPanel.tsx`：[NEW]
+- `src/app/admin/page.tsx`：接入两个新组件
