@@ -85,16 +85,15 @@ export default function MainLayout({
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
 
       {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
-      <div className="hidden lg:flex shrink-0">
-        <Sidebar
-          userRoles={userRoles}
-          currentView={currentView}
-          setCurrentView={setCurrentView}
-          brands={brands}
-          activeBrand={activeBrand}
-          setActiveBrand={setActiveBrand}
-        />
-      </div>
+      <Sidebar
+        userRoles={userRoles}
+        currentView={currentView}
+        setCurrentView={setCurrentView}
+        brands={brands}
+        activeBrand={activeBrand}
+        setActiveBrand={setActiveBrand}
+        className="hidden lg:flex"
+      />
 
       {/* ── Mobile: Drawer backdrop ─────────────────────────────────── */}
       {mobileSidebarOpen && (

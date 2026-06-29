@@ -632,6 +632,10 @@ RolePermission 表：
 - **双重滚动条消除**：将 `<main>` 容器的 `overflow-y-auto` 改为 `overflow-hidden`，由具体子页面容器各自负责是否有滚动或高度铺满，消除了嵌套滚动问题。
 - **清除历史布局残留**：废除了硬编码的 `h-[calc(100vh-140px)]` 及负边距，所有视图完美自适应新的垂直侧边栏页面布局。
 
+- **侧边栏遮挡重叠修复**：移除 Desktop 侧边栏外部无宽度的包裹 `div`，直接由 `Sidebar` (传入 `hidden lg:flex`) 充当 flex item，修复展开/折叠时主内容被侧边栏盖住的布局引擎 bug。
+- **太阳花 Logo 替换**：将侧边栏左上角临时手写的蓝色 `AMC` 圆圈，替换为系统正式的太阳花 Logo (`/logo.svg`)，在展开模式下水平排列 Icon 与 `AI Marketing Crew` 文本。
+
 ### 影响文件
 - `src/components/layout/MainLayout.tsx`
+- `src/components/layout/Sidebar.tsx`
 - `src/components/KanbanBoard.tsx`

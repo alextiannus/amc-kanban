@@ -38,6 +38,7 @@ interface SidebarProps {
   brands: Brand[]
   activeBrand: Brand | null
   setActiveBrand: (brand: Brand) => void
+  className?: string
 }
 
 const COLLAPSED_KEY = 'amc.sidebar.collapsed'
@@ -160,6 +161,7 @@ export default function Sidebar({
   brands,
   activeBrand,
   setActiveBrand,
+  className = '',
 }: SidebarProps) {
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
@@ -209,15 +211,18 @@ export default function Sidebar({
       transition-all duration-300 ease-in-out
       ${collapsed ? 'w-16' : 'w-56'}
       overflow-hidden
+      ${className}
     `}>
 
       {/* ── Logo ──────────────────────────────────────────────────── */}
-      <div className={`flex items-center gap-3 px-3 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0 ${collapsed ? 'justify-center' : ''}`}>
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
-          <span className="text-[11px] font-black text-white tracking-tight">AMC</span>
-        </div>
+      <div className={`flex items-center gap-2.5 px-4 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0 ${collapsed ? 'justify-center' : ''}`}>
+        <img
+          src="/logo.svg"
+          alt="AMC Logo"
+          className="w-8 h-8 object-contain"
+        />
         {!collapsed && (
-          <span className="text-sm font-black text-slate-800 dark:text-slate-100 tracking-tight whitespace-nowrap">
+          <span className="text-sm font-black text-slate-850 dark:text-slate-100 tracking-tight whitespace-nowrap">
             AI Marketing Crew
           </span>
         )}
