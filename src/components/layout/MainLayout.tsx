@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { useTheme } from 'next-themes'
-import { Sun, Moon } from 'lucide-react'
+import { Sun, Moon, GraduationCap } from 'lucide-react'
 import Sidebar from './Sidebar'
 import UserMenu from './UserMenu'
 import { type Brand } from './BrandSwitcher'
@@ -146,6 +146,17 @@ export default function MainLayout({
 
           {/* Right controls */}
           <div className="flex items-center gap-2">
+            <a
+              href="/learn"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 h-9 rounded-full flex items-center justify-center gap-1.5 text-slate-500 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors font-bold text-xs shrink-0 cursor-pointer"
+              title="AMC 学院"
+            >
+              <GraduationCap size={16} className="text-indigo-500" />
+              <span>AMC 学院</span>
+            </a>
+
             <button
               onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
               className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"

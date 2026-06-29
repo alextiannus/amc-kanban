@@ -34,6 +34,7 @@ model User {
   referredById String?
   referredBy   User?    @relation("UserReferrals", fields: [referredById], references: [id])
   referrals    User[]   @relation("UserReferrals")
+  salesLeads   SalesLead[]
   
   // 关系映射
   tasksAsAssignee  WorkUnit[]        @relation("TaskAssignee")
@@ -940,5 +941,21 @@ model PromoCodeUsage {
   subscriptionId String                      // The BrandSubscription that was discounted
   discountAmount Float                       // Calculated discount applied in USD
   createdAt      DateTime  @default(now())
+}
+
+// ── BD Sales Leads ──────────────────────────────────────────────────────────
+model SalesLead {
+  id          String   @id @default(cuid())
+  bdUserId    String
+  name        String   // Restaurant / Contact Name
+  phone       String?
+  email       String?
+  status      String   @default("NEW") // "NEW" | "CONTACTED" | "DEMO_SCHEDULED" | "ONBOARDED" | "REJECTED"
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bdUser      User     @relation(fields: [bdUserId], references: [id])
+  @@index([bdUserId])
 }
 
