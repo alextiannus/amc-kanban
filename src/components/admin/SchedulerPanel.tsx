@@ -165,7 +165,7 @@ export default function SchedulerPanel() {
             {lastRunTime
               ? `上次运行：${lastRunTime.toLocaleString('zh-CN')}（${minutesSince} 分钟前）`
               : '暂无巡检记录'}
-            <span className="ml-2 text-gray-500">· 每天 09:00 自动运行</span>
+            <span className="ml-2 text-gray-500">· 每天 07:00 / 14:00 自动运行</span>
           </p>
         </div>
         <button

@@ -45,26 +45,33 @@ export async function getAzureSpeechConfig(): Promise<{ key: string; region: str
 /** ─── Publishing Standards ─────────────────────────────────────────────────
  * 系统统一发布频率标准。
  * Admin → System Config UI 中可覆盖，否则使用 DEFAULT_PUBLISHING_STANDARDS。
+ *
+ * 两种频率检查模式（可组合使用）：
+ *   maxDaysBetweenPosts  — 上次发布距今不超过 N 天（高频平台：Instagram/XHS）
+ *   minPerWeek           — 过去 7 天发布总数不低于 N 篇（低频平台：Google/Facebook）
  */
 export interface PlatformStandard {
-  minPerWeek: number   // 每周最低发布篇数
+  maxDaysBetweenPosts?: number  // 上次发布距今不超过N天（违反则沉默告警）
+  minPerWeek?: number           // 过去7天发布篇数不低于N篇（违反则频率不足告警）
 }
 
 export interface PublishingStandards {
-  maxDaysSilent: number                        // 某平台超过N天无发布即告警
+  maxDaysSilent: number                        // 全局沉默告警阈值（兜底）
   minTotalPerWeek: number                      // 全平台汇总每周最低总篇数
   platforms: Record<string, PlatformStandard>  // per-platform 标准，key = platform slug
 }
 
 export const DEFAULT_PUBLISHING_STANDARDS: PublishingStandards = {
-  maxDaysSilent: 4,
-  minTotalPerWeek: 3,
+  maxDaysSilent: 3,           // 某平台 ≥ 3 天无发布即告警
+  minTotalPerWeek: 4,
   platforms: {
-    instagram:    { minPerWeek: 2 },
-    xiaohongshu:  { minPerWeek: 2 },
-    google:       { minPerWeek: 1 },
-    facebook:     { minPerWeek: 1 },
-    tiktok:       { minPerWeek: 1 },
+    // 高频平台：检查上次发布间隔（不超过2天）
+    instagram:   { maxDaysBetweenPosts: 2 },
+    xiaohongshu: { maxDaysBetweenPosts: 2 },
+    // 低频平台：检查每周发布总量（≥2篇/周）
+    google:      { minPerWeek: 2 },
+    facebook:    { minPerWeek: 2 },
+    tiktok:      { minPerWeek: 1 },
   },
 }
 

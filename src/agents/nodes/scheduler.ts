@@ -100,31 +100,7 @@ async function checkPublishingFrequency(
       }
     }
 
-    // --- Silence check (per connected platform) ---
-    for (const account of brand.socialAccounts) {
-      const platform = account.platform.toLowerCase()
-      const lastPub = lastPublishedByPlatform.get(platform)
-
-      const isSilent = !lastPub || lastPub < silenceThreshold
-      if (isSilent) {
-        const daysSilent = lastPub
-          ? Math.floor((now.getTime() - lastPub.getTime()) / (1000 * 60 * 60 * 24))
-          : null
-        alerts.push({
-          brandId: brand.id,
-          brandName: brand.name,
-          type: 'scheduler_silence_alert',
-          priority: 'high',
-          title: `${brand.name} ${account.platform} 已${daysSilent ? `${daysSilent}天` : '从未'}未发布`,
-          description: daysSilent
-            ? `距离上次在 ${account.platform} 发布已过去 ${daysSilent} 天，超过告警阈值 ${standards.maxDaysSilent} 天。建议立即安排内容。`
-            : `${brand.name} 从未在 ${account.platform} 发布过内容，请尽快安排首次发布。`,
-          payload: { platform, accountId: account.id, daysSilent },
-        })
-      }
-    }
-
-    // --- Frequency check (per platform, past 7 days) ---
+    // Map: platform → count published in last 7 days
     const publishedThisWeekByPlatform: Record<string, number> = {}
     for (const draft of recentPublished) {
       if (draft.publishedAt && draft.publishedAt >= weekAgo) {
@@ -136,19 +112,68 @@ async function checkPublishingFrequency(
     for (const account of brand.socialAccounts) {
       const platform = account.platform.toLowerCase()
       const platformStandard = standards.platforms[platform]
-      if (!platformStandard) continue  // 未配置标准的平台跳过
 
-      const thisWeekCount = publishedThisWeekByPlatform[platform] ?? 0
-      if (thisWeekCount < platformStandard.minPerWeek) {
-        alerts.push({
-          brandId: brand.id,
-          brandName: brand.name,
-          type: 'scheduler_frequency_low',
-          priority: 'normal',
-          title: `${brand.name} ${account.platform} 本周发布量不足`,
-          description: `本周在 ${account.platform} 仅发布了 ${thisWeekCount} 篇，目标为 ${platformStandard.minPerWeek} 篇/周。`,
-          payload: { platform, accountId: account.id, thisWeekCount, target: platformStandard.minPerWeek },
-        })
+      // Q1: 未绑定平台跳过（此处 account 来自已连接账号，platformStandard 未配置才跳过）
+      if (!platformStandard) continue
+
+      const lastPub = lastPublishedByPlatform.get(platform)
+
+      // ── 高频平台：检查上次发布距今天数（maxDaysBetweenPosts）─────────────
+      if (platformStandard.maxDaysBetweenPosts !== undefined) {
+        const maxGap = platformStandard.maxDaysBetweenPosts
+        const daysSince = lastPub
+          ? Math.floor((now.getTime() - lastPub.getTime()) / (1000 * 60 * 60 * 24))
+          : null
+        const isOverdue = !lastPub || (daysSince !== null && daysSince > maxGap)
+
+        if (isOverdue) {
+          alerts.push({
+            brandId: brand.id,
+            brandName: brand.name,
+            type: 'scheduler_silence_alert',
+            priority: 'high',
+            title: `${brand.name} ${account.platform} 已${daysSince ?? '从未'}${typeof daysSince === 'number' ? '天' : ''}未更新`,
+            description: daysSince !== null
+              ? `距上次在 ${account.platform} 发布已过去 ${daysSince} 天，超过间隔上限 ${maxGap} 天，建议立即安排新内容。`
+              : `${brand.name} 从未在 ${account.platform} 发布过内容，请尽快安排首次发布。`,
+            payload: { platform, accountId: account.id, daysSince, maxDaysBetweenPosts: maxGap },
+          })
+        }
+      }
+
+      // ── 低频平台：检查每周发布总量（minPerWeek）───────────────────────────
+      if (platformStandard.minPerWeek !== undefined) {
+        const target = platformStandard.minPerWeek
+        const thisWeekCount = publishedThisWeekByPlatform[platform] ?? 0
+
+        // Also check global silence (hasn't published at all recently)
+        const isSilent = !lastPub || lastPub < silenceThreshold
+        if (isSilent) {
+          const daysSilent = lastPub
+            ? Math.floor((now.getTime() - lastPub.getTime()) / (1000 * 60 * 60 * 24))
+            : null
+          alerts.push({
+            brandId: brand.id,
+            brandName: brand.name,
+            type: 'scheduler_silence_alert',
+            priority: 'high',
+            title: `${brand.name} ${account.platform} 已${daysSilent ? `${daysSilent}天` : '从未'}未发布`,
+            description: daysSilent
+              ? `距离上次在 ${account.platform} 发布已过去 ${daysSilent} 天，超过告警阈值 ${standards.maxDaysSilent} 天。建议立即安排内容。`
+              : `${brand.name} 从未在 ${account.platform} 发布过内容，请尽快安排首次发布。`,
+            payload: { platform, accountId: account.id, daysSilent },
+          })
+        } else if (thisWeekCount < target) {
+          alerts.push({
+            brandId: brand.id,
+            brandName: brand.name,
+            type: 'scheduler_frequency_low',
+            priority: 'normal',
+            title: `${brand.name} ${account.platform} 本周发布量不足`,
+            description: `本周在 ${account.platform} 仅发布了 ${thisWeekCount} 篇，目标为 ${target} 篇/周。`,
+            payload: { platform, accountId: account.id, thisWeekCount, target },
+          })
+        }
       }
     }
   }
@@ -157,6 +182,9 @@ async function checkPublishingFrequency(
 }
 
 // ─── 2. Topic Duplicate Check (30-day window) ─────────────────────────────────
+// Q4 行为：检测到重复的【已排期】草稿，直接改回 draft 状态 + 清除 scheduledAt，
+//          生成 high-priority ActionItem 通知主理人处理。
+// Q3 时机：仅在每日定时巡检（07:00 / 14:00）中执行，不在草稿生成时实时检查。
 
 async function checkTopicDuplicates(
   brands: Awaited<ReturnType<typeof getBrandsWithAccounts>>,
@@ -166,11 +194,11 @@ async function checkTopicDuplicates(
   const windowStart = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000)
 
   for (const brand of brands) {
-    // Get all published/scheduled content in the window
+    // ── 历史参照集：过去30天内已发布/已审批内容 ──────────────────────────────
     const historicalDrafts = await prisma.contentDraft.findMany({
       where: {
         brandId: brand.id,
-        status: { in: ['published', 'scheduled', 'approved'] },
+        status: { in: ['published', 'approved'] },
         OR: [
           { publishedAt: { gte: windowStart } },
           { scheduledAt: { gte: windowStart } },
@@ -187,12 +215,12 @@ async function checkTopicDuplicates(
       orderBy: { createdAt: 'desc' },
     })
 
-    // Get pending/draft content that is about to be published (not yet approved)
-    const pendingDrafts = await prisma.contentDraft.findMany({
+    // ── 检查目标：所有【已排期】草稿（status = 'scheduled'，未来将发布）──────
+    const scheduledDrafts = await prisma.contentDraft.findMany({
       where: {
         brandId: brand.id,
-        status: { in: ['draft', 'pending'] },
-        scheduledAt: { gte: new Date() },
+        status: 'scheduled',
+        scheduledAt: { gte: new Date() },  // 仅检查未来排期
       },
       select: {
         id: true,
@@ -203,16 +231,15 @@ async function checkTopicDuplicates(
       },
     })
 
-    // For each pending draft, check against the historical window
-    for (const pending of pendingDrafts) {
-      const targetKeywords = pending.topicKeywords.length > 0
-        ? pending.topicKeywords
-        : extractTopicKeywords(pending.caption)
+    // ── 逐一检查每篇已排期草稿 ───────────────────────────────────────────────
+    for (const scheduled of scheduledDrafts) {
+      const targetKeywords = scheduled.topicKeywords.length > 0
+        ? scheduled.topicKeywords
+        : extractTopicKeywords(scheduled.caption)
 
       if (targetKeywords.length === 0) continue
 
-      // Exclude self from comparison
-      const compareAgainst = historicalDrafts.filter((d: { id: string }) => d.id !== pending.id)
+      const compareAgainst = historicalDrafts.filter((d: { id: string }) => d.id !== scheduled.id)
       const duplicates = detectTopicDuplicates(targetKeywords, compareAgainst, 0.45)
 
       if (duplicates.length > 0) {
@@ -221,15 +248,27 @@ async function checkTopicDuplicates(
           ? Math.floor((Date.now() - top.publishedAt.getTime()) / (1000 * 60 * 60 * 24))
           : null
 
+        // ── Q4: 取消排期 — 将草稿从 'scheduled' 改回 'draft'，清除 scheduledAt ──
+        await prisma.contentDraft.update({
+          where: { id: scheduled.id },
+          data: {
+            status: 'draft',
+            scheduledAt: null,
+            agentNote: `⚠️ 【Scheduler 自动取消排期】检测到与 ${daysAgo != null ? `${daysAgo}天前` : '近期'}已发布内容主题相似度达 ${Math.round(top.similarity * 100)}%。已将此草稿退回草稿状态，请修改主题后重新排期。`,
+          },
+        })
+
+        console.log(`[Scheduler] ↩️ 取消排期 draft ${scheduled.id} (相似度 ${Math.round(top.similarity * 100)}%)`)
+
         alerts.push({
           brandId: brand.id,
           brandName: brand.name,
           type: 'scheduler_topic_duplicate',
-          priority: 'normal',
-          title: `${brand.name} 待发草稿与近期内容主题高度相似`,
-          description: `草稿内容与 ${daysAgo ? `${daysAgo}天前` : '近期'}的发布内容主题相似度达 ${Math.round(top.similarity * 100)}%，可能造成内容重复。建议调整主题或推迟发布。`,
+          priority: 'high',  // Q4: 已取消排期，升为 high
+          title: `${brand.name} 一篇排期内容因主题重复被自动取消`,
+          description: `草稿与 ${daysAgo != null ? `${daysAgo}天前` : '近期'}的内容主题相似度达 ${Math.round(top.similarity * 100)}%，已自动退回草稿状态。请修改主题后重新排期。`,
           payload: {
-            pendingDraftId: pending.id,
+            unscheduledDraftId: scheduled.id,
             matchedDraftId: top.draftId,
             similarity: top.similarity,
             matchedCaption: top.caption,

@@ -5,8 +5,13 @@
  *   1. Cron 触发：Authorization: Bearer {CRON_SECRET}（无 session）
  *   2. 手动触发：有效 session（role: ADMIN | COORDINATOR）
  *
- * Render / Vercel Cron 配置示例（render.yaml 或 vercel.json）：
- *   cron: "0 9 * * *"   → 每天 09:00 UTC+8（服务器时区）
+ * Render Cron 配置（render.yaml）— 两次/天（UTC+8 07:00 / 14:00）：
+ *   - name: scheduler-morning
+ *     schedule: "0 23 * * *"    # 07:00 SGT/CST (UTC+8) = 23:00 UTC 前一天
+ *   - name: scheduler-afternoon
+ *     schedule: "0 6 * * *"     # 14:00 SGT/CST (UTC+8) = 06:00 UTC 当天
+ *
+ * 两次巡检都执行完整检查（频率/沉默/重复/失败），重复告警会取消排期。
  */
 
 import { NextRequest, NextResponse } from 'next/server'

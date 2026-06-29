@@ -413,3 +413,40 @@ model SystemConfig {
 - `src/lib/systemConfig.ts`：新增 getPublishingStandards() + PublishingStandards 类型
 - `src/agents/nodes/publisher.ts`：草稿创建时写入 topicKeywords + 重复警告
 - `src/app/admin/page.tsx`：接入 SchedulerPanel
+
+---
+
+## Changelog v1.7.1 — 2026-06-29（设计决策确认更新）
+
+### Scheduler 巡检行为修订（基于用户确认）
+
+**Q1 决策（已实现）**：未绑定平台跳过频率检查，仅检查 `SocialAccount.connected = true` 的账号。
+
+**Q2 — 发布频率标准修订**（由"每周篇数"部分改为"发布间隔"检查）：
+
+| 平台 | 检查方式 | 标准 | 沉默阈值 |
+|------|---------|------|---------|
+| Instagram | maxDaysBetweenPosts | 间隔 ≤ 2 天 | 3 天无发布 |
+| 小红书 | maxDaysBetweenPosts | 间隔 ≤ 2 天 | 3 天无发布 |
+| Google | minPerWeek | ≥ 2 篇/周 | 3 天无发布 |
+| Facebook | minPerWeek | ≥ 2 篇/周 | 3 天无发布 |
+| TikTok | minPerWeek | ≥ 1 篇/周 | 3 天无发布 |
+
+**Q3 — 重复主题检查时机（调整）**：
+- ❌ 取消：草稿生成时实时检查（已从 publisher.ts 移除）
+- ✅ 保留：每天定时巡检中对所有已排期草稿扫描
+- **巡检时间**：每天 **07:00** 和 **14:00**（UTC+8）各执行一次
+- Render Cron: `0 23 * * *`（07:00 SGT）+ `0 6 * * *`（14:00 SGT）
+
+**Q4 — 重复告警行为（重大变更）**：
+- ❌ 原设计：仅在 agentNote 中添加警告，不影响发布
+- ✅ 新设计：**自动取消排期** — 将重复草稿 `status: 'scheduled' → 'draft'`，清除 `scheduledAt`
+- 同时生成 **high priority** ActionItem 通知主理人修改主题后重新排期
+- publisher.ts 不再生成重复警告，责任完全转移到 Scheduler 定时巡检
+
+**影响文件（本次修订）**：
+- `src/lib/systemConfig.ts`：PlatformStandard 新增 `maxDaysBetweenPosts?`、更新默认值
+- `src/agents/nodes/scheduler.ts`：频率检查支持两种模式；重复检测改为主动取消排期
+- `src/agents/nodes/publisher.ts`：`enrichDraftData` 简化为同步函数，移除重复检查逻辑
+- `src/components/admin/SchedulerPanel.tsx`：更新巡检时间显示
+- `src/app/api/scheduler/daily-check/route.ts`：更新 Cron 配置注释

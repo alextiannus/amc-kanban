@@ -2,46 +2,14 @@ import fs from "fs";
 import path from "path";
 import { prisma } from "../../lib/prisma.ts";
 import { postfastPublish } from "../../lib/integrations/postfast.ts";
-import { extractTopicKeywords, detectTopicDuplicates } from "../../lib/topicExtractor.ts";
+import { extractTopicKeywords } from "../../lib/topicExtractor.ts";
 
 /**
- * 丰富草稿数据：自动加入 topicKeywords，并在主题重复时在 agentNote 中添加警告。
+ * 萃取草稿主题关键词，写入 topicKeywords 字段。
+ * 注意：重复主题检测由 Scheduler 定时巡检（07:00/14:00）负责，不在此处实时检查。
  */
-async function enrichDraftData(
-  brandId: string,
-  caption: string,
-  existingAgentNote?: string | null,
-): Promise<{ topicKeywords: string[]; agentNote?: string }> {
-  const topicKeywords = extractTopicKeywords(caption)
-
-  // Check 30-day window for duplicate topics
-  const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-  const historicalDrafts = await prisma.contentDraft.findMany({
-    where: {
-      brandId,
-      status: { in: ['published', 'scheduled', 'approved'] },
-      OR: [
-        { publishedAt: { gte: windowStart } },
-        { scheduledAt: { gte: windowStart } },
-      ],
-    },
-    select: { id: true, caption: true, topicKeywords: true, scheduledAt: true, publishedAt: true },
-    take: 100,
-  })
-
-  const duplicates = detectTopicDuplicates(topicKeywords, historicalDrafts, 0.45)
-  let agentNote = existingAgentNote || undefined
-
-  if (duplicates.length > 0) {
-    const top = duplicates[0]
-    const daysAgo = top.publishedAt
-      ? Math.floor((Date.now() - top.publishedAt.getTime()) / (1000 * 60 * 60 * 24))
-      : null
-    const warningLine = `⚠️ 主题重复警告：该内容与 ${daysAgo != null ? `${daysAgo}天前` : '近期'}发布的内容主题相似度达 ${Math.round(top.similarity * 100)}%，建议考虑调整主题。`
-    agentNote = agentNote ? `${warningLine}\n\n${agentNote}` : warningLine
-  }
-
-  return { topicKeywords, ...(agentNote !== undefined ? { agentNote } : {}) }
+function enrichDraftData(caption: string): { topicKeywords: string[] } {
+  return { topicKeywords: extractTopicKeywords(caption) }
 }
 
 export async function publisherNode(state: any) {
@@ -254,7 +222,7 @@ export async function publisherNode(state: any) {
         }
 
         if (!draftRecord) {
-          const enriched = await enrichDraftData(brandId, fullCaption)
+          const enriched = enrichDraftData(fullCaption)
           draftRecord = await prisma.contentDraft.create({
             data: {
               brandId,
@@ -266,7 +234,6 @@ export async function publisherNode(state: any) {
               platformPostId: publishRes.postId || "post_" + Date.now(),
               publishedAt: new Date(),
               topicKeywords: enriched.topicKeywords,
-              ...(enriched.agentNote ? { agentNote: enriched.agentNote } : {}),
             }
           });
         }
@@ -309,7 +276,7 @@ export async function publisherNode(state: any) {
         }
 
         if (!draftRecord) {
-          const enriched = await enrichDraftData(brandId, fullCaption)
+          const enriched = enrichDraftData(fullCaption)
           await prisma.contentDraft.create({
             data: {
               brandId,
@@ -318,9 +285,7 @@ export async function publisherNode(state: any) {
               mediaUrls: mediaUrls || [],
               hashtags: cleanHashtags,
               status: "failed",
-              agentNote: enriched.agentNote
-                ? `${enriched.agentNote}\n\nPostFast Publish Failed: ${publishRes.error || "Unknown error"}`
-                : `PostFast Publish Failed: ${publishRes.error || "Unknown error"}`,
+              agentNote: `PostFast Publish Failed: ${publishRes.error || "Unknown error"}`,
               topicKeywords: enriched.topicKeywords,
             }
           });
@@ -392,7 +357,7 @@ export async function publisherNode(state: any) {
   }
 
   if (!draft) {
-    const enriched = await enrichDraftData(brandId, fullCaption)
+    const enriched = enrichDraftData(fullCaption)
     const manualNote = `【手动发布提醒】此内容已生成。由于 ${readablePlatform} 账号未联通，请在草稿中手动复制发布。`
     draft = await prisma.contentDraft.create({
       data: {
@@ -402,7 +367,7 @@ export async function publisherNode(state: any) {
         mediaUrls: mediaUrls || [],
         hashtags: cleanHashtags,
         status: "draft",
-        agentNote: enriched.agentNote ? `${enriched.agentNote}\n\n${manualNote}` : manualNote,
+        agentNote: manualNote,
         topicKeywords: enriched.topicKeywords,
       }
     });
