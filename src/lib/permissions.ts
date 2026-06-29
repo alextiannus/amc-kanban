@@ -147,7 +147,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
   // ── 4. Admin 系统 ─────────────────────────────────────────────────
   if (isAdmin) {
     groups.push({
-      groupLabel: '系统',
+      groupLabel: 'Admin',
       items: [
         { id: 'agents',  view: 'agents',  label: 'AI 序列',      icon: 'Bot' },
         { id: 'logs',    view: 'logs',    label: '工作日志',   icon: 'Activity' },
