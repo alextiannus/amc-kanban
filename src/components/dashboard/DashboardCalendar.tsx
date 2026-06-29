@@ -294,6 +294,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
   const [showPublishOptionModal, setShowPublishOptionModal] = useState(false)
   const [showPublishDropdown, setShowPublishDropdown] = useState(false)
+  const [previewModalOpen, setPreviewModalOpen] = useState(false)
 
   const accountOptions = useMemo(() => {
     const list = [...accounts]
@@ -2291,7 +2292,110 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
 
             </div>
 
-            {/* Bottom Actions removed for "Schedule Publish" style */}
+            {/* Bottom Actions */}
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsCreatingPost(false)}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-650 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all bg-white dark:bg-slate-900"
+              >
+                取消返回
+              </button>
+
+              <div className="flex items-center gap-3">
+                {/* 预览效果 Button */}
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalOpen(true)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                >
+                  <Eye className="w-4 h-4 text-indigo-500" />
+                  <span>预览效果 ({selectedAccountIds.length} 个账号)</span>
+                </button>
+
+                {selectedAccountIds.length > 0 && (
+                  <div className="relative">
+                    {/* Split publish button: main action + dropdown */}
+                    <div className="flex items-stretch rounded-xl overflow-hidden shadow-md">
+                      {/* Primary action: smart scheduling */}
+                      <button
+                        type="button"
+                        disabled={saving || isAiGenerating}
+                        onClick={handleSchedulePublish}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs transition-all flex items-center gap-1 border-r border-emerald-500"
+                      >
+                        {saving ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Send className="w-3.5 h-3.5" />
+                        )}
+                        <span>排期发布</span>
+                      </button>
+                      {/* Dropdown toggle */}
+                      <button
+                        type="button"
+                        disabled={saving || isAiGenerating}
+                        onClick={(e) => { e.stopPropagation(); setShowPublishDropdown(v => !v) }}
+                        className="px-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white transition-all flex items-center"
+                        aria-label="更多发布选项"
+                      >
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${showPublishDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+
+                    {/* Dropdown menu */}
+                    {showPublishDropdown && (
+                      <div
+                        className="absolute right-0 bottom-full mb-1.5 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-bottom-2 duration-150"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Save as draft */}
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => { setShowPublishDropdown(false); saveDraft('draft') }}
+                          className="w-full text-left px-3.5 py-2.5 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group"
+                        >
+                          <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 group-hover:scale-110 transition-transform">
+                            <Save className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-slate-50 transition-colors">保存草稿</p>
+                            <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">保存到草稿箱，稍后发布</p>
+                          </div>
+                        </button>
+
+                        <div className="h-px bg-slate-100 dark:bg-slate-800 mx-2" />
+
+                        {/* Smart scheduling */}
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => { setShowPublishDropdown(false); handleSchedulePublish() }}
+                          className="w-full text-left px-3.5 py-2.5 flex items-center gap-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors group"
+                        >
+                          <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-650 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                            <Clock className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">智能排期</p>
+                            <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">AI 推荐黄金发布时段</p>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Click-outside overlay to close */}
+                    {showPublishDropdown && (
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowPublishDropdown(false)}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
           </div>
         ) : (
@@ -2761,107 +2865,31 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
       </main>
 
       {/* 3. Right Details Drawer / Stacked Platform Previews */}
-      {isCreatingPost ? (
-        <aside className="w-full lg:w-[420px] bg-slate-50 dark:bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-800 flex flex-col shrink-0 shadow-2xl z-20">
-          <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
-            <div>
-              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                <Eye className="w-4 h-4 text-emerald-500" />
-                多平台发布预览 ({selectedAccountIds.length} 个账号)
-              </h3>
-              <p className="text-[10px] text-slate-400 dark:text-slate-550 mt-0.5">实时预览不同平台的内容渲染效果</p>
-            </div>
-            {selectedAccountIds.length > 0 && (
-              <div className="relative">
-                {/* Split publish button: main action + dropdown */}
-                <div className="flex items-stretch rounded-xl overflow-hidden shadow-md">
-                  {/* Primary action: smart scheduling */}
-                  <button
-                    type="button"
-                    disabled={saving || isAiGenerating}
-                    onClick={handleSchedulePublish}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs transition-all flex items-center gap-1 border-r border-emerald-500"
-                  >
-                    {saving ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Send className="w-3.5 h-3.5" />
-                    )}
-                    <span>排期发布</span>
-                  </button>
-                  {/* Dropdown toggle */}
-                  <button
-                    type="button"
-                    disabled={saving || isAiGenerating}
-                    onClick={(e) => { e.stopPropagation(); setShowPublishDropdown(v => !v) }}
-                    className="px-1.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white transition-all"
-                    aria-label="更多发布选项"
-                  >
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${showPublishDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-                </div>
-
-                {/* Dropdown menu */}
-                {showPublishDropdown && (
-                  <div
-                    className="absolute right-0 top-full mt-1.5 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50 animate-in slide-in-from-top-2 duration-150"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {/* Save as draft */}
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => { setShowPublishDropdown(false); saveDraft('draft') }}
-                      className="w-full text-left px-3.5 py-2.5 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group"
-                    >
-                      <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 group-hover:scale-110 transition-transform">
-                        <Save className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 group-hover:text-slate-900 dark:group-hover:text-slate-50 transition-colors">保存草稿</p>
-                        <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">保存到草稿箱，稍后发布</p>
-                      </div>
-                    </button>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-800 mx-2" />
-
-                    {/* Smart scheduling */}
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => { setShowPublishDropdown(false); handleSchedulePublish() }}
-                      className="w-full text-left px-3.5 py-2.5 flex items-center gap-3 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors group"
-                    >
-                      <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">
-                        <Clock className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">智能排期</p>
-                        <p className="text-[9px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">AI 推荐黄金发布时段</p>
-                      </div>
-                    </button>
-                  </div>
-                )}
-
-                {/* Click-outside overlay to close */}
-                {showPublishDropdown && (
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowPublishDropdown(false)}
-                  />
-                )}
+      {isCreatingPost && previewModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-955/65 p-4 backdrop-blur-sm" onClick={() => setPreviewModalOpen(false)}>
+          <div className="relative w-full max-w-4xl h-[85vh] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900 flex flex-col shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4 shrink-0">
+              <div>
+                <h3 className="text-sm font-black text-slate-805 dark:text-slate-100 flex items-center gap-1.5">
+                  <Eye className="w-4 h-4 text-indigo-500" />
+                  多平台发布预览 ({selectedAccountIds.length} 个账号)
+                </h3>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">实时预览不同平台的内容渲染效果</p>
               </div>
-            )}
-          </div>
+              <button onClick={() => setPreviewModalOpen(false)} className="rounded-md p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-thin">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50 dark:bg-slate-900 scrollbar-thin">
             {selectedAccountIds.length === 0 ? (
               <div className="py-20 text-center text-slate-400 dark:text-slate-500">
                 <Eye className="w-10 h-10 mx-auto mb-3 opacity-20" />
                 <p className="text-xs font-extrabold">请选择发布账号以查看预览</p>
               </div>
             ) : (
-              <div className="space-y-8 pb-10">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
                 {selectedAccountIds.map((accId) => {
                   const account = accountOptions.find((a) => a.id === accId)
                   if (!account) return null
@@ -3432,9 +3460,9 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                 })}
               </div>
             )}
-          </div></aside>
+          </div></div></div>
       ) : (
-        selectedDay && (
+        !isCreatingPost && selectedDay && (
           <aside className="w-full lg:w-[380px] bg-white dark:bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-800 flex flex-col shrink-0 shadow-2xl animate-in slide-in-from-right duration-350 z-20">
           <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
             <div>

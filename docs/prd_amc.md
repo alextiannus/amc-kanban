@@ -642,3 +642,16 @@ RolePermission 表：
 - `src/components/layout/Sidebar.tsx`
 - `src/components/dashboard/DashboardCalendar.tsx`
 - `src/components/KanbanBoard.tsx`
+
+---
+
+## Changelog v1.8.2 — 2026-06-29（新建发布多平台预览交互重构）
+
+### 新建发布多平台预览交互重构 (New Post Platform Preview Modal)
+- **下线下沉式固定预览栏**：移除了新建发布时右侧占据 420px 宽度的固定预览 `<aside>` 面板，为主视口表单编辑器腾出完整编辑空间。
+- **页面底部操作工具栏**：在发布草稿表单下方新增横向操作工具栏，包含 `取消返回`、`预览效果` 与发布/草稿等动作按钮。
+- **全屏模态预览弹窗 (Modal Overlay)**：点击 `预览效果` 按钮后，弹出宽屏浮层模态框。预览卡片改用双列网格布局 (`grid grid-cols-1 md:grid-cols-2`)，优化了桌面端多平台并行展示效果。
+- **排期控制拆分按钮移出**：将原本位于预览栏头部的“排期发布/保存草稿/智能排期”组合下拉按钮，平滑移动并融入表单底部工具栏中。
+
+### 影响文件
+- `src/components/dashboard/DashboardCalendar.tsx`
