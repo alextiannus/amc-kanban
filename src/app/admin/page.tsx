@@ -11,10 +11,10 @@ import UsersTab, { type UserRecord } from '@/components/admin/UsersTab'
 import BrandsTab, { type BrandRecord } from '@/components/admin/BrandsTab'
 import SystemTab, { type LLMConfigRecord } from '@/components/admin/SystemTab'
 import { type AssignmentPoolConfig, type AssignmentPoolMember, type AssignmentDecision } from '@/components/shared/types'
-import TrainingDataSection from '@/components/TrainingDataSection'
+import PlatformAiTab from '@/components/admin/PlatformAiTab'
 import EditUserModal from '@/components/admin/EditUserModal'
 
-type AdminTab = 'users' | 'brands' | 'system' | 'conversation-log'
+type AdminTab = 'users' | 'brands' | 'system' | 'platform-ai'
 
 interface InvitationResult {
   user: { id: string; email: string; type: string }
@@ -586,7 +586,7 @@ export default function AdminPage() {
       title: '系统架构配置 (Infrastructure)',
       items: [
         { id: 'system' as const, label: '系统服务与设置', icon: Settings },
-        { id: 'conversation-log' as const, label: '语料微调与导出', icon: MessageSquare },
+        { id: 'platform-ai' as const, label: '平台AI与语料学习', icon: MessageSquare },
       ]
     }
   ]
@@ -754,18 +754,16 @@ export default function AdminPage() {
           />
         )}
 
-        {activeAdminTab === 'conversation-log' && (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4 animate-in fade-in duration-200">
-            <div>
-              <h2 className="text-sm font-black text-slate-855 dark:text-slate-100 flex items-center gap-2">
-                <MessageSquare size={16} className="text-blue-500" /> AI 运营对话语料导出
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                选择托管品牌，可提取该品牌下 AI 语音伴侣与商家的所有历史交流录音及转译文本，打包为 JSONL 数据集以用于垂直大模型的微调 (Fine-tuning) 训练。
-              </p>
-            </div>
-            <TrainingDataSection brands={brands.map(b => ({ id: b.id, name: b.name }))} />
-          </div>
+        {activeAdminTab === 'platform-ai' && (
+          <PlatformAiTab 
+            users={users}
+            brands={brands.map(b => ({ id: b.id, name: b.name }))}
+            loading={loading}
+            actionLoading={actionLoading}
+            onSaveAgentDraft={handleSaveAgentDraft}
+            onCreateUser={handleCreateUser}
+            onFetchUsers={fetchUsers}
+          />
         )}
       </main>
 

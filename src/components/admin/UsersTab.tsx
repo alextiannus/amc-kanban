@@ -105,7 +105,7 @@ export default function UsersTab({
   const [selectedAgentHumanIds, setSelectedAgentHumanIds] = useState<string[]>([])
 
   const humans = users.filter(u => u.type === 'HUMAN')
-  const agents = users.filter(u => u.type === 'AI_AGENT')
+  const agents = users.filter(u => u.type === 'AI_AGENT' && !['copywriter@platform.amc', 'designer@platform.amc', 'researcher@platform.amc'].includes(u.email))
 
   const filteredHumans = humans.filter(u => 
     u.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
