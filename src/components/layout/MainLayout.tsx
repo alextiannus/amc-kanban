@@ -41,7 +41,6 @@ const VIEW_LABEL_MAP: Record<BoardView, string> = {
   dataAnalysis: '账号快照',
   agents: 'AI 序列',
   logs: '工作日志',
-  archive: '归档',
   managementOverview: '主理人总览',
 }
 

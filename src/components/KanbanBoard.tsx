@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { Store } from 'lucide-react'
 import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
-import ArchiveView from './ArchiveView'
 import MobileLayout from './dashboard/MobileLayout'
 import DashboardHome from './dashboard/DashboardHome'
 import SocialInsightDashboard from './dashboard/SocialInsightDashboard'
@@ -88,7 +87,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     if (initialView === 'dashboard') {
       try {
         const savedView = window.localStorage.getItem('amc.currentView') as BoardView | null
-        const validViews: BoardView[] = ['agents', 'archive', 'dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'dataAnalysis', 'logs', 'managementOverview']
+        const validViews: BoardView[] = ['agents', 'dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'dataAnalysis', 'logs', 'managementOverview']
         if (savedView && validViews.includes(savedView)) {
           setTimeout(() => {
             setCurrentView(savedView)
@@ -315,10 +314,6 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
             onOpenDashboard={() => setCurrentView('dashboard')}
             onCreateAgent={createAgentKey}
           />
-        </div>
-      ) : currentView === 'archive' ? (
-        <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-2 duration-300 h-full">
-          <ArchiveView onTaskClick={setSelectedTask} />
         </div>
       ) : currentView === 'calendar' ? (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">

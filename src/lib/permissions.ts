@@ -12,7 +12,6 @@ export type BoardView =
   | 'game'
   | 'socialInsight'
   | 'dataAnalysis'
-  | 'archive'
   | 'agents'
   | 'logs'
   | 'managementOverview'
@@ -52,7 +51,6 @@ export function canAccessView(roles: AppRole[], view: BoardView): boolean {
       return isAdmin || isPrincipal || isOwner
     case 'dataAnalysis':
       return isAdmin || isPrincipal
-    case 'archive':
     case 'managementOverview':
       return isAdmin || isPrincipal
     case 'agents':
@@ -151,7 +149,6 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       items: [
         { id: 'agents',  view: 'agents',  label: 'AI 序列',      icon: 'Bot' },
         { id: 'logs',    view: 'logs',    label: '工作日志',   icon: 'Activity' },
-        { id: 'archive', view: 'archive', label: '归档',         icon: 'Inbox' },
         { id: 'admin',   view: 'dashboard', label: 'Admin 控制台', icon: 'Shield', href: '/admin' },
       ],
     })
