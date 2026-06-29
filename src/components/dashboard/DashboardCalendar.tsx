@@ -1535,7 +1535,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
   }) || []
 
   return (
-    <div className="flex flex-col lg:flex-row h-full min-h-[750px] bg-slate-50 dark:bg-slate-950 font-sans">
+    <div className="flex flex-col lg:flex-row h-full min-h-0 bg-slate-50 dark:bg-slate-950 font-sans">
       
       {/* 1. Left Sidebar: Channels & Private Domain */}
       <aside className="w-full lg:w-[260px] bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 flex flex-col shrink-0">

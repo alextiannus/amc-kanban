@@ -656,3 +656,14 @@ RolePermission 表：
 
 ### 影响文件
 - `src/components/dashboard/DashboardCalendar.tsx`
+
+---
+
+## Changelog v1.8.3 — 2026-06-29（发布日历高度容器自适应与滚动条修复）
+
+### 发布日历高度容器自适应与滚动条修复 (Calendar Viewport Height & Scrollbar Fix)
+- **移出 min-h-[750px] 硬编码高度限制**：将日历页面根部容器的 `min-h-[750px]` 修改为 `min-h-0`。这使日历页面在任何视口高度下，都能正确跟随外部布局容器（`h-screen`）进行自适应收缩。
+- **激活内部 overflow-y-auto 滚动条**：解决了由于子级高度撑破父级而导致页面底部被浏览器截断、无法上下滚动的 bug。修复后，只要日历区域内容超过当前可视高度，主日历内部容器的 `overflow-y-auto` 会自动激活，确保所有日期与排期内容均可完整展现。
+
+### 影响文件
+- `src/components/dashboard/DashboardCalendar.tsx`
