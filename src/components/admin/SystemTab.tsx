@@ -3,10 +3,11 @@
 import React, { useState } from 'react'
 import {
   Shield, Key, Save, RefreshCw, Layers, ShieldCheck, Mail, CalendarClock, History, Settings,
-  Sparkles, Plus, Trash2, Edit3, Loader2, Check, Clock, AlertTriangle
+  Sparkles, Plus, Trash2, Edit3, Loader2, Check, Clock, AlertTriangle, MessageSquare
 } from 'lucide-react'
 import EmailConfigPanel from './EmailConfigPanel'
 import SchedulerPanel from './SchedulerPanel'
+import MessageTemplatesPanel from './MessageTemplatesPanel'
 
 export interface SystemLog {
   id: string
@@ -75,7 +76,7 @@ export default function SystemTab({
   llmConfigsLoading,
   onFetchLLMConfigs
 }: SystemTabProps) {
-  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'ai' | 'smtp' | 'scheduler' | ''>('llm')
+  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'ai' | 'smtp' | 'scheduler' | 'templates' | ''>('llm')
   
   // LLM Config inner states
   const [llmConfigModalOpen, setLlmConfigModalOpen] = useState(false)
@@ -463,6 +464,25 @@ export default function SystemTab({
           {activeAccordion === 'scheduler' && (
             <div className="px-6 pb-6 pt-1 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <SchedulerPanel />
+            </div>
+          )}
+        </div>
+
+        {/* Section 5: Message Templates */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          <button 
+            onClick={() => setActiveAccordion(activeAccordion === 'templates' ? '' : 'templates')}
+            className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
+          >
+            <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
+              <MessageSquare size={15} className="text-indigo-500" />
+              <span>消息与通知模板管理 (Notification & Message Templates)</span>
+            </span>
+          </button>
+
+          {activeAccordion === 'templates' && (
+            <div className="px-6 pb-6 pt-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
+              <MessageTemplatesPanel />
             </div>
           )}
         </div>
