@@ -654,10 +654,30 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     
     setMediaProcessingIndex(index)
     try {
-      const res = await fetch(`/api/brands/${activeBrandId}/assets/${assetId}/design`, {
+      const imageUrls = attachedMedia
+        .map((m) => m.url)
+        .filter((u): u is string => Boolean(u))
+
+      const apiPath = actionType === 'video'
+        ? `/api/brands/${activeBrandId}/video-director`
+        : `/api/brands/${activeBrandId}/assets/${assetId}/design`
+
+      const payload = actionType === 'video'
+        ? {
+            prompt: mediaOpPrompt,
+            creativeHooks,
+            imageAssetIds: [assetId],
+            imageUrls,
+          }
+        : {
+            prompt: mediaOpPrompt,
+            action: actionType,
+          }
+
+      const res = await fetch(apiPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: mediaOpPrompt, action: actionType })
+        body: JSON.stringify(payload)
       })
 
       const data = await res.json()
@@ -677,7 +697,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         return next
       })
 
-      alert(actionType === 'video' ? 'AI 视频生成成功！已为您同步该视频。' : 'AI 修图优化成功！已为您更新该图片。')
+      alert(actionType === 'video' ? 'VideoDirector 图生视频成功！已为您同步该视频。' : 'AI 修图优化成功！已为您更新该图片。')
       setActiveMediaOp(null)
       setMediaOpPrompt('')
       // refresh assets
@@ -1051,10 +1071,27 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         throw new Error('未找到关联的品牌ID')
       }
 
-      const res = await fetch(`/api/brands/${targetBrandId}/assets/${mediaAssetId}/design`, {
+      const targetEvent = events.find(e => e.id === draftId)
+      const apiPath = actionType === 'video'
+        ? `/api/brands/${targetBrandId}/video-director`
+        : `/api/brands/${targetBrandId}/assets/${mediaAssetId}/design`
+
+      const payload = actionType === 'video'
+        ? {
+            prompt: designerPromptText,
+            creativeHooks,
+            imageAssetIds: [mediaAssetId],
+            imageUrls: targetEvent?.mediaUrls || [],
+          }
+        : {
+            prompt: designerPromptText,
+            action: actionType,
+          }
+
+      const res = await fetch(apiPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: designerPromptText, action: actionType })
+        body: JSON.stringify(payload)
       })
 
       const data = await res.json()
@@ -1079,7 +1116,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
         throw new Error(patchData.error || '关联新素材到排期失败')
       }
 
-      alert(actionType === 'video' ? 'Designer AI 操作成功！已成功利用 Veo3 生成短视频并同步到排期。' : 'Designer AI 操作成功！排期已自动同步全新设计的海报。')
+      alert(actionType === 'video' ? 'VideoDirector 操作成功！已完成图生视频并同步到排期。' : 'Designer AI 操作成功！排期已自动同步全新设计的海报。')
       
       const month = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`
       const query = new URLSearchParams({ month })
@@ -3662,10 +3699,10 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                             <div>
                               <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                                 <Zap className="w-3.5 h-3.5 text-purple-500" />
-                                <span>Designer AI 修改助手</span>
+                                <span>Designer AI / VideoDirector 助手</span>
                               </h4>
                               <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 leading-relaxed">
-                                对海报或视频封面进行智能修改（如：“调亮图片”、“添加‘店长推荐’促销标签”、“裁剪为 1:1” 等）。
+                                Designer 负责修图；VideoDirector 负责图生视频。可基于 1 张或多张图片，结合提示词与创意 hooks 自动完善 prompt 后生成视频。
                               </p>
                             </div>
 
@@ -3693,7 +3730,7 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
                                 className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 text-white py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs shadow-sm transition-all active:scale-[0.97] disabled:opacity-50"
                               >
                                 <Video className="w-3.5 h-3.5" />
-                                <span>{videoProcessing ? '生成中...' : '生成视频 (Veo3)'}</span>
+                                <span>{videoProcessing ? '生成中...' : 'VideoDirector 图生视频'}</span>
                               </button>
                             </div>
                           </div>
