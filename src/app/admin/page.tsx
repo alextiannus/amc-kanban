@@ -180,7 +180,10 @@ export default function AdminPage() {
     setLlmConfigsLoading(true)
     try {
       const res = await fetch('/api/admin/llm-configs')
-      if (res.ok) setLlmConfigs(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setLlmConfigs(data.configs || [])
+      }
     } catch (e) {
       console.error(e)
     } finally {

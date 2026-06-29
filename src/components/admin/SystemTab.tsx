@@ -75,7 +75,7 @@ export default function SystemTab({
   llmConfigsLoading,
   onFetchLLMConfigs
 }: SystemTabProps) {
-  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'ai' | 'smtp' | 'scheduler'>('llm')
+  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'ai' | 'smtp' | 'scheduler' | ''>('llm')
   
   // LLM Config inner states
   const [llmConfigModalOpen, setLlmConfigModalOpen] = useState(false)
@@ -247,7 +247,7 @@ export default function SystemTab({
         {/* Section 1: LLM configs */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
-            onClick={() => setActiveAccordion(activeAccordion === 'llm' ? 'llm' : 'llm')}
+            onClick={() => setActiveAccordion(activeAccordion === 'llm' ? '' : 'llm')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -343,7 +343,7 @@ export default function SystemTab({
         {/* Section 2: AI Keys */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
-            onClick={() => setActiveAccordion(activeAccordion === 'ai' ? 'ai' : 'ai')}
+            onClick={() => setActiveAccordion(activeAccordion === 'ai' ? '' : 'ai')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -426,7 +426,7 @@ export default function SystemTab({
         {/* Section 3: SMTP */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
-            onClick={() => setActiveAccordion(activeAccordion === 'smtp' ? 'smtp' : 'smtp')}
+            onClick={() => setActiveAccordion(activeAccordion === 'smtp' ? '' : 'smtp')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -451,7 +451,7 @@ export default function SystemTab({
         {/* Section 4: Cron Scheduler */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
-            onClick={() => setActiveAccordion(activeAccordion === 'scheduler' ? 'scheduler' : 'scheduler')}
+            onClick={() => setActiveAccordion(activeAccordion === 'scheduler' ? '' : 'scheduler')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
