@@ -738,5 +738,19 @@ RolePermission 表：
 - `docs/prd_amc.md`
 - `docs/design_invitation_system.md`
 
+---
+
+## Changelog v1.8.8 — 2026-06-30（通用裂变与独立营销优惠码系统设计）
+
+### 裂变与营销优惠码系统设计 (Universal Fission & Marketing Promo Code Module)
+- **通用裂变 (Universal Fission)**：支持所有用户角色（无论 Merchant、BD、Principal 还是 Admin）生成个人专属的 `inviteCode`，鼓励平台整体自裂变。
+- **独立营销优惠码 (Campaign Promo Codes)**：新增 `CampaignPromoCode` 表支持生成诸如 `SUMMER2026` 独立营销兑换码，包含最大使用限额、折扣比率 (百分比/固定金额)、有效期约束及所有权归属。
+- **特权管理面板**：为 Admin、Principal、BD 账户规划专属的 **“裂变与营销推广中心 (Fission & Promo Center)”**，实现营销推广码创建、启用/禁用和推荐业绩分析的可视化。
+
+### 影响文件
+- `prisma/schema.prisma`
+- `docs/prd_amc.md`
+- `docs/design_referral_campaign_system.md`
+
 
 
