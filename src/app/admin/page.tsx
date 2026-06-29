@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { 
   Shield, User, Bot, RefreshCw, Copy, Check, ArrowLeft, Users, Store, CreditCard, Sparkles, MessageSquare, Menu, Settings
 } from 'lucide-react'
@@ -23,12 +23,26 @@ interface InvitationResult {
 }
 
 export default function AdminPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-955 flex items-center justify-center text-xs text-slate-400 font-extrabold">
+        正在初始化系统设置...
+      </div>
+    }>
+      <AdminPageInner />
+    </Suspense>
+  )
+}
+
+function AdminPageInner() {
   const [users, setUsers] = useState<UserRecord[]>([])
   const [brands, setBrands] = useState<BrandRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [brandsLoading, setBrandsLoading] = useState(true)
-  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('users')
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>((tabParam as AdminTab) || 'users')
 
   // Modals state
   const [invitationData, setInvitationData] = useState<InvitationResult | null>(null)
@@ -202,6 +216,12 @@ export default function AdminPage() {
       void fetchLLMConfigs()
     })
   }, [])
+
+  useEffect(() => {
+    if (tabParam && ['users', 'brands', 'system', 'platform-ai'].includes(tabParam)) {
+      setActiveAdminTab(tabParam as AdminTab)
+    }
+  }, [tabParam])
 
   // User tab mutate API handlers
   const handleCreateUser = async (emailStr: string, typeStr: string, roleStr: string) => {

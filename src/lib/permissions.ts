@@ -147,6 +147,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
     groups.push({
       groupLabel: 'Admin',
       items: [
+        { id: 'user-management', view: 'dashboard', label: '用户管理', icon: 'Users', href: '/admin?tab=users' },
         { id: 'agents',  view: 'agents',  label: 'AI 序列',      icon: 'Bot' },
         { id: 'logs',    view: 'logs',    label: '工作日志',   icon: 'Activity' },
         { id: 'admin',   view: 'dashboard', label: 'Admin 控制台', icon: 'Shield', href: '/admin' },
