@@ -707,3 +707,18 @@ RolePermission 表：
 - `src/lib/permissions.ts`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.6 — 2026-06-30（数据驱动文案优化闭环：注入历史表现与品牌记忆）
+
+### 数据驱动文案优化闭环与品牌记忆注入 (Analytics-Driven Copy Optimization & Brand Memory Integration)
+- **数据流闭环打通**：将 `researcherNode` 收集并记录在 LangGraph 状态中的 `researchNotes` 成功注入至 `copywriterNode`。
+- **背景信息注入 Prompt**：
+  - **Stage 1 (Hook)**：AI Copywriter 生成点击率 Hook 时，显式地向大语言模型提供包含品牌联系方式、物理地址、历史高表现贴文数据与互动指标 (Impressions, Likes) 以及品牌文档与反馈历史记忆。
+  - **Stage 2 (Body & CTA)**：AI Copywriter 生成正文和 Action 按钮指引时，参考上述 `researchNotes` 爆款模版风格与品牌负向规避词，使生成的营销文案具备更高的业务精确度与历史策略继承性。
+
+### 影响文件
+- `src/agents/nodes/copywriter.ts`
+- `docs/prd_amc.md`
+
+

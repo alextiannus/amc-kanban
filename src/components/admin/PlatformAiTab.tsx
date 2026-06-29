@@ -60,6 +60,7 @@ export default function PlatformAiTab({
     driveFolder: '',
   })
   const [initializing, setInitializing] = useState(false)
+  const [showModelGuide, setShowModelGuide] = useState(false)
 
   // Find platform agents in the users list
   const getPlatformAgent = (email: string) => users.find(u => u.email === email && u.type === 'AI_AGENT')
@@ -144,6 +145,68 @@ export default function PlatformAiTab({
             <RefreshCw size={13} className={initializing ? 'animate-spin' : ''} />
             <span>{initializing ? '正在初始化...' : '一键注册平台AI'}</span>
           </button>
+        )}
+      </div>
+
+      {/* AI Model Recommendations Guide */}
+      <div className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 dark:from-slate-950/20 dark:to-indigo-950/10 rounded-2xl border border-blue-100 dark:border-slate-800 p-5 space-y-3.5 shadow-sm">
+        <div className="flex items-center justify-between">
+          <button 
+            onClick={() => setShowModelGuide(!showModelGuide)}
+            className="flex items-center gap-2 text-xs font-black text-blue-605 dark:text-blue-400 cursor-pointer hover:underline focus:outline-none"
+          >
+            <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-[11px] font-black">?</span>
+            <span>查看平台 AI 推荐模型选型与配置指南</span>
+          </button>
+        </div>
+        
+        {showModelGuide && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-1.5 text-xs text-slate-650 dark:text-slate-400 border-t border-blue-100/40 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
+            <div className="space-y-1.5">
+              <h5 className="font-black text-slate-850 dark:text-white flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                AMC Copywriter (文案策划)
+              </h5>
+              <p className="leading-relaxed">
+                <span className="font-bold text-slate-700 dark:text-slate-350">推荐模型：</span>
+                <code className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-[10px] text-indigo-600 dark:text-indigo-400 border border-slate-100 dark:border-slate-800">Claude 3.5 Sonnet</code> 或 
+                <code className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-[10px] text-indigo-600 dark:text-indigo-400 border border-slate-100 dark:border-slate-800 ml-1">DeepSeek-V3</code>
+              </p>
+              <p className="text-[11px] text-slate-450 dark:text-slate-500 leading-relaxed">
+                理由：文案工作需要极高的语义敏感度、恰当的排版布局，以及理解本地化方言和文化梗（如新加坡/小红书用语风格）。
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <h5 className="font-black text-slate-850 dark:text-white flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-pink-500"></span>
+                AMC Designer (视觉设计)
+              </h5>
+              <p className="leading-relaxed">
+                <span className="font-bold text-slate-700 dark:text-slate-350">推荐模型：</span>
+                <code className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-[10px] text-pink-600 dark:text-pink-400 border border-slate-100 dark:border-slate-800">Gemini 2.0 Flash</code> 或 
+                <code className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-[10px] text-pink-600 dark:text-pink-400 border border-slate-100 dark:border-slate-800 ml-1">GPT-4o</code>
+              </p>
+              <p className="text-[11px] text-slate-450 dark:text-slate-500 leading-relaxed">
+                理由：设计引擎依赖强大的多模态视觉感官。Gemini 在图像物体检测（如识别餐盘、杯子位置）和构图分析上拥有顶级表现。
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <h5 className="font-black text-slate-850 dark:text-white flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                AMC Researcher (商圈检索)
+              </h5>
+              <p className="leading-relaxed">
+                <span className="font-bold text-slate-700 dark:text-slate-350">推荐模型：</span>
+                <code className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber-600 dark:text-amber-400 border border-slate-100 dark:border-slate-800">Gemini 2.0 Flash</code> 或 
+                <code className="bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded font-mono text-[10px] text-amber-600 dark:text-amber-400 border border-slate-100 dark:border-slate-800 ml-1">GPT-4o-mini</code>
+              </p>
+              <p className="text-[11px] text-slate-450 dark:text-slate-500 leading-relaxed">
+                理由：检索任务偏重于高效提取外部搜索工具返回的信息，要求高响应吞吐速度与优秀的摘要整合能力。
+              </p>
+            </div>
+          </div>
         )}
       </div>
 

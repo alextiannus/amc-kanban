@@ -191,6 +191,11 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
     refinementPromptText = `\n--- REFINEMENT REQUEST ---\nYour previous generated caption failed compliance checks with the following reason:\n"${state.complianceReason}"\n\nPrevious Caption: "${state.caption}"\n\nYou MUST rewrite the caption, strictly avoiding the violation. Fix any superlative or Halal violations directly while preserving the marketing message.\n`;
   }
 
+  let formattedResearchNotes = "";
+  if (researchNotes) {
+    formattedResearchNotes = `\n--- BRAND HISTORICAL ANALYTICS & OPERATIONAL MEMORY (RESEARCH NOTES) ---\n${researchNotes}\n`;
+  }
+
   let aiCaption = "";
   let aiHashtags: string[] = [];
   let geminiUsed = false;
@@ -214,6 +219,7 @@ ${slangText}
 ${negativePromptText}
 ${fewShotText}
 ${refinementPromptText}
+${formattedResearchNotes}
 
 Goal: Generate 3 different engaging hook variants (opening lines/titles) optimized for "${platform}".
 CRITICAL REQUIREMENT:
@@ -239,7 +245,8 @@ Rules:
      * You MUST naturally integrate these location/address/neighborhood details into the hook variants (e.g. including Singapore neighborhood name, landmark, or specific store name).
      * Align the hooks closely with these visual assets.
 4. STRICT Negative prompt: Avoid weird hooks starting with clichés like "Discover the secrets...", "The best...", "The most...", "The top...". Do not use cringy or over-the-top AI language.
-5. Output your response as a JSON array of strings:
+5. Utilize the historical analytics and top-performing posts in the Research Notes (if provided) to guide your hook structure. Emulate hooks that received high impressions and engagement.
+6. Output your response as a JSON array of strings:
    ["Hook 1", "Hook 2", "Hook 3"]
 Please output ONLY a valid JSON array of strings.`;
 
@@ -289,6 +296,7 @@ ${slangText}
 ${negativePromptText}
 ${fewShotText}
 ${refinementPromptText}
+${formattedResearchNotes}
 
 Here is the approved Hook (opening line/title) generated for this post:
 "${selectedHook}"
@@ -334,6 +342,7 @@ Guidelines:
      * Hashtags: Output hashtags neatly at the bottom.
    - For Google Business Profile (Note: MUST generate in English):
      * Professional, concise, focus on booking details, contact info, and clear promotion terms.
+6. Reference and utilize the Research Notes (historical top-performing posts, brand documents, and memory feedback logs) to maintain style consistency and avoid past mistakes.
 5. Output your response in JSON format with two keys:
    "caption": The complete post caption (string)
    "hashtags": An array of hashtags (array of strings, without the '#' symbol)
