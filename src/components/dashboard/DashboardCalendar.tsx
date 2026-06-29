@@ -232,9 +232,11 @@ interface CalendarEvent {
 
 interface DashboardCalendarProps {
   brandId?: string
+  preselectedAssetIds?: string[] | null
+  clearPreselectedAssets?: () => void
 }
 
-export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
+export default function DashboardCalendar({ brandId, preselectedAssetIds, clearPreselectedAssets }: DashboardCalendarProps) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
@@ -621,6 +623,43 @@ export default function DashboardCalendar({ brandId }: DashboardCalendarProps) {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [lightboxIndex, filteredAssets.length])
+
+  useEffect(() => {
+    if (preselectedAssetIds && preselectedAssetIds.length > 0 && brandAssets.length > 0 && accounts.length > 0) {
+      const mappedAssets = preselectedAssetIds
+        .map((id) => {
+          const found = brandAssets.find((a) => a.id === id)
+          return found ? { id: found.id, type: 'asset' as const, url: found.url } : null
+        })
+        .filter((a): a is { id: string; type: 'asset'; url: string } => !!a)
+
+      if (mappedAssets.length > 0) {
+        setIsCreatingPost(true)
+        setCaption('')
+        setContentIdea('')
+        setCreativeHooks('')
+        setHashtags('')
+
+        const hasRed = accounts.some((a) => ['red', 'xiaohongshu', 'xhs'].includes(String(a.platformId || '').toLowerCase()))
+        const initialSelected = accounts.map((a) => a.id)
+        if (!hasRed) {
+          initialSelected.push('unconfigured_red')
+        }
+        setSelectedAccountIds(initialSelected)
+        setScheduledAt('')
+        setAgentNote('')
+        setAttachedMedia(mappedAssets)
+        setNewUrlInput('')
+        setCreatedDrafts(null)
+        setIsAiGenerating(false)
+        setDraftCaptions({})
+        setDraftHashtags({})
+        setDraftStatuses({})
+      }
+
+      clearPreselectedAssets?.()
+    }
+  }, [preselectedAssetIds, brandAssets, accounts, clearPreselectedAssets])
 
   // API triggers
   const triggerCopywriter = async (draftId: string, silent = false) => {

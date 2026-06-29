@@ -82,6 +82,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   
   // Navigation State
   const [currentView, setCurrentView] = useState<BoardView>(initialView)
+  const [preselectedAssetIds, setPreselectedAssetIds] = useState<string[] | null>(null)
 
   useEffect(() => {
     if (initialView === 'dashboard') {
@@ -321,7 +322,12 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
         </div>
       ) : currentView === 'calendar' ? (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
-          <DashboardCalendar key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} />
+          <DashboardCalendar
+            key={activeBrand?.id ?? 'no-brand'}
+            brandId={activeBrand?.id}
+            preselectedAssetIds={preselectedAssetIds}
+            clearPreselectedAssets={() => setPreselectedAssetIds(null)}
+          />
         </div>
       ) : currentView === 'socialInsight' ? (
         <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
@@ -350,7 +356,10 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
           <DashboardAssets
             key={activeBrand?.id ?? 'no-brand'}
             brandId={activeBrand?.id}
-            onNavigateToCalendar={(_assetIds) => setCurrentView('calendar')}
+            onNavigateToCalendar={(assetIds) => {
+              setPreselectedAssetIds(assetIds)
+              setCurrentView('calendar')
+            }}
           />
         </div>
       ) : currentView === 'dataAnalysis' ? (
