@@ -115,5 +115,30 @@ Following alignment on LLM Ops lifecycle, the system will implement the followin
   - **DPO (Direct Preference Optimization)**: Posts with >20% human edit differences are paired as chosen vs. rejected.
 - **JSONL Export**: Expose standard ChatML format dataset generation and packaging under the "Platform AI & Learning" panel, enabling downstream offline fine-tuning pipelines.
 
+---
+
+## 7. Next-Phase System Evolutions (下阶段系统演进规划)
+
+To continue the evolution of the AI Agent Marketing platform, the following three core capabilities are planned for the next development cycle:
+
+### Feature 7: Advanced Dashboard Analytics (高级数据分析可视化)
+- **Objective**: Enhance the `/dashboard/analytics` view to display multi-dimensional charts (engagement metrics, impressions, likes, clicks, shares) pulled from the PostFast analytics APIs.
+- **Scope**:
+  - Implement interactive graphs (line, bar, pie charts) in Vanilla React or Recharts.
+  - Support brand-specific data filtering and timezone alignment for merchant dashboards.
+
+### Feature 8: AI Companion & Writer SFT Fine-Tuning (专属模型离线微调实战)
+- **Objective**: Leverage the curated ChatML-JSONL datasets (SFT/DPO) generated from the platform's user correction loops to run downstream offline fine-tuning.
+- **Scope**:
+  - Conduct supervised fine-tuning (SFT) on open-weight LLMs (e.g. Qwen/GLM/Llama) using the exported dataset.
+  - Deploy and connect the fine-tuned model back into the system router (`llmRouter.ts`) to provide highly consistent, brand-adapted copywriting.
+
+### Feature 9: Video Director Quality Loop (视频生成与自动化编导分镜)
+- **Objective**: Develop a dedicated `videoDirectorNode` in the LangGraph workflow based on `video_director_quality_loop_prd.md`.
+- **Scope**:
+  - Allow the AI to construct detailed storyboard division guidelines (分镜头大纲脚本).
+  - Automate stitching and overlaying visual frames into actual marketing video assets, incorporating background music and dynamic typography.
+
+
 
 
