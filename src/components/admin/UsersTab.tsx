@@ -2,8 +2,10 @@
 
 import React, { useState } from 'react'
 import {
-  User, Shield, Store, Users, Edit3, RefreshCw, Trash2, Check, Copy, Plus, Search
+  User, Shield, Store, Users, Edit3, RefreshCw, Trash2, Check, Copy, Plus, Search,
+  Bot, Info, Settings, Link, FolderOpen, Save
 } from 'lucide-react'
+import { type AssignmentPoolMember } from '@/components/shared/types'
 
 export interface UserRecord {
   id: string
@@ -37,9 +39,19 @@ interface UsersTabProps {
   onResetPassword: (user: UserRecord) => Promise<void>
   onDeleteUser: (user: UserRecord) => Promise<void>
   onEditUser: (user: { id: string; email: string; nickname: string | null; role: string; type: string }) => void
-  allAgents: UserRecord[]
   onSavePermissions: (humanId: string, agentIds: string[]) => Promise<void>
   savingPerms: boolean
+
+  // AI Agent specific props
+  poolMembers: AssignmentPoolMember[]
+  poolDrafts: Record<string, { capacity: number; priority: number; industries: string; regions: string }>
+  onUpdatePoolDraft: (agentId: string, patch: any) => void
+  onPatchPoolMember: (member: AssignmentPoolMember, patch: any) => Promise<void>
+  onDeletePoolMember: (member: AssignmentPoolMember) => Promise<void>
+  onCreatePoolMember: (agent: UserRecord) => Promise<void>
+  onSaveAgentPrincipals: (agentId: string, humanIds: string[]) => Promise<void>
+  onSaveAgentDraft: (agentId: string, draft: any) => Promise<boolean>
+  onFetchUsers: () => Promise<void>
 }
 
 export default function UsersTab({
@@ -53,25 +65,65 @@ export default function UsersTab({
   onResetPassword,
   onDeleteUser,
   onEditUser,
-  allAgents,
   onSavePermissions,
-  savingPerms
+  savingPerms,
+  poolMembers,
+  poolDrafts,
+  onUpdatePoolDraft,
+  onPatchPoolMember,
+  onDeletePoolMember,
+  onCreatePoolMember,
+  onSaveAgentPrincipals,
+  onSaveAgentDraft,
+  onFetchUsers
 }: UsersTabProps) {
+  const [subTab, setSubTab] = useState<'humans' | 'agents'>('humans')
   const [searchTerm, setSearchTerm] = useState('')
   const [email, setEmail] = useState('')
   const [type, setType] = useState('HUMAN')
   const [role, setRole] = useState('USER')
   
-  // Permissions Modal state
+  // Humans Permissions Modal state
   const [selectedHuman, setSelectedHuman] = useState<UserRecord | null>(null)
   const [assignedAgentIds, setAssignedAgentIds] = useState<string[]>([])
 
+  // AI Agents Editing state
+  const [editingAgent, setEditingAgent] = useState<UserRecord | null>(null)
+  const [agentDraft, setAgentDraft] = useState({
+    email: '',
+    nickname: '',
+    insights: '',
+    introduction: '',
+    workflow: '',
+    themeColor: '',
+    chatLink: '',
+    driveFolder: '',
+  })
+
+  // AI Agents Principal Selection state
+  const [selectedAgent, setSelectedAgent] = useState<UserRecord | null>(null)
+  const [selectedAgentHumanIds, setSelectedAgentHumanIds] = useState<string[]>([])
+
   const humans = users.filter(u => u.type === 'HUMAN')
-  
+  const agents = users.filter(u => u.type === 'AI_AGENT')
+
   const filteredHumans = humans.filter(u => 
     u.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (u.nickname && u.nickname.toLowerCase().includes(searchTerm.toLowerCase()))
   )
+
+  const filteredAgents = agents.filter(u => 
+    u.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (u.nickname && u.nickname.toLowerCase().includes(searchTerm.toLowerCase()))
+  )
+
+  const poolMemberForAgent = (agentId: string) => poolMembers.find(member => member.agentId === agentId)
+
+  const uniqueBrandsFromAgentLinks = (links: { brand: { id: string; name: string; status: string } }[] = []) => {
+    const map = new Map<string, { id: string; name: string; status: string }>()
+    for (const link of links) map.set(link.brand.id, link.brand)
+    return Array.from(map.values())
+  }
 
   const uniqueBrandsFromPermittedAgents = (links: UserRecord['permittedAgents']) => {
     const map = new Map<string, { id: string; name: string; status: string }>()
@@ -103,7 +155,7 @@ export default function UsersTab({
     return (
       <div className="flex flex-wrap gap-1">
         {user.role === 'ADMIN' && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-650 dark:text-indigo-455 border border-indigo-100 dark:border-indigo-800/50">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-650 dark:text-indigo-405 border border-indigo-100 dark:border-indigo-800/50">
             <Shield size={10} /> System Admin
           </span>
         )}
@@ -138,198 +190,397 @@ export default function UsersTab({
     setAssignedAgentIds(user.permittedAgents.map(pa => pa.agent.id))
   }
 
+  const handleOpenAgentEditor = (agent: UserRecord) => {
+    setEditingAgent(agent)
+    setAgentDraft({
+      email: agent.email,
+      nickname: agent.nickname || '',
+      insights: agent.insights || '',
+      introduction: agent.introduction || '',
+      workflow: agent.workflow || '',
+      themeColor: agent.themeColor || '',
+      chatLink: agent.chatLink || '',
+      driveFolder: agent.driveFolder || '',
+    })
+  }
+
+  const handleOpenAgentPrincipals = (agent: UserRecord) => {
+    setSelectedAgent(agent)
+    setSelectedAgentHumanIds(agent.assignedToHumans.map(link => link.human.id))
+  }
+
+  const handleSaveAgentDraftLocal = async () => {
+    if (!editingAgent) return
+    const success = await onSaveAgentDraft(editingAgent.id, agentDraft)
+    if (success) {
+      setEditingAgent(null)
+    }
+  }
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200">
-      {/* Left: Create Form */}
-      <div className="lg:col-span-1">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm sticky top-6">
-          <h2 className="text-sm font-black text-slate-850 dark:text-slate-100 mb-4 flex items-center gap-2">
-            <Plus size={16} className="text-blue-500" /> 新建用户
+    <div className="space-y-6 animate-in fade-in duration-200">
+      {/* Module Title */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+            <Users size={18} className="text-blue-500" /> 用户与权限管理中心 (User & Permissions console)
           </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">账号类型</label>
-              <select value={type} onChange={e => setType(e.target.value)} className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                <option value="HUMAN">人类用户</option>
-                <option value="AI_AGENT">AI Agent</option>
-              </select>
-            </div>
-            {type === 'HUMAN' && (
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">人类账号角色</label>
-                <select value={role} onChange={e => setRole(e.target.value)} className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                  <option value="USER">USER（无系统管理权限）</option>
-                  <option value="ADMIN">ADMIN（System Admin 权限）</option>
-                </select>
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">邮箱地址</label>
-              <input 
-                type="email" 
-                required 
-                value={email} 
-                onChange={e => setEmail(e.target.value)} 
-                placeholder="user@example.com" 
-                className="w-full border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" 
-              />
-            </div>
-            <button type="submit" disabled={creating} className="w-full bg-blue-650 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm">
-              {creating ? '创建中...' : '创建并生成邀请链接'}
-            </button>
-          </form>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            在此创建新账号（人类用户与 AI Agent），配置系统管理员权限与业务角色，设置 AMC 主理人对 AI 序列的托管运营授权。
+          </p>
         </div>
+        <button 
+          onClick={onFetchUsers} 
+          className="inline-flex items-center gap-1.5 px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-350 bg-slate-55 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750 transition-all cursor-pointer"
+        >
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          <span>刷新用户数据</span>
+        </button>
       </div>
 
-      {/* Right: User Lists */}
-      <div className="lg:col-span-2 space-y-4">
-        {/* Search Header */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex items-center justify-between gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="搜索用户邮箱或昵称..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-sm rounded-xl pl-9 pr-4 py-2 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-all"
-            />
+      {/* Sub-tab Switcher Segment */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800 gap-2">
+        <button
+          onClick={() => { setSubTab('humans'); setSearchTerm('') }}
+          className={`px-4 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            subTab === 'humans'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-850 dark:hover:text-slate-200'
+          }`}
+        >
+          <User size={14} />
+          <span>人类账号与运营权限 ({humans.length})</span>
+        </button>
+        <button
+          onClick={() => { setSubTab('agents'); setSearchTerm('') }}
+          className={`px-4 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            subTab === 'agents'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-500 hover:text-slate-850 dark:hover:text-slate-200'
+          }`}
+        >
+          <Bot size={14} />
+          <span>AI 序列与 Prompt 人设 ({agents.length})</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Create Form (Shared between both sub-tabs) */}
+        <div className="lg:col-span-1">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm sticky top-6">
+            <h2 className="text-sm font-black text-slate-850 dark:text-slate-100 mb-4 flex items-center gap-2">
+              <Plus size={16} className="text-blue-500" />
+              <span>新建 {subTab === 'humans' ? '人类账号' : 'AI Agent'}</span>
+            </h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">账号类型</label>
+                <select 
+                  value={type} 
+                  onChange={e => {
+                    setType(e.target.value)
+                    if (e.target.value === 'AI_AGENT') setRole('USER')
+                  }} 
+                  className="w-full border border-slate-200 dark:border-slate-700 bg-slate-55 dark:bg-slate-850 dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="HUMAN">人类用户 (HUMAN)</option>
+                  <option value="AI_AGENT">AI Agent (智能体)</option>
+                </select>
+              </div>
+              {type === 'HUMAN' && (
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">人类账号角色</label>
+                  <select value={role} onChange={e => setRole(e.target.value)} className="w-full border border-slate-200 dark:border-slate-700 bg-slate-55 dark:bg-slate-850 dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                    <option value="USER">USER（普通运营账号）</option>
+                    <option value="ADMIN">ADMIN（System Admin 系统管理）</option>
+                  </select>
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">邮箱地址</label>
+                <input 
+                  type="email" 
+                  required 
+                  value={email} 
+                  onChange={e => setEmail(e.target.value)} 
+                  placeholder={type === 'HUMAN' ? "user@example.com" : "agent.name@amc.ai"} 
+                  className="w-full border border-slate-200 dark:border-slate-700 bg-slate-55 dark:bg-slate-850 dark:text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20" 
+                />
+              </div>
+              <button type="submit" disabled={creating} className="w-full bg-blue-650 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm cursor-pointer">
+                {creating ? '创建中...' : '确认创建并生成登录凭证'}
+              </button>
+            </form>
           </div>
-          <span className="text-xs text-slate-400 font-bold flex-shrink-0">
-            共 {humans.length} 人
-          </span>
         </div>
 
-        {/* User Card List */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/50">
-            <User size={15} className="text-slate-500" />
-            <span className="text-sm font-black text-slate-800 dark:text-slate-100">人类用户列表</span>
+        {/* Right Content Area */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Search Header */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm flex items-center justify-between gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder={subTab === 'humans' ? "搜索人类用户邮箱或昵称..." : "搜索 AI 员工邮箱或人设名称..."}
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-700 text-sm rounded-xl pl-9 pr-4 py-2 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-all"
+              />
+            </div>
+            <span className="text-xs text-slate-400 font-bold flex-shrink-0">
+              已筛选: {subTab === 'humans' ? filteredHumans.length : filteredAgents.length} 个记录
+            </span>
           </div>
 
-          {loading ? (
-            <div className="p-12 text-center text-sm text-slate-450">
-              <RefreshCw className="animate-spin inline-block mr-2 text-slate-400" size={16} />
-              加载用户列表中...
-            </div>
-          ) : filteredHumans.length === 0 ? (
-            <div className="p-12 text-center text-sm text-slate-450">
-              没有找到符合条件的人类用户
-            </div>
-          ) : (
-            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredHumans.map(user => {
-                const derivedBrands = uniqueBrandsFromPermittedAgents(user.permittedAgents)
-                const ownedBrands = uniqueBrandsFromOwnerLinks([...(user.ownedBrands || []), ...(user.legacyOwnedBrands || [])])
-                return (
-                  <li key={user.id} className="px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/30 dark:hover:bg-slate-850/20 transition-all">
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <span className="text-sm font-black text-slate-800 dark:text-slate-100 truncate">{user.email}</span>
-                        {user.nickname && (
-                          <span className="text-xs text-slate-400 font-medium">({user.nickname})</span>
-                        )}
-                        <UserClassificationBadges user={user} />
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-normal">
-                        注册时间：{new Date(user.createdAt).toLocaleDateString('zh-CN')}
-                      </p>
-                      <div className="space-y-0.5 pt-1 text-[11px] text-slate-500 dark:text-slate-450">
-                        <p className="truncate">
-                          <span className="text-slate-400">拥有品牌：</span>
-                          {formatBrandNames(ownedBrands)}
-                        </p>
-                        <p className="truncate">
-                          <span className="text-slate-400">运营范围：</span>
-                          {formatBrandNames(derivedBrands)}
-                        </p>
-                        <p className="truncate">
-                          <span className="text-slate-400">授权 AI 序列：</span>
-                          {user.permittedAgents.length > 0 
-                            ? user.permittedAgents.map(pa => pa.agent.nickname || pa.agent.email).join('、')
-                            : '暂无'
-                          }
-                        </p>
-                      </div>
-                    </div>
+          {/* Sub-tab 1: Humans List */}
+          {subTab === 'humans' && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+                <User size={15} className="text-slate-550" />
+                <span className="text-sm font-black text-slate-800 dark:text-slate-100">人类账号运营列表</span>
+              </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap md:flex-nowrap">
-                      <button 
-                        onClick={() => handleOpenPermissions(user)} 
-                        className="px-2.5 py-1.5 text-[11px] font-extrabold rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-650 dark:text-slate-350 transition-all border border-slate-200/50 dark:border-slate-700/50"
-                      >
-                        运营权限
-                      </button>
-                      <button 
-                        onClick={() => onToggleBusinessRole(user, 'BRAND_OWNER')} 
-                        disabled={!!actionLoading[user.id + '_biz']} 
-                        className="px-2.5 py-1.5 text-[11px] font-extrabold rounded-xl bg-blue-50/50 hover:bg-blue-50 dark:bg-blue-950/20 dark:hover:bg-blue-950/40 text-blue-600 dark:text-blue-450 transition-all border border-blue-100/50 dark:border-blue-900/30 disabled:opacity-50"
-                      >
-                        {(user.businessRoles || []).some((item) => item.role === 'BRAND_OWNER') ? '降级 Owner' : '设为 Owner'}
-                      </button>
-                      <button 
-                        onClick={() => onToggleBusinessRole(user, 'AMC_PRINCIPAL')} 
-                        disabled={!!actionLoading[user.id + '_biz']} 
-                        className="px-2.5 py-1.5 text-[11px] font-extrabold rounded-xl bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-600 dark:text-emerald-455 transition-all border border-emerald-100/50 dark:border-emerald-900/30 disabled:opacity-50"
-                      >
-                        {(user.businessRoles || []).some((item) => item.role === 'AMC_PRINCIPAL') ? '降级 Principal' : '设为 Principal'}
-                      </button>
-                      <button 
-                        onClick={() => onRoleToggle(user)} 
-                        disabled={!!actionLoading[user.id + '_role']} 
-                        className="px-2.5 py-1.5 text-[11px] font-extrabold rounded-xl bg-indigo-50/50 hover:bg-indigo-50 dark:bg-indigo-950/20 dark:hover:bg-indigo-950/40 text-indigo-600 dark:text-indigo-450 transition-all border border-indigo-100/50 dark:border-indigo-900/30 disabled:opacity-50"
-                      >
-                        {actionLoading[user.id + '_role'] ? '...' : user.role === 'ADMIN' ? '降级 Admin' : '设为 Admin'}
-                      </button>
-                      <div className="flex items-center gap-1 border-l border-slate-100 dark:border-slate-800 pl-1.5 ml-1">
-                        <button 
-                          onClick={() => onEditUser({ id: user.id, email: user.email, nickname: user.nickname, role: user.role, type: user.type })} 
-                          title="编辑用户信息" 
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button 
-                          onClick={() => onResetPassword(user)} 
-                          disabled={!!actionLoading[user.id + '_reset']} 
-                          title="重置密码" 
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-all disabled:opacity-50"
-                        >
-                          <RefreshCw size={14} className={actionLoading[user.id + '_reset'] ? 'animate-spin' : ''} />
-                        </button>
-                        <button 
-                          onClick={() => onDeleteUser(user)} 
-                          disabled={!!actionLoading[user.id + '_del']} 
-                          title="删除" 
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all disabled:opacity-50"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+              {loading ? (
+                <div className="p-12 text-center text-sm text-slate-450">
+                  <RefreshCw className="animate-spin inline-block mr-2 text-slate-400" size={16} />
+                  加载用户列表中...
+                </div>
+              ) : filteredHumans.length === 0 ? (
+                <div className="p-12 text-center text-sm text-slate-450">
+                  没有找到符合条件的人类用户
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredHumans.map(user => {
+                    const derivedBrands = uniqueBrandsFromPermittedAgents(user.permittedAgents)
+                    const ownedBrands = uniqueBrandsFromOwnerLinks([...(user.ownedBrands || []), ...(user.legacyOwnedBrands || [])])
+                    return (
+                      <li key={user.id} className="px-6 py-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4 hover:bg-slate-50/30 dark:hover:bg-slate-850/20 transition-all">
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span className="text-sm font-black text-slate-800 dark:text-slate-100 truncate">{user.email}</span>
+                            {user.nickname && (
+                              <span className="text-xs text-slate-400 font-medium">({user.nickname})</span>
+                            )}
+                            <UserClassificationBadges user={user} />
+                          </div>
+                          <p className="text-[11px] text-slate-400 leading-normal">
+                            注册时间：{new Date(user.createdAt).toLocaleDateString('zh-CN')}
+                          </p>
+                          <div className="space-y-0.5 pt-1 text-[11px] text-slate-500 dark:text-slate-450 font-medium">
+                            <p className="truncate">
+                              <span className="text-slate-400 font-bold">拥有品牌：</span>
+                              {formatBrandNames(ownedBrands)}
+                            </p>
+                            <p className="truncate">
+                              <span className="text-slate-400 font-bold">代理运营：</span>
+                              {formatBrandNames(derivedBrands)}
+                            </p>
+                            <p className="truncate">
+                              <span className="text-slate-400 font-bold">授权可控 AI 员工：</span>
+                              {user.permittedAgents.length > 0 
+                                ? user.permittedAgents.map(pa => pa.agent.nickname || pa.agent.email).join('、')
+                                : '暂无'
+                              }
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button 
+                            onClick={() => handleOpenPermissions(user)} 
+                            className="px-2.5 py-1.5 text-[11px] font-extrabold rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-650 dark:text-slate-350 transition-all border border-slate-200/50 dark:border-slate-700/50 cursor-pointer"
+                          >
+                            授权 AI 员工
+                          </button>
+                          <button 
+                            onClick={() => onToggleBusinessRole(user, 'BRAND_OWNER')} 
+                            disabled={!!actionLoading[user.id + '_biz']} 
+                            className="px-2.5 py-1.5 text-[11px] font-extrabold rounded-xl bg-blue-50/50 hover:bg-blue-50 dark:bg-blue-950/20 dark:hover:bg-blue-950/40 text-blue-600 dark:text-blue-455 transition-all border border-blue-100/50 dark:border-blue-900/30 disabled:opacity-50 cursor-pointer"
+                          >
+                            {(user.businessRoles || []).some((item) => item.role === 'BRAND_OWNER') ? '降级 Owner' : '设为 Owner'}
+                          </button>
+                          <button 
+                            onClick={() => onToggleBusinessRole(user, 'AMC_PRINCIPAL')} 
+                            disabled={!!actionLoading[user.id + '_biz']} 
+                            className="px-2.5 py-1.5 text-[11px] font-extrabold rounded-xl bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-600 dark:text-emerald-455 transition-all border border-emerald-100/50 dark:border-emerald-900/30 disabled:opacity-50 cursor-pointer"
+                          >
+                            {(user.businessRoles || []).some((item) => item.role === 'AMC_PRINCIPAL') ? '降级 Principal' : '设为 Principal'}
+                          </button>
+                          <button 
+                            onClick={() => onRoleToggle(user)} 
+                            disabled={!!actionLoading[user.id + '_role']} 
+                            className="px-2.5 py-1.5 text-[11px] font-extrabold rounded-xl bg-indigo-50/50 hover:bg-indigo-50 dark:bg-indigo-950/20 dark:hover:bg-indigo-950/40 text-indigo-600 dark:text-indigo-450 transition-all border border-indigo-100/50 dark:border-indigo-900/30 disabled:opacity-50 cursor-pointer"
+                          >
+                            {actionLoading[user.id + '_role'] ? '...' : user.role === 'ADMIN' ? '降级 Admin' : '设为 Admin'}
+                          </button>
+                          
+                          <div className="flex items-center gap-1 border-l border-slate-100 dark:border-slate-805 pl-2 ml-1">
+                            <button 
+                              onClick={() => onEditUser({ id: user.id, email: user.email, nickname: user.nickname, role: user.role, type: user.type })} 
+                              title="编辑信息" 
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all cursor-pointer"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button 
+                              onClick={() => onResetPassword(user)} 
+                              disabled={!!actionLoading[user.id + '_reset']} 
+                              title="重置密码" 
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-all disabled:opacity-50 cursor-pointer"
+                            >
+                              <RefreshCw size={14} className={actionLoading[user.id + '_reset'] ? 'animate-spin' : ''} />
+                            </button>
+                            <button 
+                              onClick={() => onDeleteUser(user)} 
+                              disabled={!!actionLoading[user.id + '_del']} 
+                              title="删除" 
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all disabled:opacity-50 cursor-pointer"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Sub-tab 2: AI Agents List */}
+          {subTab === 'agents' && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+                <Bot size={15} className="text-slate-550" />
+                <span className="text-sm font-black text-slate-800 dark:text-slate-100">AI 智能代工序列人设</span>
+              </div>
+
+              {loading ? (
+                <div className="p-12 text-center text-sm text-slate-450">
+                  <RefreshCw className="animate-spin inline-block mr-2 text-slate-400" size={16} />
+                  加载 AI 员工中...
+                </div>
+              ) : filteredAgents.length === 0 ? (
+                <div className="p-12 text-center text-sm text-slate-450">
+                  没有找到符合条件的 AI Agent 员工
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {filteredAgents.map(agent => {
+                    const member = poolMemberForAgent(agent.id)
+                    const operatingBrands = uniqueBrandsFromAgentLinks(agent.brandMemberships)
+                    const isDeleting = !!actionLoading[agent.id + '_del']
+
+                    return (
+                      <li key={agent.id} className="px-6 py-4 space-y-4 hover:bg-slate-50/30 dark:hover:bg-slate-850/20 transition-all">
+                        {/* Agent Main Card Info */}
+                        <div className="flex items-start gap-4 flex-col sm:flex-row justify-between">
+                          <div className="flex items-start gap-3.5">
+                            <div 
+                              className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-inner"
+                              style={{ backgroundColor: agent.themeColor || '#6366f1' }}
+                            >
+                              <Bot size={18} className="text-white" />
+                            </div>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="text-sm font-black text-slate-850 dark:text-white leading-none">{agent.nickname || '未命名 Agent'}</h4>
+                                {member && (
+                                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450 border border-emerald-100 dark:border-emerald-900/30">
+                                    分派池在线: {member.currentLoad}/{member.capacity} 负载
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-400 font-mono leading-none">{agent.email}</p>
+                              <div className="space-y-0.5 pt-1 text-[11px] text-slate-500 dark:text-slate-450 font-medium">
+                                <p>
+                                  <span className="text-slate-400 font-bold">负责主理人 (Humans):</span>{' '}
+                                  {agent.assignedToHumans.length 
+                                    ? agent.assignedToHumans.map(link => link.human.nickname || link.human.email).join('、') 
+                                    : '未指定'
+                                  }
+                                </p>
+                                <p>
+                                  <span className="text-slate-400 font-bold">负责运营品牌:</span>{' '}
+                                  {formatBrandNames(operatingBrands)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 self-end sm:self-auto pl-13 sm:pl-0">
+                            <button 
+                              onClick={() => handleOpenAgentEditor(agent)} 
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] font-extrabold text-slate-700 dark:text-slate-350 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                              title="配置执行工作流与人设"
+                            >
+                              <Edit3 size={12} className="text-indigo-500" />
+                              <span>配置工作流</span>
+                            </button>
+                            <button 
+                              onClick={() => handleOpenAgentPrincipals(agent)} 
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] font-extrabold text-slate-700 dark:text-slate-350 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                              title="授权关联人类"
+                            >
+                              <Users size={12} className="text-emerald-505" />
+                              <span>指派人类</span>
+                            </button>
+                            <button 
+                              onClick={() => onDeleteUser(agent)} 
+                              disabled={isDeleting} 
+                              className="p-2 border border-rose-250 dark:border-rose-900/50 rounded-xl text-rose-600 dark:text-rose-400 bg-white hover:bg-rose-50 dark:bg-slate-900 dark:hover:bg-rose-950/20 transition-all disabled:opacity-50 cursor-pointer"
+                              title="删除 AI 员工"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Workflow summary previews */}
+                        {(agent.introduction || agent.workflow) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] pl-13">
+                            {agent.introduction && (
+                              <div className="bg-slate-50/50 dark:bg-slate-950/20 border border-slate-150/60 dark:border-slate-850/80 p-3 rounded-xl space-y-1">
+                                <p className="font-extrabold text-slate-400 flex items-center gap-1"><Info size={11} /> 角色设定 (Intro)</p>
+                                <p className="text-slate-650 dark:text-slate-400 leading-relaxed line-clamp-2 whitespace-pre-wrap">{agent.introduction}</p>
+                              </div>
+                            )}
+                            {agent.workflow && (
+                              <div className="bg-slate-50/50 dark:bg-slate-950/20 border border-slate-150/60 dark:border-slate-850/80 p-3 rounded-xl space-y-1">
+                                <p className="font-extrabold text-slate-400 flex items-center gap-1"><Settings size={11} /> 工作执行流 (Workflow)</p>
+                                <p className="text-slate-650 dark:text-slate-400 leading-relaxed line-clamp-2 whitespace-pre-wrap">{agent.workflow}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
           )}
         </div>
       </div>
 
-      {/* Permissions Modal */}
+      {/* Humans: Control AI permissions Modal */}
       {selectedHuman && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl p-6 space-y-4 border border-slate-150 dark:border-slate-850">
             <div>
-              <h2 className="text-base font-black text-slate-900 dark:text-white">配置 AI 代理人授权权限</h2>
+              <h2 className="text-base font-black text-slate-900 dark:text-white">配置 AI 代理人控制权限</h2>
               <p className="text-xs text-slate-400 mt-1">设置人类用户 <b>{selectedHuman.email}</b> 可以查看和下发指令的 AI 员工范围：</p>
             </div>
             
             <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-100 dark:border-slate-800 rounded-xl p-3 scrollbar-thin">
-              {allAgents.length === 0 ? (
+              {agents.length === 0 ? (
                 <p className="text-xs text-slate-400 py-4 text-center">暂无可用 AI Agent，请先在 AI 序列配置中创建</p>
               ) : (
-                allAgents.map(agent => (
-                  <label key={agent.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-all">
+                agents.map(agent => (
+                  <label key={agent.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-805 cursor-pointer transition-all">
                     <input
                       type="checkbox"
                       checked={assignedAgentIds.includes(agent.id)}
@@ -351,7 +602,7 @@ export default function UsersTab({
             <div className="flex justify-end gap-3 pt-2">
               <button 
                 onClick={() => setSelectedHuman(null)} 
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-550 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200/65 dark:border-slate-750 bg-white dark:bg-slate-900"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-550 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200/65 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
               >
                 取消
               </button>
@@ -361,9 +612,177 @@ export default function UsersTab({
                   setSelectedHuman(null)
                 }}
                 disabled={savingPerms}
-                className="px-5 py-2 rounded-xl text-xs font-black bg-blue-650 hover:bg-blue-700 text-white disabled:opacity-50 shadow-sm transition-all"
+                className="px-5 py-2 rounded-xl text-xs font-black bg-blue-650 hover:bg-blue-700 text-white disabled:opacity-50 shadow-sm transition-all cursor-pointer"
               >
                 {savingPerms ? '保存中...' : '保存授权'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Agents: Editing人设 Modal */}
+      {editingAgent && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-5 scrollbar-thin">
+            <div>
+              <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <Settings size={18} className="text-indigo-500" />
+                <span>配置 AI Agent 提示词设定</span>
+              </h2>
+              <p className="text-[10px] font-mono text-slate-400 mt-1">ID: {editingAgent.id}</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="space-y-1.5 block">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">对外绑定邮箱</span>
+                <input 
+                  value={agentDraft.email} 
+                  onChange={e => setAgentDraft(prev => ({ ...prev, email: e.target.value }))} 
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                />
+              </label>
+              <label className="space-y-1.5 block">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">AI 员工昵称</span>
+                <input 
+                  value={agentDraft.nickname} 
+                  onChange={e => setAgentDraft(prev => ({ ...prev, nickname: e.target.value }))} 
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                />
+              </label>
+              <label className="space-y-1.5 block">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">主题色 (支持 HEX, 例: #6366f1)</span>
+                <div className="flex gap-2">
+                  <div 
+                    className="w-9 h-9 rounded-xl border border-slate-205 dark:border-slate-700 shadow-inner flex-shrink-0"
+                    style={{ backgroundColor: agentDraft.themeColor || '#6366f1' }}
+                  />
+                  <input 
+                    value={agentDraft.themeColor} 
+                    onChange={e => setAgentDraft(prev => ({ ...prev, themeColor: e.target.value }))} 
+                    placeholder="#6366f1" 
+                    className="w-full rounded-xl border border-slate-202 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                  />
+                </div>
+              </label>
+              <label className="space-y-1.5 block">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block flex items-center gap-1"><Link size={11} /> 语音聊天机器人 (Chat Link)</span>
+                <input 
+                  value={agentDraft.chatLink} 
+                  onChange={e => setAgentDraft(prev => ({ ...prev, chatLink: e.target.value }))} 
+                  placeholder="https://example.com/bot"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                />
+              </label>
+              <label className="space-y-1.5 md:col-span-2 block">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block flex items-center gap-1"><FolderOpen size={11} /> 对应 Google Drive 上传目录</span>
+                <input 
+                  value={agentDraft.driveFolder} 
+                  onChange={e => setAgentDraft(prev => ({ ...prev, driveFolder: e.target.value }))} 
+                  placeholder="请输入 Google Drive Folder ID"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                />
+              </label>
+              <label className="space-y-1.5 md:col-span-2 block">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Workflow 工作摘要</span>
+                <textarea 
+                  value={agentDraft.insights} 
+                  onChange={e => setAgentDraft(prev => ({ ...prev, insights: e.target.value }))} 
+                  rows={3} 
+                  placeholder="给主理人或BD看的工作摘要简述"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-none" 
+                />
+              </label>
+              <label className="space-y-1.5 md:col-span-2 block">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">个人基本设定 / 角色扮演人设</span>
+                <textarea 
+                  value={agentDraft.introduction} 
+                  onChange={e => setAgentDraft(prev => ({ ...prev, introduction: e.target.value }))} 
+                  rows={4} 
+                  placeholder="你是一个专业的文案策划员工，名字是..."
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y" 
+                />
+              </label>
+              <label className="space-y-1.5 md:col-span-2 block">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">工作流系统指令 (System Prompts)</span>
+                <textarea 
+                  value={agentDraft.workflow} 
+                  onChange={e => setAgentDraft(prev => ({ ...prev, workflow: e.target.value }))} 
+                  rows={4} 
+                  placeholder="你的日常工作执行流程：第一步收集素材；第二步确认品牌基调..."
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 resize-y" 
+                />
+              </label>
+            </div>
+            
+            <div className="flex justify-end gap-3 pt-2">
+              <button 
+                onClick={() => setEditingAgent(null)} 
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-550 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
+              >
+                取消
+              </button>
+              <button 
+                onClick={handleSaveAgentDraftLocal} 
+                disabled={!!actionLoading[editingAgent.id + '_edit']} 
+                className="px-5 py-2 rounded-xl text-xs font-black bg-blue-650 hover:bg-blue-700 text-white disabled:opacity-50 shadow-sm transition-all cursor-pointer"
+              >
+                {actionLoading[editingAgent.id + '_edit'] ? '保存中...' : '保存 Agent 配置'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Agents: Supervising Human modal */}
+      {selectedAgent && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl p-6 space-y-4 border border-slate-150 dark:border-slate-850">
+            <div>
+              <h2 className="text-base font-black text-slate-900 dark:text-white">配置监督该 AI 的人类主理人</h2>
+              <p className="text-xs text-slate-400 mt-1">关联或分配谁作为 <b>{selectedAgent.nickname || selectedAgent.email}</b> 的人类主理人监督者：</p>
+            </div>
+            
+            <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-100 dark:border-slate-805 rounded-xl p-3 scrollbar-thin">
+              {humans.length === 0 ? (
+                <p className="text-xs text-slate-400 py-4 text-center">暂无人类主理人账号，请在用户列表中创建</p>
+              ) : (
+                humans.map(human => (
+                  <label key={human.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-all">
+                    <input
+                      type="checkbox"
+                      checked={selectedAgentHumanIds.includes(human.id)}
+                      onChange={e => {
+                        if (e.target.checked) setSelectedAgentHumanIds(prev => [...prev, human.id])
+                        else setSelectedAgentHumanIds(prev => prev.filter(id => id !== human.id))
+                      }}
+                      className="rounded border-slate-350 dark:border-slate-700 text-indigo-650 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <p className="font-extrabold text-slate-750 dark:text-slate-200">{human.nickname || '未命名主理人'}</p>
+                      <p className="text-[10px] text-slate-400">{human.email}</p>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button 
+                onClick={() => setSelectedAgent(null)} 
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-550 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                onClick={async () => {
+                  await onSaveAgentPrincipals(selectedAgent.id, selectedAgentHumanIds)
+                  setSelectedAgent(null)
+                }}
+                disabled={savingPerms}
+                className="px-5 py-2 rounded-xl text-xs font-black bg-blue-650 hover:bg-blue-700 text-white disabled:opacity-50 shadow-sm transition-all cursor-pointer"
+              >
+                {savingPerms ? '保存中...' : '保存关联'}
               </button>
             </div>
           </div>

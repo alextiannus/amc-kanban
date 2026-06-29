@@ -3,20 +3,18 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
-  Shield, User, Bot, RefreshCw, Copy, Check, ArrowLeft, Users, Store, CreditCard, Sparkles, MessageSquare, Menu
+  Shield, User, Bot, RefreshCw, Copy, Check, ArrowLeft, Users, Store, CreditCard, Sparkles, MessageSquare, Menu, Settings
 } from 'lucide-react'
 
 // Import Tab Components
 import UsersTab, { type UserRecord } from '@/components/admin/UsersTab'
 import BrandsTab, { type BrandRecord } from '@/components/admin/BrandsTab'
-import AgentsTab from '@/components/admin/AgentsTab'
-import PoolTab, { type AssignmentPoolConfig, type AssignmentPoolMember, type AssignmentDecision } from '@/components/admin/PoolTab'
-import LlmTab, { type LLMConfigRecord } from '@/components/admin/LlmTab'
-import SystemTab from '@/components/admin/SystemTab'
+import SystemTab, { type LLMConfigRecord } from '@/components/admin/SystemTab'
+import { type AssignmentPoolConfig, type AssignmentPoolMember, type AssignmentDecision } from '@/components/shared/types'
 import TrainingDataSection from '@/components/TrainingDataSection'
 import EditUserModal from '@/components/admin/EditUserModal'
 
-type AdminTab = 'users' | 'brands' | 'agents' | 'pool' | 'system' | 'llm' | 'conversation-log'
+type AdminTab = 'users' | 'brands' | 'system' | 'conversation-log'
 
 interface InvitationResult {
   user: { id: string; email: string; type: string }
@@ -62,6 +60,7 @@ export default function AdminPage() {
     azureSpeechKey: string
     azureSpeechRegion: string
     azureSpeechConfigured: boolean
+    // SMTP
     smtpHost: string
     smtpPort: number | null
     smtpUser: string
@@ -529,7 +528,7 @@ export default function AdminPage() {
 
   const CopyField = ({ label, value, fieldKey }: { label: string; value: string; fieldKey: string }) => (
     <div className="space-y-1.5">
-      <label className="block text-xs font-semibold text-slate-650 dark:text-gray-400">{label}</label>
+      <label className="block text-xs font-semibold text-slate-655 dark:text-gray-400">{label}</label>
       <div className="flex gap-2">
         <input readOnly value={value} className="flex-1 border border-slate-200 dark:border-gray-700 bg-slate-50 dark:bg-gray-800 dark:text-white rounded-xl px-3 py-2 font-mono text-xs min-w-0" />
         <button onClick={() => copyText(value, fieldKey)} className="px-3 py-2 bg-slate-100 dark:bg-gray-700 text-slate-700 dark:text-gray-300 rounded-xl hover:bg-slate-200 dark:hover:bg-gray-600 transition-all flex-shrink-0 cursor-pointer">
@@ -551,13 +550,13 @@ export default function AdminPage() {
           <CopyField label="临时初始密码 (7 天有效期)" value={data.temporaryPassword} fieldKey="modal_pw" />
           <CopyField label="系统邀请登录链接" value={data.invitationLink} fieldKey="modal_link" />
         </div>
-        <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 text-[10px] leading-relaxed text-amber-800 dark:text-amber-300">
+        <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-955/20 border border-amber-200 dark:border-amber-900 text-[10px] leading-relaxed text-amber-800 dark:text-amber-300">
           ⚠️ 临时密码只会展示一次，请务必在关闭弹窗前完成复制。
         </div>
         <div className="flex justify-between items-center gap-3 pt-2">
           <button
             onClick={() => copyText(`邮箱: ${data.email}\n临时密码: ${data.temporaryPassword}\n邀请链接: ${data.invitationLink}`, 'all')}
-            className="px-4 py-2 text-xs border border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300 rounded-xl hover:bg-slate-100 dark:hover:bg-gray-800 transition-all flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-900"
+            className="px-4 py-2 text-xs border border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300 rounded-xl hover:bg-slate-105 dark:hover:bg-gray-800 transition-all flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-900"
           >
             {copied === 'all' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />} 
             <span>复制全部信息</span>
@@ -571,28 +570,20 @@ export default function AdminPage() {
   const humans = users.filter(u => u.type === 'HUMAN')
   const agents = users.filter(u => u.type === 'AI_AGENT')
 
-  // Grouped Navigation Definition
+  // Grouped Navigation Definition (Refactored to 4 Main Menus)
   const navigationGroups = [
     {
-      title: '基础资源 (Core)',
+      title: '日常运营管理 (Operations)',
       items: [
-        { id: 'users' as const, label: '账号运营权限', icon: User },
-        { id: 'brands' as const, label: '托管品牌看板', icon: Store },
-        { id: 'agents' as const, label: 'AI 员工序列', icon: Bot },
+        { id: 'users' as const, label: '用户与权限管理', icon: Users },
+        { id: 'brands' as const, label: '托管品牌与派单', icon: Store },
       ]
     },
     {
-      title: '智能调度 (Dispatch)',
+      title: '系统架构配置 (Infrastructure)',
       items: [
-        { id: 'pool' as const, label: 'AI 派单决策池', icon: CreditCard },
-      ]
-    },
-    {
-      title: 'AI 与服务 (Services)',
-      items: [
-        { id: 'llm' as const, label: '大模型与秘钥', icon: Sparkles },
-        { id: 'system' as const, label: '系统全局设置', icon: Shield },
-        { id: 'conversation-log' as const, label: 'AI 运营对话日志', icon: MessageSquare },
+        { id: 'system' as const, label: '系统服务与设置', icon: Settings },
+        { id: 'conversation-log' as const, label: '语料微调与导出', icon: MessageSquare },
       ]
     }
   ]
@@ -609,7 +600,7 @@ export default function AdminPage() {
         html:not(.dark) .admin-page .text-slate-900,
         html:not(.dark) .admin-page .text-slate-800,
         html:not(.dark) .admin-page .text-slate-700,
-        html:not(.dark) .admin-page .text-slate-650,
+        html:not(.dark) .admin-page .text-slate-655,
         html:not(.dark) .admin-page .text-slate-600,
         html:not(.dark) .admin-page .text-slate-500 {
           color: #000000 !important;
@@ -663,15 +654,13 @@ export default function AdminPage() {
                         if (item.id === 'system') {
                           void fetchSystemConfig()
                           void fetchSystemLogs()
-                        }
-                        if (item.id === 'llm') {
                           void fetchLLMConfigs()
                         }
                       }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
                         isActive
                           ? 'bg-blue-650 text-white shadow-sm ring-1 ring-blue-500/10'
-                          : 'text-slate-650 hover:bg-slate-50 dark:text-slate-350 dark:hover:bg-slate-850/40'
+                          : 'text-slate-655 hover:bg-slate-50 dark:text-slate-350 dark:hover:bg-slate-850/40'
                       }`}
                     >
                       <IconComponent size={14} className={isActive ? 'text-white' : 'text-slate-450'} />
@@ -705,9 +694,19 @@ export default function AdminPage() {
             onResetPassword={handleResetPassword}
             onDeleteUser={handleDeleteUser}
             onEditUser={setEditingUser}
-            allAgents={agents}
             onSavePermissions={handleSavePermissions}
             savingPerms={savingPerms}
+            
+            // AI Agent specific props
+            poolMembers={poolMembers}
+            poolDrafts={poolDrafts}
+            onUpdatePoolDraft={handleUpdatePoolDraft}
+            onPatchPoolMember={handlePatchPoolMember}
+            onDeletePoolMember={handleDeletePoolMember}
+            onCreatePoolMember={handleCreatePoolMember}
+            onSaveAgentPrincipals={handleSaveAgentPrincipals}
+            onSaveAgentDraft={handleSaveAgentDraft}
+            onFetchUsers={fetchUsers}
           />
         )}
 
@@ -722,31 +721,8 @@ export default function AdminPage() {
             onUpdateBrandDraft={handleUpdateBrandDraft}
             onSaveBrandDraft={handleSaveBrandDraft}
             onFetchBrands={fetchBrands}
-          />
-        )}
 
-        {activeAdminTab === 'agents' && (
-          <AgentsTab 
-            agents={agents}
-            poolMembers={poolMembers}
-            poolDrafts={poolDrafts}
-            actionLoading={actionLoading}
-            loading={loading}
-            humans={humans}
-            savingPerms={savingPerms}
-            onUpdatePoolDraft={handleUpdatePoolDraft}
-            onPatchPoolMember={handlePatchPoolMember}
-            onDeletePoolMember={handleDeletePoolMember}
-            onCreatePoolMember={handleCreatePoolMember}
-            onDeleteAgent={handleDeleteUser}
-            onSaveAgentPrincipals={handleSaveAgentPrincipals}
-            onSaveAgentDraft={handleSaveAgentDraft}
-            onFetchUsers={fetchUsers}
-          />
-        )}
-
-        {activeAdminTab === 'pool' && (
-          <PoolTab 
+            // Dispatch Pool props
             poolConfig={poolConfig}
             poolMembers={poolMembers}
             poolDecisions={poolDecisions}
@@ -755,16 +731,6 @@ export default function AdminPage() {
             onFetchDecisionLogs={fetchDecisionLogs}
             onPatchPoolMember={handlePatchPoolMember}
             onDeletePoolMember={handleDeletePoolMember}
-            allAgents={agents}
-          />
-        )}
-
-        {activeAdminTab === 'llm' && (
-          <LlmTab 
-            llmConfigs={llmConfigs}
-            llmConfigsLoading={llmConfigsLoading}
-            onFetchLLMConfigs={fetchLLMConfigs}
-            onFetchSystemLogs={fetchSystemLogs}
           />
         )}
 
@@ -777,13 +743,18 @@ export default function AdminPage() {
             systemLogs={systemLogs}
             systemLogsLoading={systemLogsLoading}
             onFetchSystemLogs={fetchSystemLogs}
+
+            // LLM configs props
+            llmConfigs={llmConfigs}
+            llmConfigsLoading={llmConfigsLoading}
+            onFetchLLMConfigs={fetchLLMConfigs}
           />
         )}
 
         {activeAdminTab === 'conversation-log' && (
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4 animate-in fade-in duration-200">
             <div>
-              <h2 className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
+              <h2 className="text-sm font-black text-slate-855 dark:text-slate-100 flex items-center gap-2">
                 <MessageSquare size={16} className="text-blue-500" /> AI 运营对话语料导出
               </h2>
               <p className="text-xs text-slate-400 mt-1">
