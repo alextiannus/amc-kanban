@@ -311,6 +311,7 @@ model Brand {
   knowledge   BrandKnowledge?
   corrections UserCorrectionFeedback[]
   companionMessages CompanionMessage[]
+  companionSessions CompanionSession[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -774,6 +775,21 @@ model UserCorrectionFeedback {
 
 
 
+model CompanionSession {
+  id           String   @id @default(cuid())
+  brandId      String
+  userId       String
+  startedAt    DateTime @default(now())
+  lastActiveAt DateTime @updatedAt
+  messageCount Int      @default(0)
+
+  brand    Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  messages CompanionMessage[]
+
+  @@index([brandId, userId])
+  @@index([startedAt])
+}
+
 model CompanionMessage {
   id        String   @id @default(cuid())
   brandId   String
@@ -784,8 +800,18 @@ model CompanionMessage {
   draftId   String?  // related draft ID for approval flows
   createdAt DateTime @default(now())
 
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  // Metadata fields for analytics (all optional for backwards compatibility)
+  sessionId      String?  // → CompanionSession.id
+  inputType      String?  // 'text' | 'voice'  (role='user' only)
+  modelId        String?  // e.g. 'glm-4-flash' (role='assistant' only)
+  latencyMs      Int?     // response latency in ms (role='assistant' only)
+  tokenEstimate  Int?     // estimated token count (role='assistant' only)
+  intentDetected String?  // detected intent: 'GENERATE_AND_PUBLISH' | 'QUERY_CALENDAR' | 'NONE'
+
+  brand   Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  session CompanionSession? @relation(fields: [sessionId], references: [id])
 
   @@index([brandId, userId])
+  @@index([sessionId])
   @@index([createdAt])
 }

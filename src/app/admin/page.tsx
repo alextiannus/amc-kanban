@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users, Store, CreditCard, Sparkles } from 'lucide-react'
+import { Shield, User, Bot, Trash2, RefreshCw, Copy, Check, Plus, ArrowLeft, Edit3, Save, Users, Store, CreditCard, Sparkles, MessageSquare } from 'lucide-react'
+import ConversationLogPanel from '@/components/ConversationLogPanel'
 
 interface UserRecord {
   id: string
@@ -39,7 +40,7 @@ interface BrandRecord {
   updatedAt: string
 }
 
-type AdminTab = 'users' | 'brands' | 'agents' | 'pool' | 'system' | 'llm'
+type AdminTab = 'users' | 'brands' | 'agents' | 'pool' | 'system' | 'llm' | 'conversation-log'
 
 interface InvitationResult {
   user: { id: string; email: string; type: string }
@@ -822,7 +823,7 @@ export default function AdminPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:grid-cols-7">
           {([
             ['users', User, '用户管理'],
             ['brands', Store, '品牌管理'],
@@ -830,6 +831,7 @@ export default function AdminPage() {
             ['pool', CreditCard, '分配池'],
             ['system', Shield, '系统设置'],
             ['llm', Sparkles, '多模型管理'],
+            ['conversation-log', MessageSquare, 'AI 对话日志'],
           ] as const).map(([id, Icon, label]) => (
             <button
               key={id}
@@ -1939,6 +1941,10 @@ export default function AdminPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {activeAdminTab === 'conversation-log' && (
+        <ConversationLogPanel brands={brands.map(b => ({ id: b.id, name: b.name }))} />
       )}
 
       {invitationData && (
