@@ -870,28 +870,27 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
         targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
       }
 
-      // 1. Update status to scheduled and set scheduledAt
+      // 1. Set scheduledAt only (leave status as draft/failed)
       const patchRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          status: 'scheduled',
           scheduledAt: targetDateISO
         })
       })
       const patchJson = await patchRes.json().catch(() => ({}))
       if (!patchRes.ok) throw new Error(patchJson.error || '更新排期失败')
 
-      // 2. Submit the draft
-      const submitRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/submit`, {
+      // 2. Approve and submit to trigger delivery (forcePublish = true)
+      const submitRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/approve`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: '智能排期发布' }),
       })
       const submitJson = await submitRes.json().catch(() => ({}))
-      if (!submitRes.ok) throw new Error(submitJson.error || '提交审核排期失败')
+      if (!submitRes.ok) throw new Error(submitJson.error || '提交排期发布通道失败')
 
-      alert(`已根据活跃度自动推荐最佳时间并提交排期！时间：${new Date(targetDateISO).toLocaleString()}`)
+      alert(`已成功通过通道排期发布！推荐时间：${new Date(targetDateISO).toLocaleString()}`)
       await loadDrafts()
       closeEditor()
     } catch (e: any) {
@@ -900,6 +899,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       setSaving(false)
     }
   }
+
 
 
   const handleBatchApprove = async () => {
@@ -1042,11 +1042,10 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
             body: JSON.stringify({
               caption: cap,
               hashtags: parseTags(hash),
-              status: 'scheduled',
               scheduledAt: targetDateISO
             })
           })
-          if (!patchRes.ok) throw new Error('更新排期失败')
+          if (!patchRes.ok) throw new Error('更新排期时间失败')
 
           const submitRes = await fetch(`/api/brands/${brandId}/drafts/${d.id}/submit`, {
             method: 'PATCH',
@@ -1992,7 +1991,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   >
                     保存
                   </button>
-                  {selectedDraft && selectedDraft.status === 'draft' && (
+                  {selectedDraft && ['draft', 'failed'].includes(selectedDraft.status) && (
                     <button
                       type="button"
                       disabled={saving}
@@ -2296,7 +2295,7 @@ function DraftCard({
         <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-400">
           <span className="truncate">{draft.hashtags.map((tag) => `#${tag}`).join(' ') || 'No tags'}</span>
           <div className="flex items-center gap-1.5 shrink-0">
-            {draft.status === 'draft' && !selectMode && onSmartSchedule && (
+            {['draft', 'failed'].includes(draft.status) && !selectMode && onSmartSchedule && (
               <button
                 type="button"
                 onClick={(e) => {
