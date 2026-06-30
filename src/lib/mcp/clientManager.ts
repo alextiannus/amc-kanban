@@ -217,12 +217,54 @@ export class McpClientManager {
       throw new Error(`No active MCP connection found for namespace: ${namespace}`)
     }
 
-    // Auto-fill requesterId if calling submit_flash_order
+    // Auto-fill requesterId and coordinates if calling submit_flash_order
     if (originalName === 'submit_flash_order') {
       if (!args.requesterId) {
         args.requesterId = Math.floor(Date.now() / 1000)
       } else if (typeof args.requesterId === 'string') {
         args.requesterId = Number(args.requesterId) || Math.floor(Date.now() / 1000)
+      }
+
+      // Auto-resolve pickup coordinates if missing or empty
+      if (!args.pickupLat || !args.pickupLng || args.pickupLat === '0' || args.pickupLat === 0) {
+        console.log(`[MCP Auto-resolve] Resolving pickupLat/Lng for: ${args.pickupAddress}`)
+        try {
+          const res = await this.executeTool(brandId, `${namespace}__autocomplete_address`, {
+            input: args.pickupAddress || 'Singapore',
+            country: 'SG'
+          })
+          if (res && res.content && res.content[0]) {
+            const data = JSON.parse(res.content[0].text)
+            if (data.success && data.data && data.data[0]) {
+              args.pickupLat = Number(data.data[0].latitude)
+              args.pickupLng = Number(data.data[0].longitude)
+              console.log(`[MCP Auto-resolve] Resolved pickup coordinates: ${args.pickupLat}, ${args.pickupLng}`)
+            }
+          }
+        } catch (e) {
+          console.error('Failed to auto-resolve pickup coordinates:', e)
+        }
+      }
+
+      // Auto-resolve delivery coordinates if missing or empty
+      if (!args.deliveryLat || !args.deliveryLng || args.deliveryLat === '0' || args.deliveryLat === 0) {
+        console.log(`[MCP Auto-resolve] Resolving deliveryLat/Lng for: ${args.deliveryAddress}`)
+        try {
+          const res = await this.executeTool(brandId, `${namespace}__autocomplete_address`, {
+            input: args.deliveryAddress || 'Singapore',
+            country: 'SG'
+          })
+          if (res && res.content && res.content[0]) {
+            const data = JSON.parse(res.content[0].text)
+            if (data.success && data.data && data.data[0]) {
+              args.deliveryLat = Number(data.data[0].latitude)
+              args.deliveryLng = Number(data.data[0].longitude)
+              console.log(`[MCP Auto-resolve] Resolved delivery coordinates: ${args.deliveryLat}, ${args.deliveryLng}`)
+            }
+          }
+        } catch (e) {
+          console.error('Failed to auto-resolve delivery coordinates:', e)
+        }
       }
     }
 

@@ -205,6 +205,7 @@ export async function callGeminiChat(
 
     try {
       let paymentData: any = null
+      let quoteData: any = null
 
       if (provider === 'google') {
         // --- Gemini Tool-Call Flow ---
@@ -219,7 +220,7 @@ export async function callGeminiChat(
         contents.push({ role: 'user', parts: [{ text: userMessage }] })
 
         let loopCount = 0
-        const maxLoops = 4
+        const maxLoops = 8
 
         while (loopCount < maxLoops) {
           loopCount++
@@ -272,6 +273,22 @@ export async function callGeminiChat(
                 }
               }
 
+              // Capture Quote data
+              if (name === 'dct-logistics__quote_flash_order') {
+                try {
+                  const parsed = JSON.parse(resultText)
+                  if (parsed.success && parsed.data) {
+                    quoteData = {
+                      ...parsed.data,
+                      pickupAddress: (args as any).pickupAddress,
+                      destinationAddress: (args as any).destinationAddress
+                    }
+                  }
+                } catch (e) {
+                  console.error('Failed to parse Quote data:', e)
+                }
+              }
+
               // Append native function call and response turns to contents array
               contents.push({
                 role: 'model',
@@ -312,6 +329,13 @@ export async function callGeminiChat(
               }
             }
           }
+          if (quoteData) {
+            return {
+              reply: text || '',
+              action: 'SHOW_QUOTE',
+              params: quoteData
+            }
+          }
           return { reply: text || '', action: 'NONE' }
         }
       } 
@@ -330,7 +354,7 @@ export async function callGeminiChat(
         messages.push({ role: 'user', content: userMessage })
 
         let loopCount = 0
-        const maxLoops = 4
+        const maxLoops = 8
 
         while (loopCount < maxLoops) {
           loopCount++
@@ -404,6 +428,22 @@ export async function callGeminiChat(
                 }
               }
 
+              // Capture Quote data
+              if (name === 'dct-logistics__quote_flash_order') {
+                try {
+                  const parsed = JSON.parse(resultText)
+                  if (parsed.success && parsed.data) {
+                    quoteData = {
+                      ...parsed.data,
+                      pickupAddress: (parsedArgs as any).pickupAddress,
+                      destinationAddress: (parsedArgs as any).destinationAddress
+                    }
+                  }
+                } catch (e) {
+                  console.error('Failed to parse Quote data:', e)
+                }
+              }
+
               // Append assistant message with tool calls and the tool result message
               messages.push(message)
               messages.push({
@@ -436,6 +476,13 @@ export async function callGeminiChat(
                 orderTransactionId: paymentData.orderTransactionId,
                 orderSn: paymentData.orderSn
               }
+            }
+          }
+          if (quoteData) {
+            return {
+              reply: text || '',
+              action: 'SHOW_QUOTE',
+              params: quoteData
             }
           }
           return { reply: text || '', action: 'NONE' }
