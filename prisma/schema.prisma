@@ -728,6 +728,19 @@ model SystemConfig {
   smtpFrom             String?  // From address, e.g. noreply@yourapp.com
   smtpFromName         String?  // From display name, e.g. "AMC Staff"
   smtpSecure           Boolean? // true = SSL/TLS (port 465), false = STARTTLS (port 587)
+
+  // Direct Social integrations
+  metaAppId            String?
+  metaAppSecret        String?
+  metaRedirectUri      String?
+  googleClientId       String?
+  googleClientSecret   String?
+  googleRedirectUri    String?
+  tiktokClientKey      String?
+  tiktokClientSecret   String?
+  tiktokRedirectUri    String?
+  useDirectPublishing  Boolean? @default(false)
+
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }

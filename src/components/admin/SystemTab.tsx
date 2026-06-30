@@ -50,6 +50,20 @@ interface SystemTabProps {
     smtpFromName: string
     smtpSecure: boolean
     smtpConfigured: boolean
+    // Direct Social integrations
+    metaAppId: string
+    metaAppSecret: string
+    metaAppSecretConfigured: boolean
+    metaRedirectUri: string
+    googleClientId: string
+    googleClientSecret: string
+    googleClientSecretConfigured: boolean
+    googleRedirectUri: string
+    tiktokClientKey: string
+    tiktokClientSecret: string
+    tiktokClientSecretConfigured: boolean
+    tiktokRedirectUri: string
+    useDirectPublishing: boolean
   } | null
   onUpdateSystemConfig: (updater: (prev: any) => any) => void
   onSaveSystemConfig: () => Promise<void>
@@ -76,7 +90,7 @@ export default function SystemTab({
   llmConfigsLoading,
   onFetchLLMConfigs
 }: SystemTabProps) {
-  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'ai' | 'smtp' | 'scheduler' | 'templates' | ''>('llm')
+  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'ai' | 'smtp' | 'scheduler' | 'templates' | 'direct_oauth' | ''>('llm')
   
   // LLM Config inner states
   const [llmConfigModalOpen, setLlmConfigModalOpen] = useState(false)
@@ -424,9 +438,186 @@ export default function SystemTab({
           )}
         </div>
 
+        {/* Section: Direct Social Media OAuth Credentials */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          <button 
+            type="button"
+            onClick={() => setActiveAccordion(activeAccordion === 'direct_oauth' ? '' : 'direct_oauth')}
+            className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
+          >
+            <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
+              <Shield size={15} className="text-indigo-500" />
+              <span>直连社媒应用授权秘钥 (Direct Meta, Google & TikTok Developers)</span>
+            </span>
+            {systemConfig?.useDirectPublishing && (
+              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/20 px-2.5 py-0.5 rounded-full border border-amber-100 dark:border-amber-900/30">直连模式已启用</span>
+            )}
+          </button>
+
+          {activeAccordion === 'direct_oauth' && (
+            <div className="px-6 pb-6 pt-1 space-y-6 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
+              
+              {/* Toggle Switch */}
+              <div className="flex items-center justify-between pt-4 border-b border-slate-100 dark:border-slate-800/80 pb-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 block">启用直连发布代理 (跳过 PostFast)</label>
+                  <p className="text-[10px] text-slate-400 mt-1">开启后，系统将直接使用下方配置的官方应用证书进行授权与推送发布。</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={systemConfig?.useDirectPublishing ?? false}
+                  onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, useDirectPublishing: e.target.checked } : null)}
+                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Meta Developer Config */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                  <span>📱 Meta Developer App (Facebook, Instagram, Threads, WhatsApp)</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Facebook App ID</label>
+                    <input
+                      type="text"
+                      value={systemConfig?.metaAppId ?? ''}
+                      onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, metaAppId: e.target.value } : null)}
+                      placeholder="请输入 App ID"
+                      className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Facebook App Secret</label>
+                    <input
+                      type="password"
+                      value={systemConfig?.metaAppSecret ?? ''}
+                      onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, metaAppSecret: e.target.value } : null)}
+                      placeholder={systemConfig?.metaAppSecretConfigured ? "•••••••• (已配置)" : "请输入 App Secret"}
+                      className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">OAuth Redirect URI</label>
+                  <input
+                    type="text"
+                    value={systemConfig?.metaRedirectUri ?? ''}
+                    onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, metaRedirectUri: e.target.value } : null)}
+                    placeholder="如 https://your-domain.com/api/integrations/facebook/callback"
+                    className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Google Developer Config */}
+              <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800/85">
+                <h4 className="text-xs font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                  <span>🔑 Google Cloud Console (Google Business Profile, YouTube)</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Google Client ID</label>
+                    <input
+                      type="text"
+                      value={systemConfig?.googleClientId ?? ''}
+                      onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, googleClientId: e.target.value } : null)}
+                      placeholder="请输入 Client ID"
+                      className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Google Client Secret</label>
+                    <input
+                      type="password"
+                      value={systemConfig?.googleClientSecret ?? ''}
+                      onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, googleClientSecret: e.target.value } : null)}
+                      placeholder={systemConfig?.googleClientSecretConfigured ? "•••••••• (已配置)" : "请输入 Client Secret"}
+                      className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">OAuth Redirect URI</label>
+                  <input
+                    type="text"
+                    value={systemConfig?.googleRedirectUri ?? ''}
+                    onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, googleRedirectUri: e.target.value } : null)}
+                    placeholder="如 https://your-domain.com/api/integrations/google/callback"
+                    className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* TikTok Developer Config */}
+              <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800/85">
+                <h4 className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                  <span>🎵 TikTok Developer Portal (TikTok Posting API)</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">TikTok Client Key</label>
+                    <input
+                      type="text"
+                      value={systemConfig?.tiktokClientKey ?? ''}
+                      onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, tiktokClientKey: e.target.value } : null)}
+                      placeholder="请输入 Client Key"
+                      className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">TikTok Client Secret</label>
+                    <input
+                      type="password"
+                      value={systemConfig?.tiktokClientSecret ?? ''}
+                      onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, tiktokClientSecret: e.target.value } : null)}
+                      placeholder={systemConfig?.tiktokClientSecretConfigured ? "•••••••• (已配置)" : "请输入 Client Secret"}
+                      className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">OAuth Redirect URI</label>
+                  <input
+                    type="text"
+                    value={systemConfig?.tiktokRedirectUri ?? ''}
+                    onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, tiktokRedirectUri: e.target.value } : null)}
+                    placeholder="如 https://your-domain.com/api/integrations/tiktok/callback"
+                    className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:ring-1 focus:ring-indigo-500 focus:outline-none font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Buttons Row */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+                <button
+                  type="button"
+                  onClick={onSaveSystemConfig}
+                  disabled={savingSystemConfig || !systemConfig}
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  {savingSystemConfig ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>正在保存...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={13} />
+                      <span>保存直连接口配置</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </div>
+          )}
+        </div>
+
         {/* Section 3: SMTP */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
+            type="button"
             onClick={() => setActiveAccordion(activeAccordion === 'smtp' ? '' : 'smtp')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >

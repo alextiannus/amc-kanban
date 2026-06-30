@@ -62,6 +62,20 @@ export async function GET() {
     smtpFromName: config.smtpFromName || '',
     smtpSecure: config.smtpSecure ?? true,
     smtpConfigured: !!(config.smtpHost && config.smtpFrom),
+    // Direct Social integrations
+    metaAppId: config.metaAppId || '',
+    metaAppSecret: maskKey(config.metaAppSecret),
+    metaAppSecretConfigured: !!config.metaAppSecret,
+    metaRedirectUri: config.metaRedirectUri || '',
+    googleClientId: config.googleClientId || '',
+    googleClientSecret: maskKey(config.googleClientSecret),
+    googleClientSecretConfigured: !!config.googleClientSecret,
+    googleRedirectUri: config.googleRedirectUri || '',
+    tiktokClientKey: config.tiktokClientKey || '',
+    tiktokClientSecret: maskKey(config.tiktokClientSecret),
+    tiktokClientSecretConfigured: !!config.tiktokClientSecret,
+    tiktokRedirectUri: config.tiktokRedirectUri || '',
+    useDirectPublishing: config.useDirectPublishing ?? false,
     createdAt: config.createdAt,
     updatedAt: config.updatedAt,
   })
@@ -94,6 +108,17 @@ export async function PATCH(request: Request) {
   const nextSmtpFrom      = resolveField(body, 'smtpFrom', current.smtpFrom)
   const nextSmtpFromName  = resolveField(body, 'smtpFromName', current.smtpFromName)
   const nextSmtpSecure    = resolveBoolField(body, 'smtpSecure', current.smtpSecure)
+  // Direct Social integration fields
+  const nextMetaAppId       = resolveField(body, 'metaAppId', current.metaAppId)
+  const nextMetaAppSecret   = resolveField(body, 'metaAppSecret', current.metaAppSecret)
+  const nextMetaRedirectUri = resolveField(body, 'metaRedirectUri', current.metaRedirectUri)
+  const nextGoogleClientId       = resolveField(body, 'googleClientId', current.googleClientId)
+  const nextGoogleClientSecret   = resolveField(body, 'googleClientSecret', current.googleClientSecret)
+  const nextGoogleRedirectUri = resolveField(body, 'googleRedirectUri', current.googleRedirectUri)
+  const nextTiktokClientKey       = resolveField(body, 'tiktokClientKey', current.tiktokClientKey)
+  const nextTiktokClientSecret   = resolveField(body, 'tiktokClientSecret', current.tiktokClientSecret)
+  const nextTiktokRedirectUri = resolveField(body, 'tiktokRedirectUri', current.tiktokRedirectUri)
+  const nextUseDirectPublishing   = resolveBoolField(body, 'useDirectPublishing', current.useDirectPublishing)
 
   const updated = await prisma.systemConfig.update({
     where: { id: 'default' },
@@ -108,6 +133,16 @@ export async function PATCH(request: Request) {
       ...(nextSmtpFrom     !== undefined && { smtpFrom: nextSmtpFrom }),
       ...(nextSmtpFromName !== undefined && { smtpFromName: nextSmtpFromName }),
       ...(nextSmtpSecure   !== undefined && { smtpSecure: nextSmtpSecure }),
+      ...(nextMetaAppId       !== undefined && { metaAppId: nextMetaAppId }),
+      ...(nextMetaAppSecret   !== undefined && { metaAppSecret: nextMetaAppSecret }),
+      ...(nextMetaRedirectUri !== undefined && { metaRedirectUri: nextMetaRedirectUri }),
+      ...(nextGoogleClientId       !== undefined && { googleClientId: nextGoogleClientId }),
+      ...(nextGoogleClientSecret   !== undefined && { googleClientSecret: nextGoogleClientSecret }),
+      ...(nextGoogleRedirectUri !== undefined && { googleRedirectUri: nextGoogleRedirectUri }),
+      ...(nextTiktokClientKey       !== undefined && { tiktokClientKey: nextTiktokClientKey }),
+      ...(nextTiktokClientSecret   !== undefined && { tiktokClientSecret: nextTiktokClientSecret }),
+      ...(nextTiktokRedirectUri !== undefined && { tiktokRedirectUri: nextTiktokRedirectUri }),
+      ...(nextUseDirectPublishing   !== undefined && { useDirectPublishing: nextUseDirectPublishing }),
     },
   })
 
@@ -117,12 +152,18 @@ export async function PATCH(request: Request) {
     geminiApiKey: maskKey(current.geminiApiKey),
     azureSpeechKey: maskKey(current.azureSpeechKey),
     smtpPassword: maskPassword(current.smtpPassword),
+    metaAppSecret: maskKey(current.metaAppSecret),
+    googleClientSecret: maskKey(current.googleClientSecret),
+    tiktokClientSecret: maskKey(current.tiktokClientSecret),
   }
   const maskedNew = {
     ...updated,
     geminiApiKey: maskKey(updated.geminiApiKey),
     azureSpeechKey: maskKey(updated.azureSpeechKey),
     smtpPassword: maskPassword(updated.smtpPassword),
+    metaAppSecret: maskKey(updated.metaAppSecret),
+    googleClientSecret: maskKey(updated.googleClientSecret),
+    tiktokClientSecret: maskKey(updated.tiktokClientSecret),
   }
 
   await prisma.auditLog.create({
@@ -153,6 +194,20 @@ export async function PATCH(request: Request) {
     smtpFromName: updated.smtpFromName || '',
     smtpSecure: updated.smtpSecure ?? true,
     smtpConfigured: !!(updated.smtpHost && updated.smtpFrom),
+    // Direct Social integrations
+    metaAppId: updated.metaAppId || '',
+    metaAppSecret: maskKey(updated.metaAppSecret),
+    metaAppSecretConfigured: !!updated.metaAppSecret,
+    metaRedirectUri: updated.metaRedirectUri || '',
+    googleClientId: updated.googleClientId || '',
+    googleClientSecret: maskKey(updated.googleClientSecret),
+    googleClientSecretConfigured: !!updated.googleClientSecret,
+    googleRedirectUri: updated.googleRedirectUri || '',
+    tiktokClientKey: updated.tiktokClientKey || '',
+    tiktokClientSecret: maskKey(updated.tiktokClientSecret),
+    tiktokClientSecretConfigured: !!updated.tiktokClientSecret,
+    tiktokRedirectUri: updated.tiktokRedirectUri || '',
+    useDirectPublishing: updated.useDirectPublishing ?? false,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   })

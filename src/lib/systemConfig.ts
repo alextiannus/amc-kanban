@@ -10,8 +10,90 @@ export async function ensureSystemConfig() {
       geminiApiKey: null,
       azureSpeechKey: null,
       azureSpeechRegion: null,
+      metaAppId: null,
+      metaAppSecret: null,
+      metaRedirectUri: null,
+      googleClientId: null,
+      googleClientSecret: null,
+      googleRedirectUri: null,
+      tiktokClientKey: null,
+      tiktokClientSecret: null,
+      tiktokRedirectUri: null,
+      useDirectPublishing: false,
     },
   })
+}
+
+export interface DirectMetaConfig {
+  appId: string
+  appSecret: string
+  redirectUri: string
+}
+
+export interface DirectGoogleConfig {
+  clientId: string
+  clientSecret: string
+  redirectUri: string
+}
+
+export interface DirectTikTokConfig {
+  clientKey: string
+  clientSecret: string
+  redirectUri: string
+}
+
+export async function getDirectMetaConfig(): Promise<DirectMetaConfig | null> {
+  try {
+    const config = await ensureSystemConfig()
+    if (!config.metaAppId || !config.metaAppSecret || !config.metaRedirectUri) return null
+    return {
+      appId: config.metaAppId,
+      appSecret: config.metaAppSecret,
+      redirectUri: config.metaRedirectUri,
+    }
+  } catch (error) {
+    console.error('[getDirectMetaConfig Error]', error)
+    return null
+  }
+}
+
+export async function getDirectGoogleConfig(): Promise<DirectGoogleConfig | null> {
+  try {
+    const config = await ensureSystemConfig()
+    if (!config.googleClientId || !config.googleClientSecret || !config.googleRedirectUri) return null
+    return {
+      clientId: config.googleClientId,
+      clientSecret: config.googleClientSecret,
+      redirectUri: config.googleRedirectUri,
+    }
+  } catch (error) {
+    console.error('[getDirectGoogleConfig Error]', error)
+    return null
+  }
+}
+
+export async function getDirectTikTokConfig(): Promise<DirectTikTokConfig | null> {
+  try {
+    const config = await ensureSystemConfig()
+    if (!config.tiktokClientKey || !config.tiktokClientSecret || !config.tiktokRedirectUri) return null
+    return {
+      clientKey: config.tiktokClientKey,
+      clientSecret: config.tiktokClientSecret,
+      redirectUri: config.tiktokRedirectUri,
+    }
+  } catch (error) {
+    console.error('[getDirectTikTokConfig Error]', error)
+    return null
+  }
+}
+
+export async function isDirectPublishingEnabled(): Promise<boolean> {
+  try {
+    const config = await ensureSystemConfig()
+    return !!config.useDirectPublishing
+  } catch {
+    return false
+  }
 }
 
 export async function getGeminiApiKey(): Promise<string | null> {

@@ -83,6 +83,20 @@ function AdminPageInner() {
     smtpFromName: string
     smtpSecure: boolean
     smtpConfigured: boolean
+    // Direct Social integrations
+    metaAppId: string
+    metaAppSecret: string
+    metaAppSecretConfigured: boolean
+    metaRedirectUri: string
+    googleClientId: string
+    googleClientSecret: string
+    googleClientSecretConfigured: boolean
+    googleRedirectUri: string
+    tiktokClientKey: string
+    tiktokClientSecret: string
+    tiktokClientSecretConfigured: boolean
+    tiktokRedirectUri: string
+    useDirectPublishing: boolean
   } | null>(null)
   const [systemLogs, setSystemLogs] = useState<any[]>([])
   const [systemLogsLoading, setSystemLogsLoading] = useState(false)
@@ -524,6 +538,16 @@ function AdminPageInner() {
           geminiApiKey: systemConfig.geminiApiKey,
           azureSpeechKey: systemConfig.azureSpeechKey,
           azureSpeechRegion: systemConfig.azureSpeechRegion,
+          metaAppId: systemConfig.metaAppId,
+          metaAppSecret: systemConfig.metaAppSecret,
+          metaRedirectUri: systemConfig.metaRedirectUri,
+          googleClientId: systemConfig.googleClientId,
+          googleClientSecret: systemConfig.googleClientSecret,
+          googleRedirectUri: systemConfig.googleRedirectUri,
+          tiktokClientKey: systemConfig.tiktokClientKey,
+          tiktokClientSecret: systemConfig.tiktokClientSecret,
+          tiktokRedirectUri: systemConfig.tiktokRedirectUri,
+          useDirectPublishing: systemConfig.useDirectPublishing,
         }),
       })
       if (res.ok) {

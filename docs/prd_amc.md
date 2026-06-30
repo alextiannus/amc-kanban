@@ -821,5 +821,28 @@ RolePermission 表：
 - `src/app/api/mcp/route.ts`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.14 — 2026-06-30（直连社媒开发者应用证书配置与灰度路由）
+
+### 直连 API 证书配置与发布路由适配
+- **新增 SystemConfig 直连证书字段**：在数据库 `SystemConfig` 表中增加了 Meta (Facebook App ID/Secret, OAuth Redirect URI)、Google (Google Client ID/Secret, OAuth Redirect URI)、TikTok (TikTok Client Key/Secret, OAuth Redirect URI) 的开发者全局证书字段及灰度发布开关 `useDirectPublishing`。
+- **系统设置界面直连表单**：在管理后台系统配置页面新增了“直连社媒应用授权秘钥”折叠面板，支持配置这三大平台的 Client ID / Client Secret 并能通过开关切换直连发布模式。
+- **直连适配客户端与桥接器**：新增了 `googleBusiness.ts`、`facebook.ts`、`instagram.ts`、`tiktok.ts` 直连 fetch 适配客户端，并编写了 `client.ts` 用于在开启直连模式时直接走官方 API 渠道，未开启时自动 fallback 到 PostFast 的混合调度桥接逻辑。
+
+### 影响文件
+- `prisma/schema.prisma`
+- `src/lib/systemConfig.ts`
+- `src/app/api/admin/system-config/route.ts`
+- `src/components/admin/SystemTab.tsx`
+- `src/app/admin/page.tsx`
+- `src/lib/integrations/direct/googleBusiness.ts`
+- `src/lib/integrations/direct/facebook.ts`
+- `src/lib/integrations/direct/instagram.ts`
+- `src/lib/integrations/direct/tiktok.ts`
+- `src/lib/integrations/direct/client.ts`
+- `docs/prd_amc.md`
+
+
 
 
