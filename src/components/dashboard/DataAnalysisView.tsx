@@ -428,30 +428,27 @@ export default function DataAnalysisView() {
                         </span>
                       )}
 
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/snapshot:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/snapshot:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2.5 p-4">
                         <button
                           onClick={() => setActiveSnapshotUrl(item.latestSnapshot!.imageUrl)}
-                          className="p-2.5 bg-white hover:bg-slate-100 text-slate-900 rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-1 font-bold text-xs"
-                          title="查看大图"
+                          className="w-full max-w-[130px] py-2 bg-white hover:bg-slate-100 text-slate-900 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 font-bold text-xs cursor-pointer"
                         >
-                          <Eye className="w-3.5 h-3.5" /> 查看
+                          <Eye className="w-4 h-4" /> 查看大图
                         </button>
                         <button
                           onClick={() => triggerUpload(item.accountId)}
-                          className="p-2.5 bg-emerald-650 hover:bg-emerald-705 text-white rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-1 font-bold text-xs"
-                          title="上传新截图覆盖"
+                          className="w-full max-w-[130px] py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 font-bold text-xs cursor-pointer"
                         >
-                          <Upload className="w-3.5 h-3.5" /> 上传
+                          <Upload className="w-4 h-4" /> 上传截图
                         </button>
                         {item.profileUrl && (
                           <a
                             href={item.profileUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-1 font-bold text-xs"
-                            title="访问主页"
+                            className="w-full max-w-[130px] py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 font-bold text-xs text-center"
                           >
-                            <Store className="w-3.5 h-3.5" /> 主页
+                            <Store className="w-4 h-4" /> 访问主页
                           </a>
                         )}
                       </div>
