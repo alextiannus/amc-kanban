@@ -933,12 +933,12 @@ export default function LearnPage() {
             </div>
           )}
 
-          {/* 3. Skill Hub Tab */}
+                    {/* 3. Skill Hub Tab */}
           {activeTab === 'skills' && (
             <div className="space-y-6 animate-in fade-in duration-200">
               
               {/* Category filters */}
-              <div className="flex flex-wrap gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800/80 max-w-fit">
+              <div className="flex flex-wrap gap-1 bg-white/70 dark:bg-slate-900/60 p-1 rounded-xl border border-amber-200/50 dark:border-slate-800/80 max-w-fit shadow-sm">
                 {[
                   { id: 'all', label: '全部技能' },
                   { id: 'marketing', label: '营销推广 (Marketing)' },
@@ -949,10 +949,10 @@ export default function LearnPage() {
                   <button
                     key={cat.id}
                     onClick={() => setSkillCategory(cat.id as typeof skillCategory)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
                       skillCategory === cat.id
-                        ? 'bg-indigo-600 text-white shadow'
-                        : 'text-slate-400 hover:text-slate-200 cursor-pointer'
+                        ? 'bg-amber-500 text-white shadow shadow-amber-500/20'
+                        : 'text-slate-500 hover:text-amber-700 hover:bg-amber-500/5 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer'
                     }`}
                   >
                     {cat.label}
@@ -967,42 +967,42 @@ export default function LearnPage() {
                   return (
                     <div
                       key={skill.id}
-                      className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 flex flex-col justify-between hover:border-indigo-500/30 transition-all duration-300"
+                      className="rounded-xl border border-amber-200/60 bg-white/80 p-5 flex flex-col justify-between hover:border-amber-400 dark:border-slate-800 dark:bg-slate-900/30 dark:hover:border-amber-550/30 transition-all duration-300 shadow-sm"
                     >
                       <div>
                         {/* Header info */}
                         <div className="flex items-start justify-between gap-2 mb-3">
                           <div className="flex items-center gap-2.5">
                             <span className="text-2xl">{skill.icon}</span>
-                            <h3 className="font-bold text-sm sm:text-base text-slate-100">{skill.title}</h3>
+                            <h3 className="font-black text-sm sm:text-base text-slate-850 dark:text-slate-100">{skill.title}</h3>
                           </div>
                           <span
-                            className={`rounded px-2 py-0.5 text-[10px] font-bold border ${
+                            className={`rounded px-2 py-0.5 text-[10px] font-black border ${
                               isInstalled
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-slate-800 text-slate-400 border-slate-700'
+                                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
+                                : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-450 dark:border-slate-700'
                             }`}
                           >
                             {isInstalled ? '已激活' : '未安装'}
                           </span>
                         </div>
 
-                        <p className="text-xs text-slate-400 leading-relaxed mb-4">{skill.desc}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-4 font-semibold">{skill.desc}</p>
                         
                         {/* Rating & Installs */}
-                        <div className="flex items-center gap-4 text-[10px] text-slate-500 font-bold mb-4">
-                          <span className="flex items-center gap-1 text-amber-500">
+                        <div className="flex items-center gap-4 text-[10px] text-slate-500 font-black mb-4">
+                          <span className="flex items-center gap-1 text-amber-600">
                             <Star size={11} fill="currentColor" /> {skill.rating}
                           </span>
                           <span>活跃使用数: {skill.installs}</span>
                         </div>
 
                         {/* Bullets */}
-                        <div className="space-y-1 border-t border-slate-800/80 pt-3.5 mb-4">
-                          <span className="text-[10px] text-slate-500 uppercase tracking-widest block mb-1 font-bold">技能优势</span>
+                        <div className="space-y-1 border-t border-amber-100 dark:border-slate-800/80 pt-3.5 mb-4">
+                          <span className="text-[10px] text-slate-400 dark:text-slate-505 uppercase tracking-widest block mb-1 font-black">技能优势</span>
                           {skill.features.map((feat, fIdx) => (
-                            <div key={fIdx} className="flex items-center gap-2 text-xs text-slate-350">
-                              <CheckCircle2 size={12} className="text-indigo-400 shrink-0" />
+                            <div key={fIdx} className="flex items-center gap-2 text-xs text-slate-655 dark:text-slate-350 font-semibold">
+                              <CheckCircle2 size={12} className="text-amber-500 dark:text-amber-400 shrink-0" />
                               <span>{feat}</span>
                             </div>
                           ))}
@@ -1012,10 +1012,10 @@ export default function LearnPage() {
                       {/* Action Toggle Button */}
                       <button
                         onClick={() => handleToggleSkill(skill.id)}
-                        className={`w-full py-2 rounded-xl text-xs font-bold transition-all ${
+                        className={`w-full py-2 rounded-xl text-xs font-black transition-all ${
                           isInstalled
-                            ? 'bg-slate-900 border border-slate-800 text-rose-500 hover:bg-rose-950/20 hover:border-rose-900/30'
-                            : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow shadow-indigo-900/25'
+                            ? 'bg-rose-50 border border-rose-200 text-rose-600 hover:bg-rose-100 dark:bg-slate-900 dark:border-slate-800 dark:text-rose-500 dark:hover:bg-rose-950/20 dark:hover:border-rose-900/30'
+                            : 'bg-amber-500 hover:bg-amber-650 text-white shadow shadow-amber-500/10'
                         } cursor-pointer`}
                       >
                         {isInstalled ? '卸载技能插件' : '一键启用技能'}
@@ -1026,7 +1026,6 @@ export default function LearnPage() {
               </div>
             </div>
           )}
-
           {/* 4. Self-Media Operations Tab */}
           {activeTab === 'school' && (
             <div className="space-y-6 animate-in fade-in duration-200">
