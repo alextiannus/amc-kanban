@@ -780,5 +780,19 @@ RolePermission 表：
 - `src/app/learn/page.tsx`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.11 — 2026-06-30（侧边栏交互体验优化与提示文字修正）
+
+### 侧边栏回缩防打扰与日历提示文字微调
+- **侧边栏回缩防打扰**：在 `Sidebar.tsx` 中增加 `isHovered` 状态跟踪，当用户的鼠标悬停在左侧菜单栏区域时，自动挂起回缩动作，移开后恢复 3 秒倒计时自动回缩。
+- **日程提示文字本地化微调**：将内容日历编辑面板与草稿详情弹窗中的 `内容创意 / 生成指令 (AI Idea & Prompt)` 提示文本调整为更贴合运营视角的 `素材说明/今日主题`。
+
+### 影响文件
+- `src/components/layout/Sidebar.tsx`
+- `src/components/dashboard/DashboardCalendar.tsx`
+- `src/components/dashboard/DraftManagementView.tsx`
+- `docs/prd_amc.md`
+
 
 
