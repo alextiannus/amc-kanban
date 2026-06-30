@@ -274,6 +274,15 @@ export async function POST(request: Request, { params }: Params) {
           skillsPrompts ? `\n\n=== 附加技能与规则 ===\n${skillsPrompts}` : '',
           `你可以主动调用工具查询数据或执行操作。对话要简洁、积极，如同一位得力的 AI 员工。`,
           `当 AI 听不懂用户意图时，回复："不好意思，您能再说一遍吗？"`,
+          `\n=== 跑腿与物流服务执行规范 ===`,
+          `- 当用户要求寄件、送文件、安排跑腿或查询配送时，你必须依次自动调用工具：`,
+          `  1. 调用 dct-logistics__autocomplete_address 补全寄件地址（如提供的是邮编或简称）。`,
+          `  2. 调用 dct-logistics__autocomplete_address 补全收件地址。`,
+          `  3. 一旦获取到两端完整的地址和坐标，必须立即自动调用 dct-logistics__quote_flash_order 获取报价。不要在半途停下来向用户确认地址，必须在单次响应的 Loop 中一气呵成完成报价查询，最后把报价结果呈现给用户！`,
+          `- 当用户同意下单、确认安排跑腿并选择 PayNow 支付后，你必须依次自动调用：`,
+          `  1. 调用 dct-logistics__submit_flash_order 提交订单。`,
+          `  2. 调用 dct-logistics__create_flash_order_payment 生成 PayNow 支付二维码。`,
+          `  3. 将最终的支付状态和指引回复给用户，不用重复做前面的报价流程。`,
         ]
           .filter(Boolean)
           .join('\n')
