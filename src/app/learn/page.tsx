@@ -31,31 +31,9 @@ import {
   Share2
 } from 'lucide-react'
 
-const BG_STYLE_LABELS = {
-  0: '默认 (单侧太阳花)',
-  1: '双侧漂浮太阳花',
-  2: '向日葵缓旋辐射',
-}
-
 export default function LearnPage() {
   const [activeTab, setActiveTab] = useState<'qa' | 'manual' | 'skills' | 'school'>('school')
   const [bgStyle, setBgStyle] = useState<0 | 1 | 2>(0)
-
-  useEffect(() => {
-    const saved = localStorage.getItem('amc_learn_bg_style')
-    if (saved) {
-      const parsed = parseInt(saved, 10)
-      if (parsed === 0 || parsed === 1 || parsed === 2) {
-        setBgStyle(parsed)
-      }
-    }
-  }, [])
-
-  const cycleBgStyle = () => {
-    const next = ((bgStyle + 1) % 3) as 0 | 1 | 2
-    setBgStyle(next)
-    localStorage.setItem('amc_learn_bg_style', next.toString())
-  }
 
   // Q&A Category States
   const [qaSearch, setQaSearch] = useState('')
@@ -78,6 +56,22 @@ export default function LearnPage() {
   const [schoolItems, setSchoolItems] = useState<any[]>([])
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<any | null>(null)
+
+  useEffect(() => {
+    if (selectedArticle) {
+      // Stable hash based on article ID to give each article a unique template
+      let hash = 0
+      const idStr = selectedArticle.id || ''
+      for (let i = 0; i < idStr.length; i++) {
+        hash = idStr.charCodeAt(i) + ((hash << 5) - hash)
+      }
+      setBgStyle((Math.abs(hash) % 3) as 0 | 1 | 2)
+    } else {
+      // Randomize on tab/view changes
+      const rand = Math.floor(Math.random() * 3) as 0 | 1 | 2
+      setBgStyle(rand)
+    }
+  }, [selectedArticle, activeTab])
 
   const handleDeleteFaq = async (id: string) => {
     if (!confirm('确定要删除这条 Q&A 吗？')) return
@@ -322,22 +316,14 @@ export default function LearnPage() {
 
       <div className="mx-auto max-w-5xl px-6 py-12 relative z-10">
         
-        {/* Breadcrumb & BG Style Selector Row */}
-        <div className="mb-6 flex items-center justify-between">
+        {/* Breadcrumb Navigation */}
+        <div className="mb-6">
           <Link
             href="/board"
             className="inline-flex items-center gap-2 text-xs font-black text-amber-600 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
           >
             ← 返回主控面板
           </Link>
-          
-          <button
-            onClick={cycleBgStyle}
-            className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 text-[10px] font-black text-amber-700 dark:text-amber-400 cursor-pointer transition-all active:scale-95 shadow-sm"
-            title="点击切换背景创意"
-          >
-            🖼️ 背景模版: {BG_STYLE_LABELS[bgStyle]}
-          </button>
         </div>
 
         {/* Learning Hub Banner */}
@@ -358,10 +344,10 @@ export default function LearnPage() {
         {/* Grid Main 4 Tabs */}
         <div className="mb-10 grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
+            { id: 'school', label: '📱 自媒体运营', desc: '分享与阅读自媒体运营资料' },
             { id: 'qa', label: '❓ 常见问题 (Q&A)', desc: '快速解答操作与发布疑问' },
             { id: 'manual', label: '📋 使用手册 (Manual)', desc: '标准协作 SOP 与系统说明' },
-            { id: 'skills', label: '🛒 技能中心 (Skill Hub)', desc: '精选营销与内容创作技能包' },
-            { id: 'school', label: '📱 自媒体运营', desc: '分享与阅读自媒体运营资料' }
+            { id: 'skills', label: '🛒 技能中心 (Skill Hub)', desc: '精选营销与内容创作技能包' }
           ].map(tab => (
             <button
               key={tab.id}
