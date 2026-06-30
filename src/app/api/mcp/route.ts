@@ -18,6 +18,7 @@
 
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { createAmcMcpServer, getAgentFromKey } from '@/lib/partner/mcp/server'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,6 +40,80 @@ async function handleMcp(request: Request): Promise<Response> {
       JSON.stringify({ error: 'Invalid or expired agent API key' }),
       { status: 401, headers: { 'Content-Type': 'application/json' } }
     )
+  }
+
+  // Intercept POST request for direct uploads
+  if (request.method === 'POST') {
+    const contentType = request.headers.get('content-type') || ''
+    const clone = request.clone()
+
+    if (contentType.includes('text/markdown') || contentType.includes('text/plain')) {
+      try {
+        const markdown = await clone.text()
+        if (!markdown.trim()) {
+          return new Response(
+            JSON.stringify({ error: 'markdown content is empty' }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } }
+          )
+        }
+        const url = new URL(request.url)
+        let title = url.searchParams.get('title') || ''
+        const desc = url.searchParams.get('desc') || ''
+        if (!title) {
+          const match = markdown.match(/^\s*#\s+(.+)$/m)
+          title = match ? match[1].trim() : '未命名自媒体文章'
+        }
+        const item = await prisma.schoolItem.create({
+          data: {
+            type: 'ARTICLE',
+            title,
+            desc: desc || null,
+            markdown,
+            authorId: agent.id
+          }
+        })
+        return new Response(
+          JSON.stringify({ success: true, item }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ error: 'Failed to process markdown upload' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
+    if (contentType.includes('application/json')) {
+      try {
+        const body = await clone.json()
+        if (body && typeof body === 'object' && !('jsonrpc' in body)) {
+          // Direct JSON upload
+          const { title, desc, markdown } = body
+          if (!markdown) {
+            return new Response(
+              JSON.stringify({ error: 'markdown is required' }),
+              { status: 400, headers: { 'Content-Type': 'application/json' } }
+            )
+          }
+          const item = await prisma.schoolItem.create({
+            data: {
+              type: 'ARTICLE',
+              title: title || '未命名文章',
+              desc: desc || null,
+              markdown,
+              authorId: agent.id
+            }
+          })
+          return new Response(
+            JSON.stringify({ success: true, item }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        }
+      } catch (e) {
+        // Fall through to standard MCP transport if JSON parsing fails
+      }
+    }
   }
 
   // Create a fresh transport + server per request (stateless, Render-friendly)

@@ -808,5 +808,18 @@ RolePermission 表：
 - `src/app/board/subscription/SubscriptionClient.tsx`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.13 — 2026-06-30（AMC 学院默认 Tab 与文章上传接口扩展）
+
+### 学院默认选项卡调整与 Markdown 直接上传支持
+- **自媒体运营 Tab 设为默认**：将学习中心主页面（`/learn`）的默认激活选项卡从 `'qa'`（常见问题）改为 `'school'`（自媒体运营）。
+- **增加 api/mcp 接口的 Markdown/JSON 直接上传支持**：扩展了 `/api/mcp` 路由，允许 AI 应用以 `text/markdown` 或非 standard JSON-RPC 格式直接通过 HTTP POST 方式提交 Markdown 内容，并将其自动解析并插入数据库为 `ARTICLE` 类型的学习中心文章。
+
+### 影响文件
+- `src/app/learn/page.tsx`
+- `src/app/api/mcp/route.ts`
+- `docs/prd_amc.md`
+
 
 

@@ -32,7 +32,7 @@ import {
 } from 'lucide-react'
 
 export default function LearnPage() {
-  const [activeTab, setActiveTab] = useState<'qa' | 'manual' | 'skills' | 'school'>('qa')
+  const [activeTab, setActiveTab] = useState<'qa' | 'manual' | 'skills' | 'school'>('school')
   
   // Q&A Category States
   const [qaSearch, setQaSearch] = useState('')
