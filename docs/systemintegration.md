@@ -374,3 +374,63 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
         *   若访问根路径 `/`，已登录重定向到运营看板 `/board`，未登录停留在根路径 `/`（即主理人/代理商登录页）。
         *   限制无法访问品牌主路径。如果访问 `/dashboard/brand-owner` 或其子路径，中间件将根据当前环境动态将其重定向到对应的品牌主域名（例如 `http(s)://amc-mm.immedi.ai/dashboard/brand-owner`）。
 
+---
+
+## 10. 集中式 MCP 聚合器与服务端智能体客户端架构 (Centralized MCP Client & Skills Integration)
+
+为了实现商家端（amc-mm）AI 语音伴侣/BD 助手无缝、极速且安全地接入外部垂直领域 Agent 服务（即 MCP Server，如进销存系统、财务系统、本地营销系统等），并动态挂载品牌特定 Skills，系统采用 **“中台聚合，Schema 本地缓存，按需延迟连接”** 的架构设计。
+
+### 10.1 核心数据架构 (Database Schema)
+新增外部 MCP 服务的连接配置与自定义 Skills 表设计，以实现多租户隔离与能力插拔：
+
+*   **`McpServerConfig` (MCP 服务配置表)**: 存储品牌绑定的外部 Agent 服务的 SSE 终点及认证 Key。
+*   **`CompanionSkill` (AI 伴侣 Skills 库)**: 存储品牌自定义技能的 System Prompt（如小红书爆款写法、五星好评回复规则）。
+
+### 10.2 性能与延迟控制设计 (Performance & Latency Mitigations)
+为了在语音对话（秒级响应）环境中消除网络多重握手带来的卡顿，采用如下控制策略：
+1.  **Schema 本地内存/Redis 缓存**: 对外部 MCP 服务的 `listTools` 结构实施 10 分钟 TTL 缓存，仅在初始化或定期轮询时进行 schema 获取。
+2.  **延迟连接 (Lazy Connection)**: 对话主循环加载时，仅传递工具定义；仅当 LLM 决策需要进行工具调用（Tool Calling）时，才建立真实 TCP 握手并发送 `callTool`，避免无用开销。
+3.  **BFF 网关聚合模式**:
+    *   外部 MCP 服务统一由 `amc-kanban` 后台中台的客户端管理器（`McpClientManager`）进行接入。
+    *   MM 伴侣仅向内部 Kanban API 发起统一接口查询，减少移动端长连接数并提供统一的错误隔离。
+
+### 10.3 核心代码模块契约 (Code Interfaces)
+
+#### 10.3.1 McpClientManager (客户端管理器)
+```typescript
+interface ConnectedServer {
+  name: string;
+  client: Client;
+  transport: SSEClientTransport;
+}
+
+export class McpClientManager {
+  private static connections: Map<string, ConnectedServer[]> = new Map();
+
+  // 聚合指定品牌所有激活 MCP Server 的工具集，并加前缀隔离命名空间
+  public static async aggregateExternalTools(brandId: string): Promise<any[]>;
+
+  // 将调用路由并分发给对应的外部 MCP 服务执行
+  public static async executeTool(brandId: string, namespacedName: string, args: any): Promise<any>;
+}
+```
+
+#### 10.3.2 语音聊天 API 网关流转
+```
+[ 语音输入 / 文本 ]
+       │
+       ▼
+1. 校验 brandId ──► 读取 active 状态的 CompanionSkill ──► 组装 System Prompt
+       │
+       ▼
+2. 读取 McpClientManager.aggregateExternalTools (内存缓存，0ms) ──► 形成 combinedTools
+       │
+       ▼
+3. 调用大模型 (含 combinedTools)
+       │
+       ├─► [ LLM 返回普通文本回复 ] ──► 立即返回给语音端
+       │
+       └─► [ LLM 决策 Tool Calling ] ──► 根据前缀分发给本地/外部 MCP ──► 回传大模型 ──► 生成最终音频/文本
+```
+
+
