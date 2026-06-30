@@ -794,5 +794,19 @@ RolePermission 表：
 - `src/components/dashboard/DraftManagementView.tsx`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.12 — 2026-06-30（订阅周期与计费折扣调整）
+
+### 订阅周期约束与价格政策更新
+- **移除 1 个月短期订阅**：最低起签周期调整为 3 个月，在新建品牌向导及订阅计划前台页面中剔除了 1 个月（单月）的可选项，支持 3/6/12 个月周期。
+- **取消所有订阅周期折扣**：下线了原先 3 个月(95折)、6 个月(9折)、12 个月(85折) 的自动周期折扣算法，所有周期统一使用无折扣基础月费（Starter: $600/mo, Essential: $2800/mo），移除了所有周期折扣率提示与优惠标签。
+
+### 影响文件
+- `src/lib/subscription/catalog.ts`
+- `src/components/brands/NewBrandWizard.tsx`
+- `src/app/board/subscription/SubscriptionClient.tsx`
+- `docs/prd_amc.md`
+
 
 

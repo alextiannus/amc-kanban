@@ -1203,13 +1203,12 @@ export default function BrandSubscriptionPage() {
                 </div>
                 
                 {/* Duration Buttons */}
-                <div className="grid grid-cols-4 gap-2 shrink-0 w-full md:w-auto max-w-sm">
-                  {[
-                    { months: 1,  label: '1 个月',  discount: 0 },
-                    { months: 3,  label: '3 个月',  discount: 5 },
-                    { months: 6,  label: '6 个月',  discount: 10 },
-                    { months: 12, label: '12 个月', discount: 15, badge: '最优惠' },
-                  ].map(d => (
+                <div className="grid grid-cols-3 gap-2 shrink-0 w-full md:w-auto max-w-sm">
+                  {([
+                    { months: 3,  label: '3 个月',  discount: 0 },
+                    { months: 6,  label: '6 个月',  discount: 0 },
+                    { months: 12, label: '12 个月', discount: 0 },
+                  ] as Array<{ months: number; label: string; discount: number; badge?: string }>).map(d => (
                     <button
                       key={d.months}
                       onClick={() => setDurationMonths(d.months)}
@@ -1245,10 +1244,7 @@ export default function BrandSubscriptionPage() {
                   const isRecommended = p.id === recommendedPlanId
                   const baseMonthly = p.promoMonthlyUsd ?? p.monthlyUsd
                   
-                  const discountPct = 
-                    durationMonths === 3 ? 5 :
-                    durationMonths === 6 ? 10 :
-                    durationMonths === 12 ? 15 : 0;
+                  const discountPct = 0;
                   
                   const cycleMonthly = Math.round(baseMonthly * (1 - discountPct / 100))
                   const cycleTotal = cycleMonthly * durationMonths
@@ -1301,9 +1297,7 @@ export default function BrandSubscriptionPage() {
                             </span>
                           </div>
                           <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
-                            {durationMonths === 1 
-                              ? '单月订阅' 
-                              : `${durationMonths}个月总计 $${cycleTotal} (已扣减折扣)`}
+                            {durationMonths}个月总计 ${cycleTotal}
                           </p>
                         </div>
 

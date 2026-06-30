@@ -211,7 +211,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
   },
 ]
 
-export const ALLOWED_DURATIONS = [1, 3, 6, 12] as const
+export const ALLOWED_DURATIONS = [3, 6, 12] as const
 
 export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.01'
 
@@ -249,11 +249,8 @@ export function calculatePricing(
   const monthlyBaseUsd = plan.promoMonthlyUsd ?? plan.monthlyUsd
   const recurringSubtotalUsd = (monthlyBaseUsd + recurringAddonsUsd) * durationMonths
   
-  // Align discounts with wizard: 3mo=5%, 6mo=10%, 12mo=15%
-  const discountPercent = 
-    durationMonths === 3 ? 5 :
-    durationMonths === 6 ? 10 :
-    durationMonths === 12 ? 15 : 0;
+  // Align discounts with wizard: No discounts
+  const discountPercent = 0;
 
   const recurringAfterDiscountUsd = Math.round(recurringSubtotalUsd * (1 - discountPercent / 100))
   const discountUsd = recurringSubtotalUsd - recurringAfterDiscountUsd

@@ -81,11 +81,10 @@ const PLANS: PlanOption[] = [
   },
 ]
 
-const DURATIONS = [
-  { months: 1,  label: '1 个月',  discount: 0 },
-  { months: 3,  label: '3 个月',  discount: 5 },
-  { months: 6,  label: '6 个月',  discount: 10 },
-  { months: 12, label: '12 个月', discount: 15, badge: '最优惠' },
+const DURATIONS: Array<{ months: number; label: string; discount: number; badge?: string }> = [
+  { months: 3,  label: '3 个月',  discount: 0 },
+  { months: 6,  label: '6 个月',  discount: 0 },
+  { months: 12, label: '12 个月', discount: 0 },
 ]
 
 const PLAN_COLOR: Record<string, { bg: string; border: string; text: string; badge: string; ring: string }> = {
