@@ -51,11 +51,13 @@ function InlineBrandSwitcher({
   activeBrand,
   setActiveBrand,
   collapsed,
+  onAddNewBrand,
 }: {
   brands: Brand[]
   activeBrand: Brand | null
   setActiveBrand: (b: Brand) => void
   collapsed: boolean
+  onAddNewBrand: () => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -140,7 +142,7 @@ function InlineBrandSwitcher({
           </div>
           <div className="px-1.5 pb-1.5 pt-0.5 border-t border-slate-100 dark:border-slate-800">
             <button
-              onClick={() => { setOpen(false); router.push('/board/subscription') }}
+              onClick={() => { setOpen(false); onAddNewBrand() }}
               className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-left transition-colors hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400"
             >
               <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 flex items-center justify-center shrink-0">
@@ -180,7 +182,11 @@ export default function Sidebar({
     // If the page has a secondary menu (currently 'calendar' is the main page with a secondary menu),
     // wait 3 seconds and automatically collapse the main menu.
     // If the user is hovering over/interacting with the sidebar, do not auto-collapse.
-    const viewsWithSubMenu: BoardView[] = ['calendar']
+    const viewsWithSubMenu: BoardView[] = [
+      'calendar', 'dashboard', 'drafts', 'assets', 
+      'game', 'socialInsight', 'dataAnalysis', 'agents', 
+      'logs', 'managementOverview'
+    ]
     if (viewsWithSubMenu.includes(currentView) && !collapsed && !isHovered) {
       const timer = setTimeout(() => {
         setCollapsed(true)
@@ -291,6 +297,7 @@ export default function Sidebar({
                         activeBrand={activeBrand}
                         setActiveBrand={setActiveBrand}
                         collapsed={collapsed}
+                        onAddNewBrand={() => setWizardOpen(true)}
                       />
                     </div>
                   )}
@@ -374,25 +381,7 @@ export default function Sidebar({
         })}
       </nav>
 
-      {/* ── New Brand Button (for Principal / BD / Admin) ──────────── */}
-      {canCreateBrand && (
-        <div className="shrink-0 px-2 pb-1">
-          <button
-            id="sidebar-new-brand"
-            onClick={() => setWizardOpen(true)}
-            title={collapsed ? '新建品牌' : undefined}
-            className={`
-              w-full flex items-center gap-2 px-3 py-2 rounded-xl transition-colors
-              bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40
-              text-indigo-700 dark:text-indigo-300 text-xs font-semibold
-              ${collapsed ? 'justify-center' : ''}
-            `}
-          >
-            <Plus size={14} className="shrink-0" />
-            {!collapsed && <span>新建品牌</span>}
-          </button>
-        </div>
-      )}
+
 
       {/* ── Success toast ─────────────────────────────────────────── */}
       {wizardSuccess && (

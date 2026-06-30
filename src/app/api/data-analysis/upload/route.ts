@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getHuaweiObsConfig, uploadHuaweiObsObject } from '@/lib/integrations/huaweiObs'
 import fs from 'fs/promises'
 import path from 'path'
 
@@ -48,14 +49,6 @@ export async function POST(request: Request) {
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    // Save under public/snapshots/${accountId}/
-    const uploadDir = path.join(process.cwd(), 'public/snapshots', accountId)
-    try {
-      await fs.access(uploadDir)
-    } catch {
-      await fs.mkdir(uploadDir, { recursive: true })
-    }
-
     // Determine extension, default to .png
     let ext = '.png'
     if (file.name) {
@@ -65,11 +58,53 @@ export async function POST(request: Request) {
       }
     }
 
-    const fileName = `${Date.now()}-uploaded${ext}`
-    const filePath = path.join(uploadDir, fileName)
-    await fs.writeFile(filePath, buffer)
+    let imageUrl = ''
+    const obsConfig = getHuaweiObsConfig()
+    console.log('[Upload Snapshot] Resolving storage backend. OBS Config:', obsConfig ? {
+      bucket: obsConfig.bucket,
+      endpoint: obsConfig.endpoint,
+      region: obsConfig.region,
+      publicBaseUrl: obsConfig.publicBaseUrl,
+      hasAccessKey: !!obsConfig.accessKeyId,
+      hasSecretKey: !!obsConfig.secretAccessKey,
+    } : 'null (Falling back to local storage)')
 
-    const imageUrl = `/snapshots/${accountId}/${fileName}`
+    if (obsConfig) {
+      const obsKey = `snapshots/${accountId}/${Date.now()}-uploaded${ext}`
+      console.log('[Upload Snapshot] Uploading to Huawei OBS with key:', obsKey)
+      const uploadResult = await uploadHuaweiObsObject({
+        key: obsKey,
+        body: buffer,
+        contentType: file.type || 'image/png'
+      })
+      if (!uploadResult.ok) {
+        console.error('[Upload Snapshot] Huawei OBS Upload failed:', uploadResult.error)
+        return NextResponse.json({ 
+          error: `Huawei OBS upload failed: ${uploadResult.error}`,
+          debug: {
+            bucket: obsConfig.bucket,
+            endpoint: obsConfig.endpoint,
+            error: uploadResult.error,
+          }
+        }, { status: 400 })
+      }
+      imageUrl = uploadResult.url
+      console.log('[Upload Snapshot] Huawei OBS Upload succeeded. URL:', imageUrl)
+    } else {
+      // Local fallback for local development without OSS credentials
+      const uploadDir = path.join(process.cwd(), 'public/snapshots', accountId)
+      console.log('[Upload Snapshot] Local storage fallback path:', uploadDir)
+      try {
+        await fs.access(uploadDir)
+      } catch {
+        await fs.mkdir(uploadDir, { recursive: true })
+      }
+      const fileName = `${Date.now()}-uploaded${ext}`
+      const filePath = path.join(uploadDir, fileName)
+      await fs.writeFile(filePath, buffer)
+      imageUrl = `/snapshots/${accountId}/${fileName}`
+      console.log('[Upload Snapshot] Local write succeeded. URL:', imageUrl)
+    }
 
     // Insert into DB
     await prisma.$transaction([

@@ -37,7 +37,13 @@ export function getHuaweiObsConfig(): ObsConfig | null {
   const bucket = process.env.HUAWEI_OBS_BUCKET || process.env.OBS_BUCKET || 'robotics'
   let endpoint = normalizeEndpoint(process.env.HUAWEI_OBS_ENDPOINT || process.env.OBS_ENDPOINT || 'obs.ap-southeast-3.myhuaweicloud.com')
   if (endpoint.startsWith(`${bucket}.`)) endpoint = endpoint.slice(bucket.length + 1)
-  const region = process.env.HUAWEI_OBS_REGION || process.env.OBS_REGION || DEFAULT_REGION
+  
+  let region = process.env.HUAWEI_OBS_REGION || process.env.OBS_REGION
+  if (!region) {
+    const match = endpoint.match(/obs\.([^.]+)\.myhuaweicloud\.com/)
+    region = match ? match[1] : DEFAULT_REGION
+  }
+  
   const publicBaseUrl = (process.env.HUAWEI_OBS_PUBLIC_BASE_URL || process.env.OBS_PUBLIC_BASE_URL || `https://${bucket}.${endpoint}`).replace(/\/+$/, '')
 
   if (!accessKeyId || !secretAccessKey || !bucket || !endpoint) return null
@@ -77,8 +83,15 @@ export async function uploadHuaweiObsObject(input: {
     'x-amz-date': amzDate,
   }
 
-  const signedHeaders = Object.keys(headers).sort().join(';')
-  const canonicalHeaders = Object.keys(headers).sort().map((key) => `${key}:${headers[key]}\n`).join('')
+  // Only sign host and x-amz-* headers to prevent signature mismatch if fetch alters content-type/cache-control
+  const headersToSign: Record<string, string> = {
+    host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+  }
+
+  const signedHeaders = Object.keys(headersToSign).sort().join(';')
+  const canonicalHeaders = Object.keys(headersToSign).sort().map((key) => `${key}:${headersToSign[key]}\n`).join('')
   const canonicalRequest = [
     'PUT',
     objectPath,

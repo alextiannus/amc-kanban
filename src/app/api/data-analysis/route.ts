@@ -82,7 +82,9 @@ export async function GET(request: Request) {
         owners: amcOwners,
         latestSnapshot: latestSnapshot ? {
           id: latestSnapshot.id,
-          imageUrl: latestSnapshot.imageUrl,
+          imageUrl: latestSnapshot.imageUrl.startsWith('/api/')
+            ? latestSnapshot.imageUrl
+            : latestSnapshot.imageUrl.replace(/^\/snapshots\//, '/api/snapshots/'),
           capturedAt: latestSnapshot.capturedAt,
           isUserUploaded: latestSnapshot.isUserUploaded,
           isReal: latestSnapshot.isReal,

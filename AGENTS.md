@@ -27,3 +27,24 @@ This applies to:
 When a user asks you to configure an API key, ALWAYS direct them to the Admin UI,
 NEVER suggest adding to Render Dashboard > Environment variables.
 <!-- END:system-config-rules -->
+
+<!-- BEGIN:file-storage-rules -->
+# File Storage Developer Guidelines (Huawei OBS / OSS)
+
+To prevent `403 Forbidden` (SignatureDoesNotMatch) errors and dynamic resource loading 404 bugs in Next.js production / containerized stacks, ALWAYS follow these guidelines when creating or modifying file storage features:
+
+### 1. Production Storage Requirement
+*   In production (`NODE_ENV === 'production'`), files MUST be uploaded to Huawei OBS (or other cloud storage, if configured) and never fall back to local disk storage, as container environments are ephemeral.
+
+### 2. Signature Safety (S3 V4 Signing)
+*   **Volatile Headers Exclusion**: Do NOT include volatile HTTP headers (like `Content-Type`, `Cache-Control`, or custom headers) in the `SignedHeaders` parameter of the AWS Signature Version 4. Standard HTTP client libraries (like `fetch` / `undici`) may normalize, append, or modify these headers during request transmission, causing signature mismatches.
+*   **Critical Headers Only**: Only sign `host`, `x-amz-content-sha256`, and `x-amz-date` headers to ensure signature stability.
+
+### 3. Dynamic Region Auto-Resolution
+*   Do NOT hardcode regions (e.g. defaulting to `ap-southeast-3`). If `OBS_REGION` or `HUAWEI_OBS_REGION` is missing in the environment, always parse the region dynamically from the `OBS_ENDPOINT` using `endpoint.match(/obs\.([^.]+)\.myhuaweicloud\.com/)` to prevent mismatches.
+
+### 4. Next.js Production Runtime File Serving Fallback
+*   If cloud storage is not configured (e.g. in offline local development), fall back to local file writes under `public/snapshots/...` or `public/uploads/...`.
+*   **Dynamic serving requirement**: Never reference locally-saved snapshots directly through static paths like `/snapshots/...` because Next.js only registers static files present at build time and will throw 404. Serve them dynamically through an API Route / Route Handler (e.g. `/api/snapshots/[accountId]/[filename]`) that reads files on-demand.
+<!-- END:file-storage-rules -->
+

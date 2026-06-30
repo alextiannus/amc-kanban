@@ -395,7 +395,7 @@ export default function Login() {
                   !isRegister ? 'bg-white text-slate-800 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Meet Your AI Staff
+                Sign In / 登录
               </button>
               <button
                 type="button"
@@ -404,15 +404,34 @@ export default function Login() {
                   isRegister ? 'bg-white text-slate-800 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Meet Your AI Staff
+                Sign Up / 注册
               </button>
             </div>
 
             {/* Form */}
             <form className="space-y-6" onSubmit={isRegister ? handleRegister : handleLogin}>
+              {/* Nickname Field (Register only) */}
+              {isRegister && (
+                <div>
+                  <label className={LABEL_CLASS} htmlFor="nickname">Name / 您的姓名或昵称</label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
+                    <input
+                      id="nickname"
+                      type="text"
+                      required
+                      className={INPUT_CLASS}
+                      placeholder="e.g. Alex Tian"
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Email Field */}
               <div>
-                <label className={LABEL_CLASS} htmlFor="email">Email Address</label>
+                <label className={LABEL_CLASS} htmlFor="email">Email Address / 电子邮箱</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                   <input
@@ -428,10 +447,48 @@ export default function Login() {
                 </div>
               </div>
 
+              {/* Phone Field (Register only) */}
+              {isRegister && (
+                <div>
+                  <label className={LABEL_CLASS} htmlFor="phone">Phone Number / 联系电话</label>
+                  <div className="relative">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
+                    <input
+                      id="phone"
+                      type="tel"
+                      required
+                      className={INPUT_CLASS}
+                      placeholder="e.g. +65 9xxx xxxx"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Country Field (Register only) */}
+              {isRegister && (
+                <div>
+                  <label className={LABEL_CLASS} htmlFor="country">Country / City (所在城市)</label>
+                  <div className="relative">
+                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
+                    <input
+                      id="country"
+                      type="text"
+                      required
+                      className={INPUT_CLASS}
+                      placeholder="e.g. Singapore"
+                      value={country}
+                      onChange={(e) => setCountry(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Password Field */}
               <div>
                 <div className="flex justify-between items-center mb-2 ml-1 mr-1">
-                  <label className="block font-jetbrains text-xs text-slate-500" htmlFor="password">Password</label>
+                  <label className="block font-jetbrains text-xs text-slate-500" htmlFor="password">Password / 密码</label>
                   {!isRegister && (
                     <a className="font-jetbrains text-xs text-purple-600 hover:text-purple-700 transition-colors hover:underline" href="#">Forgot?</a>
                   )}
@@ -458,34 +515,31 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Registration Fields */}
+              {/* Confirm Password Field (Register only) */}
               {isRegister && (
-                <>
-                  {/* Confirm Password Field */}
-                  <div>
-                    <label className={LABEL_CLASS} htmlFor="confirm-password">Confirm Password</label>
-                    <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
-                      <input
-                        id="confirm-password"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        required
-                        autoComplete="new-password"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg py-4 pl-12 pr-12 text-slate-800 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600/50 transition-all placeholder:text-slate-400 font-hanken text-base shadow-sm"
-                        placeholder="Confirm password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors"
-                      >
-                        {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                      </button>
-                    </div>
+                <div>
+                  <label className={LABEL_CLASS} htmlFor="confirm-password">Confirm Password / 确认密码</label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
+                    <input
+                      id="confirm-password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      autoComplete="new-password"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-lg py-4 pl-12 pr-12 text-slate-800 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600/50 transition-all placeholder:text-slate-400 font-hanken text-base shadow-sm"
+                      placeholder="Confirm password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
                   </div>
-                </>
+                </div>
               )}
 
               {/* Error Banner */}

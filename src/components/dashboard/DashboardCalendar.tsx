@@ -2506,18 +2506,19 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800/60 shadow-sm overflow-hidden flex flex-col flex-1">
-          {activeView !== 'day' && activeView !== 'list' && (
-            <div className="grid grid-cols-7 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-              {WEEKDAYS.map(d => (
-                <div key={d} className="text-center text-[10px] font-black text-slate-400 dark:text-slate-500 py-3 uppercase tracking-wider">
-                  {d === '日' || d === '六' ? <span className="text-red-400">{d}</span> : d}
+          {activeView !== 'day' && activeView !== 'list' ? (
+            <div className="overflow-x-auto flex-1 flex flex-col">
+              <div className="min-w-[700px] md:min-w-0 flex-1 flex flex-col">
+                <div className="grid grid-cols-7 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                  {WEEKDAYS.map(d => (
+                    <div key={d} className="text-center text-[10px] font-black text-slate-400 dark:text-slate-500 py-3 uppercase tracking-wider">
+                      {d === '日' || d === '六' ? <span className="text-red-400">{d}</span> : d}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
 
-          {activeView === 'month' && (
-            <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 dark:divide-slate-800 flex-1 min-h-[400px]">
+                {activeView === 'month' && (
+                  <div className="grid grid-cols-7 divide-x divide-y divide-slate-100 dark:divide-slate-800 flex-1 min-h-[400px]">
               {cells.map((day, idx) => {
                 const dayEvents = day ? (eventsByDay[day] || []) : []
                 const selected = day === selectedDay
@@ -2698,6 +2699,9 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
               })}
             </div>
           )}
+              </div>
+            </div>
+          ) : null}
 
           {activeView === 'day' && (
             <div className="flex-1 p-6 overflow-y-auto">
