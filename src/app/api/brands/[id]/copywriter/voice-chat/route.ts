@@ -334,6 +334,7 @@ export async function POST(request: Request, { params }: Params) {
           }
         )
 
+        console.log('[voice-chat] callGeminiChat result:', JSON.stringify(result, null, 2))
         const finalReply = result.reply || '抱歉，我处理时遇到了些问题，请再说一遍。'
 
         controller.enqueue(encoder.encode(JSON.stringify({

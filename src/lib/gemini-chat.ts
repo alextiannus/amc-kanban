@@ -307,6 +307,7 @@ export async function callGeminiChat(
                       pickupAddress: (args as any).pickupAddress,
                       destinationAddress: (args as any).destinationAddress
                     }
+                    console.log('[gemini-chat] Captured quoteData (Google):', JSON.stringify(quoteData, null, 2))
                   }
                 } catch (e) {
                   console.error('Failed to parse Quote data:', e)
@@ -463,6 +464,7 @@ export async function callGeminiChat(
                       pickupAddress: (parsedArgs as any).pickupAddress,
                       destinationAddress: (parsedArgs as any).destinationAddress
                     }
+                    console.log('[gemini-chat] Captured quoteData (OpenAI):', JSON.stringify(quoteData, null, 2))
                   }
                 } catch (e) {
                   console.error('Failed to parse Quote data:', e)
