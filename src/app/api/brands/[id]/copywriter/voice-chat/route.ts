@@ -282,42 +282,52 @@ export async function POST(request: Request, { params }: Params) {
       ...extTools
     ]
 
-    // Call gemini-chat with history and tools
-    const result = await callGeminiChat(systemPrompt, history, message, true, 500, combinedTools)
+    let currentMessage = message
+    let currentHistory = [...history]
+    let loopCount = 0
+    const maxLoops = 4
+    
+    let finalReply = ''
+    let finalAction = 'NONE'
+    let finalParams = {}
 
-    // If Gemini made a tool call, execute it and get a follow-up reply
-    if (result.toolCallName && result.toolCallArgs) {
-      const { resultText, actionReply } = await executeTool(result.toolCallName, result.toolCallArgs, brandId)
-
-      // If the tool has a predefined reply (e.g., approve/reject), use it directly
-      if (actionReply) {
-        return NextResponse.json({
-          reply: actionReply,
-          action: result.action,
-          params: result.params,
-        })
+    while (loopCount < maxLoops) {
+      loopCount++
+      const result = await callGeminiChat(systemPrompt, currentHistory, currentMessage, true, 500, combinedTools)
+      
+      if (result.toolCallName && result.toolCallArgs) {
+        console.log(`[voice-chat loop] Iteration ${loopCount}: executing tool ${result.toolCallName} with args:`, result.toolCallArgs)
+        const { resultText, actionReply } = await executeTool(result.toolCallName, result.toolCallArgs, brandId)
+        
+        if (actionReply) {
+          finalReply = actionReply
+          finalAction = result.action || 'NONE'
+          finalParams = result.params || {}
+          break
+        }
+        
+        // Append previous turn to history
+        currentHistory.push({ role: 'user', content: currentMessage })
+        currentHistory.push({ role: 'model', content: `[Tool: ${result.toolCallName}]` })
+        
+        // Next message is the tool result
+        currentMessage = `工具 ${result.toolCallName} 执行结果：\n${resultText}`
+      } else {
+        finalReply = result.reply || ''
+        finalAction = result.action || 'NONE'
+        finalParams = result.params || {}
+        break
       }
+    }
 
-      // Otherwise, send tool result back to Gemini for a natural language reply
-      const followUpHistory: ChatTurn[] = [
-        ...history.slice(-10),
-        { role: 'user', content: message },
-        { role: 'model', content: `[Tool: ${result.toolCallName}]` },
-        { role: 'user', content: `工具执行结果：${resultText}` },
-      ]
-
-      const followUp = await callGeminiChat(systemPrompt, followUpHistory, '请根据以上工具结果，用自然语言简洁地回答用户。', false, 500, combinedTools)
-      return NextResponse.json({
-        reply: followUp.reply || resultText,
-        action: result.action,
-        params: result.params,
-      })
+    if (!finalReply) {
+      finalReply = '抱歉，我处理时遇到了些问题，请再说一遍。'
     }
 
     return NextResponse.json({
-      reply: result.reply,
-      action: result.action || 'NONE',
-      params: result.params,
+      reply: finalReply,
+      action: finalAction,
+      params: finalParams,
     })
   } catch (error: any) {
     console.error('[Voice Chat API Error]:', error)
