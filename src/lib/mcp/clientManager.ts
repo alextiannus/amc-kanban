@@ -2,6 +2,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { prisma } from '@/lib/prisma'
+// @ts-ignore
+import { fetch as undiciFetch } from 'undici'
 
 interface ConnectedServer {
   name: string
@@ -52,13 +54,22 @@ export class McpClientManager {
     for (const config of configs) {
       try {
         const url = new URL(config.url)
-        const headers = (config.headers as Record<string, string>) || {}
+        const rawHeaders = (config.headers as Record<string, string>) || {}
+        const headers = {
+          'Accept': 'application/json, text/event-stream',
+          ...rawHeaders
+        }
         
         let transport: any
         if (config.headers && typeof config.headers === 'object') {
           // If authorization headers are present, use StreamableHTTPClientTransport for direct post auth
           transport = new StreamableHTTPClientTransport(url, {
-            requestInit: { headers }
+            requestInit: { 
+              headers,
+              // @ts-ignore
+              cache: 'no-store'
+            },
+            fetch: undiciFetch as any
           })
         } else {
           transport = new SSEClientTransport(url)
