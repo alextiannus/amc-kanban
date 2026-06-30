@@ -167,6 +167,7 @@ export default function Sidebar({
 }: SidebarProps) {
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
 
   useEffect(() => {
     try {
@@ -178,15 +179,16 @@ export default function Sidebar({
   useEffect(() => {
     // If the page has a secondary menu (currently 'calendar' is the main page with a secondary menu),
     // wait 3 seconds and automatically collapse the main menu.
+    // If the user is hovering over/interacting with the sidebar, do not auto-collapse.
     const viewsWithSubMenu: BoardView[] = ['calendar']
-    if (viewsWithSubMenu.includes(currentView) && !collapsed) {
+    if (viewsWithSubMenu.includes(currentView) && !collapsed && !isHovered) {
       const timer = setTimeout(() => {
         setCollapsed(true)
         try { localStorage.setItem(COLLAPSED_KEY, 'true') } catch {/* ignore */}
       }, 3000)
       return () => clearTimeout(timer)
     }
-  }, [currentView, collapsed])
+  }, [currentView, collapsed, isHovered])
 
   const toggleCollapsed = () => {
     setCollapsed(prev => {
@@ -227,14 +229,17 @@ export default function Sidebar({
 
   return (
     <>
-    <aside className={`
+    <aside
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={`
       relative flex flex-col shrink-0 h-screen
       bg-white dark:bg-slate-900
       border-r border-slate-100 dark:border-slate-800
       transition-all duration-300 ease-in-out
-      ${collapsed ? 'w-16' : 'w-56'}
+      \${collapsed ? 'w-16' : 'w-56'}
       overflow-hidden
-      ${className}
+      \${className}
     `}>
 
       {/* ── Logo ──────────────────────────────────────────────────── */}

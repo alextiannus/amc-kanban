@@ -1359,7 +1359,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
               {selectedDraft?.status !== 'published' && (
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">内容创意 / 生成指令 (AI Idea & Prompt)</label>
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">素材说明/今日主题</label>
                   <textarea
                     value={contentIdea}
                     onChange={(event) => setContentIdea(event.target.value)}

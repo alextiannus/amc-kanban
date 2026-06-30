@@ -1918,7 +1918,7 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
               
               {/* Content Idea & Generator Prompt */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">内容创意 / 生成指令 (AI Idea & Prompt)</label>
+                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">素材说明/今日主题</label>
                 <textarea
                   value={contentIdea}
                   onChange={(event) => setContentIdea(event.target.value)}
@@ -3139,7 +3139,7 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
                     {activeDrawerEvent.status !== 'done' && activeDrawerEvent.type !== 'task' && (
                       <div className="space-y-3 pt-2">
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">内容创意 / 生成指令 (AI Idea & Prompt)</label>
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">素材说明/今日主题</label>
                           <textarea
                             value={contentIdea}
                             onChange={(e) => setContentIdea(e.target.value)}
