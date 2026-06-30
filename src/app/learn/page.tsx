@@ -269,14 +269,19 @@ export default function LearnPage() {
   }, [schoolItems])
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 font-sans">
-      <div className="mx-auto max-w-5xl px-6 py-12">
+    <main className="min-h-screen bg-[#fefcf6] text-slate-800 dark:bg-slate-950 dark:text-slate-100 font-sans relative overflow-hidden">
+      {/* Background decoration grid & radial glowing halos for sunflower theme */}
+      <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(to_right,#f5eedd_1px,transparent_1px),linear-gradient(to_bottom,#f5eedd_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-35 dark:opacity-10 pointer-events-none"></div>
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-yellow-300/15 dark:bg-yellow-500/5 blur-3xl pointer-events-none"></div>
+      <div className="absolute top-[10%] right-[-15%] w-[60%] h-[60%] rounded-full bg-amber-400/10 dark:bg-amber-600/5 blur-3xl pointer-events-none"></div>
+
+      <div className="mx-auto max-w-5xl px-6 py-12 relative z-10">
         
         {/* Breadcrumb Navigation */}
         <div className="mb-6">
           <Link
             href="/board"
-            className="inline-flex items-center gap-2 text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors"
+            className="inline-flex items-center gap-2 text-xs font-black text-amber-600 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
           >
             ← 返回主控面板
           </Link>
@@ -284,15 +289,15 @@ export default function LearnPage() {
 
         {/* Learning Hub Banner */}
         <header className="mb-10 relative">
-          <div className="absolute top-0 right-0 opacity-15 blur-3xl w-64 h-64 bg-indigo-600 rounded-full pointer-events-none"></div>
+          <div className="absolute top-0 right-0 opacity-15 blur-3xl w-64 h-64 bg-amber-400 rounded-full pointer-events-none"></div>
           
-          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-300">
-            <GraduationCap size={14} /> AMC 学习与赋能中心
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-xs font-black text-amber-700 dark:text-amber-400">
+            <GraduationCap size={14} className="text-amber-600 dark:text-amber-400" /> AMC 学习与赋能中心
           </div>
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+          <h1 className="mt-4 text-4xl font-black tracking-tight bg-gradient-to-r from-slate-900 via-slate-800 to-amber-600 dark:from-white dark:via-slate-100 dark:to-amber-400 bg-clip-text text-transparent">
             AMC 学习中心
           </h1>
-          <p className="mt-3 max-w-3xl text-sm sm:text-base text-slate-450 leading-relaxed">
+          <p className="mt-3 max-w-3xl text-sm sm:text-base text-slate-600 dark:text-slate-400 leading-relaxed font-semibold">
             掌握 AMC，让每一分订阅费发挥最大价值。这是一站式餐饮/零售品牌主理人与 AI 员工深度协作的指南中心。
           </p>
         </header>
@@ -310,14 +315,16 @@ export default function LearnPage() {
               onClick={() => setActiveTab(tab.id as 'qa' | 'manual' | 'skills' | 'school')}
               className={`p-4 rounded-2xl border text-left transition-all duration-300 ${
                 activeTab === tab.id
-                  ? 'border-indigo-500 bg-indigo-950/40 shadow-lg shadow-indigo-950/40'
-                  : 'border-slate-800/80 bg-slate-900/40 hover:border-slate-700/80 hover:bg-slate-900/60 cursor-pointer'
+                  ? 'border-amber-500/80 bg-gradient-to-br from-amber-500/10 to-amber-600/5 dark:from-amber-950/30 dark:to-amber-900/10 shadow-lg shadow-amber-500/5'
+                  : 'border-amber-200/50 bg-white/70 dark:border-slate-850 dark:bg-slate-900/40 hover:border-amber-300 hover:bg-white dark:hover:border-slate-750 dark:hover:bg-slate-900/60 cursor-pointer'
               }`}
             >
-              <h3 className="font-bold text-sm sm:text-base text-slate-100 flex items-center gap-1.5">
+              <h3 className={`font-black text-xs sm:text-sm flex items-center gap-1.5 ${
+                activeTab === tab.id ? 'text-amber-700 dark:text-amber-400' : 'text-slate-800 dark:text-slate-200'
+              }`}>
                 {tab.label}
               </h3>
-              <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1.5 leading-snug font-semibold">
                 {tab.desc}
               </p>
             </button>
@@ -332,8 +339,8 @@ export default function LearnPage() {
             <div className="space-y-6 animate-in fade-in duration-200">
               
               {/* FAQ Search and Filter Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between border-b border-slate-800/80 pb-4">
-                <div className="flex flex-wrap gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800/80">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between border-b border-amber-200/50 dark:border-slate-800/80 pb-4">
+                <div className="flex flex-wrap gap-1 bg-white/70 dark:bg-slate-900/60 p-1 rounded-xl border border-amber-200/50 dark:border-slate-800/80 shadow-sm">
                   {[
                     { id: 'all', label: '全部' },
                     { id: 'accounts', label: '账号接入' },
@@ -345,10 +352,10 @@ export default function LearnPage() {
                     <button
                       key={cat.id}
                       onClick={() => setQaCategory(cat.id as typeof qaCategory)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
                         qaCategory === cat.id
-                          ? 'bg-indigo-600 text-white shadow'
-                          : 'text-slate-400 hover:text-slate-200 cursor-pointer'
+                          ? 'bg-amber-500 text-white shadow shadow-amber-500/20'
+                          : 'text-slate-500 hover:text-amber-700 hover:bg-amber-500/5 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer'
                       }`}
                     >
                       {cat.label}
@@ -358,13 +365,13 @@ export default function LearnPage() {
 
                 {/* Search Box */}
                 <div className="relative w-full sm:w-64">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                   <input
                     type="text"
                     value={qaSearch}
                     onChange={e => setQaSearch(e.target.value)}
                     placeholder="搜索常见问题..."
-                    className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900/40 text-xs font-semibold text-slate-200 placeholder-slate-500 outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-amber-200/60 bg-white/70 text-xs font-semibold text-slate-800 placeholder-slate-400 outline-none focus:ring-2 focus:ring-amber-500/40 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-205 dark:placeholder-slate-500"
                   />
                 </div>
               </div>
@@ -379,8 +386,8 @@ export default function LearnPage() {
                         key={faq.id}
                         className={`rounded-xl border transition-all duration-200 ${
                           isOpen
-                            ? 'border-indigo-500/40 bg-slate-900/60 shadow shadow-indigo-950/20'
-                            : 'border-slate-800/80 bg-slate-900/20 hover:border-slate-700/80 hover:bg-slate-900/40'
+                            ? 'border-amber-400 bg-amber-50/20 shadow-md shadow-amber-500/5 dark:border-amber-500/40 dark:bg-slate-900/60'
+                            : 'border-amber-200/60 bg-white/70 hover:border-amber-300 hover:bg-white dark:border-slate-850 dark:bg-slate-900/20'
                         }`}
                       >
                         <div
@@ -388,27 +395,27 @@ export default function LearnPage() {
                           className="flex items-center justify-between p-4 cursor-pointer select-none"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-400 border border-indigo-500/20">
+                            <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-black text-amber-600 border border-amber-500/20 uppercase tracking-wider">
                               {faq.tag}
                             </span>
-                            <h3 className="font-bold text-slate-100 text-sm sm:text-base pr-4">
+                            <h3 className="font-extrabold text-slate-850 dark:text-slate-100 text-sm sm:text-base pr-4">
                               {faq.q}
                             </h3>
                           </div>
-                          <div className="text-slate-500">
+                          <div className="text-amber-600 dark:text-slate-500">
                             {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                           </div>
                         </div>
 
                         {isOpen && (
-                          <div className="border-t border-slate-800/80 p-5 bg-slate-950/50 rounded-b-xl space-y-4">
-                            <div className="text-slate-350 text-sm leading-relaxed whitespace-pre-wrap">
+                          <div className="border-t border-amber-200/40 p-5 bg-white/40 dark:bg-slate-950/50 rounded-b-xl space-y-4">
+                            <div className="text-slate-655 dark:text-slate-350 text-sm leading-relaxed whitespace-pre-wrap font-medium">
                               {faq.a}
                             </div>
-                            <div className="flex justify-end border-t border-slate-800/30 pt-3">
+                            <div className="flex justify-end border-t border-amber-100/40 dark:border-slate-800/30 pt-3">
                               <button
                                 onClick={() => handleDeleteFaq(faq.id)}
-                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-400 hover:text-rose-300 transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 hover:text-rose-600 transition-colors cursor-pointer"
                               >
                                 <Trash2 size={13} /> 删除此问题
                               </button>
@@ -419,7 +426,7 @@ export default function LearnPage() {
                     )
                   })
                 ) : (
-                  <div className="py-20 text-center text-slate-500 text-xs">
+                  <div className="py-20 text-center text-slate-500 text-xs font-semibold">
                     没有找到符合筛选条件的常见问题。
                   </div>
                 )}
@@ -433,7 +440,7 @@ export default function LearnPage() {
               
               {/* Left Navigation Menu */}
               <div className="md:col-span-4 space-y-2">
-                <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest px-3">手册章节目录</p>
+                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest px-3">手册章节目录</p>
                 {[
                   { id: 'p0', label: 'Phase 0：签约与分配' },
                   { id: 'p1', label: 'Phase 1：品牌上线 (Onboarding)' },
@@ -445,10 +452,10 @@ export default function LearnPage() {
                   <button
                     key={chap.id}
                     onClick={() => setOpenManualSection(chap.id)}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all border ${
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all border ${
                       openManualSection === chap.id
-                        ? 'bg-indigo-600/15 border-indigo-500/35 text-indigo-400 shadow'
-                        : 'border-transparent text-slate-400 hover:bg-slate-900/50 hover:text-slate-200 cursor-pointer'
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 shadow-sm dark:bg-amber-950/20 dark:border-amber-550/30 dark:text-amber-400'
+                        : 'border-transparent text-slate-600 hover:bg-amber-500/5 hover:text-amber-700 dark:text-slate-400 dark:hover:bg-slate-900/50 dark:hover:text-slate-200 cursor-pointer'
                     }`}
                   >
                     {chap.label}
@@ -723,44 +730,44 @@ export default function LearnPage() {
                 {/* Phase 3 */}
                 {openManualSection === 'p3' && (
                   <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-100 border-b border-slate-800/80 pb-3">Phase 3：口碑与评价管理</h2>
-                    <p className="text-slate-350 text-sm leading-relaxed">
+                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 border-b border-amber-200/60 dark:border-slate-800/80 pb-3">Phase 3：口碑与评价管理</h2>
+                    <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed font-semibold">
                       AI Agent 与品牌主理人对用户反馈进行 24h 监控与自动回复，维护商家的线上口碑与搜索引擎权重。
                     </p>
 
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
+                    <div className="rounded-xl border border-amber-200/60 bg-white/70 shadow-sm dark:border-slate-800 dark:bg-slate-950/40 p-4 flex justify-center items-center overflow-hidden">
                       <img src="/phase3.webp" alt="Phase 3: 口碑与评价管理" loading="lazy" className="max-w-full h-auto rounded-lg" />
                     </div>
 
-                    <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40 mt-4">
-                      <table className="w-full text-xs text-slate-300 text-left border-collapse">
+                    <div className="overflow-x-auto rounded-xl border border-amber-200/60 bg-white/80 dark:border-slate-800 dark:bg-slate-950/40 shadow-sm mt-4">
+                      <table className="w-full text-xs text-slate-700 dark:text-slate-300 text-left border-collapse">
                         <thead>
-                          <tr className="bg-slate-900 border-b border-slate-800">
-                            <th className="p-3 font-bold text-slate-200 w-16">步骤</th>
-                            <th className="p-3 font-bold text-slate-200 w-32">执行者</th>
-                            <th className="p-3 font-bold text-slate-200">说明</th>
+                          <tr className="bg-amber-500/5 dark:bg-slate-900 border-b border-amber-100 dark:border-slate-800">
+                            <th className="p-3 font-black text-slate-800 dark:text-slate-200 w-16">步骤</th>
+                            <th className="p-3 font-black text-slate-800 dark:text-slate-200 w-32">执行者</th>
+                            <th className="p-3 font-black text-slate-800 dark:text-slate-200">说明</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800/50">
+                        <tbody className="divide-y divide-amber-100 dark:divide-slate-800/50">
                           <tr>
-                            <td className="p-3 font-bold">1. 拉取评论</td>
-                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
-                            <td className="p-3 text-slate-300">每日 20:00 自动抓取各个平台（如 Google Business 等）最新的消费者评论与评分。</td>
+                            <td className="p-3 font-black">1. 方案与主题设定</td>
+                            <td className="p-3 text-amber-600 dark:text-amber-400 font-bold">AMC Agent</td>
+                            <td className="p-3 text-slate-655 dark:text-slate-350 font-semibold">每日 20:00 自动抓取各个平台（如 Google Business 等）最新的消费者评论与评分。</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">2. 分类处理</td>
-                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
-                            <td className="p-3 text-slate-300">根据星级评分分类：好评（≥4星）自动礼貌感谢；中评/差评（≤3星）则拟定道歉信并给出解决方案。</td>
+                            <td className="p-3 font-black">2. 分类处理</td>
+                            <td className="p-3 text-amber-600 dark:text-amber-400 font-bold">AMC Agent</td>
+                            <td className="p-3 text-slate-655 dark:text-slate-350 font-semibold">根据星级评分分类：好评（≥4星）自动礼貌感谢；中评/差评（≤3星）则拟定道歉信并给出解决方案。</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">3. 自动回复</td>
-                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent</td>
-                            <td className="p-3 text-slate-300">在托管渠道（如 Google Business）于 24 小时内全自动调用接口回写回复，拉升口碑响应速度。</td>
+                            <td className="p-3 font-black">3. 自动回复</td>
+                            <td className="p-3 text-amber-600 dark:text-amber-400 font-bold">AMC Agent</td>
+                            <td className="p-3 text-slate-655 dark:text-slate-350 font-semibold">在托管渠道（如 Google Business）于 24 小时内全自动调用接口回写回复，拉升口碑响应速度。</td>
                           </tr>
                           <tr>
-                            <td className="p-3 font-bold">4. 异常升级</td>
-                            <td className="p-3 text-indigo-400 font-semibold">AMC Agent ➜ 主理人</td>
-                            <td className="p-3 text-slate-300">遇到账号凭证断连或突发恶性差评舆情危机时，自动在看板创建标红卡片通知主理人人工介入。</td>
+                            <td className="p-3 font-black">4. 异常升级</td>
+                            <td className="p-3 text-amber-600 dark:text-amber-400 font-bold">AMC Agent ➜ 主理人</td>
+                            <td className="p-3 text-slate-655 dark:text-slate-350 font-semibold">遇到账号凭证断连或突发恶性差评舆情危机时，自动在看板创建标红卡片通知主理人人工介入。</td>
                           </tr>
                         </tbody>
                       </table>
@@ -1024,27 +1031,27 @@ export default function LearnPage() {
           {activeTab === 'school' && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="space-y-6">
-                <div className="rounded-xl border border-slate-850 bg-slate-900/40 p-4 text-xs sm:text-sm text-slate-400 leading-relaxed">
+                <div className="rounded-xl border border-amber-300/40 bg-amber-500/5 p-4 text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-semibold">
                   💡 **自媒体运营资料中心**：支持 Agent 以 Markdown 格式上传运营指南与案例，供 AMC 主理人和 Agent 共享学习。
                 </div>
 
                 {selectedArticle ? (
                   /* Detailed Article View */
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6 sm:p-8 space-y-6 shadow-xl relative backdrop-blur-md">
+                  <div className="rounded-2xl border border-amber-200/60 bg-white/90 dark:bg-slate-900/30 p-6 sm:p-8 space-y-6 shadow-xl relative backdrop-blur-md">
                     <button
                       onClick={() => setSelectedArticle(null)}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-350 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 text-xs font-black text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors cursor-pointer"
                     >
                       ← 返回资料列表
                     </button>
                     
-                    <div className="space-y-3 border-b border-slate-800/60 pb-6">
-                      <h2 className="text-xl sm:text-2xl font-extrabold text-slate-100 leading-tight">
+                    <div className="space-y-3 border-b border-amber-200/50 dark:border-slate-800/60 pb-6">
+                      <h2 className="text-xl sm:text-2xl font-black text-slate-850 dark:text-slate-100 leading-tight">
                         {selectedArticle.title}
                       </h2>
-                      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-[11px] text-slate-400">
+                      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
                         <div className="flex items-center gap-4">
-                          <span className="flex items-center gap-1.5 font-bold text-indigo-405">
+                          <span className="flex items-center gap-1.5 font-black text-amber-600 dark:text-amber-400">
                             🤖 上传 Agent: {selectedArticle.author?.nickname || selectedArticle.author?.email || 'AMC Agent'}
                           </span>
                           <span>发布时间: {new Date(selectedArticle.createdAt).toLocaleDateString()}</span>
@@ -1052,7 +1059,7 @@ export default function LearnPage() {
                         <div className="flex items-center gap-4">
                           <button
                             onClick={(e) => handleShareArticle(selectedArticle.id, e)}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-indigo-400 hover:text-indigo-350 transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-black text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors cursor-pointer"
                           >
                             <Share2 size={12} /> {copiedId === selectedArticle.id ? '链接已复制！' : '转发分享'}
                           </button>
@@ -1060,7 +1067,7 @@ export default function LearnPage() {
                       </div>
                     </div>
 
-                    <div className="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                    <div className="prose dark:prose-invert max-w-none text-slate-700 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap font-medium">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {selectedArticle.markdown || '*此文章暂无 Markdown 内容*'}
                       </ReactMarkdown>
@@ -1073,38 +1080,38 @@ export default function LearnPage() {
                       articlesList.map((article, idx) => (
                         <div
                           key={article.id || idx}
-                          className="rounded-xl border border-slate-800 bg-slate-900/30 p-5 flex flex-col justify-between hover:border-indigo-500/30 hover:bg-slate-900/45 transition-all duration-300 shadow-sm"
+                          className="rounded-xl border border-amber-200/60 bg-white/80 p-5 flex flex-col justify-between hover:border-amber-400 hover:bg-white dark:border-slate-800 dark:bg-slate-900/30 dark:hover:border-amber-550/30 dark:hover:bg-slate-900/45 transition-all duration-300 shadow-sm"
                         >
                           <div className="space-y-2">
                             <div className="flex items-start justify-between gap-4">
-                              <h4 className="font-extrabold text-slate-100 text-sm sm:text-base leading-snug">
+                              <h4 className="font-extrabold text-slate-850 dark:text-slate-100 text-sm sm:text-base leading-snug">
                                 {article.title}
                               </h4>
-                              <span className="rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-400 border border-indigo-500/20 uppercase shrink-0">
+                              <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[10px] font-black text-amber-600 border border-amber-500/20 uppercase shrink-0">
                                 Markdown
                               </span>
                             </div>
-                            <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
+                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-3 font-semibold">
                               {article.desc || '暂无文章简介'}
                             </p>
                           </div>
 
-                          <div className="flex flex-wrap items-center justify-between gap-4 text-[10px] text-slate-500 border-t border-slate-805/60 pt-3.5 mt-4">
-                            <div className="flex items-center gap-1.5 font-bold text-indigo-405">
+                          <div className="flex flex-wrap items-center justify-between gap-4 text-[10px] text-slate-500 border-t border-amber-100 dark:border-slate-805/60 pt-3.5 mt-4 font-black">
+                            <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
                               <span>🤖 Agent: {article.author?.nickname || article.author?.email || 'AMC Agent'}</span>
                             </div>
                             <div className="flex items-center gap-4">
-                              <span>{new Date(article.createdAt).toLocaleDateString()}</span>
+                              <span className="text-slate-500 dark:text-slate-450">{new Date(article.createdAt).toLocaleDateString()}</span>
                               <div className="flex items-center gap-3">
                                 <button
                                   onClick={() => setSelectedArticle(article)}
-                                  className="text-xs font-extrabold text-indigo-400 hover:text-indigo-350 underline cursor-pointer"
+                                  className="text-xs font-black text-amber-600 hover:text-amber-700 dark:text-amber-450 dark:hover:text-amber-400 underline cursor-pointer"
                                 >
                                   阅读全文 →
                                 </button>
                                 <button
                                   onClick={(e) => handleShareArticle(article.id, e)}
-                                  className="text-xs font-extrabold text-indigo-400 hover:text-indigo-350 underline cursor-pointer"
+                                  className="text-xs font-black text-amber-600 hover:text-amber-700 dark:text-amber-450 dark:hover:text-amber-400 underline cursor-pointer"
                                 >
                                   {copiedId === article.id ? '已复制' : '分享'}
                                 </button>
@@ -1114,7 +1121,7 @@ export default function LearnPage() {
                         </div>
                       ))
                     ) : (
-                      <div className="py-20 text-center text-slate-550 text-xs border border-slate-805/60 bg-slate-900/20 rounded-xl">
+                      <div className="py-20 text-center text-slate-500 text-xs border border-amber-200/60 bg-white/70 dark:border-slate-805/60 dark:bg-slate-900/20 rounded-xl font-semibold">
                         暂无 Agent 学习资料，可通过 MCP/API 接口以 Markdown 格式上传。
                       </div>
                     )}
@@ -1127,11 +1134,11 @@ export default function LearnPage() {
         </section>
 
         {/* Security Alert Block */}
-        <section className="mt-12 rounded-xl border border-slate-800 bg-slate-900/20 p-5 flex items-start gap-3">
-          <ShieldAlert size={20} className="text-indigo-400 shrink-0 mt-0.5" />
+        <section className="mt-12 rounded-xl border border-amber-300/40 bg-amber-500/5 p-5 flex items-start gap-3">
+          <ShieldAlert size={20} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <h4 className="font-bold text-sm text-slate-200">运营安全与合规协议</h4>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <h4 className="font-black text-sm text-slate-850 dark:text-slate-200">运营安全与合规协议</h4>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-semibold">
               为确保您的账号安全及避免接口调用封禁，请严格遵守本手册所述之 SOP 规范。请避免在未授权的第三方助手或非沙盒环境内直接运行 API 写入指令。手动创建的 API 账号凭证必须在本地前台插件连接激活状态下工作。
             </p>
           </div>
