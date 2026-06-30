@@ -848,6 +848,60 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     }
   }
 
+  const handleSingleSmartSchedule = async (draftId: string) => {
+    if (!brandId) return
+    setSaving(true)
+    setError(null)
+    try {
+      let targetDateISO: string
+      try {
+        const schedRes = await fetch(`/api/brands/${brandId}/scheduling/recommend`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform: null, numberOfPosts: 1, urgency: 'normal' }),
+        })
+        if (schedRes.ok) {
+          const schedData = await schedRes.json()
+          targetDateISO = schedData.recommendations?.[0]?.recommendedAt ?? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+        } else {
+          targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+        }
+      } catch {
+        targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+      }
+
+      // 1. Update status to scheduled and set scheduledAt
+      const patchRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'scheduled',
+          scheduledAt: targetDateISO
+        })
+      })
+      const patchJson = await patchRes.json().catch(() => ({}))
+      if (!patchRes.ok) throw new Error(patchJson.error || '更新排期失败')
+
+      // 2. Submit the draft
+      const submitRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/submit`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: '智能排期发布' }),
+      })
+      const submitJson = await submitRes.json().catch(() => ({}))
+      if (!submitRes.ok) throw new Error(submitJson.error || '提交审核排期失败')
+
+      alert(`已根据活跃度自动推荐最佳时间并提交排期！时间：${new Date(targetDateISO).toLocaleString()}`)
+      await loadDrafts()
+      closeEditor()
+    } catch (e: any) {
+      alert(e.message || '智能排期失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+
   const handleBatchApprove = async () => {
     if (!brandId || selectedDraftIds.length === 0) return
     if (!confirm(`确定要批量批准并发布这 ${selectedDraftIds.length} 个草稿吗？`)) return
@@ -1318,6 +1372,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                           selectMode={selectMode} 
                           selected={selectMode ? selectedDraftIds.includes(draft.id) : selectedId === draft.id} 
                           onOpen={() => handleCardClick(draft.id)} 
+                          onSmartSchedule={() => handleSingleSmartSchedule(draft.id)}
                         />
                       ))}
                     </div>
@@ -1937,6 +1992,16 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   >
                     保存
                   </button>
+                  {selectedDraft && selectedDraft.status === 'draft' && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => handleSingleSmartSchedule(selectedDraft.id)}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                    >
+                      <Sparkles className="h-4 w-4" /> 智能排期
+                    </button>
+                  )}
                   <button
                     disabled={saving || (!caption.trim() && !contentIdea.trim()) || selectedAccountIds.length === 0}
                     onClick={submitDraft}
@@ -2159,15 +2224,29 @@ function FilterSelect({ icon, value, onChange, options }: { icon: React.ReactNod
   )
 }
 
-function DraftCard({ draft, compact, selectMode, selected, onOpen }: { draft: DraftItem; compact: boolean; selectMode: boolean; selected: boolean; onOpen: () => void }) {
+function DraftCard({ 
+  draft, 
+  compact, 
+  selectMode, 
+  selected, 
+  onOpen, 
+  onSmartSchedule 
+}: { 
+  draft: DraftItem 
+  compact: boolean 
+  selectMode: boolean 
+  selected: boolean 
+  onOpen: () => void 
+  onSmartSchedule?: () => void 
+}) {
   const media = mediaForDraft(draft)
   const platform = draft.account?.platformId
   const accountName = draft.account?.displayName || draft.account?.handle || platformLabel(platform)
 
   return (
-    <button
+    <div
       onClick={onOpen}
-      className={`group overflow-hidden rounded-lg border bg-white text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900 ${selected ? 'border-emerald-400 ring-2 ring-emerald-100 dark:ring-emerald-900/40' : 'border-slate-200 dark:border-slate-800'}`}
+      className={`group overflow-hidden rounded-lg border bg-white text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900 cursor-pointer ${selected ? 'border-emerald-400 ring-2 ring-emerald-100 dark:ring-emerald-900/40' : 'border-slate-200 dark:border-slate-800'}`}
     >
       <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-800">
         <div className="flex min-w-0 items-center gap-2">
@@ -2216,9 +2295,23 @@ function DraftCard({ draft, compact, selectMode, selected, onOpen }: { draft: Dr
         <p className={`${compact ? 'line-clamp-2' : 'line-clamp-3'} text-sm font-semibold leading-6 text-slate-700 dark:text-slate-200`}>{draft.caption || 'Untitled draft'}</p>
         <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-400">
           <span className="truncate">{draft.hashtags.map((tag) => `#${tag}`).join(' ') || 'No tags'}</span>
-          <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> View</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {draft.status === 'draft' && !selectMode && onSmartSchedule && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSmartSchedule()
+                }}
+                className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-1 text-[11px] border border-indigo-100 transition-colors"
+              >
+                <Sparkles className="h-3 w-3" /> 智能排期
+              </button>
+            )}
+            <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> View</span>
+          </div>
         </div>
       </div>
-    </button>
+    </div>
   )
 }

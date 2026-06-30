@@ -843,6 +843,20 @@ RolePermission 表：
 - `src/lib/integrations/direct/client.ts`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.15 — 2026-06-30（Post 管理中 Draft 状态草稿一键智能排期）
+
+### Post 管理面板中的草稿一键智能排期
+- **编辑面板新增智能排期按钮**：对于现有状态为 `draft`（草稿）的 Post，在详情/编辑侧边抽屉中添加了“智能排期”操作按钮。
+- **草稿卡片新增行内智能排期按钮**：重构了 `DraftCard` 渲染组件，当卡片状态为 `draft` 且非批量选择模式时，在卡片底部快捷展示“智能排期”轻量按钮。
+- **排期自动挂载流程**：用户点击上述智能排期按钮时，系统会自动请求推荐排期时间 API，然后自动更新草稿排期时间，并调用 `/submit` 提交审核，以保证物流/推文等跑腿排期逻辑在三方通道中正确挂载并生成 platformPostId。
+
+### 影响文件
+- `src/components/dashboard/DraftManagementView.tsx`
+- `docs/prd_amc.md`
+
+
 
 
 
