@@ -446,7 +446,7 @@ export default function DataAnalysisView() {
               <div 
                 key={item.accountId}
                 onClick={() => setSelectedAccount(item)}
-                className="group relative bg-[#090d16] border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col cursor-pointer aspect-[9/16]"
+                className="group relative bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col cursor-pointer p-2.5 gap-2.5"
               >
                 {/* Real-time upload progress overlay */}
                 {isUploading && uploadingAccountId === item.accountId ? (
@@ -465,89 +465,93 @@ export default function DataAnalysisView() {
                   </div>
                 ) : hasSnapshot ? (
                   <>
-                    <img 
-                      src={getMainAppUrl(item.latestSnapshot!.imageUrl)} 
-                      alt={`${item.handle} Snapshot`}
-                      className="w-full h-full object-contain object-top bg-[#090d16] transition-transform duration-500 group-hover:scale-[1.02]"
-                      loading="lazy"
-                    />
+                    <div className="relative w-full overflow-hidden rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800/60">
+                      <img 
+                        src={getMainAppUrl(item.latestSnapshot!.imageUrl)} 
+                        alt={`${item.handle} Snapshot`}
+                        className="w-full h-auto object-contain block transition-transform duration-500 group-hover:scale-[1.02]"
+                        loading="lazy"
+                      />
 
-                    {/* Gradient Overlay at bottom */}
-                    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 via-black/35 to-transparent pointer-events-none" />
-
-                    {/* Subtle Overlay Content */}
-                    <div className="absolute bottom-4 left-4 right-4 text-white flex flex-col gap-0.5 z-10 pointer-events-none">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs">{PLATFORM_ICONS[item.platformId] || '🔗'}</span>
-                        <span className="text-xs font-black tracking-wide truncate">{item.handle}</span>
+                      {/* Hover detail clue */}
+                      <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <span className="px-3.5 py-1.5 bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-slate-100 rounded-full font-bold text-xs shadow-md transform translate-y-1 group-hover:translate-y-0 transition-transform duration-300">
+                          查看快照详情
+                        </span>
                       </div>
-                      <span className="text-[10px] text-slate-300 font-bold truncate">
+                    </div>
+
+                    {/* Metadata details listed below the clean screenshot */}
+                    <div className="flex flex-col gap-1.5 px-1 pb-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="text-sm shrink-0">{PLATFORM_ICONS[item.platformId] || '🔗'}</span>
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{item.handle}</span>
+                        </div>
+                        {(() => {
+                          const badge = PLATFORM_BADGES[item.platformId] || { label: item.platformId.toUpperCase(), icon: '🔗', className: 'bg-slate-700 text-white' }
+                          return (
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-wider ${badge.className}`}>
+                              {badge.label}
+                            </span>
+                          )
+                        })()}
+                      </div>
+                      
+                      <div className="text-[11px] text-slate-400 dark:text-slate-500 font-bold truncate">
                         {item.brand.name}
-                      </span>
-                    </div>
+                      </div>
 
-                    {/* Verification Badges in corner */}
-                    <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10 pointer-events-none">
-                      {item.latestSnapshot?.isUserUploaded ? (
-                        <span className="bg-emerald-500/90 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
-                          👤 用户上传
+                      <div className="flex items-center justify-between text-[9px] font-bold text-slate-400 dark:text-slate-500 border-t border-slate-100 dark:border-slate-800/80 pt-2 mt-1 shrink-0">
+                        <span>
+                          {item.latestSnapshot?.isUserUploaded ? (
+                            <span className="text-emerald-500">👤 用户上传</span>
+                          ) : item.latestSnapshot?.isReal ? (
+                            <span className="text-blue-500">🤖 AI 真实抓取</span>
+                          ) : (
+                            <span className="text-amber-500">⚠️ 未验证</span>
+                          )}
                         </span>
-                      ) : item.latestSnapshot?.isReal ? (
-                        <span className="bg-blue-600/90 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
-                          🤖 AI 真实抓取
+                        <span>
+                          {item.latestSnapshot?.capturedAt 
+                            ? new Date(item.latestSnapshot.capturedAt).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+                            : ''}
                         </span>
-                      ) : (
-                        <span className="bg-amber-500/95 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
-                          ⚠️ 未验证快照
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Platform Brand Badge */}
-                    {(() => {
-                      const badge = PLATFORM_BADGES[item.platformId] || { label: item.platformId.toUpperCase(), icon: '🔗', className: 'bg-slate-700 text-white' }
-                      return (
-                        <span className={`absolute top-3 right-3 text-[8px] font-black px-2.5 py-0.5 rounded-full shadow backdrop-blur-sm tracking-wider flex items-center gap-1.5 ${badge.className}`}>
-                          <span>{badge.icon}</span>
-                          <span>{badge.label}</span>
-                        </span>
-                      )
-                    })()}
-
-                    {/* Hover detail clue */}
-                    <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-10">
-                      <span className="px-4 py-2 bg-white/95 text-slate-900 rounded-full font-black text-xs shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-                        查看快照详情
-                      </span>
+                      </div>
                     </div>
                   </>
                 ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 bg-slate-50 dark:bg-slate-950/20 relative">
-                    {/* Platform Brand Badge for Placeholders */}
-                    {(() => {
-                      const badge = PLATFORM_BADGES[item.platformId] || { label: item.platformId.toUpperCase(), icon: '🔗', className: 'bg-slate-700 text-white' }
-                      return (
-                        <span className={`absolute top-3 right-3 text-[8px] font-black px-2.5 py-0.5 rounded-full shadow tracking-wider flex items-center gap-1.5 ${badge.className}`}>
-                          <span>{badge.icon}</span>
-                          <span>{badge.label}</span>
-                        </span>
-                      )
-                    })()}
-                    <Camera className="w-10 h-10 text-slate-400 dark:text-slate-700 mb-2" />
-                    <p className="text-xs font-black text-slate-650 dark:text-slate-350">{item.brand.name}</p>
-                    <p className="text-[10px] text-slate-400 font-bold mt-0.5 flex items-center gap-1">
-                      <span>{PLATFORM_ICONS[item.platformId]}</span>
-                      <span>{item.handle}</span>
-                    </p>
+                  <>
+                    <div className="relative w-full aspect-[2/3] flex flex-col items-center justify-center p-4 text-center text-slate-450 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800/80">
+                      <Camera className="w-8 h-8 text-slate-350 dark:text-slate-700 mb-2" />
+                      <span className="text-[9px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded font-extrabold uppercase tracking-wide">
+                        暂无快照
+                      </span>
+                      <p className="text-[9px] text-slate-400 mt-2 max-w-[130px] leading-relaxed font-semibold">
+                        点击卡片登录并获取自动截图，或手动上传最新快照。
+                      </p>
+                    </div>
                     
-                    <span className="text-[9px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded-full mt-3 font-extrabold uppercase">
-                      快照不可用
-                    </span>
-                    
-                    <p className="text-[9px] text-slate-400 mt-2 max-w-[150px] leading-relaxed font-semibold">
-                      点击卡片登录并获取自动截图，或手动上传最新快照。
-                    </p>
-                  </div>
+                    <div className="flex flex-col gap-1.5 px-1 pb-1">
+                      <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="text-sm shrink-0">{PLATFORM_ICONS[item.platformId] || '🔗'}</span>
+                          <span className="text-xs font-bold text-slate-850 dark:text-slate-200 truncate">{item.handle}</span>
+                        </div>
+                        {(() => {
+                          const badge = PLATFORM_BADGES[item.platformId] || { label: item.platformId.toUpperCase(), icon: '🔗', className: 'bg-slate-700 text-white' }
+                          return (
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded tracking-wider ${badge.className}`}>
+                              {badge.label}
+                            </span>
+                          )
+                        })()}
+                      </div>
+                      <div className="text-[11px] text-slate-400 dark:text-slate-500 font-bold truncate">
+                        {item.brand.name}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             )
