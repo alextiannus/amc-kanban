@@ -204,6 +204,8 @@ export async function callGeminiChat(
     console.log(`[callGeminiChat] Requesting: ${config.displayName} (${provider}/${modelName}) with enableTools=${enableTools}`)
 
     try {
+      let paymentData: any = null
+
       if (provider === 'google') {
         // --- Gemini Tool-Call Flow ---
         const contents: Array<{ role: string; parts: Array<any> }> = []
@@ -258,6 +260,18 @@ export async function callGeminiChat(
                 return { reply: actionReply, action, params: args }
               }
 
+              // Capture PayNow QR code data
+              if (name === 'dct-logistics__create_flash_order_payment') {
+                try {
+                  const parsed = JSON.parse(resultText)
+                  if (parsed.success && parsed.data) {
+                    paymentData = parsed.data
+                  }
+                } catch (e) {
+                  console.error('Failed to parse PayNow data:', e)
+                }
+              }
+
               // Append native function call and response turns to contents array
               contents.push({
                 role: 'model',
@@ -286,6 +300,18 @@ export async function callGeminiChat(
           }
 
           const text = parts.find((p: any) => p.text)?.text?.trim()
+          if (paymentData) {
+            return {
+              reply: text || '',
+              action: 'SHOW_PAYNOW_QR',
+              params: {
+                qrCode: paymentData.qrCodeInBase64,
+                payAmount: paymentData.payAmount,
+                orderTransactionId: paymentData.orderTransactionId,
+                orderSn: paymentData.orderSn
+              }
+            }
+          }
           return { reply: text || '', action: 'NONE' }
         }
       } 
@@ -366,6 +392,18 @@ export async function callGeminiChat(
                 return { reply: actionReply, action, params: parsedArgs }
               }
 
+              // Capture PayNow QR code data
+              if (name === 'dct-logistics__create_flash_order_payment') {
+                try {
+                  const parsed = JSON.parse(resultText)
+                  if (parsed.success && parsed.data) {
+                    paymentData = parsed.data
+                  }
+                } catch (e) {
+                  console.error('Failed to parse PayNow data:', e)
+                }
+              }
+
               // Append assistant message with tool calls and the tool result message
               messages.push(message)
               messages.push({
@@ -388,6 +426,18 @@ export async function callGeminiChat(
           }
 
           const text = message.content?.trim()
+          if (paymentData) {
+            return {
+              reply: text || '',
+              action: 'SHOW_PAYNOW_QR',
+              params: {
+                qrCode: paymentData.qrCodeInBase64,
+                payAmount: paymentData.payAmount,
+                orderTransactionId: paymentData.orderTransactionId,
+                orderSn: paymentData.orderSn
+              }
+            }
+          }
           return { reply: text || '', action: 'NONE' }
         }
       }

@@ -196,115 +196,166 @@ async function executeTool(
 }
 
 export async function POST(request: Request, { params }: Params) {
-  try {
-    const { id: brandId } = await params
-    const actor = await getActor(request)
-    if (!actor) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  const encoder = new TextEncoder()
+  const customStream = new ReadableStream({
+    async start(controller) {
+      try {
+        const { id: brandId } = await params
+        const actor = await getActor(request)
+        if (!actor) {
+          controller.enqueue(encoder.encode(JSON.stringify({ error: 'Unauthorized' }) + '\n'))
+          controller.close()
+          return
+        }
 
-    const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
-    if (!ok) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    }
+        const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
+        if (!ok) {
+          controller.enqueue(encoder.encode(JSON.stringify({ error: 'Not found' }) + '\n'))
+          controller.close()
+          return
+        }
 
-    const body = await request.json().catch(() => ({}))
-    const {
-      message,
-      history = [],
-      context = {},
-    } = body as {
-      message?: string
-      history?: ChatTurn[]
-      context?: {
-        activeDraftId?: string
-        pendingDraftIds?: string[]
+        const body = await request.json().catch(() => ({}))
+        const {
+          message,
+          history = [],
+          context = {},
+        } = body as {
+          message?: string
+          history?: ChatTurn[]
+          context?: {
+            activeDraftId?: string
+            pendingDraftIds?: string[]
+          }
+        }
+
+        if (!message || typeof message !== 'string') {
+          controller.enqueue(encoder.encode(JSON.stringify({ error: 'message is required' }) + '\n'))
+          controller.close()
+          return
+        }
+
+        // Fetch brand + knowledge
+        const brand = await prisma.brand.findUnique({
+          where: { id: brandId },
+          include: { knowledge: true, companionSkills: { where: { isEnabled: true } } },
+        })
+
+        if (!brand) {
+          controller.enqueue(encoder.encode(JSON.stringify({ error: 'Brand not found' }) + '\n'))
+          controller.close()
+          return
+        }
+
+        // Build system prompt
+        const k = brand.knowledge
+        const menuText = k?.menuItems
+          ? `菜单/产品：\n${(k.menuItems as any[]).map((m) => `- ${m.name}: ${m.description ?? ''}`).join('\n')}`
+          : ''
+        const slangText = k?.slangDict
+          ? `本地用语：\n${Object.entries(k.slangDict as Record<string, string>).map(([a, b]) => `- "${a}": ${b}`).join('\n')}`
+          : ''
+        const draftContext = context.activeDraftId
+          ? `当前正在讨论的草稿 ID: ${context.activeDraftId}`
+          : context.pendingDraftIds?.length
+          ? `待审批草稿 IDs: ${context.pendingDraftIds.join(', ')}`
+          : ''
+
+        const skillsPrompts = brand.companionSkills?.map((s: any) => `[Skill: ${s.displayName}]\n${s.systemPrompt}`).join('\n\n') || ''
+
+        const systemPrompt = [
+          `你是品牌"${brand.name}"的专属 AI 营销伴侣（员工），用中英文混合方式沟通（中文为主，专业术语用英文）。`,
+          `品牌简介：${brand.description ?? '优质餐厅品牌'}`,
+          brand.location ? `位置：${brand.location}` : '',
+          k?.brandTone ? `品牌风格：${k.brandTone}` : '',
+          menuText,
+          slangText,
+          draftContext,
+          skillsPrompts ? `\n\n=== 附加技能与规则 ===\n${skillsPrompts}` : '',
+          `你可以主动调用工具查询数据或执行操作。对话要简洁、积极，如同一位得力的 AI 员工。`,
+          `当 AI 听不懂用户意图时，回复："不好意思，您能再说一遍吗？"`,
+        ]
+          .filter(Boolean)
+          .join('\n')
+
+        // Inject the user message (detect GENERATE_AND_PUBLISH intent first for compatibility)
+        const generateKeywords = ['生成并发布', '帮我发布', '批量生成', '一键生成', '发布到所有', '帮我写并发']
+        const wantsGenerate = generateKeywords.some((kw) => message.includes(kw))
+
+        if (wantsGenerate) {
+          controller.enqueue(encoder.encode(JSON.stringify({
+            type: 'done',
+            reply: '好的，老板！我马上为您批量生成内容并排期发布！',
+            action: 'GENERATE_AND_PUBLISH'
+          }) + '\n'))
+          controller.close()
+          return
+        }
+
+        // Fetch and merge remote MCP tools
+        const extTools = await McpClientManager.aggregateExternalTools(brandId)
+        const combinedTools = [
+          ...COMPANION_TOOLS,
+          ...extTools
+        ]
+
+        // Send initial progress update
+        controller.enqueue(encoder.encode(JSON.stringify({ type: 'status', message: '思考中...' }) + '\n'))
+
+        // Call gemini-chat with history, tools, and the tool execution callback
+        const result = await callGeminiChat(
+          systemPrompt,
+          history,
+          message,
+          true,
+          500,
+          combinedTools,
+          async (toolName, toolArgs) => {
+            let statusMsg = '正在处理...'
+            if (toolName === 'dct-logistics__autocomplete_address') {
+              statusMsg = `正在解析地址: ${toolArgs.input || ''}...`
+            } else if (toolName === 'dct-logistics__quote_flash_order') {
+              statusMsg = '正在计算跑腿计价与配送费...'
+            } else if (toolName === 'dct-logistics__submit_flash_order') {
+              statusMsg = '正在提交跑腿服务订单...'
+            } else if (toolName === 'dct-logistics__create_flash_order_payment') {
+              statusMsg = '正在生成 PayNow 支付二维码...'
+            } else if (toolName === 'dct-logistics__query_flash_payment_status') {
+              statusMsg = '正在查询支付状态...'
+            } else if (toolName.includes('__')) {
+              statusMsg = `正在调用工具: ${toolName.split('__')[1]}...`
+            }
+
+            console.log(`[streaming-status] sending status update: "${statusMsg}"`)
+            controller.enqueue(encoder.encode(JSON.stringify({ type: 'status', message: statusMsg }) + '\n'))
+
+            const { resultText, actionReply } = await executeTool(toolName, toolArgs, brandId)
+            return { resultText, actionReply }
+          }
+        )
+
+        const finalReply = result.reply || '抱歉，我处理时遇到了些问题，请再说一遍。'
+
+        controller.enqueue(encoder.encode(JSON.stringify({
+          type: 'done',
+          reply: finalReply,
+          action: result.action || 'NONE',
+          params: result.params || {},
+        }) + '\n'))
+        controller.close()
+      } catch (error: any) {
+        console.error('[Voice Chat API Error]:', error)
+        controller.enqueue(encoder.encode(JSON.stringify({ error: error.message || 'Internal server error' }) + '\n'))
+        controller.close()
       }
     }
+  })
 
-    if (!message || typeof message !== 'string') {
-      return NextResponse.json({ error: 'message is required' }, { status: 400 })
+  return new Response(customStream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
     }
-
-    // Fetch brand + knowledge
-    const brand = await prisma.brand.findUnique({
-      where: { id: brandId },
-      include: { knowledge: true, companionSkills: { where: { isEnabled: true } } },
-    })
-
-    if (!brand) {
-      return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-    }
-
-    // Build system prompt
-    const k = brand.knowledge
-    const menuText = k?.menuItems
-      ? `菜单/产品：\n${(k.menuItems as any[]).map((m) => `- ${m.name}: ${m.description ?? ''}`).join('\n')}`
-      : ''
-    const slangText = k?.slangDict
-      ? `本地用语：\n${Object.entries(k.slangDict as Record<string, string>).map(([a, b]) => `- "${a}": ${b}`).join('\n')}`
-      : ''
-    const draftContext = context.activeDraftId
-      ? `当前正在讨论的草稿 ID: ${context.activeDraftId}`
-      : context.pendingDraftIds?.length
-      ? `待审批草稿 IDs: ${context.pendingDraftIds.join(', ')}`
-      : ''
-
-    const skillsPrompts = brand.companionSkills?.map((s: any) => `[Skill: ${s.displayName}]\n${s.systemPrompt}`).join('\n\n') || ''
-
-    const systemPrompt = [
-      `你是品牌"${brand.name}"的专属 AI 营销伴侣（员工），用中英文混合方式沟通（中文为主，专业术语用英文）。`,
-      `品牌简介：${brand.description ?? '优质餐厅品牌'}`,
-      brand.location ? `位置：${brand.location}` : '',
-      k?.brandTone ? `品牌风格：${k.brandTone}` : '',
-      menuText,
-      slangText,
-      draftContext,
-      skillsPrompts ? `\n\n=== 附加技能与规则 ===\n${skillsPrompts}` : '',
-      `你可以主动调用工具查询数据或执行操作。对话要简洁、积极，如同一位得力的 AI 员工。`,
-      `当 AI 听不懂用户意图时，回复："不好意思，您能再说一遍吗？"`,
-    ]
-      .filter(Boolean)
-      .join('\n')
-
-    // Inject the user message (detect GENERATE_AND_PUBLISH intent first for compatibility)
-    const generateKeywords = ['生成并发布', '帮我发布', '批量生成', '一键生成', '发布到所有', '帮我写并发']
-    const wantsGenerate = generateKeywords.some((kw) => message.includes(kw))
-
-    if (wantsGenerate) {
-      return NextResponse.json({ reply: '好的，老板！我马上为您批量生成内容并排期发布！', action: 'GENERATE_AND_PUBLISH' })
-    }
-
-    // Fetch and merge remote MCP tools
-    const extTools = await McpClientManager.aggregateExternalTools(brandId)
-    const combinedTools = [
-      ...COMPANION_TOOLS,
-      ...extTools
-    ]
-
-    // Call gemini-chat with history, tools, and the tool execution callback
-    const result = await callGeminiChat(
-      systemPrompt,
-      history,
-      message,
-      true,
-      500,
-      combinedTools,
-      async (toolName, toolArgs) => {
-        const { resultText, actionReply } = await executeTool(toolName, toolArgs, brandId)
-        return { resultText, actionReply }
-      }
-    )
-
-    const finalReply = result.reply || '抱歉，我处理时遇到了些问题，请再说一遍。'
-
-    return NextResponse.json({
-      reply: finalReply,
-      action: result.action || 'NONE',
-      params: result.params || {},
-    })
-  } catch (error: any) {
-    console.error('[Voice Chat API Error]:', error)
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
-  }
+  })
 }
