@@ -275,6 +275,11 @@ export default function LearnPage() {
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-yellow-300/15 dark:bg-yellow-500/5 blur-3xl pointer-events-none"></div>
       <div className="absolute top-[10%] right-[-15%] w-[60%] h-[60%] rounded-full bg-amber-400/10 dark:bg-amber-600/5 blur-3xl pointer-events-none"></div>
 
+      {/* Scaled-up sunflower smile logo in the top right background */}
+      <div className="absolute -top-10 -right-10 md:-top-16 md:-right-16 w-80 h-80 md:w-[26rem] md:h-[26rem] opacity-10 dark:opacity-[0.04] pointer-events-none transform rotate-12 select-none">
+        <img src="/logo.svg" alt="" className="w-full h-full object-contain" />
+      </div>
+
       <div className="mx-auto max-w-5xl px-6 py-12 relative z-10">
         
         {/* Breadcrumb Navigation */}
