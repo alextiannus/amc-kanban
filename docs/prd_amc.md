@@ -874,3 +874,19 @@ RolePermission 表：
 - `src/app/api/data-analysis/upload/route.ts`
 - `src/components/dashboard/DataAnalysisView.tsx`
 - `docs/prd_amc.md`
+
+---
+
+## Changelog v1.8.17 — 2026-07-01（账号快照卡片重构与详情模态框实现）
+
+### 账号快照展示页面重构
+- **卡片纯图化展示**：重构了 `DataAnalysisView.tsx` 中的快照卡片组件，移除了原有卡片头部的品牌信息、主理人列表以及底部的统计与操作栏。卡片完全用于展示全屏截图快照以达到最佳的视觉展示效果。
+- **快照完整展示**：卡片布局优化为 `aspect-[9/16]` 手机比例，并使用 `object-contain object-top` 布局确保全尺寸截图完整显示、不被裁剪，同时提供柔和的暗色背景渐变遮罩。
+- **快照详情弹窗**：实现 `selectedAccount` 详情模态框。用户点击卡片后，弹出包含该账号所有元数据信息的双栏窗口。
+  - **左侧**：展示完整未裁剪的大图截图。
+  - **右侧**：汇总品牌名称、物理位置、平台名称、账号 Handle、绑定主理人列表、账号粉丝数、星级、快照生成及验证状态，并提供“访问主页”、“手动上传最新截图”和“重新登录并授权”快捷操作。
+- **数据自动同步**：新增监听逻辑，在后台快照数据或上传截图更新后，模态框内展示的数据会自动与最新的 items 列表数据进行响应式同步更新。
+
+### 影响文件
+- `src/components/dashboard/DataAnalysisView.tsx`
+- `docs/prd_amc.md`

@@ -179,8 +179,18 @@ export default function DataAnalysisView() {
   
   // UI State
   const [triggeringCrawler, setTriggeringCrawler] = useState(false)
-  const [activeSnapshotUrl, setActiveSnapshotUrl] = useState<string | null>(null)
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [selectedAccount, setSelectedAccount] = useState<SnapshotData | null>(null)
+
+  // Keep selectedAccount synced with items updates
+  useEffect(() => {
+    if (selectedAccount) {
+      const updated = items.find(i => i.accountId === selectedAccount.accountId)
+      if (updated) {
+        setSelectedAccount(updated)
+      }
+    }
+  }, [items, selectedAccount])
 
   // Login State
   const [loginModalAccount, setLoginModalAccount] = useState<SnapshotData | null>(null)
@@ -435,240 +445,278 @@ export default function DataAnalysisView() {
             return (
               <div 
                 key={item.accountId}
-                className="group bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-850 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden"
+                onClick={() => setSelectedAccount(item)}
+                className="group relative bg-[#090d16] border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col cursor-pointer aspect-[9/16]"
               >
-                {/* Header card info */}
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center text-sm font-black dark:bg-white dark:text-slate-900 flex-shrink-0">
-                      {item.brand.name.slice(0, 2).toUpperCase()}
+                {/* Real-time upload progress overlay */}
+                {isUploading && uploadingAccountId === item.accountId ? (
+                  <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center text-white p-4 z-10 animate-in fade-in duration-200">
+                    <div className="relative w-14 h-14 flex items-center justify-center">
+                      <div className="absolute inset-0 rounded-full border-4 border-slate-800 border-t-emerald-500 animate-spin" />
+                      <span className="text-[10px] font-black text-emerald-400">{uploadProgress}%</span>
                     </div>
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-black text-slate-950 dark:text-white truncate flex items-center gap-1.5">
-                        <span>{item.brand.name}</span>
-                        {item.brand.location && (
-                          <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 font-semibold">{item.brand.location}</span>
-                        )}
-                      </h4>
-                      <p className="text-xs text-slate-400 font-bold flex items-center gap-1.5 mt-0.5 truncate">
-                        <span>{PLATFORM_ICONS[item.platformId] || '🔗'}</span>
-                        <span className="text-slate-650 dark:text-slate-300 font-black">{item.handle}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] bg-slate-150 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 px-2.5 py-1 rounded-full font-black uppercase tracking-wider">
-                    {item.platformId}
-                  </span>
-                </div>
-
-                {/* Body: Owners (主理人) */}
-                <div className="px-4 py-2.5 bg-slate-50/50 dark:bg-slate-950/20 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 overflow-x-auto">
-                  <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="text-[10px] font-black text-slate-400 shrink-0 uppercase tracking-wide">主理人:</span>
-                  <div className="flex gap-1">
-                    {item.owners.length === 0 ? (
-                      <span className="text-[10px] text-slate-400 italic">未绑定</span>
-                    ) : (
-                      item.owners.map(owner => (
-                        <span 
-                          key={owner.id} 
-                          className="text-[10px] font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-350 px-2 py-0.5 rounded-md shadow-sm shrink-0"
-                        >
-                          {owner.nickname}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Screenshot Display Area */}
-                <div className="relative aspect-[4/5] bg-slate-950 flex items-center justify-center overflow-hidden border-b border-slate-100 dark:border-slate-800 group/snapshot">
-                  {/* Real-time upload progress overlay */}
-                  {isUploading && uploadingAccountId === item.accountId ? (
-                    <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center text-white p-4 z-10 animate-in fade-in duration-200">
-                      <div className="relative w-14 h-14 flex items-center justify-center">
-                        <div className="absolute inset-0 rounded-full border-4 border-slate-800 border-t-emerald-500 animate-spin" />
-                        <span className="text-[10px] font-black text-emerald-400">{uploadProgress}%</span>
-                      </div>
-                      <span className="text-[11px] font-black text-slate-200 mt-3 tracking-wide">正在上传截图...</span>
-                      <div className="w-2/3 bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden shadow-inner">
-                        <div 
-                          className="bg-emerald-500 h-full rounded-full transition-all duration-150" 
-                          style={{ width: `${uploadProgress}%` }}
-                        />
-                      </div>
-                    </div>
-                  ) : hasSnapshot ? (
-                    <>
-                      <img 
-                        src={getMainAppUrl(item.latestSnapshot!.imageUrl)} 
-                        alt={`${item.handle} Snapshot`}
-                        className="w-full h-full object-contain bg-slate-950 object-top transition-transform duration-500 group-hover/snapshot:scale-[1.02]"
-                        loading="lazy"
+                    <span className="text-[11px] font-black text-slate-200 mt-3 tracking-wide">正在上传截图...</span>
+                    <div className="w-2/3 bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden shadow-inner">
+                      <div 
+                        className="bg-emerald-500 h-full rounded-full transition-all duration-150" 
+                        style={{ width: `${uploadProgress}%` }}
                       />
-                      
-                      {/* Image Verification Badges */}
+                    </div>
+                  </div>
+                ) : hasSnapshot ? (
+                  <>
+                    <img 
+                      src={getMainAppUrl(item.latestSnapshot!.imageUrl)} 
+                      alt={`${item.handle} Snapshot`}
+                      className="w-full h-full object-contain object-top bg-[#090d16] transition-transform duration-500 group-hover:scale-[1.02]"
+                      loading="lazy"
+                    />
+
+                    {/* Gradient Overlay at bottom */}
+                    <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 via-black/35 to-transparent pointer-events-none" />
+
+                    {/* Subtle Overlay Content */}
+                    <div className="absolute bottom-4 left-4 right-4 text-white flex flex-col gap-0.5 z-10 pointer-events-none">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs">{PLATFORM_ICONS[item.platformId] || '🔗'}</span>
+                        <span className="text-xs font-black tracking-wide truncate">{item.handle}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-300 font-bold truncate">
+                        {item.brand.name}
+                      </span>
+                    </div>
+
+                    {/* Verification Badges in corner */}
+                    <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10 pointer-events-none">
                       {item.latestSnapshot?.isUserUploaded ? (
-                        <span className="absolute top-2 left-2 bg-emerald-650/90 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
+                        <span className="bg-emerald-500/90 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
                           👤 用户上传
                         </span>
                       ) : item.latestSnapshot?.isReal ? (
-                        <span className="absolute top-2 left-2 bg-blue-650/90 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
+                        <span className="bg-blue-600/90 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
                           🤖 AI 真实抓取
                         </span>
                       ) : (
-                        <span className="absolute top-2 left-2 bg-amber-605/90 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
+                        <span className="bg-amber-500/95 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
                           ⚠️ 未验证快照
                         </span>
                       )}
-
-                      {/* Platform Brand Badge */}
-                      {(() => {
-                        const badge = PLATFORM_BADGES[item.platformId] || { label: item.platformId.toUpperCase(), icon: '🔗', className: 'bg-slate-700 text-white' }
-                        return (
-                          <span className={`absolute top-2 right-2 text-[9px] font-black px-2.5 py-0.5 rounded-full shadow backdrop-blur-sm tracking-wider flex items-center gap-1.5 ${badge.className}`}>
-                            <span>{badge.icon}</span>
-                            <span>{badge.label}</span>
-                          </span>
-                        )
-                      })()}
-
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/snapshot:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2.5 p-4">
-                        <button
-                          onClick={() => setActiveSnapshotUrl(getMainAppUrl(item.latestSnapshot!.imageUrl))}
-                          className="w-full max-w-[130px] py-2 bg-white hover:bg-slate-100 text-slate-900 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 font-bold text-xs cursor-pointer"
-                        >
-                          <Eye className="w-4 h-4" /> 查看大图
-                        </button>
-                        <button
-                          onClick={() => triggerUpload(item.accountId)}
-                          className="w-full max-w-[130px] py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 font-bold text-xs cursor-pointer"
-                        >
-                          <Upload className="w-4 h-4" /> 上传截图
-                        </button>
-                        {item.profileUrl && (
-                          <a
-                            href={item.profileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full max-w-[130px] py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1.5 font-bold text-xs text-center"
-                          >
-                            <Store className="w-4 h-4" /> 访问主页
-                          </a>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-4">
-                      {/* Platform Brand Badge for Placeholders */}
-                      {(() => {
-                        const badge = PLATFORM_BADGES[item.platformId] || { label: item.platformId.toUpperCase(), icon: '🔗', className: 'bg-slate-700 text-white' }
-                        return (
-                          <span className={`absolute top-2 right-2 text-[9px] font-black px-2.5 py-0.5 rounded-full shadow tracking-wider flex items-center gap-1.5 ${badge.className}`}>
-                            <span>{badge.icon}</span>
-                            <span>{badge.label}</span>
-                          </span>
-                        )
-                      })()}
-                      <div className="flex flex-col items-center">
-                        <Camera className="w-10 h-10 text-slate-600 dark:text-slate-700 mb-2" />
-                        <p className="text-xs font-black text-slate-400 dark:text-slate-500">快照抓取失效 (需要登录)</p>
-                        <p className="text-[10px] text-slate-400 mt-1 max-w-[220px]">
-                          因 Instagram 登录墙限制，可手动上传截图，或登录自动获取。
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-2 w-full px-4">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setLoginModalAccount(item)
-                            setLoginUsername('')
-                            setLoginPassword('')
-                          }}
-                          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-md transition-all active:scale-95 cursor-pointer"
-                        >
-                          <span>🔑 登录并获取截图</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => triggerUpload(item.accountId)}
-                          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-650 hover:bg-emerald-705 text-white rounded-xl text-[11px] font-bold shadow-md transition-all active:scale-95 cursor-pointer"
-                        >
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>手动上传截图</span>
-                        </button>
-                      </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Mobile-friendly Action Bar */}
-                {hasSnapshot && (
-                  <div className="md:hidden flex border-b border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 divide-x divide-slate-150 dark:divide-slate-800">
-                    <button
-                      onClick={() => setActiveSnapshotUrl(getMainAppUrl(item.latestSnapshot!.imageUrl))}
-                      className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>查看大图</span>
-                    </button>
-                    <button
-                      onClick={() => triggerUpload(item.accountId)}
-                      className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>上传截图</span>
-                    </button>
+                    {/* Platform Brand Badge */}
+                    {(() => {
+                      const badge = PLATFORM_BADGES[item.platformId] || { label: item.platformId.toUpperCase(), icon: '🔗', className: 'bg-slate-700 text-white' }
+                      return (
+                        <span className={`absolute top-3 right-3 text-[8px] font-black px-2.5 py-0.5 rounded-full shadow backdrop-blur-sm tracking-wider flex items-center gap-1.5 ${badge.className}`}>
+                          <span>{badge.icon}</span>
+                          <span>{badge.label}</span>
+                        </span>
+                      )
+                    })()}
+
+                    {/* Hover detail clue */}
+                    <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-10">
+                      <span className="px-4 py-2 bg-white/95 text-slate-900 rounded-full font-black text-xs shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                        查看快照详情
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 bg-slate-50 dark:bg-slate-950/20 relative">
+                    {/* Platform Brand Badge for Placeholders */}
+                    {(() => {
+                      const badge = PLATFORM_BADGES[item.platformId] || { label: item.platformId.toUpperCase(), icon: '🔗', className: 'bg-slate-700 text-white' }
+                      return (
+                        <span className={`absolute top-3 right-3 text-[8px] font-black px-2.5 py-0.5 rounded-full shadow tracking-wider flex items-center gap-1.5 ${badge.className}`}>
+                          <span>{badge.icon}</span>
+                          <span>{badge.label}</span>
+                        </span>
+                      )
+                    })()}
+                    <Camera className="w-10 h-10 text-slate-400 dark:text-slate-700 mb-2" />
+                    <p className="text-xs font-black text-slate-650 dark:text-slate-350">{item.brand.name}</p>
+                    <p className="text-[10px] text-slate-400 font-bold mt-0.5 flex items-center gap-1">
+                      <span>{PLATFORM_ICONS[item.platformId]}</span>
+                      <span>{item.handle}</span>
+                    </p>
+                    
+                    <span className="text-[9px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded-full mt-3 font-extrabold uppercase">
+                      快照不可用
+                    </span>
+                    
+                    <p className="text-[9px] text-slate-400 mt-2 max-w-[150px] leading-relaxed font-semibold">
+                      点击卡片登录并获取自动截图，或手动上传最新快照。
+                    </p>
                   </div>
                 )}
-
-                {/* Footer details */}
-                <div className="p-4 bg-slate-50/30 dark:bg-slate-950/10 flex items-center justify-between text-xs text-slate-400 font-bold mt-auto border-t border-slate-100 dark:border-slate-800">
-                  <span className="flex items-center gap-1">
-                    <Smartphone className="w-3.5 h-3.5 text-slate-400" />
-                    <span>粉丝: {item.followerCount ? `${item.followerCount.toLocaleString()}` : '--'}</span>
-                  </span>
-                  <span>
-                    {hasSnapshot 
-                      ? `更新: ${new Date(item.latestSnapshot!.capturedAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` 
-                      : '未抓取'}
-                  </span>
-                </div>
               </div>
             )
           })}
         </div>
       )}
 
-      {/* Snapshot zoom Modal */}
-      {activeSnapshotUrl && (
+      {/* Snapshot details Modal */}
+      {selectedAccount && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md animate-in fade-in duration-300"
-          onClick={() => setActiveSnapshotUrl(null)}
+          onClick={() => setSelectedAccount(null)}
         >
           <div 
-            className="relative bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col"
+            className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/40">
-              <span className="text-xs font-bold text-slate-400">快照大图预览</span>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center text-xs font-black dark:bg-white dark:text-slate-900 shrink-0">
+                  {selectedAccount.brand.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>{selectedAccount.brand.name}</span>
+                    {selectedAccount.brand.location && (
+                      <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-500 font-semibold">{selectedAccount.brand.location}</span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-bold flex items-center gap-1">
+                    <span>{PLATFORM_ICONS[selectedAccount.platformId]}</span>
+                    <span>{selectedAccount.handle}</span>
+                  </p>
+                </div>
+              </div>
               <button 
-                onClick={() => setActiveSnapshotUrl(null)}
-                className="p-2 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+                onClick={() => setSelectedAccount(null)}
+                className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 flex justify-center bg-slate-950">
-              <img 
-                src={activeSnapshotUrl} 
-                className="max-w-full h-auto object-contain rounded-xl border border-slate-800" 
-                alt="Full Snapshot" 
-              />
+
+            {/* Modal Content: 2-Column layout */}
+            <div className="flex-1 overflow-y-auto flex flex-col md:flex-row min-h-0">
+              {/* Left Column: Full Screenshot Image */}
+              <div className="flex-1 bg-slate-950 p-6 flex items-center justify-center min-h-[300px] md:min-h-0 overflow-y-auto max-h-[50vh] md:max-h-none border-b md:border-b-0 md:border-r border-slate-150 dark:border-slate-800">
+                {selectedAccount.latestSnapshot ? (
+                  <img 
+                    src={getMainAppUrl(selectedAccount.latestSnapshot.imageUrl)} 
+                    className="max-w-full max-h-[70vh] object-contain rounded-xl border border-slate-800" 
+                    alt="Full Account Snapshot" 
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-6 text-center text-slate-500">
+                    <Camera className="w-12 h-12 text-slate-700 mb-2 animate-pulse" />
+                    <p className="text-sm font-bold text-slate-400">暂无该账号的抓取快照</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Account Details & Actions */}
+              <div className="w-full md:w-80 p-6 flex flex-col justify-between bg-slate-50/50 dark:bg-slate-900/50 shrink-0 space-y-6">
+                <div className="space-y-5">
+                  {/* Stats & Info Section */}
+                  <div className="space-y-3.5">
+                    <h4 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">账号明细</h4>
+                    <div className="space-y-2 bg-white dark:bg-slate-950 p-3 rounded-2xl border border-slate-200 dark:border-slate-855 shadow-sm text-xs">
+                      <div className="flex justify-between py-1">
+                        <span className="text-slate-450 font-bold">平台渠道</span>
+                        <span className="font-black text-slate-800 dark:text-slate-200 uppercase">{selectedAccount.platformId}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-slate-450 font-bold">粉丝数量</span>
+                        <span className="font-black text-slate-800 dark:text-slate-200">
+                          {selectedAccount.followerCount ? `${selectedAccount.followerCount.toLocaleString()}` : '--'}
+                        </span>
+                      </div>
+                      {selectedAccount.ratingScore !== null && (
+                        <div className="flex justify-between py-1">
+                          <span className="text-slate-450 font-bold">评分星级</span>
+                          <span className="font-black text-slate-800 dark:text-slate-200">⭐ {selectedAccount.ratingScore.toFixed(1)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between py-1">
+                        <span className="text-slate-450 font-bold">更新时间</span>
+                        <span className="font-black text-slate-800 dark:text-slate-200">
+                          {selectedAccount.latestSnapshot 
+                            ? new Date(selectedAccount.latestSnapshot.capturedAt).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : '未抓取'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-slate-450 font-bold">快照状态</span>
+                        <span className="font-black">
+                          {selectedAccount.latestSnapshot?.isUserUploaded ? (
+                            <span className="text-emerald-500">👤 用户手动上传</span>
+                          ) : selectedAccount.latestSnapshot?.isReal ? (
+                            <span className="text-blue-500">🤖 AI 真实抓取</span>
+                          ) : selectedAccount.latestSnapshot ? (
+                            <span className="text-amber-500">⚠️ 未验证快照</span>
+                          ) : (
+                            <span className="text-slate-400">无数据</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Owners Section */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">账号主理人</h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedAccount.owners.length === 0 ? (
+                        <span className="text-xs text-slate-450 italic">未绑定主理人</span>
+                      ) : (
+                        selectedAccount.owners.map(owner => (
+                          <div 
+                            key={owner.id} 
+                            className="text-xs font-bold bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-350 px-3 py-1 rounded-xl shadow-sm"
+                          >
+                            <span className="font-black text-slate-850 dark:text-white">{owner.nickname}</span>
+                            <span className="text-[10px] text-slate-450 block">{owner.email}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="space-y-2.5 pt-4 border-t border-slate-200 dark:border-slate-800">
+                  {selectedAccount.profileUrl && (
+                    <a
+                      href={selectedAccount.profileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-2.5 bg-indigo-650 hover:bg-indigo-755 text-white rounded-xl shadow transition-all active:scale-95 flex items-center justify-center gap-1.5 font-bold text-xs text-center"
+                    >
+                      <Store className="w-4 h-4" /> 访问主页
+                    </a>
+                  )}
+                  
+                  <button
+                    onClick={() => triggerUpload(selectedAccount.accountId)}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow transition-all active:scale-95 flex items-center justify-center gap-1.5 font-bold text-xs cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" /> 手动上传最新截图
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginModalAccount(selectedAccount)
+                      setLoginUsername('')
+                      setLoginPassword('')
+                    }}
+                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 dark:bg-slate-950 dark:hover:bg-slate-900 border border-slate-700 dark:border-slate-800 text-slate-200 dark:text-slate-300 rounded-xl shadow transition-all active:scale-95 flex items-center justify-center gap-1.5 font-bold text-xs cursor-pointer"
+                  >
+                    <span>🔑 重新登录并抓取</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       )}
+
 
       {/* Instagram Login Modal */}
       {loginModalAccount && (
