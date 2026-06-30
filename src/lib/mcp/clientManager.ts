@@ -153,6 +153,23 @@ export class McpClientManager {
           const rawParams = tool.inputSchema || { type: 'object', properties: {} }
           const sanitizedParams = this.sanitizeSchema(rawParams)
           
+          // Inject Enum guidelines for critical parameters to prevent LLM formatting issues
+          if (sanitizedParams.properties) {
+            if (sanitizedParams.properties.drivingType) {
+              sanitizedParams.properties.drivingType.enum = ["Motorbike", "Car"]
+              sanitizedParams.properties.drivingType.description = "Vehicle type for delivery. Must be 'Motorbike' or 'Car'."
+            }
+            if (sanitizedParams.properties.deliveryType) {
+              sanitizedParams.properties.deliveryType.enum = ["FLASH"]
+              sanitizedParams.properties.deliveryType.description = "Delivery type. Defaults to 'FLASH'."
+            }
+            
+            // Remove requesterId from required array so model doesn't ask user for it
+            if (Array.isArray(sanitizedParams.required)) {
+              sanitizedParams.required = sanitizedParams.required.filter((r: string) => r !== 'requesterId')
+            }
+          }
+          
           return {
             name: `${namespace}__${tool.name}`,
             description: tool.description,
@@ -198,6 +215,22 @@ export class McpClientManager {
 
     if (!conn) {
       throw new Error(`No active MCP connection found for namespace: ${namespace}`)
+    }
+
+    // Auto-fill requesterId if calling submit_flash_order
+    if (originalName === 'submit_flash_order') {
+      if (!args.requesterId) {
+        args.requesterId = Math.floor(Date.now() / 1000)
+      } else if (typeof args.requesterId === 'string') {
+        args.requesterId = Number(args.requesterId) || Math.floor(Date.now() / 1000)
+      }
+    }
+
+    // Auto-fill locale if calling create_flash_order_payment
+    if (originalName === 'create_flash_order_payment') {
+      if (!args.locale) {
+        args.locale = 'zh-CN'
+      }
     }
 
     try {
