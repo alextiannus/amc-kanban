@@ -1,5 +1,6 @@
 import { getGeminiApiKey } from './systemConfig'
 import { callLLMChat, type ChatMessage } from './llmRouter'
+import { prisma } from './prisma'
 
 /**
  * A single turn in a conversation (Gemini multi-turn format).
@@ -153,120 +154,194 @@ export async function callGeminiChat(
   maxTokens = 500,
   customTools?: any[],
 ): Promise<GeminiChatResult> {
-  const apiKey = await getGeminiApiKey()
+  // 1. Query the database to find the configurations to try (prioritize 'companion' tag, then default configs)
+  const matchingConfigs = await prisma.lLMConfig.findMany({
+    where: { isEnabled: true, taskTags: { has: 'companion' } },
+    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+  })
+  const matchingIds = matchingConfigs.map((c: any) => c.id)
 
-  // ─── Attempt 1: Gemini (native tool-call support) ───────────────────────────
-  if (apiKey) {
-    // Build the contents array: system prompt as first user turn, then history, then current message
-    const contents: Array<{ role: string; parts: Array<{ text: string }> }> = []
+  const defaultConfigs = await prisma.lLMConfig.findMany({
+    where: { isEnabled: true, isDefault: true, NOT: { id: { in: matchingIds } } },
+    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+  })
 
-    // Inject system context as the first user/model exchange
-    if (systemPrompt) {
-      contents.push({ role: 'user', parts: [{ text: `[System Context]\n${systemPrompt}` }] })
-      contents.push({ role: 'model', parts: [{ text: '好的，我已了解品牌信息，随时为您服务！' }] })
+  const configsToTry = [...matchingConfigs, ...defaultConfigs]
+  
+  // If no database configs are found, use Gemini as the system fallback
+  const sysProvider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || 'google'
+  const sysModel = process.env.SYSTEM_DEFAULT_LLM_MODEL || 'gemini-2.0-flash'
+  
+  const resolvedConfigs = configsToTry.length > 0 ? configsToTry : [
+    {
+      id: 'system_default',
+      provider: sysProvider,
+      displayName: 'System Default',
+      modelName: sysModel,
+      baseUrl: null,
+      apiKey: null
+    }
+  ]
+
+  for (const config of resolvedConfigs) {
+    const { provider, modelName, baseUrl } = config
+    let apiKey = config.apiKey || ''
+    
+    // Resolve API key
+    if (!apiKey) {
+      if (provider === 'google') apiKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
+      else if (provider === 'openai') apiKey = process.env.OPENAI_API_KEY || ''
+      else if (provider === 'anthropic') apiKey = process.env.ANTHROPIC_API_KEY || ''
+      else if (provider === 'deepseek') apiKey = process.env.DEEPSEEK_API_KEY || ''
+    }
+    
+    if (!apiKey) {
+      console.warn(`[callGeminiChat] Skip config ${config.displayName}: No API key`)
+      continue
     }
 
-    // Inject conversation history (keep last 20 turns to manage token usage)
-    const recentHistory = history.slice(-20)
-    for (const turn of recentHistory) {
-      contents.push({
-        role: turn.role === 'user' ? 'user' : 'model',
-        parts: [{ text: turn.content }],
-      })
-    }
-
-    // Current user message
-    contents.push({ role: 'user', parts: [{ text: userMessage }] })
-
-    const body: Record<string, any> = {
-      contents,
-      generationConfig: { maxOutputTokens: maxTokens },
-    }
-
-    if (enableTools) {
-      body.tools = [{ functionDeclarations: customTools || COMPANION_TOOLS }]
-      body.toolConfig = { functionCallingConfig: { mode: 'AUTO' } }
-    }
+    console.log(`[callGeminiChat] Requesting: ${config.displayName} (${provider}/${modelName}) with enableTools=${enableTools}`)
 
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
-      )
+      if (provider === 'google') {
+        // --- Gemini Tool-Call Flow ---
+        const contents: Array<{ role: string; parts: Array<{ text: string }> }> = []
+        if (systemPrompt) {
+          contents.push({ role: 'user', parts: [{ text: `[System Context]\n${systemPrompt}` }] })
+          contents.push({ role: 'model', parts: [{ text: '好的，我已了解品牌信息，随时为您服务！' }] })
+        }
+        for (const turn of history.slice(-20)) {
+          contents.push({ role: turn.role === 'user' ? 'user' : 'model', parts: [{ text: turn.content }] })
+        }
+        contents.push({ role: 'user', parts: [{ text: userMessage }] })
 
-      if (response.ok) {
-        const json = await response.json()
-        const candidate = json.candidates?.[0]
-        if (candidate) {
-          const parts = candidate.content?.parts || []
+        const body: Record<string, any> = {
+          contents,
+          generationConfig: { maxOutputTokens: maxTokens },
+        }
+        if (enableTools) {
+          body.tools = [{ functionDeclarations: customTools || COMPANION_TOOLS }]
+          body.toolConfig = { functionCallingConfig: { mode: 'AUTO' } }
+        }
 
-          // Check for function call
-          const funcCallPart = parts.find((p: any) => p.functionCall)
-          if (funcCallPart?.functionCall) {
-            const { name, args } = funcCallPart.functionCall
-            const action = TOOL_TO_ACTION[name] || 'NONE'
-            return {
-              reply: '', // Frontend will handle reply after tool execution
-              action,
-              toolCallName: name,
-              toolCallArgs: args || {},
-              params: args || {},
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+        )
+
+        if (response.ok) {
+          const json = await response.json()
+          const candidate = json.candidates?.[0]
+          if (candidate) {
+            const parts = candidate.content?.parts || []
+            const funcCallPart = parts.find((p: any) => p.functionCall)
+            if (funcCallPart?.functionCall) {
+              const { name, args } = funcCallPart.functionCall
+              const action = TOOL_TO_ACTION[name] || 'NONE'
+              return {
+                reply: '',
+                action,
+                toolCallName: name,
+                toolCallArgs: args || {},
+                params: args || {},
+              }
+            }
+
+            const text = parts.find((p: any) => p.text)?.text?.trim()
+            if (text) {
+              return { reply: text, action: 'NONE' }
             }
           }
+        } else {
+          const errText = await response.text().catch(() => '')
+          console.error(`[callGeminiChat] Gemini error ${response.status}: ${errText}`)
+        }
+      } 
+      else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim') {
+        // --- OpenAI-compatible (GLM5.2) Tool-Call Flow ---
+        const defaultBase = provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1'
+        const endpoint = `${baseUrl || defaultBase}/chat/completions`
 
-          // Text response
-          const text = parts.find((p: any) => p.text)?.text?.trim()
-          if (text) {
-            // Attempt to parse JSON action from text (legacy support)
-            try {
-              const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim()
-              if (cleaned.startsWith('{')) {
-                const parsed = JSON.parse(cleaned)
-                if (parsed.reply) {
-                  return { reply: parsed.reply, action: parsed.action || 'NONE', params: parsed.params }
-                }
-              }
-            } catch {
-              // Not JSON — treat as plain text reply
+        const messages: ChatMessage[] = []
+        if (systemPrompt) {
+          messages.push({ role: 'system', content: systemPrompt })
+        }
+        for (const turn of history.slice(-20)) {
+          messages.push({ role: turn.role === 'user' ? 'user' : 'assistant', content: turn.content })
+        }
+        messages.push({ role: 'user', content: userMessage })
+
+        const body: Record<string, any> = {
+          model: modelName,
+          messages,
+          max_tokens: maxTokens,
+        }
+
+        if (enableTools) {
+          const formattedTools = (customTools || COMPANION_TOOLS).map(t => ({
+            type: 'function',
+            function: {
+              name: t.name,
+              description: t.description,
+              parameters: t.parameters
             }
-            return { reply: text, action: 'NONE' }
+          }))
+          if (formattedTools.length > 0) {
+            body.tools = formattedTools
+            body.tool_choice = 'auto'
           }
         }
-      } else if (response.status !== 429 && response.status !== 503) {
-        // Non-rate-limit error (e.g. 400 bad request) — don't fallback
-        const errText = await response.text().catch(() => '')
-        console.error(`[GeminiChat] API error ${response.status}:`, errText)
-        return { reply: '不好意思，您能再说一遍吗？', action: 'NONE' }
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(body),
+        })
+
+        if (response.ok) {
+          const json = await response.json()
+          const message = json.choices?.[0]?.message
+          if (message) {
+            if (message.tool_calls && message.tool_calls.length > 0) {
+              const toolCall = message.tool_calls[0]
+              const { name, arguments: rawArgs } = toolCall.function
+              const action = TOOL_TO_ACTION[name] || 'NONE'
+              let parsedArgs = {}
+              try {
+                parsedArgs = JSON.parse(rawArgs || '{}')
+              } catch {
+                console.error(`[callGeminiChat] Failed to parse tool arguments: ${rawArgs}`)
+              }
+              
+              return {
+                reply: '',
+                action,
+                toolCallName: name,
+                toolCallArgs: parsedArgs,
+                params: parsedArgs
+              }
+            }
+
+            const text = message.content?.trim()
+            if (text) {
+              return { reply: text, action: 'NONE' }
+            }
+          }
+        } else {
+          const errText = await response.text().catch(() => '')
+          console.error(`[callGeminiChat] OpenAI-compatible error ${response.status}: ${errText}`)
+        }
       }
-      // 429 / 503 / empty response → fall through to fallback
-      console.warn(`[GeminiChat] Gemini unavailable (${response.status}) — trying LLM fallback`)
-    } catch (error) {
-      console.warn('[GeminiChat] Gemini request failed — trying LLM fallback:', error)
+    } catch (err: any) {
+      console.warn(`[callGeminiChat] Config ${config.displayName} failed:`, err)
     }
-  } else {
-    console.warn('[GeminiChat] No Gemini API key — trying LLM fallback directly')
   }
 
-  // ─── Attempt 2: LLM Router fallback (GLM, DeepSeek, etc.) ──────────────────
-  // Tool-call is disabled for non-Gemini providers (no native support).
-  // Build OpenAI-compatible messages array.
-  const messages: ChatMessage[] = []
-  if (systemPrompt) {
-    messages.push({ role: 'system', content: systemPrompt })
-  }
-  for (const turn of history.slice(-20)) {
-    messages.push({ role: turn.role === 'user' ? 'user' : 'assistant', content: turn.content })
-  }
-  messages.push({ role: 'user', content: userMessage })
-
-  const fallbackResult = await callLLMChat('companion', messages, maxTokens)
-  if (fallbackResult.text) {
-    console.log(`[GeminiChat] ✅ Fallback succeeded via ${fallbackResult.provider}/${fallbackResult.modelName}`)
-    return { reply: fallbackResult.text, action: 'NONE' }
-  }
-
-  // All providers exhausted
-  console.error('[GeminiChat] All LLM providers failed')
-  return { reply: '抱歉，AI 服务暂时不可用，请稍后再试。', action: 'NONE' }
+  // All configs exhausted
+  console.error('[callGeminiChat] All LLM configs failed')
+  return { reply: '抱歉，AI 语音助手服务暂时不可用，请稍后再试。', action: 'NONE' }
 }
 
