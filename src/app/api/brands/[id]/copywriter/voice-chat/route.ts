@@ -283,6 +283,8 @@ export async function POST(request: Request, { params }: Params) {
           `  1. 调用 dct-logistics__submit_flash_order 提交订单。`,
           `  2. 调用 dct-logistics__create_flash_order_payment 生成 PayNow 支付二维码。`,
           `  3. 将最终的支付状态和指引回复给用户，不用重复做前面的报价流程。`,
+          `\n=== 媒体素材上传规范 ===`,
+          `- 当用户表达需要上传照片、发视频、传图、打开相册、选择素材等指令时，你必须在回答末尾附带 <<ACTION:TRIGGER_UPLOAD>>，例如："好的，已为您打开相册，请选择您要上传的素材。<<ACTION:TRIGGER_UPLOAD>>"`,
         ]
           .filter(Boolean)
           .join('\n')
@@ -296,6 +298,20 @@ export async function POST(request: Request, { params }: Params) {
             type: 'done',
             reply: '好的，老板！我马上为您批量生成内容并排期发布！',
             action: 'GENERATE_AND_PUBLISH'
+          }) + '\n'))
+          controller.close()
+          return
+        }
+
+        // Inject the user message (detect TRIGGER_UPLOAD intent for opening photo library)
+        const uploadKeywords = ['上传', '发张照片', '传照片', '发视频', '传视频', '打开相册', '选择素材', '上传素材', '上传照片', '上传视频']
+        const wantsUpload = uploadKeywords.some((kw) => message.includes(kw))
+
+        if (wantsUpload) {
+          controller.enqueue(encoder.encode(JSON.stringify({
+            type: 'done',
+            reply: '好的，老板！已为您打开手机相册，请选择您要上传的图片或视频素材。',
+            action: 'TRIGGER_UPLOAD'
           }) + '\n'))
           controller.close()
           return
