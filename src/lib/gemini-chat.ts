@@ -304,6 +304,7 @@ export async function callGeminiChat(
                     const dataObj = inner.success && inner.data ? inner.data : inner
                     quoteData = {
                       ...dataObj,
+                      ...args,
                       pickupAddress: (args as any).pickupAddress,
                       destinationAddress: (args as any).destinationAddress
                     }
@@ -461,6 +462,7 @@ export async function callGeminiChat(
                     const dataObj = inner.success && inner.data ? inner.data : inner
                     quoteData = {
                       ...dataObj,
+                      ...parsedArgs,
                       pickupAddress: (parsedArgs as any).pickupAddress,
                       destinationAddress: (parsedArgs as any).destinationAddress
                     }
