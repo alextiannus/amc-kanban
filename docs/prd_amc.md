@@ -745,12 +745,26 @@ RolePermission 表：
 ### 裂变与营销优惠码系统设计 (Universal Fission & Marketing Promo Code Module)
 - **通用裂变 (Universal Fission)**：支持所有用户角色（无论 Merchant、BD、Principal 还是 Admin）生成个人专属的 `inviteCode`，鼓励平台整体自裂变。
 - **独立营销优惠码 (Campaign Promo Codes)**：新增 `CampaignPromoCode` 表支持生成诸如 `SUMMER2026` 独立营销兑换码，包含最大使用限额、折扣比率 (百分比/固定金额)、有效期约束及所有权归属。
-- **特权管理面板**：为 Admin、Principal、BD 账户规划专属的 **“裂变与营销推广中心 (Fission & Promo Center)”**，实现营销推广码创建、启用/禁用和推荐业绩分析的可视化。
+- **特权管理面板**：为 Admin、Principal、BD 账户规划专属的 **“裂变与营销推广中心 (Fission & Promo Center)”**，实现营销推广码创建、启用/禁用和推荐业绩业绩分析的可视化。
 
 ### 影响文件
 - `prisma/schema.prisma`
 - `docs/prd_amc.md`
 - `docs/design_referral_campaign_system.md`
+
+---
+
+## Changelog v1.8.9 — 2026-06-30（BD 阶段目标及线索查重与期限制设计）
+
+### 销售阶段目标进度 & 线索周期规制
+- **业绩目标汇率转换与分级提成**：本月总销售额增加 7.2 人民币汇率换算，分设 ¥36,000 (提成 5%) 与 ¥138,000 (提成 10%) 两层奖励，未达标提成锁 0%，提供“解题奖励”文本和激活率统计数据接口支持。
+- **CRM线索查重拦截**：线索新建时对邮箱与手机号进行查重，已在 `SalesLead` 或 `User` 系统记录则返回 409 报错拦截。
+- **CRM线索转化与超期失效**：已转化 (`ONBOARDED`) 和超期 (`>= 90天`) 线索在列表中剔除，对 `60-90天` 间的线索附加超期提醒。
+
+### 影响文件
+- `src/app/api/mm/bd/performance/route.ts`
+- `src/app/api/mm/bd/leads/route.ts`
+- `docs/prd_amc.md`
 
 
 

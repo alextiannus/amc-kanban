@@ -102,13 +102,27 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    const estimatedCommission = Math.round(totalActiveSubscriptionVolume * 0.20)
+    // Exchange rate: 1 USD = 7.2 RMB
+    const totalSalesRmb = Math.round(totalActiveSubscriptionVolume * 7.2)
+    
+    // Commission Tier calculation:
+    // - Under ¥36,000: 0% (0 commission)
+    // - ¥36,000 - ¥137,999: 5% (sales * 0.05)
+    // - ¥138,000+: 10% (sales * 0.10)
+    let commissionRate = 0
+    if (totalSalesRmb >= 138000) {
+      commissionRate = 0.10
+    } else if (totalSalesRmb >= 36000) {
+      commissionRate = 0.05
+    }
+    const earnedCommissionRmb = Math.round(totalSalesRmb * commissionRate)
 
     // 5. Generate mock historical time-series for Recharts
+    const chartBaseRmb = earnedCommissionRmb > 0 ? earnedCommissionRmb : Math.round(totalSalesRmb * 0.05)
     const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月']
     const commissionHistory = monthNames.map((m, idx) => ({
       name: m,
-      commission: Math.round(estimatedCommission * (0.4 + idx * 0.12))
+      commission: Math.round(chartBaseRmb * (0.4 + idx * 0.12))
     }))
 
     return NextResponse.json({
@@ -116,7 +130,14 @@ export async function GET(req: NextRequest) {
       kpis: {
         totalOnboarded,
         activeSubscriptions,
-        estimatedCommission
+        inactiveSubscriptions: totalOnboarded - activeSubscriptions,
+        activationRate: totalOnboarded > 0 ? Math.round((activeSubscriptions / totalOnboarded) * 100) : 0,
+        totalSalesUsd: totalActiveSubscriptionVolume,
+        totalSalesRmb,
+        earnedCommissionRmb,
+        commissionRate,
+        target1Rmb: 36000,
+        target2Rmb: 138000
       },
       brands: formattedBrands,
       chartData: commissionHistory

@@ -22,10 +22,27 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const leads = await prisma.salesLead.findMany({
-      where: { bdUserId: session.user.id },
+    const expiryLimit = new Date()
+    expiryLimit.setDate(expiryLimit.getDate() - 90)
+
+    const dbLeads = await prisma.salesLead.findMany({
+      where: { 
+        bdUserId: session.user.id,
+        status: { not: 'ONBOARDED' },
+        createdAt: { gte: expiryLimit }
+      },
       orderBy: { createdAt: 'desc' }
     })
+
+    const leads = dbLeads.map((lead: any) => {
+      const daysActive = Math.floor((Date.now() - new Date(lead.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+      return {
+        ...lead,
+        daysActive,
+        daysToExpiry: 90 - daysActive
+      }
+    })
+
     return NextResponse.json({ leads })
   } catch (err: any) {
     console.error('[bd_leads_api] GET failed:', err)
@@ -58,6 +75,37 @@ export async function POST(req: NextRequest) {
 
     if (!name) {
       return NextResponse.json({ error: 'Restaurant/Contact Name is required' }, { status: 400 })
+    }
+
+    // Validate duplicates if phone or email is provided
+    if (phone && phone.trim()) {
+      const trimmedPhone = phone.trim()
+      // Check in SalesLead
+      const dupLeadPhone = await prisma.salesLead.findFirst({
+        where: { phone: trimmedPhone }
+      })
+      if (dupLeadPhone) {
+        return NextResponse.json({ error: '此客户电话号码已被系统录入，请勿重复跟进。' }, { status: 409 })
+      }
+    }
+
+    if (email && email.trim()) {
+      const trimmedEmail = email.trim().toLowerCase()
+      // Check in SalesLead
+      const dupLeadEmail = await prisma.salesLead.findFirst({
+        where: { email: { equals: trimmedEmail, mode: 'insensitive' } }
+      })
+      if (dupLeadEmail) {
+        return NextResponse.json({ error: '此客户邮箱地址已被系统录入，请勿重复跟进。' }, { status: 409 })
+      }
+      
+      // Check in User
+      const dupUser = await prisma.user.findFirst({
+        where: { email: { equals: trimmedEmail, mode: 'insensitive' } }
+      })
+      if (dupUser) {
+        return NextResponse.json({ error: '此客户邮箱已被商户注册，请勿重复跟进。' }, { status: 409 })
+      }
     }
 
     const lead = await prisma.salesLead.create({
