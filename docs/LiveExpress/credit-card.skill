@@ -1,0 +1,239 @@
+---
+name: credit-card
+description: Use when a user needs to set up or use credit card payment tools (agenzo-token-cli + evo-payment-cli) for DeliveryChinatown flash/run-leg orders, including adding credit cards, 3DS verification, creating Network Tokens, charging via evo-payment-cli, and confirming payment to DCT.
+---
+
+# Credit Card Payment Skill
+
+Use this skill when handling credit card payments for DCT flash delivery orders. The flow involves three tools:
+
+1. `agenzo-token-cli` — add credit card + 3DS → create Network Token
+2. `evo-cli` — charge the Network Token via `cryptogram +pay`
+3. DCT MCP `confirm_flash_order_payment` — notify DCT that payment succeeded
+
+**Do not** attempt credit card payment without first reading the [dct-logistics SKILL.md](../dct-logistics/SKILL.md) for the overall delivery flow (quote → submit → pay → track).
+
+---
+
+## Prerequisites
+
+### agenzo-token-cli
+
+```bash
+# ⚠️ Dev environment requires scoped old version v0.3.2
+#    Unscoped v1.7.0 uses /api/v3/agent-pay which does NOT exist on dev
+npm uninstall -g agenzo-token-cli
+npm install -g @agenzo/token-cli@0.3.2
+agenzo-token-cli --version   # verify
+```
+
+API Host: `https://agent-dev.agenzo.com`
+
+### evo-payment-cli
+
+```bash
+# macOS / Linux
+npm install -g @evopayment/cli
+
+# Windows — npm package needs unzip (not available on Windows)
+# Download from GitHub Releases and unzip manually:
+#   https://github.com/CardInfoLink/evo-payment-cli/releases/download/v0.10.0/evo-payment-cli_0.10.0_windows_amd64.zip
+# Place evo-cli.exe in a PATH directory (e.g. C:\Program Files\nodejs\)
+
+evo-cli --version   # verify
+```
+
+**Configure evo-cli:**
+
+```bash
+echo "<sign-key>" | evo-cli config init \
+  --merchant-sid <SID> \
+  --api-base-url https://hkg-online-uat.everonet.com \
+  --linkpay-base-url https://hkg-counter-uat.everonet.com \
+  --env test \
+  --sign-type SHA256 \
+  --api-key-stdin
+
+evo-cli doctor   # verify: 4/4 pass ✅
+```
+
+> **Security:** The sign key MUST be passed via `--api-key-stdin` (stdin), never as a CLI argument. It is stored in the OS keychain by evo-cli.
+
+---
+
+## Core Workflow
+
+```
+① submit_flash_order → orderTransactionId (save as string!)
+② agenzo: payment-methods add → 3DS → pm_id ACTIVE
+③ agenzo: payment-tokens create → Network Token
+④ evo-cli: cryptogram +pay → Authorised
+⑤ confirm_flash_order_payment → orderStatus: 0→1, payStatus: 1
+⑥ query_flash_order_status → track delivery (1→40→50→70)
+```
+
+### Step 1 — Add Credit Card + 3DS
+
+Tell the user you need their credit card details (number, expiry, CVV) and email for 3DS verification.
+
+```bash
+agenzo-token-cli --yes payment-methods add \
+  --api-key <api_key> \
+  --email <email_for_3ds> \
+  --card-number <card_number> \
+  --expiry <MMYY> \
+  --cvv <cvv> \
+  --idempotency-key <uuid>
+```
+
+- `--idempotency-key` is **required** — generate a unique value per attempt
+- The card is created in `PENDING` status
+- A 3DS verification email is sent — **the user must open the link in a browser**
+- Keep the CLI process alive (long timeout, ~180s) until the card becomes `ACTIVE`
+- On success: returns a 32-char hex **payment-method-id**
+
+### Step 2 — Create Network Token
+
+```bash
+agenzo-token-cli --yes payment-tokens create \
+  --type network-token \
+  --api-key <api_key> \
+  --payment-method-id <pm_id> \
+  --idempotency-key <uuid>
+```
+
+Response includes:
+- `value` — tokenized card number (e.g. `2223001889785528`)
+- `cryptogram` — e.g. `AKJM+sGR3nH4AAPzHdbbAAADFA==`
+- `expiry_date` — e.g. `0729`
+- `eci` — e.g. `06`
+- `brand` — e.g. `Mastercard`
+
+> VCN (`--type vcn`) is **not available** on dev (returns `TOKEN_FEATURE_DISABLED`). Always use `network-token`.
+
+### Step 3 — Charge via evo-cli
+
+```bash
+evo-cli cryptogram +pay \
+  --network-token-value <tokenValue> \
+  --token-expiry-date <MMYY> \
+  --token-cryptogram "<cryptogram>" \
+  --eci <eci> \
+  --payment-brand Mastercard \
+  --amount <amount> \
+  --currency SGD \
+  --merchant-tx-id <orderTransactionId>
+```
+
+- Set `--merchant-tx-id` to the `orderTransactionId` for traceability
+- Success response: `result.code: "S0000"`, `status: "Authorised"`, returns `evoTransID`
+- The same Network Token can be reused for multiple charges
+
+### Step 4 — Confirm Payment to DCT
+
+After evo-cli returns success, call `confirm_flash_order_payment`:
+
+```json
+{
+  "orderTransactionId": "<orderTransactionId as string>",
+  "payType": "CREDITCARD_PAY",
+  "payTransactionId": "<evoTransID>"
+}
+```
+
+> ⚠️ **Critical: `orderTransactionId` must be a String!** Order IDs are 19-digit numbers. JavaScript `Number` loses precision beyond `Number.MAX_SAFE_INTEGER` (9007199254740991). Passing as Number results in a wrong value → Partner API returns "No order data found!".
+
+**Behavior:**
+- Only succeeds if the order is currently in `orderStatus = 0` (pending payment)
+- Updates to `orderStatus = 1`, `payStatus = 1`
+- Writes `payType`, `payTransactionId`, `payTime`
+- Triggers the same dispatch flow as PayNow
+
+### Step 5 — Track Delivery
+
+After payment is confirmed, poll `query_flash_order_status` or `query_flash_order_detail` to follow delivery progress.
+
+---
+
+## Tool Reference
+
+### agenzo-token-cli
+
+| Command | Purpose |
+|---------|---------|
+| `payment-methods add` | Add credit card + trigger 3DS verification |
+| `payment-methods get <id>` | Check card status |
+| `payment-methods list` | List all saved cards |
+| `payment-tokens create --type network-token` | Create Network Token from an active card |
+| `payment-tokens get <id>` | Query token details |
+
+All runtime commands require `--api-key <key>`.
+
+### evo-cli
+
+| Command | Purpose |
+|---------|---------|
+| `cryptogram +pay` | Charge a Network Token |
+| `payment +refund` | Refund a payment |
+| `payment +query` | Query payment status |
+
+### DCT MCP
+
+| Tool | Purpose |
+|------|---------|
+| `confirm_flash_order_payment` | Confirm external payment, update order status |
+| `query_flash_order_status` | Track delivery status |
+| `query_flash_order_detail` | Full order details |
+
+---
+
+## Safety Rules
+
+1. **Never store sign keys in plaintext** — use `--api-key-stdin` for evo-cli config
+2. **Verify payment before confirming** — only call `confirm_flash_order_payment` after evo-cli returns `S0000`
+3. **Don't confirm twice** — a single `confirm_flash_order_payment` call per order
+4. **Don't use `confirm_flash_order_payment` for PayNow** — PayNow status updates automatically
+5. **Don't confirm already-paid orders** — check `orderStatus == 0` first
+6. **Always pass `orderTransactionId` as string** — precision loss with number type
+7. **Keep 3DS CLI process alive** — the process polls until card activates; killing it early loses the result
+
+---
+
+## Common Errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `No order data found!` | `orderTransactionId` passed as Number (precision loss) | Pass as String |
+| `TOKEN_FEATURE_DISABLED` | VCN not enabled on dev | Use `--type network-token` instead |
+| `Route not found` / auth failure | Wrong agenzo-token-cli version | Use `@agenzo/token-cli@0.3.2` (scoped old version) |
+| `config file not found` | evo-cli not configured | Run `evo-cli config init` |
+| `Only unpaid orders can be confirmed as paid!` | Order already paid/cancelled | Check order status first |
+| `Partner API HTTP 404` | Backend endpoint not deployed | Deploy `/order/flash/pay/manual/confirm` |
+
+---
+
+## Test Data
+
+### agenzo (Dev)
+| Field | Value |
+|-------|-------|
+| API Key | `sk_test_PLACEHOLDER` |
+| Test Card | `2223001870064586` MasterCard |
+| Expiry | `1226` |
+| CVV | `935` |
+| 3DS Email | `gaoshan@deliverychinatown.com` |
+
+### evo (UAT)
+| Field | Value |
+|-------|-------|
+| Merchant SID | `S005908` |
+| Sign Key | `sk_sandbox_PLACEHOLDER` |
+| API Base URL | `https://hkg-online-uat.everonet.com` |
+| Environment | test |
+
+
+### Standard Test Addresses
+| Purpose | Postcode | Address | Coordinates |
+|---------|----------|---------|-------------|
+| Pickup | 577178 | 38 Jalan Pemimpin M38 Singapore 577178 | `1.3484243, 103.841569` |
+| Delivery | 358847 | 18 Leicester Road Platinum Edge Singapore 358847 | `1.3304937, 103.8668479` |

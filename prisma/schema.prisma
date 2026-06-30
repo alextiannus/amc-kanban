@@ -324,6 +324,8 @@ model Brand {
   companionMessages CompanionMessage[]
   companionSessions CompanionSession[]
   copywriterLogs    CopywriterLog[]
+  mcpServerConfigs  McpServerConfig[]
+  companionSkills   CompanionSkill[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -971,4 +973,34 @@ model SalesLead {
   bdUser      User     @relation(fields: [bdUserId], references: [id])
   @@index([bdUserId])
 }
+
+model McpServerConfig {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name        String   // e.g. "dct-logistics"
+  url         String   // SSE/HTTP Endpoint
+  headers     Json?    // Optional credentials/auth headers
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([brandId])
+}
+
+model CompanionSkill {
+  id             String   @id @default(cuid())
+  brandId        String
+  brand          Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name           String   // e.g. "dct-logistics"
+  displayName    String   // e.g. "LiveExpress Logistics"
+  description    String?  // Brief description
+  systemPrompt   String   @db.Text // System prompt override
+  isEnabled      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([brandId])
+}
+
 

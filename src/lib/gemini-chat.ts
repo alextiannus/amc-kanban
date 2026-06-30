@@ -36,7 +36,7 @@ export interface GeminiChatResult {
 /**
  * Companion tool declarations for function calling.
  */
-const COMPANION_TOOLS: FunctionDeclaration[] = [
+export const COMPANION_TOOLS: FunctionDeclaration[] = [
   {
     name: 'get_calendar_events',
     description: 'Get the brand\'s scheduled and published content for a given time period. Use when user asks about content schedule, what was posted, when posts are planned, or how many posts this week/month.',
@@ -151,6 +151,7 @@ export async function callGeminiChat(
   userMessage: string,
   enableTools = true,
   maxTokens = 500,
+  customTools?: any[],
 ): Promise<GeminiChatResult> {
   const apiKey = await getGeminiApiKey()
 
@@ -183,7 +184,7 @@ export async function callGeminiChat(
     }
 
     if (enableTools) {
-      body.tools = [{ functionDeclarations: COMPANION_TOOLS }]
+      body.tools = [{ functionDeclarations: customTools || COMPANION_TOOLS }]
       body.toolConfig = { functionCallingConfig: { mode: 'AUTO' } }
     }
 
@@ -233,7 +234,8 @@ export async function callGeminiChat(
         }
       } else if (response.status !== 429 && response.status !== 503) {
         // Non-rate-limit error (e.g. 400 bad request) — don't fallback
-        console.error(`[GeminiChat] API error ${response.status}`)
+        const errText = await response.text().catch(() => '')
+        console.error(`[GeminiChat] API error ${response.status}:`, errText)
         return { reply: '不好意思，您能再说一遍吗？', action: 'NONE' }
       }
       // 429 / 503 / empty response → fall through to fallback

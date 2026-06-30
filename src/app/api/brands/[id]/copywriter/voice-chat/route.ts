@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { callGeminiChat, ChatTurn } from '@/lib/gemini-chat'
+import { callGeminiChat, ChatTurn, COMPANION_TOOLS } from '@/lib/gemini-chat'
 import { submitDraftForDelivery } from '@/lib/draftSubmission'
 import { postfastDeletePost } from '@/lib/integrations/postfast'
+import { McpClientManager } from '@/lib/mcp/clientManager'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -28,6 +29,11 @@ async function executeTool(
   brandId: string,
 ): Promise<{ resultText: string; actionReply?: string }> {
   try {
+    if (toolName.includes('__')) {
+      const response = await McpClientManager.executeTool(brandId, toolName, args)
+      return { resultText: `MCP 工具调用成功！返回数据：\n${JSON.stringify(response, null, 2)}` }
+    }
+
     switch (toolName) {
       case 'get_calendar_events': {
         const now = new Date()
@@ -223,7 +229,7 @@ export async function POST(request: Request, { params }: Params) {
     // Fetch brand + knowledge
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
-      include: { knowledge: true },
+      include: { knowledge: true, companionSkills: { where: { isEnabled: true } } },
     })
 
     if (!brand) {
@@ -244,6 +250,8 @@ export async function POST(request: Request, { params }: Params) {
       ? `待审批草稿 IDs: ${context.pendingDraftIds.join(', ')}`
       : ''
 
+    const skillsPrompts = brand.companionSkills?.map((s: any) => `[Skill: ${s.displayName}]\n${s.systemPrompt}`).join('\n\n') || ''
+
     const systemPrompt = [
       `你是品牌"${brand.name}"的专属 AI 营销伴侣（员工），用中英文混合方式沟通（中文为主，专业术语用英文）。`,
       `品牌简介：${brand.description ?? '优质餐厅品牌'}`,
@@ -252,6 +260,7 @@ export async function POST(request: Request, { params }: Params) {
       menuText,
       slangText,
       draftContext,
+      skillsPrompts ? `\n\n=== 附加技能与规则 ===\n${skillsPrompts}` : '',
       `你可以主动调用工具查询数据或执行操作。对话要简洁、积极，如同一位得力的 AI 员工。`,
       `当 AI 听不懂用户意图时，回复："不好意思，您能再说一遍吗？"`,
     ]
@@ -266,8 +275,15 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ reply: '好的，老板！我马上为您批量生成内容并排期发布！', action: 'GENERATE_AND_PUBLISH' })
     }
 
+    // Fetch and merge remote MCP tools
+    const extTools = await McpClientManager.aggregateExternalTools(brandId)
+    const combinedTools = [
+      ...COMPANION_TOOLS,
+      ...extTools
+    ]
+
     // Call gemini-chat with history and tools
-    const result = await callGeminiChat(systemPrompt, history, message)
+    const result = await callGeminiChat(systemPrompt, history, message, true, 500, combinedTools)
 
     // If Gemini made a tool call, execute it and get a follow-up reply
     if (result.toolCallName && result.toolCallArgs) {
@@ -290,7 +306,7 @@ export async function POST(request: Request, { params }: Params) {
         { role: 'user', content: `工具执行结果：${resultText}` },
       ]
 
-      const followUp = await callGeminiChat(systemPrompt, followUpHistory, '请根据以上工具结果，用自然语言简洁地回答用户。', false)
+      const followUp = await callGeminiChat(systemPrompt, followUpHistory, '请根据以上工具结果，用自然语言简洁地回答用户。', false, 500, combinedTools)
       return NextResponse.json({
         reply: followUp.reply || resultText,
         action: result.action,

@@ -1,0 +1,579 @@
+---
+name: dct-logistics
+description: Use when a user needs DeliveryChinatown flash/run-leg logistics through the dct-logistics MCP server, including address autocomplete, delivery quotation, order submission, PayNow payment creation, payment polling, order status/detail lookup, cancellation, and priority fee operations.
+---
+
+# DeliveryChinatown Logistics
+
+Use the `dct-logistics` MCP server for DeliveryChinatown flash/run-leg delivery. The MCP API key authenticates the agent to the MCP server. Do not ask the user for Partner platform credentials and do not call Partner login APIs directly.
+
+## Core Workflow
+
+1. Collect pickup, delivery, contact, item, country/city, delivery time, and preferred vehicle information. If the user only provides a postcode, call `autocomplete_address` to resolve it into a full address before proceeding. **Note: `deliveryTime` is required by the Partner API for quotation - ask the user for an estimated pickup time if not provided.**
+2. Call `quote_flash_order` to get the estimated delivery fee and distance.
+3. Show the quote to the user and ask for explicit confirmation before creating the order.
+4. Call `submit_flash_order` only after confirmation.
+5. Save the returned `orderTransactionId` immediately. Use it for payment, status, detail, cancel, and priority fee tools.
+6. **Ask the user which payment method to use: PayNow or Credit Card.**
+   - **PayNow →** Go to step 6a.
+   - **Credit Card →** Go to step 6b.
+7. (Continues from whichever branch completes. After credit card payment, call `confirm_flash_order_payment` to notify DCT.)
+
+### 6a. PayNow Payment Flow
+- Call `create_flash_order_payment({ orderTransactionId, locale: "zh-CN", paymentMethod: "PAYNOW" })` to generate a PayNow QR code.
+- If `qrCodeInBase64` is empty or network error, **retry the same call** (network may be unstable; the order is already created, do not create a replacement).
+- Decode the base64 QR code and save as an image file, then present it to the user for scanning.
+- Tell the user the exact `payAmount` (note: this may differ from the quoted `deliveryFee` — it is the actual amount charged).
+- Poll `query_flash_payment_status` every 5 seconds when the user is actively waiting.
+- Stop polling when `payStatus = 1` (paid). The order then progresses through the delivery lifecycle automatically.
+- See "PayNow Payment" section below for full details with response examples.
+
+### 6b. Credit Card Payment Flow (via agenzo-token-cli)
+- Use the `agenzo-token-cli` tool (scoped package `@agenzo/token-cli@0.3.2`) to handle credit card payment.
+- **Prerequisites:** An API Key (`sk_<env>_...`) with `token` scope must already exist. If not, follow the admin-cli flow first (login → developer create → keys create --scope token).
+- **Steps:**
+  1. Ask the user for their credit card details (number, expiry, CVV) and the email for 3DS verification.
+  2. Run `agenzo-token-cli --yes payment-methods add --api-key <key> --email <email> --card-number <number> --expiry <MMYY> --cvv <cvv> --idempotency-key <unique_id>` to add the card and initiate 3DS verification.
+  3. The 3DS flow sends a verification email — tell the user to open the link in a browser. Keep the CLI process alive (long timeout, e.g. 180s) until the card becomes ACTIVE.
+  4. Create a payment token: prefer `network-token` on dev (VCN may be disabled). Run `agenzo-token-cli --yes payment-tokens create --type network-token --api-key <key> --payment-method-id <pm_id> --idempotency-key <unique_id>`.
+  5. The token can be used as payment for the delivery order.
+- ⚠️ See `skills/agenzo-cli/doc/token-cli.md` for full details on 3DS flow, idempotency-key, and error handling.
+
+8. Use `query_flash_order_status` or `query_flash_order_detail` for delivery progress.
+9. Use `cancel_flash_order` only before driver acceptance.
+10. Use `add_flash_order_priority_fee` only after the user explicitly agrees to the extra amount.
+
+## Tool Guide
+
+Use `autocomplete_address` to resolve a postcode/address query into address details (coordinates, full address):
+
+- Required fields: `input`, `country`.
+- `input` is the search text — can be a postcode, address keyword, or partial address.
+- `country` is the country code, e.g. `SG`, `MY`, `VN`, `TH`.
+- Use this tool **before** `quote_flash_order` when the user only provides a postcode or vague address. It returns full address details including coordinates that you can pass directly to `quote_flash_order`.
+- **Response format:** Returns an array of address matches. Each match contains `address`, `latitude`, `longitude`, `postalCode`, `buildingName`, `country`, `countryCode`.
+- **Extract the first result's** `address` as `pickupAddress`/`deliveryAddress`, `latitude` as `pickupLat`/`deliveryLat`, `longitude` as `pickupLng`/`deliveryLng` for `quote_flash_order`.
+- **Example response:**
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "postalCode": "577178",
+        "address": "38 Jalan Pemimpin M38 Singapore 577178",
+        "latitude": "1.3484243232319",
+        "longitude": "103.841569037581",
+        "buildingName": "M38",
+        "country": "Singapore",
+        "countryCode": "SG"
+      }
+    ]
+  }
+  ```
+- **Example usage:** `autocomplete_address({ input: "577178", country: "SG" })` → extract `address: "38 Jalan Pemimpin M38 Singapore 577178"`, `lat: 1.3484243`, `lng: 103.841569` → pass to `quote_flash_order`.
+
+Use `quote_flash_order` before every new order:
+
+- Required fields: `drivingType`, `pickupAddress`, `pickupLat`, `pickupLng`, `destinationAddress`, `destinationLat`, `destinationLng`, `countryCode`, `city`, **`deliveryTime`**.
+- `deliveryTime` format: `yyyy-MM-dd HH:mm:ss` (e.g. `2026-06-24 18:00:00`). ⚠️ The Partner API requires this field even though the MCP schema marks it optional.
+- Optional field: `locale`.
+- Recommended defaults: `drivingType = "Motorbike"`, `countryCode = "SG"`, `city = "Singapore"` unless the user says otherwise.
+
+### ⚠️ 报价前必查清单（quote_flash_order pre-flight checklist）
+
+每次调用 `quote_flash_order` 前，**逐项确认**：
+
+| # | 检查项 | 正确值 | 常见错误 |
+|---|--------|--------|----------|
+| 1 | `deliveryTime` 是否已传入？ | `yyyy-MM-dd HH:mm:ss` 格式 | ❌ 漏传（MCP schema 标 optional 但 API 必需） |
+| 2 | `drivingType` 大小写？ | `"Motorbike"` 或 `"Car"` | ❌ `"motorcycle"` / `"motorbike"` 小写不识别 |
+| 3 | `countryCode` | `"SG"` / `"MY"` 等 | ❌ 漏传 |
+| 4 | `city` | `"Singapore"` 等 | ❌ 漏传 |
+| 5 | 坐标来自 `autocomplete_address`？ | 是 | ❌ 不要自己编坐标 |
+
+如果 `deliveryFee` 返回 `null`，**先对照此清单排查**，不要直接下单。
+- **Example response:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "deliveryFee": 17.5,
+      "distanceInKiloMeter": 5.37,
+      "deliveryTime": "7"
+    }
+  }
+  ```
+  `deliveryFee` is the estimated fee in SGD, `distanceInKiloMeter` is the distance, `deliveryTime` is the estimated delivery time in minutes.
+
+Use `submit_flash_order` to create the order:
+
+- Required fields: `requesterId` (type: **Long/Number**, not string), `pickupAddress`, `pickupTime`, `pickupLat`, `pickupLng`, `pickupMobile`, `pickupContactName`, `deliveryAddress`, `deliveryLat`, `deliveryLng`, `deliveryMobile`, `deliveryContactName`, `itemDesc`.
+- Recommended fields: `thirdPartyOrderNo`, `requesterMobile`, `requesterContactName`, `currencySign`, `deliveryType`, `drivingType`, `tips`, `estimatedDeliveryTime`, `goodsType`, `itemSize`, `itemWeight`, `itemRemark`, `itemEstValue`, `itemActValue`.
+- `thirdPartyOrderNo` is strongly recommended for reconciliation, but the current API does not enforce idempotency with it.
+- Do not call `submit_flash_order` twice for the same user request unless a human operator confirms the first attempt definitely did not create an order.
+
+Use `create_flash_order_payment` after order creation:
+
+- Required field: `orderTransactionId`.
+- ⚠️ **Partner API also requires `locale`** (e.g. `"zh-CN"`) even though the MCP schema marks it optional. Without it, the API returns `"localemust not be blank"`.
+- `paymentMethod`: defaults to `"PAYNOW"` in schema, but always pass it explicitly.
+- ⚠️ **Network instability:** `qrCodeInBase64` may sometimes return as an empty string `""` on first call due to network issues. If so, **retry the same `create_flash_order_payment` call** — do NOT submit a new order.
+- **Response fields:**
+  - `qrCodeInBase64` — base64-encoded PNG image of the PayNow QR code. Must be decoded to binary and saved as `.png` to show to the user.
+  - `orderTransactionId` — echoed back.
+  - `payTransactionId` — initially `null`, populated only after successful payment.
+  - `payAmount` — the actual amount charged in SGD (may differ from the quoted `deliveryFee`).
+  - `orderSn` — the display order number (e.g. `"2026-06-26-SG-5876"`).
+- **Example request:**
+  ```json
+  {
+    "orderTransactionId": "4042642228078133249",
+    "locale": "zh-CN",
+    "paymentMethod": "PAYNOW"
+  }
+  ```
+- **Example response:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "qrCodeInBase64": "iVBORw0KGgo...",
+      "orderTransactionId": "4042642228078133249",
+      "payTransactionId": null,
+      "payAmount": 0.01,
+      "orderSn": "2026-06-26-SG-5876"
+    }
+  }
+  ```
+- Do not create a replacement order if payment creation fails — keep the original `orderTransactionId` and retry the payment call.
+
+Use `query_flash_payment_status` for PayNow confirmation:
+
+- Required field: `orderTransactionId`.
+- Polling rules:
+  - Do not poll the same order more than once every 5 seconds.
+  - Stop polling after 5 minutes.
+  - Stop immediately when `payStatus = 1` (paid), or if the order is canceled/refunded, does not exist, or the user stops waiting.
+- If polling times out, keep the original `orderTransactionId` and use status/detail queries for later checks. Do not create a new order.
+- **Response before payment (waiting):**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "orderTransactionId": "4042642228078133249",
+      "orderSn": "5876",
+      "userId": "1001",
+      "orderStatus": 0,
+      "payStatus": 0,
+      "payType": "",
+      "payTime": null,
+      "payTransactionId": "",
+      "payAmount": 0.01,
+      "countryCode": "SG",
+      "city": "Singapore"
+    }
+  }
+  ```
+- **Response after successful payment:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "orderTransactionId": "4042642228078133249",
+      "orderSn": "5876",
+      "userId": "1001",
+      "orderStatus": 1,
+      "payStatus": 1,
+      "payType": "PAY_NOW",
+      "payTime": 1782460670000,
+      "payTransactionId": "215483",
+      "payAmount": 0.01,
+      "countryCode": "SG",
+      "city": "Singapore"
+    }
+  }
+  ```
+- Key indicators of successful payment: `payStatus: 1`, `payType: "PAY_NOW"`, `payTransactionId` has a non-empty value, `payTime` has a timestamp.
+
+Use `confirm_flash_order_payment` after successfully executing a third-party/card payment:
+
+- Indended for external payment (e.g. credit card via evo-payment-cli) to notify DCT that the order has been paid and trigger the same dispatch flow as a successful PayNow payment.
+- Required field: `orderTransactionId` (**must be a String, not Number** — JavaScript loses precision on 19-digit order IDs; passing as Number will resolve to a different value).
+- Optional fields: `payType` (default `"THIRD_PARTY_PAY"`), `payTransactionId` (if not provided, the system auto-generates one).
+- **Supported `payType` values:**
+  - `THIRD_PARTY_PAY` — default, for external payment confirmations
+  - `PAY_NOW` — PayNow
+  - `PAY_NOW_SP` — PayNow SP
+  - `CREDITCARD_PAY` — credit card
+  - `BANK_TRANSFER` — bank transfer
+  - `PAY_LATER` — pay later
+- **Behavior on success:**
+  - Only succeeds if the order is currently in "pending payment" status (`orderStatus = 0`).
+  - Updates order to paid: `orderStatus = 1`, `payStatus = 1`.
+  - Writes `payType`, `payTransactionId`, `payTime`.
+  - Triggers the same dispatch flow as PayNow (driver matching).
+- **Safety rules:**
+  - Only call this after **you have verified** the external payment was actually successful (e.g. evo-cli returned success).
+  - Do NOT call this for PayNow payments — PayNow is handled automatically by `create_flash_order_payment` + polling.
+  - Do NOT call this multiple times for the same order.
+- **Example request:**
+  ```json
+  {
+    "orderTransactionId": "4042680195589029890",
+    "payType": "CREDITCARD_PAY",
+    "payTransactionId": "pay2606291733550001000020620628"
+  }
+  ```
+- **Example response:**
+  ```json
+  {
+    "success": true,
+    "data": true
+  }
+  ```
+
+Use `query_flash_order_status` for concise status:
+
+- Required field: `orderTransactionId`.
+- Prefer this when the user only asks "where is my order", "paid yet", "accepted yet", or "delivered yet".
+
+Use `query_flash_order_detail` for full detail:
+
+- Required field: `orderTransactionId`.
+- Prefer this when the user needs driver info, pickup/drop-off details, payment details, fee details, delivery images, or delivery progress.
+- **Key fields in the response:**
+  - Driver info: `deliveryManId`, `deliveryManName`, `deliveryManMobile` (populated when `orderStatus >= 40`).
+  - Pickup time: `pickupAt` (timestamp, populated after rider picks up).
+  - Delivery images: `deliveryImageList` — array of `{ path, type }` where `type` is `"pickup"` or `"reach"` (delivery confirmation photos).
+  - Stop details: `stopList` — each stop has `address`, `contactName`, `mobile`, `orderStatus`, `distance`.
+  - Item details: `orderFlashItemList` — `itemDesc`, `itemSize`, `itemWeight`, `itemEstValue`, `itemActValue`, `remark`.
+  - Payment: `payAmount`, `payStatus`, `payType`, `payTime`, `payTransactionId`, `refundTransactionId`.
+  - Fees: `deliveryFee`, `priorityFee`, `driverBonusFee`.
+
+Use `list_flash_orders` for support or lookup:
+
+- Required fields: `pageNo`, `pageSize`.
+- Optional filters: `userId`, `orderSn`, `orderTimeFrom`, `orderTimeTo`, `reachTimeFrom`, `reachTimeTo`, `orderStatus`.
+- Keep `pageSize` at 20 unless the user asks for a larger page.
+
+Use `cancel_flash_order` only after confirming the user's intent:
+
+- Required field: `orderTransactionId`.
+- Optional field: `cancelReason`.
+- Do not promise cancellation after driver acceptance; tell the user cancellation may fail once a driver has accepted.
+
+Use `add_flash_order_priority_fee` only after explicit user approval:
+
+- Required fields: `orderTransactionId`, `priorityFee`.
+- `priorityFee` must be greater than 0.
+- Explain that this is an extra fee intended to improve driver acceptance.
+
+Use `list_flash_order_priority_fee_records` when checking added fees:
+
+- Required field: `orderTransactionId`.
+
+## Required User Confirmations
+
+Ask for confirmation before:
+
+- Submitting an order.
+- Creating a PayNow payment if the user has not confirmed the order amount.
+- Canceling an order.
+- Adding priority fee.
+
+For confirmation, summarize the pickup, drop-off, contact names/phones, item description, delivery time, vehicle type, estimated fee, and any extra fee.
+
+## Payment Methods
+
+### PayNow (Full Flow)
+
+1. Call `create_flash_order_payment({ orderTransactionId, locale: "zh-CN", paymentMethod: "PAYNOW" })`.
+2. **Check the response:**
+   - If `qrCodeInBase64` is non-empty → decode it to a PNG image and present to the user.
+   - If `qrCodeInBase64` is empty string `""` → this may be a transient network issue. **Retry the same call** once or twice. Do NOT create a new order.
+3. **Show the user:**
+   - The QR code image for scanning via PayNow app.
+   - The exact `payAmount` (in SGD) and `orderSn`.
+   - Ask them to scan and pay.
+4. **Poll for payment confirmation:**
+   - Call `query_flash_payment_status({ orderTransactionId })` every 5 seconds.
+   - Display the current `payStatus` to the user.
+   - Stop polling when `payStatus = 1` (paid), or timeout after 5 minutes, or user cancels.
+5. **After payment confirmed (`payStatus = 1`):**
+   - The order automatically progresses through the delivery lifecycle.
+   - No further action needed — the system handles driver matching.
+   - Use `query_flash_order_status` or `query_flash_order_detail` to follow delivery progress.
+6. **Post-payment status transition (observed in SIT):**
+   - `orderStatus: 1` (paid/matching) → `orderStatus: 40` (driver accepted) → `orderStatus: 50` (picked up) → `orderStatus: 70` (all reached/delivered).
+   - `query_flash_order_detail` shows the assigned driver info (`deliveryManId`, `deliveryManName`, `deliveryManMobile`) once `orderStatus >= 40`.
+   - Pickup and delivery photos may be available in `deliveryImageList` at completion.
+
+### Important Notes
+- The `payAmount` returned by `create_flash_order_payment` may differ from the `deliveryFee` quoted earlier — it is the actual amount the PayNow charge is created for. Always show the user the `payAmount`, not the quote, when asking them to pay.
+- The QR code is a **one-time** PayNow QR — once paid, it cannot be used again. If the user loses the QR before paying, call `create_flash_order_payment` again (same order, it will generate a new QR).
+
+### Credit Card (via agenzo-token-cli + evo-payment-cli)
+
+Use the `agenzo-token-cli` tool for credit card payment. This is an external CLI managed by the `agenzo-cli` skill — see `skills/agenzo-cli/SKILL.md` for the full workflow.
+
+#### Prerequisites
+- An API Key with `token` scope from `agenzo-admin-cli keys create --scope token`.
+- ⚠️ **CLI version matters**: Use `@agenzo/token-cli` (scoped package, v0.3.2) for the dev environment (`https://agent-dev.agenzo.com`). The standalone `agenzo-token-cli` (v1.7.0) uses `/api/v3/agent-pay` which does NOT exist on dev.
+- Install: `npm install -g @agenzo/token-cli@0.3.2`
+
+#### Flow: Add Card → 3DS → Create Token
+
+**Step 1 — Add Payment Method (with 3DS):**
+```bash
+agenzo-token-cli --yes payment-methods add \
+  --api-key <key> \
+  --email <email_for_3ds> \
+  --card-number <number> \
+  --expiry <MMYY> \
+  --cvv <cvv> \
+  --idempotency-key <unique_id>
+```
+- ⚠️ `--idempotency-key` is **required** by the API. Provide a unique value.
+- The card is created in `PENDING` status.
+- A 3DS verification email is sent to the provided email address.
+- **The user must open the verification link in a browser** to complete 3DS.
+- The CLI keeps polling until activation — **keep the process alive** (use a long timeout, e.g. 180s).
+- On success: status becomes `ACTIVE`, returns a 32-char hex payment method ID.
+
+**Step 2 — Create Payment Token:**
+```bash
+# Network Token (recommended for dev testing — VCN may be disabled)
+agenzo-token-cli --yes payment-tokens create \
+  --type network-token \
+  --api-key <key> \
+  --payment-method-id <pm_id> \
+  --idempotency-key <unique_id>
+
+# VCN (if feature flag enabled)
+agenzo-token-cli --yes payment-tokens create \
+  --type vcn \
+  --api-key <key> \
+  --payment-method-id <pm_id> \
+  --amount <USD_amount> \
+  --idempotency-key <unique_id>
+```
+- `--payment-method-id` skips card lookup — use the ID from Step 1.
+- `--card <full-card-number>` is also supported (matches by last 4 digits).
+- **VCN may be disabled** on dev (`TOKEN_FEATURE_DISABLED`). If so, use `network-token` instead.
+- Network Token response includes: `value` (tokenized card number), `cryptogram`, `expiry_date`, `eci`.
+
+#### Step 3 — Charge via evo-payment-cli
+
+Use `evo-cli` (`@evopayment/cli`) to charge the Network Token and then notify DCT.
+
+**Prerequisites:**
+- evo-cli installed: `npm install -g @evopayment/cli`
+- evo-cli configured: `echo "<sign-key>" | evo-cli config init --merchant-sid <SID> --sign-type SHA256 --env test --api-key-stdin`
+  - Test env SID: `S005908`, SignKey stored in OS keychain (not plaintext).
+- Already have a Network Token from Step 2 above.
+
+**Payment command:**
+```bash
+evo-cli cryptogram +pay \
+  --network-token-value <tokenValue> \
+  --token-expiry-date <MMYY> \
+  --token-cryptogram <cryptogram> \
+  --eci <eci> \
+  --payment-brand Mastercard \
+  --amount <payAmount> \
+  --currency SGD \
+  --merchant-tx-id <orderTransactionId>
+```
+- Use `--merchant-tx-id` set to the `orderTransactionId` for traceability.
+- On success, evo returns a payment confirmation with `evoTransactionId`.
+
+#### Step 4 — Confirm Payment to DCT
+
+After evo-cli confirms successful payment, call `confirm_flash_order_payment` to notify DCT:
+
+```json
+confirm_flash_order_payment({
+  "orderTransactionId": "4042680195589029890",
+  "payType": "CREDITCARD_PAY",
+  "payTransactionId": "pay2606291733550001000020620628"
+})
+```
+
+> ⚠️ **Critical:** `orderTransactionId` **must be a String**, not a Number. The order IDs are 19-digit numbers that exceed JavaScript's safe integer range (Number.MAX_SAFE_INTEGER = 9007199254740991). If passed as a Number, precision loss will cause the Partner API to fail with "No order data found!". Always quote it as a string.
+
+- This triggers the same dispatch flow as PayNow.
+- The order transitions to `orderStatus: 1` and a driver is matched automatically.
+
+#### Full Credit Card Flow Summary
+```
+1. submit_flash_order          → orderTransactionId (save as String!)
+2. agenzo: payment-methods add → paymentMethodId
+3. agenzo: payment-tokens create --type network-token → token (value, cryptogram, expiry, eci)
+4. evo-cli: cryptogram +pay    → evoTransactionId (payment success)
+5. confirm_flash_order_payment → orderStatus: 0→1 (paid, dispatching)
+   ⚠️ orderTransactionId must be a String!
+6. query_flash_order_status    → track delivery (1→40→50→70)
+```
+
+#### Test Data (Dev Environment)
+- API Host: `https://agent-dev.agenzo.com`
+- Test card: `2223001870064586` (MasterCard) / Exp: `1226` / CVV: `935`
+- 3DS email: `gaoshan@deliverychinatown.com`
+
+## Safety Rules
+
+- Never request or expose Partner platform `clientSecret`.
+- Never reveal the MCP API key in user-facing responses.
+- Never invent coordinates. Use `autocomplete_address` as the approved geocoding tool to resolve addresses/postcodes. If the tool is unavailable or returns no results, ask the user for more specific address details before calling logistics tools.
+- Never create an order without pickup and delivery contact phone numbers.
+- Never blindly retry order submission after network timeout.
+- Never poll payment status faster than once every 5 seconds per order.
+- Never continue payment polling longer than 5 minutes.
+- Never add priority fee without explicit user approval.
+- Only call `confirm_flash_order_payment` AFTER you have verified the external payment was successful (evo-cli returned success).
+- Never call `confirm_flash_order_payment` for PayNow payments — PayNow is handled automatically.
+- Never call `confirm_flash_order_payment` twice for the same order.
+- Do NOT call `confirm_flash_order_payment` if the order status is already >= 1 (already paid/dispatched).
+- If `qrCodeInBase64` is empty on first `create_flash_order_payment` call, retry the payment creation (not the order) — this is a transient network issue.
+- Do NOT submit a new order if payment creation fails — keep the original `orderTransactionId` and retry `create_flash_order_payment`.
+- After payment is confirmed (`payStatus = 1`), do NOT attempt to create another payment for the same order.
+
+## Status Reference
+
+Order status values:
+
+- `0`: waiting for payment.
+- `1`: paid or matching.
+- `20`: rematching.
+- `30`: waiting for driver.
+- `40`: driver accepted.
+- `50`: picked.
+- `60`: partly reached.
+- `70`: all reached.
+- `80`: canceled by customer.
+- `90`: refunded.
+- `100`: commented.
+
+Payment status values:
+
+- `0`: waiting to pay.
+- `1`: paid.
+- `2`: paying.
+
+Supported payment methods:
+
+- **PayNow** — through `create_flash_order_payment` (MCP-based, QR code).
+- **Credit Card** — through `agenzo-token-cli payment-methods add` + `payment-tokens create --type vcn` (external CLI, VCN token).
+
+## Error Handling
+
+If `autocomplete_address` returns no results, ask the user for a more specific address (building/street name) rather than guessing coordinates.
+
+If quotation fails, explain that the delivery quote could not be calculated and ask the user to verify addresses, coordinates, country, city, and vehicle type.
+
+If order submission fails, do not retry automatically. Tell the user the order was not confirmed by the platform and ask whether they want support/manual checking.
+
+If payment creation fails, keep the `orderTransactionId` and use `query_flash_order_detail` or `query_flash_payment_status` for follow-up. Do not create a replacement order automatically.
+
+If payment polling is rate-limited, wait at least 5 seconds before trying again.
+
+If cancellation fails, query order detail/status and explain the current state.
+
+## Example Prompt Handling
+
+When the user says "帮我叫一个跑腿" or provides just postcodes/addresses:
+
+1. Collect all pickup/drop-off/contact/item/time information.
+2. If the user provides only postcodes or vague addresses, call `autocomplete_address({ input: "<postcode>", country: "SG" })` to resolve them into full addresses with coordinates.
+3. Extract the first result: `address` + `latitude` + `longitude` → map to `pickupAddress`/`deliveryAddress`, `pickupLat`/`deliveryLat`, `pickupLng`/`deliveryLng`.
+4. Call `quote_flash_order` with the resolved addresses.
+5. Ask the user to confirm the fee and delivery details.
+6. Call `submit_flash_order`.
+6. Ask the user which payment method: **PayNow** or **Credit Card**.
+7. **If PayNow:** Call `create_flash_order_payment`, show QR code, poll payment status.
+8. **If Credit Card:** Follow agenzo-token-cli flow (add card + 3DS → create Network Token) → evo-cli cryptogram +pay → confirm_flash_order_payment.
+9. Proceed with delivery tracking via `query_flash_order_status`/`query_flash_order_detail`.
+
+**Example flow with postcodes 577178 → 358847:**
+```
+autocomplete_address("577178", "SG")
+  → 38 Jalan Pemimpin M38 Singapore 577178 | 1.3484243, 103.841569
+
+autocomplete_address("358847", "SG")
+  → 18 Leicester Road Platinum Edge Singapore 358847 | 1.3304937, 103.8668479
+
+quote_flash_order(
+  pickupAddress: "38 Jalan Pemimpin M38 Singapore 577178",
+  pickupLat: 1.3484243, pickupLng: 103.841569,
+  destinationAddress: "18 Leicester Road Platinum Edge Singapore 358847",
+  destinationLat: 1.3304937, destinationLng: 103.8668479,
+  drivingType: "Motorbike", countryCode: "SG", city: "Singapore",
+  deliveryTime: "2026-06-24 18:00:00"
+)
+  → deliveryFee: 17.5 SGD, distance: 5.37 km
+
+submit_flash_order(...)
+  → {"success": true, "data": "4042642228078133249"}
+
+ask user: "PayNow 还是 信用卡?"
+
+PayNow → create_flash_order_payment(
+  orderTransactionId: "4042642228078133249",
+  locale: "zh-CN",
+  paymentMethod: "PAYNOW"
+)
+  → {"qrCodeInBase64": "iVBORw0...", "payAmount": 0.01, "orderSn": "2026-06-26-SG-5876"}
+
+→ Save QR as PNG, show to user, poll payment status...
+
+query_flash_payment_status("4042642228078133249")
+  → payStatus: 0  (waiting)
+  → payStatus: 1  (paid!) → payTransactionId: "215483", payType: "PAY_NOW"
+
+query_flash_order_status("4042642228078133249")
+  → orderStatus: 1  (paid/matching)
+  → orderStatus: 40 (driver accepted: rider_7)
+  → orderStatus: 70 (all reached - delivered!)
+```
+
+When the user says "查一下我的订单":
+
+1. Ask for `orderTransactionId` or `orderSn` if missing.
+2. Prefer `query_flash_order_detail` when `orderTransactionId` is available.
+3. Use `list_flash_orders` only when searching by filters.
+
+When the user says "取消订单":
+
+1. Ask for `orderTransactionId` if missing.
+2. Confirm cancellation intent.
+3. Call `cancel_flash_order`.
+4. Query status/detail after cancellation if the result is unclear.
+---
+name: dct_logistics
+description: DeliveryChinatown flash/run-leg logistics management including address autocomplete, quotation, order submission, payment and tracking
+---
+
+# DeliveryChinatown Logistics
+
+Handle DeliveryChinatown flash/run-leg delivery orders through the MCP server.
+
+## Core Workflow
+
+1. Collect pickup/delivery details (address, contact, items, time, vehicle). Use `autocomplete_address` for postcode resolution
+2. Call `quote_flash_order` for fee/distance estimate
+3. Show quote and get user confirmation
+4. Call `submit_flash_order` to create order, save `orderTransactionId`
+5. Ask user for payment method: PayNow or Credit Card
+6. Process payment and track delivery status
+
+## Key Tools
+
+- `autocomplete_address`: Resolve postcode/address to full details with coordinates
+- `quote_flash_order`: Get delivery fee and distance estimate
+- `submit_flash_order`: Create new delivery order
+- `create_flash_order_payment`: Generate PayNow QR code
+- `query_flash_payment_status`: Poll payment status (every 5s, max 5min)
+- `query_flash_order_status/detail`: Track delivery progress
+- `cancel_flash_order`: Cancel order before driver acceptance
+- `add_flash_order_priority_fee`: Add extra fee for driver acceptance
+- `confirm_flash_order_payment`: Not
