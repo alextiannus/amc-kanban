@@ -282,7 +282,9 @@ export default function LearnPage() {
   }, [schoolItems])
 
   const articlesList = useMemo(() => {
-    return schoolItems.filter(item => item.type === 'ARTICLE')
+    return schoolItems
+      .filter(item => item.type === 'ARTICLE')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }, [schoolItems])
 
   return (
