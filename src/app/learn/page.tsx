@@ -31,9 +31,32 @@ import {
   Share2
 } from 'lucide-react'
 
+const BG_STYLE_LABELS = {
+  0: '默认 (单侧太阳花)',
+  1: '双侧漂浮太阳花',
+  2: '向日葵缓旋辐射',
+}
+
 export default function LearnPage() {
   const [activeTab, setActiveTab] = useState<'qa' | 'manual' | 'skills' | 'school'>('school')
-  
+  const [bgStyle, setBgStyle] = useState<0 | 1 | 2>(0)
+
+  useEffect(() => {
+    const saved = localStorage.getItem('amc_learn_bg_style')
+    if (saved) {
+      const parsed = parseInt(saved, 10)
+      if (parsed === 0 || parsed === 1 || parsed === 2) {
+        setBgStyle(parsed)
+      }
+    }
+  }, [])
+
+  const cycleBgStyle = () => {
+    const next = ((bgStyle + 1) % 3) as 0 | 1 | 2
+    setBgStyle(next)
+    localStorage.setItem('amc_learn_bg_style', next.toString())
+  }
+
   // Q&A Category States
   const [qaSearch, setQaSearch] = useState('')
   const [qaCategory, setQaCategory] = useState<'all' | 'accounts' | 'posts' | 'influencers' | 'billing' | 'reports'>('all')
@@ -275,21 +298,46 @@ export default function LearnPage() {
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-yellow-300/15 dark:bg-yellow-500/5 blur-3xl pointer-events-none"></div>
       <div className="absolute top-[10%] right-[-15%] w-[60%] h-[60%] rounded-full bg-amber-400/10 dark:bg-amber-600/5 blur-3xl pointer-events-none"></div>
 
-      {/* Scaled-up sunflower smile logo in the top right background */}
-      <div className="absolute -top-10 -right-10 md:-top-16 md:-right-16 w-80 h-80 md:w-[26rem] md:h-[26rem] opacity-10 dark:opacity-[0.04] pointer-events-none transform rotate-12 select-none">
-        <img src="/logo.svg" alt="" className="w-full h-full object-contain" />
-      </div>
+      {/* Swappable Sunflower background styles */}
+      {bgStyle === 0 && (
+        <div className="absolute -top-10 -right-10 md:-top-16 md:-right-16 w-80 h-80 md:w-[26rem] md:h-[26rem] opacity-10 dark:opacity-[0.04] pointer-events-none transform rotate-12 select-none animate-in fade-in duration-550">
+          <img src="/logo.svg" alt="" className="w-full h-full object-contain" />
+        </div>
+      )}
+      {bgStyle === 1 && (
+        <div className="animate-in fade-in duration-550">
+          <div className="absolute -top-10 -right-10 md:-top-16 md:-right-16 w-80 h-80 md:w-[26rem] md:h-[26rem] opacity-10 dark:opacity-[0.04] pointer-events-none transform rotate-12 select-none">
+            <img src="/logo.svg" alt="" className="w-full h-full object-contain" />
+          </div>
+          <div className="absolute -bottom-10 -left-10 md:-bottom-16 md:-left-16 w-72 h-72 md:w-[22rem] md:h-[22rem] opacity-[0.07] dark:opacity-[0.03] pointer-events-none transform -rotate-12 select-none">
+            <img src="/logo.svg" alt="" className="w-full h-full object-contain" />
+          </div>
+        </div>
+      )}
+      {bgStyle === 2 && (
+        <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[70rem] h-[70rem] opacity-[0.06] dark:opacity-[0.03] pointer-events-none select-none animate-[spin_180s_linear_infinite] animate-in fade-in duration-550">
+          <img src="/logo.svg" alt="" className="w-full h-full object-contain" />
+        </div>
+      )}
 
       <div className="mx-auto max-w-5xl px-6 py-12 relative z-10">
         
-        {/* Breadcrumb Navigation */}
-        <div className="mb-6">
+        {/* Breadcrumb & BG Style Selector Row */}
+        <div className="mb-6 flex items-center justify-between">
           <Link
             href="/board"
             className="inline-flex items-center gap-2 text-xs font-black text-amber-600 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
           >
             ← 返回主控面板
           </Link>
+          
+          <button
+            onClick={cycleBgStyle}
+            className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 text-[10px] font-black text-amber-700 dark:text-amber-400 cursor-pointer transition-all active:scale-95 shadow-sm"
+            title="点击切换背景创意"
+          >
+            🖼️ 背景模版: {BG_STYLE_LABELS[bgStyle]}
+          </button>
         </div>
 
         {/* Learning Hub Banner */}
