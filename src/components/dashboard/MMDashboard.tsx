@@ -899,13 +899,26 @@ export default function MMDashboard() {
             hashtags: draft.hashtags,
             mediaUrls: draft.mediaUrls,
             assetIds: draft.assetIds,
-            status: 'scheduled',
+            status: 'draft',
             scheduledAt: recommendedAt,
           }),
         })
         if (!createRes.ok) {
           const err = await createRes.json().catch(() => ({}))
-          throw new Error(err.error || '提交草稿失败')
+          throw new Error(err.error || '创建排期草稿失败')
+        }
+        const createdData = await createRes.json()
+        const createdDraftId = createdData.draft.id
+
+        // Call the submit endpoint to deliver/schedule to PostFast/direct API
+        const submitRes = await fetch(`/api/brands/${activeBrand.id}/drafts/${createdDraftId}/submit`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: '智能排期发布' }),
+        })
+        if (!submitRes.ok) {
+          const err = await submitRes.json().catch(() => ({}))
+          throw new Error(err.error || '提交智能排期失败')
         }
       }
 
