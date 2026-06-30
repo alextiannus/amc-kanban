@@ -128,6 +128,29 @@ const TOOL_TO_ACTION: Record<string, string> = {
   reject_draft: 'REJECT_DRAFT',
 }
 
+const extractInnerData = (resultText: string): any => {
+  try {
+    const jsonStart = resultText.indexOf('{')
+    if (jsonStart === -1) return null
+    const outer = JSON.parse(resultText.substring(jsonStart))
+    
+    // Check if it's an MCP Response structure
+    const textContent = outer.content?.[0]?.text
+    if (textContent) {
+      const innerJsonStart = textContent.indexOf('{')
+      if (innerJsonStart !== -1) {
+        return JSON.parse(textContent.substring(innerJsonStart))
+      }
+      return JSON.parse(textContent)
+    }
+    
+    return outer
+  } catch (e) {
+    console.error('[extractInnerData] Parse error:', e)
+    return null
+  }
+}
+
 /**
  * Call LLM with multi-turn history and optional function calling support.
  *
@@ -264,9 +287,9 @@ export async function callGeminiChat(
               // Capture PayNow QR code data
               if (name === 'dct-logistics__create_flash_order_payment') {
                 try {
-                  const parsed = JSON.parse(resultText)
-                  if (parsed.success && parsed.data) {
-                    paymentData = parsed.data
+                  const inner = extractInnerData(resultText)
+                  if (inner) {
+                    paymentData = inner.success && inner.data ? inner.data : inner
                   }
                 } catch (e) {
                   console.error('Failed to parse PayNow data:', e)
@@ -276,10 +299,11 @@ export async function callGeminiChat(
               // Capture Quote data
               if (name === 'dct-logistics__quote_flash_order') {
                 try {
-                  const parsed = JSON.parse(resultText)
-                  if (parsed.success && parsed.data) {
+                  const inner = extractInnerData(resultText)
+                  if (inner) {
+                    const dataObj = inner.success && inner.data ? inner.data : inner
                     quoteData = {
-                      ...parsed.data,
+                      ...dataObj,
                       pickupAddress: (args as any).pickupAddress,
                       destinationAddress: (args as any).destinationAddress
                     }
@@ -419,9 +443,9 @@ export async function callGeminiChat(
               // Capture PayNow QR code data
               if (name === 'dct-logistics__create_flash_order_payment') {
                 try {
-                  const parsed = JSON.parse(resultText)
-                  if (parsed.success && parsed.data) {
-                    paymentData = parsed.data
+                  const inner = extractInnerData(resultText)
+                  if (inner) {
+                    paymentData = inner.success && inner.data ? inner.data : inner
                   }
                 } catch (e) {
                   console.error('Failed to parse PayNow data:', e)
@@ -431,10 +455,11 @@ export async function callGeminiChat(
               // Capture Quote data
               if (name === 'dct-logistics__quote_flash_order') {
                 try {
-                  const parsed = JSON.parse(resultText)
-                  if (parsed.success && parsed.data) {
+                  const inner = extractInnerData(resultText)
+                  if (inner) {
+                    const dataObj = inner.success && inner.data ? inner.data : inner
                     quoteData = {
-                      ...parsed.data,
+                      ...dataObj,
                       pickupAddress: (parsedArgs as any).pickupAddress,
                       destinationAddress: (parsedArgs as any).destinationAddress
                     }
