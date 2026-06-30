@@ -38,7 +38,8 @@ import {
   Check,
   Maximize2,
   ExternalLink,
-  Save
+  Save,
+  Trash2
 } from 'lucide-react'
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
@@ -3122,16 +3123,109 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
 
                     {/* Real Temporal Protection Indicator for scheduled posts */}
                     {activeDrawerEvent.status === 'scheduled' && activeDrawerEvent.type !== 'task' && (
-                      <div className="p-4 bg-indigo-500/5 dark:bg-indigo-950/10 border border-indigo-500/15 rounded-2xl">
-                        <h4 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>Temporal 托管与重试调度</span>
-                        </h4>
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
-                          <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                          <span>服务托管中 · 重试事务就绪</span>
+                      <div className="space-y-3">
+                        <div className="p-4 bg-indigo-500/5 dark:bg-indigo-950/10 border border-indigo-500/15 rounded-2xl">
+                          <h4 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>Temporal 托管与重试调度</span>
+                          </h4>
+                          <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                            <span>服务托管中 · 重试事务就绪</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5">该排期受指数退避及重调度机制保护，若因网络抖动推送失败，Temporal 调度器将自动重试。</p>
                         </div>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5">该排期受指数退避及重调度机制保护，若因网络抖动推送失败，Temporal 调度器将自动重试。</p>
+                        <div className="flex gap-2.5">
+                          <button
+                            onClick={async () => {
+                              if (!confirm('确定要立即发布此排期帖吗？')) return
+                              setSaving(true)
+                              try {
+                                const res = await fetch(`/api/brands/${activeBrandId || activeDrawerEvent.brandId}/drafts/${activeDrawerEvent.id}/approve`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ note: '日历手动立即发布' }),
+                                })
+                                if (!res.ok) {
+                                  const data = await res.json()
+                                  throw new Error(data.error || '发布失败')
+                                }
+                                alert('已成功发送立即发布指令！')
+                                setSelectedEventId(null)
+                                setSelectedDay(null)
+                                await refreshCalendar()
+                              } catch (e: any) {
+                                alert(e.message || '发布失败')
+                              } finally {
+                                setSaving(false)
+                              }
+                            }}
+                            disabled={saving}
+                            className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs shadow-sm transition-all"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>立即发布</span>
+                          </button>
+
+                          <button
+                            onClick={async () => {
+                              setSaving(true)
+                              try {
+                                const res = await fetch(`/api/brands/${activeBrandId || activeDrawerEvent.brandId}/drafts/${activeDrawerEvent.id}/submit`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ note: '日历手动重新智能排期' }),
+                                })
+                                if (!res.ok) {
+                                  const data = await res.json()
+                                  throw new Error(data.error || '重新排期失败')
+                                }
+                                alert('已重新计算最佳时间并成功排期！')
+                                setSelectedEventId(null)
+                                setSelectedDay(null)
+                                await refreshCalendar()
+                              } catch (e: any) {
+                                alert(e.message || '重新排期失败')
+                              } finally {
+                                setSaving(false)
+                              }
+                            }}
+                            disabled={saving}
+                            className="flex-1 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs shadow-sm transition-all"
+                          >
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>重新智能排期</span>
+                          </button>
+
+                          <button
+                            onClick={async () => {
+                              if (!confirm('确定要删除此排期帖吗？此操作不可逆。')) return
+                              setSaving(true)
+                              try {
+                                const res = await fetch(`/api/brands/${activeBrandId || activeDrawerEvent.brandId}/drafts/${activeDrawerEvent.id}`, {
+                                  method: 'DELETE',
+                                })
+                                if (!res.ok) {
+                                  const data = await res.json()
+                                  throw new Error(data.error || '删除失败')
+                                }
+                                alert('已成功删除该排期！')
+                                setSelectedEventId(null)
+                                setSelectedDay(null)
+                                await refreshCalendar()
+                              } catch (e: any) {
+                                alert(e.message || '删除失败')
+                              } finally {
+                                setSaving(false)
+                              }
+                            }}
+                            disabled={saving}
+                            className="flex-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs shadow-sm transition-all"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>删除排期</span>
+                          </button>
+                        </div>
                       </div>
                     )}
 
