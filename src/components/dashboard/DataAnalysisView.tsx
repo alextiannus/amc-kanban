@@ -62,6 +62,39 @@ const PLATFORM_ICONS: Record<string, string> = {
   youtube: '🎥',
 }
 
+const PLATFORM_BADGES: Record<string, { label: string; icon: string; className: string }> = {
+  instagram: { 
+    label: 'INSTAGRAM', 
+    icon: '📸', 
+    className: 'bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 text-white border-none' 
+  },
+  tiktok: { 
+    label: 'TIKTOK', 
+    icon: '🎵', 
+    className: 'bg-black text-white border border-slate-800' 
+  },
+  xiaohongshu: { 
+    label: 'RED / 小红书', 
+    icon: '📕', 
+    className: 'bg-rose-600 text-white border-none' 
+  },
+  facebook: { 
+    label: 'FACEBOOK', 
+    icon: '👥', 
+    className: 'bg-blue-600 text-white border-none' 
+  },
+  google: { 
+    label: 'GOOGLE', 
+    icon: '🌐', 
+    className: 'bg-emerald-600 text-white border-none' 
+  },
+  youtube: { 
+    label: 'YOUTUBE', 
+    icon: '🎥', 
+    className: 'bg-red-600 text-white border-none' 
+  },
+}
+
 export default function DataAnalysisView() {
   const [items, setItems] = useState<SnapshotData[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,6 +104,7 @@ export default function DataAnalysisView() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingAccountId, setUploadingAccountId] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number>(0)
 
   const triggerUpload = (accountId: string) => {
     setUploadingAccountId(accountId)
@@ -85,20 +119,45 @@ export default function DataAnalysisView() {
     if (!file || !uploadingAccountId) return
 
     setIsUploading(true)
+    setUploadProgress(0)
     setNotification(null)
     const formData = new FormData()
     formData.append('file', file)
     formData.append('accountId', uploadingAccountId)
 
     try {
-      const res = await fetch('/api/data-analysis/upload', {
-        method: 'POST',
-        body: formData,
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', '/api/data-analysis/upload')
+
+        // Track upload progress
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percentage = Math.round((event.loaded / event.total) * 100)
+            setUploadProgress(percentage)
+          }
+        }
+
+        xhr.onload = () => {
+          let json: any = {}
+          try {
+            json = JSON.parse(xhr.responseText)
+          } catch (e) {}
+
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve()
+          } else {
+            reject(new Error(json.error || '上传截图失败'))
+          }
+        }
+
+        xhr.onerror = () => {
+          reject(new Error('网络连接错误，上传失败'))
+        }
+
+        xhr.send(formData)
       })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(json.error || '上传截图失败')
-      }
+
       setNotification({ type: 'success', message: '截图上传并更新成功！' })
       loadData()
     } catch (err) {
@@ -106,6 +165,7 @@ export default function DataAnalysisView() {
     } finally {
       setIsUploading(false)
       setUploadingAccountId(null)
+      setUploadProgress(0)
     }
   }
   // Filters
@@ -422,30 +482,56 @@ export default function DataAnalysisView() {
                 </div>
 
                 {/* Screenshot Display Area */}
-                <div className="relative aspect-[4/5] bg-slate-900 flex items-center justify-center overflow-hidden border-b border-slate-100 dark:border-slate-800 group/snapshot">
-                  {hasSnapshot ? (
+                <div className="relative aspect-[4/5] bg-slate-950 flex items-center justify-center overflow-hidden border-b border-slate-100 dark:border-slate-800 group/snapshot">
+                  {/* Real-time upload progress overlay */}
+                  {isUploading && uploadingAccountId === item.accountId ? (
+                    <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center text-white p-4 z-10 animate-in fade-in duration-200">
+                      <div className="relative w-14 h-14 flex items-center justify-center">
+                        <div className="absolute inset-0 rounded-full border-4 border-slate-800 border-t-emerald-500 animate-spin" />
+                        <span className="text-[10px] font-black text-emerald-400">{uploadProgress}%</span>
+                      </div>
+                      <span className="text-[11px] font-black text-slate-200 mt-3 tracking-wide">正在上传截图...</span>
+                      <div className="w-2/3 bg-slate-800 rounded-full h-1.5 mt-2 overflow-hidden shadow-inner">
+                        <div 
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-150" 
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : hasSnapshot ? (
                     <>
                       <img 
                         src={getMainAppUrl(item.latestSnapshot!.imageUrl)} 
                         alt={`${item.handle} Snapshot`}
-                        className="w-full h-full object-cover object-top transition-transform duration-500 group-hover/snapshot:scale-105"
+                        className="w-full h-full object-contain bg-slate-950 object-top transition-transform duration-500 group-hover/snapshot:scale-[1.02]"
                         loading="lazy"
                       />
                       
                       {/* Image Verification Badges */}
                       {item.latestSnapshot?.isUserUploaded ? (
-                        <span className="absolute top-2 left-2 bg-emerald-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
+                        <span className="absolute top-2 left-2 bg-emerald-650/90 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
                           👤 用户上传
                         </span>
                       ) : item.latestSnapshot?.isReal ? (
-                        <span className="absolute top-2 left-2 bg-blue-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
+                        <span className="absolute top-2 left-2 bg-blue-650/90 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
                           🤖 AI 真实抓取
                         </span>
                       ) : (
-                        <span className="absolute top-2 left-2 bg-amber-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
+                        <span className="absolute top-2 left-2 bg-amber-605/90 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
                           ⚠️ 未验证快照
                         </span>
                       )}
+
+                      {/* Platform Brand Badge */}
+                      {(() => {
+                        const badge = PLATFORM_BADGES[item.platformId] || { label: item.platformId.toUpperCase(), icon: '🔗', className: 'bg-slate-700 text-white' }
+                        return (
+                          <span className={`absolute top-2 right-2 text-[9px] font-black px-2.5 py-0.5 rounded-full shadow backdrop-blur-sm tracking-wider flex items-center gap-1.5 ${badge.className}`}>
+                            <span>{badge.icon}</span>
+                            <span>{badge.label}</span>
+                          </span>
+                        )
+                      })()}
 
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/snapshot:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2.5 p-4">
                         <button
@@ -474,6 +560,16 @@ export default function DataAnalysisView() {
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-4">
+                      {/* Platform Brand Badge for Placeholders */}
+                      {(() => {
+                        const badge = PLATFORM_BADGES[item.platformId] || { label: item.platformId.toUpperCase(), icon: '🔗', className: 'bg-slate-700 text-white' }
+                        return (
+                          <span className={`absolute top-2 right-2 text-[9px] font-black px-2.5 py-0.5 rounded-full shadow tracking-wider flex items-center gap-1.5 ${badge.className}`}>
+                            <span>{badge.icon}</span>
+                            <span>{badge.label}</span>
+                          </span>
+                        )
+                      })()}
                       <div className="flex flex-col items-center">
                         <Camera className="w-10 h-10 text-slate-600 dark:text-slate-700 mb-2" />
                         <p className="text-xs font-black text-slate-400 dark:text-slate-500">快照抓取失效 (需要登录)</p>
@@ -527,7 +623,7 @@ export default function DataAnalysisView() {
                 )}
 
                 {/* Footer details */}
-                <div className="p-4 bg-slate-50/30 dark:bg-slate-950/10 flex items-center justify-between text-xs text-slate-400 font-bold mt-auto">
+                <div className="p-4 bg-slate-50/30 dark:bg-slate-950/10 flex items-center justify-between text-xs text-slate-400 font-bold mt-auto border-t border-slate-100 dark:border-slate-800">
                   <span className="flex items-center gap-1">
                     <Smartphone className="w-3.5 h-3.5 text-slate-400" />
                     <span>粉丝: {item.followerCount ? `${item.followerCount.toLocaleString()}` : '--'}</span>
