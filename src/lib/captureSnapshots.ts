@@ -55,6 +55,44 @@ async function loginInstagram(page: any, account: any): Promise<boolean> {
   }
 }
 
+function verifyRealProfile(platformId: string, url: string, content: string): boolean {
+  const lowerUrl = url.toLowerCase()
+  const lowerContent = content.toLowerCase()
+
+  // If redirected to login/signup/cookie pages, it's not a real profile
+  if (
+    lowerUrl.includes('/login') ||
+    lowerUrl.includes('/signup') ||
+    lowerUrl.includes('accounts/login') ||
+    lowerUrl.includes('/emailsignup')
+  ) {
+    return false
+  }
+
+  const platform = platformId.toLowerCase()
+  if (platform === 'instagram' || platform === 'ig') {
+    // Should have follower metrics and post indications, and NOT be a login wall page
+    const hasFollowers = lowerContent.includes('followers') || lowerContent.includes('粉丝') || lowerContent.includes('following') || lowerContent.includes('关注')
+    const hasPosts = lowerContent.includes('posts') || lowerContent.includes('帖子')
+    if (lowerContent.includes('log in to instagram') || lowerContent.includes('登录 instagram')) {
+      if (!hasFollowers) return false
+    }
+    return hasFollowers || hasPosts
+  }
+
+  if (platform === 'tiktok') {
+    const hasFollowers = lowerContent.includes('followers') || lowerContent.includes('粉丝') || lowerContent.includes('likes') || lowerContent.includes('喜欢')
+    return hasFollowers && !lowerUrl.includes('/login')
+  }
+
+  if (platform === 'xiaohongshu' || platform === 'red') {
+    return lowerContent.includes('粉丝') || lowerContent.includes('关注') || lowerContent.includes('获赞与收藏')
+  }
+
+  // Default true if no explicit fail indicators found
+  return true
+}
+
 export async function captureAccountSnapshot(accountId: string): Promise<string> {
   const account = await prisma.socialAccount.findUnique({
     where: { id: accountId },
@@ -99,6 +137,7 @@ export async function captureAccountSnapshot(accountId: string): Promise<string>
 
   let savedFilename = ''
   let screenshotCaptured = false
+  let isReal = false
 
   const browser = await getBrowser()
   if (browser) {
@@ -165,7 +204,8 @@ export async function captureAccountSnapshot(accountId: string): Promise<string>
         await page.screenshot({ path: pngPath, fullPage: false })
         savedFilename = `/snapshots/${accountId}/${timestamp}.png`
         screenshotCaptured = true
-        console.log(`[AMC Researcher] Captured screenshot successfully for ${account.handle} at ${pngPath}`)
+        isReal = verifyRealProfile(account.platformId, currentUrl, pageContent)
+        console.log(`[AMC Researcher] Captured screenshot successfully for ${account.handle} at ${pngPath}. Verified real: ${isReal}`)
       }
     } catch (err) {
       console.error(`[AMC Researcher] Playwright capture failed for ${account.handle}`, err)
@@ -189,6 +229,8 @@ export async function captureAccountSnapshot(accountId: string): Promise<string>
         accountId,
         imageUrl: savedFilename,
         capturedAt: new Date(),
+        isUserUploaded: false,
+        isReal: isReal,
       },
     }),
   ])

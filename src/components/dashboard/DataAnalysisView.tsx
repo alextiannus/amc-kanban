@@ -1,10 +1,10 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { 
   Search, ArrowUpDown, Camera, RefreshCw, Eye, X, 
-  Store, Users, Smartphone, AlertCircle, CheckCircle2 
+  Store, Users, Smartphone, AlertCircle, CheckCircle2, Upload
 } from 'lucide-react'
 
 interface SnapshotData {
@@ -29,6 +29,8 @@ interface SnapshotData {
     id: string
     imageUrl: string
     capturedAt: string
+    isUserUploaded?: boolean
+    isReal?: boolean
   } | null
 }
 
@@ -46,6 +48,47 @@ export default function DataAnalysisView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
+  // File Upload State
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingAccountId, setUploadingAccountId] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+
+  const triggerUpload = (accountId: string) => {
+    setUploadingAccountId(accountId)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+      fileInputRef.current.click()
+    }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !uploadingAccountId) return
+
+    setIsUploading(true)
+    setNotification(null)
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('accountId', uploadingAccountId)
+
+    try {
+      const res = await fetch('/api/data-analysis/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json.error || '上传截图失败')
+      }
+      setNotification({ type: 'success', message: '截图上传并更新成功！' })
+      loadData()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '上传失败')
+    } finally {
+      setIsUploading(false)
+      setUploadingAccountId(null)
+    }
+  }
   // Filters
   const [selectedBrand, setSelectedBrand] = useState('all')
   const [selectedPlatform, setSelectedPlatform] = useState('instagram')
@@ -369,21 +412,46 @@ export default function DataAnalysisView() {
                         className="w-full h-full object-cover object-top transition-transform duration-500 group-hover/snapshot:scale-105"
                         loading="lazy"
                       />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/snapshot:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      
+                      {/* Image Verification Badges */}
+                      {item.latestSnapshot?.isUserUploaded ? (
+                        <span className="absolute top-2 left-2 bg-emerald-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
+                          👤 用户上传
+                        </span>
+                      ) : item.latestSnapshot?.isReal ? (
+                        <span className="absolute top-2 left-2 bg-blue-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
+                          🤖 AI 真实抓取
+                        </span>
+                      ) : (
+                        <span className="absolute top-2 left-2 bg-amber-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow backdrop-blur-sm">
+                          ⚠️ 未验证快照
+                        </span>
+                      )}
+
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/snapshot:opacity-100 transition-opacity flex items-center justify-center gap-2">
                         <button
                           onClick={() => setActiveSnapshotUrl(item.latestSnapshot!.imageUrl)}
-                          className="p-3 bg-white hover:bg-slate-100 text-slate-900 rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-1.5 font-bold text-xs"
+                          className="p-2.5 bg-white hover:bg-slate-100 text-slate-900 rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-1 font-bold text-xs"
+                          title="查看大图"
                         >
-                          <Eye className="w-4 h-4" /> 查看大图
+                          <Eye className="w-3.5 h-3.5" /> 查看
+                        </button>
+                        <button
+                          onClick={() => triggerUpload(item.accountId)}
+                          className="p-2.5 bg-emerald-650 hover:bg-emerald-705 text-white rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-1 font-bold text-xs"
+                          title="上传新截图覆盖"
+                        >
+                          <Upload className="w-3.5 h-3.5" /> 上传
                         </button>
                         {item.profileUrl && (
                           <a
                             href={item.profileUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-1.5 font-bold text-xs"
+                            className="p-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-lg transition-transform active:scale-95 flex items-center gap-1 font-bold text-xs"
+                            title="访问主页"
                           >
-                            <Store className="w-4 h-4" /> 访问主页
+                            <Store className="w-3.5 h-3.5" /> 主页
                           </a>
                         )}
                       </div>
@@ -394,20 +462,30 @@ export default function DataAnalysisView() {
                         <Camera className="w-10 h-10 text-slate-600 dark:text-slate-700 mb-2" />
                         <p className="text-xs font-black text-slate-400 dark:text-slate-500">快照抓取失效 (需要登录)</p>
                         <p className="text-[10px] text-slate-400 mt-1 max-w-[220px]">
-                          因 Instagram 登录墙限制，请点击下方输入账号密码登录，以便自动回采最新主页真实截图。
+                          因 Instagram 登录墙限制，可手动上传截图，或登录自动获取。
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLoginModalAccount(item)
-                          setLoginUsername('')
-                          setLoginPassword('')
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-md transition-all active:scale-95 cursor-pointer"
-                      >
-                        <span>🔑 登录并获取截图</span>
-                      </button>
+                      <div className="flex flex-col gap-2 w-full px-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLoginModalAccount(item)
+                            setLoginUsername('')
+                            setLoginPassword('')
+                          }}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold shadow-md transition-all active:scale-95 cursor-pointer"
+                        >
+                          <span>🔑 登录并获取截图</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => triggerUpload(item.accountId)}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-650 hover:bg-emerald-705 text-white rounded-xl text-[11px] font-bold shadow-md transition-all active:scale-95 cursor-pointer"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>手动上传截图</span>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -544,6 +622,14 @@ export default function DataAnalysisView() {
           </form>
         </div>
       )}
+      {/* Hidden file input for screenshot uploads */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept="image/*"
+      />
     </div>
   )
 }

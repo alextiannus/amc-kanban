@@ -760,12 +760,14 @@ model SchedulerReport {
 }
 
 model SocialAccountSnapshot {
-  id         String        @id @default(cuid())
-  accountId  String
-  account    SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  imageUrl   String
-  capturedAt DateTime      @default(now())
-  createdAt  DateTime      @default(now())
+  id             String        @id @default(cuid())
+  accountId      String
+  account        SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  imageUrl       String
+  isUserUploaded Boolean       @default(false)
+  isReal         Boolean       @default(false)
+  capturedAt     DateTime      @default(now())
+  createdAt      DateTime      @default(now())
 
   @@index([accountId])
 }

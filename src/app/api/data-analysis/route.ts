@@ -46,7 +46,7 @@ export async function GET(request: Request) {
         },
         snapshots: {
           orderBy: { capturedAt: 'desc' },
-          take: 1,
+          take: 20,
         }
       },
       orderBy: {
@@ -58,7 +58,8 @@ export async function GET(request: Request) {
 
     // Format the response for easy consumption by the frontend
     const results = accounts.map((acc: any) => {
-      const latestSnapshot = acc.snapshots[0] || null
+      const realSnapshot = acc.snapshots.find((s: any) => s.isReal)
+      const latestSnapshot = realSnapshot || acc.snapshots[0] || null
       const amcOwners = acc.brand.owners.map((bo: any) => ({
         id: bo.user.id,
         email: bo.user.email,
@@ -83,6 +84,8 @@ export async function GET(request: Request) {
           id: latestSnapshot.id,
           imageUrl: latestSnapshot.imageUrl,
           capturedAt: latestSnapshot.capturedAt,
+          isUserUploaded: latestSnapshot.isUserUploaded,
+          isReal: latestSnapshot.isReal,
         } : null,
         hasCredentials: !!acc.loginUsername,
       }

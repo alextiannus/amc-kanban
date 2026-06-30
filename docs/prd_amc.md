@@ -856,7 +856,21 @@ RolePermission 表：
 - `src/components/dashboard/DraftManagementView.tsx`
 - `docs/prd_amc.md`
 
+---
 
+## Changelog v1.8.16 — 2026-06-30（手动上传社媒快照与AI抓取防覆盖机制）
 
+### 手动上传快照与AI抓取防覆盖机制
+- **快照数据模型字段扩展**：`SocialAccountSnapshot` 表新增 `isUserUploaded` 与 `isReal` 字段，以区分用户手动上传的真实截图与 AI 爬虫采集的截图。
+- **手动上传 API 路由**：新增 `/api/data-analysis/upload` 接口，支持用户手动上传快照截图，上传的截图自动标记为 `isUserUploaded: true` 且 `isReal: true`。
+- **爬虫真实性判定 (Anti-Hallucination)**：在 `captureAccountSnapshot` 采集逻辑中，添加 `verifyRealProfile` 辅助函数。通过校验爬虫跳转后的实际 URL、页面关键词（如 followers / 粉丝数 / posts）等，确保爬虫真的抓取到了目标页面而不是登录墙或空白页。只有判定真实的截图才标记为 `isReal: true`，防止爬虫的假/失效截图覆盖用户上传的真截图。
+- **查询与展示策略**：在 `/api/data-analysis` 接口获取快照时，优先返回最新的已验证为真实的快照 (`isReal: true`)，当且仅当不存在任何真实快照时才 fallback 回退显示最新采集的（无论真伪）快照。
+- **UI交互优化**：在 `DataAnalysisView.tsx` 中整合文件上传控件，为没有快照的卡片添加“手动上传截图”按钮，并为已有快照的卡片悬浮状态下添加“上传截图”操作，实现点击快照直接覆盖更新。
 
-
+### 影响文件
+- `prisma/schema.prisma`
+- `src/lib/captureSnapshots.ts`
+- `src/app/api/data-analysis/route.ts`
+- `src/app/api/data-analysis/upload/route.ts`
+- `src/components/dashboard/DataAnalysisView.tsx`
+- `docs/prd_amc.md`
