@@ -282,52 +282,26 @@ export async function POST(request: Request, { params }: Params) {
       ...extTools
     ]
 
-    let currentMessage = message
-    let currentHistory = [...history]
-    let loopCount = 0
-    const maxLoops = 4
-    
-    let finalReply = ''
-    let finalAction = 'NONE'
-    let finalParams = {}
-
-    while (loopCount < maxLoops) {
-      loopCount++
-      const result = await callGeminiChat(systemPrompt, currentHistory, currentMessage, true, 500, combinedTools)
-      
-      if (result.toolCallName && result.toolCallArgs) {
-        console.log(`[voice-chat loop] Iteration ${loopCount}: executing tool ${result.toolCallName} with args:`, result.toolCallArgs)
-        const { resultText, actionReply } = await executeTool(result.toolCallName, result.toolCallArgs, brandId)
-        
-        if (actionReply) {
-          finalReply = actionReply
-          finalAction = result.action || 'NONE'
-          finalParams = result.params || {}
-          break
-        }
-        
-        // Append previous turn to history
-        currentHistory.push({ role: 'user', content: currentMessage })
-        currentHistory.push({ role: 'model', content: `[Tool: ${result.toolCallName}]` })
-        
-        // Next message is the tool result
-        currentMessage = `工具 ${result.toolCallName} 执行结果：\n${resultText}`
-      } else {
-        finalReply = result.reply || ''
-        finalAction = result.action || 'NONE'
-        finalParams = result.params || {}
-        break
+    // Call gemini-chat with history, tools, and the tool execution callback
+    const result = await callGeminiChat(
+      systemPrompt,
+      history,
+      message,
+      true,
+      500,
+      combinedTools,
+      async (toolName, toolArgs) => {
+        const { resultText, actionReply } = await executeTool(toolName, toolArgs, brandId)
+        return { resultText, actionReply }
       }
-    }
+    )
 
-    if (!finalReply) {
-      finalReply = '抱歉，我处理时遇到了些问题，请再说一遍。'
-    }
+    const finalReply = result.reply || '抱歉，我处理时遇到了些问题，请再说一遍。'
 
     return NextResponse.json({
       reply: finalReply,
-      action: finalAction,
-      params: finalParams,
+      action: result.action || 'NONE',
+      params: result.params || {},
     })
   } catch (error: any) {
     console.error('[Voice Chat API Error]:', error)

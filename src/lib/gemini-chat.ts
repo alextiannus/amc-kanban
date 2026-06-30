@@ -153,6 +153,7 @@ export async function callGeminiChat(
   enableTools = true,
   maxTokens = 500,
   customTools?: any[],
+  executeToolCallback?: (name: string, args: Record<string, any>) => Promise<{ resultText: string; actionReply?: string }>
 ): Promise<GeminiChatResult> {
   // 1. Query the database to find the configurations to try (prioritize 'companion' tag, then default configs)
   const matchingConfigs = await prisma.lLMConfig.findMany({
@@ -205,7 +206,7 @@ export async function callGeminiChat(
     try {
       if (provider === 'google') {
         // --- Gemini Tool-Call Flow ---
-        const contents: Array<{ role: string; parts: Array<{ text: string }> }> = []
+        const contents: Array<{ role: string; parts: Array<any> }> = []
         if (systemPrompt) {
           contents.push({ role: 'user', parts: [{ text: `[System Context]\n${systemPrompt}` }] })
           contents.push({ role: 'model', parts: [{ text: '好的，我已了解品牌信息，随时为您服务！' }] })
@@ -215,29 +216,65 @@ export async function callGeminiChat(
         }
         contents.push({ role: 'user', parts: [{ text: userMessage }] })
 
-        const body: Record<string, any> = {
-          contents,
-          generationConfig: { maxOutputTokens: maxTokens },
-        }
-        if (enableTools) {
-          body.tools = [{ functionDeclarations: customTools || COMPANION_TOOLS }]
-          body.toolConfig = { functionCallingConfig: { mode: 'AUTO' } }
-        }
+        let loopCount = 0
+        const maxLoops = 4
 
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
-        )
+        while (loopCount < maxLoops) {
+          loopCount++
+          const body: Record<string, any> = {
+            contents,
+            generationConfig: { maxOutputTokens: maxTokens },
+          }
+          if (enableTools) {
+            body.tools = [{ functionDeclarations: customTools || COMPANION_TOOLS }]
+            body.toolConfig = { functionCallingConfig: { mode: 'AUTO' } }
+          }
 
-        if (response.ok) {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+          )
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => '')
+            throw new Error(`Gemini error ${response.status}: ${errText}`)
+          }
+
           const json = await response.json()
           const candidate = json.candidates?.[0]
-          if (candidate) {
-            const parts = candidate.content?.parts || []
-            const funcCallPart = parts.find((p: any) => p.functionCall)
-            if (funcCallPart?.functionCall) {
-              const { name, args } = funcCallPart.functionCall
-              const action = TOOL_TO_ACTION[name] || 'NONE'
+          if (!candidate) throw new Error('No candidate returned from Gemini')
+
+          const parts = candidate.content?.parts || []
+          const funcCallPart = parts.find((p: any) => p.functionCall)
+
+          if (funcCallPart?.functionCall) {
+            const { name, args } = funcCallPart.functionCall
+            const action = TOOL_TO_ACTION[name] || 'NONE'
+            console.log(`[callGeminiChat Gemini Loop] Iteration ${loopCount}: Model requested function: ${name}`)
+
+            if (executeToolCallback) {
+              const { resultText, actionReply } = await executeToolCallback(name, args)
+              if (actionReply) {
+                return { reply: actionReply, action, params: args }
+              }
+
+              // Append native function call and response turns to contents array
+              contents.push({
+                role: 'model',
+                parts: [{ functionCall: funcCallPart.functionCall }]
+              })
+              contents.push({
+                role: 'user',
+                parts: [{
+                  functionResponse: {
+                    name,
+                    response: { result: resultText }
+                  }
+                }]
+              })
+              // Continue ReAct loop inside the single API invocation
+              continue
+            } else {
               return {
                 reply: '',
                 action,
@@ -246,15 +283,10 @@ export async function callGeminiChat(
                 params: args || {},
               }
             }
-
-            const text = parts.find((p: any) => p.text)?.text?.trim()
-            if (text) {
-              return { reply: text, action: 'NONE' }
-            }
           }
-        } else {
-          const errText = await response.text().catch(() => '')
-          console.error(`[callGeminiChat] Gemini error ${response.status}: ${errText}`)
+
+          const text = parts.find((p: any) => p.text)?.text?.trim()
+          return { reply: text || '', action: 'NONE' }
         }
       } 
       else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim') {
@@ -262,7 +294,7 @@ export async function callGeminiChat(
         const defaultBase = provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1'
         const endpoint = `${baseUrl || defaultBase}/chat/completions`
 
-        const messages: ChatMessage[] = []
+        const messages: any[] = []
         if (systemPrompt) {
           messages.push({ role: 'system', content: systemPrompt })
         }
@@ -271,51 +303,80 @@ export async function callGeminiChat(
         }
         messages.push({ role: 'user', content: userMessage })
 
-        const body: Record<string, any> = {
-          model: modelName,
-          messages,
-          max_tokens: maxTokens,
-        }
+        let loopCount = 0
+        const maxLoops = 4
 
-        if (enableTools) {
-          const formattedTools = (customTools || COMPANION_TOOLS).map(t => ({
-            type: 'function',
-            function: {
-              name: t.name,
-              description: t.description,
-              parameters: t.parameters
-            }
-          }))
-          if (formattedTools.length > 0) {
-            body.tools = formattedTools
-            body.tool_choice = 'auto'
+        while (loopCount < maxLoops) {
+          loopCount++
+          const body: Record<string, any> = {
+            model: modelName,
+            messages,
+            max_tokens: maxTokens,
           }
-        }
 
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          body: JSON.stringify(body),
-        })
+          if (enableTools) {
+            const formattedTools = (customTools || COMPANION_TOOLS).map(t => ({
+              type: 'function',
+              function: {
+                name: t.name,
+                description: t.description,
+                parameters: t.parameters
+              }
+            }))
+            if (formattedTools.length > 0) {
+              body.tools = formattedTools
+              body.tool_choice = 'auto'
+            }
+          }
 
-        if (response.ok) {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(body),
+          })
+
+          if (!response.ok) {
+            const errText = await response.text().catch(() => '')
+            throw new Error(`OpenAI error ${response.status}: ${errText}`)
+          }
+
           const json = await response.json()
           const message = json.choices?.[0]?.message
-          if (message) {
-            if (message.tool_calls && message.tool_calls.length > 0) {
-              const toolCall = message.tool_calls[0]
-              const { name, arguments: rawArgs } = toolCall.function
-              const action = TOOL_TO_ACTION[name] || 'NONE'
-              let parsedArgs = {}
-              try {
-                parsedArgs = JSON.parse(rawArgs || '{}')
-              } catch {
-                console.error(`[callGeminiChat] Failed to parse tool arguments: ${rawArgs}`)
+          if (!message) throw new Error('No message returned from OpenAI')
+
+          if (message.tool_calls && message.tool_calls.length > 0) {
+            const toolCall = message.tool_calls[0]
+            const { name, arguments: rawArgs } = toolCall.function
+            const action = TOOL_TO_ACTION[name] || 'NONE'
+            console.log(`[callGeminiChat OpenAI Loop] Iteration ${loopCount}: Model requested function: ${name}`)
+
+            let parsedArgs = {}
+            try {
+              parsedArgs = JSON.parse(rawArgs || '{}')
+            } catch {
+              console.error(`[callGeminiChat] Failed to parse tool arguments: ${rawArgs}`)
+            }
+
+            if (executeToolCallback) {
+              const { resultText, actionReply } = await executeToolCallback(name, parsedArgs)
+              if (actionReply) {
+                return { reply: actionReply, action, params: parsedArgs }
               }
-              
+
+              // Append assistant message with tool calls and the tool result message
+              messages.push(message)
+              messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                name,
+                content: resultText
+              })
+              // Continue ReAct loop inside the single API invocation
+              continue
+            } else {
               return {
                 reply: '',
                 action,
@@ -324,15 +385,10 @@ export async function callGeminiChat(
                 params: parsedArgs
               }
             }
-
-            const text = message.content?.trim()
-            if (text) {
-              return { reply: text, action: 'NONE' }
-            }
           }
-        } else {
-          const errText = await response.text().catch(() => '')
-          console.error(`[callGeminiChat] OpenAI-compatible error ${response.status}: ${errText}`)
+
+          const text = message.content?.trim()
+          return { reply: text || '', action: 'NONE' }
         }
       }
     } catch (err: any) {
