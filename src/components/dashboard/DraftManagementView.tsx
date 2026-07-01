@@ -382,8 +382,35 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
   const handleGenerateHooks = async () => {
     setIsGeneratingHooks(true)
+    const topic = hookTopic || contentIdea || '我们的特色服务'
+    
+    // 1. Try server-side generation (uses system configs, API keys, and backup models)
     try {
-      const systemPrompt = `You are an expert Instagram Reels hook creator. Generate 3 ready-to-use opening hooks for an Instagram Reel based on the user's business type, hook style, and target topic.
+      const response = await fetch('/api/copywriter/generate-hooks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessType: hookBusinessType,
+          hookStyle,
+          topic,
+          contentIdea
+        })
+      })
+      if (response.ok) {
+        const json = await response.json()
+        if (json.success && Array.isArray(json.hooks) && json.hooks.length > 0) {
+          setGeneratedHooks(json.hooks.slice(0, 3))
+          setIsGeneratingHooks(false)
+          return
+        }
+      }
+      throw new Error('Server-side hook generation failed')
+    } catch (serverErr) {
+      console.warn('[handleGenerateHooks] Server-side generation failed, trying browser-direct next:', serverErr)
+      
+      // 2. Try browser-direct Gemini call (if configured on client)
+      try {
+        const systemPrompt = `You are an expert Instagram Reels hook creator. Generate 3 ready-to-use opening hooks for an Instagram Reel based on the user's business type, hook style, and target topic.
 Return the output strictly in a valid JSON array format, where each item in the array has:
 - "visual": Description of what to show on screen in the first 2-3 seconds (B-Roll description, max 12 words, in Chinese).
 - "overlay": The text printed in big bold letters on the video screen overlay (Maximum 5-7 words, in Chinese).
@@ -397,24 +424,26 @@ JSON output format:
 ]
 Never include any markdown backticks, conversational preamble, or explanation outside the JSON.`
 
-      const promptMsg = `Business Type: ${hookBusinessType}\nHook Style: ${hookStyle}\nTopic: ${hookTopic || contentIdea || '我们的特色服务'}`
-      
-      const res = await callGeminiDirect(systemPrompt, [], promptMsg, false, 800)
-      if (res.direct && res.reply) {
-        let cleanText = res.reply.replace(/```json/gi, '').replace(/```/g, '').trim()
-        const parsed = JSON.parse(cleanText)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setGeneratedHooks(parsed.slice(0, 3))
-          setIsGeneratingHooks(false)
-          return
+        const promptMsg = `Business Type: ${hookBusinessType}\nHook Style: ${hookStyle}\nTopic: ${topic}`
+        
+        const res = await callGeminiDirect(systemPrompt, [], promptMsg, false, 800)
+        if (res.direct && res.reply) {
+          let cleanText = res.reply.replace(/```json/gi, '').replace(/```/g, '').trim()
+          const parsed = JSON.parse(cleanText)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setGeneratedHooks(parsed.slice(0, 3))
+            setIsGeneratingHooks(false)
+            return
+          }
         }
+        throw new Error('Browser-direct generation failed')
+      } catch (directErr) {
+        console.warn('[handleGenerateHooks] Browser-direct failed, falling back to local preset templates:', directErr)
+        
+        // 3. Fallback to local rule-based templates
+        const fallbacks = getFallbackHooks(hookBusinessType, hookStyle, topic)
+        setGeneratedHooks(fallbacks)
       }
-      throw new Error('Fallback to local presets')
-    } catch (e) {
-      console.warn('AI Hook generation failed or key missing, using preset generator templates:', e)
-      const topic = hookTopic || contentIdea || '我们的特色服务'
-      const fallbacks = getFallbackHooks(hookBusinessType, hookStyle, topic)
-      setGeneratedHooks(fallbacks)
     } finally {
       setIsGeneratingHooks(false)
     }
