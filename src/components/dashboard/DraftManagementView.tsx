@@ -1673,166 +1673,125 @@ Never include any markdown backticks, conversational preamble, or explanation ou
 
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
               {selectedDraft?.status !== 'published' && (
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">素材说明/今日主题</label>
-                  <textarea
-                    value={contentIdea}
-                    onChange={(event) => setContentIdea(event.target.value)}
-                    placeholder="输入内容创意或AI生成指令，例如：‘介绍我们的新菜单，突出新鲜食材和南洋风味’，AI将自动按所选平台特性重构文案..."
-                    className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                  />
-                </div>
-              )}
-              
-              {selectedDraft?.status !== 'published' && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">创意 hooks (Creative Hooks)</label>
+                <div className="space-y-3.5">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">今日主题 / 素材说明</label>
+                    <textarea
+                      value={contentIdea}
+                      onChange={(event) => setContentIdea(event.target.value)}
+                      placeholder="输入内容创意或AI生成指令，例如：‘介绍我们的新菜单，突出新鲜食材和南洋风味’，AI将自动按所选平台特性重构文案..."
+                      className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    />
+                  </div>
+
+                  {/* Generate Hooks Button (directly triggers generation) */}
+                  <div className="flex justify-end">
                     <button
                       type="button"
-                      onClick={() => setShowHookGenerator(!showHookGenerator)}
-                      className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-extrabold transition-all"
+                      disabled={isGeneratingHooks}
+                      onClick={handleGenerateHooks}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 text-xs font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Sparkles className="h-3 w-3" />
-                      {showHookGenerator ? '收起 Hooks 生成器' : 'Generate Hooks'}
+                      {isGeneratingHooks ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>正在分析上下文并生成 Hooks...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5" />
+                          <span>Generate Hooks (生成爆款 Hooks)</span>
+                        </>
+                      )}
                     </button>
                   </div>
-                  <textarea
-                    value={creativeHooks}
-                    onChange={(event) => setCreativeHooks(event.target.value)}
-                    placeholder="输入吸睛创意 hooks / 写作思路 / 爆款切入点，方便保存思路并供 AI 创作时使用..."
-                    className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                  />
 
-                  {showHookGenerator && (
-                    <div className="rounded-lg border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/10 dark:bg-indigo-950/5 p-4 space-y-3">
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">行业类型</label>
-                          <select
-                            value={hookBusinessType}
-                            onChange={(e) => setHookBusinessType(e.target.value)}
-                            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                          >
-                            <option value="F&B">餐饮美食 (F&B)</option>
-                            <option value="eCommerce">电商零售 (eCommerce)</option>
-                            <option value="SaaS">软件科技 (SaaS/IT)</option>
-                            <option value="Coaching">知识博主 (Coach/Ed)</option>
-                            <option value="LocalService">本地生活 (Service/Spa)</option>
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">钩子风格</label>
-                          <select
-                            value={hookStyle}
-                            onChange={(e) => setHookStyle(e.target.value)}
-                            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                          >
-                            <option value="Contra-Narrative">打破认知 (反向阻断)</option>
-                            <option value="Pain Point">痛点焦虑 (引发共鸣)</option>
-                            <option value="Curiosity Gap">神秘好奇 (吸引留存)</option>
-                            <option value="Direct Value">直接福利 (干货实操)</option>
-                            <option value="Social Proof">数据背书 (建立信任)</option>
-                          </select>
-                        </div>
+                  {/* Active Selected Hook Preview Card */}
+                  {creativeHooks && (
+                    <div className="rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/20 dark:bg-indigo-950/20 p-3.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400">已选择的 Hook 创意：</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCreativeHooks('')
+                            setGeneratedHooks([])
+                          }}
+                          className="text-[10px] text-rose-500 hover:underline font-bold"
+                        >
+                          清除选择
+                        </button>
                       </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">产品主题/钩子核心词</label>
-                        <input
-                          type="text"
-                          value={hookTopic}
-                          onChange={(e) => setHookTopic(e.target.value)}
-                          placeholder="例如：黄金流沙包、自动记账小程序... (为空则使用今日主题)"
-                          className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-                        />
+                      <div className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed font-medium">
+                        {creativeHooks}
                       </div>
+                    </div>
+                  )}
 
-                      <button
-                        type="button"
-                        disabled={isGeneratingHooks}
-                        onClick={handleGenerateHooks}
-                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 px-3 py-2 text-xs font-bold text-white transition-colors disabled:opacity-50"
-                      >
-                        {isGeneratingHooks ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            正在生成 Reels 爆款 Hooks...
-                          </>
-                        ) : (
-                          <>
-                            <Zap className="h-3.5 w-3.5" />
-                            生成 3 个爆款 Hooks
-                          </>
-                        )}
-                      </button>
+                  {/* 3 Generated Hooks Cards to select from */}
+                  {generatedHooks.length > 0 && (
+                    <div className="space-y-2 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">
+                          推荐的 3 个爆款 Hooks ({attachedMedia.some(m => isVideoUrl(m.url)) ? '视频' : '图文'}类型):
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleGenerateHooks}
+                          className="text-[10px] text-indigo-600 hover:underline font-bold dark:text-indigo-400"
+                        >
+                          重新生成
+                        </button>
+                      </div>
+                      <div className="space-y-2.5">
+                        {generatedHooks.map((h, i) => {
+                          const isVid = attachedMedia.some(m => isVideoUrl(m.url))
+                          const labelVisual = isVid ? '画面设计' : '图片设计'
+                          const labelOverlay = isVid ? '屏幕贴纸' : '排版文字'
+                          const labelAudio = isVid ? '口播开头' : '正文开头'
+                          
+                          const hookTextStr = `【${labelVisual}】：${h.visual}\n【${labelOverlay}】：${h.overlay}\n【${labelAudio}】：${h.audio}`
+                          const isSelected = creativeHooks === hookTextStr
 
-                      {generatedHooks.length > 0 && (
-                        <div className="space-y-2 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">
-                              推荐的 3 个爆款 Hooks ({attachedMedia.some(m => isVideoUrl(m.url)) ? '视频' : '图文'}类型):
-                            </span>
-                            <button
-                              type="button"
-                              onClick={handleGenerateHooks}
-                              className="text-[10px] text-indigo-600 hover:underline font-bold dark:text-indigo-400"
+                          return (
+                            <div
+                              key={i}
+                              onClick={() => setCreativeHooks(hookTextStr)}
+                              className={`group relative rounded-md border p-3 cursor-pointer transition-all ${
+                                isSelected 
+                                  ? 'border-indigo-500 bg-indigo-50/20 dark:border-indigo-900 dark:bg-indigo-950/20 shadow-sm ring-1 ring-indigo-500' 
+                                  : 'border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-950 hover:border-indigo-400 dark:hover:border-indigo-900'
+                              }`}
                             >
-                              重新生成
-                            </button>
-                          </div>
-                          <div className="space-y-2.5">
-                            {generatedHooks.map((h, i) => {
-                              const isVid = attachedMedia.some(m => isVideoUrl(m.url))
-                              const labelVisual = isVid ? '画面设计' : '图片设计'
-                              const labelOverlay = isVid ? '屏幕贴纸' : '排版文字'
-                              const labelAudio = isVid ? '口播开头' : '正文开头'
-                              
-                              return (
-                                <div
-                                  key={i}
-                                  className="group relative rounded-md border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-950 p-3 hover:border-indigo-400 transition-all dark:hover:border-indigo-900"
-                                >
-                                  <div className="space-y-1.5 text-xs">
-                                    <div className="flex items-start gap-1.5">
-                                      <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 shrink-0 uppercase tracking-wide">
-                                        {labelOverlay}
-                                      </span>
-                                      <span className="font-extrabold text-slate-900 dark:text-white leading-relaxed">{h.overlay}</span>
-                                    </div>
-                                    <div className="flex items-start gap-1.5">
-                                      <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 shrink-0 uppercase tracking-wide">
-                                        {labelAudio}
-                                      </span>
-                                      <span className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{h.audio}</span>
-                                    </div>
-                                    <div className="flex items-start gap-1.5">
-                                      <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0 uppercase tracking-wide">
-                                        {labelVisual}
-                                      </span>
-                                      <span className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed italic">{h.visual}</span>
-                                    </div>
-                                  </div>
-                                  <div className="mt-2.5 flex justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const hookTextStr = `【${labelVisual}】：${h.visual}\n【${labelOverlay}】：${h.overlay}\n【${labelAudio}】：${h.audio}`
-                                        setCreativeHooks(hookTextStr)
-                                        setShowHookGenerator(false)
-                                      }}
-                                      className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-bold transition-all"
-                                    >
-                                      <Check className="h-3 w-3" />
-                                      选择此 Hook
-                                    </button>
-                                  </div>
+                              <div className="space-y-1.5 text-xs">
+                                <div className="flex items-start gap-1.5">
+                                  <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 shrink-0 uppercase tracking-wide">
+                                    {labelOverlay}
+                                  </span>
+                                  <span className="font-extrabold text-slate-900 dark:text-white leading-relaxed">{h.overlay}</span>
                                 </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
+                                <div className="flex items-start gap-1.5">
+                                  <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 shrink-0 uppercase tracking-wide">
+                                    {labelAudio}
+                                  </span>
+                                  <span className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{h.audio}</span>
+                                </div>
+                                <div className="flex items-start gap-1.5">
+                                  <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0 uppercase tracking-wide">
+                                    {labelVisual}
+                                  </span>
+                                  <span className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed italic">{h.visual}</span>
+                                </div>
+                              </div>
+                              {isSelected && (
+                                <div className="absolute top-2.5 right-2.5 text-indigo-600 dark:text-indigo-400">
+                                  <Check className="h-4 w-4" />
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
