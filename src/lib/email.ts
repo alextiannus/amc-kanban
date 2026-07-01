@@ -345,7 +345,7 @@ export const DEFAULT_TEMPLATES = {
         </div>
 
         <div class="cta-wrap">
-          <a href="{{mmInviteLink}" class="cta">📱 打开 AMC 商家端系统 →</a>
+          <a href="{{mmInviteLink}}" class="cta">打开 AMC 商家端系统 →</a>
         </div>
 
         <div class="notice">
@@ -364,7 +364,7 @@ export const DEFAULT_TEMPLATES = {
           </div>
           <div class="step">
             <div class="step-num">3</div>
-            <div class="step-text">绑定您的社交账号：接入您的 <strong>Instagram</strong> 和 <strong>Google GBP</strong> 商家后台，AI 智能体即可为您起草日常文案并监控评论。</div>
+            <div class="step-text">绑定您的社交账号：接入您的 <strong>Instagram</strong> 和 <strong>Google GBP</strong> 商家后台，AI 智能体和您的专属品牌主理人即可为您起草日常文案并监控评论。</div>
           </div>
         </div>
       </div>
