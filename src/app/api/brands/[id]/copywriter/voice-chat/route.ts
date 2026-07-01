@@ -290,7 +290,10 @@ export async function POST(request: Request, { params }: Params) {
           .join('\n')
 
         // Inject the user message (detect GENERATE_AND_PUBLISH intent first for compatibility)
-        const generateKeywords = ['生成并发布', '帮我发布', '批量生成', '一键生成', '发布到所有', '帮我写并发']
+        const generateKeywords = [
+          '生成并发布', '帮我发布', '批量生成', '一键生成', '发布到所有', '帮我写并发',
+          '立刻发布', '立即发布', '立刻发', '立即发', '立即生成并发布', '立刻生成并发布'
+        ]
         const wantsGenerate = generateKeywords.some((kw) => message.includes(kw))
 
         if (wantsGenerate) {

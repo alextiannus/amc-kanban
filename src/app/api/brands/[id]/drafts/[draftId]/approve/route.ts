@@ -5,7 +5,7 @@ import { submitDraftForDelivery } from '@/lib/draftSubmission'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
-export async function PATCH(request: Request, { params }: Params) {
+async function handleApprove(request: Request, { params }: Params) {
   const session = await getSession()
   if (!session?.user || session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -20,8 +20,12 @@ export async function PATCH(request: Request, { params }: Params) {
     actorId: session.user.id,
     forcePublish: true,
     note: typeof body.note === 'string' ? body.note.trim() || null : null,
+    immediatePublish: body.publishType === 'immediate',
   })
 
   if (!result.ok) return NextResponse.json({ error: result.error, draft: result.draft }, { status: result.status })
   return NextResponse.json(result)
 }
+
+export const POST = handleApprove
+export const PATCH = handleApprove

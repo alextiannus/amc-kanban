@@ -10,6 +10,7 @@ type SubmitDraftInput = {
   note?: string | null
   /** Override auto-scheduling urgency. 'urgent' = publish ASAP; default 'normal' = smart slot */
   urgency?: 'normal' | 'urgent'
+  immediatePublish?: boolean
 }
 
 function isFuture(value?: Date | null) {
@@ -182,7 +183,9 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   // This is the unified enforcement point: ALL submissions (AI, human, voice, bulk)
   // go through the smart scheduling algorithm. Only urgency='urgent' gets a near-slot.
   let resolvedScheduledAt = draft.scheduledAt
-  if (!isFuture(resolvedScheduledAt)) {
+  if (input.immediatePublish) {
+    resolvedScheduledAt = null
+  } else if (!isFuture(resolvedScheduledAt)) {
     const recommended = await fetchRecommendedScheduleTime(
       input.brandId,
       draft.account.platformId,

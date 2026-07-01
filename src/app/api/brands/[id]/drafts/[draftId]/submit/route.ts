@@ -29,6 +29,7 @@ export async function PATCH(request: Request, { params }: Params) {
     draftId,
     actorId: actor.id,
     note: typeof body.note === 'string' ? body.note : null,
+    immediatePublish: body.publishType === 'immediate',
   })
 
   if (!result.ok) return NextResponse.json({ error: result.error, draft: result.draft }, { status: result.status })
