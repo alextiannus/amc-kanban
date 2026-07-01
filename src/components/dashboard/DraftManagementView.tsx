@@ -41,6 +41,7 @@ import {
   Store,
 } from 'lucide-react'
 import PostPreviewModal from './PostPreviewModal'
+import { callGeminiDirect } from '@/lib/gemini-direct'
 
 function isVideoUrl(url: string): boolean {
   if (!url) return false
@@ -183,6 +184,157 @@ function mediaForDraft(draft: DraftItem) {
   return [...draft.mediaUrls, ...assetUrls].filter((url): url is string => Boolean(url)).slice(0, 4)
 }
 
+function getFallbackHooks(businessType: string, hookStyle: string, topic: string) {
+  const t = topic || '我们的特色服务'
+  const db: Record<string, Record<string, Array<{ visual: string; overlay: string; audio: string }>>> = {
+    'F&B': {
+      'Contra-Narrative': [
+        { visual: '镜头快速对准一盘色泽诱人的美食，旁边放着调味罐', overlay: '别再盲目跟风点招牌了！', audio: '大家都以为点招牌最稳妥，其实懂行的老饕全奔着这道菜的秘制底料来！' },
+        { visual: '博主夹起一块肉，展示鲜嫩多汁的切面', overlay: '千万别在晚上十点看这个...', audio: '如果你正在减肥或者饿肚子，千万别点开，我怕你直接点开外卖下单。' },
+        { visual: '快速切过主厨手工拉面或揉面团的动作，汗水特写', overlay: '你以为这只是普通手工菜？', audio: '别被它简单的外表骗了，主厨揉面300次才换来这一口极致的弹牙。' }
+      ],
+      'Pain Point': [
+        { visual: '展示一个人面对油腻快餐盒、叹气的特写', overlay: '天天吃油腻外卖，人都累了', audio: '别再用油腻高盐的外卖应付胃了，今天这道轻食招牌让你美味与健康兼得。' },
+        { visual: '展示长长的排队人潮，烈日下烦躁的顾客', overlay: '排队两小时，真不值得！', audio: '大热天排队太遭罪？关注我，今天教你如何提前五分钟线上一键预约免排队！' },
+        { visual: '对比干巴巴的速冻水饺和新鲜手工包制水饺', overlay: '速冻食品吃不出家的味道', audio: '别再吃那些冰柜里冻了半年的食品了，来尝尝每天早晨现宰肉现包的鲜美。' }
+      ],
+      'Curiosity Gap': [
+        { visual: '主厨做手势示意保密，把一碗神秘酱汁收回柜台', overlay: '我们店里概不外传的隐藏菜单', audio: '只有来过5次以上的老熟客才知道的隐藏暗号，今天我就顶着被开除的风险告诉你。' },
+        { visual: '镜头缓缓推近一个精致的小盅，冒着白雾', overlay: '为什么这道菜每天仅售10份？', audio: '真不是搞饥饿营销，而是因为主食材需要慢火炖煮整整12小时才能出锅。' },
+        { visual: '红辣椒在热油中爆香的慢动作画面，视觉冲击极强', overlay: '这口辣，全网没人能坚持3秒', audio: '自称能吃辣的都来挑战了，但至今还没有人能把这碗变态辣底料全部吃完。' }
+      ],
+      'Direct Value': [
+        { visual: '俯拍整张铺满各种菜品的长桌，镜头由远及近', overlay: '50元吃饱三人的省钱点单攻略', audio: '第一次来千万别乱点，保存这个视频，教你用一张百元钞吃齐所有招牌菜。' },
+        { visual: '将特色菜在盘中搅拌、捞起的拉丝效果特写', overlay: '3个步骤，教你在家复刻招牌', audio: '其实做法没有你想的那么神秘，今天一分钟把核心配方教给你，赶紧收藏。' },
+        { visual: '精美的双人冷饮与甜品在夕阳下闪闪发光', overlay: '性价比超高约会宝藏地', audio: '别去人挤人还贵的西餐厅了，这家氛围感拉满、人均50的宝藏店赶紧艾特他带你去。' }
+      ],
+      'Social Proof': [
+        { visual: '展示一叠堆得高高的外卖单或堂食预订簿', overlay: '全网累计销量突破10万份', audio: '上市短短3个月，这道菜就被点单了10万多次，到底有什么魔力让大家这么上瘾？' },
+        { visual: '博主展示本地大众点评或小红书上的高分截图', overlay: '常年霸榜本地热门榜第一名', audio: '今天终于来打卡这家在本地美食榜上连续三年蝉联第一的宝藏餐馆了。' },
+        { visual: '展示店里高朋满座、顾客欢声笑语的画面', overlay: '回头客比例高达85%的秘密', audio: '随机采访了5位正在用餐的顾客，他们全都是来了不下十次的老粉！' }
+      ]
+    },
+    'eCommerce': {
+      'Contra-Narrative': [
+        { visual: '把一件普通的衣服或产品随手一扔，然后展示其上身或使用效果', overlay: '别再浪费钱买大牌同款了！', audio: '很多人以为只有千元大牌才有这个质感，其实百元平替就能穿出同等高级感。' },
+        { visual: '将某件商品拆包丢在一边，露出细节特写', overlay: '这个设计太鸡肋？是你用错了', audio: '大家都说这个小玩意儿没用，其实是你忽略了它最核心的这个隐藏设计。' },
+        { visual: '博主将一堆化妆品或产品扫进垃圾桶', overlay: '为什么我劝你别买爆款清单', audio: '今天来当一回黑脸，避雷这三个在网上风很大但实际用起来非常鸡肋的爆款。' }
+      ],
+      'Pain Point': [
+        { visual: '展示用普通剪刀费力剪东西或者打结线头的痛苦画面', overlay: '每天都在被这些家居细节折磨？', audio: '如果你也受够了每次做家务都腰酸背痛，这个神奇的设计绝对能救你一命。' },
+        { visual: '展示衣柜乱七八糟、找不到衣服的焦躁特写', overlay: '衣柜塞得满满的却永远没衣服穿', audio: '别再乱买衣服了，今天教你一套极简衣柜搭配公式，一周五天穿搭不重样。' },
+        { visual: '博主面对干燥脱皮的脸或者粗糙皮肤指指点点', overlay: '用再多面霜皮肤还是干到脱皮？', audio: '别再花大价钱买贵妇面霜了，其实是你的第一步补水逻辑搞错了。' }
+      ],
+      'Curiosity Gap': [
+        { visual: '包裹严严实实的纸箱放在桌上，用美工刀轻轻划开', overlay: '开箱一个我等了三个月的包裹', audio: '今天终于收到了这个从国外订购、排单三个月的神秘好物，来看看它值不值。' },
+        { visual: '展示产品一个非常奇特的隐藏按钮或者机关特写', overlay: '这个产品居然还有这个隐藏用法？', audio: '相信90%买过这个产品的人，都不知道按住这个地方三秒能解锁全新功能。' },
+        { visual: '博主将一件产品握在手中，神神秘秘地对镜头微笑', overlay: '只用了一次，我的生活就被它改变了', audio: '今天安利一个我私藏了很久、能提升生活幸福感10倍的宝藏单品。' }
+      ],
+      'Direct Value': [
+        { visual: '快速展示多件高颜值好物平铺在桌面上的视觉盛宴', overlay: '开学季/百元内拼多多宝藏好物清单', audio: '今天毫无保留分享5个均价二三十、但品质极高的高颜值好物，链接都在下方。' },
+        { visual: '展示产品详细的使用步骤，动作利落干净', overlay: '三步教你彻底清洗家里的这个死角', audio: '不需要请专业保洁，用这个小工具配合这三个步骤，自己五分钟就能搞定。' },
+        { visual: '博主直接展示尺码表和上身对比图', overlay: '小个子女生避坑买裤子指南', audio: '教你三个看尺码表的万能公式，以后网购裤子再也不会买错长度。' }
+      ],
+      'Social Proof': [
+        { visual: '展示仓库里爆满的包裹、工人们忙碌发货的场景', overlay: '上架5分钟，1万件全部抢空', audio: '这已经是我们本月第三次断货了，工人们正在连夜加班发货，这次别再错过了。' },
+        { visual: '博主拿着手机展示粉丝群里清一色的五星好评截图', overlay: '小红书上万条好评的年度防晒', audio: '全网博主都在推，我买回来亲测了一个月，发现它真的名副其实。' },
+        { visual: '展示一张巨大的销量统计图或者行业奖杯特写', overlay: '蝉联天猫品类销量第一的好物', audio: '能做到连续三年销量冠军，绝对不是靠营销，今天我们来深扒一下它的硬实力。' }
+      ]
+    },
+    'SaaS': {
+      'Contra-Narrative': [
+        { visual: '博主对着复杂的Excel表格狂敲键盘，然后叹气关掉', overlay: '别再傻傻手动做Excel报表了！', audio: '每天花两小时复制粘贴数据？教你一招，用这个AI工具3秒钟一键生成。' },
+        { visual: '展示传统的代码编辑器，然后一键切换到无代码拖拽界面', overlay: '不会写代码也能做自己的App？', audio: '别去花几万找外包开发了，现在只用一个拖拽式工具，零基础也能做产品。' },
+        { visual: '博主指着一堆过期的昂贵软件订阅账单', overlay: '别再给这些垃圾软件交智商税了', audio: '这三个高昂订阅软件的功能，其实用这一个免费的开源平替就能全部搞定。' }
+      ],
+      'Pain Point': [
+        { visual: '深夜时钟特写，博主疲惫不堪地打哈欠工作', overlay: '每天加班到深夜，效率却极低？', audio: '如果你也被繁琐的日常琐事折磨得没时间生活，你需要这套自动化工作流。' },
+        { visual: '电脑屏幕突然卡死或报错的特写，博主捂脸崩溃', overlay: '又被软件卡死丢失了重要数据？', audio: '别等数据丢失了才后悔，教你用一行代码实现全自动多云备份，终身免费。' },
+        { visual: '展示一封封堆积如山的未回复邮件和客户留言特写', overlay: '客户消息回不完，转化率直线下滑', audio: '别再让人工客服疲于奔命了，用这个AI助手自动接管首轮回复，转化率提升3倍。' }
+      ],
+      'Curiosity Gap': [
+        { visual: '博主把电脑屏幕转过来，但打上模糊马赛克', overlay: '我团队提高5倍生产力的秘密武器', audio: '这是我们内部从不公开的效率秘方，今天大公开，看看我们是怎么做到的。' },
+        { visual: '展示产品界面上的一个隐藏高级开发者选项', overlay: '这个被99%的人忽略的隐藏开关', audio: '很少有人知道，把这个选项打开后，你的系统处理速度能瞬间提升两倍。' },
+        { visual: '博主神神秘秘地对镜头小声说话', overlay: '嘘！同行不希望你知道的提效外挂', audio: '今天顶着被同行投诉的风险，给你们分享这个可以自动生成方案的黑科技。' }
+      ],
+      'Direct Value': [
+        { visual: '快速切换展示三个软件界面的核心交互，节奏明快', overlay: '3个打工人必备的免费提效神仙网站', audio: '今天推荐3个冷门但好用到哭的效率网站，能让你每天提前两小时下班。' },
+        { visual: '录屏演示软件的配置页面，鼠标点击引导', overlay: '手把手教你配置你的第一个AI助理', audio: '不需要懂编程，跟着我这个保姆级视频配置，五分钟就能让AI替你干活。' },
+        { visual: '展示一份制作精美、充满图表的自动化PDF报告', overlay: '一键生成周报模板/直接打包带走', audio: '在评论区扣“周报”，我把这套自动生成报告的指令直接免费发送到你的私信。' }
+      ],
+      'Social Proof': [
+        { visual: '展示软件后台的用户数不断滚动的动画，数字狂飙', overlay: '全球突破100万用户的效率工具', audio: '从零到百万用户，我们只用了短短半年，来看看为什么大家都在用它替代老软件。' },
+        { visual: '博主展示世界五百强企业的Logo墙或者知名大咖的推荐语', overlay: '微软/谷歌员工私下都在用的软件', audio: '大厂高效率的背后，其实是因为员工都在用这套工具进行跨部门协同。' },
+        { visual: '展示一幅满屏的高星评分和正面反馈弹窗', overlay: '在Product Hunt上评分4.9的神器', audio: '全网好评率高达98%，今天我就来深度测评，看看它到底是不是名副其实。' }
+      ]
+    },
+    'Coaching': {
+      'Contra-Narrative': [
+        { visual: '博主微笑着连连摇头，双手交叉比出拒绝姿势', overlay: '为什么你越努力反而越赚不到钱？', audio: '很多人觉得成功靠的是埋头苦干，其实努力的底层逻辑错了，再拼也是白费。' },
+        { visual: '博主撕掉一张写着“传统成功学”的白纸', overlay: '别再相信少睡四个小时的鬼话了', audio: '那些劝你牺牲睡眠去拼命的建议，实际上是在慢性摧毁你的认知和判断力。' },
+        { visual: '博主用白板笔在黑板上划掉一个常见的行业公式', overlay: '这个被吹上天的创业公式，是个坑！', audio: '今天用我十年行业交税的经验告诉你，为什么90%的新手都会死在这个公式上。' }
+      ],
+      'Pain Point': [
+        { visual: '展示一个人看着银行卡余额或者停滞不前的粉丝数叹气', overlay: '努力了很久，成果依然为零？', audio: '如果你也陷入了成长的瓶颈期，每天焦虑却看不到出路，听听我这三点建议。' },
+        { visual: '展示一本书翻了两页就被丢在一边，博主揉太阳穴', overlay: '买了一堆书，却一本都读不进去？', audio: '别再强迫自己死记硬背了，教你一个高效吸收知识的“三步输出法”。' },
+        { visual: '博主指着太阳穴，露出疲惫不堪的表情', overlay: '每天脑子里想法很多，但就是不执行', audio: '拖延症的本质根本不是懒，而是你的大脑在逃避未知的焦虑，教你一招破局。' }
+      ],
+      'Curiosity Gap': [
+        { visual: '博主将一叠写着“核心机密”的笔记在镜头前一闪而过', overlay: '年入百万的人，都在遵循的潜规则', audio: '这套赚钱认知是学校里永远不会教给你的，花三分钟看完，少走五年弯路。' },
+        { visual: '博主拿出白纸，开始在上面画金字塔模型', overlay: '人与人之间最大的认知鸿沟在哪？', audio: '真正拉开差距的不是智商或背景，而是这个关键维度的思考习惯，今天画给你看。' },
+        { visual: '博主神神秘秘地对镜头微笑', overlay: '高手做决策时，都在用这套算法', audio: '为什么有些人看问题能一针见血？因为他们的脑子里有一套独特的过滤模型。' }
+      ],
+      'Direct Value': [
+        { visual: '白板上写着大大的1、2、3条清晰步骤', overlay: '小白快速转行/自学提升保姆级规划', audio: '不管你基础多差，跟着这套自学路径坚持3个月，绝对能在新行业站稳脚跟。' },
+        { visual: '博主指着屏幕，背景展示一份思维导图', overlay: '整理了半个月的行业认知图谱免费送', audio: '为了帮你理清思路，我把整套行业框架做成了导图，建议截图保存。' },
+        { visual: '博主手里拿着几张精心整理的干货卡片', overlay: '高手常用的5个思维模型，直接抄作业', audio: '如果你不知道怎么分析复杂问题，把这5个思维模型保存下来，遇到事情直接套用。' }
+      ],
+      'Social Proof': [
+        { visual: '展示一位学员在微信聊天记录里报喜的截图特写', overlay: '30天，帮助100个普通人跑通闭环', audio: '这是我们上个月实战营学员的真实数据，今天不讲空话，直接拆解他的成功路径。' },
+        { visual: '博主站在一个座无虚席的演讲现场或千人大会上', overlay: '线上线下累计学员突破1万人', audio: '深耕这个领域十多年，这是我总结出来的最适合普通人的一套认知蜕变课。' },
+        { visual: '博主指着手机上成百上千条感谢信和打卡记录', overlay: '跟着这个公式打卡，好评率100%', audio: '这套方法经过了上万名学员的真实测试，只要你按着做，就一定能看到变化。' }
+      ]
+    },
+    'LocalService': {
+      'Contra-Narrative': [
+        { visual: '博主面对一堆乱七八糟的美容仪器或清洁剂直摆手', overlay: '千万别去那些廉价美容院/洗车店了！', audio: '很多人贪便宜去低价体验，不仅服务缩水，还可能给皮肤/车子造成二次损伤。' },
+        { visual: '镜头扫过高大上的装修，最后定格在技师认真的手部细节上', overlay: '别被网红门店的浮华装修骗了！', audio: '挑门店最核心的不是看装修有多奢华，而是看他们技师的实操工龄和细心度。' },
+        { visual: '博主翻白眼或者做出无语的姿势', overlay: '为什么我不推荐你跟风做网红项目', audio: '今天作为行业内幕人士，劝大家避雷这三个好看不中用、纯属浪费钱的项目。' }
+      ],
+      'Pain Point': [
+        { visual: '博主展示一个乱糟糟的家或者车子内饰的脏乱差特写', overlay: '工作太忙，家里乱到崩溃？', audio: '别再把周末宝贵的休息时间浪费在做家务上了，把专业的事交给专业团队。' },
+        { visual: '展示一个人揉脖子、揉肩膀痛苦不堪的写照', overlay: '肩膀酸痛到整夜失眠，怎么治？', audio: '长期坐办公室的打工人，别等腰椎出问题了才后悔，教你一套快速舒缓法。' },
+        { visual: '博主展示头发干枯分叉或者指甲断裂的局部镜头', overlay: '做了美甲/头发没几天就断裂脱落？', audio: '如果你经常遇到美甲边缘起翘，其实是因为店员在打磨和涂胶的步骤上偷懒了。' }
+      ],
+      'Curiosity Gap': [
+        { visual: '展示一扇紧闭的包厢门，博主轻轻推开露出里面舒适的环境', overlay: '藏在写字楼里的隐藏版高端体验馆', audio: '今天带大家去一个只有熟客引路才能找到的私密康养空间，体验绝了。' },
+        { visual: '博主拿着一瓶没有任何标签的特制调理精油特写', overlay: '为什么我们店从来不公开这款精油？', audio: '这是我们专门为老会员定制研发的草本纯植物精油，外面根本买不到。' },
+        { visual: '镜头推近技师一记精准到位的按摩手法特写，顾客放松地闭眼', overlay: '按这里为什么能让人一秒放松？', audio: '这个穴位是舒缓压力的关键，来听听我们有着20年经验的老师傅怎么说。' }
+      ],
+      'Direct Value': [
+        { visual: '展示门店大门、内部环境和热情的服务流程，节奏连贯', overlay: '第一次到店免费赠送的3项福利', audio: '别说我没提醒你，新店开张福利，只要关注并私信，到店就能免费体验三个项目。' },
+        { visual: '博主展示地图导航，以及门店外便捷的免费停车位', overlay: '避坑指引：如何快速到达并免费停车', audio: '为了让大家不把时间浪费在找路 and 找车位上，专门做了这期超详细到店攻略。' },
+        { visual: '镜头扫过前台，展示各种赠送的点心和茶水', overlay: '不仅是服务，这里更是下午茶圣地', audio: '来我们店里不仅能享受专业项目，我们还提供免费现磨咖啡和精致法式甜点。' }
+      ],
+      'Social Proof': [
+        { visual: '展示一面贴满了红旗或者感谢信的墙面，镜头拉近', overlay: '被本地街坊邻里送了100面锦旗的店', audio: '在社区开了快十年，老邻居们一提起这家店都赞不绝口，靠的全是实打实的口碑。' },
+        { visual: '展示一位知名本地明星或者百万级博主到店体验的照片/视频', overlay: '本地多名大咖和网红私下常来的打卡店', audio: '今天带大家揭秘，为什么这家低调的店，会成为本地各路名人的首选去处。' },
+        { visual: '展示前台排队的预约记录本，翻动多页，全是满员', overlay: '提前一周都不一定能约上的宝藏店', audio: '好评率高达99.5%，为了保证每位客人的体验，我们每天只接待有限的预约。' }
+      ]
+    }
+  }
+
+  const bizTypeTemplates = db[businessType] || db['F&B']
+  const selectedStyleTemplates = bizTypeTemplates[hookStyle] || []
+  
+  // Interpolate topic into templates if possible
+  return selectedStyleTemplates.map(item => ({
+    visual: item.visual.replace(/特色服务/g, t).replace(/招牌/g, t),
+    overlay: item.overlay.replace(/特色服务/g, t).replace(/招牌/g, t),
+    audio: item.audio.replace(/特色服务/g, t).replace(/招牌/g, t)
+  }))
+}
+
 function truncateMiddle(value: string, max = 20) {
   if (value.length <= max) return value
   return `${value.slice(0, max - 3)}...`
@@ -219,6 +371,55 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
 
   const [contentIdea, setContentIdea] = useState('')
   const [creativeHooks, setCreativeHooks] = useState('')
+  
+  // Hooks generator states
+  const [showHookGenerator, setShowHookGenerator] = useState(false)
+  const [hookBusinessType, setHookBusinessType] = useState('F&B')
+  const [hookStyle, setHookStyle] = useState('Contra-Narrative')
+  const [hookTopic, setHookTopic] = useState('')
+  const [isGeneratingHooks, setIsGeneratingHooks] = useState(false)
+  const [generatedHooks, setGeneratedHooks] = useState<Array<{ visual: string; overlay: string; audio: string }>>([])
+
+  const handleGenerateHooks = async () => {
+    setIsGeneratingHooks(true)
+    try {
+      const systemPrompt = `You are an expert Instagram Reels hook creator. Generate 3 ready-to-use opening hooks for an Instagram Reel based on the user's business type, hook style, and target topic.
+Return the output strictly in a valid JSON array format, where each item in the array has:
+- "visual": Description of what to show on screen in the first 2-3 seconds (B-Roll description, max 12 words, in Chinese).
+- "overlay": The text printed in big bold letters on the video screen overlay (Maximum 5-7 words, in Chinese).
+- "audio": The voiceover/spoken opening line to say (1 short, high-energy sentence, in Chinese).
+
+JSON output format:
+[
+  { "visual": "画面：...", "overlay": "...", "audio": "..." },
+  { "visual": "画面：...", "overlay": "...", "audio": "..." },
+  { "visual": "画面：...", "overlay": "...", "audio": "..." }
+]
+Never include any markdown backticks, conversational preamble, or explanation outside the JSON.`
+
+      const promptMsg = `Business Type: ${hookBusinessType}\nHook Style: ${hookStyle}\nTopic: ${hookTopic || contentIdea || '我们的特色服务'}`
+      
+      const res = await callGeminiDirect(systemPrompt, [], promptMsg, false, 800)
+      if (res.direct && res.reply) {
+        let cleanText = res.reply.replace(/```json/gi, '').replace(/```/g, '').trim()
+        const parsed = JSON.parse(cleanText)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setGeneratedHooks(parsed.slice(0, 3))
+          setIsGeneratingHooks(false)
+          return
+        }
+      }
+      throw new Error('Fallback to local presets')
+    } catch (e) {
+      console.warn('AI Hook generation failed or key missing, using preset generator templates:', e)
+      const topic = hookTopic || contentIdea || '我们的特色服务'
+      const fallbacks = getFallbackHooks(hookBusinessType, hookStyle, topic)
+      setGeneratedHooks(fallbacks)
+    } finally {
+      setIsGeneratingHooks(false)
+    }
+  }
+
   const [activeMediaOp, setActiveMediaOp] = useState<{ index: number; action: 'design' | 'video' } | null>(null)
   const [mediaOpPrompt, setMediaOpPrompt] = useState('')
   const [mediaProcessingIndex, setMediaProcessingIndex] = useState<number | null>(null)
@@ -544,6 +745,9 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       setActiveMediaOp(null)
       setMediaOpPrompt('')
       setMediaProcessingIndex(null)
+      setShowHookGenerator(false)
+      setHookTopic('')
+      setGeneratedHooks([])
       return
     }
     setContentIdea('')
@@ -551,6 +755,9 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setActiveMediaOp(null)
     setMediaOpPrompt('')
     setMediaProcessingIndex(null)
+    setShowHookGenerator(false)
+    setHookTopic('')
+    setGeneratedHooks([])
     setCaption(selectedDraft.caption)
     setCreativeHooks(selectedDraft.creativeHooks || '')
     setHashtags(formatTags(selectedDraft.hashtags))
@@ -1449,14 +1656,141 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
               )}
               
               {selectedDraft?.status !== 'published' && (
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">创意 hooks (Creative Hooks)</label>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">创意 hooks (Creative Hooks)</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowHookGenerator(!showHookGenerator)}
+                      className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-extrabold transition-all"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      {showHookGenerator ? '收起 Hooks 生成器' : 'Generate Hooks'}
+                    </button>
+                  </div>
                   <textarea
                     value={creativeHooks}
                     onChange={(event) => setCreativeHooks(event.target.value)}
                     placeholder="输入吸睛创意 hooks / 写作思路 / 爆款切入点，方便保存思路并供 AI 创作时使用..."
                     className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                   />
+
+                  {showHookGenerator && (
+                    <div className="rounded-lg border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/10 dark:bg-indigo-950/5 p-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">行业类型</label>
+                          <select
+                            value={hookBusinessType}
+                            onChange={(e) => setHookBusinessType(e.target.value)}
+                            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                          >
+                            <option value="F&B">餐饮美食 (F&B)</option>
+                            <option value="eCommerce">电商零售 (eCommerce)</option>
+                            <option value="SaaS">软件科技 (SaaS/IT)</option>
+                            <option value="Coaching">知识博主 (Coach/Ed)</option>
+                            <option value="LocalService">本地生活 (Service/Spa)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">钩子风格</label>
+                          <select
+                            value={hookStyle}
+                            onChange={(e) => setHookStyle(e.target.value)}
+                            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                          >
+                            <option value="Contra-Narrative">打破认知 (反向阻断)</option>
+                            <option value="Pain Point">痛点焦虑 (引发共鸣)</option>
+                            <option value="Curiosity Gap">神秘好奇 (吸引留存)</option>
+                            <option value="Direct Value">直接福利 (干货实操)</option>
+                            <option value="Social Proof">数据背书 (建立信任)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">产品主题/钩子核心词</label>
+                        <input
+                          type="text"
+                          value={hookTopic}
+                          onChange={(e) => setHookTopic(e.target.value)}
+                          placeholder="例如：黄金流沙包、自动记账小程序... (为空则使用今日主题)"
+                          className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isGeneratingHooks}
+                        onClick={handleGenerateHooks}
+                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 px-3 py-2 text-xs font-bold text-white transition-colors disabled:opacity-50"
+                      >
+                        {isGeneratingHooks ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            正在生成 Reels 爆款 Hooks...
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="h-3.5 w-3.5" />
+                            生成 3 个爆款 Hooks
+                          </>
+                        )}
+                      </button>
+
+                      {generatedHooks.length > 0 && (
+                        <div className="space-y-2 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">推荐的 3 个高转化率 Opening Lines:</span>
+                            <button
+                              type="button"
+                              onClick={handleGenerateHooks}
+                              className="text-[10px] text-indigo-600 hover:underline font-bold dark:text-indigo-400"
+                            >
+                              重新生成
+                            </button>
+                          </div>
+                          <div className="space-y-2.5">
+                            {generatedHooks.map((h, i) => (
+                              <div
+                                key={i}
+                                className="group relative rounded-md border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-950 p-3 hover:border-indigo-400 transition-all dark:hover:border-indigo-900"
+                              >
+                                <div className="space-y-1.5 text-xs">
+                                  <div className="flex items-start gap-1.5">
+                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 shrink-0 uppercase tracking-wide">屏幕贴纸</span>
+                                    <span className="font-extrabold text-slate-900 dark:text-white leading-relaxed">{h.overlay}</span>
+                                  </div>
+                                  <div className="flex items-start gap-1.5">
+                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 shrink-0 uppercase tracking-wide">口播开头</span>
+                                    <span className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{h.audio}</span>
+                                  </div>
+                                  <div className="flex items-start gap-1.5">
+                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0 uppercase tracking-wide">画面设计</span>
+                                    <span className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed italic">{h.visual}</span>
+                                  </div>
+                                </div>
+                                <div className="mt-2.5 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const hookTextStr = `【画面设计】：${h.visual}\n【屏幕贴纸】：${h.overlay}\n【口播开头】：${h.audio}`
+                                      setCreativeHooks(hookTextStr)
+                                      setShowHookGenerator(false)
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-bold transition-all"
+                                  >
+                                    <Check className="h-3 w-3" />
+                                    选择此 Hook
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               
