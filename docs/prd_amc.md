@@ -1062,5 +1062,27 @@ RolePermission 表：
 - `src/components/dashboard/DashboardCalendar.tsx`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.27 — 2026-07-02（基于 Crew 营销战队的权限治理决策）
+
+### Crew 营销战队设计与生命周期决策
+- **引入 Crew 营销战队实体**：为解决人类员工与 AI Agent 的权限推导混乱，引入统一的 `MarketingCrew`（战队）与 `CrewMember`（战队成员）模型，1 个品牌对应 1 个 Crew。
+- **废除隐式主理人推导**：废除根据 AgentPermission 关联数量动态升级用户为 `AMC_PRINCIPAL` 的机制，所有商业角色采用显式角色关系绑定。
+- **品牌创建与主理人优先绑定**：
+  - 新建品牌时，自动为该品牌初始化 `MarketingCrew`。
+  - 自动为该 Crew 绑定指派一名人类主理人（`AMC_PRINCIPAL`），取消新品牌创建时自动克隆/初始化默认 AI Agent 的行为。
+- **由主理人手动添加 AI 员工**：新品牌创建后初始 Crew 中无 AI 员工。后续由绑定的人类主理人扮演战队指挥官，根据品牌业务需求，在后台手动挑选并添加（配属）合适的 AI 同事（AI Agent）进入该战队。
+- **品牌主基于邮箱激活与识别**：
+  - 品牌在创建时录入商户（品牌主）的唯一邮箱地址。
+  - 只有当拥有此邮箱的客户注册并首次登录系统时，系统才会通过邮箱字段识别，将其自动识别并拉入该品牌的 Crew，以 `BRAND_OWNER` 角色激活，解决了 BD 或主理人代建品牌的场景。
+- **细粒度角色与操作控制 (Action-based ACL)**：
+  - 战队成员可以包含主理人、高级主理人、管理人员、BD、品牌主和 AI 员工等多种角色。
+  - 权限判定不再使用粗颗粒布尔值 `canHumanAccess`，转而使用 Action-based 判断（例如：BD 仅允许 `read_summary` 读取汇总，拒绝其 `read_drafts` / `write_drafts` 等具体草稿的编辑）。
+
+### 影响文件
+- `docs/prd_amc.md`
+
+
 
 
