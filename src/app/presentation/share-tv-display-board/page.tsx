@@ -127,7 +127,7 @@ function PresentationContent() {
   const stageTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Calculate items per batch page
-  const gridRows = 2 // Always maintain 2 rows for balanced height layout
+  const gridRows = 1 // Maintain 1 row for spacious polaroid collage display
   const pageSize = gridCols * gridRows
   const totalPages = Math.ceil(items.length / pageSize)
 
@@ -501,8 +501,8 @@ function PresentationContent() {
       <div className="flex-1 w-full h-full relative z-10 flex items-center justify-center">
         {viewMode === 'grid' ? (
           /* DENSE POLAROID STICKER GRID WALL DISPLAY */
-          <div className="w-full h-full flex items-center justify-center p-3">
-            <div className={`grid ${getGridColsClass()} gap-3 w-full max-w-[96vw]`}>
+          <div className="w-full h-full flex items-center justify-center p-8 md:p-12">
+            <div className={`grid ${getGridColsClass()} gap-8 md:gap-12 w-full max-w-[90vw]`}>
               {currentBatchItems.map((item, idx) => {
                 const seed = batchSeeds[idx]
                 if (!seed) return null
