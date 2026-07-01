@@ -1770,7 +1770,9 @@ Never include any markdown backticks, conversational preamble, or explanation ou
                       {generatedHooks.length > 0 && (
                         <div className="space-y-2 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">推荐的 3 个高转化率 Opening Lines:</span>
+                            <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">
+                              推荐的 3 个爆款 Hooks ({attachedMedia.some(m => isVideoUrl(m.url)) ? '视频' : '图文'}类型):
+                            </span>
                             <button
                               type="button"
                               onClick={handleGenerateHooks}
@@ -1780,41 +1782,54 @@ Never include any markdown backticks, conversational preamble, or explanation ou
                             </button>
                           </div>
                           <div className="space-y-2.5">
-                            {generatedHooks.map((h, i) => (
-                              <div
-                                key={i}
-                                className="group relative rounded-md border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-950 p-3 hover:border-indigo-400 transition-all dark:hover:border-indigo-900"
-                              >
-                                <div className="space-y-1.5 text-xs">
-                                  <div className="flex items-start gap-1.5">
-                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 shrink-0 uppercase tracking-wide">屏幕贴纸</span>
-                                    <span className="font-extrabold text-slate-900 dark:text-white leading-relaxed">{h.overlay}</span>
+                            {generatedHooks.map((h, i) => {
+                              const isVid = attachedMedia.some(m => isVideoUrl(m.url))
+                              const labelVisual = isVid ? '画面设计' : '图片设计'
+                              const labelOverlay = isVid ? '屏幕贴纸' : '排版文字'
+                              const labelAudio = isVid ? '口播开头' : '正文开头'
+                              
+                              return (
+                                <div
+                                  key={i}
+                                  className="group relative rounded-md border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-950 p-3 hover:border-indigo-400 transition-all dark:hover:border-indigo-900"
+                                >
+                                  <div className="space-y-1.5 text-xs">
+                                    <div className="flex items-start gap-1.5">
+                                      <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 shrink-0 uppercase tracking-wide">
+                                        {labelOverlay}
+                                      </span>
+                                      <span className="font-extrabold text-slate-900 dark:text-white leading-relaxed">{h.overlay}</span>
+                                    </div>
+                                    <div className="flex items-start gap-1.5">
+                                      <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 shrink-0 uppercase tracking-wide">
+                                        {labelAudio}
+                                      </span>
+                                      <span className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{h.audio}</span>
+                                    </div>
+                                    <div className="flex items-start gap-1.5">
+                                      <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0 uppercase tracking-wide">
+                                        {labelVisual}
+                                      </span>
+                                      <span className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed italic">{h.visual}</span>
+                                    </div>
                                   </div>
-                                  <div className="flex items-start gap-1.5">
-                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 shrink-0 uppercase tracking-wide">口播开头</span>
-                                    <span className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{h.audio}</span>
-                                  </div>
-                                  <div className="flex items-start gap-1.5">
-                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0 uppercase tracking-wide">画面设计</span>
-                                    <span className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed italic">{h.visual}</span>
+                                  <div className="mt-2.5 flex justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const hookTextStr = `【${labelVisual}】：${h.visual}\n【${labelOverlay}】：${h.overlay}\n【${labelAudio}】：${h.audio}`
+                                        setCreativeHooks(hookTextStr)
+                                        setShowHookGenerator(false)
+                                      }}
+                                      className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-bold transition-all"
+                                    >
+                                      <Check className="h-3 w-3" />
+                                      选择此 Hook
+                                    </button>
                                   </div>
                                 </div>
-                                <div className="mt-2.5 flex justify-end">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const hookTextStr = `【画面设计】：${h.visual}\n【屏幕贴纸】：${h.overlay}\n【口播开头】：${h.audio}`
-                                      setCreativeHooks(hookTextStr)
-                                      setShowHookGenerator(false)
-                                    }}
-                                    className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-bold transition-all"
-                                  >
-                                    <Check className="h-3 w-3" />
-                                    选择此 Hook
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
                         </div>
                       )}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { callGeminiChat } from '@/lib/gemini-chat'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
   const session = await getSession()
@@ -9,23 +10,53 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}))
-  const { businessType, hookStyle, topic, contentIdea } = body
+  const { brandId, contentType, contentIdea } = body
 
-  const systemPrompt = `You are an expert Instagram Reels hook creator. Generate 3 ready-to-use opening hooks for an Instagram Reel based on the user's business type, hook style, and target topic.
+  // 1. Fetch brand details for context
+  let brandContext = ''
+  if (brandId) {
+    try {
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        include: { knowledge: true }
+      })
+      if (brand) {
+        brandContext = `Brand Name: ${brand.name}\n`
+        if (brand.description) brandContext += `Brand description: ${brand.description}\n`
+        if (brand.knowledge?.brandTone) brandContext += `Brand Tone/Style: ${brand.knowledge.brandTone}\n`
+      }
+    } catch (e) {
+      console.warn('Failed to load brand context', e)
+    }
+  }
+
+  // Determine media instructions based on contentType ('video' vs 'photo')
+  const mediaInstruction = contentType === 'video'
+    ? `The content type is Video (Reels/Shorts/Video post). Visual design instructions should specify dynamic, high-engagement 3-second B-Roll action video instructions for the creator. The hook text should be optimized for video watch-time.`
+    : `The content type is Photo/Carousel (图文/图片卡片). Visual design instructions should specify static image layout, graphic styling, or carousel slide visual instructions. The hook text should be optimized for image CTR.`
+
+  const systemPrompt = `You are an expert copywriter. Generate 3 ready-to-use opening hook options for a social media post.
+Generate these hooks based on the brand context and the user's content idea / materials description.
+${mediaInstruction}
+
 Return the output strictly in a valid JSON array format, where each item in the array has:
-- "visual": Description of what to show on screen in the first 2-3 seconds (B-Roll description, max 12 words, in Chinese).
-- "overlay": The text printed in big bold letters on the video screen overlay (Maximum 5-7 words, in Chinese).
-- "audio": The voiceover/spoken opening line to say (1 short, high-energy sentence, in Chinese).
+- "visual": Visual design/graphic/video instructions for the creator (in Chinese, max 15 words).
+- "overlay": The text to print/overlay on the graphic/video overlay (in Chinese, max 7 words).
+- "audio": The opening spoken/written caption line that hooks the audience (in Chinese, 1 short sentence).
 
 JSON output format:
 [
-  { "visual": "画面：...", "overlay": "...", "audio": "..." },
-  { "visual": "画面：...", "overlay": "...", "audio": "..." },
-  { "visual": "画面：...", "overlay": "...", "audio": "..." }
+  { "visual": "...", "overlay": "...", "audio": "..." },
+  { "visual": "...", "overlay": "...", "audio": "..." },
+  { "visual": "...", "overlay": "...", "audio": "..." }
 ]
 Never include any markdown backticks, conversational preamble, or explanation outside the JSON.`
 
-  const promptMsg = `Business Type: ${businessType || 'F&B'}\nHook Style: ${hookStyle || 'Contra-Narrative'}\nTopic: ${topic || contentIdea || '我们的特色服务'}`
+  const promptMsg = `[Brand Context]
+${brandContext || 'No details provided.'}
+
+[Content Idea / Materials Description]
+${contentIdea || 'No details provided.'}`
 
   try {
     const result = await callGeminiChat(systemPrompt, [], promptMsg, false, 800)

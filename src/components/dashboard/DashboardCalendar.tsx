@@ -1,6 +1,7 @@
 'use client'
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import PostPreviewModal from './PostPreviewModal'
+import { callGeminiDirect } from '@/lib/gemini-direct'
 import {
   Heart,
   MessageCircle,
@@ -210,6 +211,23 @@ function getPostOriginalUrl(platform: string, platformPostId: string | null | un
   }
 }
 
+function getFallbackHooks(topic: string, contentType: 'video' | 'photo') {
+  const t = topic || '我们的特色服务'
+  if (contentType === 'video') {
+    return [
+      { visual: '画面：快速切过产品或店铺细节，拉近镜头特写', overlay: `别再瞎找攻略了！`, audio: `大家都以为这很简单，其实懂行的人都在看这个细节！` },
+      { visual: '画面：展示博主在镜头前操作或体验产品的特写', overlay: `原来这才是搞定它的最快捷径`, audio: `今天不废话，用这套实操步骤直接帮你省下80%的精力。` },
+      { visual: '画面：展示令人惊艳的效果图或者用户满足的表情', overlay: `我敢保证你绝对没听过这个`, audio: `这是一个只有行业内部人员才知道的隐藏秘密，建议先收藏。` }
+    ]
+  } else {
+    return [
+      { visual: '排版：精美的拼图/多图网格，首图重点标红', overlay: `避坑！劝你避开这三个雷区`, audio: `最近被私信轰炸问这个事情，今天整理了一套清晰图解给大家彻底说明白。` },
+      { visual: '排版：左侧暗淡普通图，右侧极具视觉冲击的成品图', overlay: `普通人轻松搞定它的底层逻辑`, audio: `这套保姆级攻略直接打包分享，以后遇到类似问题照着抄作业就够了。` },
+      { visual: '排版：带有醒目疑问文字的图片作为第一张封面', overlay: `为什么高手都在偷偷用这个？`, audio: `看似普通的做法背后，其实藏着这几个拉开差距的绝招，建议点赞保存。` }
+    ]
+  }
+}
+
 interface CalendarEvent {
   id: string
   brandId: string
@@ -280,6 +298,11 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
   const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
   const [newUrlInput, setNewUrlInput] = useState('')
   const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all'>('unused')
+  
+  // Hooks generator states
+  const [showHookGenerator, setShowHookGenerator] = useState(false)
+  const [isGeneratingHooks, setIsGeneratingHooks] = useState(false)
+  const [generatedHooks, setGeneratedHooks] = useState<Array<{ visual: string; overlay: string; audio: string }>>([])
   const [accounts, setAccounts] = useState<any[]>([])
   const [brandAssets, setBrandAssets] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
@@ -300,6 +323,80 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
   const [showPublishDropdown, setShowPublishDropdown] = useState(false)
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
   const [previewOnly, setPreviewOnly] = useState(false)
+
+  const handleGenerateHooks = async () => {
+    setIsGeneratingHooks(true)
+    const hasVideo = attachedMedia.some(m => isVideoUrl(m.url))
+    const contentType = hasVideo ? 'video' : 'photo'
+    
+    // 1. Try server-side generation (uses system configs, API keys, and backup models)
+    try {
+      const response = await fetch('/api/copywriter/generate-hooks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId: activeBrandId || brandId,
+          contentType,
+          contentIdea
+        })
+      })
+      if (response.ok) {
+        const json = await response.json()
+        if (json.success && Array.isArray(json.hooks) && json.hooks.length > 0) {
+          setGeneratedHooks(json.hooks.slice(0, 3))
+          setIsGeneratingHooks(false)
+          return
+        }
+      }
+      throw new Error('Server-side hook generation failed')
+    } catch (serverErr) {
+      console.warn('[handleGenerateHooks] Server-side generation failed, trying browser-direct next:', serverErr)
+      
+      // 2. Try browser-direct Gemini call (if configured on client)
+      try {
+        const systemPrompt = `You are an expert copywriter. Generate 3 ready-to-use opening hook options for a social media post based on the brand context and the user's content idea / materials description.
+${contentType === 'video'
+  ? 'The content type is Video (Reels/Shorts/Video post). Visual design instructions should specify dynamic, high-engagement 3-second B-Roll action video instructions for the creator.'
+  : 'The content type is Photo/Carousel (图文/图片卡片). Visual design instructions should specify static image layout, graphic styling, or carousel slide visual instructions.'}
+
+Return the output strictly in a valid JSON array format, where each item in the array has:
+- "visual": Visual design/graphic/video instructions for the creator (in Chinese, max 15 words).
+- "overlay": The text to print/overlay on the graphic/video overlay (in Chinese, max 7 words).
+- "audio": The opening spoken/written caption line that hooks the audience (in Chinese, 1 short sentence).
+
+JSON output format:
+[
+  { "visual": "...", "overlay": "...", "audio": "..." },
+  { "visual": "...", "overlay": "...", "audio": "..." },
+  { "visual": "...", "overlay": "...", "audio": "..." }
+]
+Never include any markdown backticks, conversational preamble, or explanation outside the JSON.`
+
+        const promptMsg = `[Content Idea / Materials Description]
+${contentIdea || 'No details provided.'}`
+        
+        const res = await callGeminiDirect(systemPrompt, [], promptMsg, false, 800)
+        if (res.direct && res.reply) {
+          let cleanText = res.reply.replace(/```json/gi, '').replace(/```/g, '').trim()
+          const parsed = JSON.parse(cleanText)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setGeneratedHooks(parsed.slice(0, 3))
+            setIsGeneratingHooks(false)
+            return
+          }
+        }
+        throw new Error('Browser-direct generation failed')
+      } catch (directErr) {
+        console.warn('[handleGenerateHooks] Browser-direct failed, falling back to local preset templates:', directErr)
+        
+        // 3. Fallback to local rule-based templates
+        const fallbacks = getFallbackHooks(contentIdea, contentType)
+        setGeneratedHooks(fallbacks)
+      }
+    } finally {
+      setIsGeneratingHooks(false)
+    }
+  }
 
   const accountOptions = useMemo(() => {
     const list = [...accounts]
@@ -1944,13 +2041,113 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
 
               {/* Creative Hooks */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">创意 hooks (Creative Hooks)</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">创意 hooks (Creative Hooks)</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowHookGenerator(!showHookGenerator)}
+                    className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-extrabold transition-all"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    {showHookGenerator ? '收起 Hooks 生成器' : 'Generate Hooks'}
+                  </button>
+                </div>
                 <textarea
                   value={creativeHooks}
                   onChange={(event) => setCreativeHooks(event.target.value)}
                   placeholder="输入吸睛创意 hooks / 写作思路 / 爆款切入点，方便保存思路并供 AI 创作时使用..."
                   className="min-h-[60px] w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 />
+
+                {showHookGenerator && (
+                  <div className="rounded-lg border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/10 dark:bg-indigo-950/5 p-4 space-y-3">
+                    <button
+                      type="button"
+                      disabled={isGeneratingHooks}
+                      onClick={handleGenerateHooks}
+                      className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 px-3 py-2 text-xs font-bold text-white transition-colors disabled:opacity-50"
+                    >
+                      {isGeneratingHooks ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          正在分析上下文并生成 Hooks...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="h-3.5 w-3.5" />
+                          基于品牌及今日主题生成 3 个 Hooks
+                        </>
+                      )}
+                    </button>
+
+                    {generatedHooks.length > 0 && (
+                      <div className="space-y-2 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">
+                            推荐的 3 个爆款 Hooks ({attachedMedia.some(m => isVideoUrl(m.url)) ? '视频' : '图文'}类型):
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleGenerateHooks}
+                            className="text-[10px] text-indigo-600 hover:underline font-bold dark:text-indigo-400"
+                          >
+                            重新生成
+                          </button>
+                        </div>
+                        <div className="space-y-2.5">
+                          {generatedHooks.map((h, i) => {
+                            const isVid = attachedMedia.some(m => isVideoUrl(m.url))
+                            const labelVisual = isVid ? '画面设计' : '图片设计'
+                            const labelOverlay = isVid ? '屏幕贴纸' : '排版文字'
+                            const labelAudio = isVid ? '口播开头' : '正文开头'
+                            
+                            return (
+                              <div
+                                key={i}
+                                className="group relative rounded-md border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-950 p-3 hover:border-indigo-400 transition-all dark:hover:border-indigo-900"
+                              >
+                                <div className="space-y-1.5 text-xs">
+                                  <div className="flex items-start gap-1.5">
+                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 shrink-0 uppercase tracking-wide">
+                                      {labelOverlay}
+                                    </span>
+                                    <span className="font-extrabold text-slate-900 dark:text-white leading-relaxed">{h.overlay}</span>
+                                  </div>
+                                  <div className="flex items-start gap-1.5">
+                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 shrink-0 uppercase tracking-wide">
+                                      {labelAudio}
+                                    </span>
+                                    <span className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{h.audio}</span>
+                                  </div>
+                                  <div className="flex items-start gap-1.5">
+                                    <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0 uppercase tracking-wide">
+                                      {labelVisual}
+                                    </span>
+                                    <span className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed italic">{h.visual}</span>
+                                  </div>
+                                </div>
+                                <div className="mt-2.5 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const hookTextStr = `【${labelVisual}】：${h.visual}\n【${labelOverlay}】：${h.overlay}\n【${labelAudio}】：${h.audio}`
+                                      setCreativeHooks(hookTextStr)
+                                      setShowHookGenerator(false)
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-bold transition-all"
+                                  >
+                                    <Check className="h-3 w-3" />
+                                    选择此 Hook
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
 
@@ -3265,13 +3462,113 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">创意 hooks (Creative Hooks)</label>
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-550">创意 hooks (Creative Hooks)</label>
+                            <button
+                              type="button"
+                              onClick={() => setShowHookGenerator(!showHookGenerator)}
+                              className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-extrabold transition-all"
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              {showHookGenerator ? '收起 Hooks 生成器' : 'Generate Hooks'}
+                            </button>
+                          </div>
                           <textarea
                             value={creativeHooks}
                             onChange={(e) => setCreativeHooks(e.target.value)}
                             placeholder="输入吸睛创意 hooks / 写作思路 / 爆款切入点..."
                             className="min-h-[50px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                           />
+
+                          {showHookGenerator && (
+                            <div className="rounded-lg border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/10 dark:bg-indigo-950/5 p-4 space-y-3">
+                              <button
+                                type="button"
+                                disabled={isGeneratingHooks}
+                                onClick={handleGenerateHooks}
+                                className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 px-3 py-2 text-xs font-bold text-white transition-colors disabled:opacity-50"
+                              >
+                                {isGeneratingHooks ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    正在分析上下文并生成 Hooks...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Zap className="h-3.5 w-3.5" />
+                                    基于品牌及今日主题生成 3 个 Hooks
+                                  </>
+                                )}
+                              </button>
+
+                              {generatedHooks.length > 0 && (
+                                <div className="space-y-2 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">
+                                      推荐的 3 个爆款 Hooks ({attachedMedia.some(m => isVideoUrl(m.url)) ? '视频' : '图文'}类型):
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={handleGenerateHooks}
+                                      className="text-[10px] text-indigo-600 hover:underline font-bold dark:text-indigo-400"
+                                    >
+                                      重新生成
+                                    </button>
+                                  </div>
+                                  <div className="space-y-2.5">
+                                    {generatedHooks.map((h, i) => {
+                                      const isVid = attachedMedia.some(m => isVideoUrl(m.url))
+                                      const labelVisual = isVid ? '画面设计' : '图片设计'
+                                      const labelOverlay = isVid ? '屏幕贴纸' : '排版文字'
+                                      const labelAudio = isVid ? '口播开头' : '正文开头'
+                                      
+                                      return (
+                                        <div
+                                          key={i}
+                                          className="group relative rounded-md border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-950 p-3 hover:border-indigo-400 transition-all dark:hover:border-indigo-900"
+                                        >
+                                          <div className="space-y-1.5 text-xs">
+                                            <div className="flex items-start gap-1.5">
+                                              <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 shrink-0 uppercase tracking-wide">
+                                                {labelOverlay}
+                                              </span>
+                                              <span className="font-extrabold text-slate-900 dark:text-white leading-relaxed">{h.overlay}</span>
+                                            </div>
+                                            <div className="flex items-start gap-1.5">
+                                              <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 shrink-0 uppercase tracking-wide">
+                                                {labelAudio}
+                                              </span>
+                                              <span className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{h.audio}</span>
+                                            </div>
+                                            <div className="flex items-start gap-1.5">
+                                              <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0 uppercase tracking-wide">
+                                                {labelVisual}
+                                              </span>
+                                              <span className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed italic">{h.visual}</span>
+                                            </div>
+                                          </div>
+                                          <div className="mt-2.5 flex justify-end">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const hookTextStr = `【${labelVisual}】：${h.visual}\n【${labelOverlay}】：${h.overlay}\n【${labelAudio}】：${h.audio}`
+                                                setCreativeHooks(hookTextStr)
+                                                setShowHookGenerator(false)
+                                              }}
+                                              className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/80 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 px-2 py-0.5 text-[10px] font-bold transition-all"
+                                            >
+                                              <Check className="h-3 w-3" />
+                                              选择此 Hook
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex gap-2.5">
