@@ -66,6 +66,7 @@ interface PostPreviewModalProps {
   onSaveDraft: () => void
   onSchedule: (customTime?: string) => void
   onRegenerate: () => void
+  previewOnly?: boolean
 }
 
 export default function PostPreviewModal({
@@ -85,7 +86,8 @@ export default function PostPreviewModal({
   onCancel,
   onSaveDraft,
   onSchedule,
-  onRegenerate
+  onRegenerate,
+  previewOnly = false
 }: PostPreviewModalProps) {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false)
@@ -152,7 +154,8 @@ export default function PostPreviewModal({
         </div>
 
         {/* Modal Footer - Core Action Buttons */}
-        <div className="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4 flex items-center justify-between shrink-0 gap-3">
+        {!previewOnly && (
+          <div className="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4 flex items-center justify-between shrink-0 gap-3">
           {/* Cancel generation */}
           <button
             type="button"
@@ -269,6 +272,7 @@ export default function PostPreviewModal({
             </div>
           </div>
         </div>
+        )}
 
         {/* Nested Inline Edit Modal */}
         {editingAccountId && (() => {

@@ -998,4 +998,26 @@ RolePermission 表：
 - `src/app/api/brands/[id]/social-insight/route.ts`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.24 — 2026-07-01（草稿编辑页提交按钮删除与手动时间排期尊重）
+
+### 草稿编辑按钮精简
+- **去掉提交草稿按钮**：在 Post 草稿编辑面板侧边抽屉（`DraftManagementView.tsx`）底部，完全移除“提交草稿”按钮，使用户仅能进行预览、废弃、保存、AI 创作与智能排期操作，简化发帖前的决策路径。
+
+### 手动指定发布时间在智能排期中的尊重逻辑
+- **尊重未来排期时间**：
+  - 更新 `handleSingleSmartSchedule` 和 `handleSmartScheduleFromModal`（在 `DraftManagementView.tsx` 中）以及 `handleSchedulePublish`（在 `DashboardCalendar.tsx` 中）的智能排期实现。
+  - 当检测到用户已经在编辑面板上自主选择了未来的指定发布时间（即 `scheduledAt` 为未来的某个时间段）时，点击“智能排期”不再向 `/api/brands/[id]/scheduling/recommend` 获取系统推荐的时间，而是直接锁定并采用用户设定的时间提交排期，实现“双剑合璧”的业务灵活性。
+
+### 预览效果弹窗优化
+- **预览只生成预览图**：为 `PostPreviewModal` 组件引入 `previewOnly` 属性。
+- **隐藏底部控制栏**：当点击草稿编辑页/日历的“预览效果”打开弹窗时，系统传入 `previewOnly={true}`，隐藏预览弹窗底部的“取消创作”、“重新生成”、“保存草稿”、“智能排期”等全部四个操作按钮，防止多层弹窗/抽屉按钮功能冲突。
+
+### 影响文件
+- `src/components/dashboard/PostPreviewModal.tsx`
+- `src/components/dashboard/DraftManagementView.tsx`
+- `src/components/dashboard/DashboardCalendar.tsx`
+- `docs/prd_amc.md`
+
 

@@ -248,6 +248,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
   const [isCreatingPost, setIsCreatingPost] = useState(false)
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
+  const [previewOnly, setPreviewOnly] = useState(false)
   const [isAiGenerating, setIsAiGenerating] = useState(false)
   const [draftCaptions, setDraftCaptions] = useState<Record<string, string>>({})
   const [draftHashtags, setDraftHashtags] = useState<Record<string, string>>({})
@@ -854,20 +855,31 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setError(null)
     try {
       let targetDateISO: string
-      try {
-        const schedRes = await fetch(`/api/brands/${brandId}/scheduling/recommend`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ platform: null, numberOfPosts: 1, urgency: 'normal' }),
-        })
-        if (schedRes.ok) {
-          const schedData = await schedRes.json()
-          targetDateISO = schedData.recommendations?.[0]?.recommendedAt ?? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
-        } else {
+      const existingDraft = drafts.find(d => d.id === draftId)
+      const currentManualTime = (selectedDraft && selectedDraft.id === draftId && scheduledAt) 
+        ? fromDateTimeLocal(scheduledAt) 
+        : null
+      const parsedTime = currentManualTime || (existingDraft?.scheduledAt ? new Date(existingDraft.scheduledAt).toISOString() : null)
+      const isFutureTime = parsedTime && new Date(parsedTime).getTime() > Date.now()
+
+      if (isFutureTime && parsedTime) {
+        targetDateISO = parsedTime
+      } else {
+        try {
+          const schedRes = await fetch(`/api/brands/${brandId}/scheduling/recommend`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ platform: null, numberOfPosts: 1, urgency: 'normal' }),
+          })
+          if (schedRes.ok) {
+            const schedData = await schedRes.json()
+            targetDateISO = schedData.recommendations?.[0]?.recommendedAt ?? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+          } else {
+            targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        } catch {
           targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
         }
-      } catch {
-        targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
       }
 
       // 1. Set scheduledAt only (leave status as draft/failed)
@@ -1015,8 +1027,13 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setSaving(true)
     try {
       let targetDateISO: string
+      const parsedTime = scheduledAt ? fromDateTimeLocal(scheduledAt) : null
+      const isFutureTime = parsedTime && new Date(parsedTime).getTime() > Date.now()
+
       if (customTime) {
         targetDateISO = new Date(customTime).toISOString()
+      } else if (isFutureTime && parsedTime) {
+        targetDateISO = parsedTime
       } else {
         try {
           const schedRes = await fetch(`/api/brands/${brandId}/scheduling/recommend`, {
@@ -1874,6 +1891,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                   setDraftCaptions(newCaptions)
                   setDraftHashtags(newHashtags)
                   setDraftStatuses(newStatuses)
+                  setPreviewOnly(true)
                   setPreviewModalOpen(true)
                 }}
                 className={`rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 flex items-center gap-2 ${(!selectedDraft || selectedDraft.status === 'published') ? 'mr-auto' : ''}`}
@@ -1972,6 +1990,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                           setDraftHashtags(newHashtags)
                           setDraftStatuses(newStatuses)
                           setIsAiGenerating(true)
+                          setPreviewOnly(false)
                           setPreviewModalOpen(true)
 
                           // Trigger AI copywriting in parallel
@@ -2009,13 +2028,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                       <Sparkles className="h-4 w-4" /> 智能排期
                     </button>
                   )}
-                  <button
-                    disabled={saving || (!caption.trim() && !contentIdea.trim()) || selectedAccountIds.length === 0}
-                    onClick={submitDraft}
-                    className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-                  >
-                    <Send className="h-4 w-4" /> 提交草稿
-                  </button>
+
                   {selectedDraft?.status === 'pending_review' && (
                     <>
                       <button
@@ -2080,6 +2093,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
                               setDraftHashtags(newHashtags)
                               setDraftStatuses(newStatuses)
                               setIsAiGenerating(true)
+                              setPreviewOnly(false)
                               setPreviewModalOpen(true)
 
                               // Trigger AI copywriting in parallel
@@ -2127,6 +2141,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
         onSaveDraft={handleSaveDraftsFromModal}
         onSchedule={handleSmartScheduleFromModal}
         onRegenerate={handleRegenerate}
+        previewOnly={previewOnly}
       />
 
       {/* Lightbox Preview Modal */}
