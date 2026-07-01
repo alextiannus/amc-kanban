@@ -934,7 +934,10 @@ RolePermission 表：
 - **持续展出时间缩短**：
   - 默认单批次贴纸停置展出时间由 3 分钟（180000ms）缩短至 `1分钟`（60000ms），满足更高频次的信息轮播展示需求。
   - 控制面板中的选择下拉框默认选项对应更新为 `1 分钟 (默认)`。
+- **免登录公开访问支持**：
+  - 在路由拦截代理 `src/proxy.ts` 中，将 `/presentation/` 路径添加为公开页面，使未登录的用户也可以直接访问电子大屏展示页，免去重定向至登录页。
 
 ### 影响文件
 - `src/app/presentation/share-tv-display-board/page.tsx`
+- `src/proxy.ts`
 - `docs/prd_amc.md`

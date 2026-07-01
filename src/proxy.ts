@@ -51,7 +51,10 @@ export default async function proxy(request: NextRequest) {
   }
 
   // ── Main app (immedi.ai) ──────────────────────────────────────────────────
-  const isPublicPage = pathname === '/game' || pathname.startsWith('/game/')
+  const isPublicPage = 
+    pathname === '/game' || 
+    pathname.startsWith('/game/') ||
+    pathname.startsWith('/presentation/')
   const isApiRoute = pathname.startsWith('/api')
 
   // Bypass API and public routes
