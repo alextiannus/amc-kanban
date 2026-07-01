@@ -280,7 +280,7 @@ export const DEFAULT_TEMPLATES = {
     name: '品牌商户入驻欢迎邮件',
     description: '新餐厅/商户入驻 AMC 品牌时发送的入驻与使用说明邮件',
     placeholders: 'nickname,brandName,planName,to,temporaryPassword,mmInviteLink',
-    subject: '【AMC】🎉 品牌入驻成功！立即开启 {{brandName}} 的 AI 营销之旅',
+    subject: '【AMC】品牌入驻成功！立即开启 {{brandName}} 的 AI 营销之旅',
     html: `<!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -321,18 +321,17 @@ export const DEFAULT_TEMPLATES = {
   <div class="wrap">
     <div class="card">
       <div class="hero">
-        <div class="hero-emoji">🎉</div>
         <h1>您的品牌智能营销助手已就绪！</h1>
         <p>AI Marketing Crew — 让 AI 团队助您爆单</p>
       </div>
       <div class="body">
         <p>你好 <strong>{{nickname}}</strong>，</p>
         <p>祝贺您！您的品牌已被成功录入 AMC 平台，您的商家账户已正式开通：</p>
-
+ 
         <div class="brand-badge">
-          <span>🏪 {{brandName}} {{#planName}}· {{planName}}{{/planName}}</span>
+          <span>{{brandName}} {{#planName}}· {{planName}}{{/planName}}</span>
         </div>
-
+ 
         <div class="creds">
           <div class="row">
             <div class="lbl">登录邮箱</div>
@@ -343,13 +342,13 @@ export const DEFAULT_TEMPLATES = {
             <div class="val">{{temporaryPassword}}</div>
           </div>
         </div>
-
+ 
         <div class="cta-wrap">
           <a href="{{mmInviteLink}}" class="cta">打开 AMC 商家端系统 →</a>
         </div>
-
+ 
         <div class="notice">
-          <p>⚠️ 该临时链接有效期为 <strong>7天</strong>，首次登录后请务必立刻修改您的登录密码。</p>
+          <p>该临时链接有效期为 <strong>7天</strong>，首次登录后请务必立刻修改您的登录密码。</p>
         </div>
 
         <p style="margin-top:24px;font-weight:600;color:#1e293b;">三步开启 AI 自动化营销旅程：</p>
