@@ -337,9 +337,23 @@ export async function GET(req: Request, { params }: Params) {
       postfastApiKey: true,
       googlePlaceId: true, googleApiKey: true,
       googleRefreshToken: true, googleAccountId: true, googleLocationId: true,
+      subscriptions: {
+        where: {
+          status: 'ACTIVE',
+          OR: [
+            { contractEndDate: null },
+            { contractEndDate: { gt: new Date() } }
+          ]
+        },
+        take: 1
+      }
     },
   })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  if (!brand.subscriptions || brand.subscriptions.length === 0) {
+    return NextResponse.json({ error: '此品牌的订阅服务已到期或未激活，请前往“服务协议与订阅”进行激活后重试。' }, { status: 402 })
+  }
 
   const dateRangeLabel = `${from.toISOString().slice(0, 10)} → ${to.toISOString().slice(0, 10)}`
 

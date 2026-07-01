@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Check, X, TrendingUp, TrendingDown, AlertCircle, Star,
-  Zap, BarChart2, ChevronDown, Store, Bot, ExternalLink,
+  Zap, BarChart2, ChevronDown, Store, Bot, ExternalLink, Trash2,
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
 import { BrandKnowledgePanel } from './BrandKnowledgePanel'
@@ -155,12 +155,36 @@ function PlatformLogo({ icon, iconDark, name, size = 20 }: { icon: string; iconD
   )
 }
 
-function KpiCard({ account }: { account: ConnectedAccount }) {
+function KpiCard({ account, brandId, onDelete }: { account: ConnectedAccount; brandId?: string; onDelete?: () => void }) {
   const platform = ALL_PLATFORMS.find(p => p.id === account.platformId)
   if (!platform) return null
   // Extract a hex color from the icon URL for tinting
   const colorMatch = platform.icon.match(/\/([A-Fa-f0-9]{6})$/)
   const tint = colorMatch ? `#${colorMatch[1]}` : '#6366f1'
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!brandId) return
+    const confirmed = window.confirm(`确定要删除此 ${platform.name} 账号 (${account.handle}) 吗？删除后相关发帖和快照数据将被清除。`)
+    if (!confirmed) return
+
+    try {
+      const res = await fetch(`/api/brands/${brandId}/accounts/${account.uid}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        onDelete?.()
+      } else {
+        const errJson = await res.json().catch(() => ({}))
+        alert(errJson.error || '删除失败，请重试')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('网络错误，请稍后重试')
+    }
+  }
+
   const inner = (
     <div className={`bg-white dark:bg-slate-900 rounded-2xl p-4 border shadow-sm transition-all flex flex-col gap-3 min-w-0 relative overflow-hidden ${
       account.profileUrl
@@ -169,9 +193,25 @@ function KpiCard({ account }: { account: ConnectedAccount }) {
     }`}>
       {/* Subtle tinted top bar */}
       <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-2xl" style={{ background: tint }} />
-      {account.profileUrl && (
-        <ExternalLink className="absolute top-3.5 right-3.5 w-3 h-3 text-slate-300 dark:text-slate-600 group-hover:text-blue-400 transition-colors" />
-      )}
+      
+      {/* Action buttons (Delete & ExternalLink) */}
+      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+        {brandId && (
+          <button
+            onClick={handleDelete}
+            className="p-1 rounded bg-slate-50 hover:bg-rose-50 dark:bg-slate-850 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer border border-transparent hover:border-rose-100 dark:hover:border-rose-900/30"
+            title="删除账号"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+        {account.profileUrl && (
+          <div className="p-1 text-slate-300 dark:text-slate-650 group-hover:text-blue-400 transition-colors">
+            <ExternalLink className="w-3.5 h-3.5" />
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center gap-3">
         {/* Bigger logo with platform-tinted background */}
         <div
@@ -181,7 +221,7 @@ function KpiCard({ account }: { account: ConnectedAccount }) {
           <PlatformLogo icon={platform.icon} iconDark={platform.iconDark} name={platform.name} size={24} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-extrabold text-slate-700 dark:text-slate-200 truncate pr-5">{account.handle || platform.name}</p>
+          <p className="text-xs font-extrabold text-slate-700 dark:text-slate-200 truncate pr-12">{account.handle || platform.name}</p>
           <p className="text-[10px] text-slate-400 truncate">{platform.name}</p>
         </div>
       </div>
@@ -802,10 +842,23 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
           <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <BarChart2 className="w-4 h-4" /> 账号资产配置
           </h3>
+          <button
+            onClick={() => setShowAddAccount(true)}
+            className="inline-flex items-center justify-center gap-1 rounded-xl bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-xs font-bold text-white transition-all cursor-pointer shadow-sm shadow-blue-500/10 active:scale-95"
+          >
+            <span>+</span> 绑定新账号
+          </button>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {connectedAccounts.map(acc => (
-            <KpiCard key={acc.uid} account={acc} />
+            <KpiCard
+              key={acc.uid}
+              account={acc}
+              brandId={activeBrand?.id}
+              onDelete={() => {
+                if (activeBrand?.id) loadDetail(activeBrand.id)
+              }}
+            />
           ))}
         </div>
       </section>

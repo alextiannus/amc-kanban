@@ -977,4 +977,25 @@ RolePermission 表：
 - `src/components/dashboard/DashboardCalendar.tsx`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.23 — 2026-07-01（账号删除能力与取消订阅过滤优化）
+
+### 账号管理与删除能力
+- **前端删除操作**：在 `DashboardHome.tsx` 的每个社交账号卡片（`KpiCard`）右上角新增删除（垃圾桶）图标。用户点击并二次确认后，直接调用 DELETE 接口，成功后自动刷新账号配置。
+- **前端新增渠道入口**：在“账号资产配置”标题右侧新增“+ 绑定新账号”按钮，连通已有的 `AddAccountModal`，让主理人可以自助添加绑定社交媒体账号。
+- **后端依赖级删除支持**：更新 `/api/brands/[id]/accounts/[aid]` 的 `DELETE` 接口，在删除 `SocialAccount` 前，同步以事务形式安全清除关联 of `ActionItem` 和 `ContentDraft` 数据，避免违反外键约束。
+
+### 取消订阅账号看板过滤
+- **账号快照过滤**：在 `/api/data-analysis` 与 `/api/public/snapshots` 接口中，只查询并展现对应品牌拥有当前有效（未到期且 status 为 ACTIVE）的订阅计划的社媒账号快照。
+- **数据分析服务拦截**：在 `/api/brands/[id]/social-insight` 数据分析接口中添加校验：若该品牌当前没有有效的激活订阅计划，则直接返回 `402 Payment Required` 状态，并提示相应错误说明，使前端能够准确渲染订阅已取消/未激活的友好阻断提示。
+
+### 影响文件
+- `src/app/api/brands/[id]/accounts/[aid]/route.ts`
+- `src/components/dashboard/DashboardHome.tsx`
+- `src/app/api/data-analysis/route.ts`
+- `src/app/api/public/snapshots/route.ts`
+- `src/app/api/brands/[id]/social-insight/route.ts`
+- `docs/prd_amc.md`
+
 

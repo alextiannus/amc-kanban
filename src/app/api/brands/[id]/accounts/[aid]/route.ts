@@ -63,6 +63,11 @@ export async function DELETE(_req: Request, { params }: Params) {
   const brand = await prisma.brand.findFirst({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await prisma.socialAccount.deleteMany({ where: { id: aid, brandId } })
+  // Safely delete related action items and drafts first to prevent foreign key errors
+  await prisma.$transaction([
+    prisma.actionItem.deleteMany({ where: { accountId: aid, brandId } }),
+    prisma.contentDraft.deleteMany({ where: { accountId: aid, brandId } }),
+    prisma.socialAccount.deleteMany({ where: { id: aid, brandId } }),
+  ])
   return NextResponse.json({ ok: true })
 }

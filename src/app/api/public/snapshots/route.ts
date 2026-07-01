@@ -13,6 +13,15 @@ export async function GET(request: Request) {
       where: {
         brand: {
           status: 'ACTIVE',
+          subscriptions: {
+            some: {
+              status: 'ACTIVE',
+              OR: [
+                { contractEndDate: null },
+                { contractEndDate: { gt: new Date() } }
+              ]
+            }
+          },
           ...(brandId ? { id: brandId } : {}),
           ...(ownerId ? {
             owners: {
