@@ -98,13 +98,13 @@ function PresentationContent() {
 
   // Layout View Mode & Columns
   const [viewMode, setViewMode] = useState<'grid' | 'single'>('grid')
-  const [gridCols, setGridCols] = useState<number>(4)
+  const [displayCount, setDisplayCount] = useState<number>(12)
   const [enableBreathing, setEnableBreathing] = useState(true)
 
   // Polaroid Sticker Wall Animation Loop States
   const [currentPage, setCurrentPage] = useState(0)
   const [stage, setStage] = useState<'entering' | 'holding' | 'falling'>('entering')
-  const [holdDuration, setHoldDuration] = useState(180000) // Default 3 minutes (180000ms)
+  const [holdDuration, setHoldDuration] = useState(60000) // Default 1 minute (60000ms)
   const [batchSeeds, setBatchSeeds] = useState<PhysicsSeed[]>([])
 
   // Carousel & Autoplay States (for Single view mode)
@@ -127,8 +127,8 @@ function PresentationContent() {
   const stageTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Calculate items per batch page
-  const gridRows = 1 // Maintain 1 row for spacious polaroid collage display
-  const pageSize = gridCols * gridRows
+  const gridCols = displayCount === 12 ? 6 : displayCount === 15 ? 5 : 8
+  const pageSize = displayCount
   const totalPages = Math.ceil(items.length / pageSize)
 
   // Fetch snapshots
@@ -173,11 +173,11 @@ function PresentationContent() {
 
     const seeds = currentBatchItems.map((_, idx) => {
       const angle = (Math.random() - 0.5) * 8 // Stuck tilt: -4 to +4 degrees
-      const sx = (Math.random() - 0.5) * 1200 // Offscreen X entry offset
-      const sy = -700 - Math.random() * 300 // Offscreen Y entry (above viewport)
-      const sr = (Math.random() - 0.5) * 120 // Flying spin rotation offset
-      const ex = (Math.random() - 0.5) * 400 // Drift X offset on fall-off
-      const er = (Math.random() - 0.5) * 90 // Exit spin rotation offset
+      const sx = (Math.random() - 0.5) * 300 // Softened offscreen X entry offset (closer to target)
+      const sy = -450 - Math.random() * 150 // Softened offscreen Y entry (above viewport)
+      const sr = (Math.random() - 0.5) * 30 // Softened flying spin rotation offset
+      const ex = (Math.random() - 0.5) * 200 // Softened drift X offset on fall-off
+      const er = (Math.random() - 0.5) * 45 // Softened exit spin rotation offset
       const bd = 20 + (idx * 2) % 15 // Breathing duration
       const ad = (idx * 0.45) % 4 // Animation delay offset
 
@@ -206,8 +206,8 @@ function PresentationContent() {
     if (stageTimeoutRef.current) clearTimeout(stageTimeoutRef.current)
 
     if (stage === 'entering') {
-      // Transition to 'holding' after fly-in animations complete
-      const animationDuration = (currentBatchItems.length * 100) + 1200
+      // Transition to 'holding' after fly-in animations complete (adjusted for softer dynamics)
+      const animationDuration = (currentBatchItems.length * 80) + 1800
       stageTimeoutRef.current = setTimeout(() => {
         setStage('holding')
       }, animationDuration)
@@ -219,8 +219,8 @@ function PresentationContent() {
       }, holdDuration)
     } 
     else if (stage === 'falling') {
-      // Transition to next batch and fly-in after exit animations drop off screen
-      const animationDuration = (currentBatchItems.length * 60) + 1200
+      // Transition to next batch and fly-in after exit animations drop off screen (adjusted for 2.2s duration + delay)
+      const animationDuration = (currentBatchItems.length * 80) + 2450
       stageTimeoutRef.current = setTimeout(() => {
         setCurrentPage(prev => (prev + 1) % totalPages)
         setStage('entering')
@@ -247,7 +247,7 @@ function PresentationContent() {
     setTimeout(() => {
       setCurrentPage(prev => (prev - 1 + totalPages) % totalPages)
       setStage('entering')
-    }, (currentBatchItems.length * 60) + 100)
+    }, (currentBatchItems.length * 80) + 2450)
   }, [viewMode, stage, totalPages, currentBatchItems.length])
 
   // Generate QR Code
@@ -431,14 +431,17 @@ function PresentationContent() {
 
   const getGridColsClass = () => {
     switch (gridCols) {
-      case 3: return 'grid-cols-3'
-      case 4: return 'grid-cols-3 sm:grid-cols-4'
-      case 5: return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5'
-      case 8: return 'grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10'
-      case 6:
-      default:
-        return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8'
+      case 5: return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
+      case 6: return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6'
+      case 8: return 'grid-cols-4 sm:grid-cols-6 md:grid-cols-7 lg:grid-cols-8'
+      default: return 'grid-cols-4'
     }
+  }
+
+  const getGridGapClass = () => {
+    if (displayCount === 24) return 'gap-3 lg:gap-4'
+    if (displayCount === 15) return 'gap-4 lg:gap-6'
+    return 'gap-6 lg:gap-8'
   }
 
   if (loading) {
@@ -501,8 +504,8 @@ function PresentationContent() {
       <div className="flex-1 w-full h-full relative z-10 flex items-center justify-center">
         {viewMode === 'grid' ? (
           /* DENSE POLAROID STICKER GRID WALL DISPLAY */
-          <div className="w-full h-full flex items-center justify-center p-8 md:p-12">
-            <div className={`grid ${getGridColsClass()} gap-8 md:gap-12 w-full max-w-[90vw]`}>
+          <div className="w-full h-full flex items-center justify-center p-6 md:p-10">
+            <div className={`grid ${getGridColsClass()} ${getGridGapClass()} w-full max-w-[94vw]`}>
               {currentBatchItems.map((item, idx) => {
                 const seed = batchSeeds[idx]
                 if (!seed) return null
@@ -518,17 +521,17 @@ function PresentationContent() {
                         opacity: 0, 
                         x: seed.startX, 
                         y: seed.startY, 
-                        scale: 1.8, 
+                        scale: 1.15, // Softer zoom scale
                         rotate: seed.startRotate 
                       }}
                       animate={
                         stage === 'falling'
                           ? { 
                               opacity: 0, 
-                              y: window.innerHeight + 300, 
+                              y: window.innerHeight + 200, 
                               x: seed.exitX, 
                               rotate: seed.exitRotate, 
-                              scale: 0.95 
+                              scale: 0.9 
                             }
                           : { 
                               opacity: 1, 
@@ -541,14 +544,14 @@ function PresentationContent() {
                       transition={
                         stage === 'falling'
                           ? { 
-                              duration: 1.0, 
-                              ease: [0.6, -0.28, 0.735, 0.045], // Accel down physics
-                              delay: idx * 0.05 
+                              duration: 2.2, // Softer, slower floating down leaf effect
+                              ease: "easeInOut", // Smooth leaf float feel
+                              delay: idx * 0.08 // Staggered drop delay
                             }
                           : { 
                               type: 'spring', 
-                              stiffness: 65, 
-                              damping: 12, 
+                              stiffness: 45, // Gentler landing spring
+                              damping: 18,   // Higher damping to prevent excessive bounce
                               delay: idx * 0.08 // Stagger fly-in pasting
                             }
                       }
@@ -699,27 +702,27 @@ function PresentationContent() {
                   >
                     <option value={15000}>15 秒 (演示)</option>
                     <option value={30000}>30 秒</option>
-                    <option value={60000}>1 分钟</option>
-                    <option value={180000}>3 分钟 (默认)</option>
+                    <option value={60000}>1 分钟 (默认)</option>
+                    <option value={180000}>3 分钟</option>
                     <option value={300000}>5 分钟</option>
                   </select>
                 </div>
 
-                {/* Columns Density */}
+                {/* Display Count Selection */}
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-450 font-extrabold uppercase">列数</span>
+                  <span className="text-[10px] text-slate-450 font-extrabold uppercase">单屏数量</span>
                   <select 
-                    value={gridCols}
+                    value={displayCount}
                     onChange={(e) => {
-                      setGridCols(Number(e.target.value))
+                      setDisplayCount(Number(e.target.value))
                       setCurrentPage(0)
                       setStage('entering')
                     }}
-                    className="bg-slate-900 border border-slate-800 rounded-xl px-2 py-1 text-xs text-white outline-none cursor-pointer"
+                    className="bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1 text-xs text-white outline-none cursor-pointer"
                   >
-                    <option value={4}>4 列 (宽松)</option>
-                    <option value={6}>6 列 (标准)</option>
-                    <option value={8}>8 列 (密集)</option>
+                    <option value={12}>12 个 (默认)</option>
+                    <option value={15}>15 个</option>
+                    <option value={24}>24 个</option>
                   </select>
                 </div>
 
