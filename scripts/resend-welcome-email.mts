@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { sendBrandOnboardingWelcomeEmail } from '../src/lib/email'
+import { sendBrandOnboardingWelcomeEmail } from '../src/lib/email.ts'
 
 const prisma = new PrismaClient()
 
