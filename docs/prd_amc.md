@@ -957,3 +957,24 @@ RolePermission 表：
 - `src/app/api/brands/[id]/actions/[aid]/approve/route.ts`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.22 — 2026-07-01（智能排期按钮新增下拉选择与指定时间发布）
+
+### 预览面板智能排期按钮交互升级
+- **下拉菜单排期选择**：
+  - 将多平台预览模态框（`PostPreviewModal.tsx`）底部的“智能排期”按钮升级为分立的下拉组合按钮（Split Button）。
+  - 点击左侧主体直接执行“智能排期”（系统自动推荐最佳时间）。
+  - 点击右侧下拉箭头浮现设置面板，提供两个核心选项：
+    1. **智能自动排期 (推荐)**：使用智能排期算法自动推荐最佳发布时段并提交审核。
+    2. **按设定时间排期**：提供标准的 `datetime-local` 时间选择器，支持用户指定特定的年月日与时分，点击“确认排期发布”即可将推文草稿直接设定为所选定的排期时刻并提交发布管线。
+- **发布日历与排期管理适配**：
+  - 更新 `DraftManagementView.tsx` 及 `DashboardCalendar.tsx` 的排期提交函数，使其支持接收可选的 `customTime` 参数，完成从模态框到后台 API 的打通。
+
+### 影响文件
+- `src/components/dashboard/PostPreviewModal.tsx`
+- `src/components/dashboard/DraftManagementView.tsx`
+- `src/components/dashboard/DashboardCalendar.tsx`
+- `docs/prd_amc.md`
+
+

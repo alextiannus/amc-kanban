@@ -943,27 +943,31 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
     }
   }
 
-  const handleSchedulePublish = async () => {
+  const handleSchedulePublish = async (customTime?: string) => {
     if (!activeBrandId) return
 
     setSaving(true)
     try {
-      // Call unified smart scheduling API to get recommended publish time
+      // Call unified smart scheduling API to get recommended publish time if no customTime provided
       let targetDateISO: string
-      try {
-        const schedRes = await fetch(`/api/brands/${activeBrandId}/scheduling/recommend`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ platform: null, numberOfPosts: 1, urgency: 'normal' }),
-        })
-        if (schedRes.ok) {
-          const schedData = await schedRes.json()
-          targetDateISO = schedData.recommendations?.[0]?.recommendedAt ?? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
-        } else {
+      if (customTime) {
+        targetDateISO = new Date(customTime).toISOString()
+      } else {
+        try {
+          const schedRes = await fetch(`/api/brands/${activeBrandId}/scheduling/recommend`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ platform: null, numberOfPosts: 1, urgency: 'normal' }),
+          })
+          if (schedRes.ok) {
+            const schedData = await schedRes.json()
+            targetDateISO = schedData.recommendations?.[0]?.recommendedAt ?? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+          } else {
+            targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        } catch {
           targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
         }
-      } catch {
-        targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
       }
 
       const draftsList = await saveOrUpdateDrafts('scheduled', targetDateISO)
@@ -985,7 +989,11 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
       const timeStr = dt.toLocaleString('zh-CN', {
         month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
       })
-      alert(`智能排期成功！系统已为您安排在 ${timeStr} 发布。`)
+      if (customTime) {
+        alert(`排期成功！系统已为您安排在 ${timeStr} 发布。`)
+      } else {
+        alert(`智能排期成功！系统已为您安排在 ${timeStr} 发布。`)
+      }
       setIsCreatingPost(false)
       setShowPublishOptionModal(false)
       await refreshCalendar()
@@ -3529,7 +3537,7 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
               {/* Option 2: Smart Scheduling */}
               <button
                 type="button"
-                onClick={handleSchedulePublish}
+                onClick={() => handleSchedulePublish()}
                 disabled={saving}
                 className="w-full text-left p-4 rounded-2xl border border-slate-150 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-850 hover:bg-indigo-50/10 dark:hover:bg-indigo-950/10 transition-all flex items-start gap-4 group active:scale-[0.99] disabled:opacity-50"
               >

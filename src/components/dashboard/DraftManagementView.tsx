@@ -1010,25 +1010,29 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     }
   }
 
-  const handleSmartScheduleFromModal = async () => {
+  const handleSmartScheduleFromModal = async (customTime?: string) => {
     if (!brandId || !createdDrafts) return
     setSaving(true)
     try {
       let targetDateISO: string
-      try {
-        const schedRes = await fetch(`/api/brands/${brandId}/scheduling/recommend`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ platform: null, numberOfPosts: 1, urgency: 'normal' }),
-        })
-        if (schedRes.ok) {
-          const schedData = await schedRes.json()
-          targetDateISO = schedData.recommendations?.[0]?.recommendedAt ?? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
-        } else {
+      if (customTime) {
+        targetDateISO = new Date(customTime).toISOString()
+      } else {
+        try {
+          const schedRes = await fetch(`/api/brands/${brandId}/scheduling/recommend`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ platform: null, numberOfPosts: 1, urgency: 'normal' }),
+          })
+          if (schedRes.ok) {
+            const schedData = await schedRes.json()
+            targetDateISO = schedData.recommendations?.[0]?.recommendedAt ?? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+          } else {
+            targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        } catch {
           targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
         }
-      } catch {
-        targetDateISO = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
       }
 
       await Promise.all(
@@ -1060,9 +1064,13 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
       setCreatedDrafts(null)
       closeEditor()
       await loadDrafts()
-      alert(`已根据用户活跃度为您自动推荐最佳时间，并提交排期审核！推荐时间：${new Date(targetDateISO).toLocaleString()}`)
+      if (customTime) {
+        alert(`已成功设定发布时间，并提交排期审核！排期时间：${new Date(targetDateISO).toLocaleString()}`)
+      } else {
+        alert(`已根据用户活跃度为您自动推荐最佳时间，并提交排期审核！推荐时间：${new Date(targetDateISO).toLocaleString()}`)
+      }
     } catch (e: any) {
-      alert(e.message || '智能排期失败')
+      alert(e.message || (customTime ? '排期发布失败' : '智能排期失败'))
     } finally {
       setSaving(false)
     }

@@ -17,7 +17,8 @@ import {
   Save,
   Trash2,
   Video,
-  RefreshCw
+  RefreshCw,
+  ChevronDown
 } from 'lucide-react'
 
 // Helper function to check video file extensions
@@ -63,7 +64,7 @@ interface PostPreviewModalProps {
   attachedMedia: any[]
   onCancel: () => void
   onSaveDraft: () => void
-  onSchedule: () => void
+  onSchedule: (customTime?: string) => void
   onRegenerate: () => void
 }
 
@@ -87,6 +88,8 @@ export default function PostPreviewModal({
   onRegenerate
 }: PostPreviewModalProps) {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
+  const [showScheduleDropdown, setShowScheduleDropdown] = useState(false)
+  const [customTime, setCustomTime] = useState('')
 
   if (!isOpen) return null
 
@@ -192,20 +195,78 @@ export default function PostPreviewModal({
               <span>保存草稿</span>
             </button>
 
-            {/* Smart publish */}
-            <button
-              type="button"
-              disabled={saving || isAiGenerating}
-              onClick={onSchedule}
-              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5"
-            >
-              {saving ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Clock className="w-3.5 h-3.5" />
+            {/* Smart publish with split dropdown */}
+            <div className="relative flex items-center bg-emerald-600 rounded-xl shadow-md">
+              <button
+                type="button"
+                disabled={saving || isAiGenerating}
+                onClick={() => onSchedule()}
+                className="px-4 py-2 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs rounded-l-xl transition-all flex items-center gap-1.5 border-r border-emerald-500/25"
+              >
+                {saving ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Clock className="w-3.5 h-3.5" />
+                )}
+                <span>智能排期</span>
+              </button>
+              
+              <button
+                type="button"
+                disabled={saving || isAiGenerating}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowScheduleDropdown(prev => !prev)
+                }}
+                className="px-2.5 py-2 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-r-xl transition-all self-stretch flex items-center justify-center"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+
+              {showScheduleDropdown && (
+                <div className="absolute bottom-full right-0 mb-2.5 w-56 rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-800 dark:bg-slate-900 z-50 text-left animate-in fade-in slide-in-from-bottom-2 duration-150">
+                  <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">排期发布设置</p>
+                  
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowScheduleDropdown(false)
+                      onSchedule()
+                    }}
+                    className="w-full text-left px-2 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1.5"
+                  >
+                    <span>🤖</span>
+                    <span>智能自动排期 (推荐)</span>
+                  </button>
+                  
+                  <div className="border-t border-slate-100 dark:border-slate-800 my-2" />
+                  
+                  <div className="space-y-1.5 p-0.5">
+                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                      <span>📅</span>
+                      <span>指定排期发布时间</span>
+                    </span>
+                    <input
+                      type="datetime-local"
+                      value={customTime}
+                      onChange={(e) => setCustomTime(e.target.value)}
+                      className="w-full text-xs rounded-lg border border-slate-200 bg-white px-2 py-1.5 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    />
+                    <button
+                      type="button"
+                      disabled={!customTime}
+                      onClick={() => {
+                        setShowScheduleDropdown(false)
+                        onSchedule(customTime)
+                      }}
+                      className="w-full mt-1.5 py-2 bg-indigo-650 hover:bg-indigo-750 disabled:opacity-50 disabled:bg-slate-300 disabled:dark:bg-slate-800 text-white font-bold text-xs rounded-lg shadow-sm transition-all"
+                    >
+                      确认排期发布
+                    </button>
+                  </div>
+                </div>
               )}
-              <span>智能排期</span>
-            </button>
+            </div>
           </div>
         </div>
 
