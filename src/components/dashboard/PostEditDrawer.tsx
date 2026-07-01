@@ -906,16 +906,18 @@ export default function PostEditDrawer({
   // Hook generation handler
   const triggerGenerateHooks = async () => {
     setIsGeneratingHooks(true)
+    const isVid = attachedMedia.some(m => isVideoUrl(m.url))
     const topic = hookTopic || contentIdea || '我们的特色服务'
     try {
       const response = await fetch('/api/copywriter/generate-hooks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          businessType: hookBusinessType,
+          brandId,
+          contentType: isVid ? 'video' : 'photo',
+          contentIdea,
           hookStyle,
-          topic,
-          contentIdea
+          businessType: hookBusinessType,
         })
       })
       if (response.ok) {
@@ -928,8 +930,16 @@ export default function PostEditDrawer({
       }
       
       // Browser-direct Gemini fallback
-      const systemPrompt = `You are an expert Instagram Reels hook creator. Generate 3 ready-to-use opening hooks for an Instagram Reel based on the user's business type, hook style, and target topic. Return output strictly in a JSON array format...`
-      const promptMsg = `Business Type: ${hookBusinessType}\nHook Style: ${hookStyle}\nTopic: ${topic}`
+      const systemPrompt = `You are an expert copywriter. Generate 3 highly engaging, high-conversion opening hook options for a social media post.
+Style framework: ${hookStyle}
+Industry: ${hookBusinessType}
+Media type: ${isVid ? 'video' : 'photo'}
+
+Return the output strictly in a valid JSON array format, containing:
+- "visual": Visual design instructions for the creator (in Chinese, max 15 words).
+- "overlay": The bold text overlay to print on the video/image (in Chinese, max 7 words).
+- "audio": The opening caption line that hooks the audience (in Chinese, max 30 words, 1 short sentence).`
+      const promptMsg = `Content idea / Materials description: ${contentIdea || topic}`
       const res = await callGeminiDirect(systemPrompt, [], promptMsg, false, 800)
       if (res.direct && res.reply) {
         let cleanText = res.reply.replace(/```json/gi, '').replace(/```/g, '').trim()
@@ -1116,6 +1126,38 @@ export default function PostEditDrawer({
                       placeholder="输入内容创意或AI生成指令，例如：‘介绍我们的新菜单，突出新鲜食材和南洋风味’，AI将自动按所选平台特性重构文案..."
                       className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-805 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-105"
                     />
+                  </div>
+
+                  {/* Selectors for Industry and Hook Framework */}
+                  <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">行业品类 (Industry)</label>
+                      <select
+                        value={hookBusinessType}
+                        onChange={(e) => setHookBusinessType(e.target.value)}
+                        className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2 outline-none font-bold text-slate-700 dark:text-slate-350"
+                      >
+                        <option value="F&B">餐饮美食 (F&B)</option>
+                        <option value="eCommerce">线上电商 (eCommerce)</option>
+                        <option value="Local Service">本地生活/实体店 (Local Service)</option>
+                        <option value="Beauty & Lifestyle">美妆生活/时尚 (Beauty & Lifestyle)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">爆款公式 (Framework)</label>
+                      <select
+                        value={hookStyle}
+                        onChange={(e) => setHookStyle(e.target.value)}
+                        className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2 outline-none font-bold text-slate-700 dark:text-slate-350"
+                      >
+                        <option value="Contra-Narrative">反向叙事 (Contra-Narrative)</option>
+                        <option value="Pain Point">痛点打击 (Pain Point)</option>
+                        <option value="Curiosity Gap">好奇心留白 (Curiosity Gap)</option>
+                        <option value="Direct Value">直接价值 (Direct Value)</option>
+                        <option value="Social Proof">社交背书 (Social Proof)</option>
+                      </select>
+                    </div>
                   </div>
 
                   {/* Generate Hooks Button */}

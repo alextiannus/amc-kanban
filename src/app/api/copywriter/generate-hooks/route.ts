@@ -3,6 +3,21 @@ import { getSession } from '@/lib/auth'
 import { callGeminiChat } from '@/lib/gemini-chat'
 import { prisma } from '@/lib/prisma'
 
+const HOOK_STYLE_GUIDELINES: Record<string, string> = {
+  'Contra-Narrative': '反向叙事 (Contra-Narrative)：打破常规认知或习惯，利用冲突制造悬念。例如：“别再盲目跟风点招牌了！”、“大家都以为点招牌最稳妥，其实懂行的全奔着...”',
+  'Pain Point': '痛点打击 (Pain Point)：直击目标用户的日常生活烦恼、焦虑或不便，引出解决方案。例如：“天天吃油腻外卖，人都累了”、“大热天排队太遭罪？教你免排队秘诀”',
+  'Curiosity Gap': '好奇心留白 (Curiosity Gap)：刻意隐瞒核心关键点或数字，引发受众往下看的欲望。例如：“为什么这道菜每天仅售10份？”、“只有来过5次以上的老熟客才知道的隐藏暗号...”',
+  'Direct Value': '直接价值 (Direct Value)：开门见山直接给福利、省钱点单攻略或制作配方。例如：“50元吃饱三人的省钱点单攻略”、“3个步骤，教你在家复刻招牌”',
+  'Social Proof': '社交背书 (Social Proof)：用真实的销售量、排行榜、回头客数据或群众热度作为权威背书。例如：“全网累计销量突破10万份”、“回头客比例高达85%的秘密”',
+}
+
+const BUSINESS_TYPE_LABELS: Record<string, string> = {
+  'F&B': '餐饮美食 (F&B)',
+  'eCommerce': '线上电商 (eCommerce)',
+  'Local Service': '本地生活/实体店铺 (Local Service)',
+  'Beauty & Lifestyle': '美妆生活/时尚日常 (Beauty & Lifestyle)',
+}
+
 export async function POST(request: Request) {
   const session = await getSession()
   if (!session?.user) {
@@ -10,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => ({}))
-  const { brandId, contentType, contentIdea } = body
+  const { brandId, contentType, contentIdea, hookStyle, businessType } = body
 
   // 1. Fetch brand details for context
   let brandContext = ''
@@ -30,19 +45,31 @@ export async function POST(request: Request) {
     }
   }
 
+  // 2. Fetch specific guidelines for hook style
+  const styleInstruction = hookStyle && HOOK_STYLE_GUIDELINES[hookStyle]
+    ? `You MUST design the hooks following this framework: ${HOOK_STYLE_GUIDELINES[hookStyle]}`
+    : 'Provide diverse hooks using dynamic opening structures.'
+
+  const bizTypeInstruction = businessType && BUSINESS_TYPE_LABELS[businessType]
+    ? `The business type is ${BUSINESS_TYPE_LABELS[businessType]}. Tailor the hooks to match this industry context.`
+    : ''
+
   // Determine media instructions based on contentType ('video' vs 'photo')
   const mediaInstruction = contentType === 'video'
     ? `The content type is Video (Reels/Shorts/Video post). Visual design instructions should specify dynamic, high-engagement 3-second B-Roll action video instructions for the creator. The hook text should be optimized for video watch-time.`
     : `The content type is Photo/Carousel (图文/图片卡片). Visual design instructions should specify static image layout, graphic styling, or carousel slide visual instructions. The hook text should be optimized for image CTR.`
 
-  const systemPrompt = `You are an expert copywriter. Generate 3 ready-to-use opening hook options for a social media post.
-Generate these hooks based on the brand context and the user's content idea / materials description.
+  const systemPrompt = `You are an elite Instagram/Xiaohongshu growth hacker and copywriter. Generate 3 highly engaging, high-conversion opening hook options.
+Each hook MUST feel native, trendy, and deeply compelling for the target audience.
+
+${styleInstruction}
+${bizTypeInstruction}
 ${mediaInstruction}
 
-Return the output strictly in a valid JSON array format, where each item in the array has:
-- "visual": Visual design/graphic/video instructions for the creator (in Chinese, max 15 words).
-- "overlay": The text to print/overlay on the graphic/video overlay (in Chinese, max 7 words).
-- "audio": The opening spoken/written caption line that hooks the audience (in Chinese, 1 short sentence).
+Return the output strictly in a valid JSON array format, containing:
+- "visual": Actionable visual/graphic/video instructions for the creator (in Chinese, max 15 words).
+- "overlay": The bold, high-contrast text overlay to print on the video/image (in Chinese, max 7 words).
+- "audio": The opening spoken/written caption line that hooks the audience (in Chinese, max 30 words, 1 short sentence).
 
 JSON output format:
 [
