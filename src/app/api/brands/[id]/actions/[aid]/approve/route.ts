@@ -203,6 +203,7 @@ export async function PATCH(request: Request, { params }: Params) {
                 status: isScheduled ? 'scheduled' : 'published',
                 publishedAt: isScheduled ? null : new Date(),
                 platformPostId: result.postId ?? null,
+                postUrl: isScheduled ? null : (result.url ?? null),
               }
             : { status: 'draft', agentNote: `发布失败: ${result.error}` },
         })

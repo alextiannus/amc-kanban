@@ -21,6 +21,7 @@ const DRAFT_SELECT = {
   agentNote: true,
   rejectionNote: true,
   platformPostId: true,
+  postUrl: true,
   publishedAt: true,
   creativeHooks: true,
   createdAt: true,
@@ -82,23 +83,34 @@ export async function GET(request: Request, { params }: Params) {
     take: 100,
   })
 
-  // Dynamically resolve postUrl for published drafts
-  const hasPublishedDrafts = drafts.some((d: any) => d.status === 'published' && d.platformPostId)
-  let resolvedDrafts = drafts.map((d: any) => ({ ...d, postUrl: undefined as string | undefined }))
+  // Dynamically resolve postUrl for published drafts that don't have it in the database
+  const needsUrlResolution = drafts.some((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
+  let resolvedDrafts = drafts.map((d: any) => ({ ...d, postUrl: d.postUrl ?? undefined as string | undefined }))
 
-  if (hasPublishedDrafts) {
+  if (needsUrlResolution) {
     const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
     if (brand?.postfastApiKey) {
       const { postfastListPosts } = await import('@/lib/integrations/postfast')
       const pfResult = await postfastListPosts(brand.postfastApiKey, { status: 'published' })
       if (pfResult.success) {
-        resolvedDrafts = drafts.map((d: any) => {
+        resolvedDrafts = await Promise.all(drafts.map(async (d: any) => {
           if (d.status === 'published' && d.platformPostId) {
+            if (d.postUrl) {
+              return { ...d, postUrl: d.postUrl }
+            }
             const pfPost = pfResult.posts.find((p: any) => p.id === d.platformPostId)
-            return { ...d, postUrl: pfPost?.postUrl }
+            const resolvedUrl = pfPost?.postUrl
+            if (resolvedUrl) {
+              // Cache to database
+              await prisma.contentDraft.update({
+                where: { id: d.id },
+                data: { postUrl: resolvedUrl }
+              }).catch((err: any) => console.error('Failed to cache draft postUrl:', err))
+            }
+            return { ...d, postUrl: resolvedUrl }
           }
           return { ...d, postUrl: undefined }
-        })
+        }))
       }
     }
   }

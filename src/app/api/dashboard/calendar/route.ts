@@ -115,13 +115,13 @@ export async function GET(request: Request) {
   })
 
   // Dynamically resolve postUrl for published drafts using PostFast
-  const hasPublishedDrafts = drafts.some((d: any) => d.status === 'published' && d.platformPostId)
+  const needsUrlResolution = drafts.some((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
   const draftPostUrlMap = new Map<string, string>()
 
-  if (hasPublishedDrafts) {
+  if (needsUrlResolution) {
     const brandIdsWithPublished = Array.from(new Set(
       drafts
-        .filter((d: any) => d.status === 'published' && d.platformPostId)
+        .filter((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
         .map((d: any) => d.brandId)
     ))
 
@@ -141,6 +141,20 @@ export async function GET(request: Request) {
                 draftPostUrlMap.set(pfPost.id, pfPost.postUrl)
               }
             }
+          }
+        }
+      }
+
+      // Inline update the DB for any draft where we resolved the URL from PostFast
+      for (const d of drafts) {
+        if (d.status === 'published' && d.platformPostId && !d.postUrl) {
+          const resolvedUrl = draftPostUrlMap.get(d.platformPostId)
+          if (resolvedUrl) {
+            d.postUrl = resolvedUrl // update in-memory object so it is returned
+            await prisma.contentDraft.update({
+              where: { id: d.id },
+              data: { postUrl: resolvedUrl }
+            }).catch((err: any) => console.error('Failed to cache draft postUrl in calendar:', err))
           }
         }
       }
@@ -182,7 +196,7 @@ export async function GET(request: Request) {
       clicks,
       roi,
       platformPostId: draft.platformPostId,
-      postUrl: draft.platformPostId ? draftPostUrlMap.get(draft.platformPostId) : null,
+      postUrl: draft.postUrl || (draft.platformPostId ? draftPostUrlMap.get(draft.platformPostId) : null),
       type: 'post',
       agentNote: draft.agentNote,
       creativeHooks: draft.creativeHooks,

@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { draftId, success, platformPostId, error } = body
+  const { draftId, success, platformPostId, postUrl, error } = body
 
   if (!draftId) return NextResponse.json({ error: 'draftId required' }, { status: 400 })
 
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
   await prisma.contentDraft.update({
     where: { id: draftId },
     data: success
-      ? { status: 'published', publishedAt: new Date(), platformPostId: platformPostId || null }
+      ? { status: 'published', publishedAt: new Date(), platformPostId: platformPostId || null, postUrl: postUrl || null }
       : { status: 'draft', agentNote: `发布失败: ${error || 'unknown error'}` },
   })
 

@@ -253,7 +253,7 @@ export async function POST(request: Request) {
           await Promise.all([
             prisma.contentDraft.update({
               where: { id: draft.id },
-              data: { status: 'published', publishedAt: new Date(), platformPostId },
+              data: { status: 'published', publishedAt: new Date(), platformPostId, postUrl: publishedUrl },
             }),
             prisma.actionItem.update({
               where: { id: item.id },

@@ -1092,6 +1092,28 @@ RolePermission 表：
 ### 影响文件
 - `docs/prd_amc.md`
 
+---
 
+## Changelog v1.8.28 — 2026-07-02（已发布内容贴文链接持久化与缓存优化）
 
+### 已发布内容贴文链接持久化
+- **数据库 Schema 字段扩展**：在 `ContentDraft` 模型中新增可选字段 `postUrl` 用以保存帖文的最终发布链接。
+- **发布路由链接保存**：
+  - 更新自动发布、手动审核通过发布、重试发布等场景的后端逻辑，在发布成功并获得 `postId` 的同时，捕获 PostFast 返回的 `url` 并直接将其作为 `postUrl` 写入 `ContentDraft`。
+  - 在智能体上报发布状态 `/api/agent/pending-approvals` 时，支持 payload 接收并更新 `postUrl` 字段。
 
+### 读时缓存与分页容灾机制 (Read-Through Cache)
+- **草稿与日历接口适配**：在获取草稿列表和日历视图接口中，如果对应草稿的 `status` 为 `published` 且拥有 `platformPostId`，但数据库内 `postUrl` 缺失时，才调用 PostFast 获取在线贴文列表。
+- **回写缓存持久化**：获取到在线数据后，系统会自动在内存中匹配并向数据库发起写回更新（Writeback Cache），将匹配到的 `postUrl` 缓存写入 `ContentDraft`。下一次用户或其他组件访问该内容时，直接走数据库读取，无需再次调用外部 API，彻底解决老帖文被分页挤出而导致链接丢失的缺陷。
+
+### 影响文件
+- `prisma/schema.prisma`
+- `src/agents/nodes/publisher.ts`
+- `src/app/api/tasks/[id]/retry-publish/route.ts`
+- `src/app/api/brands/[id]/actions/[aid]/approve/route.ts`
+- `src/app/api/agent/action-items/route.ts`
+- `src/app/api/agent/pending-approvals/route.ts`
+- `src/app/api/brands/[id]/drafts/route.ts`
+- `src/app/api/brands/[id]/drafts/[draftId]/route.ts`
+- `src/app/api/dashboard/calendar/route.ts`
+- `docs/prd_amc.md`

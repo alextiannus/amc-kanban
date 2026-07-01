@@ -212,6 +212,7 @@ export async function publisherNode(state: any) {
                 hashtags: cleanHashtags,
                 status: "published",
                 platformPostId: publishRes.postId || "post_" + Date.now(),
+                postUrl: publishRes.url || null,
                 publishedAt: new Date()
               }
             });
@@ -232,6 +233,7 @@ export async function publisherNode(state: any) {
               hashtags: cleanHashtags,
               status: "published",
               platformPostId: publishRes.postId || "post_" + Date.now(),
+              postUrl: publishRes.url || null,
               publishedAt: new Date(),
               topicKeywords: enriched.topicKeywords,
             }

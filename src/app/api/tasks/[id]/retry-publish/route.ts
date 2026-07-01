@@ -104,7 +104,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (publish.success) {
     await prisma.contentDraft.update({
       where: { id: draft.id },
-      data: { status: 'published', publishedAt: new Date(), platformPostId: publish.postId ?? null },
+      data: { status: 'published', publishedAt: new Date(), platformPostId: publish.postId ?? null, postUrl: publish.url ?? null },
     })
 
     const materials = task.materials

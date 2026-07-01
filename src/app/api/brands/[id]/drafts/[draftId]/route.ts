@@ -19,6 +19,7 @@ const DRAFT_SELECT = {
   agentNote: true,
   rejectionNote: true,
   platformPostId: true,
+  postUrl: true,
   publishedAt: true,
   creativeHooks: true,
   createdAt: true,
@@ -63,15 +64,21 @@ export async function GET(request: Request, { params }: Params) {
   const draft = await prisma.contentDraft.findFirst({ where: { id: draftId, brandId }, select: DRAFT_SELECT })
   if (!draft) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  let postUrl: string | undefined
-  if (draft.status === 'published' && draft.platformPostId) {
+  let postUrl = draft.postUrl || undefined
+  if (!postUrl && draft.status === 'published' && draft.platformPostId) {
     const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } })
     if (brand?.postfastApiKey) {
       const { postfastListPosts } = await import('@/lib/integrations/postfast')
       const pfResult = await postfastListPosts(brand.postfastApiKey, { status: 'published' })
       if (pfResult.success) {
         const pfPost = pfResult.posts.find((p) => p.id === draft.platformPostId)
-        if (pfPost) postUrl = pfPost.postUrl
+        if (pfPost?.postUrl) {
+          postUrl = pfPost.postUrl
+          await prisma.contentDraft.update({
+            where: { id: draft.id },
+            data: { postUrl }
+          }).catch((err: any) => console.error('Failed to cache draft postUrl in GET:', err))
+        }
       }
     }
   }
