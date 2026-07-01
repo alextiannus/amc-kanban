@@ -168,9 +168,10 @@ export async function PATCH(request: Request, { params }: Params) {
         } else {
           // Auto-schedule: if no scheduledAt on this draft, get recommended time first
           let resolvedScheduledAt = draft.scheduledAt ? new Date(draft.scheduledAt) : null
-          const isScheduledFuture = resolvedScheduledAt && resolvedScheduledAt > new Date()
+          const isRescheduleRequested = typeof body.note === 'string' &&
+            (body.note.includes('重新智能排期') || body.note.includes('智能重新排期'))
 
-          if (!isScheduledFuture) {
+          if (!resolvedScheduledAt || isRescheduleRequested) {
             const recommended = await fetchRecommendedScheduleTime(brandId, platformName!)
             if (recommended) {
               resolvedScheduledAt = recommended

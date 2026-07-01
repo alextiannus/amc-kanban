@@ -183,9 +183,12 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   // This is the unified enforcement point: ALL submissions (AI, human, voice, bulk)
   // go through the smart scheduling algorithm. Only urgency='urgent' gets a near-slot.
   let resolvedScheduledAt = draft.scheduledAt
+  const isRescheduleRequested = typeof input.note === 'string' &&
+    (input.note.includes('重新智能排期') || input.note.includes('智能重新排期'))
+
   if (input.immediatePublish) {
     resolvedScheduledAt = null
-  } else if (!isFuture(resolvedScheduledAt)) {
+  } else if (!resolvedScheduledAt || isRescheduleRequested) {
     const recommended = await fetchRecommendedScheduleTime(
       input.brandId,
       draft.account.platformId,

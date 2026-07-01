@@ -941,3 +941,19 @@ RolePermission 表：
 - `src/app/presentation/share-tv-display-board/page.tsx`
 - `src/proxy.ts`
 - `docs/prd_amc.md`
+
+---
+
+## Changelog v1.8.21 — 2026-07-01（发布与排期尊重用户选择时间）
+
+### 智能排期优先尊重用户选择时间
+- **手动排期时间锁定**：
+  - 在统一投递函数 `submitDraftForDelivery` (`src/lib/draftSubmission.ts`) 及动作项审批路由 (`src/app/api/brands/[id]/actions/[aid]/approve/route.ts`) 中，新增对已设定的发布时间（`scheduledAt`）的尊重逻辑。
+  - 只有当草稿的 `scheduledAt` 为 `null`/`undefined`（即 AI 员工生成未排期状态），或者用户在客户端明确点击并触发“智能重新排期/重新智能排期”时，系统才会请求推荐时段并覆盖该时刻。
+  - 用户手动选择/拖拽排期的时间（包括由于时差或提交延迟导致稍处于过去的时间）将完整保留，不再无故被智能排期算法延后（如强行延至两天后），直接调用 PostFast 排期发布或即时发布。
+
+### 影响文件
+- `src/lib/draftSubmission.ts`
+- `src/app/api/brands/[id]/actions/[aid]/approve/route.ts`
+- `docs/prd_amc.md`
+
