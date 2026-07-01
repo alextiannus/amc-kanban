@@ -1079,6 +1079,11 @@ RolePermission 表：
 - **细粒度角色与操作控制 (Action-based ACL)**：
   - 战队成员可以包含主理人、高级主理人、管理人员、BD、品牌主和 AI 员工等多种角色。
   - 权限判定不再使用粗颗粒布尔值 `canHumanAccess`，转而使用 Action-based 判断（例如：BD 仅允许 `read_summary` 读取汇总，拒绝其 `read_drafts` / `write_drafts` 等具体草稿的编辑）。
+- **配套数据迁移与平滑并轨决策**：
+  - **历史关联无损灌入**：通过数据库迁移脚本将原 `BrandOwner` 和活跃的 `BrandAgent` 数据无损映射灌入新 `CrewMember` 表。
+  - **间接绑定权限补齐**：对于历史中仅通过 `AgentPermission` 间接关联品牌的人类用户，脚本自动为其在相应品牌下创建 `CrewMember` 记录（角色由全局角色推导，如主理人设为 `AMC_PRINCIPAL`），防止因架构变更导致历史权限断档。
+  - **组织越权关系扁平化**：为废除原有的全局 Organization 跨品牌越权查询，脚本自动将 `OrganizationMember` 中的 member 作为 `COLLABORATOR` 成员拉入该组织 owner 旗下所有品牌的 Crew 中，将跨表越权关系拉平归一到 `CrewMember` 单表关系。
+  - **支持局部多角色**：`CrewMember` 表的物理字段（如 `role`）设计为支持单用户在单 Crew 内拥有多角色（如逗号分隔或多记录），以便支撑局部多身份（如“主理人兼 BD”）。
 
 ### 影响文件
 - `docs/prd_amc.md`
