@@ -289,8 +289,8 @@ function Step2({ state, onPlan, onDuration, currentUser, onChange, onValidatePro
       {/* Duration */}
       <div>
         <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wide">合同时长</p>
-        <div className="grid grid-cols-4 gap-2">
-          {DURATIONS.map(d => (
+        <div className={`grid ${state.planId === 'starter' ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
+          {DURATIONS.filter(d => !(state.planId === 'starter' && d.months === 3)).map(d => (
             <button
               key={d.months}
               id={`wizard-duration-${d.months}`}
@@ -306,7 +306,7 @@ function Step2({ state, onPlan, onDuration, currentUser, onChange, onValidatePro
                   {d.badge}
                 </span>
               )}
-              <div className={`text-xs font-bold ${state.durationMonths === d.months ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300'}`}>
+              <div className={`text-xs font-bold ${state.durationMonths === d.months ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-650 dark:text-slate-350'}`}>
                 {d.label}
               </div>
               {d.discount > 0 && (
@@ -325,22 +325,19 @@ function Step2({ state, onPlan, onDuration, currentUser, onChange, onValidatePro
           <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
             邀请码 / 优惠码
           </label>
-          <div className="flex gap-2">
+          <div className="relative flex items-center">
             <input
               type="text"
               placeholder="请输入优惠码或主理人/BD邀请码"
               value={state.promoCode}
               onChange={e => onChange('promoCode', e.target.value)}
-              className="flex-1 px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400 font-semibold uppercase"
+              className="w-full px-3.5 py-2.5 pr-10 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400 font-semibold uppercase"
             />
-            <button
-              type="button"
-              onClick={onValidatePromo}
-              disabled={validatingPromo}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-black transition-all disabled:opacity-50"
-            >
-              {validatingPromo ? '验证中...' : '核销优惠'}
-            </button>
+            {validatingPromo && (
+              <span className="absolute right-3.5 flex items-center justify-center">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+              </span>
+            )}
           </div>
           {state.promoValidationMsg && (
             <p className={`text-xs font-bold ${state.promoValid ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
@@ -443,12 +440,91 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
       .catch(err => console.error('Fetch profile err:', err))
   }, [])
 
+  // ── Auto-adjust duration for starter plan ──
+  useEffect(() => {
+    if (state.planId === 'starter' && state.durationMonths === 3) {
+      setState(prev => ({ ...prev, durationMonths: 6 }))
+    }
+  }, [state.planId, state.durationMonths])
+
+  // ── Auto-validate promo code with 500ms debounce ──
+  useEffect(() => {
+    const code = state.promoCode.trim();
+    if (!code) {
+      setState(prev => {
+        if (prev.promoValid || prev.promoValidationMsg) {
+          return {
+            ...prev,
+            promoValid: false,
+            promoDiscountType: null,
+            promoDiscountValue: 0,
+            promoValidationMsg: null
+          }
+        }
+        return prev
+      })
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      (async () => {
+        setValidatingPromo(true)
+        try {
+          const res = await fetch('/api/promo/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+          })
+          const data = await res.json()
+          if (res.ok && data.valid) {
+            setState(prev => ({
+              ...prev,
+              promoValid: true,
+              promoDiscountType: data.discountType,
+              promoDiscountValue: data.discountValue,
+              promoValidationMsg: `✅ 已应用：${data.description}`
+            }))
+          } else {
+            setState(prev => ({
+              ...prev,
+              promoValid: false,
+              promoDiscountType: null,
+              promoDiscountValue: 0,
+              promoValidationMsg: `❌ ${data.error || '验证失败'}`
+            }))
+          }
+        } catch {
+          setState(prev => ({
+            ...prev,
+            promoValid: false,
+            promoDiscountType: null,
+            promoDiscountValue: 0,
+            promoValidationMsg: '❌ 网络错误，请重新验证'
+          }))
+        } finally {
+          setValidatingPromo(false)
+        }
+      })();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [state.promoCode]);
+
   function onChange(k: keyof WizardState, v: string) {
     setState(prev => ({ ...prev, [k]: v }))
   }
 
   function onPlan(planId: string, planName: string, monthlyUsd: number) {
-    setState(prev => ({ ...prev, planId, planName, monthlyBaseUsd: monthlyUsd }))
+    setState(prev => {
+      const nextDuration = (planId === 'starter' && prev.durationMonths === 3) ? 6 : prev.durationMonths
+      return {
+        ...prev,
+        planId,
+        planName,
+        monthlyBaseUsd: monthlyUsd,
+        durationMonths: nextDuration
+      }
+    })
   }
 
   function onDuration(months: number) {

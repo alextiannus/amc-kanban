@@ -484,28 +484,34 @@ export async function POST(request: Request) {
       assignment = { selectedAgentId: result.selectedAgentId, matchedBy: result.matchedBy, decisionId: result.decisionId }
     } catch {/* non-fatal */}
 
-    // Send welcome email with amc-mm invite link (only for newly created accounts)
-    if (ownerCreated && tempPassword) {
-      try {
-        const mmHost = process.env.NEXT_PUBLIC_MM_HOST || 'https://amc-mm.immedi.ai'
-        const { link: mmInviteLink } = generateInvitationLink(
+    // Send welcome email with amc-mm invite link
+    try {
+      const mmHost = process.env.NEXT_PUBLIC_MM_HOST || 'https://amc-mm.immedi.ai'
+      let mmInviteLink = mmHost
+      let finalTempPassword = '(您之前已设置过密码，请使用已有密码登录)'
+
+      if (ownerCreated && tempPassword) {
+        const { link } = generateInvitationLink(
           owner.email,
           tempPassword,
           ownerEmail.split('@')[0],
           mmHost,
           { expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 }
         )
-        await sendBrandOnboardingWelcomeEmail({
-          to: owner.email,
-          nickname: ownerEmail.split('@')[0],
-          brandName: name.trim(),
-          temporaryPassword: tempPassword,
-          mmInviteLink,
-          planName,
-        })
-      } catch (emailErr) {
-        console.error('[POST /api/brands] wizard welcome email failed:', emailErr)
+        mmInviteLink = link
+        finalTempPassword = tempPassword
       }
+
+      await sendBrandOnboardingWelcomeEmail({
+        to: owner.email,
+        nickname: ownerEmail.split('@')[0],
+        brandName: name.trim(),
+        temporaryPassword: finalTempPassword,
+        mmInviteLink,
+        planName,
+      })
+    } catch (emailErr) {
+      console.error('[POST /api/brands] wizard welcome email failed:', emailErr)
     }
 
     return NextResponse.json({

@@ -342,6 +342,59 @@ export default function BrandSubscriptionPage() {
       .catch(err => console.error('Fetch profile err:', err))
   }, [])
 
+  // ── Auto-adjust duration for starter plan ──
+  useEffect(() => {
+    if (planId === 'starter' && durationMonths === 3) {
+      setDurationMonths(6)
+    }
+  }, [planId, durationMonths])
+
+  // ── Auto-validate promo code with 500ms debounce ──
+  useEffect(() => {
+    const code = promoCode.trim();
+    if (!code) {
+      setPromoValid(false)
+      setPromoDiscountType(null)
+      setPromoDiscountValue(0)
+      setPromoValidationMsg(null)
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      (async () => {
+        setValidatingPromo(true)
+        try {
+          const res = await fetch('/api/promo/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+          })
+          const data = await res.json()
+          if (res.ok && data.valid) {
+            setPromoValid(true)
+            setPromoDiscountType(data.discountType)
+            setPromoDiscountValue(data.discountValue)
+            setPromoValidationMsg(`✅ 已应用：${data.description}`)
+          } else {
+            setPromoValid(false)
+            setPromoDiscountType(null)
+            setPromoDiscountValue(0)
+            setPromoValidationMsg(`❌ ${data.error || '验证失败'}`)
+          }
+        } catch {
+          setPromoValid(false)
+          setPromoDiscountType(null)
+          setPromoDiscountValue(0)
+          setPromoValidationMsg('❌ 网络错误，请重试')
+        } finally {
+          setValidatingPromo(false)
+        }
+      })();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [promoCode]);
+
   const success = searchParams?.get('success') === '1'
   const canceled = searchParams?.get('canceled') === '1'
   const checkoutSessionId = searchParams?.get('sid') || ''
@@ -1203,12 +1256,14 @@ export default function BrandSubscriptionPage() {
                 </div>
                 
                 {/* Duration Buttons */}
-                <div className="grid grid-cols-3 gap-2 shrink-0 w-full md:w-auto max-w-sm">
+                <div className={`grid ${planId === 'starter' ? 'grid-cols-2' : 'grid-cols-3'} gap-2 shrink-0 w-full md:w-auto max-w-sm`}>
                   {([
                     { months: 3,  label: '3 个月',  discount: 0 },
                     { months: 6,  label: '6 个月',  discount: 0 },
                     { months: 12, label: '12 个月', discount: 0 },
-                  ] as Array<{ months: number; label: string; discount: number; badge?: string }>).map(d => (
+                  ] as Array<{ months: number; label: string; discount: number; badge?: string }>)
+                  .filter(d => !(planId === 'starter' && d.months === 3))
+                  .map(d => (
                     <button
                       key={d.months}
                       onClick={() => setDurationMonths(d.months)}
@@ -1388,22 +1443,19 @@ export default function BrandSubscriptionPage() {
                     </p>
                   </div>
                   
-                  <div className="flex gap-2 max-w-md">
+                  <div className="relative flex items-center max-w-md">
                     <input
                       type="text"
                       placeholder="请输入邀请码或营销优惠码"
                       value={promoCode}
                       onChange={e => setPromoCode(e.target.value)}
-                      className="flex-1 px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400 font-semibold uppercase"
+                      className="w-full px-3.5 py-2.5 pr-10 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-400 font-semibold uppercase"
                     />
-                    <button
-                      type="button"
-                      onClick={handleValidatePromo}
-                      disabled={validatingPromo}
-                      className="px-5 py-2.5 bg-slate-900 hover:bg-slate-850 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-black transition-all disabled:opacity-50"
-                    >
-                      {validatingPromo ? '验证中...' : '核销优惠'}
-                    </button>
+                    {validatingPromo && (
+                      <span className="absolute right-3.5 flex items-center justify-center">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                      </span>
+                    )}
                   </div>
                   {promoValidationMsg && (
                     <p className={`text-xs font-bold ${promoValid ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>

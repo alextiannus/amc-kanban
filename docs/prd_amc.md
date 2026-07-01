@@ -1020,4 +1020,21 @@ RolePermission 表：
 - `src/components/dashboard/DashboardCalendar.tsx`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.25 — 2026-07-01（套餐合同时长限制与邀请码自动校验）
+
+### 套餐合同时长逻辑调整
+- **基础自媒体运营套餐限制**：当用户选择“自媒体基础运营”（$600 套餐，即 `starter` 方案）时，前端不再展示“3 个月”的合同时长选项。
+- **自动升档调整**：若用户在选择 $2800 品牌建设套餐时选择了“3 个月”时长，随后切换到“自媒体基础运营”套餐时，系统将自动将时长修改并锁定在“6 个月”，确保状态的一致性与合法性。
+
+### 邀请/优惠码核销自动校验
+- **去掉核销优惠按钮**：完全移除新建品牌向导（`NewBrandWizard.tsx`）和套餐订阅激活页面（`SubscriptionClient.tsx`）中的“核销优惠”手动触发按钮。
+- **输入框静默自动核销**：在邀请码/优惠码输入框中集成了 500ms 的 debounce 监听。用户输入完毕停止打字 500ms 后，系统将自动调用接口进行核销，同时在输入框右侧内嵌展示优雅的加载动画（Spinner Loop），计算完成后实时输出折扣信息。
+
+### 影响文件
+- `src/components/brands/NewBrandWizard.tsx`
+- `src/app/board/subscription/SubscriptionClient.tsx`
+- `docs/prd_amc.md`
+
 
