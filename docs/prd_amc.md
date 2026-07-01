@@ -1037,4 +1037,30 @@ RolePermission 表：
 - `src/app/board/subscription/SubscriptionClient.tsx`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.26 — 2026-07-01（Post 编辑表单与状态按钮统一重构）
+
+### Post 编辑表单组件化与统一
+- **抽取统一 PostEditDrawer 组件**：将原先内嵌在 `DraftManagementView.tsx` 中的侧边编辑抽屉，抽取为独立的通用组件 `PostEditDrawer.tsx`。
+- **状态感知与动态表单行为**：
+  - 新增/编辑表单整合：当 `postId` 传入 `null` 时自动切换为“新建草稿”模式；传入具体 ID 时自动加载已有数据。
+  - 输入框禁用规则：仅在 post 处于 `published` / `done` 状态时，表单的所有输入项（文案、标签、账号、排期时间、媒体库等）才切换为只读状态。
+- **不同状态按钮动态适配**：
+  - **Draft / Failed (草稿 / 生成失败)**：显示 `预览效果`、`废弃`、`✨ AI 创作`、`保存`、`智能排期` 按钮。
+  - **Pending Review (待审核)**：显示 `预览效果`、`废弃`、`保存`、`✨ AI 重新创作`、`驳回`、`批准` 按钮。
+  - **Scheduled (已排期)**：显示 `预览效果`、`取消排期` (即废弃)、`保存` (保存文案及指定时间修改)、`立即发布`、`重新智能排期` 按钮。
+  - **Published / Done (已发布 / 已完成)**：只读模式，仅显示 `预览效果` 和 `打开已发布文章` 按钮。
+
+### 日历视图与草稿视图统一接入
+- **删除冗余日历详情侧栏与编辑表单**：在 `DashboardCalendar.tsx` 中，完全移除原先用于展示只读详情的 `aside` 侧边栏和内嵌的 `isCreatingPost` 重复表单，统一使用新抽取的 `<PostEditDrawer>`。
+- **双向无缝编辑支持**：在日历中点击任何排期帖、待审核帖或已发布帖，直接唤起统一的 `<PostEditDrawer>` 渲染，允许直接在日历中对已排期/待审核内容进行即时修改并保存，或执行状态流转（如立即发布、批准/驳回、取消排期等）。
+
+### 影响文件
+- `src/components/dashboard/PostEditDrawer.tsx`
+- `src/components/dashboard/DraftManagementView.tsx`
+- `src/components/dashboard/DashboardCalendar.tsx`
+- `docs/prd_amc.md`
+
+
 
