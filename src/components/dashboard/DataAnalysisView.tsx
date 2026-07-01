@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { 
   Search, ArrowUpDown, Camera, RefreshCw, Eye, X, 
-  Store, Users, Smartphone, AlertCircle, CheckCircle2, Upload
+  Store, Users, Smartphone, AlertCircle, CheckCircle2, Upload, Tv
 } from 'lucide-react'
 
 interface SnapshotData {
@@ -325,6 +325,21 @@ export default function DataAnalysisView() {
           <p className="text-xs text-slate-400 font-bold mt-1">展示各品牌社交媒体账号的最新真实主页快照，由 AMC Researcher 定期回采更新。</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              let url = '/presentation/share-tv-display-board'
+              const params = []
+              if (selectedBrand !== 'all') params.push(`brandId=${selectedBrand}`)
+              if (selectedPlatform !== 'all') params.push(`platformId=${selectedPlatform}`)
+              if (params.length > 0) url += `?${params.join('&')}`
+              window.open(url, '_blank')
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-100 dark:text-slate-100 rounded-xl text-sm font-bold shadow-md transition-all active:scale-95 cursor-pointer border border-slate-700 dark:border-slate-800"
+            title="在大屏电视上播放最新截图"
+          >
+            <Tv className="w-4 h-4 text-indigo-400" />
+            <span>电子大屏展示</span>
+          </button>
           <button
             onClick={loadData}
             disabled={loading}
