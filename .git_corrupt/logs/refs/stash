@@ -1,0 +1,4 @@
+0000000000000000000000000000000000000000 47cb8d6ba1633311faedadee5d3d3d86e2278b43 alextiannus <alextiannus@gmail.com> 1779981110 +0800	On main: pre-sync-local-changes
+47cb8d6ba1633311faedadee5d3d3d86e2278b43 1cd28a69ad7250d6e6900dc2dff20b28722cab10 alextiannus <alextiannus@gmail.com> 1779981110 +0800	autostash
+1cd28a69ad7250d6e6900dc2dff20b28722cab10 93819c52abf4c118dfa62190c4ebfdce37b15c38 alextiannus <alextiannus@gmail.com> 1782580977 +0800	WIP on main: a0887d4 fix(ts): use slangDict state instead of non-existent Brand.menuItems/slangDict in buildSystemPrompt
+93819c52abf4c118dfa62190c4ebfdce37b15c38 f9bbf740470725518c91c348c5e6c837b3a1e5dc alextiannus <alextiannus@gmail.com> 1782616516 +0800	WIP on main: 1b5710b feat: apply AI Staff sunflower icon to amc-kanban

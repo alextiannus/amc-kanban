@@ -1141,3 +1141,36 @@ RolePermission 表：
 
 ### 影响文件
 - `docs/prd_amc.md`
+
+---
+
+## Changelog v1.8.30 — 2026-07-02（基于人类 API Key 委托的 AI 智能体权限继承与 Crew 扁平化设计方案）
+
+### 1. 品牌与 Crew 营销战队的去中心化独立设计
+- **品牌与人/AI 关系解耦**：品牌（`Brand`）成为完全独立的业务实体，不再强制绑定任何特定的人类或 AI 智能体。
+- **扁平化的 Crew 协作结构**：
+  - 每个品牌拥有一个专属的 `MarketingCrew`（营销战队）。
+  - `CrewMember`（战队成员）是一个扁平的模型，人类用户（`User` type="HUMAN"）与 AI 智能体（`User` type="AI_AGENT"）以平等的“同事”身份加入同一个 Crew。
+  - 通过 `CrewMember` 的 `role` 字段区分其在战队中的职能（如：`AMC_PRINCIPAL` 主理人、`BRAND_OWNER` 品牌主、`AI_COPYWRITER` 文案智能体、`AI_DESIGNER` 设计智能体）。
+
+### 2. 委托式智能体身份与权限继承模型 (Personal API Key Delegation)
+- **人类个人 API Key (Bearer Token)**：
+  - 看板的每个人类用户均可在其个人设置中生成一个或多个 API Key（对应 `UserApiKey` 表）。
+  - 智能体实例（运行在外部或沙箱中）在连接 AMC Kanban 的 MCP 或 REST API 时，将该人类用户的 API Key 放入 Request Header：
+    `Authorization: Bearer <HUMAN_PERSONAL_API_KEY>`
+  - 智能体同时在自定义 Header 中声明自己的 Agent 身份：
+    `X-Agent-ID: <AI_AGENT_USER_ID>`
+- **双重鉴权与权限继承逻辑 (Dual-Layer ACL)**：
+  - **第一层：数据边界继承 (Authority Domain)**：后端 API 拦截器解析 API Key，将该请求的数据访问范围（即能看到哪些品牌、哪些草稿）完全限制在**该 API Key 所属人类用户**的权限边界内。若人类用户的权限被变更或收回，智能体权限立即同步生效。
+  - **第二层：职能角色拦截 (Functional Role Restrictions)**：虽然智能体继承了人类用户的权限边界，但系统对智能体自身（通过 `X-Agent-ID` 对应的 AI 智能体 `User` 记录）进行功能级权限限制。即使智能体使用了 `ADMIN` 或 `AMC_PRINCIPAL` 的 API Key，其能调用的 API/MCP 技能仍受其 `AI_AGENT` 角色职能约束。例如：
+    - `AI_COPYWRITER` 仅被允许执行 `read_drafts`、`write_drafts`，不允许执行 `delete_account` 或 `modify_subscription`。
+- **审计日志 (Audit & Traceability)**：
+  - 所有由智能体发起的写操作，系统在 `AuditLog` 中记录为：
+    - `actorId: <AI_AGENT_USER_ID>`
+    - `actorType: "AI_AGENT"`
+    - `metadata: { delegatedBy: <HUMAN_USER_ID> }`
+  - 确保满足安全合规与操作可追溯性，清晰体现“某 AI 智能体代表某人类用户执行了该操作”。
+
+### 影响文件
+- `docs/prd_amc.md`
+
