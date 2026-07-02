@@ -104,6 +104,25 @@ export async function PATCH(request: Request, { params }: Params) {
         create: { userId: resolvedOwnerId, role: 'BRAND_OWNER' },
         update: {},
       })
+
+      // 同步更新 MarketingCrew & CrewMember
+      let crew = await tx.marketingCrew.findUnique({ where: { brandId: id } })
+      if (!crew) {
+        crew = await tx.marketingCrew.create({ data: { brandId: id } })
+      }
+      await tx.crewMember.upsert({
+        where: {
+          crewId_userId: {
+            crewId: crew.id,
+            userId: resolvedOwnerId
+          }
+        },
+        create: {
+          crewId: crew.id,
+          userId: resolvedOwnerId
+        },
+        update: {}
+      })
     }
 
     if (nextAgentIds) {
@@ -113,6 +132,43 @@ export async function PATCH(request: Request, { params }: Params) {
           where: { brandId_agentId: { brandId: id, agentId } },
           create: { brandId: id, agentId, role: 'worker', active: true },
           update: { active: true },
+        })
+      }
+
+      // 同步更新 MarketingCrew & CrewMember 关联
+      let crew = await tx.marketingCrew.findUnique({ where: { brandId: id } })
+      if (!crew) {
+        crew = await tx.marketingCrew.create({ data: { brandId: id } })
+      }
+
+      const currentBrand = await tx.brand.findUnique({ where: { id }, select: { ownerId: true } })
+      const ownerId = currentBrand?.ownerId
+
+      const keepUserIds = [...nextAgentIds]
+      if (ownerId) keepUserIds.push(ownerId)
+
+      // 移除不在保留列表中的旧成员
+      await tx.crewMember.deleteMany({
+        where: {
+          crewId: crew.id,
+          userId: { notIn: keepUserIds }
+        }
+      })
+
+      // 将最新勾选的团队成员（人类与 AI）全部加入 CrewMember
+      for (const agentId of nextAgentIds) {
+        await tx.crewMember.upsert({
+          where: {
+            crewId_userId: {
+              crewId: crew.id,
+              userId: agentId
+            }
+          },
+          create: {
+            crewId: crew.id,
+            userId: agentId
+          },
+          update: {}
         })
       }
     }
