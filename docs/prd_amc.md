@@ -1147,11 +1147,11 @@ RolePermission 表：
 ## Changelog v1.8.30 — 2026-07-02（基于人类 API Key 委托的 AI 智能体权限继承与 Crew 扁平化设计方案）
 
 ### 1. 品牌与 Crew 营销战队的去中心化独立设计
-- **品牌与人/AI 关系解耦**：品牌（`Brand`）成为完全独立的业务实体，不再强制绑定任何特定的人类或 AI 智能体。
-- **扁平化的 Crew 协作结构**：
-  - 每个品牌拥有一个专属的 `MarketingCrew`（营销战队）。
-  - `CrewMember`（战队成员）是一个扁平的模型，人类用户（`User` type="HUMAN"）与 AI 智能体（`User` type="AI_AGENT"）以平等的“同事”身份加入同一个 Crew。
-  - 通过 `CrewMember` 的 `role` 字段区分其在战队中的职能（如：`AMC_PRINCIPAL` 主理人、`BRAND_OWNER` 品牌主、`AI_COPYWRITER` 文案智能体、`AI_DESIGNER` 设计智能体）。
+- **品牌与人/AI 物理模型解耦**：从数据库与实体模型层面，品牌（`Brand`）作为独立业务实体建立，不强行将人类负责人或 AI 智能体作为硬编码字段绑定，而是统一通过 `MarketingCrew` 进行关联。
+- **系统自动绑定与分配机制**：
+  - **AI 智能体自动分配**：在新品牌创建时，系统会自动触发分配池逻辑，从空闲且匹配该品牌行业属性的 AI 智能体中挑选并配属到该品牌的 Crew。
+  - **人类角色自动绑定**：若品牌是由 BD 协助创建或由品牌主本人创建，系统在初始化 Crew 时，会自动将该 BD 或品牌主加入为战队成员（`CrewMember`），无需后续手动邀请。
+- **看板可见性统一判定原则**：无论是人类用户还是 AI Agent，均统一作为平等的 `CrewMember`。只要某个实体在某品牌的 Crew 中，系统就会在看板（Kanban）以及各视图中向其呈现该品牌，其可操作范围则在其所分配的 `role` 权限范围内进行细粒度控制。
 
 ### 2. 委托式智能体身份与权限继承模型 (Personal API Key Delegation)
 - **人类个人 API Key (Bearer Token)**：
