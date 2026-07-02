@@ -44,7 +44,7 @@ type CreateBrandForSubscriptionInput = {
   ownerId: string
   name: string
   location?: string | null
-  ownerEmail?: string | null
+  ownerEmail: string           // REQUIRED: brand owner email — used to find/create brand owner account
   timezone?: string | null
   address?: string | null
   description?: string | null
@@ -54,6 +54,11 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
   const name = input.name.trim()
   if (!name) {
     return { ok: false as const, reason: 'name_required' as const }
+  }
+
+  const normalizedOwnerEmail = input.ownerEmail.trim().toLowerCase()
+  if (!normalizedOwnerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedOwnerEmail)) {
+    return { ok: false as const, reason: 'owner_email_required' as const }
   }
 
   const now = new Date()
@@ -83,14 +88,13 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     return { ok: true as const, brand: existingBrand, alreadyCreated: true as const, agentId: null }
   }
 
-  const normalizedOwnerEmail = input.ownerEmail?.trim().toLowerCase() || null
-  const brandOwner = normalizedOwnerEmail ? await findOrCreateBrandOwnerAccount(normalizedOwnerEmail) : null
+  const brandOwner = await findOrCreateBrandOwnerAccount(normalizedOwnerEmail)
 
-  if (brandOwner && !brandOwner.ok) {
+  if (!brandOwner.ok) {
     return { ok: false as const, reason: 'brand_owner_not_found' as const }
   }
 
-  const brandOwnerId = brandOwner?.ok ? brandOwner.user.id : input.ownerId
+  const brandOwnerId = brandOwner.user.id
 
   const brand = await prisma.$transaction(async (tx: any) => {
     const created = await tx.brand.create({

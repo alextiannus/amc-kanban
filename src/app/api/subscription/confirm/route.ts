@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         name: pendingBrandName,
         description: pendingBrandDescription || null,
         location: pendingBrandLocation || null,
-        ownerEmail: pendingBrandOwnerEmail || null,
+        ownerEmail: pendingBrandOwnerEmail || '',
         timezone: pendingBrandTimezone || null,
         address: pendingBrandAddress || null,
       })

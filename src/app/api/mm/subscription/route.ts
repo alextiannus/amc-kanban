@@ -38,6 +38,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'brandId and pendingBrandName cannot be used together' }, { status: 400 })
     }
 
+    // ownerEmail is REQUIRED when creating a new brand
+    if (pendingBrandName && !pendingBrandOwnerEmail) {
+      return NextResponse.json({ error: '新建品牌必须提供品牌主邮件 (pendingBrandOwnerEmail)' }, { status: 400 })
+    }
+    if (pendingBrandName && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pendingBrandOwnerEmail)) {
+      return NextResponse.json({ error: '品牌主邮件格式无效' }, { status: 400 })
+    }
+
     if (brandId) {
       const exists = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } })
       if (!exists) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
@@ -188,7 +196,7 @@ export async function POST(request: NextRequest) {
             name: pendingBrandName,
             description: pendingBrandDescription || null,
             location: pendingBrandLocation || null,
-            ownerEmail: pendingBrandOwnerEmail || null,
+            ownerEmail: pendingBrandOwnerEmail || '',
             timezone: pendingBrandTimezone,
             address: pendingBrandAddress || null,
           })
