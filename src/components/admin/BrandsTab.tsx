@@ -124,7 +124,7 @@ export default function BrandsTab({
       if (!matchName && !matchLoc) return false
     }
     if (statusFilter !== 'ALL') {
-      const subStatus = brand.subscriptions[0]?.status || 'CANCELLED'
+      const subStatus = brand.subscriptions[0]?.status || 'NO_SUB'
       if (subStatus !== statusFilter) return false
     }
     return true
@@ -288,7 +288,7 @@ export default function BrandsTab({
                   {filteredBrands.map((brand) => {
                     const subscription = brand.subscriptions[0]
                     const planName = subscription?.planName || '未绑定套餐'
-                    const status = subscription?.status || 'CANCELLED'
+                    const status = subscription?.status || '无订阅'
                     
                     const endDate = subscription?.contractEndDate
                     const formattedDate = endDate ? new Date(endDate).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '无'
@@ -396,7 +396,7 @@ export default function BrandsTab({
                             ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-455 border-rose-100 dark:border-rose-900/30'
                             : 'bg-slate-100 dark:bg-slate-805 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                         }`}>
-                          {subscription?.status || 'CANCELLED'}
+                          {subscription?.status || '无订阅'}
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30">
                           {subscription?.planName || '未绑定计划'}
