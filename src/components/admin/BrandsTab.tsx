@@ -41,6 +41,7 @@ interface BrandsTabProps {
   onFetchDecisionLogs: () => Promise<void>
   onPatchPoolMember: (member: AssignmentPoolMember, patch: Partial<AssignmentPoolMember>) => Promise<void>
   onDeletePoolMember: (member: AssignmentPoolMember) => Promise<void>
+  onCreatePoolMember: (agent: any) => Promise<void>
 }
 
 export default function BrandsTab({
@@ -60,12 +61,15 @@ export default function BrandsTab({
   onFetchPoolData,
   onFetchDecisionLogs,
   onPatchPoolMember,
-  onDeletePoolMember
+  onDeletePoolMember,
+  onCreatePoolMember
 }: BrandsTabProps) {
   const [subTab, setSubTab] = useState<'brands' | 'pool'>('brands')
   const [editingBrandId, setEditingBrandId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'PENDING' | 'FAILED' | 'CANCELLED'>('ALL')
+  const [poolSearchTerm, setPoolSearchTerm] = useState('')
+  const [selectedPrincipalToAdd, setSelectedPrincipalToAdd] = useState('')
 
   const filteredHumans = humans.filter((u) => {
     if (u.role === 'ADMIN') return true
@@ -74,6 +78,16 @@ export default function BrandsTab({
     const isOnlyBrandOwner = roles.every(r => r === 'BRAND_OWNER')
     return !isOnlyBrandOwner
   })
+
+  const principals = humans.filter(u => u.businessRoles?.some(r => r.role === 'AMC_PRINCIPAL'))
+  const existingPoolAgentIds = new Set(poolMembers.map(m => m.agentId))
+  const principalsNotInPool = principals.filter(u => !existingPoolAgentIds.has(u.id))
+  const filteredPrincipalsNotInPool = poolSearchTerm.trim()
+    ? principalsNotInPool.filter(u =>
+        u.email.toLowerCase().includes(poolSearchTerm.toLowerCase()) ||
+        (u.nickname && u.nickname.toLowerCase().includes(poolSearchTerm.toLowerCase()))
+      )
+    : principalsNotInPool
   const [crewSearchTerms, setCrewSearchTerms] = useState<Record<string, string>>({})
   const [activeSearchBrandId, setActiveSearchBrandId] = useState<string | null>(null)
   const [isDeletingBrandId, setIsDeletingBrandId] = useState<string | null>(null)
@@ -747,15 +761,15 @@ export default function BrandsTab({
                 </label>
 
                 <label className="space-y-1.5 block">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">备用兜底 AI (Fallback)</span>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">备用兜底主理人 (Fallback)</span>
                   <select 
                     value={activeConfig.fallbackAgentId || ''} 
                     onChange={e => handleUpdateConfig({ fallbackAgentId: e.target.value || null })}
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
                     <option value="">未指定 (退回报错)</option>
-                    {agents.map(agent => (
-                      <option key={agent.id} value={agent.id}>{agent.nickname || agent.email}</option>
+                    {principals.map(u => (
+                      <option key={u.id} value={u.id}>{u.nickname || u.email}</option>
                     ))}
                   </select>
                 </label>
@@ -766,12 +780,57 @@ export default function BrandsTab({
           {/* Member Load Cards */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">派单池 AI 成员实时负荷监控</h3>
-              <span className="text-xs text-slate-400 font-bold">在线 AI: {poolMembers.filter(m => m.active).length} / 共 {poolMembers.length}</span>
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">派单池主理人成员实时负荷监控</h3>
+              <span className="text-xs text-slate-400 font-bold">在线主理人: {poolMembers.filter(m => m.active).length} / 共 {poolMembers.length}</span>
+            </div>
+
+            {/* Search and Add Principal Form */}
+            <div className="flex flex-col md:flex-row items-end gap-3 bg-slate-50 dark:bg-slate-950/20 p-4 rounded-xl border border-slate-150 dark:border-slate-800">
+              <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">筛选主理人昵称/邮箱</span>
+                  <input
+                    type="text"
+                    placeholder="输入主理人邮箱或昵称筛选..."
+                    value={poolSearchTerm}
+                    onChange={e => setPoolSearchTerm(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">选择 AMC 主理人</span>
+                  <select
+                    value={selectedPrincipalToAdd}
+                    onChange={e => setSelectedPrincipalToAdd(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="">-- 请选择一位待分配主理人 --</option>
+                    {filteredPrincipalsNotInPool.map(u => (
+                      <option key={u.id} value={u.id}>{u.nickname || u.email} ({u.email})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={!selectedPrincipalToAdd}
+                onClick={async () => {
+                  const targetUser = principalsNotInPool.find(u => u.id === selectedPrincipalToAdd)
+                  if (targetUser) {
+                    await onCreatePoolMember(targetUser)
+                    setSelectedPrincipalToAdd('')
+                    setPoolSearchTerm('')
+                  }
+                }}
+                className="w-full md:w-auto px-4 py-2 rounded-xl bg-indigo-650 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold text-xs transition-all shadow-sm cursor-pointer flex items-center justify-center gap-1.5 h-[36px]"
+              >
+                <Plus size={14} />
+                <span>加入分配池</span>
+              </button>
             </div>
 
             {poolMembers.length === 0 ? (
-              <p className="text-xs text-slate-400 py-6 text-center">暂无分派池内 AI 员工</p>
+              <p className="text-xs text-slate-400 py-6 text-center">暂无分派池内主理人成员</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {poolMembers.map((m) => {

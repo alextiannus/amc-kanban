@@ -36,18 +36,18 @@ export async function GET(request: Request) {
   const agentIds = members.map((m: any) => m.agentId)
   const [agents, loads] = await Promise.all([
     prisma.user.findMany({
-      where: { id: { in: agentIds }, type: 'AI_AGENT' },
+      where: { id: { in: agentIds } },
       select: { id: true, nickname: true, email: true },
     }),
-    prisma.brandAgent.groupBy({
-      by: ['agentId'],
-      where: { active: true, agentId: { in: agentIds } },
+    prisma.brandOwner.groupBy({
+      by: ['userId'],
+      where: { brand: { status: 'ACTIVE' }, userId: { in: agentIds } },
       _count: { _all: true },
     }),
   ])
 
   const agentMap = new Map(agents.map((a: any) => [a.id, a]))
-  const loadMap = new Map(loads.map((l: any) => [l.agentId, l._count._all]))
+  const loadMap = new Map(loads.map((l: any) => [l.userId, l._count._all]))
 
   let rows = members.map((m: any) => {
     const currentLoad = Number(loadMap.get(m.agentId) || 0)
@@ -85,10 +85,10 @@ export async function POST(request: Request) {
   if (!agentId) return NextResponse.json({ error: 'agentId is required' }, { status: 400 })
 
   const agent = await prisma.user.findFirst({
-    where: { id: agentId, type: 'AI_AGENT' },
+    where: { id: agentId },
     select: { id: true },
   })
-  if (!agent) return NextResponse.json({ error: 'AI agent not found' }, { status: 404 })
+  if (!agent) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
   const payload = {
     agentId,

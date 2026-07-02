@@ -173,26 +173,20 @@ export async function POST(request: Request) {
       console.error('[POST /api/brands] admin workspace init failed:', workspaceError)
     }
 
-    let assignment: { selectedAgentId: string | null; matchedBy: string | null; decisionId: string | null } | null = null
-    try {
-      const result = await resolveAssignment({
-        subjectType: 'brand_create',
-        subjectId: brand.id,
-        industry: typeof industry === 'string' ? industry : null,
-        region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
-        referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
-        createdBy: 'admin',
-      })
-      assignment = {
-        selectedAgentId: result.selectedAgentId,
-        matchedBy: result.matchedBy,
-        decisionId: result.decisionId,
-      }
-    } catch (assignmentError) {
-      console.error('[POST /api/brands] admin assignment failed:', assignmentError)
-    }
+    resolveAssignment({
+      subjectType: 'brand_create',
+      subjectId: brand.id,
+      industry: typeof industry === 'string' ? industry : null,
+      region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
+      referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
+      createdBy: 'admin',
+    }).then(result => {
+      console.log('[POST /api/brands] Background assignment succeeded:', result.selectedAgentId)
+    }).catch(assignmentError => {
+      console.error('[POST /api/brands] Background assignment failed:', assignmentError)
+    })
 
-    return NextResponse.json({ ...brand, assignment, subscription: null }, { status: 201 })
+    return NextResponse.json({ ...brand, assignment: null, subscription: null }, { status: 201 })
   }
 
   // ── Wizard path: AMC_PRINCIPAL or BD creates a brand on behalf of a merchant ──
@@ -354,18 +348,18 @@ export async function POST(request: Request) {
 
     try { await ensureBrandWorkspace(wizardResult.brand.id) } catch {/* non-fatal */}
 
-    let assignment = null
-    try {
-      const result = await resolveAssignment({
-        subjectType: 'brand_create',
-        subjectId: wizardResult.brand.id,
-        industry: typeof industry === 'string' ? industry : null,
-        region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
-        referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
-        createdBy: 'admin',
-      })
-      assignment = { selectedAgentId: result.selectedAgentId, matchedBy: result.matchedBy, decisionId: result.decisionId }
-    } catch {/* non-fatal */}
+    resolveAssignment({
+      subjectType: 'brand_create',
+      subjectId: wizardResult.brand.id,
+      industry: typeof industry === 'string' ? industry : null,
+      region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
+      referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
+      createdBy: 'admin',
+    }).then(result => {
+      console.log('[POST /api/brands] Wizard Background assignment succeeded:', result.selectedAgentId)
+    }).catch(assignmentError => {
+      console.error('[POST /api/brands] Wizard Background assignment failed:', assignmentError)
+    })
 
     // Send welcome email with amc-mm invite link
     try {
@@ -399,7 +393,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ...wizardResult.brand,
-      assignment,
+      assignment: null,
       subscription: {
         id: wizardResult.subscription.id,
         planId: wizardResult.subscription.planId,
@@ -493,27 +487,22 @@ export async function POST(request: Request) {
     console.error('[POST /api/brands] workspace init failed:', workspaceError)
   }
 
-  try {
-    const result = await resolveAssignment({
-      subjectType: 'brand_create',
-      subjectId: brand.id,
-      industry: typeof industry === 'string' ? industry : null,
-      region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
-      referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
-      createdBy: 'system',
-    })
-    assignment = {
-      selectedAgentId: result.selectedAgentId,
-      matchedBy: result.matchedBy,
-      decisionId: result.decisionId,
-    }
-  } catch (assignmentError) {
-    console.error('[POST /api/brands] assignment failed:', assignmentError)
-  }
+  resolveAssignment({
+    subjectType: 'brand_create',
+    subjectId: brand.id,
+    industry: typeof industry === 'string' ? industry : null,
+    region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
+    referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
+    createdBy: 'system',
+  }).then(result => {
+    console.log('[POST /api/brands] Background standard assignment succeeded:', result.selectedAgentId)
+  }).catch(assignmentError => {
+    console.error('[POST /api/brands] Background standard assignment failed:', assignmentError)
+  })
 
   return NextResponse.json({
     ...brand,
-    assignment,
+    assignment: null,
     subscription: boundSubscription ? {
       id: boundSubscription.id,
       planId: boundSubscription.planId,

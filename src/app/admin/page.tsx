@@ -786,6 +786,7 @@ function AdminPageInner() {
             onFetchDecisionLogs={fetchDecisionLogs}
             onPatchPoolMember={handlePatchPoolMember}
             onDeletePoolMember={handleDeletePoolMember}
+            onCreatePoolMember={handleCreatePoolMember}
           />
         )}
 

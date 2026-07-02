@@ -244,7 +244,6 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
     const liveAgents = await tx.user.findMany({
       where: {
         id: { in: activeAgentIds },
-        type: 'AI_AGENT',
       },
       select: { id: true },
     })
@@ -252,15 +251,15 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
     const activeMembers = allActiveMembers.filter((m: any) => liveAgentIdSet.has(m.agentId))
 
     if (!activeMembers.length) {
-      throw new AssignmentError('NO_ELIGIBLE_AGENT', 'No active AI agent available in pool', 409)
+      throw new AssignmentError('NO_ELIGIBLE_AGENT', 'No active principal available in pool', 409)
     }
 
-    const loadRows = await tx.brandAgent.groupBy({
-      by: ['agentId'],
-      where: { active: true, agentId: { in: activeMembers.map((m: any) => m.agentId) } },
+    const loadRows = await tx.brandOwner.groupBy({
+      by: ['userId'],
+      where: { brand: { status: 'ACTIVE' }, userId: { in: activeMembers.map((m: any) => m.agentId) } },
       _count: { _all: true },
     })
-    const loadMap = new Map<string, number>(loadRows.map((r: any) => [r.agentId, r._count._all]))
+    const loadMap = new Map<string, number>(loadRows.map((r: any) => [r.userId, r._count._all]))
 
     const membersWithLoad = activeMembers.map((m: any) => ({
       ...m,
@@ -381,23 +380,43 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
           throw new AssignmentError('INVALID_SUBJECT_ID', 'brand subject must be an active brand id', 400)
         }
 
-        await tx.brandAgent.upsert({
+        await tx.brandOwner.upsert({
           where: {
-            brandId_agentId: {
+            brandId_userId: {
               brandId: subjectId,
-              agentId: selected.agentId,
+              userId: selected.agentId,
             },
           },
           create: {
             brandId: subjectId,
-            agentId: selected.agentId,
-            role: 'worker',
-            active: true,
+            userId: selected.agentId,
+            role: 'collaborator',
           },
           update: {
-            active: true,
+            role: 'collaborator',
           },
         })
+
+        // Also add to crew members if crew exists
+        const crew = await tx.marketingCrew.findUnique({
+          where: { brandId: subjectId },
+          select: { id: true }
+        })
+        if (crew) {
+          await tx.crewMember.upsert({
+            where: {
+              crewId_userId: {
+                crewId: crew.id,
+                userId: selected.agentId,
+              },
+            },
+            create: {
+              crewId: crew.id,
+              userId: selected.agentId,
+            },
+            update: {},
+          })
+        }
       }
     }
 

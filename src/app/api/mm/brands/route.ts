@@ -63,30 +63,24 @@ export async function POST(request: NextRequest) {
       console.error('[MM-API-Brand-Create] Workspace init failed:', workspaceError)
     }
 
-    // 5. Run AI Assignment matching
-    let assignment = null
-    try {
-      const result = await resolveAssignment({
-        subjectType: 'brand_create',
-        subjectId: brand.id,
-        industry: typeof industry === 'string' ? industry : null,
-        region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
-        referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
-        createdBy: 'system',
-      })
-      assignment = {
-        selectedAgentId: result.selectedAgentId,
-        matchedBy: result.matchedBy,
-        decisionId: result.decisionId,
-      }
-    } catch (assignmentError) {
-      console.error('[MM-API-Brand-Create] Resolve assignment failed:', assignmentError)
-    }
+    // 5. Run AI Assignment matching in background (asynchronously)
+    resolveAssignment({
+      subjectType: 'brand_create',
+      subjectId: brand.id,
+      industry: typeof industry === 'string' ? industry : null,
+      region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
+      referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
+      createdBy: 'system',
+    }).then(result => {
+      console.log('[MM-API-Brand-Create] Background resolve assignment succeeded:', result.selectedAgentId)
+    }).catch(assignmentError => {
+      console.error('[MM-API-Brand-Create] Background resolve assignment failed:', assignmentError)
+    })
 
     return NextResponse.json({
       success: true,
       brand,
-      assignment,
+      assignment: null,
     }, { status: 201 })
 
   } catch (err: any) {

@@ -64,10 +64,7 @@ export async function addCrewMember(crewId: string, userId: string, tx: any = pr
     update: {}
   })
 
-  // If the added user is human, automatically pull in their AI avatars
-  if (user.type === 'HUMAN') {
-    await cascadePullAvatars(crewId, userId, tx)
-  }
+  // Disabled automatic pulling of AI avatars to support AMC Principal pool assignment instead.
 
   return member
 }

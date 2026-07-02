@@ -3,6 +3,7 @@ import { encrypt } from '@/lib/auth'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 import { findOrCreateBrandOwnerAccount } from '@/lib/brandOwnerAccount'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
+import { resolveAssignment } from '@/lib/assignmentPool'
 import crypto from 'crypto'
 
 function addMonths(date: Date, months: number) {
@@ -159,6 +160,19 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
 
   ensureBrandWorkspace(brand.id).catch((workspaceError) => {
     console.error('[createBrandForActivatedSubscription] workspace init failed:', workspaceError)
+  })
+
+  // Assign an AMC principal from the pool asynchronously
+  resolveAssignment({
+    subjectType: 'brand_create',
+    subjectId: brand.id,
+    industry: input.description || null,
+    region: input.timezone || null,
+    createdBy: 'system',
+  }).then(result => {
+    console.log('[createBrandForActivatedSubscription] Background principal assignment succeeded:', result.selectedAgentId)
+  }).catch(assignmentError => {
+    console.error('[createBrandForActivatedSubscription] Background principal assignment failed:', assignmentError)
   })
 
   return { ok: true as const, brand, alreadyCreated: false as const, agentId: agentKey.agentId }
