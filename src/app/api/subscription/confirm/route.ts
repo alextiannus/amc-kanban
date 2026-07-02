@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { activateSubscriptionByPaymentSession, createBrandForActivatedSubscription, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
+import { activateSubscriptionByPaymentSession, createBrandForActivatedSubscription } from '@/lib/subscription/service'
 import Stripe from 'stripe'
 import { sendSubscriptionSuccessEmail } from '@/lib/email'
 
@@ -83,21 +83,6 @@ export async function POST(request: Request) {
     )
   }
 
-  const keyResult = activated.alreadyActive
-    ? null
-    : pendingBrandName
-      ? null
-      : await ensureBrandAgentKeyAfterSubscription({
-        ownerId: session.user.id,
-      })
-
-  if (sub.brandId && keyResult?.agentId) {
-    await prisma.brandAgent.upsert({
-      where: { brandId_agentId: { brandId: sub.brandId, agentId: keyResult.agentId } },
-      create: { brandId: sub.brandId, agentId: keyResult.agentId, role: 'worker', active: true },
-      update: { role: 'worker', active: true },
-    })
-  }
 
   // Send Subscription Success Confirmation Email (No username/password)
   try {
@@ -128,8 +113,7 @@ export async function POST(request: Request) {
     ok: true,
     subscription: activated.subscription,
     alreadyActive: activated.alreadyActive,
-    agentKeyGenerated: Boolean(keyResult),
-    agentId: keyResult?.agentId || null,
+    agentId: null,
     brand: createdBrand?.ok ? createdBrand.brand : null,
   })
 }

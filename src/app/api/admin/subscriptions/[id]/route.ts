@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildAdminStatusUpdateData, type SubscriptionStatus } from '@/lib/subscription/workflow'
-import { ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -30,13 +29,7 @@ export async function PATCH(request: Request, { params }: Params) {
   })
 
   if (existing.status !== 'ACTIVE' && updated.status === 'ACTIVE') {
-    const ownerId = updated.createdById || null
-
-    if (ownerId) {
-      await ensureBrandAgentKeyAfterSubscription({
-        ownerId,
-      })
-    }
+    // Agent key provisioning removed — no longer needed
   }
 
   return NextResponse.json({ ok: true, subscription: updated })

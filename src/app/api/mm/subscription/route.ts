@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client'
 import Stripe from 'stripe'
 import { SUBSCRIPTION_PLANS, SUBSCRIPTION_ADDONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, calculatePricing } from '@/lib/subscription/catalog'
 import { buildOfflineInvoiceResponse, buildBillingActivatedResponse, buildBillingActivationData } from '@/lib/subscription/workflow'
-import { createBrandForActivatedSubscription, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
+import { createBrandForActivatedSubscription } from '@/lib/subscription/service'
 import { sendSubscriptionSuccessEmail } from '@/lib/email'
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
@@ -202,18 +202,7 @@ export async function POST(request: NextRequest) {
       const activatedSubscription = await prisma.brandSubscription.findUnique({
         where: { id: pendingSub.id },
       })
-      const keyResult = pendingBrandName
-        ? { agentId: createdBrand?.ok ? createdBrand.agentId || null : null }
-        : await ensureBrandAgentKeyAfterSubscription({
-            ownerId: session.user.id,
-          })
-      if (brandId && keyResult.agentId) {
-        await prisma.brandAgent.upsert({
-          where: { brandId_agentId: { brandId, agentId: keyResult.agentId } },
-          create: { brandId, agentId: keyResult.agentId, role: 'worker', active: true },
-          update: { role: 'worker', active: true },
-        })
-      }
+      const keyResult = { agentId: createdBrand?.ok ? createdBrand.agentId || null : null }
 
       // Send Subscription Success Confirmation Email (No username/password)
       try {

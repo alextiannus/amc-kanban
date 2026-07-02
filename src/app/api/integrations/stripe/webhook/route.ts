@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
-import { activateSubscriptionByPaymentSession, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
+import { activateSubscriptionByPaymentSession } from '@/lib/subscription/service'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -36,12 +36,7 @@ export async function POST(request: Request) {
     if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data.object as Stripe.Checkout.Session
       if (session.id) {
-        const activated = await activateSubscriptionByPaymentSession(session.id)
-        if (activated.ok && !activated.alreadyActive && activated.subscription.createdById) {
-          await ensureBrandAgentKeyAfterSubscription({
-            ownerId: activated.subscription.createdById,
-          })
-        }
+        await activateSubscriptionByPaymentSession(session.id)
       }
     }
 

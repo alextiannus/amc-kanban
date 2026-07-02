@@ -1,10 +1,8 @@
 import { prisma } from '@/lib/prisma'
-import { encrypt } from '@/lib/auth'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 import { findOrCreateBrandOwnerAccount } from '@/lib/brandOwnerAccount'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { resolveAssignment } from '@/lib/assignmentPool'
-import crypto from 'crypto'
 
 function addMonths(date: Date, months: number) {
   const next = new Date(date)
@@ -79,18 +77,11 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       return { ok: false as const, reason: 'brand_not_found' as const }
     }
 
-    const agentKey = await ensureBrandAgentKeyAfterSubscription({ ownerId: input.ownerId })
-    await prisma.brandAgent.upsert({
-      where: { brandId_agentId: { brandId: existingBrand.id, agentId: agentKey.agentId } },
-      create: { brandId: existingBrand.id, agentId: agentKey.agentId, role: 'worker', active: true },
-      update: { role: 'worker', active: true },
-    })
-
     ensureBrandWorkspace(existingBrand.id).catch((workspaceError) => {
       console.error('[createBrandForActivatedSubscription] existing workspace init failed:', workspaceError)
     })
 
-    return { ok: true as const, brand: existingBrand, alreadyCreated: true as const, agentId: agentKey.agentId }
+    return { ok: true as const, brand: existingBrand, alreadyCreated: true as const, agentId: null }
   }
 
   const normalizedOwnerEmail = input.ownerEmail?.trim().toLowerCase() || null
@@ -154,20 +145,8 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     console.error('[createBrandForActivatedSubscription] Auxiliary mappings setup failed (non-fatal):', syncError)
   }
 
-  let agentId: string | null = null
-  try {
-    const agentKey = await ensureBrandAgentKeyAfterSubscription({ ownerId: input.ownerId })
-    agentId = agentKey.agentId
-    await prisma.brandAgent.upsert({
-      where: { brandId_agentId: { brandId: brand.id, agentId: agentKey.agentId } },
-      create: { brandId: brand.id, agentId: agentKey.agentId, role: 'worker', active: true },
-      update: { role: 'worker', active: true },
-    })
-  } catch (agentError) {
-    console.error('[createBrandForActivatedSubscription] Agent key setup failed (non-fatal):', agentError)
-  }
-
   ensureBrandWorkspace(brand.id).catch((workspaceError) => {
+
     console.error('[createBrandForActivatedSubscription] workspace init failed:', workspaceError)
   })
 
@@ -184,91 +163,5 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     console.error('[createBrandForActivatedSubscription] Background principal assignment failed:', assignmentError)
   })
 
-  return { ok: true as const, brand, alreadyCreated: false as const, agentId }
-}
-
-type EnsureBrandAgentKeyInput = {
-  ownerId: string
-}
-
-export async function ensureBrandAgentKeyAfterSubscription(input: EnsureBrandAgentKeyInput) {
-  const { ownerId } = input
-
-  // Reuse the owner's existing AI employee across brands whenever possible.
-  // Subscription belongs to the AI employee identity, not a single brand.
-  const ownerLinkedAgent = await prisma.user.findFirst({
-    where: {
-      type: 'AI_AGENT',
-      assignedToHumans: {
-        some: { humanId: ownerId },
-      },
-    },
-    orderBy: { createdAt: 'asc' },
-    select: {
-      id: true,
-      email: true,
-      apiKey: true,
-    },
-  })
-
-  let agentId = ownerLinkedAgent?.id
-  let rawExistingApiKey = ownerLinkedAgent?.apiKey || null
-
-  if (!agentId) {
-    const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
-    const email = `sub-${ownerId.slice(0, 12)}-${suffix}@agent.amc.local`
-
-    const newAgent = await prisma.user.create({
-      data: {
-        email,
-        password: crypto.randomBytes(16).toString('hex'),
-        type: 'AI_AGENT',
-        role: 'USER',
-        nickname: 'Subscription Agent',
-        apiKey: `placeholder-${crypto.randomUUID()}`,
-      },
-      select: { id: true, apiKey: true },
-    })
-
-    agentId = newAgent.id
-    rawExistingApiKey = newAgent.apiKey
-  }
-
-  await prisma.agentPermission.upsert({
-    where: {
-      humanId_agentId: {
-        humanId: ownerId,
-        agentId,
-      },
-    },
-    create: {
-      humanId: ownerId,
-      agentId,
-    },
-    update: {},
-  })
-
-  const resolvedApiKey =
-    rawExistingApiKey && !rawExistingApiKey.startsWith('placeholder-') ? rawExistingApiKey : null
-
-  // Keep using the current key when agent already has a real key.
-  if (resolvedApiKey) {
-    return {
-      agentId,
-      apiKey: resolvedApiKey,
-    }
-  }
-
-  // Generate a new key only if the AI employee has no usable key yet.
-  const plaintextApiKey = await encrypt({ agentId, type: 'AI_AGENT' }, '36500d')
-
-  await prisma.user.update({
-    where: { id: agentId },
-    data: { apiKey: plaintextApiKey },
-  })
-
-  return {
-    agentId,
-    apiKey: plaintextApiKey,
-  }
+  return { ok: true as const, brand, alreadyCreated: false as const, agentId: null }
 }

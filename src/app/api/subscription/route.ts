@@ -19,7 +19,7 @@ import {
   type SubscriptionStatus,
 } from '@/lib/subscription/workflow'
 import { readBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
-import { createBrandForActivatedSubscription, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
+import { createBrandForActivatedSubscription } from '@/lib/subscription/service'
 import { computeEffectiveUserRoles } from '@/lib/userRoles'
 import Stripe from 'stripe'
 
@@ -258,14 +258,6 @@ export async function GET(request: Request) {
   let resolvedAgentId: string | null = null
   let resolvedAgentKey: string | null = null
 
-  if (hasEffectiveActiveSubscription) {
-    const ensured = await ensureBrandAgentKeyAfterSubscription({
-      ownerId: session.user.id,
-    })
-    resolvedAgentId = ensured.agentId
-    resolvedAgentKey = ensured.apiKey
-  }
-
   if (!brand) {
     const instructionContext = resolvedAgentId
       ? {
@@ -337,14 +329,6 @@ export async function GET(request: Request) {
 
   resolvedAgentId = brandAgent?.agent.id || resolvedAgentId
   resolvedAgentKey = hasEffectiveActiveSubscription ? brandAgent?.agent.apiKey || resolvedAgentKey : null
-
-  if (hasEffectiveActiveSubscription && !resolvedAgentKey) {
-    const ensured = await ensureBrandAgentKeyAfterSubscription({
-      ownerId: session.user.id,
-    })
-    resolvedAgentId = ensured.agentId
-    resolvedAgentKey = ensured.apiKey
-  }
 
   const parsedStores = profileMarkdown?.markdown ? extractStoresFromMarkdown(profileMarkdown.markdown) : []
   const stores = parsedStores.length
@@ -613,18 +597,7 @@ export async function POST(request: Request) {
     const activatedSubscription = await prisma.brandSubscription.findUnique({
       where: { id: pending.id },
     })
-    const keyResult = pendingBrandName
-      ? { agentId: createdBrand?.ok ? createdBrand.agentId || null : null }
-      : await ensureBrandAgentKeyAfterSubscription({
-          ownerId: session.user.id,
-        })
-    if (brandId && keyResult.agentId) {
-      await prisma.brandAgent.upsert({
-        where: { brandId_agentId: { brandId, agentId: keyResult.agentId } },
-        create: { brandId, agentId: keyResult.agentId, role: 'worker', active: true },
-        update: { role: 'worker', active: true },
-      })
-    }
+    const keyResult = { agentId: createdBrand?.ok ? createdBrand.agentId || null : null }
     return NextResponse.json({
       ...buildBillingActivatedResponse({
         subscriptionId: pending.id,
