@@ -392,6 +392,76 @@ export const DEFAULT_TEMPLATES = {
 
 如有疑问请联系客服，本邮件由系统自动发出。
 `.trim()
+  },
+  SUBSCRIPTION_SUCCESS: {
+    name: '订阅成功确认邮件',
+    description: '商户成功订阅新品牌或升级套餐时的邮件通知',
+    placeholders: 'nickname,brandName,planName',
+    subject: '【AMC】订阅成功！您的 {{brandName}} 智能营销套餐已成功激活',
+    html: `<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>订阅成功确认</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .container { max-width: 560px; margin: 40px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 32px 40px; text-align: center; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 22px; font-weight: 700; }
+    .header p { margin: 4px 0 0; color: rgba(255,255,255,0.75); font-size: 13px; }
+    .body { padding: 32px 40px; }
+    .body p { color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 16px; }
+    .details { background: #f1f5f9; border-radius: 10px; padding: 20px 24px; margin: 24px 0; }
+    .details .label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .details .value { font-size: 15px; font-weight: 600; color: #0f172a; word-break: break-all; }
+    .details .value + .label { margin-top: 16px; }
+    .cta { display: block; margin: 24px 0; padding: 14px 28px; background: #10b981; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 15px; text-align: center; }
+    .footer { padding: 20px 40px; border-top: 1px solid #e2e8f0; }
+    .footer p { font-size: 12px; color: #94a3b8; margin: 0; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎉 订阅激活成功！</h1>
+      <p>AI Marketing Crew (AMC)</p>
+    </div>
+    <div class="body">
+      <p>你好 <strong>{{nickname}}</strong>，</p>
+      <p>恭喜您！您的品牌订阅套餐已成功激活并开通。您现在可以立即登录 AMC 商家端并开始使用所有功能：</p>
+
+      <div class="details">
+        <div class="label">绑定品牌</div>
+        <div class="value">{{brandName}}</div>
+        <div class="label">已激活套餐</div>
+        <div class="value">{{planName}}</div>
+      </div>
+
+      <a href="https://amc-mm.immedi.ai/dashboard" class="cta">进入商家端控制台 →</a>
+
+      <p>我们的 AI 营销智能体与您的专属品牌主理人现在已准备就绪，将立即为您起草推广文案并开启智能代运营。</p>
+    </div>
+    <div class="footer">
+      <p>此邮件由 AI Marketing Crew 系统自动发送，请勿回复。</p>
+    </div>
+  </div>
+</body>
+</html>`,
+    text: `
+订阅激活成功 — AI Marketing Crew
+
+你好 {{nickname}}，
+
+您的品牌订阅已成功激活并开通：
+
+绑定品牌：{{brandName}}
+已激活套餐：{{planName}}
+
+请登录商家端控制台开始使用：https://amc-mm.immedi.ai/dashboard
+
+您的专属 AI 营销智能体已就绪！
+`.trim()
   }
 }
 
@@ -542,6 +612,48 @@ export async function sendBrandOnboardingWelcomeEmail(params: {
     subject: interpolateTemplate(subject, vars),
     html: interpolateTemplate(formattedHtml, vars),
     text: interpolateTemplate(formattedText, vars)
+  })
+}
+
+/**
+ * 订阅成功确认邮件（不带临时密码与用户名）
+ */
+export async function sendSubscriptionSuccessEmail(params: {
+  to: string
+  nickname: string
+  brandName: string
+  planName: string
+}): Promise<EmailResult> {
+  const { to, nickname, brandName, planName } = params
+
+  let subject = DEFAULT_TEMPLATES.SUBSCRIPTION_SUCCESS.subject
+  let html = DEFAULT_TEMPLATES.SUBSCRIPTION_SUCCESS.html
+  let text = DEFAULT_TEMPLATES.SUBSCRIPTION_SUCCESS.text
+
+  try {
+    const dbTemplate = await prisma.messageTemplate.findUnique({
+      where: { id: 'SUBSCRIPTION_SUCCESS' }
+    })
+    if (dbTemplate) {
+      subject = dbTemplate.subject
+      html = dbTemplate.html
+      text = dbTemplate.text || ''
+    }
+  } catch (err) {
+    console.error('[email] Failed to fetch SUBSCRIPTION_SUCCESS template from DB:', err)
+  }
+
+  const vars = {
+    nickname,
+    brandName,
+    planName
+  }
+
+  return sendEmail({
+    to,
+    subject: interpolateTemplate(subject, vars),
+    html: interpolateTemplate(html, vars),
+    text: interpolateTemplate(text, vars)
   })
 }
 

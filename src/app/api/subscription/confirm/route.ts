@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { activateSubscriptionByPaymentSession, createBrandForActivatedSubscription, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
 import Stripe from 'stripe'
+import { sendSubscriptionSuccessEmail } from '@/lib/email'
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeKey ? new Stripe(stripeKey) : null
@@ -96,6 +97,29 @@ export async function POST(request: Request) {
       create: { brandId: sub.brandId, agentId: keyResult.agentId, role: 'worker', active: true },
       update: { role: 'worker', active: true },
     })
+  }
+
+  // Send Subscription Success Confirmation Email (No username/password)
+  try {
+    const userObj = await prisma.human.findUnique({
+      where: { id: session.user.id },
+      select: { email: true, nickname: true }
+    })
+    if (userObj?.email) {
+      let targetBrandName = pendingBrandName
+      if (!targetBrandName && sub.brandId) {
+        const bObj = await prisma.brand.findUnique({ where: { id: sub.brandId }, select: { name: true } })
+        targetBrandName = bObj?.name || ''
+      }
+      await sendSubscriptionSuccessEmail({
+        to: userObj.email,
+        nickname: userObj.nickname || userObj.email.split('@')[0],
+        brandName: targetBrandName || '您的品牌',
+        planName: sub.planName,
+      })
+    }
+  } catch (emailErr) {
+    console.error('[confirm_subscription_email] failed to send success email:', emailErr)
   }
 
   return NextResponse.json({

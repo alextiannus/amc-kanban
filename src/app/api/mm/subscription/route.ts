@@ -6,6 +6,7 @@ import Stripe from 'stripe'
 import { SUBSCRIPTION_PLANS, SUBSCRIPTION_ADDONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, calculatePricing } from '@/lib/subscription/catalog'
 import { buildOfflineInvoiceResponse, buildBillingActivatedResponse, buildBillingActivationData } from '@/lib/subscription/workflow'
 import { createBrandForActivatedSubscription, ensureBrandAgentKeyAfterSubscription } from '@/lib/subscription/service'
+import { sendSubscriptionSuccessEmail } from '@/lib/email'
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeKey ? new Stripe(stripeKey) : null
@@ -212,6 +213,25 @@ export async function POST(request: NextRequest) {
           create: { brandId, agentId: keyResult.agentId, role: 'worker', active: true },
           update: { role: 'worker', active: true },
         })
+      }
+
+      // Send Subscription Success Confirmation Email (No username/password)
+      try {
+        const userObj = await prisma.human.findUnique({
+          where: { id: session.user.id },
+          select: { email: true, nickname: true }
+        })
+        if (userObj?.email) {
+          const targetBrandName = pendingBrandName || (brandId ? (await prisma.brand.findUnique({ where: { id: brandId }, select: { name: true } }))?.name : null) || '您的品牌'
+          await sendSubscriptionSuccessEmail({
+            to: userObj.email,
+            nickname: userObj.nickname || userObj.email.split('@')[0],
+            brandName: targetBrandName,
+            planName: pendingSub.planName,
+          })
+        }
+      } catch (emailErr) {
+        console.error('[billing_subscription_email] failed to send success email:', emailErr)
       }
       return NextResponse.json({
         success: true,
