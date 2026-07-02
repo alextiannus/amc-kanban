@@ -427,6 +427,7 @@ export async function POST(request: Request) {
   const pendingBrandAddress = String(body.pendingBrandAddress ?? '').trim()
   const pendingBrandOwnerEmail = String(body.pendingBrandOwnerEmail ?? '').trim().toLowerCase()
   const pendingBrandTimezone = String(body.timezone ?? '').trim() || 'America/New_York'
+  const pendingBrandDescription = String(body.pendingBrandDescription ?? '').trim()
 
   if (brandId && pendingBrandName) {
     return NextResponse.json({ error: 'brandId and pendingBrandName cannot be used together' }, { status: 400 })
@@ -596,6 +597,7 @@ export async function POST(request: Request) {
           subscriptionId: pending.id,
           ownerId: session.user.id,
           name: pendingBrandName,
+          description: pendingBrandDescription || null,
           location: pendingBrandLocation || null,
           ownerEmail: pendingBrandOwnerEmail || null,
           timezone: pendingBrandTimezone,
@@ -693,6 +695,7 @@ export async function POST(request: Request) {
       discountPercent: String(summary.discountPercent),
       pendingBrandName,
       pendingBrandLocation,
+      pendingBrandDescription,
       pendingBrandOwnerEmail,
       pendingBrandTimezone,
       pendingBrandAddress,

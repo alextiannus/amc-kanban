@@ -122,7 +122,7 @@ export async function POST(request: Request) {
   const sessionUser = context.user
 
   const body = await request.json()
-  const { name, location, timezone, industry, region, referenceCode, googlePlaceId, address, lat, lng, promoCode } = body
+  const { name, description, location, timezone, industry, region, referenceCode, googlePlaceId, address, lat, lng, promoCode } = body
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
@@ -270,6 +270,7 @@ export async function POST(request: Request) {
         data: {
           ownerId: owner.id,
           name: name.trim(),
+          description: description?.trim() || null,
           location: location?.trim() || null,
           timezone: timezone || 'America/New_York',
           ...(address ? { address: address.trim() } : {}),
@@ -433,6 +434,7 @@ export async function POST(request: Request) {
       data: {
         ownerId: sessionUser.id,
         name: name.trim(),
+        description: description?.trim() || null,
         location: location?.trim() || null,
         timezone: timezone || 'America/New_York',
         ...(address ? { address: address.trim() } : {}),

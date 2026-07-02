@@ -50,6 +50,9 @@ export async function POST(request: Request) {
   const pendingBrandLocation = typeof checkout.metadata?.pendingBrandLocation === 'string'
     ? checkout.metadata.pendingBrandLocation.trim()
     : ''
+  const pendingBrandDescription = typeof checkout.metadata?.pendingBrandDescription === 'string'
+    ? checkout.metadata.pendingBrandDescription.trim()
+    : ''
   const pendingBrandAddress = typeof checkout.metadata?.pendingBrandAddress === 'string'
     ? checkout.metadata.pendingBrandAddress.trim()
     : ''
@@ -65,6 +68,7 @@ export async function POST(request: Request) {
         subscriptionId,
         ownerId: session.user.id,
         name: pendingBrandName,
+        description: pendingBrandDescription || null,
         location: pendingBrandLocation || null,
         ownerEmail: pendingBrandOwnerEmail || null,
         timezone: pendingBrandTimezone || null,
