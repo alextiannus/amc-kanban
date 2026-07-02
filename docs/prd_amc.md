@@ -1206,9 +1206,17 @@ RolePermission 表：
 - **清除临时物理文件**：上传云存储成功后，系统自动清理保存在临时文件系统（ephemeral container filesystem）中的 PNG 本地文件，彻底解决 Render 容器重启或水平扩展时，本地物理文件丢失引发前端访问 404 的隐患。
 - **本地开发无感回退**：若云存储配置不可用（例如在本地离线开发阶段），系统将自动无缝回退至写入本地磁盘的旧逻辑，确保本地调测环境平滑不受影响。
 
+### 3. AI Marketing Crew 改名与合格主理人入驻支持
+- **专属团队功能改名**：在品牌管理控制台（BrandsTab）中，将“分配负责该品牌的专属 AI 团队 (AI Agents)”正式更名为 **AI Marketing Crew**。
+- **合格主理人多选加入**：多选项扩展为允许从合格人类用户（排除单一只有品牌主身份的用户，保留管理员、运营端主理人/Principal、BD 等）以及所有 AI Agents 中，混合选择添加为品牌的 Crew 成员。
+- **后端成员类型校验放宽**：在 PATCH `/api/admin/brands/[id]` 接口中，移除限制 `agentIds` 列表必须全为 `type === 'AI_AGENT'` 的强类型校验，只需确保传入的成员 ID 在用户表中合法即可。这使得人类主理人能够安全保存至品牌 Worker 列表中，并在多租户 RLS 及扁平化身份链中作为统一的 `CrewMember` 生效。
+
 ### 影响文件
 - `render.yaml`
 - `src/lib/captureSnapshots.ts`
+- `src/components/admin/BrandsTab.tsx`
+- `src/app/api/admin/brands/[id]/route.ts`
 - `docs/prd_amc.md`
+
 
 

@@ -63,6 +63,14 @@ export default function BrandsTab({
   onDeletePoolMember
 }: BrandsTabProps) {
   const [subTab, setSubTab] = useState<'brands' | 'pool'>('brands')
+
+  const filteredHumans = humans.filter((u) => {
+    if (u.role === 'ADMIN') return true
+    const roles = u.businessRoles?.map(r => r.role) || []
+    if (roles.length === 0) return true
+    const isOnlyBrandOwner = roles.every(r => r === 'BRAND_OWNER')
+    return !isOnlyBrandOwner
+  })
   const [savingConfig, setSavingConfig] = useState(false)
   const [configDraft, setConfigDraft] = useState<Partial<AssignmentPoolConfig>>({})
 
@@ -265,9 +273,20 @@ export default function BrandsTab({
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         >
                           <option value="">未设置</option>
-                          {humans.map((human) => (
-                            <option key={human.id} value={human.id}>{human.nickname ? `${human.nickname} (${human.email})` : human.email}</option>
-                          ))}
+                          <optgroup label="人类主理人 (Humans)">
+                            {filteredHumans.map((human) => (
+                              <option key={human.id} value={human.id}>
+                                {human.nickname ? `${human.nickname} (${human.email})` : human.email}
+                              </option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="AI 智能体 (AI Agents)">
+                            {agents.map((agent) => (
+                              <option key={agent.id} value={agent.id}>
+                                🤖 {agent.nickname || agent.email}
+                              </option>
+                            ))}
+                          </optgroup>
                         </select>
                       </label>
                       <label className="space-y-1.5 block">
@@ -311,43 +330,64 @@ export default function BrandsTab({
                   )}
 
                   {/* AI Agents binding */}
-                  {draft && (
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/40 p-4 space-y-3">
-                      <p className="text-xs font-black text-slate-700 dark:text-slate-350">🤖 分配负责该品牌的专属 AI 团队 (AI Agents)</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                        {agents.length === 0 ? (
-                          <p className="text-xs text-slate-400 py-2 col-span-full">暂无 AI Agents 可供绑定</p>
-                        ) : (
-                          agents.map((agent) => {
-                            const isChecked = draft.agentIds.includes(agent.id)
-                            return (
-                              <label 
-                                key={`${brand.id}-${agent.id}`} 
-                                className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs font-extrabold cursor-pointer transition-all bg-white dark:bg-slate-900 ${
-                                  isChecked 
-                                    ? 'border-indigo-500 ring-1 ring-indigo-500/20 text-indigo-750 dark:text-indigo-300' 
-                                    : 'border-slate-150 dark:border-slate-800 text-slate-650 dark:text-slate-405 hover:bg-slate-50/30'
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => {
-                                    const nextAgentIds = isChecked
-                                      ? draft.agentIds.filter(id => id !== agent.id)
-                                      : [...draft.agentIds, agent.id]
-                                    onUpdateBrandDraft(brand.id, { agentIds: nextAgentIds })
-                                  }}
-                                  className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                                />
-                                <span className="truncate">{agent.nickname || agent.email}</span>
-                              </label>
-                            )
-                          })
-                        )}
+                  {draft && (() => {
+                    const eligibleCrewMembers = [
+                      ...filteredHumans.map(u => ({
+                        id: u.id,
+                        name: u.nickname ? `${u.nickname} (${u.email})` : u.email,
+                        isAi: false
+                      })),
+                      ...agents.map(a => ({
+                        id: a.id,
+                        name: a.nickname || a.email,
+                        isAi: true
+                      }))
+                    ]
+
+                    return (
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/40 p-4 space-y-3">
+                        <p className="text-xs font-black text-slate-700 dark:text-slate-350 flex items-center gap-1.5">
+                          <span>🤖 AI Marketing Crew</span>
+                          <span className="text-[10px] font-normal text-slate-400 dark:text-slate-500">(包含人类主理人与 AI 智能体)</span>
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                          {eligibleCrewMembers.length === 0 ? (
+                            <p className="text-xs text-slate-400 py-2 col-span-full">暂无合格的 Crew 成员可供绑定</p>
+                          ) : (
+                            eligibleCrewMembers.map((member) => {
+                              const isChecked = draft.agentIds.includes(member.id)
+                              return (
+                                <label 
+                                  key={`${brand.id}-${member.id}`} 
+                                  className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs font-extrabold cursor-pointer transition-all bg-white dark:bg-slate-900 ${
+                                    isChecked 
+                                      ? 'border-indigo-500 ring-1 ring-indigo-500/20 text-indigo-750 dark:text-indigo-300' 
+                                      : 'border-slate-150 dark:border-slate-800 text-slate-650 dark:text-slate-405 hover:bg-slate-50/30'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      const nextAgentIds = isChecked
+                                        ? draft.agentIds.filter(id => id !== member.id)
+                                        : [...draft.agentIds, member.id]
+                                      onUpdateBrandDraft(brand.id, { agentIds: nextAgentIds })
+                                    }}
+                                    className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                                  />
+                                  <span className="truncate flex items-center gap-1">
+                                    <span>{member.isAi ? '🤖' : '👤'}</span>
+                                    <span className="truncate">{member.name}</span>
+                                  </span>
+                                </label>
+                              )
+                            })
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )
+                  })()}
                 </div>
               )
             })}

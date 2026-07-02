@@ -71,8 +71,8 @@ export async function PATCH(request: Request, { params }: Params) {
   if (rawAgentIds) {
     nextAgentIds = Array.from(new Set(rawAgentIds.filter((value): value is string => typeof value === 'string' && value.trim() !== '')))
     if (nextAgentIds.length > 0) {
-      const agentCount = await prisma.user.count({ where: { id: { in: nextAgentIds }, type: 'AI_AGENT' } })
-      if (agentCount !== nextAgentIds.length) {
+      const userCount = await prisma.user.count({ where: { id: { in: nextAgentIds } } })
+      if (userCount !== nextAgentIds.length) {
         return NextResponse.json({ error: 'One or more agentIds are invalid' }, { status: 400 })
       }
     }
