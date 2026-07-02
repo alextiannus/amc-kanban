@@ -209,6 +209,7 @@ export default function UsersTab({
           onResetPassword={onResetPassword}
           onDeleteUser={onDeleteUser}
           onEditUser={setEditingHumanUser}
+          onFetchUsers={onFetchUsers}
         />
       )}
 
