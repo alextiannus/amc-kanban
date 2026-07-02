@@ -30,6 +30,13 @@ export async function canHumanAccessBrand(brandId: string, userId: string): Prom
   })
   if (isAmcOperator(user)) return true
 
+  // 2. Direct Brand Owner check
+  const brand = await prisma.brand.findUnique({
+    where: { id: brandId },
+    select: { ownerId: true }
+  })
+  if (brand?.ownerId === userId) return true
+
   // 2. Direct Crew membership check
   const isDirect = await isUserInBrandCrew(brandId, userId)
   if (isDirect) return true
