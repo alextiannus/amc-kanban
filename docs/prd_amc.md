@@ -1126,15 +1126,14 @@ RolePermission 表：
 - **独立路由与入口设计**：
   - 将地图视图设计为单独的页面路由 `/profile/principal/map`。
   - 在 `/profile/principal` 主理人看板首页的“品牌列表”区域右上角增设“🗺️ 查看地图分布”按钮，作为进入该页面的入口。
-- **市场选择与默认中心（Singapore）**：
-  - 地图页面顶部配置“市场切换”下拉菜单，**当前版本默认选择并锁定在新加坡（Singapore）**，并将地图中心初始化在新加坡坐标。
-  - 长期规划支持主理人切换至其他市场（如 Kuala Lumpur 吉隆坡、Jakarta 雅加达等），以按区域过滤和审视门店分布。
-- **数据库 Schema 设计扩展**：
-  - 在 `Brand` 模型中规划新增 `market` 字段（默认值为 `"Singapore"`，以方便市场归类）。
-  - 新增 `latitude`（纬度）和 `longitude`（经度）字段，并预留 Geocoding 逻辑将地址（address）异步转换并填入坐标。
+- **复用 Brand.location 字段与默认中心（Singapore）**：
+  - **无需新增数据库的 market 字段**，直接复用 `Brand` 品牌表中已有的 `location` 字段作为国家/市场过滤属性。
+  - 地图页面顶部配置“市场切换”下拉菜单，**当前版本默认选择并锁定在新加坡（Singapore）**，对应过滤 `location === "Singapore"` 且地图中心初始化在新加坡坐标。
+  - 长期规划支持主理人切换至其他市场（如吉隆坡 Kuala Lumpur、雅加达 Jakarta 等），通过匹配 `location` 字段按区域过滤。
+- **数据库 Schema 坐标设计扩展**：
+  - 在 `Brand` 模型中规划新增 `latitude`（纬度）和 `longitude`（经度）字段，并预留 Geocoding 逻辑将地址（address）异步转换并填入坐标。
 - **信息卡片与多维 Research 数据展现（成果载体）**：
-  - 点击地图打点标记（Marker）将展示气泡窗口，不仅包含基本的门店名、Logo、地址、AI员工和未决 ActionItems，还预留了展示 Google Place Details 评分、营业时间、消费者评论的卡片区块。
-  - 架构设计上支持后续不断向气泡窗口或地图侧边栏中灌入该门店在当地的“调研成果（Research Results）”，协助主理人利用空间维度快速洞察和理解商户的本地化生意状况。
+  - **简化卡片展现内容**：气泡窗口**不用展示 AI 员工，也不用展示待办事项**。仅展示**商家数据**（名称、Logo、地址、官网链接）以及 **Research 调研成果**（如 Google Place Details 评分、营业时间、消费者热门评价，并为未来的竞品分析、区域人口统计等调研成果预留卡片区块）。
 
 ### 影响文件
 - `docs/prd_amc.md`
