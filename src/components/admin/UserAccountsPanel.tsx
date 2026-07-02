@@ -82,6 +82,16 @@ export default function UserAccountsPanel({
     }
   }, [selectedUserId, users])
 
+  const handleSelectUser = (user: UserRecord | null) => {
+    if (!user) {
+      setSelectedUserId(null)
+    } else {
+      setSelectedUserId(user.id)
+    }
+    setRegeneratedKey(null)
+    setShowKeyPlaintext(false)
+  }
+
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newEmail.trim()) return
