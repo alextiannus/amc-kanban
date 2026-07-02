@@ -1,0 +1,1056 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String
+  type         String   @default("HUMAN") // HUMAN or AI_AGENT
+  role         String   @default("USER")  // ADMIN or USER (针对人类)
+  country      String?
+  phone        String?
+  
+  // AI Agent 独占属性
+  nickname     String?
+  insights     String?
+  driveFolder  String?
+  chatLink     String?
+  introduction String?
+  workflow     String?
+  themeColor   String?
+  avatar       String?  // Deprecated: kept for backwards compatibility
+  avatarData   Bytes?    // Binary avatar image data stored in DB
+  avatarMimeType String? // MIME type: image/jpeg, image/png, etc
+  apiKey       String?  @unique // Each AI Agent has its own API key
+  
+  // AI Agent self-relation for ownership (AI Avatar)
+  ownerId      String?
+  owner        User?    @relation("UserAvatars", fields: [ownerId], references: [id])
+  avatars      User[]   @relation("UserAvatars")
+
+  // API Keys for human users
+  apiKeys      UserApiKey[]
+
+  // Marketing Crew memberships
+  crewMemberships CrewMember[]
+
+  // Referral / Invite Code System
+  inviteCode   String?  @unique
+  referredById String?
+  referredBy   User?    @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals    User[]   @relation("UserReferrals")
+  salesLeads   SalesLead[]
+  
+  // 关系映射
+  tasksAsAssignee  WorkUnit[]        @relation("TaskAssignee")
+  ownedBrands      BrandOwner[]      @relation("BrandOwners")
+  organizationMembers OrganizationMember[] @relation("OrganizationOwner")
+  organizationsJoined OrganizationMember[] @relation("OrganizationMember")
+
+  // 权限映射表（人类用户能看到哪些 AI Agent 的工作）
+  permittedAgents  AgentPermission[] @relation("HumanUser")
+  assignedToHumans AgentPermission[] @relation("AiAgent")
+  businessRoles  UserBusinessRole[]
+  brandMemberships BrandAgent[]      @relation("BrandAgents")
+  createdSubscriptions BrandSubscription[]
+  comments         Comment[]
+  sentInvitations  Invitation[] @relation("InvitationInviter")
+  receivedInvitations Invitation[] @relation("InvitationInvitee")
+  schoolItems      SchoolItem[] @relation("AgentSchoolItems")
+  
+  // Relations to Marketing Promo Codes
+  createdCampaigns CampaignPromoCode[] @relation("CreatedPromoCodes")
+  ownedCampaigns   CampaignPromoCode[] @relation("OwnedPromoCodes")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserBusinessRole {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, role])
+  @@index([userId])
+  @@index([role])
+}
+
+// 组织成员关系：owner 管理组织，member 可查看 owner 的全部品牌
+model OrganizationMember {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    User     @relation("OrganizationMember", fields: [memberId], references: [id], onDelete: Cascade)
+  role      String   @default("member") // member | manager
+  createdAt DateTime @default(now())
+
+  @@unique([ownerId, memberId])
+  @@index([ownerId])
+  @@index([memberId])
+}
+
+model WorkUnit {
+  id             String    @id @default(cuid())
+  title          String
+  description    String?
+  status         String    @default("todo")
+  weight         Int       @default(3)
+  materials      String?
+  requiredInput  String?
+  priority       String    @default("medium")
+  estimatedHours Float?
+  deadline       DateTime?
+  tags           String[]  @default([])
+  assigneeId     String?
+  assignee       User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  brandId        String?
+  brand          Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  
+  // Relations for task dependencies (self-relation join table)
+  dependencies   TaskDependency[] @relation("BlockedTask") // Blocker tasks that block this task
+  blockingTasks  TaskDependency[] @relation("BlockerTask") // Tasks that are blocked by this task
+  
+  // Comments thread
+  comments       Comment[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([brandId])
+  @@index([assigneeId, brandId])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  timestamp    DateTime @default(now())
+  actorId      String?
+  actorType    String   @default("SYSTEM")
+  actorName    String?
+  action       String
+  resourceId   String
+  resourceType String   @default("WorkUnit")
+  oldValue     Json?
+  newValue     Json?
+  reason       String?
+  metadata     Json?
+
+  @@index([resourceId, resourceType])
+  @@index([actorId])
+  @@index([timestamp])
+}
+
+model AssignmentPoolConfig {
+  id               String   @id @default("default")
+  enabled          Boolean  @default(true)
+  overflowPolicy   String   @default("fallback_only")
+  rebalancePolicy  String   @default("manual_only")
+  matchingOrder    String   @default("industry_first")
+  fallbackAgentId  String?
+  updatedById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model AssignmentPoolMember {
+  id         String   @id @default(cuid())
+  agentId    String   @unique
+  active     Boolean  @default(true)
+  capacity   Int      @default(30)
+  priority   Int      @default(100)
+  industries String[] @default([])
+  regions    String[] @default([])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([active, priority])
+}
+
+model AssignmentDecisionLog {
+  id                String   @id @default(cuid())
+  subjectType       String
+  subjectId         String
+  requestedIndustry String?
+  requestedRegion   String?
+  referenceCode     String?
+  matchedBy         String?
+  selectedAgentId   String?
+  reason            String?
+  createdBy         String   @default("system")
+  overflowHandled   Boolean  @default(false)
+  fallbackUsed      Boolean  @default(false)
+  idempotencyKey    String?
+  createdAt         DateTime @default(now())
+
+  @@index([subjectType, subjectId])
+  @@index([selectedAgentId])
+  @@index([createdAt])
+}
+
+model IdempotencyRecord {
+  id          String   @id @default(cuid())
+  scope       String
+  key         String
+  requestHash String
+  statusCode  Int?
+  response    Json?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@unique([scope, key])
+  @@index([expiresAt])
+}
+
+model Invitation {
+  id             String   @id @default(cuid())
+  inviterId      String?
+  inviter        User?    @relation("InvitationInviter", fields: [inviterId], references: [id])
+  inviteeEmail   String
+  inviteeUserId  String?
+  inviteeUser    User?    @relation("InvitationInvitee", fields: [inviteeUserId], references: [id])
+  status         String   @default("PENDING") // PENDING | CLAIMED | EXPIRED | REVOKED
+  claimedAt      DateTime?
+  revokedAt      DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([inviteeEmail, status])
+  @@index([inviteeUserId, status])
+  @@index([expiresAt])
+}
+
+// 多对多权限关联表
+model AgentPermission {
+  id           String @id @default(cuid())
+  humanId      String
+  agentId      String
+  human        User   @relation("HumanUser", fields: [humanId], references: [id])
+  agent        User   @relation("AiAgent", fields: [agentId], references: [id])
+  @@unique([humanId, agentId])
+}
+
+// 品牌 ← → AI Agent 绑定（每个品牌可有多个 Agent 协作）
+model BrandAgent {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  agentId   String
+  agent     User     @relation("BrandAgents", fields: [agentId], references: [id])
+  role      String   @default("worker") // worker | lead
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  @@unique([brandId, agentId])
+}
+
+// 品牌 ← → 人类 Owner（每个品牌可有多个 Owner）
+model BrandOwner {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("BrandOwners", fields: [userId], references: [id])
+  role      String   @default("owner") // owner | collaborator
+  createdAt DateTime @default(now())
+  @@unique([brandId, userId])
+  @@index([brandId])
+  @@index([userId])
+  @@index([brandId, role])
+}
+
+model UserApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  name        String?   // Label for the key (e.g. "Zhangyi Key")
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+
+  @@index([userId])
+}
+
+model MarketingCrew {
+  id        String   @id @default(cuid())
+  brandId   String   @unique
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  members   CrewMember[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CrewMember {
+  id          String        @id @default(cuid())
+  crewId      String
+  crew        MarketingCrew @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt    DateTime      @default(now())
+
+  @@unique([crewId, userId])
+  @@index([crewId])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AMC Brand Dashboard Models
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Brand {
+  id             String   @id @default(cuid())
+  crew           MarketingCrew?
+  // Legacy single-owner field — kept for zero-downtime migration,
+  // new code uses the BrandOwner join table for multi-owner support.
+  ownerId        String?
+  name           String
+  location       String?
+  timezone       String   @default("America/New_York")
+  autoPilot      Boolean  @default(true)
+  status         String   @default("ACTIVE") // ACTIVE | PAUSED | ARCHIVED
+
+  // Brand profile (Agent can populate these)
+  description    String?  // Brand tagline / about text
+  logoUrl        String?  // Brand logo image URL
+  watermarkUrl      String?  // Custom watermark image URL (fallback to logoUrl if null)
+  watermarkPosition String   @default("bottom-right") // position: top-left | top-right | bottom-left | bottom-right | center
+  watermarkOpacity  Float    @default(0.8) // Opacity level from 0.0 to 1.0
+  watermarkPadding  Int      @default(20)  // Padding in pixels from the edge
+  watermarkText     String?  // Optional watermark text (fallback to brand name if both logo and custom text null)
+  website        String?  // Brand website URL
+  phone          String?  // Contact phone
+  address        String?  // Full address
+
+  // Integration credentials (stored encrypted in production)
+  postfastApiKey         String?
+  googlePlaceId          String?
+  googleApiKey           String?
+  googleRefreshToken     String?
+  googleAccountId        String?
+  googleLocationId       String?
+  googleLocationName     String?
+  googleClientId         String?
+  googleClientSecret     String?
+  googleRedirectUri      String?
+  googleBusinessUrl      String?
+  googleReviewUrl        String?
+  googlePreferOAuth      Boolean  @default(true)
+  larkAppId              String?
+  larkAppSecret          String?
+  larkDriveToken         String?
+  larkParentFolderToken  String?
+  larkDriveFolderId      String?
+  larkBotWebhook         String?
+  larkOwnerId            String?
+
+  owners      BrandOwner[]
+  tasks       WorkUnit[]
+  accounts    SocialAccount[]
+  contents    ContentDraft[]
+  assets      MediaAsset[]
+  topicFeeds  TopicFeed[]
+  actionItems ActionItem[]
+  conversions ConversionEvent[]
+  brandAgents BrandAgent[]
+  subscriptions BrandSubscription[]
+  gameConfig  GameConfig?
+  gameSessions GameSession[]
+  folders      BrandFolder[]
+  knowledge   BrandKnowledge?
+  corrections UserCorrectionFeedback[]
+  companionMessages CompanionMessage[]
+  companionSessions CompanionSession[]
+  copywriterLogs    CopywriterLog[]
+  mcpServerConfigs  McpServerConfig[]
+  companionSkills   CompanionSkill[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model BrandSubscription {
+  id                 String   @id @default(cuid())
+  planId             String
+  planName           String
+  durationMonths     Int
+  billedMonths       Int
+  monthlyBaseUsd     Int
+  recurringAddonsUsd Int      @default(0)
+  oneTimeAddonsUsd   Int      @default(0)
+  totalDueUsd        Int
+  currency           String   @default("USD")
+  status             String   @default("PENDING") // PENDING | ACTIVE | CANCELLED | FAILED
+  paymentProvider    String?  // STRIPE
+  paymentSessionId   String?  @unique
+  paymentUrl         String?
+  selectedAddons     Json?
+  termsVersion       String?
+  termsAcceptedAt    DateTime?
+  contractStartDate  DateTime?
+  contractEndDate    DateTime?
+  paidAt             DateTime?
+  brandId            String?
+  brand              Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  createdById        String?
+  createdBy          User?    @relation(fields: [createdById], references: [id])
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdById])
+  @@index([brandId])
+  @@index([createdById, status, brandId])
+}
+
+model SocialAccount {
+  id             String    @id @default(cuid())
+  brandId        String
+  brand          Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  platformId     String
+  handle         String
+  displayName    String?
+  accessToken    String?
+  refreshToken   String?
+  expiresAt      DateTime?
+  autoPilot      Boolean   @default(true)
+
+  // Login credentials (loginPassword: admin-visible only in API responses)
+  profileUrl     String?   // public profile URL e.g. https://instagram.com/handle
+  loginUsername  String?   // account login email or username
+  loginPassword  String?   // account password — returned masked to non-admin callers
+
+  followerCount  Int?
+  followerDelta  Int?      @default(0)
+  ratingScore    Float?
+  snapshotAt     DateTime?
+
+  drafts         ContentDraft[]
+  actionItems    ActionItem[]
+  snapshots      SocialAccountSnapshot[]
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([brandId, platformId, handle])
+  @@index([brandId])
+}
+
+model ContentDraft {
+  id             String         @id @default(cuid())
+  brandId        String
+  brand          Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  accountId      String?
+  account        SocialAccount? @relation(fields: [accountId], references: [id])
+  caption        String
+  captionLang    String         @default("en")
+  mediaUrls      String[]       @default([])
+  hashtags       String[]       @default([])
+  scheduledAt    DateTime?
+  status         String         @default("draft")
+  agentId        String?
+  agentNote      String?
+  rejectionNote  String?
+  platformPostId String?
+  postUrl        String?
+  publishedAt    DateTime?
+  creativeHooks  String?
+  topicKeywords  String[]       @default([]) // 主题关键词，用于30天重复检测
+
+  actionItem     ActionItem?
+  assetRefs      ContentAssetRef[]
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([brandId, status])
+}
+
+model ActionItem {
+  id           String         @id @default(cuid())
+  brandId      String
+  brand        Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  accountId    String?
+  account      SocialAccount? @relation(fields: [accountId], references: [id])
+  type         String
+  priority     String         @default("normal")
+  title        String
+  description  String
+  payload      Json?
+  status       String         @default("pending")
+  resolvedAt   DateTime?
+  resolvedBy   String?
+  resolvedNote String?
+  agentId      String?
+  expiresAt    DateTime?
+  draftId      String?        @unique
+  draft        ContentDraft?  @relation(fields: [draftId], references: [id])
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([brandId, status, priority])
+}
+
+model MediaAsset {
+  id           String    @id @default(cuid())
+  brandId      String
+  brand        Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  url          String
+  filename     String?
+  mimeType     String
+  sizeBytes    Int?
+  width        Int?
+  height       Int?
+  aiTags       String[]  @default([])
+  aiCategory   String?
+  aiCaption    String?
+  aiReady      Boolean   @default(false)
+  usedCount    Int       @default(0)
+  lastUsedAt   DateTime?
+  uploadedBy   String?
+  sourceType   String    @default("upload")
+
+  contentRefs  ContentAssetRef[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([brandId, aiReady])
+  @@index([brandId, aiCategory])
+}
+
+model TopicFeed {
+  id            String   @id @default(cuid())
+  brandId       String
+  brand         Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  title         String
+  markdown      String
+  summary       String?
+  tags          String[] @default([])
+  sourceUrl     String?
+  status        String   @default("active")
+  createdById   String?
+  createdByType String   @default("SYSTEM")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([brandId, updatedAt])
+  @@index([brandId, status])
+}
+
+model ContentAssetRef {
+  id        String       @id @default(cuid())
+  draftId   String
+  draft     ContentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  assetId   String
+  asset     MediaAsset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  order     Int          @default(0)
+
+  @@unique([draftId, assetId])
+}
+
+model ConversionEvent {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  type        String
+  source      String
+  referPostId String?
+  couponCode  String?
+  metadata    Json?
+  occurredAt  DateTime @default(now())
+
+  @@index([brandId, occurredAt])
+  @@index([brandId, type, source])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Game Wheel Marketing Models
+// ─────────────────────────────────────────────────────────────────────────────
+
+model GameConfig {
+  id                 String      @id @default(cuid())
+  brandId            String      @unique
+  brand              Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  
+  title              String      @default("Lucky Spin Wheel")
+  description        String?     
+  themeColor         String      @default("#3b82f6") 
+  
+  taskPhotoEnabled   Boolean     @default(true)
+  taskReviewEnabled  Boolean     @default(true)
+  taskGoogleMapsEnabled  Boolean     @default(true)
+  taskXiaohongshuEnabled Boolean     @default(true)
+  taskInstagramEnabled   Boolean     @default(true)
+  clerkPin           String      @default("123456")
+  maxSpinsPerUserDay Int         @default(3)
+  templateType       String      @default("WHEEL")
+  
+  posterTitle        String      @default("Scan & Win!")
+  posterDesc         String      @default("Leave a review to spin and win rewards instantly!")
+  posterTheme        String      @default("black")
+  
+  prizes             GamePrize[]
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+}
+
+model GamePrize {
+  id                 String      @id @default(cuid())
+  gameConfigId       String
+  gameConfig         GameConfig  @relation(fields: [gameConfigId], references: [id], onDelete: Cascade)
+  
+  name               String      
+  type               String      // COUPON | PHYSICAL | POINTS | THANKS
+  probability        Float       
+  totalInventory     Int?        // Null represents infinite inventory
+  claimedCount       Int         @default(0)
+  imageUrl           String?
+  
+  spinLogs           GameSpinLog[]
+  
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+}
+
+model GameSession {
+  id                 String                   @id @default(cuid())
+  brandId            String
+  brand              Brand                    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  
+  sessionId          String                   
+  pointsBalance      Int                      @default(0)
+  
+  tasks              CustomerTaskSubmission[]
+  spinLogs           GameSpinLog[]
+
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@unique([brandId, sessionId])
+  @@index([brandId, sessionId])
+}
+
+model CustomerTaskSubmission {
+  id                 String           @id @default(cuid())
+  sessionId          String
+  session            GameSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  brandId            String
+  
+  taskType           String           
+  status             String           @default("PENDING") 
+  pointsAwarded      Int              @default(0)
+  
+  images             String[]         
+  imageMd5s          String[]         
+  copyrightAgreed    Boolean          @default(true)
+  
+  reviewPlatform     String?          
+  reviewTimeRaw      String?          
+  aiReason           String?
+  
+  isManualOverride   Boolean          @default(false) 
+  reviewedAt         DateTime?
+  
+  createdAt          DateTime         @default(now())
+}
+
+model GameSpinLog {
+  id                 String           @id @default(cuid())
+  sessionId          String
+  session            GameSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  prizeId            String
+  prize              GamePrize        @relation(fields: [prizeId], references: [id])
+  
+  pointsDeducted     Int              @default(5)
+  redemptionCode     String           @unique 
+  status             String           @default("UNCLAIMED") // UNCLAIMED | CLAIMED | EXPIRED
+  
+  claimedAt          DateTime?
+  expiresAt          DateTime?
+  
+  createdAt          DateTime         @default(now())
+}
+
+model TaskDependency {
+  id            String   @id @default(cuid())
+  blockedTaskId String
+  blockerTaskId String
+  blockedTask   WorkUnit @relation("BlockedTask", fields: [blockedTaskId], references: [id], onDelete: Cascade)
+  blockerTask   WorkUnit @relation("BlockerTask", fields: [blockerTaskId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  @@unique([blockedTaskId, blockerTaskId])
+  @@index([blockedTaskId])
+  @@index([blockerTaskId])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  taskId     String
+  task       WorkUnit @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId   String
+  author     User     @relation(fields: [authorId], references: [id])
+  content    String   // Markdown string
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([taskId])
+  @@index([authorId])
+}
+
+model FaqItem {
+  id        String   @id @default(cuid())
+  category  String   // accounts | posts | influencers | billing | reports
+  q         String   // Question
+  a         String   // Answer
+  tag       String   // Tag label
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SchoolItem {
+  id        String   @id @default(cuid())
+  type      String   // COURSE | CASE | CALENDAR | ARTICLE
+  title     String?  // Title (for COURSE/CASE/ARTICLE)
+  desc      String?  // Description (for COURSE/CASE/ARTICLE)
+  duration  String?  // Duration e.g. "12m" (for COURSE)
+  level     String?  // entry | advanced (for COURSE)
+  date      String?  // Date/period e.g. "1月-2月" (for CALENDAR)
+  event     String?  // Event name (for CALENDAR)
+  tip       String?  // Tip/suggestion (for CALENDAR)
+  markdown  String?  // Markdown content (for ARTICLE)
+  authorId  String?  // Author Agent ID (User.id)
+  author    User?    @relation("AgentSchoolItems", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BrandFolder {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, name])
+  @@index([brandId])
+}
+
+model BrandAgentCheckpoint {
+  id                 String   @id @default(cuid())
+  threadId           String
+  checkpointId       String
+  parentCheckpointId String?
+  checkpoint         Json     // Serialized checkpoint state data
+  metadata           Json     // Checkpoint metadata
+  createdAt          DateTime @default(now())
+
+  @@unique([threadId, checkpointId])
+  @@index([threadId])
+}
+
+model SystemConfig {
+  id                   String   @id @default("default")
+  geminiApiKey         String?
+  azureSpeechKey       String?  // Microsoft Azure Speech TTS key
+  azureSpeechRegion    String?  // e.g. "eastasia", "southeastasia"
+  publishingStandards  Json?    // 系统统一发布频率标准，见 getPublishingStandards()
+  // SMTP email configuration
+  smtpHost             String?  // e.g. smtp.gmail.com
+  smtpPort             Int?     // e.g. 465 (SSL) or 587 (STARTTLS)
+  smtpUser             String?  // SMTP login username
+  smtpPassword         String?  // SMTP login password (stored encrypted in DB)
+  smtpFrom             String?  // From address, e.g. noreply@yourapp.com
+  smtpFromName         String?  // From display name, e.g. "AMC Staff"
+  smtpSecure           Boolean? // true = SSL/TLS (port 465), false = STARTTLS (port 587)
+
+  // Direct Social integrations
+  metaAppId            String?
+  metaAppSecret        String?
+  metaRedirectUri      String?
+  googleClientId       String?
+  googleClientSecret   String?
+  googleRedirectUri    String?
+  tiktokClientKey      String?
+  tiktokClientSecret   String?
+  tiktokRedirectUri    String?
+  useDirectPublishing  Boolean? @default(false)
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// Scheduler 每次巡检的报告记录
+model SchedulerReport {
+  id          String   @id @default(cuid())
+  triggeredBy String   // 'cron' | userId (手动触发者)
+  runAt       DateTime @default(now())
+  summary     Json     // { totalBrands, alertsGenerated, duration }
+  details     Json     // 完整巡检结果数组
+  status      String   @default("completed") // completed | failed
+
+  @@index([runAt])
+}
+
+model SocialAccountSnapshot {
+  id             String        @id @default(cuid())
+  accountId      String
+  account        SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  imageUrl       String
+  isUserUploaded Boolean       @default(false)
+  isReal         Boolean       @default(false)
+  capturedAt     DateTime      @default(now())
+  createdAt      DateTime      @default(now())
+
+  @@index([accountId])
+}
+
+model LLMConfig {
+  id           String   @id @default(cuid())
+  provider     String   // "openai" | "anthropic" | "google" | "deepseek" | "custom_shim"
+  displayName  String   // Page display name (e.g., "GPT-4o")
+  modelName    String   // Real model ID (e.g., "gpt-4o-2024-05-13")
+  apiKey       String   // Encrypted API key
+  baseUrl      String?  // Custom proxy endpoint URL
+  isEnabled    Boolean  @default(true)
+  isDefault    Boolean  @default(false)
+  priority     Int      @default(0) // Higher number = higher priority in fallback chain (tried first)
+  taskTags     String[] // e.g., ["copywriting", "reasoning", "translation"]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isEnabled])
+  @@index([isDefault])
+  @@index([priority])
+}
+
+model BrandKnowledge {
+  id        String   @id @default(cuid())
+  brandId   String   @unique
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  
+  menuItems Json?    // JSON array of menu items: [{name, price, description, images: []}]
+  slangDict Json?    // JSON dictionary of localized slang mappings
+  brandTone String?  // String description of customized tone/perspective
+  negPrompts String[] // List of forbidden words or guidelines
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([brandId])
+}
+
+model UserCorrectionFeedback {
+  id            String   @id @default(cuid())
+  brandId       String
+  brand         Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  originalText  String   // Text generated by AI
+  correctedText String   // Text edited by user and published
+  diffRatio     Float    // Calculated diff percentage
+  isApproved    Boolean  @default(false) // Approved by Coordinator to be used as Few-Shot
+  vectorStatus  String   @default("PENDING") // PENDING | SYNCED | FAILED (stored in Pinecone/Vector DB)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([brandId])
+  @@index([isApproved])
+}
+
+
+
+model CompanionSession {
+  id           String   @id @default(cuid())
+  brandId      String
+  userId       String
+  startedAt    DateTime @default(now())
+  lastActiveAt DateTime @updatedAt
+  messageCount Int      @default(0)
+
+  brand    Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  messages CompanionMessage[]
+
+  @@index([brandId, userId])
+  @@index([startedAt])
+}
+
+model CompanionMessage {
+  id        String   @id @default(cuid())
+  brandId   String
+  userId    String
+  role      String   // 'user' | 'assistant'
+  content   String
+  action    String?  // action AI performed, e.g. 'APPROVE_DRAFT', 'QUERY_CALENDAR'
+  draftId   String?  // related draft ID for approval flows
+  createdAt DateTime @default(now())
+
+  // Metadata fields for analytics (all optional for backwards compatibility)
+  sessionId      String?  // → CompanionSession.id
+  inputType      String?  // 'text' | 'voice'  (role='user' only)
+  modelId        String?  // e.g. 'glm-4-flash' (role='assistant' only)
+  latencyMs      Int?     // response latency in ms (role='assistant' only)
+  tokenEstimate  Int?     // estimated token count (role='assistant' only)
+  intentDetected String?  // detected intent: 'GENERATE_AND_PUBLISH' | 'QUERY_CALENDAR' | 'NONE'
+
+  // Annotation fields for AI training (Admin only)
+  rating           Int?     // 1=bad 2=ok 3=good
+  adminNote        String?  // admin free-text annotation
+  correctedContent String?  // what the correct response should have been
+  isAnnotated      Boolean  @default(false)
+  trainingTag      String?  // 'include' | 'exclude' | 'needs_rewrite'
+
+  brand   Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  session CompanionSession? @relation(fields: [sessionId], references: [id])
+
+  @@index([brandId, userId])
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([isAnnotated])
+  @@index([trainingTag])
+}
+
+model CopywriterLog {
+  id             String   @id @default(cuid())
+  brandId        String
+  userId         String   // AI Agent or Human who triggered generation
+  promptVersion  String?  // optional prompt version tag, e.g. 'v2.1_food_zh'
+  systemPrompt   String   // full system prompt (primary training artifact)
+  userInput      String   // topic / creative brief from user
+  rawOutput      String   // full LLM output (all platforms)
+  modelId        String?  // model used, e.g. 'glm-4-flash'
+  latencyMs      Int?     // response latency in ms
+  tokenEstimate  Int?     // estimated token count
+  platform       String?  // target platform: 'instagram' | 'xiaohongshu' | 'tiktok' | 'all'
+  draftId        String?  // related ContentDraft.id (if applicable)
+  createdAt      DateTime @default(now())
+
+  // Annotation fields for AI training (Admin only)
+  rating           Int?     // 1=bad 2=ok 3=good
+  adminNote        String?  // admin free-text annotation
+  correctedContent String?  // what the correct output should have been
+  isAnnotated      Boolean  @default(false)
+  trainingTag      String?  // 'include' | 'exclude' | 'needs_rewrite'
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId])
+  @@index([createdAt])
+  @@index([isAnnotated])
+  @@index([trainingTag])
+}
+
+model MessageTemplate {
+  id           String   @id // e.g. "WELCOME_EMAIL", "PASSWORD_RESET", "BRAND_ONBOARDING"
+  name         String
+  description  String?
+  subject      String
+  html         String   @db.Text
+  text         String?  @db.Text
+  placeholders String   // Comma-separated list of variables, e.g. "nickname,temporaryPassword,invitationLink"
+  updatedAt    DateTime @updatedAt
+  updatedBy    String?
+}
+
+// ── Independent Marketing/Campaign Promo Codes ──────────────────────────────
+model CampaignPromoCode {
+  id            String    @id @default(cuid())
+  code          String    @unique           // e.g. "SUMMER10", "12EAT_PROMO"
+  name          String                      // Campaign Name
+  description   String?
+  
+  // Discount Configuration
+  discountType  String    @default("PERCENT") // "PERCENT" or "FIXED_AMOUNT"
+  discountValue Float                       // The actual numerical value
+  applyDuration String    @default("ONCE")    // "ONCE", "FOREVER", or "MULTIPLE_MONTHS"
+  durationMonths Int?                       // Null unless applyDuration is "MULTIPLE_MONTHS"
+  
+  // Constraints
+  maxUses       Int?                        // Maximum number of times this code can be used (null = unlimited)
+  usedCount     Int       @default(0)
+  expiresAt     DateTime?                   // Expiration date
+  isActive      Boolean   @default(true)
+  
+  // Creators & Owners
+  createdById   String
+  createdBy     User      @relation("CreatedPromoCodes", fields: [createdById], references: [id])
+  ownerId       String?                     // The BD or Principal who owns this campaign
+  owner         User?     @relation("OwnedPromoCodes", fields: [ownerId], references: [id])
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ── Track Code Usage & Attributed Subscriptions ────────────────────────────
+model PromoCodeUsage {
+  id             String    @id @default(cuid())
+  userId         String                      // The merchant user who redeemed the code
+  codeUsed       String                      // The literal code typed
+  codeType       String                      // "USER_INVITE" | "CAMPAIGN_PROMO"
+  referredById   String?                     // User ID who gets credit
+  campaignCodeId String?                     // Campaign ID (if CAMPAIGN_PROMO)
+  subscriptionId String                      // The BrandSubscription that was discounted
+  discountAmount Float                       // Calculated discount applied in USD
+  createdAt      DateTime  @default(now())
+}
+
+// ── BD Sales Leads ──────────────────────────────────────────────────────────
+model SalesLead {
+  id          String   @id @default(cuid())
+  bdUserId    String
+  name        String   // Restaurant / Contact Name
+  phone       String?
+  email       String?
+  status      String   @default("NEW") // "NEW" | "CONTACTED" | "DEMO_SCHEDULED" | "ONBOARDED" | "REJECTED"
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bdUser      User     @relation(fields: [bdUserId], references: [id])
+  @@index([bdUserId])
+}
+
+model McpServerConfig {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name        String   // e.g. "dct-logistics"
+  url         String   // SSE/HTTP Endpoint
+  headers     Json?    // Optional credentials/auth headers
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([brandId])
+}
+
+model CompanionSkill {
+  id             String   @id @default(cuid())
+  brandId        String
+  brand          Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name           String   // e.g. "dct-logistics"
+  displayName    String   // e.g. "LiveExpress Logistics"
+  description    String?  // Brief description
+  systemPrompt   String   @db.Text // System prompt override
+  isEnabled      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([brandId])
+}
+
+

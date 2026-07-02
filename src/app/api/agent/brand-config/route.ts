@@ -127,11 +127,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
+  const isMm = request.headers.get('x-client-type') === 'mm'
   return NextResponse.json(
     {
       error: '新增品牌必须由用户先完成该品牌的订阅购买，支付成功后系统会自动创建品牌。',
       code: 'SUBSCRIPTION_REQUIRED_BEFORE_BRAND_CREATE',
-      redirectTo: `/board/subscription?newBrandName=${encodeURIComponent(name.trim())}`,
+      redirectTo: isMm
+        ? `/dashboard?newBrandName=${encodeURIComponent(name.trim())}`
+        : `/board/subscription?newBrandName=${encodeURIComponent(name.trim())}`,
     },
     { status: 402 }
   )

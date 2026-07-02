@@ -446,7 +446,7 @@ export async function POST(request: Request) {
   const promoCode = body.promoCode ? String(body.promoCode).trim().toUpperCase() : undefined
   const addonIds: string[] = Array.isArray(body.addonIds) ? body.addonIds.map((v: unknown) => String(v)) : []
   const uniqueAddonIds: string[] = Array.from(new Set(addonIds))
-  const rawMode = body.paymentMode
+  const rawMode = body.paymentMode ?? body.paymentMethod
   const paymentMode: 'ONLINE' | 'OFFLINE' | 'BILLING' =
     rawMode === 'OFFLINE' ? 'OFFLINE' : rawMode === 'BILLING' ? 'BILLING' : 'ONLINE'
   const agreedToTerms = Boolean(body.agreedToTerms)
@@ -616,6 +616,13 @@ export async function POST(request: Request) {
       : await ensureBrandAgentKeyAfterSubscription({
           ownerId: session.user.id,
         })
+    if (brandId && keyResult.agentId) {
+      await prisma.brandAgent.upsert({
+        where: { brandId_agentId: { brandId, agentId: keyResult.agentId } },
+        create: { brandId, agentId: keyResult.agentId, role: 'worker', active: true },
+        update: { role: 'worker', active: true },
+      })
+    }
     return NextResponse.json({
       ...buildBillingActivatedResponse({
         subscriptionId: pending.id,
@@ -641,10 +648,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Online payment is not configured. Missing STRIPE_SECRET_KEY.' }, { status: 503 })
   }
 
-  const origin = new URL(request.url).origin
-  const baseSubscriptionUrl = brandId
-    ? `${origin}/board/subscription/${encodeURIComponent(brandId)}`
-    : `${origin}/board/subscription`
+  const isMm = body.clientType === 'mm' || request.headers.get('x-client-type') === 'mm'
+  const origin = request.headers.get('x-forwarded-host')
+    ? `${request.headers.get('x-forwarded-proto') || 'http'}://${request.headers.get('x-forwarded-host')}`
+    : new URL(request.url).origin
+  const baseSubscriptionUrl = isMm
+    ? `${origin}/dashboard`
+    : (brandId ? `${origin}/board/subscription/${encodeURIComponent(brandId)}` : `${origin}/board/subscription`)
   const returnTo = typeof body.returnTo === 'string' && body.returnTo.startsWith('/') ? body.returnTo : ''
   const pendingBrandParams = new URLSearchParams()
   if (pendingBrandName) pendingBrandParams.set('newBrandName', pendingBrandName)

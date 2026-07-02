@@ -45,7 +45,7 @@ export function buildBillingActivatedResponse(params: {
 export function buildBillingActivationData(durationMonths: number, now = new Date()) {
   return {
     status: 'ACTIVE' as SubscriptionStatus,
-    paidAt: now,
+    paidAt: null,
     contractStartDate: now,
     contractEndDate: addMonths(now, durationMonths),
   }

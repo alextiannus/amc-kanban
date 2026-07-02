@@ -86,6 +86,14 @@ export async function POST(request: Request) {
         ownerId: session.user.id,
       })
 
+  if (sub.brandId && keyResult?.agentId) {
+    await prisma.brandAgent.upsert({
+      where: { brandId_agentId: { brandId: sub.brandId, agentId: keyResult.agentId } },
+      create: { brandId: sub.brandId, agentId: keyResult.agentId, role: 'worker', active: true },
+      update: { role: 'worker', active: true },
+    })
+  }
+
   return NextResponse.json({
     ok: true,
     subscription: activated.subscription,

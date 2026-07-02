@@ -411,11 +411,12 @@ export async function POST(request: Request) {
 
   const subscriptionId = typeof body.subscriptionId === 'string' ? body.subscriptionId.trim() : ''
   if (!subscriptionId) {
+    const isMm = request.headers.get('x-client-type') === 'mm'
     return NextResponse.json(
       {
         error: '新增品牌需要先完成该品牌的订阅购买。',
         code: 'SUBSCRIPTION_REQUIRED_BEFORE_BRAND_CREATE',
-        redirectTo: '/board/subscription',
+        redirectTo: isMm ? '/dashboard' : '/board/subscription',
       },
       { status: 402 }
     )
