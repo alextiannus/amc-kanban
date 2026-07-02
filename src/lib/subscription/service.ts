@@ -60,7 +60,6 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
   const subscription = await prisma.brandSubscription.findFirst({
     where: {
       id: input.subscriptionId,
-      createdById: input.ownerId,
       status: 'ACTIVE',
       OR: [{ contractEndDate: null }, { contractEndDate: { gt: now } }],
     },

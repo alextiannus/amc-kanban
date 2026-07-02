@@ -204,17 +204,20 @@ export async function POST(request: NextRequest) {
       })
       const keyResult = { agentId: createdBrand?.ok ? createdBrand.agentId || null : null }
 
-      // Send Subscription Success Confirmation Email (No username/password)
+      // Send Subscription Success Confirmation Email to brand owner
+      // When admin creates on behalf of owner, email goes to ownerEmail not admin
       try {
-        const userObj = await prisma.user.findUnique({
+        const emailTarget = pendingBrandOwnerEmail || null
+        const sessionUser = await prisma.user.findUnique({
           where: { id: session.user.id },
           select: { email: true, nickname: true }
         })
-        if (userObj?.email) {
+        const toEmail = emailTarget || sessionUser?.email
+        if (toEmail) {
           const targetBrandName = pendingBrandName || (brandId ? (await prisma.brand.findUnique({ where: { id: brandId }, select: { name: true } }))?.name : null) || '您的品牌'
           sendSubscriptionSuccessEmail({
-            to: userObj.email,
-            nickname: userObj.nickname || userObj.email.split('@')[0],
+            to: toEmail,
+            nickname: toEmail.split('@')[0],
             brandName: targetBrandName,
             planName: pendingSub.planName,
           }).catch((emailErr) => {
@@ -224,6 +227,7 @@ export async function POST(request: NextRequest) {
       } catch (emailErr) {
         console.error('[billing_subscription_email] failed to initiate success email:', emailErr)
       }
+
       return NextResponse.json({
         success: true,
         ...buildBillingActivatedResponse({
