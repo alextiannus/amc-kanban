@@ -16,6 +16,7 @@
     "test:api": "node --experimental-strip-types scripts/test-api.mts",
     "test:subscription": "node --experimental-strip-types scripts/test-subscription-pricing.mts && node --experimental-strip-types scripts/test-subscription-workflow.mts",
     "test:subscription-workflow": "node --experimental-strip-types scripts/test-subscription-workflow.mts",
+    "test:user-management": "DATABASE_URL=\"postgresql://alextian@127.0.0.1:5432/amc_dev\" node --experimental-strip-types scripts/test-user-management-e2e.mts",
     "sync:role-roster": "node --experimental-strip-types scripts/sync-user-role-roster.mts",
     "verify:permissions": "node scripts/verify-permissions.mjs",
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",

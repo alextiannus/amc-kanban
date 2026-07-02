@@ -1,97 +1,49 @@
-/**
- * Brand access control helpers
- *
- * Multi-owner model:
- *  - BrandOwner join table: human users who "own" a brand (can approve, configure, etc.)
- *  - BrandAgent join table: AI agents linked to a brand (can update info, push drafts, etc.)
- *
- * Legacy: Brand.ownerId still exists for backwards-compat DB queries, but is no longer
- * the authoritative source of ownership. Always use canOwnBrand() for access checks.
- */
-
 import { prisma } from './prisma'
-import { isAmcOperator, isAmcOperatorRole } from './amcOperator'
+import {
+  canHumanAccessBrand,
+  canSessionAccessBrand,
+  isUserInBrandCrew
+} from './user-management/brandAccess'
 
 /**
- * Returns true if the given userId is an owner of the brand
- * (checks BrandOwner table OR legacy Brand.ownerId for backward compat).
+ * Returns true if the given userId has write access/ownership permissions for the brand.
  */
 export async function canOwnBrand(brandId: string, userId: string): Promise<boolean> {
-  // ADMIN users have full access to all brands
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { type: true, role: true } })
-  if (isAmcOperator(user)) return true
-
-  // Primary: BrandOwner join table
-  const ownerRow = await prisma.brandOwner.findUnique({
-    where: { brandId_userId: { brandId, userId } },
-    select: { id: true },
-  })
-  if (ownerRow) return true
-
-  // Fallback: legacy ownerId field (for brands created before multi-owner migration)
-  const brand = await prisma.brand.findFirst({
-    where: { id: brandId, ownerId: userId },
-    select: { id: true },
-  })
-  return !!brand
+  return canSessionAccessBrand(brandId, userId, 'HUMAN', 'WRITE')
 }
 
 /**
- * Returns true if a HUMAN user can access a brand through delegated AI permissions:
- * human -> AgentPermission -> AI agent -> BrandAgent(active) -> brand.
+ * Returns true if a HUMAN user can access a brand through crew membership.
  */
 export async function canAccessBrandViaAgentPermission(
   brandId: string,
   humanUserId: string
 ): Promise<boolean> {
-  const link = await prisma.brandAgent.findFirst({
-    where: {
-      brandId,
-      active: true,
-      agent: {
-        assignedToHumans: {
-          some: { humanId: humanUserId },
-        },
-      },
-    },
-    select: { id: true },
-  })
-  return !!link
+  return canHumanAccessBrand(brandId, humanUserId)
 }
 
 /**
- * Returns true when humanUserId is an organization member of any brand owner.
- * Organization members can view all brands under that owner.
+ * Returns true when humanUserId is an organization member of any crew member.
  */
 export async function canAccessBrandViaOrganization(
   brandId: string,
   humanUserId: string
 ): Promise<boolean> {
-  const orgOwnerIds = (
-    await prisma.organizationMember.findMany({
-      where: { memberId: humanUserId },
-      select: { ownerId: true },
-    })
-  ).map((m: any) => m.ownerId)
-
+  const orgMemberships = await prisma.organizationMember.findMany({
+    where: { memberId: humanUserId },
+    select: { ownerId: true },
+  })
+  const orgOwnerIds = orgMemberships.map((m: any) => m.ownerId)
   if (orgOwnerIds.length === 0) return false
 
   const link = await prisma.brand.findFirst({
     where: {
       id: brandId,
-      OR: [
-        {
-          ownerId: { in: orgOwnerIds },
-        },
-        {
-          owners: {
-            some: {
-              role: 'owner',
-              userId: { in: orgOwnerIds },
-            },
-          },
-        },
-      ],
+      crew: {
+        members: {
+          some: { userId: { in: orgOwnerIds } }
+        }
+      }
     },
     select: { id: true },
   })
@@ -99,39 +51,25 @@ export async function canAccessBrandViaOrganization(
 }
 
 /**
- * Returns true if the given agentId is actively linked to the brand
- * via the BrandAgent join table.
+ * Returns true if the given agentId is actively linked to the brand's crew.
  */
 export async function canAgentAccessBrand(brandId: string, agentId: string): Promise<boolean> {
-  const link = await prisma.brandAgent.findUnique({
-    where: { brandId_agentId: { brandId, agentId } },
-    select: { active: true },
-  })
-  return !!link?.active
+  return canSessionAccessBrand(brandId, agentId, 'AI_AGENT', 'READ')
 }
 
 /**
  * HUMAN project access check for brand view/edit operations.
- * Access is granted if user is admin, explicit owner, legacy owner, or delegated through AgentPermission.
  */
 export async function canHumanAccessBrandProject(
   brandId: string,
   userId: string,
   userRole?: string
 ): Promise<boolean> {
-  if (isAmcOperatorRole(userRole)) return true
-
-  if (await canOwnBrand(brandId, userId)) return true
-
-  if (await canAccessBrandViaOrganization(brandId, userId)) return true
-
-  return canAccessBrandViaAgentPermission(brandId, userId)
+  return canSessionAccessBrand(brandId, userId, 'HUMAN', 'READ')
 }
 
 /**
- * Session-aware brand read check:
- * - AI_AGENT users: linked BrandAgent(active)
- * - HUMAN users: canHumanAccessBrandProject()
+ * Session-aware brand read check.
  */
 export async function canSessionAccessBrandProject(
   brandId: string,
@@ -139,18 +77,11 @@ export async function canSessionAccessBrandProject(
   userType: string,
   userRole?: string
 ): Promise<boolean> {
-  if (userType === 'AI_AGENT') {
-    return canAgentAccessBrand(brandId, userId)
-  }
-  return canHumanAccessBrandProject(brandId, userId, userRole)
+  return canSessionAccessBrand(brandId, userId, userType as 'HUMAN' | 'AI_AGENT', 'READ')
 }
 
 /**
- * Full access check:
- * - HUMAN users: must be in BrandOwner table (or legacy ownerId)
- * - AI_AGENT users: must be in BrandAgent table (active)
- *
- * Returns 'owner' | 'agent' | null
+ * Full access type resolution.
  */
 export async function getBrandAccessType(
   brandId: string,

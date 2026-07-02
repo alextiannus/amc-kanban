@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
 import { resolveAssignment } from '@/lib/assignmentPool'
@@ -8,15 +7,17 @@ import { findOrCreateBrandOwnerAccount } from '@/lib/brandOwnerAccount'
 import { sendBrandOnboardingWelcomeEmail } from '@/lib/email'
 import { generateInvitationLink } from '@/lib/invitation'
 import { computeEffectiveUserRoles } from '@/lib/userRoles'
+import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
+import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 
 // GET /api/brands — list brands for the logged-in user
-// Only return brands that have at least one active AI Agent assigned.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const assignedOnly = searchParams.get('assignedOnly') === 'true'
 
-  const session = await getSession()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const context = await resolveSessionOrApiKey(request)
+  if (!context?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const sessionUser = context.user
 
   const accountsSelect = {
     orderBy: { createdAt: 'asc' as const },
@@ -50,104 +51,13 @@ export async function GET(request: Request) {
         contractEndDate: true,
       },
     }
-    const activeBrandFilterForAgent = {
-      status: { not: 'ARCHIVED' as const },
-      subscriptions: {
-        some: activeSubscriptionWhere,
-      },
-      brandAgents: {
-        some: {
-          active: true,
-        },
-      },
-    }
 
     const activeBrandFilter = {
       status: { not: 'ARCHIVED' as const },
     }
 
-    // AI Agent — return brands linked via BrandAgent join table
-    if (session.user.type === 'AI_AGENT') {
-      const agentLinks = await prisma.brandAgent.findMany({
-        where: { agentId: session.user.id, active: true, brand: activeBrandFilterForAgent },
-        include: {
-          brand: { include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect } },
-        },
-        orderBy: { createdAt: 'asc' },
-      })
-      return NextResponse.json(agentLinks.map((l: any) => l.brand))
-    }
-
-    // If assignedOnly=true, return only brands that the human user is directly responsible for.
-    // A user is responsible for a brand if they own it (direct/legacy) or have permission to
-    // manage the AI agent assigned to it. Organization memberships are not automatically assigned.
-    if (assignedOnly) {
-      // 1. Delegated agent permissions -> Brand Agent links
-      const delegatedAgentPermissions = await prisma.agentPermission.findMany({
-        where: { humanId: session.user.id },
-        select: { agentId: true },
-      })
-      const permittedAgentIds = delegatedAgentPermissions.map((perm: any) => perm.agentId)
-      const delegatedBrandLinks = permittedAgentIds.length
-        ? await prisma.brandAgent.findMany({
-            where: {
-              agentId: { in: permittedAgentIds },
-              active: true,
-            },
-            select: { brandId: true },
-          })
-        : []
-      const delegatedBrandIds = delegatedBrandLinks.map((link: any) => link.brandId)
-
-      // 2. Owned brands (via BrandOwner join table)
-      const ownerLinks = await prisma.brandOwner.findMany({
-        where: { userId: session.user.id },
-        select: { brandId: true },
-      })
-      const ownedBrandIds = ownerLinks.map((link: any) => link.brandId)
-
-      // 3. Legacy owned brands (via ownerId field)
-      const legacyOwnedBrands = await prisma.brand.findMany({
-        where: { ownerId: session.user.id },
-        select: { id: true },
-      })
-      const legacyOwnedBrandIds = legacyOwnedBrands.map((b: any) => b.id)
-
-      // Combine direct candidate brands (excluding organization-wide unassigned brands)
-      const candidateBrandIds = Array.from(
-        new Set([
-          ...delegatedBrandIds,
-          ...ownedBrandIds,
-          ...legacyOwnedBrandIds,
-        ])
-      )
-
-      // Build OR conditions for query
-      const orConditions: any[] = []
-      if (candidateBrandIds.length > 0) {
-        orConditions.push({ id: { in: candidateBrandIds } })
-      }
-
-      // If no responsible conditions, return empty list
-      if (orConditions.length === 0) {
-        return NextResponse.json([])
-      }
-
-      const brands = await prisma.brand.findMany({
-        where: {
-          ...activeBrandFilter,
-          OR: orConditions,
-        },
-        include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
-        orderBy: { createdAt: 'asc' },
-      })
-
-      return NextResponse.json(brands)
-    }
-
-    // ADMIN human — see ALL brands across the system
-    // (Agents may create brands with themselves as ownerId; admins need full visibility)
-    if (isAmcOperator(session.user)) {
+    // 1. ADMIN human — see ALL brands across the system
+    if (isAmcOperator(sessionUser)) {
       const allBrands = await prisma.brand.findMany({
         where: activeBrandFilter,
         include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
@@ -156,90 +66,48 @@ export async function GET(request: Request) {
       return NextResponse.json(allBrands)
     }
 
-    // Regular human user — brands via BrandOwner join table
-    const [ownerLinks, legacyOwnedBrands, delegatedAgentPermissions, organizationMemberships] = await Promise.all([
-      prisma.brandOwner.findMany({
-        where: { userId: session.user.id, brand: activeBrandFilter },
-        include: {
-          brand: { include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect } },
-        },
-        orderBy: { createdAt: 'asc' },
-      }),
-      prisma.brand.findMany({
-        where: { ownerId: session.user.id, ...activeBrandFilter },
-        include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
-        orderBy: { createdAt: 'asc' },
-      }),
-      prisma.agentPermission.findMany({
-        where: { humanId: session.user.id },
-        select: { agentId: true },
-      }),
-      prisma.organizationMember.findMany({
-        where: { memberId: session.user.id },
-        select: { ownerId: true },
-      }),
-    ])
-
-    const ownedBrandIds = new Set([
-      ...ownerLinks.map((link: any) => link.brandId),
-      ...legacyOwnedBrands.map((brand: any) => brand.id),
-    ])
-
-    const permittedAgentIds = delegatedAgentPermissions.map((perm: any) => perm.agentId)
-    const delegatedBrandLinks = permittedAgentIds.length
-      ? await prisma.brandAgent.findMany({
-          where: {
-            agentId: { in: permittedAgentIds },
-            active: true,
-            brandId: { notIn: [...ownedBrandIds] },
-          },
-          select: { brandId: true },
+    // 2. Resolve organization ownership cascade (human only)
+    const orgMemberships = sessionUser.type === 'HUMAN' 
+      ? await prisma.organizationMember.findMany({
+          where: { memberId: sessionUser.id },
+          select: { ownerId: true }
         })
       : []
+    const orgOwnerIds = orgMemberships.map((m: any) => m.ownerId)
 
-    const delegatedBrandIds = Array.from(new Set(delegatedBrandLinks.map((link: any) => link.brandId)))
-    const organizationOwnerIds = Array.from(new Set(organizationMemberships.map((m: any) => m.ownerId)))
-    const delegatedBrands = delegatedBrandIds.length
-      ? await prisma.brand.findMany({
-          where: { id: { in: delegatedBrandIds }, ...activeBrandFilter },
-          include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
-          orderBy: { createdAt: 'asc' },
-        })
-      : []
+    const queryOr: any[] = [
+      // Direct membership in the Brand's Crew
+      {
+        crew: {
+          members: {
+            some: { userId: sessionUser.id }
+          }
+        }
+      }
+    ]
 
-    const excludedBrandIds = Array.from(new Set([
-      ...ownedBrandIds,
-      ...delegatedBrandIds,
-    ]))
+    // If not restricted to assignedOnly, check organization access
+    if (!assignedOnly && orgOwnerIds.length > 0) {
+      queryOr.push({
+        crew: {
+          members: {
+            some: { userId: { in: orgOwnerIds } }
+          }
+        }
+      })
+    }
 
-    const organizationBrands = organizationOwnerIds.length
-      ? await prisma.brand.findMany({
-          where: {
-            ...activeBrandFilter,
-            id: { notIn: excludedBrandIds },
-            OR: [
-              { ownerId: { in: organizationOwnerIds } },
-              {
-                owners: {
-                  some: {
-                    role: 'owner',
-                    userId: { in: organizationOwnerIds },
-                  },
-                },
-              },
-            ],
-          },
-          include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
-          orderBy: { createdAt: 'asc' },
-        })
-      : []
+    // Build the query filter for brands where user or their organization owner is a crew member
+    const brands = await prisma.brand.findMany({
+      where: {
+        ...activeBrandFilter,
+        OR: queryOr
+      },
+      include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
+      orderBy: { createdAt: 'asc' },
+    })
 
-    return NextResponse.json([
-      ...ownerLinks.map((link: any) => link.brand),
-      ...legacyOwnedBrands,
-      ...delegatedBrands,
-      ...organizationBrands,
-    ].filter(Boolean))
+    return NextResponse.json(brands)
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Internal Server Error'
     console.error('[GET /api/brands]', e)
@@ -249,8 +117,9 @@ export async function GET(request: Request) {
 
 // POST /api/brands — create a new brand (human session required)
 export async function POST(request: Request) {
-  const session = await getSession()
-  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const context = await resolveSessionOrApiKey(request)
+  if (!context?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const sessionUser = context.user
 
   const body = await request.json()
   const { name, location, timezone, industry, region, referenceCode, googlePlaceId, address, lat, lng, promoCode } = body
@@ -259,7 +128,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  const adminCreate = isAmcOperator(session.user)
+  const adminCreate = isAmcOperator(sessionUser)
   if (adminCreate) {
     const ownerEmail = typeof body.ownerEmail === 'string' ? body.ownerEmail.trim().toLowerCase() : ''
     const ownerResult = ownerEmail ? await findOrCreateBrandOwnerAccount(ownerEmail) : null
@@ -268,7 +137,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: ownerResult.reason === 'invalid_email' ? 'Brand owner email is invalid' : 'Brand owner email belongs to a non-human account' }, { status: 400 })
     }
 
-    const owner = ownerResult?.ok ? ownerResult.user : { id: session.user.id, email: session.user.email || null }
+    const owner = ownerResult?.ok ? ownerResult.user : { id: sessionUser.id, email: sessionUser.email || null }
 
     const brand = await prisma.brand.create({
       data: {
@@ -281,6 +150,11 @@ export async function POST(request: Request) {
       },
     })
 
+    // 1. Write to new Crew models
+    const crew = await createMarketingCrew(brand.id)
+    await addCrewMember(crew.id, owner.id)
+
+    // 2. Write to legacy tables for backwards compatibility
     await prisma.brandOwner.upsert({
       where: { brandId_userId: { brandId: brand.id, userId: owner.id } },
       create: { brandId: brand.id, userId: owner.id, role: 'owner' },
@@ -323,11 +197,11 @@ export async function POST(request: Request) {
 
   // ── Wizard path: AMC_PRINCIPAL or BD creates a brand on behalf of a merchant ──
   const dbRoles = await prisma.userBusinessRole.findMany({
-    where: { userId: session.user.id },
+    where: { userId: sessionUser.id },
     select: { role: true },
   })
   const roleNames = dbRoles.map((r: { role: string }) => r.role)
-  const isAdminUser = session.user.role === 'ADMIN'
+  const isAdminUser = sessionUser.role === 'ADMIN'
   const canWizardCreate = isAdminUser || roleNames.includes('AMC_PRINCIPAL') || roleNames.includes('BD')
 
   if (canWizardCreate) {
@@ -403,6 +277,14 @@ export async function POST(request: Request) {
         },
       })
 
+      // 1. Write to new Crew models inside transaction
+      const crew = await createMarketingCrew(brand.id, tx)
+      await addCrewMember(crew.id, owner.id, tx)
+      if (sessionUser.id !== owner.id) {
+        await addCrewMember(crew.id, sessionUser.id, tx)
+      }
+
+      // 2. Write to legacy tables for backwards compatibility
       await tx.brandOwner.upsert({
         where: { brandId_userId: { brandId: brand.id, userId: owner.id } },
         create: { brandId: brand.id, userId: owner.id, role: 'owner' },
@@ -419,7 +301,7 @@ export async function POST(request: Request) {
       const subscription = await tx.brandSubscription.create({
         data: {
           brandId: brand.id,
-          createdById: session.user.id,
+          createdById: sessionUser.id,
           planId,
           planName,
           durationMonths,
@@ -543,7 +425,7 @@ export async function POST(request: Request) {
     const subscriptionToBind = await tx.brandSubscription.findFirst({
       where: {
         id: subscriptionId,
-        createdById: session.user.id,
+        createdById: sessionUser.id,
         status: 'ACTIVE',
         brandId: null,
         OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
@@ -556,7 +438,7 @@ export async function POST(request: Request) {
 
     const brand = await tx.brand.create({
       data: {
-        ownerId: session.user.id,
+        ownerId: sessionUser.id,
         name: name.trim(),
         location: location?.trim() || null,
         timezone: timezone || 'America/New_York',
@@ -565,15 +447,20 @@ export async function POST(request: Request) {
       },
     })
 
+    // 1. Write to new Crew models inside transaction
+    const crew = await createMarketingCrew(brand.id, tx)
+    await addCrewMember(crew.id, sessionUser.id, tx)
+
+    // 2. Write to legacy tables for backwards compatibility
     await tx.brandOwner.upsert({
-      where: { brandId_userId: { brandId: brand.id, userId: session.user.id } },
-      create: { brandId: brand.id, userId: session.user.id },
+      where: { brandId_userId: { brandId: brand.id, userId: sessionUser.id } },
+      create: { brandId: brand.id, userId: sessionUser.id },
       update: {},
     })
 
     await tx.userBusinessRole.upsert({
-      where: { userId_role: { userId: session.user.id, role: 'BRAND_OWNER' } },
-      create: { userId: session.user.id, role: 'BRAND_OWNER' },
+      where: { userId_role: { userId: sessionUser.id, role: 'BRAND_OWNER' } },
+      create: { userId: sessionUser.id, role: 'BRAND_OWNER' },
       update: {},
     })
 

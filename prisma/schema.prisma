@@ -29,6 +29,17 @@ model User {
   avatarMimeType String? // MIME type: image/jpeg, image/png, etc
   apiKey       String?  @unique // Each AI Agent has its own API key
   
+  // AI Agent self-relation for ownership (AI Avatar)
+  ownerId      String?
+  owner        User?    @relation("UserAvatars", fields: [ownerId], references: [id])
+  avatars      User[]   @relation("UserAvatars")
+
+  // API Keys for human users
+  apiKeys      UserApiKey[]
+
+  // Marketing Crew memberships
+  crewMemberships CrewMember[]
+
   // Referral / Invite Code System
   inviteCode   String?  @unique
   referredById String?
@@ -257,12 +268,48 @@ model BrandOwner {
   @@index([brandId, role])
 }
 
+model UserApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  name        String?   // Label for the key (e.g. "Zhangyi Key")
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+
+  @@index([userId])
+}
+
+model MarketingCrew {
+  id        String   @id @default(cuid())
+  brandId   String   @unique
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  members   CrewMember[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CrewMember {
+  id          String        @id @default(cuid())
+  crewId      String
+  crew        MarketingCrew @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt    DateTime      @default(now())
+
+  @@unique([crewId, userId])
+  @@index([crewId])
+  @@index([userId])
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AMC Brand Dashboard Models
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Brand {
   id             String   @id @default(cuid())
+  crew           MarketingCrew?
   // Legacy single-owner field — kept for zero-downtime migration,
   // new code uses the BrandOwner join table for multi-owner support.
   ownerId        String?

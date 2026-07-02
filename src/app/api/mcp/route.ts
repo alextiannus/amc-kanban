@@ -17,28 +17,48 @@
  */
 
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
-import { createAmcMcpServer, getAgentFromKey } from '@/lib/partner/mcp/server'
+import { createAmcMcpServer } from '@/lib/partner/mcp/server'
 import { prisma } from '@/lib/prisma'
+import { verifyUserApiKey } from '@/lib/user-management/auth'
 
 export const dynamic = 'force-dynamic'
 
 async function handleMcp(request: Request): Promise<Response> {
-  // Validate agent API key from Authorization header
+  // Validate API key from Authorization header
   const authHeader = request.headers.get('authorization') || ''
   const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim()
 
   if (!apiKey) {
     return new Response(
-      JSON.stringify({ error: 'Missing Authorization header. Use: Authorization: Bearer <AGENT_API_KEY>' }),
+      JSON.stringify({ error: 'Missing Authorization header. Use: Authorization: Bearer <PERSONAL_API_KEY>' }),
       { status: 401, headers: { 'Content-Type': 'application/json' } }
     )
   }
 
-  const agent = await getAgentFromKey(apiKey)
-  if (!agent) {
+  const user = await verifyUserApiKey(apiKey)
+  if (!user) {
     return new Response(
-      JSON.stringify({ error: 'Invalid or expired agent API key' }),
+      JSON.stringify({ error: 'Invalid or expired API key' }),
       { status: 401, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  // Resolve AI Agent ID (defaults to the human user's single AI avatar if header is missing)
+  let agentId = request.headers.get('x-agent-id')?.trim() || null
+  if (!agentId) {
+    const avatars = await prisma.user.findMany({
+      where: { ownerId: user.id, type: 'AI_AGENT' },
+      select: { id: true }
+    })
+    if (avatars.length === 1) {
+      agentId = avatars[0].id
+    }
+  }
+
+  if (!agentId) {
+    return new Response(
+      JSON.stringify({ error: 'No active AI Agent found or specified for this delegated user' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
     )
   }
 
@@ -69,7 +89,7 @@ async function handleMcp(request: Request): Promise<Response> {
             title,
             desc: desc || null,
             markdown,
-            authorId: agent.id
+            authorId: agentId
           }
         })
         return new Response(
@@ -102,7 +122,7 @@ async function handleMcp(request: Request): Promise<Response> {
               title: title || '未命名文章',
               desc: desc || null,
               markdown,
-              authorId: agent.id
+              authorId: agentId
             }
           })
           return new Response(
@@ -118,7 +138,7 @@ async function handleMcp(request: Request): Promise<Response> {
 
   // Create a fresh transport + server per request (stateless, Render-friendly)
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-  const mcpServer = createAmcMcpServer(apiKey)
+  const mcpServer = createAmcMcpServer(apiKey, agentId)
 
   await mcpServer.connect(transport)
   const response = await transport.handleRequest(request)

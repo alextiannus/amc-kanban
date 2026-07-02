@@ -11,6 +11,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
+import { verifyUserApiKey } from '@/lib/user-management/auth'
+import { canHumanAccessBrand, isUserInBrandCrew } from '@/lib/user-management/brandAccess'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { writeAuditLog, actorFromContext } from '@/lib/audit'
 import { readBrandProfileMarkdown, refreshBrandProfileMarkdown, writeBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
@@ -56,6 +58,22 @@ export async function getAgentFromKey(apiKey: string) {
 }
 
 async function requireActiveBrandLink(brandId: string, agentId: string) {
+  // Check if the agent's human owner has access to the brand
+  const agent = await prisma.user.findUnique({
+    where: { id: agentId },
+    select: { ownerId: true }
+  })
+  
+  if (agent?.ownerId) {
+    const hasAccess = await canHumanAccessBrand(brandId, agent.ownerId)
+    if (hasAccess) return { id: 'granted' }
+  }
+
+  // Fallback direct crew membership check
+  const isMember = await isUserInBrandCrew(brandId, agentId)
+  if (isMember) return { id: 'granted' }
+
+  // Backward compatibility fallback to BrandAgent table (legacy check)
   return prisma.brandAgent.findFirst({ where: { brandId, agentId, active: true }, select: { id: true } })
 }
 
@@ -70,13 +88,35 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 // ── Build and return a configured McpServer ────────────────────────────────
-export function createAmcMcpServer(agentApiKey: string) {
+export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string | null) {
   const server = new McpServer({
     name: 'amc-kanban',
     version: '1.0.0',
   })
 
-  const resolveAgent = () => getAgentFromKey(agentApiKey)
+  const resolveAgent = async () => {
+    // 1. Resolve human via UserApiKey
+    const human = await verifyUserApiKey(agentApiKey)
+    if (!human) return null
+
+    // 2. Resolve agentId
+    let agentId = requestAgentId || null
+    if (!agentId) {
+      // Fallback: If human only has one agent avatar, use it
+      const avatars = await prisma.user.findMany({ where: { ownerId: human.id, type: 'AI_AGENT' } })
+      if (avatars.length === 1) {
+        agentId = avatars[0].id
+      }
+    }
+
+    if (!agentId) return null
+
+    // Return the AI Agent object
+    const agent = await prisma.user.findUnique({ where: { id: agentId } })
+    if (!agent || agent.type !== 'AI_AGENT') return null
+
+    return agent
+  }
 
   // ── get_brand_config ────────────────────────────────────────────────────
   server.tool(
