@@ -52,12 +52,14 @@ function InlineBrandSwitcher({
   setActiveBrand,
   collapsed,
   onAddNewBrand,
+  onExpand,
 }: {
   brands: Brand[]
   activeBrand: Brand | null
   setActiveBrand: (b: Brand) => void
   collapsed: boolean
   onAddNewBrand: () => void
+  onExpand?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -79,7 +81,12 @@ function InlineBrandSwitcher({
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(v => !v)}
+        onClick={() => {
+          setOpen(v => !v)
+          if (collapsed && onExpand) {
+            onExpand()
+          }
+        }}
         title={collapsed ? (activeBrand?.name ?? '选择品牌') : undefined}
         className={`
           w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all duration-150
@@ -298,6 +305,10 @@ export default function Sidebar({
                         setActiveBrand={setActiveBrand}
                         collapsed={collapsed}
                         onAddNewBrand={() => setWizardOpen(true)}
+                        onExpand={() => {
+                          setCollapsed(false)
+                          try { localStorage.setItem(COLLAPSED_KEY, 'false') } catch {/* ignore */}
+                        }}
                       />
                     </div>
                   )}
