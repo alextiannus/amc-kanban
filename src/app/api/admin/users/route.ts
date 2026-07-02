@@ -53,6 +53,9 @@ export async function GET() {
         },
         ownedBrands: {
           select: { brand: { select: { id: true, name: true, status: true } } },
+        },
+        apiKeys: {
+          select: { id: true, name: true }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -103,14 +106,35 @@ export async function POST(request: Request) {
     const userType = type === 'AI_AGENT' ? 'AI_AGENT' : 'HUMAN'
 
     const requestedRole = userType === 'HUMAN' && body.role === 'ADMIN' ? 'ADMIN' : 'USER'
-    const user = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        password: hashedPassword,
-        type: userType,
-        role: requestedRole,
+    
+    const result = await prisma.$transaction(async (tx: any) => {
+      const u = await tx.user.create({
+        data: {
+          email: normalizedEmail,
+          password: hashedPassword,
+          type: userType,
+          role: requestedRole,
+        }
+      })
+
+      let keyToken = null
+      if (userType === 'HUMAN') {
+        const randomToken = `amc_usr_${crypto.randomBytes(16).toString('hex')}`
+        const newKey = await tx.userApiKey.create({
+          data: {
+            userId: u.id,
+            token: randomToken,
+            name: 'Initial Personal API Key'
+          }
+        })
+        keyToken = newKey.token
       }
+
+      return { user: u, apiKey: keyToken }
     })
+
+    const user = result.user
+    const apiKey = result.apiKey
 
     const expiresAt = new Date(Date.now() + INVITATION_TTL_MS)
     await prisma.invitation.updateMany({
@@ -169,7 +193,8 @@ export async function POST(request: Request) {
       success: true,
       user: { id: user.id, email: user.email, type: user.type },
       temporaryPassword,
-      invitationLink
+      invitationLink,
+      apiKey
     })
   } catch (error) {
     console.error('Admin create user error:', error)

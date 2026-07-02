@@ -2,11 +2,10 @@
 
 import React, { useState } from 'react'
 import { 
-  Users, Shield, User, Bot, RefreshCw, Key, ShieldCheck
+  Users, Shield, User, Bot, RefreshCw, Key
 } from 'lucide-react'
 import UserAccountsPanel from './UserAccountsPanel'
 import UserGroupsPanel from './UserGroupsPanel'
-import PermissionsPanel from './PermissionsPanel'
 import AiAgentsPanel from './AiAgentsPanel'
 import { type BrandRecord } from './BrandsTab'
 import { type AssignmentPoolMember } from '@/components/shared/types'
@@ -42,6 +41,7 @@ export interface UserRecord {
   brandMemberships?: Array<{
     brand: { id: string; name: string; status: string }
   }>
+  apiKeys?: Array<{ id: string; name: string }>
 }
 
 interface UsersTabProps {
@@ -71,7 +71,7 @@ interface UsersTabProps {
   onCreatePoolMember: (agent: UserRecord) => Promise<void>
 }
 
-type SubTab = 'humans' | 'groups' | 'perms' | 'agents'
+type SubTab = 'humans' | 'groups' | 'agents'
 
 export default function UsersTab({
   users,
@@ -173,17 +173,6 @@ export default function UsersTab({
           <span>用户组与角色</span>
         </button>
         <button
-          onClick={() => setSubTab('perms')}
-          className={`px-4 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            subTab === 'perms'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-550'
-              : 'border-transparent text-slate-500 hover:text-slate-850 dark:hover:text-slate-200'
-          }`}
-        >
-          <ShieldCheck size={14} />
-          <span>资源与功能授权</span>
-        </button>
-        <button
           onClick={() => setSubTab('agents')}
           className={`px-4 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
             subTab === 'agents'
@@ -223,17 +212,7 @@ export default function UsersTab({
         />
       )}
 
-      {subTab === 'perms' && (
-        <PermissionsPanel 
-          users={users}
-          agents={agents}
-          brands={brands}
-          onSavePermissions={onSavePermissions}
-          savingPerms={savingPerms}
-          onFetchUsers={onFetchUsers}
-          onFetchBrands={onFetchBrands}
-        />
-      )}
+
 
       {subTab === 'agents' && (
         <AiAgentsPanel 

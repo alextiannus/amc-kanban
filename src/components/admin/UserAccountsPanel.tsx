@@ -447,13 +447,26 @@ export default function UserAccountsPanel({
             </div>
 
             {/* API Key Credentials section */}
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-55 dark:bg-slate-955/20 p-4 space-y-3.5">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/20 p-5 space-y-4">
               <div>
                 <h4 className="text-[11px] font-black text-slate-700 dark:text-slate-350">🔑 智能体委任 API 密钥 (Bearer Token)</h4>
                 <p className="text-[10px] text-slate-455 leading-relaxed mt-0.5">
-                  重置后，智能体程序可以使用此 Token 代理该用户的身份边界完成外部连接及数据交互。
+                  重置或初始化后，智能体程序可以使用此 Token 代理该用户的身份边界完成外部连接及数据交互。
                 </p>
               </div>
+
+              {/* Status warning/success banner */}
+              {selectedUser.apiKeys && selectedUser.apiKeys.length > 0 ? (
+                <div className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 text-[10px] font-bold text-emerald-650 dark:text-emerald-400 flex items-center gap-1.5 leading-relaxed">
+                  <Check size={13} className="text-emerald-500" />
+                  <span>API 凭证已就绪 (已生成 1 个 API 密钥，可用于 AI 员工的委任)</span>
+                </div>
+              ) : (
+                <div className="bg-amber-50/50 dark:bg-amber-955/20 border border-amber-250 dark:border-amber-900/60 rounded-xl p-3 text-[10px] font-bold text-amber-650 dark:text-amber-400 leading-relaxed space-y-1">
+                  <span className="flex items-center gap-1"><AlertCircle size={12} /><span>该成员账号目前尚未配置 API 密钥！</span></span>
+                  <p className="font-medium text-slate-450">AI 代理智能体将无法使用此用户的身份承接品牌的运营及交互工作。建议立即点击下方按钮为其配置初始 API 凭证。</p>
+                </div>
+              )}
 
               {/* Show key plaintext alert box if regenerated */}
               {regeneratedKey && (
@@ -478,24 +491,36 @@ export default function UserAccountsPanel({
               )}
 
               <div className="flex gap-2">
-                <button
-                  onClick={handleRegenerateApiKey}
-                  disabled={isRegeneratingKey}
-                  className="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-black text-slate-750 dark:text-slate-300 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 disabled:opacity-40 transition-all cursor-pointer shadow-sm"
-                >
-                  <RefreshCw size={11} className={isRegeneratingKey ? 'animate-spin' : ''} />
-                  <span>重置 API Key</span>
-                </button>
+                {selectedUser.apiKeys && selectedUser.apiKeys.length > 0 ? (
+                  <button
+                    onClick={handleRegenerateApiKey}
+                    disabled={isRegeneratingKey}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-xl text-[10.5px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-50/20 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all cursor-pointer shadow-sm"
+                  >
+                    <RefreshCw size={11} className={isRegeneratingKey ? 'animate-spin' : ''} />
+                    <span>重置 API Key</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleRegenerateApiKey}
+                    disabled={isRegeneratingKey}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-extrabold text-[10.5px] transition-all shadow-md rounded-xl cursor-pointer"
+                  >
+                    <RefreshCw size={11} className={isRegeneratingKey ? 'animate-spin' : ''} />
+                    <span>✨ 立即初始化 API 密钥</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => setShowResetConfirm(true)}
-                  className="inline-flex items-center justify-center gap-1 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-[10px] font-bold text-slate-750 dark:text-slate-350 bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 transition-all cursor-pointer shadow-sm"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 border border-amber-200 dark:border-amber-800 rounded-xl text-[10.5px] font-extrabold text-amber-600 dark:text-amber-450 bg-amber-50/20 hover:bg-amber-50 dark:hover:bg-amber-955/30 transition-all cursor-pointer shadow-sm"
                 >
                   <Key size={11} className="text-amber-500" />
                   <span>密码初始化</span>
                 </button>
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="inline-flex items-center justify-center p-2 border border-rose-150 dark:border-rose-955 bg-rose-50 hover:bg-rose-100 dark:bg-rose-955/10 text-rose-600 dark:text-rose-455 transition-all shadow-sm rounded-xl cursor-pointer"
+                  className="inline-flex items-center justify-center p-2.5 border border-rose-200 dark:border-rose-800 bg-rose-50/20 hover:bg-rose-50 dark:hover:bg-rose-955/30 text-rose-600 dark:text-rose-455 transition-all shadow-sm rounded-xl cursor-pointer"
                   title="注销账号"
                 >
                   <Trash2 size={12} />
