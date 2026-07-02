@@ -35,6 +35,9 @@ type DashboardPayload = {
     name: string
     location: string | null
     status: string
+    subscriptions?: Array<{
+      status: string
+    }>
     owners: Array<{
       userId: string
       role: string
@@ -78,8 +81,12 @@ function statusBadgeClass(status: string) {
   switch (status) {
     case 'ACTIVE':
       return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300'
-    case 'PAUSED':
+    case 'PENDING':
       return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300'
+    case 'FAILED':
+      return 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300'
+    case 'CANCELLED':
+    case 'PAUSED':
     case 'ARCHIVED':
       return 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
     default:
@@ -372,9 +379,14 @@ export default function PrincipalDashboardPage() {
                         ) : <p className="text-xs text-slate-400">暂无品牌主</p>}
                       </td>
                       <td className="py-2 pr-3 text-xs">
-                        <span className={`inline-flex rounded-full border px-2 py-0.5 font-bold ${statusBadgeClass(brand.status)}`}>
-                          {brand.status}
-                        </span>
+                        {(() => {
+                          const subStatus = brand.subscriptions?.[0]?.status || 'PENDING'
+                          return (
+                            <span className={`inline-flex rounded-full border px-2 py-0.5 font-bold ${statusBadgeClass(subStatus)}`}>
+                              {subStatus}
+                            </span>
+                          )
+                        })()}
                       </td>
                       <td className="py-2 pr-3 align-top">
                         <div className="min-w-[260px] space-y-2">

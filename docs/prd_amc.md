@@ -1218,5 +1218,31 @@ RolePermission 表：
 - `src/app/api/admin/brands/[id]/route.ts`
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.32 — 2026-07-02（托管品牌管理界面重构与运行状态冗余清理）
+
+### 1. 移除冗余“运行状态”并统一读取“订阅状态”
+- **移除冗余开关**：去除了品牌详情设置中的“运行状态”选择器。
+- **状态逻辑重定向**：将原先读取和展示运行状态（Brand.status = ACTIVE/PAUSED）的逻辑，重定向为读取和展示该品牌的最新“订阅付款状态”（BrandSubscription.status = ACTIVE/PENDING/FAILED/CANCELLED）。
+- **过滤与显示升级**：支持按全部、ACTIVE、PENDING、FAILED、CANCELLED 五种状态对托管品牌进行列表筛选和彩药丸徽章状态展示。
+
+### 2. 品牌主下拉列表过滤修复
+- **独立人选集**：将“主理人/业主 (Brand Owner)”下拉选择框的数据源，从过滤后的 `filteredHumans`（排除了纯品牌主身份的用户）改回 unfiltered `humans` 全量人类用户。
+- **防止空置错误**：解决之前因纯品牌主身份用户被过滤隐藏，导致下拉框无法回显已绑定业主的 ID，从而渲染为“未设置”的显示及保存 Bug。
+- **Crew 成员隔离保留**：继续在 "AI Marketing Crew" 成员列表中保留 `filteredHumans` 的规则，确保运营层面的 AI 员工和督导团队中不会混入其他商家的纯业主账号。
+
+### 3. cramp 视图升级为全宽表格与编辑弹窗 (Table + Modal UX)
+- **宽表展现形式**：抛弃左右分栏（col-span-4 对 col-span-8）的局促排版，将品牌列表升级为全局占比的响应式高雅数据表。
+- **多维信息汇聚**：在列表中直接渲染：品牌名称、国家/城市（MapPin 标记）、订阅套餐等级、最新订阅状态、过期日期（过期的红字警示）、团队成员头像/昵称组（图标平铺）。
+- **弹窗编辑 (Edit Modal)**：点击数据表的任意行，弹出精心打磨、支持深色模式的 `EditBrandModal`，可在宽敞的视野下完成对品牌资产、商业计划及 Crew 分配的统一保存。
+
+### 影响文件
+- `docs/prd_amc.md`
+- `src/components/admin/BrandsTab.tsx`
+- `src/app/profile/principal/page.tsx`
+- `src/app/api/profile/principal-dashboard/route.ts`
+
+
 
 

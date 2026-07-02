@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { encrypt } from '@/lib/auth'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 import { findOrCreateBrandOwnerAccount } from '@/lib/brandOwnerAccount'
+import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import crypto from 'crypto'
 
 function addMonths(date: Date, months: number) {
@@ -115,6 +116,14 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       },
     })
 
+    // 1. Write to new Crew models inside transaction
+    const crew = await createMarketingCrew(created.id, tx)
+    await addCrewMember(crew.id, brandOwnerId, tx)
+    if (brandOwnerId !== input.ownerId) {
+      await addCrewMember(crew.id, input.ownerId, tx)
+    }
+
+    // 2. Write to legacy tables for backwards compatibility
     await tx.brandOwner.upsert({
       where: { brandId_userId: { brandId: created.id, userId: brandOwnerId } },
       create: { brandId: created.id, userId: brandOwnerId, role: 'owner' },

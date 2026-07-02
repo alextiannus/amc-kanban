@@ -114,6 +114,11 @@ export async function GET(request: Request) {
                 brandAgents: true,
               },
             },
+            subscriptions: {
+              orderBy: { updatedAt: 'desc' },
+              take: 1,
+              select: { status: true },
+            },
           },
           orderBy: { updatedAt: 'desc' },
         })
