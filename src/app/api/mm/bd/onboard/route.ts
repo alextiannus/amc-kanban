@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
 import bcrypt from 'bcryptjs'
 import { sendBrandOnboardingWelcomeEmail } from '@/lib/email'
+import { generateInvitationLink } from '@/lib/invitation'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -110,7 +111,21 @@ export async function POST(req: NextRequest) {
     })
 
     // 4. Send Welcome Onboarding Email (SMTP)
-    const mmInviteLink = 'https://amc-mm.immedi.ai/login'
+    const mmHost = process.env.NEXT_PUBLIC_MM_HOST || 'https://amc-mm.immedi.ai'
+    let mmInviteLink = `${mmHost}/login`
+    try {
+      const { link } = generateInvitationLink(
+        normalizedEmail,
+        tempPassword,
+        String(merchantName).trim(),
+        mmHost,
+        { expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 }
+      )
+      mmInviteLink = link
+    } catch (e) {
+      console.warn('[bd_onboard] Failed to generate secure login link, using fallback:', e)
+    }
+
     try {
       await sendBrandOnboardingWelcomeEmail({
         to: normalizedEmail,
