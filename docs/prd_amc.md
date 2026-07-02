@@ -1170,6 +1170,14 @@ RolePermission 表：
     - `actorType: "AI_AGENT"`
     - `metadata: { delegatedBy: <HUMAN_USER_ID> }`
   - 确保满足安全合规与操作可追溯性，清晰体现“某 AI 智能体代表某人类用户执行了该操作”。
+- **配套数据迁移与平滑并轨决策 (Migration Plan)**：
+  - **全量人类 API Key 自动补建**：数据库迁移脚本运行时，遍历所有 `type: "HUMAN"` 的人类用户，为其补建对应的个人 API Key。
+  - **生产环境免改动无感映射 (Zero-Config Hot Mapping)**：
+    为避免修改已在运行的 AI 智能体外部进程/容器环境变量中的 API Key，迁移脚本将直接把历史 AI 智能体的 Key 继承转移给关联的人类账号：
+    - 将 AI 智能体 **“狄仁杰”** 的历史 `apiKey` 写入人类用户 **“Zhangyi”** 的 `UserApiKey`。
+    - 将 AI 智能体 **“唐伯虎”** 的历史 `apiKey` 写入人类用户 **“LiWei”** 的 `UserApiKey`。
+    - 将 AI 智能体 **“小桥”** 的历史 `apiKey` 写入人类用户 **“田野”** 的 `UserApiKey`。
+    - 如此，外部智能体在发起请求时无需进行任何环境变量或配置文件修改，即可通过旧 key 自动以对应人类的委托身份进行授权连接，实现生产环境无缝并轨。
 
 ### 影响文件
 - `docs/prd_amc.md`
