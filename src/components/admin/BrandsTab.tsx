@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { 
-  Store, Save, RefreshCw, Users, Shield, MapPin, Tag, Cpu, Trash2, CreditCard, ToggleLeft, ToggleRight
+  Store, Save, RefreshCw, Users, Shield, MapPin, Tag, Cpu, Trash2, CreditCard, ToggleLeft, ToggleRight, Search
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
 import { type AssignmentPoolConfig, type AssignmentPoolMember, type AssignmentDecision } from '@/components/shared/types'
@@ -71,6 +71,8 @@ export default function BrandsTab({
     const isOnlyBrandOwner = roles.every(r => r === 'BRAND_OWNER')
     return !isOnlyBrandOwner
   })
+  const [crewSearchTerms, setCrewSearchTerms] = useState<Record<string, string>>({})
+  const [activeSearchBrandId, setActiveSearchBrandId] = useState<string | null>(null)
   const [savingConfig, setSavingConfig] = useState(false)
   const [configDraft, setConfigDraft] = useState<Partial<AssignmentPoolConfig>>({})
 
@@ -344,45 +346,96 @@ export default function BrandsTab({
                       }))
                     ]
 
+                    const selectedMembers = eligibleCrewMembers.filter(member => draft.agentIds.includes(member.id))
+                    const searchTerm = crewSearchTerms[brand.id] || ''
+                    const availableMembers = eligibleCrewMembers.filter(member => {
+                      const isSelected = draft.agentIds.includes(member.id)
+                      if (isSelected) return false
+                      if (!searchTerm) return true
+                      return member.name.toLowerCase().includes(searchTerm.toLowerCase())
+                    })
+
                     return (
-                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/40 p-4 space-y-3">
-                        <p className="text-xs font-black text-slate-700 dark:text-slate-350 flex items-center gap-1.5">
-                          <span>🤖 AI Marketing Crew</span>
-                          <span className="text-[10px] font-normal text-slate-400 dark:text-slate-500">(包含人类主理人与 AI 智能体)</span>
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                          {eligibleCrewMembers.length === 0 ? (
-                            <p className="text-xs text-slate-400 py-2 col-span-full">暂无合格的 Crew 成员可供绑定</p>
+                                     {/* Badges List of currently selected members */}
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">已分配团队成员 ({selectedMembers.length})</span>
+                          {selectedMembers.length === 0 ? (
+                            <div className="text-xs text-slate-400 py-3 px-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center font-medium bg-white dark:bg-slate-900">
+                              当前暂无分配 of Crew 成员，请在下方搜索添加
+                            </div>
                           ) : (
-                            eligibleCrewMembers.map((member) => {
-                              const isChecked = draft.agentIds.includes(member.id)
-                              return (
-                                <label 
-                                  key={`${brand.id}-${member.id}`} 
-                                  className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs font-extrabold cursor-pointer transition-all bg-white dark:bg-slate-900 ${
-                                    isChecked 
-                                      ? 'border-indigo-500 ring-1 ring-indigo-500/20 text-indigo-750 dark:text-indigo-300' 
-                                      : 'border-slate-150 dark:border-slate-800 text-slate-650 dark:text-slate-405 hover:bg-slate-50/30'
-                                  }`}
+                            <div className="flex flex-wrap gap-2 p-2 bg-slate-55 dark:bg-slate-950 rounded-xl border border-slate-200/40 dark:border-slate-800/40 min-h-[42px]">
+                              {selectedMembers.map((member) => (
+                                <div 
+                                  key={`selected-${brand.id}-${member.id}`} 
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl text-xs font-black text-slate-800 dark:text-slate-250 shadow-sm animate-in zoom-in-95 duration-150"
                                 >
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => {
-                                      const nextAgentIds = isChecked
-                                        ? draft.agentIds.filter(id => id !== member.id)
-                                        : [...draft.agentIds, member.id]
+                                  <span>{member.isAi ? '🤖' : '👤'}</span>
+                                  <span className="max-w-[150px] truncate">{member.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextAgentIds = draft.agentIds.filter(id => id !== member.id)
                                       onUpdateBrandDraft(brand.id, { agentIds: nextAgentIds })
                                     }}
-                                    className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                                  />
-                                  <span className="truncate flex items-center gap-1">
-                                    <span>{member.isAi ? '🤖' : '👤'}</span>
-                                    <span className="truncate">{member.name}</span>
-                                  </span>
-                                </label>
-                              )
-                            })
+                                    className="text-slate-405 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/20 p-0.5 rounded transition-all cursor-pointer font-bold ml-1"
+                                    title="移出团队"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Search Selector Box */}
+                        <div className="space-y-1.5 relative">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">添加成员至 Crew (搜索人类/AI)</span>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="输入姓名、邮箱或 Agent 名字以搜索添加成员..."
+                              value={searchTerm}
+                              onFocus={() => setActiveSearchBrandId(brand.id)}
+                              onChange={e => setCrewSearchTerms(prev => ({ ...prev, [brand.id]: e.target.value }))}
+                              className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3.5 py-2.5 pl-9 text-xs text-slate-850 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <Search size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          </div>
+
+                          {/* Search Dropdown list */}
+                          {activeSearchBrandId === brand.id && (
+                            <>
+                              <div className="fixed inset-0 z-10" onClick={() => setActiveSearchBrandId(null)} />
+                              <div className="absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-20 divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in slide-in-from-top-1 duration-100">
+                                {availableMembers.length === 0 ? (
+                                  <div className="p-3.5 text-center text-xs text-slate-450 font-medium bg-slate-55 dark:bg-slate-955/10">无匹配的候选成员（或已被全部添加）</div>
+                                ) : (
+                                  availableMembers.map(member => (
+                                    <div
+                                      key={`avail-${brand.id}-${member.id}`}
+                                      onClick={() => {
+                                        const nextAgentIds = [...draft.agentIds, member.id]
+                                        onUpdateBrandDraft(brand.id, { agentIds: nextAgentIds })
+                                        setCrewSearchTerms(prev => ({ ...prev, [brand.id]: '' }))
+                                        setActiveSearchBrandId(null)
+                                      }}
+                                      className="flex items-center justify-between px-4 py-2.5 text-xs text-slate-750 dark:text-slate-350 hover:bg-indigo-50/40 dark:hover:bg-slate-850 cursor-pointer transition-colors"
+                                    >
+                                      <span className="flex items-center gap-2">
+                                        <span>{member.isAi ? '🤖' : '👤'}</span>
+                                        <span className="font-extrabold">{member.name}</span>
+                                        {member.isAi && (
+                                          <span className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/20 text-[9px] font-black text-indigo-600 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-800/30">AI Agent</span>
+                                        )}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 font-bold hover:text-indigo-600">+ 添加成员</span>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
