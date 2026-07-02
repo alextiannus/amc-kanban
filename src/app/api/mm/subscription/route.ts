@@ -223,15 +223,17 @@ export async function POST(request: NextRequest) {
         })
         if (userObj?.email) {
           const targetBrandName = pendingBrandName || (brandId ? (await prisma.brand.findUnique({ where: { id: brandId }, select: { name: true } }))?.name : null) || '您的品牌'
-          await sendSubscriptionSuccessEmail({
+          sendSubscriptionSuccessEmail({
             to: userObj.email,
             nickname: userObj.nickname || userObj.email.split('@')[0],
             brandName: targetBrandName,
             planName: pendingSub.planName,
+          }).catch((emailErr) => {
+            console.error('[billing_subscription_email] background email failed:', emailErr)
           })
         }
       } catch (emailErr) {
-        console.error('[billing_subscription_email] failed to send success email:', emailErr)
+        console.error('[billing_subscription_email] failed to initiate success email:', emailErr)
       }
       return NextResponse.json({
         success: true,

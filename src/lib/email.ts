@@ -89,7 +89,6 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailResult>
     console.warn('[email] SMTP not configured — skipping email send')
     return { success: false, error: 'SMTP not configured' }
   }
-
   try {
     const transporter = nodemailer.createTransport({
       host: smtp.host,
@@ -98,6 +97,9 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailResult>
       auth: smtp.user
         ? { user: smtp.user, pass: smtp.password }
         : undefined,
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 10000,
     })
 
     const info = await transporter.sendMail({
