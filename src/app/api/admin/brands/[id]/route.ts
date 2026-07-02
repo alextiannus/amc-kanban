@@ -262,7 +262,7 @@ export async function DELETE(
     }
 
     // Soft delete (update status to ARCHIVED)
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.brand.update({
         where: { id },
         data: { status: 'ARCHIVED' },
