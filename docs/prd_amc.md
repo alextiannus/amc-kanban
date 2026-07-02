@@ -1193,3 +1193,22 @@ RolePermission 表：
 ### 影响文件
 - `docs/prd_amc.md`
 
+---
+
+## Changelog v1.8.31 — 2026-07-02（Render 生产部署安全与易失性存储云端适配）
+
+### 1. 生产环境数据库部署安全性升级
+- **安全替换部署指令**：在 `render.yaml` 中，将构建阶段使用的 `npx prisma db push --accept-data-loss` 彻底替换为安全的生产数据库迁移命令 `npx prisma migrate deploy`。
+- **防止数据丢失**：通过停用 `--accept-data-loss` 选项，避免因表结构非兼容变更导致生产数据库历史数据发生意外静默擦除。
+
+### 2. 爬虫截图临时存储云端化与 OBS 适配
+- **易失性容器适配**：在 `src/lib/captureSnapshots.ts` 中，截图功能将优先检测并适配华为 OBS 云存储服务。当检测到华为 OBS 配置可用时，自动将截图上传至 OBS 桶中。
+- **清除临时物理文件**：上传云存储成功后，系统自动清理保存在临时文件系统（ephemeral container filesystem）中的 PNG 本地文件，彻底解决 Render 容器重启或水平扩展时，本地物理文件丢失引发前端访问 404 的隐患。
+- **本地开发无感回退**：若云存储配置不可用（例如在本地离线开发阶段），系统将自动无缝回退至写入本地磁盘的旧逻辑，确保本地调测环境平滑不受影响。
+
+### 影响文件
+- `render.yaml`
+- `src/lib/captureSnapshots.ts`
+- `docs/prd_amc.md`
+
+

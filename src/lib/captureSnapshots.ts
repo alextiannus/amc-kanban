@@ -1,6 +1,7 @@
 import { prisma } from './prisma.ts'
 import fs from 'fs'
 import path from 'path'
+import { uploadHuaweiObsObject } from './integrations/huaweiObs'
 
 // Try importing playwright dynamically to avoid server-start load overhead if missing
 async function getBrowser() {
@@ -203,6 +204,30 @@ export async function captureAccountSnapshot(accountId: string): Promise<string>
         const pngPath = path.join(dirPath, `${timestamp}.png`)
         await page.screenshot({ path: pngPath, fullPage: false })
         savedFilename = `/snapshots/${accountId}/${timestamp}.png`
+        
+        // 尝试上传到华为 OBS (如果已配置)
+        try {
+          const fileBuffer = fs.readFileSync(pngPath)
+          const uploadRes = await uploadHuaweiObsObject({
+            key: `snapshots/${accountId}/${timestamp}.png`,
+            body: fileBuffer,
+            contentType: 'image/png',
+            cacheControl: 'public, max-age=31536000, immutable',
+          })
+          if (uploadRes && uploadRes.ok) {
+            savedFilename = uploadRes.url
+            console.log(`[AMC Researcher] Uploaded snapshot to Huawei OBS: ${savedFilename}`)
+            // 上传成功后清理本地临时文件以节省磁盘空间
+            fs.unlink(pngPath, (err) => {
+              if (err) console.error(`[AMC Researcher] Failed to delete local temp snapshot:`, err)
+            })
+          } else {
+            console.log(`[AMC Researcher] Huawei OBS not configured or upload failed, keeping local fallback path.`)
+          }
+        } catch (obsErr) {
+          console.error(`[AMC Researcher] Huawei OBS upload exception, keeping local fallback path:`, obsErr)
+        }
+        
         screenshotCaptured = true
         isReal = verifyRealProfile(account.platformId, currentUrl, pageContent)
         console.log(`[AMC Researcher] Captured screenshot successfully for ${account.handle} at ${pngPath}. Verified real: ${isReal}`)

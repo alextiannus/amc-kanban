@@ -9,7 +9,7 @@ services:
   - type: web
     name: amc-kanban
     env: node
-    buildCommand: npm install --ignore-scripts && npx prisma generate && npx prisma db push --accept-data-loss && npm run build
+    buildCommand: npm install --ignore-scripts && npx prisma generate && npx prisma migrate deploy && npm run build
     startCommand: npm run start
     # Only redeploy when main app files change (ignore brand-owner changes)
     paths:
