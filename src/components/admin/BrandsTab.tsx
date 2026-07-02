@@ -356,7 +356,13 @@ export default function BrandsTab({
                     })
 
                     return (
-                                     {/* Badges List of currently selected members */}
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-55 dark:bg-slate-955/20 p-5 space-y-4">
+                        <p className="text-xs font-black text-slate-700 dark:text-slate-350 flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-slate-800">
+                          <span>🤖 AI Marketing Crew</span>
+                          <span className="text-[10px] font-normal text-slate-400 dark:text-slate-500">(包含人类主理人与 AI 智能体)</span>
+                        </p>
+
+                        {/* Badges List of currently selected members */}
                         <div className="space-y-1.5">
                           <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">已分配团队成员 ({selectedMembers.length})</span>
                           {selectedMembers.length === 0 ? (
