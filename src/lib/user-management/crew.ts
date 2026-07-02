@@ -20,23 +20,21 @@ export async function cascadePullAvatars(crewId: string, humanUserId: string, tx
     select: { id: true }
   })
 
-  await Promise.all(
-    avatars.map((avatar: any) =>
-      tx.crewMember.upsert({
-        where: {
-          crewId_userId: {
-            crewId,
-            userId: avatar.id
-          }
-        },
-        create: {
+  for (const avatar of avatars) {
+    await tx.crewMember.upsert({
+      where: {
+        crewId_userId: {
           crewId,
           userId: avatar.id
-        },
-        update: {}
-      })
-    )
-  )
+        }
+      },
+      create: {
+        crewId,
+        userId: avatar.id
+      },
+      update: {}
+    })
+  }
 }
 
 /**
