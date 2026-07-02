@@ -226,9 +226,9 @@ export async function PATCH(request: Request, { params }: Params) {
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: Params
 ) {
-  const { id } = params
+  const { id } = await params
   const session = await getSession()
   if (!session?.user || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
