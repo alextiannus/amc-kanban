@@ -9,6 +9,9 @@ export async function GET() {
   }
 
   const brands = await prisma.brand.findMany({
+    where: {
+      status: { not: 'ARCHIVED' }
+    },
     select: {
       id: true,
       name: true,

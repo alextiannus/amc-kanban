@@ -223,3 +223,68 @@ export async function PATCH(request: Request, { params }: Params) {
 
   return NextResponse.json({ ok: true, brand: updated })
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const { id } = params
+  const session = await getSession()
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  try {
+    const brand = await prisma.brand.findUnique({
+      where: { id },
+      include: {
+        subscriptions: {
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+        },
+      },
+    })
+
+    if (!brand) {
+      return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+    }
+
+    // Check latest subscription status
+    const latestSubscription = brand.subscriptions[0]
+    if (latestSubscription) {
+      const subStatus = latestSubscription.status
+      if (subStatus !== 'CANCELLED' && subStatus !== 'EXPIRED') {
+        return NextResponse.json(
+          { error: `无法删除处于“${subStatus === 'ACTIVE' ? '正常履约中' : subStatus}”的品牌。为了数据安全，只能删除已取消订阅 (CANCELLED) 或已过期的品牌。` },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Soft delete (update status to ARCHIVED)
+    await prisma.$transaction(async (tx) => {
+      await tx.brand.update({
+        where: { id },
+        data: { status: 'ARCHIVED' },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          actorId: session.user.id,
+          actorType: 'HUMAN',
+          actorName: session.user.email || null,
+          action: 'ADMIN_BRAND_SOFT_DELETED',
+          resourceId: id,
+          resourceType: 'Brand',
+          newValue: { status: 'ARCHIVED' },
+        },
+      })
+    })
+
+    return NextResponse.json({ ok: true })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Internal Server Error'
+    console.error('[DELETE /api/admin/brands/[id]]', e)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}

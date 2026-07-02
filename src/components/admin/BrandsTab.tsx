@@ -73,6 +73,30 @@ export default function BrandsTab({
   })
   const [crewSearchTerms, setCrewSearchTerms] = useState<Record<string, string>>({})
   const [activeSearchBrandId, setActiveSearchBrandId] = useState<string | null>(null)
+  const [isDeletingBrandId, setIsDeletingBrandId] = useState<string | null>(null)
+
+  const handleDeleteBrand = async (brandId: string) => {
+    if (!confirm('确定要删除这个品牌吗？该操作会将品牌逻辑归档 (Soft Delete)，不再在前台或看板列表中展示。')) {
+      return
+    }
+    setIsDeletingBrandId(brandId)
+    try {
+      const res = await fetch(`/api/admin/brands/${brandId}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        await onFetchBrands()
+      } else {
+        const errData = await res.json()
+        alert(errData.error || '删除品牌失败')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('网络错误，删除失败')
+    } finally {
+      setIsDeletingBrandId(null)
+    }
+  }
   const [savingConfig, setSavingConfig] = useState(false)
   const [configDraft, setConfigDraft] = useState<Partial<AssignmentPoolConfig>>({})
 
@@ -219,115 +243,154 @@ export default function BrandsTab({
                       </div>
                     </div>
 
-                    <button 
-                      onClick={() => onSaveBrandDraft(brand)} 
-                      disabled={isSaving} 
-                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-650 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold text-xs transition-all shadow-sm flex-shrink-0 cursor-pointer self-start md:self-auto"
-                    >
-                      {isSaving ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Save className="w-3.5 h-3.5" />
-                      )}
-                      <span>{isSaving ? '保存中...' : '保存修改'}</span>
-                    </button>
+                    <div className="flex items-center gap-2.5 flex-shrink-0 self-start md:self-auto">
+                      {/* Delete brand button (only allowed when subscription cancelled or expired) */}
+                      {(() => {
+                        const hasActiveSub = brand.subscriptions && brand.subscriptions.length > 0 && brand.subscriptions[0].status === 'ACTIVE'
+                        const isDeleting = isDeletingBrandId === brand.id
+                        return (
+                          <button
+                            onClick={() => handleDeleteBrand(brand.id)}
+                            disabled={hasActiveSub || isDeleting}
+                            className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-extrabold text-xs transition-all shadow-sm ${
+                              hasActiveSub
+                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-800 cursor-not-allowed'
+                                : 'bg-rose-50/20 border border-rose-250 dark:border-rose-900/30 text-rose-650 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-955/20 cursor-pointer'
+                            }`}
+                            title={hasActiveSub ? "正常签约中 (ACTIVE) 的品牌无法删除。请先修改订阅状态为 CANCELLED 之后再操作。" : "删除品牌 (Soft Delete)"}
+                          >
+                            {isDeleting ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3.5 h-3.5" />
+                            )}
+                            <span>删除品牌</span>
+                          </button>
+                        )
+                      })()}
+
+                      <button 
+                        onClick={() => onSaveBrandDraft(brand)} 
+                        disabled={isSaving} 
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-650 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold text-xs transition-all shadow-sm flex-shrink-0 cursor-pointer"
+                      >
+                        {isSaving ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Save className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isSaving ? '保存中...' : '保存修改'}</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Form fields */}
                   {draft && (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 pt-1">
-                      <label className="space-y-1.5 lg:col-span-2 block">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">品牌名称</span>
-                        <input 
-                          type="text"
-                          value={draft.name} 
-                          onChange={e => onUpdateBrandDraft(brand.id, { name: e.target.value })} 
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
-                        />
-                      </label>
-                      <label className="space-y-1.5 block">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">运行状态</span>
-                        <select 
-                          value={draft.status} 
-                          onChange={e => onUpdateBrandDraft(brand.id, { status: e.target.value })} 
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="ACTIVE">ACTIVE (活跃)</option>
-                          <option value="PAUSED">PAUSED (暂停)</option>
-                          <option value="ARCHIVED">ARCHIVED (归档)</option>
-                        </select>
-                      </label>
-                      <label className="space-y-1.5 block">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">物理地点</span>
-                        <input 
-                          type="text"
-                          value={draft.location} 
-                          onChange={e => onUpdateBrandDraft(brand.id, { location: e.target.value })} 
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
-                        />
-                      </label>
-                      
-                      <label className="space-y-1.5 lg:col-span-2 block">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">主理人/业主 (Brand Owner)</span>
-                        <select 
-                          value={draft.ownerUserId} 
-                          onChange={e => onUpdateBrandDraft(brand.id, { ownerUserId: e.target.value })} 
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="">未设置</option>
-                          <optgroup label="人类主理人 (Humans)">
-                            {filteredHumans.map((human) => (
-                              <option key={human.id} value={human.id}>
-                                {human.nickname ? `${human.nickname} (${human.email})` : human.email}
-                              </option>
-                            ))}
-                          </optgroup>
-                          <optgroup label="AI 智能体 (AI Agents)">
-                            {agents.map((agent) => (
-                              <option key={agent.id} value={agent.id}>
-                                🤖 {agent.nickname || agent.email}
-                              </option>
-                            ))}
-                          </optgroup>
-                        </select>
-                      </label>
-                      <label className="space-y-1.5 block">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">服务套餐等级 (Plan)</span>
-                        <select 
-                          value={draft.planId} 
-                          onChange={e => onUpdateBrandDraft(brand.id, { planId: e.target.value })} 
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="starter">STARTER (自媒体基础)</option>
-                          <option value="essential">ESSENTIAL (品牌建设)</option>
-                          <option value="advanced">ADVANCED (旗舰代运营)</option>
-                        </select>
-                      </label>
-                      <label className="space-y-1.5 block">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">订阅付款状态</span>
-                        <select 
-                          value={draft.subscriptionStatus} 
-                          onChange={e => onUpdateBrandDraft(brand.id, { subscriptionStatus: e.target.value })} 
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value="ACTIVE">ACTIVE (正常履约中)</option>
-                          <option value="PENDING">PENDING (待确认账单)</option>
-                          <option value="FAILED">FAILED (扣款失败)</option>
-                          <option value="CANCELLED">CANCELLED (已退订)</option>
-                        </select>
-                      </label>
-                      <label className="space-y-1.5 block">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">签约合同周期</span>
-                        <select 
-                          value={draft.durationMonths} 
-                          onChange={e => onUpdateBrandDraft(brand.id, { durationMonths: Number(e.target.value) })} 
-                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        >
-                          <option value={3}>3 个月</option>
-                          <option value={6}>6 个月</option>
-                          <option value={12}>12 个月</option>
-                        </select>
-                      </label>
+                    <div className="space-y-4 pt-1">
+                      {/* Section 1: Brand Settings */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl border border-slate-150 dark:border-slate-800/80 bg-slate-50/20 dark:bg-slate-955/5">
+                        <div className="md:col-span-3 pb-1 border-b border-slate-100 dark:border-slate-800/60">
+                          <span className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest block">🏷️ 品牌基础资产设置</span>
+                        </div>
+                        <label className="space-y-1.5 block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">品牌名称</span>
+                          <input 
+                            type="text"
+                            value={draft.name} 
+                            onChange={e => onUpdateBrandDraft(brand.id, { name: e.target.value })} 
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                          />
+                        </label>
+                        <label className="space-y-1.5 block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">运行状态</span>
+                          <select 
+                            value={draft.status} 
+                            onChange={e => onUpdateBrandDraft(brand.id, { status: e.target.value })} 
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          >
+                            <option value="ACTIVE">ACTIVE (活跃)</option>
+                            <option value="PAUSED">PAUSED (暂停)</option>
+                            <option value="ARCHIVED">ARCHIVED (归档)</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1.5 block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">物理地点</span>
+                          <input 
+                            type="text"
+                            value={draft.location} 
+                            onChange={e => onUpdateBrandDraft(brand.id, { location: e.target.value })} 
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                          />
+                        </label>
+                      </div>
+
+                      {/* Section 2: Billing & Subscriptions */}
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-2xl border border-slate-150 dark:border-slate-800/80 bg-slate-50/20 dark:bg-slate-955/5">
+                        <div className="md:col-span-4 pb-1 border-b border-slate-100 dark:border-slate-800/60">
+                          <span className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest block">💳 商业授权与订阅 (Billing & Subscriptions)</span>
+                        </div>
+                        <label className="space-y-1.5 md:col-span-2 block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">主理人/业主 (Brand Owner)</span>
+                          <select 
+                            value={draft.ownerUserId} 
+                            onChange={e => onUpdateBrandDraft(brand.id, { ownerUserId: e.target.value })} 
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          >
+                            <option value="">未设置</option>
+                            <optgroup label="人类主理人 (Humans)">
+                              {filteredHumans.map((human) => (
+                                <option key={human.id} value={human.id}>
+                                  {human.nickname ? `${human.nickname} (${human.email})` : human.email}
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="AI 智能体 (AI Agents)">
+                              {agents.map((agent) => (
+                                <option key={agent.id} value={agent.id}>
+                                  🤖 {agent.nickname || agent.email}
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </label>
+                        <label className="space-y-1.5 block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">服务套餐等级 (Plan)</span>
+                          <select 
+                            value={draft.planId} 
+                            onChange={e => onUpdateBrandDraft(brand.id, { planId: e.target.value })} 
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          >
+                            <option value="starter">STARTER (自媒体基础)</option>
+                            <option value="essential">ESSENTIAL (品牌建设)</option>
+                            <option value="advanced">ADVANCED (旗舰代运营)</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1.5 block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">订阅付款状态</span>
+                          <select 
+                            value={draft.subscriptionStatus} 
+                            onChange={e => onUpdateBrandDraft(brand.id, { subscriptionStatus: e.target.value })} 
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          >
+                            <option value="ACTIVE">ACTIVE (正常履约中)</option>
+                            <option value="PENDING">PENDING (待确认账单)</option>
+                            <option value="FAILED">FAILED (扣款失败)</option>
+                            <option value="CANCELLED">CANCELLED (已退订)</option>
+                          </select>
+                        </label>
+                        <label className="space-y-1.5 md:col-span-2 block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">签约合同周期</span>
+                          <select 
+                            value={draft.durationMonths} 
+                            onChange={e => onUpdateBrandDraft(brand.id, { durationMonths: Number(e.target.value) })} 
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          >
+                            <option value={3}>3 个月</option>
+                            <option value={6}>6 个月</option>
+                            <option value={12}>12 个月</option>
+                          </select>
+                        </label>
+                      </div>
                     </div>
                   )}
 
