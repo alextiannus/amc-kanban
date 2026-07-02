@@ -1120,20 +1120,21 @@ RolePermission 表：
 
 ---
 
-## Changelog v1.8.29 — 2026-07-02（主理人看板地图视图设计方案）
+## Changelog v1.8.29 — 2026-07-02（主理人看板独立地图页面设计方案）
 
-### 地图视图与地理位置数据支撑设计（设计阶段）
-- **数据库 Schema 设计扩展**：在 `Brand` 品牌模型中规划新增 `latitude`（纬度，Float?）和 `longitude`（经度，Float?）字段，以支持地图打点所需的空间坐标数据。规划新增 geocoding 逻辑，根据地址自动获取或在创建新品牌时手动校验填入。
-- **主理人看板 UI 交互设计**：
-  - 在 `/profile/principal` 主理人看板的“品牌列表”面板右上角增加“列表视图 (List)”和“地图视图 (Map)”的切换 Toggle。
-  - 在“地图视图”中，使用地图容器（规划集成 Google Maps JS SDK 或 Leaflet）呈现所有托管饭店（品牌）的地理位置标记（Markers）。
-  - 标记的颜色反映品牌当前的经营状态（ACTIVE 绿色，PAUSED 橙色，出现待办动作项时呈现警告色）。
-- **信息弹窗与交互设计 (InfoWindow Overlay)**：
-  - 点击地图上的餐厅标记将弹出详情卡片，显示餐厅名称、Logo、地址。
-  - 呈现关联的 AI 员工状态与数量。
-  - 展现当前的未决动作项（Action Items）状态。
-  - 规划预留周边数据和 Place Details（如评分、营业时间、商圈热度）展示位置。
-  - 提供“管理”按钮以一键跳转到品牌专属的管理页面 `/profile/principal/brands/${brandId}`。
+### 独立地图视图与多市场切换设计（设计阶段）
+- **独立路由与入口设计**：
+  - 将地图视图设计为单独的页面路由 `/profile/principal/map`。
+  - 在 `/profile/principal` 主理人看板首页的“品牌列表”区域右上角增设“🗺️ 查看地图分布”按钮，作为进入该页面的入口。
+- **市场选择与默认中心（Singapore）**：
+  - 地图页面顶部配置“市场切换”下拉菜单，**当前版本默认选择并锁定在新加坡（Singapore）**，并将地图中心初始化在新加坡坐标。
+  - 长期规划支持主理人切换至其他市场（如 Kuala Lumpur 吉隆坡、Jakarta 雅加达等），以按区域过滤和审视门店分布。
+- **数据库 Schema 设计扩展**：
+  - 在 `Brand` 模型中规划新增 `market` 字段（默认值为 `"Singapore"`，以方便市场归类）。
+  - 新增 `latitude`（纬度）和 `longitude`（经度）字段，并预留 Geocoding 逻辑将地址（address）异步转换并填入坐标。
+- **信息卡片与多维 Research 数据展现（成果载体）**：
+  - 点击地图打点标记（Marker）将展示气泡窗口，不仅包含基本的门店名、Logo、地址、AI员工和未决 ActionItems，还预留了展示 Google Place Details 评分、营业时间、消费者评论的卡片区块。
+  - 架构设计上支持后续不断向气泡窗口或地图侧边栏中灌入该门店在当地的“调研成果（Research Results）”，协助主理人利用空间维度快速洞察和理解商户的本地化生意状况。
 
 ### 影响文件
 - `docs/prd_amc.md`
