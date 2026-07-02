@@ -154,12 +154,18 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     console.error('[createBrandForActivatedSubscription] Auxiliary mappings setup failed (non-fatal):', syncError)
   }
 
-  const agentKey = await ensureBrandAgentKeyAfterSubscription({ ownerId: input.ownerId })
-  await prisma.brandAgent.upsert({
-    where: { brandId_agentId: { brandId: brand.id, agentId: agentKey.agentId } },
-    create: { brandId: brand.id, agentId: agentKey.agentId, role: 'worker', active: true },
-    update: { role: 'worker', active: true },
-  })
+  let agentId: string | null = null
+  try {
+    const agentKey = await ensureBrandAgentKeyAfterSubscription({ ownerId: input.ownerId })
+    agentId = agentKey.agentId
+    await prisma.brandAgent.upsert({
+      where: { brandId_agentId: { brandId: brand.id, agentId: agentKey.agentId } },
+      create: { brandId: brand.id, agentId: agentKey.agentId, role: 'worker', active: true },
+      update: { role: 'worker', active: true },
+    })
+  } catch (agentError) {
+    console.error('[createBrandForActivatedSubscription] Agent key setup failed (non-fatal):', agentError)
+  }
 
   ensureBrandWorkspace(brand.id).catch((workspaceError) => {
     console.error('[createBrandForActivatedSubscription] workspace init failed:', workspaceError)
@@ -172,13 +178,13 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     industry: input.description || null,
     region: input.timezone || null,
     createdBy: 'system',
-  }).then(result => {
+  }).then((result: any) => {
     console.log('[createBrandForActivatedSubscription] Background principal assignment succeeded:', result.selectedAgentId)
-  }).catch(assignmentError => {
+  }).catch((assignmentError: any) => {
     console.error('[createBrandForActivatedSubscription] Background principal assignment failed:', assignmentError)
   })
 
-  return { ok: true as const, brand, alreadyCreated: false as const, agentId: agentKey.agentId }
+  return { ok: true as const, brand, alreadyCreated: false as const, agentId }
 }
 
 type EnsureBrandAgentKeyInput = {
