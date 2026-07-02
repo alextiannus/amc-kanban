@@ -1134,6 +1134,10 @@ RolePermission 表：
   - 在 `Brand` 模型中规划新增 `latitude`（纬度）和 `longitude`（经度）字段，并预留 Geocoding 逻辑将地址（address）异步转换并填入坐标。
 - **信息卡片与多维 Research 数据展现（成果载体）**：
   - **简化卡片展现内容**：气泡窗口**不用展示 AI 员工，也不用展示待办事项**。仅展示**商家数据**（名称、Logo、地址、官网链接）以及 **Research 调研成果**（如 Google Place Details 评分、营业时间、消费者热门评价，并为未来的竞品分析、区域人口统计等调研成果预留卡片区块）。
+- **地址搜索添加与点位绑定入口**：
+  - 在地图页面设计中新增一个“🔍 搜索绑定门店地址”的输入框（集成 Google Places Autocomplete 自动补全）。
+  - 若主理人在创建新品牌商家时未能成功采集或解析到完整的坐标与地址，可以在此直接输入门面名称或地址进行搜索。
+  - 选择正确的 Google 门店位置后，弹出确认气泡/弹窗以将其绑定至指定的 Brand 实例。确认后，系统自动将查出的 `googlePlaceId`、`address` 及 `latitude`/`longitude` 坐标写回数据库中的该 `Brand` 纪录，并即时在地图上生成并渲染打点 Marker，大幅提高位置容错性。
 
 ### 影响文件
 - `docs/prd_amc.md`
