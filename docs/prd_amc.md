@@ -1117,3 +1117,23 @@ RolePermission 表：
 - `src/app/api/brands/[id]/drafts/[draftId]/route.ts`
 - `src/app/api/dashboard/calendar/route.ts`
 - `docs/prd_amc.md`
+
+---
+
+## Changelog v1.8.29 — 2026-07-02（主理人看板地图视图设计方案）
+
+### 地图视图与地理位置数据支撑设计（设计阶段）
+- **数据库 Schema 设计扩展**：在 `Brand` 品牌模型中规划新增 `latitude`（纬度，Float?）和 `longitude`（经度，Float?）字段，以支持地图打点所需的空间坐标数据。规划新增 geocoding 逻辑，根据地址自动获取或在创建新品牌时手动校验填入。
+- **主理人看板 UI 交互设计**：
+  - 在 `/profile/principal` 主理人看板的“品牌列表”面板右上角增加“列表视图 (List)”和“地图视图 (Map)”的切换 Toggle。
+  - 在“地图视图”中，使用地图容器（规划集成 Google Maps JS SDK 或 Leaflet）呈现所有托管饭店（品牌）的地理位置标记（Markers）。
+  - 标记的颜色反映品牌当前的经营状态（ACTIVE 绿色，PAUSED 橙色，出现待办动作项时呈现警告色）。
+- **信息弹窗与交互设计 (InfoWindow Overlay)**：
+  - 点击地图上的餐厅标记将弹出详情卡片，显示餐厅名称、Logo、地址。
+  - 呈现关联的 AI 员工状态与数量。
+  - 展现当前的未决动作项（Action Items）状态。
+  - 规划预留周边数据和 Place Details（如评分、营业时间、商圈热度）展示位置。
+  - 提供“管理”按钮以一键跳转到品牌专属的管理页面 `/profile/principal/brands/${brandId}`。
+
+### 影响文件
+- `docs/prd_amc.md`
