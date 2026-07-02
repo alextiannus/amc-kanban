@@ -28,6 +28,9 @@
   --color-slate-655: #334155;
   --color-slate-750: #1e293b;
   --color-slate-850: #0f172a;
+
+  /* Custom Blue Scale Extensions */
+  --color-blue-650: #2563eb;
 }
 
 @media (prefers-color-scheme: dark) {
