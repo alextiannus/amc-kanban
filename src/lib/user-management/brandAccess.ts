@@ -40,7 +40,7 @@ export async function canHumanAccessBrand(brandId: string, userId: string): Prom
     where: { memberId: userId },
     select: { ownerId: true }
   })
-  const ownerIds = orgOwners.map((m) => m.ownerId)
+  const ownerIds = orgOwners.map((m: { ownerId: string }) => m.ownerId)
 
   if (ownerIds.length > 0) {
     const orgHasAccess = await prisma.crewMember.findFirst({
