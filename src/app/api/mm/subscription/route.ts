@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
 
       // Send Subscription Success Confirmation Email (No username/password)
       try {
-        const userObj = await prisma.human.findUnique({
+        const userObj = await prisma.user.findUnique({
           where: { id: session.user.id },
           select: { email: true, nickname: true }
         })

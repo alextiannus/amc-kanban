@@ -85,11 +85,9 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       update: { role: 'worker', active: true },
     })
 
-    try {
-      await ensureBrandWorkspace(existingBrand.id)
-    } catch (workspaceError) {
+    ensureBrandWorkspace(existingBrand.id).catch((workspaceError) => {
       console.error('[createBrandForActivatedSubscription] existing workspace init failed:', workspaceError)
-    }
+    })
 
     return { ok: true as const, brand: existingBrand, alreadyCreated: true as const, agentId: agentKey.agentId }
   }
@@ -159,11 +157,9 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     update: { role: 'worker', active: true },
   })
 
-  try {
-    await ensureBrandWorkspace(brand.id)
-  } catch (workspaceError) {
+  ensureBrandWorkspace(brand.id).catch((workspaceError) => {
     console.error('[createBrandForActivatedSubscription] workspace init failed:', workspaceError)
-  }
+  })
 
   return { ok: true as const, brand, alreadyCreated: false as const, agentId: agentKey.agentId }
 }
