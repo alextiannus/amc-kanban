@@ -408,7 +408,6 @@ export default function BrandsTab({
                         )}
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400 font-medium">
-                        <span className="flex items-center gap-1"><Users size={11} /> 业主邮箱: {editingBrand.owners[0]?.user.email || '未指定'}</span>
                         <span className="flex items-center gap-1"><MapPin size={11} /> 物理位置: {editingBrand.location || '未标注'}</span>
                         <span className="flex items-center gap-1"><Tag size={11} /> 待审核事项: {editingBrand._count.actionItems} 个</span>
                       </div>
