@@ -64,7 +64,7 @@ export default function NewPrincipalBrandPage() {
       returnTo: '/profile/principal',
     })
     if (brandLocation) params.set('newBrandLocation', brandLocation)
-    router.push(`/board/subscription?${params.toString()}`)
+    router.push('/admin')
   }
 
   return (

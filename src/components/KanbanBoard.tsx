@@ -270,12 +270,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
               当前账号还没有生效的订阅计划，因此暂不展示品牌主看板、品牌切换器和其他需要品牌上下文的页面。
             </p>
           </div>
-          <button
-            onClick={() => router.push('/board/subscription')}
-            className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white hover:bg-blue-700"
-          >
-            去订阅计划
-          </button>
+
         </div>
       </div>
     )

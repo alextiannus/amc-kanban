@@ -221,19 +221,8 @@ export default function ManagePrincipalBrandPage() {
               <h1 className="mt-2 text-2xl font-black text-slate-900 dark:text-white">管理品牌</h1>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{brand.status} · {brand._count.actionItems} 个动作项</p>
             </div>
-            {canManageSubscription ? (
-              <button
-                onClick={() => router.push(`/board/subscription/${brand.id}`)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-900/50 dark:bg-indigo-950/40 dark:text-indigo-200"
-              >
-                <CreditCard className="h-4 w-4" /> 管理订阅计划
-              </button>
-            ) : (
-              <div className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
-                <CreditCard className="h-4 w-4" /> 仅品牌主理人可管理订阅
-              </div>
-            )}
           </div>
+
         </section>
 
         <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">

@@ -2969,7 +2969,7 @@ export default function MMDashboard() {
                 </div>
               </nav>
               <a 
-                href={activeBrand?.id ? getMainAppUrl(`/board/subscription/${activeBrand.id}`) : '#'}
+                href="#"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-auto p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/30 hover:bg-indigo-100/70 dark:hover:bg-indigo-900/40 transition-colors block text-left cursor-pointer group"
@@ -3009,7 +3009,7 @@ export default function MMDashboard() {
             showToast={showToast}
             onOpenSettings={() => setShowBrandSettings(true)}
             onOpenKnowledge={() => setShowKnowledgePanel(true)}
-            subscriptionHref={activeBrand?.id ? getMainAppUrl(`/board/subscription/${activeBrand.id}`) : '#'}
+            subscriptionHref='#'
           />
         )}
       </AnimatePresence>

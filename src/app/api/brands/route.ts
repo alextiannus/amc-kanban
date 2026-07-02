@@ -471,7 +471,7 @@ export async function POST(request: Request) {
       {
         error: '订阅未支付成功或已经绑定其他品牌，无法创建品牌。',
         code: 'SUBSCRIPTION_NOT_AVAILABLE_FOR_BRAND_CREATE',
-        redirectTo: '/board/subscription',
+        redirectTo: '/admin',
       },
       { status: 402 }
     )

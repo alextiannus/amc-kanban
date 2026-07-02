@@ -35,7 +35,6 @@ interface BrandHeroCardProps {
   autoPilot: boolean
   onShowSettings: () => void
   onShowKnowledge: () => void
-  onShowSubscription: () => void
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -72,7 +71,6 @@ export default function BrandHeroCard({
   autoPilot,
   onShowSettings,
   onShowKnowledge,
-  onShowSubscription,
 }: BrandHeroCardProps) {
   const tagline = extractTagline(brandDetail?.description)
   const bodyText = extractBody(brandDetail?.description)
@@ -172,21 +170,7 @@ export default function BrandHeroCard({
               <FileText className="w-3 h-3" />
               知识库
             </button>
-            <button
-              id="hero-subscription"
-              onClick={onShowSubscription}
-              className={`flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all ${
-                isActive
-                  ? 'bg-indigo-500/20 border border-indigo-400/30 text-indigo-300 hover:bg-indigo-500/30'
-                  : 'bg-white/8 border border-white/15 text-white/50 hover:bg-white/15'
-              }`}
-            >
-              <CreditCard className="w-3 h-3" />
-              <span className="max-w-[140px] truncate">{subscription?.planName || '未绑定套餐'}</span>
-              {expiryDate && (
-                <span className="text-white/40 text-[10px] font-normal hidden xl:inline">· {expiryDate}</span>
-              )}
-            </button>
+
           </div>
         </div>
 

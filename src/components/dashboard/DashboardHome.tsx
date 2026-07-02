@@ -696,11 +696,6 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
           ? `状态: ${currentBrandSubscription.status}`
           : '未配置'
 
-  const openBrandSubscription = () => {
-    if (!activeBrand?.id) return
-    router.push(`/board/subscription/${activeBrand.id}`)
-  }
-
   useEffect(() => {
     if (searchParams && searchParams.get('google_success') === 'true') {
       void (async () => {
@@ -822,7 +817,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
         autoPilot={autoPilot}
         onShowSettings={() => setShowSettings(true)}
         onShowKnowledge={() => setShowKnowledge(true)}
-        onShowSubscription={openBrandSubscription}
+
       />
 
       {/* ── Brand Story Slides ────────────────────────────────────────────── */}

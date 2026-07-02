@@ -629,7 +629,7 @@ export async function POST(request: Request) {
     : new URL(request.url).origin
   const baseSubscriptionUrl = isMm
     ? `${origin}/dashboard`
-    : (brandId ? `${origin}/board/subscription/${encodeURIComponent(brandId)}` : `${origin}/board/subscription`)
+    : `${origin}/admin`
   const returnTo = typeof body.returnTo === 'string' && body.returnTo.startsWith('/') ? body.returnTo : ''
   const pendingBrandParams = new URLSearchParams()
   if (pendingBrandName) pendingBrandParams.set('newBrandName', pendingBrandName)
