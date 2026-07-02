@@ -272,26 +272,6 @@ export async function POST(request: Request) {
         },
       })
 
-      // 1. Write to new Crew models inside transaction
-      const crew = await createMarketingCrew(brand.id, tx)
-      await addCrewMember(crew.id, owner.id, tx)
-      if (sessionUser.id !== owner.id) {
-        await addCrewMember(crew.id, sessionUser.id, tx)
-      }
-
-      // 2. Write to legacy tables for backwards compatibility
-      await tx.brandOwner.upsert({
-        where: { brandId_userId: { brandId: brand.id, userId: owner.id } },
-        create: { brandId: brand.id, userId: owner.id, role: 'owner' },
-        update: { role: 'owner' },
-      })
-
-      await tx.userBusinessRole.upsert({
-        where: { userId_role: { userId: owner.id, role: 'BRAND_OWNER' } },
-        create: { userId: owner.id, role: 'BRAND_OWNER' },
-        update: {},
-      })
-
       // Create PENDING subscription — Admin activates after offline payment
       const subscription = await tx.brandSubscription.create({
         data: {
@@ -316,13 +296,36 @@ export async function POST(request: Request) {
         })
       }
 
+      return { brand, subscription }
+    })
+
+    // Outside transaction: perform secondary setups (non-blocking)
+    try {
+      const crew = await createMarketingCrew(wizardResult.brand.id)
+      await addCrewMember(crew.id, owner.id)
+      if (sessionUser.id !== owner.id) {
+        await addCrewMember(crew.id, sessionUser.id)
+      }
+
+      await prisma.brandOwner.upsert({
+        where: { brandId_userId: { brandId: wizardResult.brand.id, userId: owner.id } },
+        create: { brandId: wizardResult.brand.id, userId: owner.id, role: 'owner' },
+        update: { role: 'owner' },
+      })
+
+      await prisma.userBusinessRole.upsert({
+        where: { userId_role: { userId: owner.id, role: 'BRAND_OWNER' } },
+        create: { userId: owner.id, role: 'BRAND_OWNER' },
+        update: {},
+      })
+
       if (finalReferredById) {
-        const u = await tx.user.findUnique({
+        const u = await prisma.user.findUnique({
           where: { id: owner.id },
           select: { referredById: true }
         })
         if (u && !u.referredById) {
-          await tx.user.update({
+          await prisma.user.update({
             where: { id: owner.id },
             data: { referredById: finalReferredById }
           })
@@ -330,21 +333,21 @@ export async function POST(request: Request) {
       }
 
       if (promoCodeType) {
-        await tx.promoCodeUsage.create({
+        await prisma.promoCodeUsage.create({
           data: {
             userId: owner.id,
             codeUsed: promoCode.trim().toUpperCase(),
             codeType: promoCodeType,
             referredById: promoCodeType === 'USER_INVITE' ? finalReferredById : null,
             campaignCodeId: promoCodeType === 'CAMPAIGN_PROMO' ? campaignId : null,
-            subscriptionId: subscription.id,
+            subscriptionId: wizardResult.subscription.id,
             discountAmount: Math.round(promoDiscountAmount)
           }
         })
       }
-
-      return { brand, subscription }
-    })
+    } catch (syncError) {
+      console.error('[POST /api/brands] Wizard auxiliary mappings setup failed (non-fatal):', syncError)
+    }
 
     try { await ensureBrandWorkspace(wizardResult.brand.id) } catch {/* non-fatal */}
 

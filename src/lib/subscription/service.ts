@@ -115,34 +115,6 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       },
     })
 
-    // 1. Write to new Crew models inside transaction
-    const crew = await createMarketingCrew(created.id, tx)
-    await addCrewMember(crew.id, brandOwnerId, tx)
-    if (brandOwnerId !== input.ownerId) {
-      await addCrewMember(crew.id, input.ownerId, tx)
-    }
-
-    // 2. Write to legacy tables for backwards compatibility
-    await tx.brandOwner.upsert({
-      where: { brandId_userId: { brandId: created.id, userId: brandOwnerId } },
-      create: { brandId: created.id, userId: brandOwnerId, role: 'owner' },
-      update: { role: 'owner' },
-    })
-
-    await tx.userBusinessRole.upsert({
-      where: { userId_role: { userId: brandOwnerId, role: 'BRAND_OWNER' } },
-      create: { userId: brandOwnerId, role: 'BRAND_OWNER' },
-      update: {},
-    })
-
-    if (brandOwnerId !== input.ownerId) {
-      await tx.brandOwner.upsert({
-        where: { brandId_userId: { brandId: created.id, userId: input.ownerId } },
-        create: { brandId: created.id, userId: input.ownerId, role: 'collaborator' },
-        update: { role: 'collaborator' },
-      })
-    }
-
     await tx.brandSubscription.update({
       where: { id: input.subscriptionId },
       data: { brandId: created.id },
@@ -150,6 +122,37 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
 
     return created
   })
+
+  // 4. Outside transaction: initialize crew and compatibility mappings
+  try {
+    const crew = await createMarketingCrew(brand.id)
+    await addCrewMember(crew.id, brandOwnerId)
+    if (brandOwnerId !== input.ownerId) {
+      await addCrewMember(crew.id, input.ownerId)
+    }
+
+    await prisma.brandOwner.upsert({
+      where: { brandId_userId: { brandId: brand.id, userId: brandOwnerId } },
+      create: { brandId: brand.id, userId: brandOwnerId, role: 'owner' },
+      update: { role: 'owner' },
+    })
+
+    await prisma.userBusinessRole.upsert({
+      where: { userId_role: { userId: brandOwnerId, role: 'BRAND_OWNER' } },
+      create: { userId: brandOwnerId, role: 'BRAND_OWNER' },
+      update: {},
+    })
+
+    if (brandOwnerId !== input.ownerId) {
+      await prisma.brandOwner.upsert({
+        where: { brandId_userId: { brandId: brand.id, userId: input.ownerId } },
+        create: { brandId: brand.id, userId: input.ownerId, role: 'collaborator' },
+        update: { role: 'collaborator' },
+      })
+    }
+  } catch (syncError) {
+    console.error('[createBrandForActivatedSubscription] Auxiliary mappings setup failed (non-fatal):', syncError)
+  }
 
   const agentKey = await ensureBrandAgentKeyAfterSubscription({ ownerId: input.ownerId })
   await prisma.brandAgent.upsert({

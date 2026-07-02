@@ -22,39 +22,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '品牌名称为必填项' }, { status: 400 })
     }
 
-    const brand = await prisma.$transaction(async (tx: any) => {
-      // 1. Create Brand record
-      const created = await tx.brand.create({
-        data: {
-          ownerId: session.user.id,
-          name: name.trim(),
-          description: description?.trim() || null,
-          location: location?.trim() || null,
-          timezone: timezone || 'America/New_York',
-          address: address?.trim() || null,
-          status: 'ACTIVE',
-        },
-      })
+    // 1. Create Brand record
+    const brand = await prisma.brand.create({
+      data: {
+        ownerId: session.user.id,
+        name: name.trim(),
+        description: description?.trim() || null,
+        location: location?.trim() || null,
+        timezone: timezone || 'America/New_York',
+        address: address?.trim() || null,
+        status: 'ACTIVE',
+      },
+    })
 
+    try {
       // 2. Initialize new Marketing Crew
-      const crew = await createMarketingCrew(created.id, tx)
-      await addCrewMember(crew.id, session.user.id, tx)
+      const crew = await createMarketingCrew(brand.id)
+      await addCrewMember(crew.id, session.user.id)
 
       // 3. Backward compatibility mappings
-      await tx.brandOwner.upsert({
-        where: { brandId_userId: { brandId: created.id, userId: session.user.id } },
-        create: { brandId: created.id, userId: session.user.id, role: 'owner' },
+      await prisma.brandOwner.upsert({
+        where: { brandId_userId: { brandId: brand.id, userId: session.user.id } },
+        create: { brandId: brand.id, userId: session.user.id, role: 'owner' },
         update: { role: 'owner' },
       })
 
-      await tx.userBusinessRole.upsert({
+      await prisma.userBusinessRole.upsert({
         where: { userId_role: { userId: session.user.id, role: 'BRAND_OWNER' } },
         create: { userId: session.user.id, role: 'BRAND_OWNER' },
         update: {},
       })
-
-      return created
-    })
+    } catch (syncError) {
+      console.error('[MM-API-Brand-Create] Mappings setup failed (non-fatal):', syncError)
+    }
 
     // 4. Initialize workspace
     try {

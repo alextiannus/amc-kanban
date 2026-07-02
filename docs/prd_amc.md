@@ -1243,6 +1243,21 @@ RolePermission 表：
 - `src/app/profile/principal/page.tsx`
 - `src/app/api/profile/principal-dashboard/route.ts`
 
+---
+
+## Changelog v1.8.33 — 2026-07-02（数据库事务优化与 500 超时报错修复）
+
+### 1. 降低 Prisma 事务范围 (Minimize Transaction Scope)
+- **事务范围缩减**：将新品牌注册与付款激活事务（`createBrandForActivatedSubscription`）以及品牌创建向导事务中的 `$transaction` 限制为仅执行核心的品牌创建与订阅绑定，避免元数据写入过多导致 5 秒超时。
+- **事务外异步/同步写入**：将 Marketing Crew 创建、成员绑定、邀请码使用、裂变推荐以及老版本兼容性字段 upsert 等辅助数据库写入移出交互式事务。
+
+### 影响文件
+- `docs/prd_amc.md`
+- `src/lib/subscription/service.ts`
+- `src/app/api/brands/route.ts`
+- `src/app/api/mm/brands/route.ts`
+
+
 
 
 
