@@ -1,0 +1,96 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
+import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
+import { resolveAssignment } from '@/lib/assignmentPool'
+
+export async function POST(request: NextRequest) {
+  const session = await getSession()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (session.user.type === 'AI_AGENT') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  try {
+    const body = await request.json()
+    const { name, description, location, timezone, address, industry, region, referenceCode } = body
+
+    if (!name?.trim()) {
+      return NextResponse.json({ error: '品牌名称为必填项' }, { status: 400 })
+    }
+
+    const brand = await prisma.$transaction(async (tx: any) => {
+      // 1. Create Brand record
+      const created = await tx.brand.create({
+        data: {
+          ownerId: session.user.id,
+          name: name.trim(),
+          description: description?.trim() || null,
+          location: location?.trim() || null,
+          timezone: timezone || 'America/New_York',
+          address: address?.trim() || null,
+          status: 'ACTIVE',
+        },
+      })
+
+      // 2. Initialize new Marketing Crew
+      const crew = await createMarketingCrew(created.id, tx)
+      await addCrewMember(crew.id, session.user.id, tx)
+
+      // 3. Backward compatibility mappings
+      await tx.brandOwner.upsert({
+        where: { brandId_userId: { brandId: created.id, userId: session.user.id } },
+        create: { brandId: created.id, userId: session.user.id, role: 'owner' },
+        update: { role: 'owner' },
+      })
+
+      await tx.userBusinessRole.upsert({
+        where: { userId_role: { userId: session.user.id, role: 'BRAND_OWNER' } },
+        create: { userId: session.user.id, role: 'BRAND_OWNER' },
+        update: {},
+      })
+
+      return created
+    })
+
+    // 4. Initialize workspace
+    try {
+      await ensureBrandWorkspace(brand.id)
+    } catch (workspaceError) {
+      console.error('[MM-API-Brand-Create] Workspace init failed:', workspaceError)
+    }
+
+    // 5. Run AI Assignment matching
+    let assignment = null
+    try {
+      const result = await resolveAssignment({
+        subjectType: 'brand_create',
+        subjectId: brand.id,
+        industry: typeof industry === 'string' ? industry : null,
+        region: typeof region === 'string' ? region : (typeof location === 'string' ? location : null),
+        referenceCode: typeof referenceCode === 'string' ? referenceCode : null,
+        createdBy: 'system',
+      })
+      assignment = {
+        selectedAgentId: result.selectedAgentId,
+        matchedBy: result.matchedBy,
+        decisionId: result.decisionId,
+      }
+    } catch (assignmentError) {
+      console.error('[MM-API-Brand-Create] Resolve assignment failed:', assignmentError)
+    }
+
+    return NextResponse.json({
+      success: true,
+      brand,
+      assignment,
+    }, { status: 201 })
+
+  } catch (err: any) {
+    console.error('[MM-API-Brand-Create] POST failed:', err)
+    return NextResponse.json({ error: 'Internal Server Error', details: String(err) }, { status: 500 })
+  }
+}
