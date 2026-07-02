@@ -5,6 +5,8 @@ import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 import { canAgentAccessBrand } from '@/lib/brandAccess'
+import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
+import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 
 type BrandWithCredentials = {
   postfastApiKey: string | null
@@ -115,29 +117,100 @@ export async function GET(request: Request) {
 // Owners = all HUMAN users who have this agent in their AgentPermission table.
 // If no humans are linked, falls back to the first ADMIN user.
 //
-// Body: { name, location?, timezone? }
+// Body: { name, location?, timezone?, address?, googlePlaceId? }
 export async function POST(request: Request) {
   const agent = await getAgent(request)
   if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { name } = body
+  const { name, location, timezone, address, googlePlaceId } = body
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  const isMm = request.headers.get('x-client-type') === 'mm'
-  return NextResponse.json(
-    {
-      error: '新增品牌必须由用户先完成该品牌的订阅购买，支付成功后系统会自动创建品牌。',
-      code: 'SUBSCRIPTION_REQUIRED_BEFORE_BRAND_CREATE',
-      redirectTo: isMm
-        ? `/dashboard?newBrandName=${encodeURIComponent(name.trim())}`
-        : `/board/subscription?newBrandName=${encodeURIComponent(name.trim())}`,
+  // Find owners linked to this agent in AgentPermission
+  const permissions = await prisma.agentPermission.findMany({
+    where: { agentId: agent.id },
+    select: { userId: true },
+  })
+
+  let ownerId = permissions[0]?.userId
+  if (!ownerId) {
+    const admin = await prisma.user.findFirst({
+      where: { role: 'ADMIN' },
+      select: { id: true },
+    })
+    if (!admin) return NextResponse.json({ error: 'No admin user found to assign brand' }, { status: 500 })
+    ownerId = admin.id
+  }
+
+  const brand = await prisma.$transaction(async (tx: any) => {
+    const b = await tx.brand.create({
+      data: {
+        ownerId,
+        name: name.trim(),
+        location: location?.trim() || null,
+        timezone: timezone || 'America/New_York',
+        ...(address ? { address: address.trim() } : {}),
+        ...(googlePlaceId ? { googlePlaceId } : {}),
+      },
+    })
+
+    const crew = await createMarketingCrew(b.id, tx)
+    await addCrewMember(crew.id, ownerId, tx)
+
+    await tx.brandOwner.upsert({
+      where: { brandId_userId: { brandId: b.id, userId: ownerId } },
+      create: { brandId: b.id, userId: ownerId },
+      update: {},
+    })
+
+    await tx.userBusinessRole.upsert({
+      where: { userId_role: { userId: ownerId, role: 'BRAND_OWNER' } },
+      create: { userId: ownerId, role: 'BRAND_OWNER' },
+      update: {},
+    })
+
+    // Also link the agent to this brand!
+    await tx.brandAgent.upsert({
+      where: { brandId_agentId: { brandId: b.id, agentId: agent.id } },
+      create: { brandId: b.id, agentId: agent.id, active: true },
+      update: { active: true },
+    })
+
+    return b
+  })
+
+  try {
+    await ensureBrandWorkspace(brand.id)
+  } catch (workspaceError) {
+    console.error('[POST /api/agent/brand-config] workspace init failed:', workspaceError)
+  }
+
+  const brandWithRelations = await prisma.brand.findUnique({
+    where: { id: brand.id },
+    include: {
+      accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
     },
-    { status: 402 }
-  )
+  })
+
+  if (!brandWithRelations) {
+    return NextResponse.json({ error: 'Failed to retrieve created brand relations' }, { status: 500 })
+  }
+
+  const brandResBody = {
+    ...brandWithRelations,
+    postfastApiKey: brandWithRelations.postfastApiKey || null,
+    googleApiKey: brandWithRelations.googleApiKey || null,
+    larkAppId: brandWithRelations.larkAppId || null,
+    larkAppSecret: brandWithRelations.larkAppSecret || null,
+    larkBotWebhook: brandWithRelations.larkBotWebhook || null,
+    googlePlaceId: brandWithRelations.googlePlaceId || null,
+    larkOwnerId: brandWithRelations.larkOwnerId || null,
+  }
+
+  return NextResponse.json(toPublicBrand(brandResBody), { status: 201 })
 }
 
 

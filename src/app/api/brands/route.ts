@@ -410,32 +410,24 @@ export async function POST(request: Request) {
   }
 
   const subscriptionId = typeof body.subscriptionId === 'string' ? body.subscriptionId.trim() : ''
-  if (!subscriptionId) {
-    const isMm = request.headers.get('x-client-type') === 'mm'
-    return NextResponse.json(
-      {
-        error: '新增品牌需要先完成该品牌的订阅购买。',
-        code: 'SUBSCRIPTION_REQUIRED_BEFORE_BRAND_CREATE',
-        redirectTo: isMm ? '/dashboard' : '/board/subscription',
-      },
-      { status: 402 }
-    )
-  }
 
   const creation = await prisma.$transaction(async (tx: any) => {
-    const subscriptionToBind = await tx.brandSubscription.findFirst({
-      where: {
-        id: subscriptionId,
-        createdById: sessionUser.id,
-        status: 'ACTIVE',
-        brandId: null,
-        OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
-      },
-      orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
-      select: { id: true, planId: true, planName: true, status: true },
-    })
+    let subscriptionToBind = null
+    if (subscriptionId) {
+      subscriptionToBind = await tx.brandSubscription.findFirst({
+        where: {
+          id: subscriptionId,
+          createdById: sessionUser.id,
+          status: 'ACTIVE',
+          brandId: null,
+          OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+        },
+        orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true, planId: true, planName: true, status: true },
+      })
 
-    if (!subscriptionToBind) return null
+      if (!subscriptionToBind) return null
+    }
 
     const brand = await tx.brand.create({
       data: {
@@ -465,15 +457,17 @@ export async function POST(request: Request) {
       update: {},
     })
 
-    await tx.brandSubscription.update({
-      where: { id: subscriptionToBind.id },
-      data: { brandId: brand.id },
-    })
+    if (subscriptionToBind) {
+      await tx.brandSubscription.update({
+        where: { id: subscriptionToBind.id },
+        data: { brandId: brand.id },
+      })
+    }
 
     return { brand, boundSubscription: subscriptionToBind }
   })
 
-  if (!creation) {
+  if (subscriptionId && !creation) {
     return NextResponse.json(
       {
         error: '订阅未支付成功或已经绑定其他品牌，无法创建品牌。',
@@ -482,6 +476,10 @@ export async function POST(request: Request) {
       },
       { status: 402 }
     )
+  }
+
+  if (!creation) {
+    return NextResponse.json({ error: 'Failed to create brand' }, { status: 500 })
   }
 
   const { brand, boundSubscription } = creation
@@ -514,11 +512,11 @@ export async function POST(request: Request) {
   return NextResponse.json({
     ...brand,
     assignment,
-    subscription: {
+    subscription: boundSubscription ? {
       id: boundSubscription.id,
       planId: boundSubscription.planId,
       planName: boundSubscription.planName,
       status: boundSubscription.status,
-    },
+    } : null,
   }, { status: 201 })
 }
