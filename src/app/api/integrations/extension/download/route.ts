@@ -10,7 +10,7 @@ import fs from 'fs'
  */
 export async function GET() {
   try {
-    const extensionPath = path.resolve('chrome-extension')
+    const extensionPath = path.resolve(/*turbopackIgnore: true*/ 'chrome-extension')
     if (!fs.existsSync(extensionPath)) {
       return NextResponse.json({ error: 'Extension directory not found' }, { status: 404 })
     }
@@ -18,7 +18,7 @@ export async function GET() {
     // Spawn zip to stream output: zip -r - chrome-extension
     // We execute it in the project root to keep the directory structure in the zip file
     const zipProcess = spawn('zip', ['-r', '-', 'chrome-extension'], {
-      cwd: path.resolve('.'),
+      cwd: path.resolve(/*turbopackIgnore: true*/ '.'),
     })
 
     const stream = new ReadableStream({
