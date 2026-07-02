@@ -1151,15 +1151,20 @@ RolePermission 表：
 - **系统自动绑定与分配机制**：
   - **AI 智能体自动分配**：在新品牌创建时，系统会自动触发分配池逻辑，从空闲且匹配该品牌行业属性的 AI 智能体中挑选并配属到该品牌的 Crew。
   - **人类角色自动绑定**：若品牌是由 BD 协助创建或由品牌主本人创建，系统在初始化 Crew 时，会自动将该 BD 或品牌主加入为战队成员（`CrewMember`），无需后续手动邀请。
-- **看板可见性统一判定原则**：无论是人类用户还是 AI Agent，均统一作为平等的 `CrewMember`。只要某个实体在某品牌的 Crew 中，系统就会在看板（Kanban）以及各视图中向其呈现该品牌，其可操作范围则在其所分配的 `role` 权限范围内进行细粒度控制。
+- **用户权限的系统级判定与 Crew 边界**：
+  - 人类用户的操作权限是**系统级别 (System-Level)** 的（定义在其全局角色上，如 `AMC_PRINCIPAL`、`BD`、`BRAND_OWNER` 等）。
+  - 加入品牌的 Crew 仅代表该品牌的数据边界向该用户开放（充当访问隔离门禁）。
+  - 只要用户在某个品牌的 Crew 里，且其全局角色拥有相应权限，即可在看板中查看到该品牌并执行相应级别的操作。
 
 ### 2. 委托式智能体身份与权限继承模型 (Personal API Key Delegation)
-- **人类个人 API Key (Bearer Token)**：
-  - 看板的每个人类用户均可在其个人设置中生成一个或多个 API Key（对应 `UserApiKey` 表）。
-  - 智能体实例（运行在外部或沙箱中）在连接 AMC Kanban 的 MCP 或 REST API 时，将该人类用户的 API Key 放入 Request Header：
+- **人类个人 API Key (Bearer Token) 绑定与可见性**：
+  - **Profile 绑定与多 Key 支持**：人类用户的 API Key 绑定在其个人 Profile 中，支持用户生成 and 管理多个不同的 API Key。
+  - **严格的安全可见性**：所有生成的 API Key **仅允许在用户本人的个人 Profile 页面以及管理员（Admin）的管理控制台中查看与管理（撤销/新建）**，外部其他地方绝不可见。
+  - **智能体连接与身份解耦**：智能体连接时，配置并使用该人类用户的其中一个 API Key：
     `Authorization: Bearer <HUMAN_PERSONAL_API_KEY>`
-  - 智能体同时在自定义 Header 中声明自己的 Agent 身份：
+    并在请求的自定义 Header 中声明智能体自己的 ID：
     `X-Agent-ID: <AI_AGENT_USER_ID>`
+    后端在处理时，会核对 API Key 所属人类用户与该 AI Agent 是否同属于该品牌的 Crew，以确保授权合法。
 - **双重鉴权与权限继承逻辑 (Dual-Layer ACL)**：
   - **第一层：数据边界继承 (Authority Domain)**：后端 API 拦截器解析 API Key，将该请求的数据访问范围（即能看到哪些品牌、哪些草稿）完全限制在**该 API Key 所属人类用户**的权限边界内。若人类用户的权限被变更或收回，智能体权限立即同步生效。
   - **第二层：职能角色拦截 (Functional Role Restrictions)**：虽然智能体继承了人类用户的权限边界，但系统对智能体自身（通过 `X-Agent-ID` 对应的 AI 智能体 `User` 记录）进行功能级权限限制。即使智能体使用了 `ADMIN` 或 `AMC_PRINCIPAL` 的 API Key，其能调用的 API/MCP 技能仍受其 `AI_AGENT` 角色职能约束。例如：
