@@ -455,19 +455,6 @@ export default function UserAccountsPanel({
                 </p>
               </div>
 
-              {/* Status warning/success banner */}
-              {selectedUser.apiKeys && selectedUser.apiKeys.length > 0 ? (
-                <div className="bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 text-[10px] font-bold text-emerald-650 dark:text-emerald-400 flex items-center gap-1.5 leading-relaxed">
-                  <Check size={13} className="text-emerald-500" />
-                  <span>API 凭证已就绪 (已生成 1 个 API 密钥，可用于 AI 员工的委任)</span>
-                </div>
-              ) : (
-                <div className="bg-amber-50/50 dark:bg-amber-955/20 border border-amber-250 dark:border-amber-900/60 rounded-xl p-3 text-[10px] font-bold text-amber-650 dark:text-amber-400 leading-relaxed space-y-1">
-                  <span className="flex items-center gap-1"><AlertCircle size={12} /><span>该成员账号目前尚未配置 API 密钥！</span></span>
-                  <p className="font-medium text-slate-450">AI 代理智能体将无法使用此用户的身份承接品牌的运营及交互工作。建议立即点击下方按钮为其配置初始 API 凭证。</p>
-                </div>
-              )}
-
               {/* Show key plaintext alert box if regenerated */}
               {regeneratedKey && (
                 <div className="bg-rose-50/50 dark:bg-rose-955/10 border border-rose-100 dark:border-rose-950/30 rounded-xl p-3 space-y-2 animate-in zoom-in-95 duration-200">
@@ -491,25 +478,14 @@ export default function UserAccountsPanel({
               )}
 
               <div className="flex gap-2">
-                {selectedUser.apiKeys && selectedUser.apiKeys.length > 0 ? (
-                  <button
-                    onClick={handleRegenerateApiKey}
-                    disabled={isRegeneratingKey}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-xl text-[10.5px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-50/20 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all cursor-pointer shadow-sm"
-                  >
-                    <RefreshCw size={11} className={isRegeneratingKey ? 'animate-spin' : ''} />
-                    <span>重置 API Key</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleRegenerateApiKey}
-                    disabled={isRegeneratingKey}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-extrabold text-[10.5px] transition-all shadow-md rounded-xl cursor-pointer"
-                  >
-                    <RefreshCw size={11} className={isRegeneratingKey ? 'animate-spin' : ''} />
-                    <span>✨ 立即初始化 API 密钥</span>
-                  </button>
-                )}
+                <button
+                  onClick={handleRegenerateApiKey}
+                  disabled={isRegeneratingKey}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 border border-blue-200 dark:border-blue-800 rounded-xl text-[10.5px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-50/20 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all cursor-pointer shadow-sm"
+                >
+                  <RefreshCw size={11} className={isRegeneratingKey ? 'animate-spin' : ''} />
+                  <span>{selectedUser.apiKeys && selectedUser.apiKeys.length > 0 ? '重置 API Key' : '生成 API Key'}</span>
+                </button>
 
                 <button
                   onClick={() => setShowResetConfirm(true)}
