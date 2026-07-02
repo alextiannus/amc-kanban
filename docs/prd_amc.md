@@ -1165,9 +1165,12 @@ RolePermission 表：
     并在请求的自定义 Header 中声明智能体自己的 ID：
     `X-Agent-ID: <AI_AGENT_USER_ID>`
     后端在处理请求时，核对该 API Key 所属的“本体”人类用户是否属于目标品牌的 Crew（若人类在 Crew 中，由于级联拉入机制，其 AI 分身必定也自动在 Crew 中），从而通过继承本体的权限边界完成确权。
-- **AI 智能体作为“AI 分身”的级联自动拉入机制**：
-  - 智能体可以绑定在人类用户的个人 Profile 中，充当该用户的“AI 分身 (AI Avatar)”。
-  - 当某个人类用户被分配/拉入到某个品牌的 Crew 时，系统会自动触发联动逻辑，将该用户 Profile 下绑定的 AI 分身智能体也一并自动拉入到该品牌的 Crew 中，无需人工重复添加，保证人类与 AI 分身在 Crew 边界上的强一致性。
+- **AI 智能体作为“AI 分身”的级联自动拉入机制与多场景扩展**：
+  - **自动联动拉入**：智能体可以绑定在人类用户的个人 Profile 中，充当该用户的“AI 分身 (AI Avatar)”。当某个人类用户被分配/拉入到某个品牌的 Crew 时，系统会自动触发联动逻辑，将该用户 Profile 下绑定的 AI 分身智能体也一并自动拉入到该品牌的 Crew 中，无需人工重复添加，保证人类与 AI 分身在 Crew 边界上的强一致性。
+  - **全场景架构统一扩展 (Unified Architecture for All AI Assistants)**：
+    - 该“API Key 委托 + 级联拉入”逻辑将作为平台全场景 AI 的底层统一标准。
+    - **商家端 MM 的 AI 伴侣 (Merchant Voice Companion)**：绑定品牌主/商家（`BRAND_OWNER`）的 Profile API Key 接入系统。当商家被分派管理旗下门店品牌时，其绑定的 AI 语音伴侣自动加入 Crew，使用该商家的 API Key 进行数据读写和交互，且其功能受 `AI_COMPANION` 职能拦截。
+    - **BD 商务助理 (BD Research Assistant)**：绑定 BD 用户的 Profile API Key 接入系统，使用该 BD 的资源权限范围开展商圈调研与数据回采，其功能受 `AI_RESEARCHER` 职能拦截。
 - **双重鉴权与权限继承逻辑 (Dual-Layer ACL)**：
   - **第一层：数据边界继承 (Authority Domain)**：后端 API 拦截器解析 API Key，将该请求的数据访问范围（即能看到哪些品牌、哪些草稿）完全限制在**该 API Key 所属人类用户**的权限边界内。若人类用户的权限被变更或收回，智能体权限立即同步生效。
   - **第二层：职能角色拦截 (Functional Role Restrictions)**：虽然智能体继承了人类用户的权限边界，但系统对智能体自身（通过 `X-Agent-ID` 对应的 AI 智能体 `User` 记录）进行功能级权限限制。即使智能体使用了 `ADMIN` 或 `AMC_PRINCIPAL` 的 API Key，其能调用的 API/MCP 技能仍受其 `AI_AGENT` 角色职能约束。例如：
