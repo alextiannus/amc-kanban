@@ -31,6 +31,24 @@
 
   /* Custom Blue Scale Extensions */
   --color-blue-650: #2563eb;
+  --color-blue-955: #172554;
+
+  /* Custom Indigo Scale Extensions */
+  --color-indigo-650: #4f46e5;
+  --color-indigo-750: #3730a3;
+  --color-indigo-955: #1e1b4b;
+
+  /* Custom Emerald Scale Extensions */
+  --color-emerald-650: #059669;
+  --color-emerald-955: #064e3b;
+
+  /* Custom Amber Scale Extensions */
+  --color-amber-650: #d97706;
+  --color-amber-955: #451a03;
+
+  /* Custom Rose Scale Extensions */
+  --color-rose-650: #dc2626;
+  --color-rose-955: #4c0519;
 }
 
 @media (prefers-color-scheme: dark) {
