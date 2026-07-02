@@ -404,6 +404,44 @@ function AdminPageInner() {
     }
   }
 
+  /**
+   * Create a new brand + subscription in one step (kanban admin/principal entry).
+   * Calls the same /api/mm/subscription endpoint used by MM side with paymentMode=BILLING.
+   * - createdById: automatically set to session.user.id (admin/principal) by the API
+   * - ownerId: resolved from ownerEmail by createBrandForActivatedSubscription
+   */
+  const handleCreateBrand = async (params: {
+    brandName: string
+    ownerEmail: string
+    planId: string
+    durationMonths: number
+    location?: string
+  }): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/mm/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pendingBrandName: params.brandName,
+          pendingBrandOwnerEmail: params.ownerEmail,
+          pendingBrandLocation: params.location ?? '',
+          planId: params.planId,
+          durationMonths: params.durationMonths,
+          paymentMode: 'BILLING',  // Direct activation, no Stripe — same as offline/admin activation
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        return { ok: false, error: data.error || `创建失败 (${res.status})` }
+      }
+      await fetchBrands()
+      return { ok: true }
+    } catch (e) {
+      console.error('[handleCreateBrand]', e)
+      return { ok: false, error: '网络错误，请重试' }
+    }
+  }
+
   // Agents tab mutate API handlers
   const handleUpdatePoolDraft = (agentId: string, patch: any) => {
     setPoolDrafts(prev => ({
@@ -776,6 +814,7 @@ function AdminPageInner() {
             onUpdateBrandDraft={handleUpdateBrandDraft}
             onSaveBrandDraft={handleSaveBrandDraft}
             onFetchBrands={fetchBrands}
+            onCreateBrand={handleCreateBrand}
 
             // Dispatch Pool props
             poolConfig={poolConfig}

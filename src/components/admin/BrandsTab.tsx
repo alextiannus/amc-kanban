@@ -31,6 +31,7 @@ interface BrandsTabProps {
   onUpdateBrandDraft: (brandId: string, patch: any) => void
   onSaveBrandDraft: (brand: BrandRecord) => Promise<void>
   onFetchBrands: () => Promise<void>
+  onCreateBrand: (params: { brandName: string; ownerEmail: string; planId: string; durationMonths: number; location?: string }) => Promise<{ ok: boolean; error?: string }>
 
   // Dispatch Pool props
   poolConfig: AssignmentPoolConfig | null
@@ -54,6 +55,7 @@ export default function BrandsTab({
   onUpdateBrandDraft,
   onSaveBrandDraft,
   onFetchBrands,
+  onCreateBrand,
   poolConfig,
   poolMembers,
   poolDecisions,
@@ -91,6 +93,41 @@ export default function BrandsTab({
   const [crewSearchTerms, setCrewSearchTerms] = useState<Record<string, string>>({})
   const [activeSearchBrandId, setActiveSearchBrandId] = useState<string | null>(null)
   const [isDeletingBrandId, setIsDeletingBrandId] = useState<string | null>(null)
+
+  // ── New Brand Form ──────────────────────────────────────────────────────────
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [newBrand, setNewBrand] = useState({
+    brandName: '',
+    ownerEmail: '',
+    planId: 'essential',
+    durationMonths: 12,
+    location: '',
+  })
+
+  const handleCreateBrand = async () => {
+    if (!newBrand.brandName.trim()) { setCreateError('品牌名称不能为空'); return }
+    if (!newBrand.ownerEmail.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newBrand.ownerEmail)) {
+      setCreateError('请填写有效的品牌主邮件'); return
+    }
+    setIsCreating(true)
+    setCreateError(null)
+    const result = await onCreateBrand({
+      brandName: newBrand.brandName.trim(),
+      ownerEmail: newBrand.ownerEmail.trim().toLowerCase(),
+      planId: newBrand.planId,
+      durationMonths: newBrand.durationMonths,
+      location: newBrand.location.trim() || undefined,
+    })
+    setIsCreating(false)
+    if (result.ok) {
+      setShowCreateForm(false)
+      setNewBrand({ brandName: '', ownerEmail: '', planId: 'essential', durationMonths: 12, location: '' })
+    } else {
+      setCreateError(result.error || '创建失败，请重试')
+    }
+  }
 
   const handleDeleteBrand = async (brandId: string) => {
     if (!confirm('确定要删除这个品牌吗？该操作会将品牌逻辑归档 (Soft Delete)，不再在前台或看板列表中展示。')) {
@@ -261,6 +298,15 @@ export default function BrandsTab({
                 ))}
               </div>
             </div>
+            {/* + New Brand Button */}
+            <button
+              id="admin-create-brand-btn"
+              onClick={() => { setShowCreateForm(true); setCreateError(null) }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black transition-all shadow-sm cursor-pointer shrink-0"
+            >
+              <Plus size={13} />
+              <span>新建品牌</span>
+            </button>
           </div>
 
           {brandsLoading ? (
@@ -366,7 +412,142 @@ export default function BrandsTab({
             </div>
           )}
 
+          {/* Create New Brand Modal */}
+          {showCreateForm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg animate-in zoom-in-95 duration-200 flex flex-col">
+                {/* Header */}
+                <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+                      <Plus size={15} className="text-indigo-500" />
+                      新建品牌 &amp; 开通服务计划
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">创建成功后品牌即激活，系统自动从分配池指派主理人</p>
+                  </div>
+                  <button onClick={() => setShowCreateForm(false)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer">
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div className="px-6 py-5 space-y-4 overflow-y-auto">
+                  {/* Brand Name */}
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      品牌名称 <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="例：Cheshi Hotpot"
+                      value={newBrand.brandName}
+                      onChange={e => setNewBrand(p => ({ ...p, brandName: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  {/* Owner Email */}
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      品牌主邮件 <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="brandowner@example.com"
+                      value={newBrand.ownerEmail}
+                      onChange={e => setNewBrand(p => ({ ...p, ownerEmail: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">系统将自动查找或创建该邮件对应的品牌主账号</p>
+                  </div>
+
+                  {/* Plan + Duration Row */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                        服务套餐 <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={newBrand.planId}
+                        onChange={e => setNewBrand(p => ({ ...p, planId: e.target.value }))}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="essential">ESSENTIAL（品牌建设）</option>
+                        <option value="growth">GROWTH（稳健增长）</option>
+                        <option value="scale">SCALE（全速扩张）</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                        合同周期 <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={newBrand.durationMonths}
+                        onChange={e => setNewBrand(p => ({ ...p, durationMonths: Number(e.target.value) }))}
+                        className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value={3}>3 个月</option>
+                        <option value={6}>6 个月</option>
+                        <option value={12}>12 个月</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Location */}
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      物理位置（可选）
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="例：Singapore / 新加坡"
+                      value={newBrand.location}
+                      onChange={e => setNewBrand(p => ({ ...p, location: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  {/* Error */}
+                  {createError && (
+                    <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 text-xs font-bold">
+                      ⚠️ {createError}
+                    </div>
+                  )}
+
+                  {/* Info note */}
+                  <div className="px-3.5 py-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[11px]">
+                    <span className="font-black">注意</span>：创建完成后订阅状态立即激活（ACTIVE）。主理人分配失败不影响品牌创建，可事后在 AMC Crew 中手动添加成员。
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateForm(false)}
+                    className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateBrand}
+                    disabled={isCreating}
+                    className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold text-xs transition-all shadow-sm cursor-pointer"
+                  >
+                    {isCreating ? (
+                      <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> 创建中...</>
+                    ) : (
+                      <><Save className="w-3.5 h-3.5" /> 确认创建</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Edit Brand Modal Dialog */}
+
           {(() => {
             const editingBrand = brands.find(b => b.id === editingBrandId)
             if (!editingBrand) return null

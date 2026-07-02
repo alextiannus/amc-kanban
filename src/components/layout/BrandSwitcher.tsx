@@ -120,8 +120,15 @@ export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: B
             })}
           </div>
           <div className="px-1.5 pb-1.5 pt-0.5 border-t border-slate-100 dark:border-slate-800">
-
-          </div>
+          <button
+              id="brand-switcher-add-brand"
+              onClick={() => { router.push('/admin'); setShowBrandMenu(false) }}
+              className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-left text-slate-500 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+            >
+              <Plus size={14} className="shrink-0" />
+              <span className="text-xs font-bold">添加新品牌</span>
+            </button>
+</div>
         </div>
       )}
     </div>

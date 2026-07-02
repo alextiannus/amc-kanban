@@ -1257,7 +1257,48 @@ RolePermission 表：
 - `src/app/api/brands/route.ts`
 - `src/app/api/mm/brands/route.ts`
 
+---
 
+## Changelog v1.8.34 — 2026-07-03（移除自助订阅页面 & 遗留 AI Agent 关联逻辑清理）
 
+### 1. 移除 `/board/subscription` 自助订阅购买页面
+- **决策**：看板端的自助订阅购买页面（`SubscriptionClient.tsx`, 83KB）完整删除。
+- **原因**：品牌创建与订阅计划开通流程统一收归至 Admin 后台（看板端）和 MM 端，不再需要独立的自助 Stripe 结账页面入口。
+- **影响**：所有指向 `/board/subscription` 的导航入口已替换为 `/admin` 或移除。
+
+### 2. 移除 `ensureBrandAgentKeyAfterSubscription` 遗留逻辑
+- **决策**：彻底删除该函数及其全部调用点（约 185 行代码）。
+- **原因**：品牌不再与 AI Agent 账号绑定，AI 员工由主理人手动添加至 Marketing Crew。
+- **影响文件**：`service.ts`, `stripe/webhook`, `admin/subscriptions/[id]`, `subscription/confirm`, `mm/subscription`, `subscription/route.ts`
+
+---
+
+## 品牌创建业务逻辑规范（架构澄清 2026-07-03）
+
+### 核心原则
+1. **一体化流程**：创建品牌与开通服务计划（subscription）必须同步完成，不拆分。
+2. **品牌归属识别**：品牌主（Brand Owner）通过邮件地址识别。系统自动查找或创建对应账号，并将品牌 owner 权限赋予该账号。
+3. **主理人自动分配**：品牌创建成功后，系统自动从主理人分配池（Assignment Pool）中分派一名主理人（`AMC_PRINCIPAL`）。分配失败不阻塞流程，Admin 可事后手动在 AMC Crew 中添加成员。
+4. **Marketing Crew 初始化**：品牌创建时同步初始化空的 `MarketingCrew`，品牌主和 AMC Agent 均可被添加为 Crew 成员。
+
+### 两个入口点
+
+| 入口 | 使用方 | 位置 | 品牌主信息 |
+|------|--------|------|-----------|
+| 看板端"添加新品牌" | Admin、主理人 | BrandSwitcher 下拉菜单 → 跳转 `/admin` → BrandsTab「新建品牌」 | **手动填写品牌主邮件** |
+| MM 端"添加新品牌" | 品牌主自助、BD 代操作 | AMC-MM 应用内表单 | **从登录用户信息自动读取** |
+
+### 角色权限总结
+
+| 角色 | 说明 | 权限 |
+|------|------|------|
+| 品牌主 (Brand Owner) | 品牌的最高所有者，按邮件识别 | 对品牌内容、设置拥有最高权限 |
+| Admin | 系统最高管理员 | 可操作所有系统数据 |
+| 主理人 (AMC Principal) | 由 Admin 从主理人池指派 | 可作为品牌 Marketing Crew 成员 |
+| AMC Agent | AI 智能体 | 可作为品牌 Marketing Crew 成员 |
+
+### 待实现（看板端入口重建）
+- **BrandSwitcher"添加新品牌"**：恢复按钮，指向 `/admin`（而非已删除的 `/board/subscription`）。
+- **Admin BrandsTab「新建品牌」表单**：与 MM 端逻辑完全一致的创建表单，额外包含"品牌主邮件"字段，调用相同的 `createBrandForActivatedSubscription` 服务层逻辑。
 
 
