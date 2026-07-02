@@ -129,13 +129,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  // Find owners linked to this agent in AgentPermission
-  const permissions = await prisma.agentPermission.findMany({
-    where: { agentId: agent.id },
-    select: { userId: true },
+  // Find ownerId from the agent directly
+  const agentUser = await prisma.user.findUnique({
+    where: { id: agent.id },
+    select: { ownerId: true },
   })
 
-  let ownerId = permissions[0]?.userId
+  let ownerId = agentUser?.ownerId
+
+  // Fallback to AgentPermission mapping
+  if (!ownerId) {
+    const permissions = await prisma.agentPermission.findMany({
+      where: { agentId: agent.id },
+      select: { userId: true },
+    })
+    ownerId = permissions[0]?.userId
+  }
+
+  // Fallback to first ADMIN human user
   if (!ownerId) {
     const admin = await prisma.user.findFirst({
       where: { role: 'ADMIN' },
