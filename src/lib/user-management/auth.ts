@@ -132,7 +132,7 @@ export async function verifyUserApiKey(token: string): Promise<SessionUser | nul
       prisma.userApiKey.update({
         where: { id: apiKeyRecord.id },
         data: { lastUsedAt: new Date() }
-      }).catch(err => console.error('Failed to update UserApiKey lastUsedAt:', err))
+      }).catch((err: any) => console.error('Failed to update UserApiKey lastUsedAt:', err))
 
       return {
         id: apiKeyRecord.user.id,
