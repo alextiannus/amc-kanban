@@ -6,6 +6,7 @@ import path from 'node:path'
 const root = process.cwd()
 const apiRoot = path.join(root, 'src/app/api')
 const docPath = path.join(root, 'docs/API_SERVICES.md')
+const openApiPath = path.join(root, 'skills/kanban-openapi.yaml')
 const startMarker = '<!-- API_ROUTE_INVENTORY:START -->'
 const endMarker = '<!-- API_ROUTE_INVENTORY:END -->'
 
@@ -62,6 +63,38 @@ if (routesWithoutMethods.length > 0) {
 }
 
 const operationCount = routes.reduce((sum, route) => sum + route.methods.length, 0)
+const normalizeContractPath = (value) => value.replace(/\{[^}]+\}/g, '{param}')
+const routeOperations = new Set(
+  routes.flatMap((route) =>
+    route.methods.map((method) => `${method} ${normalizeContractPath(route.path)}`),
+  ),
+)
+
+let currentOpenApiRoute = ''
+const openApiOperations = []
+for (const line of fs.readFileSync(openApiPath, 'utf8').split('\n')) {
+  const pathMatch = line.match(/^  (\/[^:]+):$/)
+  if (pathMatch) {
+    currentOpenApiRoute = `/api${pathMatch[1]}`
+    continue
+  }
+  const methodMatch = line.match(/^    (get|post|put|patch|delete|options|head):$/)
+  if (currentOpenApiRoute && methodMatch) {
+    openApiOperations.push(
+      `${methodMatch[1].toUpperCase()} ${normalizeContractPath(currentOpenApiRoute)}`,
+    )
+  }
+}
+
+const invalidOpenApiOperations = openApiOperations.filter(
+  (operation) => !routeOperations.has(operation),
+)
+if (invalidOpenApiOperations.length > 0) {
+  throw new Error(
+    `OpenAPI operations without Route Handlers: ${invalidOpenApiOperations.join(', ')}`,
+  )
+}
+
 const lines = [
   startMarker,
   '## 8. 完整 Route Handler 清单（自动生成）',
@@ -88,7 +121,9 @@ if (process.argv.includes('--check')) {
     console.error('API route inventory is stale. Run: npm run docs:api')
     process.exit(1)
   }
-  console.log(`API route inventory is current (${routes.length} paths, ${operationCount} operations).`)
+  console.log(
+    `API route inventory is current (${routes.length} paths, ${operationCount} operations; ${openApiOperations.length} Agent operations verified).`,
+  )
 } else {
   fs.writeFileSync(docPath, next)
   console.log(`Updated API route inventory (${routes.length} paths, ${operationCount} operations).`)

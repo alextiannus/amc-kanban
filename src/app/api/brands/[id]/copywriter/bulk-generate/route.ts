@@ -5,6 +5,9 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { callLLM } from '@/lib/llmRouter'
 import { copywriterNode } from '@/agents/nodes/copywriter'
 
+// Allow enough time for parallel LLM calls across all platforms
+export const maxDuration = 120
+
 // Non-blocking copywriter log helper (fire-and-forget)
 function logCopywriterOutput(opts: {
   brandId: string
@@ -33,6 +36,25 @@ function logCopywriterOutput(opts: {
 }
 
 type Params = { params: Promise<{ id: string }> }
+
+// Scheduling recommendation helper — calls the unified smart scheduling API.
+// Each platform queries independently so gaps are respected per-platform.
+async function getRecommendedTime(brandId: string, platformId: string): Promise<Date | null> {
+  try {
+    const appBase = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    const res = await fetch(`${appBase}/api/brands/${brandId}/scheduling/recommend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-forwarded-for': 'internal' },
+      body: JSON.stringify({ platform: platformId, numberOfPosts: 1, urgency: 'normal' }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const rec = data.recommendations?.[0]?.recommendedAt
+    return rec ? new Date(rec) : null
+  } catch {
+    return null
+  }
+}
 
 async function getActor(request: Request) {
   const session = await getSession()
@@ -148,68 +170,45 @@ export async function POST(request: Request, { params }: Params) {
       }
     }
 
-    // Generate content for each platform/account
-    const createdDrafts = []
+    // Generate content for all platforms in PARALLEL — reduces total latency from
+    // ~30-48s (serial, 2 LLM calls × N platforms) to ~8-15s (concurrent)
+    const draftResults = await Promise.all(
+      accounts.map(async (account: any) => {
+        const platform = account.platformId.toLowerCase()
 
-    // Scheduling recommendation helper — calls the unified smart scheduling API
-    // Each platform queries independently so gaps are respected per-platform
-    const getRecommendedTime = async (platformId: string): Promise<Date | null> => {
-      try {
-        const appBase = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-        const res = await fetch(`${appBase}/api/brands/${brandId}/scheduling/recommend`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-forwarded-for': 'internal' },
-          // Use internal header so the recommend API accepts system-level calls
-          // (will fall through to the brand-exists check since no session/agentKey)
-          body: JSON.stringify({ platform: platformId, numberOfPosts: 1, urgency: 'normal' }),
-        })
-        if (!res.ok) return null
-        const data = await res.json()
-        const rec = data.recommendations?.[0]?.recommendedAt
-        return rec ? new Date(rec) : null
-      } catch {
-        return null
-      }
-    }
+        let caption = `【${platform}】美味速递！创意想法：${idea}`
+        let hashtags: string[] = []
 
-    for (let i = 0; i < accounts.length; i++) {
-      const account = accounts[i]
-      const platform = account.platformId.toLowerCase()
-      
-      let caption = `【${platform}】美味速递！创意想法：${idea}`
-      let hashtags: string[] = []
+        try {
+          let targetPlatform = platform
+          if (platform === 'red' || platform === 'xhs') {
+            targetPlatform = 'xiaohongshu'
+          }
 
-      try {
-        let targetPlatform = platform
-        if (platform === 'red' || platform === 'xhs') {
-          targetPlatform = 'xiaohongshu'
-        }
-
-        const cwResult = await copywriterNode({
-          brandId,
-          platform: targetPlatform,
-          caption: idea,
-          mediaUrls: mediaUrls || [],
-          assetIds: assetIds || [],
-          copywriteOnly: true
-        })
-
-        if (cwResult && cwResult.caption) {
-          caption = cwResult.caption
-          hashtags = cwResult.hashtags || []
-          // Non-blocking log: copywriterNode path
-          logCopywriterOutput({
+          const cwResult = await copywriterNode({
             brandId,
-            userId: actor.id,
-            systemPrompt: '[via copywriterNode — see src/agents/nodes/copywriter.ts bodyPrompt]',
-            userInput: idea,
-            rawOutput: JSON.stringify({ caption, hashtags }),
-            platform,
+            platform: targetPlatform,
+            caption: idea,
+            mediaUrls: mediaUrls || [],
+            assetIds: assetIds || [],
+            copywriteOnly: true
           })
-        }
-      } catch (err) {
-        console.error(`Failed to generate copy via copywriterNode for ${platform}:`, err)
-        const prompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
+
+          if (cwResult && cwResult.caption) {
+            caption = cwResult.caption
+            hashtags = cwResult.hashtags || []
+            logCopywriterOutput({
+              brandId,
+              userId: actor.id,
+              systemPrompt: '[via copywriterNode — see src/agents/nodes/copywriter.ts bodyPrompt]',
+              userInput: idea,
+              rawOutput: JSON.stringify({ caption, hashtags }),
+              platform,
+            })
+          }
+        } catch (err) {
+          console.error(`Failed to generate copy via copywriterNode for ${platform}:`, err)
+          const prompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
 Brand Description: ${brand.description || "A premium restaurant/brand."}
 Target Platform: ${platform}
 Language Rule:
@@ -239,53 +238,49 @@ Output ONLY a valid JSON object with the following structure:
 }
 Do not include markdown wrappers around the JSON, return the raw JSON object.
 `
-        try {
-          const result = await callLLM("copywriting", prompt, 1000)
-          if (result.text) {
-            const cleanJson = result.text.replace(/```json/g, "").replace(/```/g, "").trim()
-            const parsed = JSON.parse(cleanJson)
-            if (parsed.caption) {
-              caption = parsed.caption
-              hashtags = parsed.hashtags || []
-              // Non-blocking log: fallback direct callLLM path (full prompt captured)
-              logCopywriterOutput({
-                brandId,
-                userId: actor.id,
-                systemPrompt: prompt,
-                userInput: idea,
-                rawOutput: JSON.stringify({ caption, hashtags }),
-                modelId: result.modelName ?? result.provider ?? undefined,
-                platform,
-              })
+          try {
+            const result = await callLLM("copywriting", prompt, 1000)
+            if (result.text) {
+              const cleanJson = result.text.replace(/```json/g, "").replace(/```/g, "").trim()
+              const parsed = JSON.parse(cleanJson)
+              if (parsed.caption) {
+                caption = parsed.caption
+                hashtags = parsed.hashtags || []
+                logCopywriterOutput({
+                  brandId,
+                  userId: actor.id,
+                  systemPrompt: prompt,
+                  userInput: idea,
+                  rawOutput: JSON.stringify({ caption, hashtags }),
+                  modelId: result.modelName ?? result.provider ?? undefined,
+                  platform,
+                })
+              }
             }
+          } catch (fallbackErr) {
+            console.error(`Fallback LLM failed for ${platform}:`, fallbackErr)
           }
-        } catch (fallbackErr) {
-          console.error(`Fallback LLM failed for ${platform}:`, fallbackErr)
         }
-      }
 
-      // Get smart recommended publish time for this platform
-      // Falls back to null (immediate) if recommend API unavailable
-      const scheduledAt = await getRecommendedTime(platform)
+        // Get smart recommended publish time for this platform (parallel with other platforms)
+        const scheduledAt = await getRecommendedTime(brandId, platform)
 
-      // Return draft preview details
-      const draftPreview = {
-        platform: account.platformId,
-        accountId: account.id,
-        displayName: account.displayName,
-        caption,
-        captionLang: platform === 'xiaohongshu' ? 'zh' : 'en',
-        mediaUrls: mediaUrls || [],
-        hashtags,
-        scheduledAt,
-        assetIds: assetIds || [],
-        isConnected: account.handle !== 'unconfigured'
-      }
+        return {
+          platform: account.platformId,
+          accountId: account.id,
+          displayName: account.displayName,
+          caption,
+          captionLang: platform === 'xiaohongshu' ? 'zh' : 'en',
+          mediaUrls: mediaUrls || [],
+          hashtags,
+          scheduledAt,
+          assetIds: assetIds || [],
+          isConnected: account.handle !== 'unconfigured'
+        }
+      })
+    )
 
-      createdDrafts.push(draftPreview)
-    }
-
-    return NextResponse.json({ success: true, drafts: createdDrafts })
+    return NextResponse.json({ success: true, drafts: draftResults })
   } catch (error: any) {
     console.error('[Bulk Generate Error]:', error)
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })

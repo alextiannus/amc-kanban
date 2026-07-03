@@ -1,9 +1,12 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canHumanAccessBrandProject, canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { postfastFetchAccounts, postfastListPosts } from '@/lib/integrations/postfast'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
+
+// Increase route timeout so PostFast sync + Prisma queries never hit Render's 30s cutoff
+export const maxDuration = 60
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -20,7 +23,7 @@ const GOOGLE_PLATFORM_ALIASES = [
 ]
 
 // GET /api/brands/[id] — brand detail with accounts, pending counts, conversion summary, recent drafts
-export async function GET(_req: Request, { params }: Params) {
+export async function GET(_req: NextRequest, { params }: Params) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -34,6 +37,10 @@ export async function GET(_req: Request, { params }: Params) {
   )
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // PostFast account sync is only needed by the kanban back-office dashboard.
+  // Skip entirely for merchant app (MM) requests to avoid blocking on external API calls.
+  const isMmClient = _req.headers.get('x-client-type') === 'mm'
+
   // Keep dashboard accounts fresh: sync PostFast-bound accounts into SocialAccount
   // before returning brand detail. Non-fatal if PostFast is temporarily unavailable.
   const syncBrand = await prisma.brand.findUnique({
@@ -44,7 +51,7 @@ export async function GET(_req: Request, { params }: Params) {
 
   let postfastSync: { ok: boolean; error?: string } | undefined
 
-  if (syncBrand.postfastApiKey) {
+  if (!isMmClient && syncBrand.postfastApiKey) {
     try {
       const pfResult = await postfastFetchAccounts(syncBrand.postfastApiKey)
       if (pfResult.success) {
@@ -252,7 +259,7 @@ export async function GET(_req: Request, { params }: Params) {
       }
     | undefined
 
-  if (syncBrand.postfastApiKey) {
+  if (!isMmClient && syncBrand.postfastApiKey) {
     try {
       const pfPosts = await postfastListPosts(syncBrand.postfastApiKey, {
         status: 'published',

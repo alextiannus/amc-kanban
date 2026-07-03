@@ -98,6 +98,7 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 
 - `GET/POST /api/brands`
 - `GET/PATCH/DELETE /api/brands/:id`
+- `POST /api/brands/:id/logo`
 - `GET/PATCH /api/brands/:id/settings`
 - `GET/PATCH /api/brands/:id/profile`
 - `GET/POST /api/brands/:id/owners`
@@ -451,6 +452,17 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 
 当前实现：SSE。
 
+## 3.21 Scheduler Service
+
+职责：管理员查看巡检状态、读取历史报告并手动触发排期巡检。
+
+接口：
+
+- `GET/POST /api/scheduler/daily-check`
+- `GET /api/scheduler/reports`
+
+权限：仅 `ADMIN`。
+
 ## 4. Service Layer Files
 
 核心服务层文件：
@@ -497,3 +509,180 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 4. API 是否需要统一 Zod schema 和响应 envelope。
 5. 是否需要把 Integration Service 从 Next route handlers 拆为独立 worker/service。
 6. 是否需要为 Agent API Key 增加 rate limit、scope 和过期策略。
+
+<!-- API_ROUTE_INVENTORY:START -->
+## 8. 完整 Route Handler 清单（自动生成）
+
+共 **166** 个 API 路径、**240** 个 HTTP 方法组合。
+
+> 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
+
+| 方法 | 路径 |
+| --- | --- |
+| GET, PATCH | `/api/admin/agent-assignment-pool/config` |
+| GET, POST | `/api/admin/agent-assignment-pool/members` |
+| DELETE, PATCH | `/api/admin/agent-assignment-pool/members/{agentId}` |
+| GET | `/api/admin/agent-assignment/decisions` |
+| GET | `/api/admin/brand-credentials` |
+| GET | `/api/admin/brands` |
+| DELETE, PATCH | `/api/admin/brands/{id}` |
+| PATCH | `/api/admin/companion-messages/{id}/annotate` |
+| GET | `/api/admin/conversation-stats` |
+| GET | `/api/admin/copywriter-logs` |
+| PATCH | `/api/admin/copywriter-logs/{id}/annotate` |
+| GET | `/api/admin/debug/avatar` |
+| POST | `/api/admin/email/test` |
+| GET, POST | `/api/admin/llm-configs` |
+| DELETE, PATCH | `/api/admin/llm-configs/{id}` |
+| GET | `/api/admin/logs` |
+| GET | `/api/admin/message-templates` |
+| PATCH | `/api/admin/message-templates/{id}` |
+| POST | `/api/admin/message-templates/{id}/test` |
+| POST | `/api/admin/permissions` |
+| PATCH | `/api/admin/subscriptions/{id}` |
+| GET, PATCH | `/api/admin/system-config` |
+| GET | `/api/admin/training-export` |
+| GET, POST | `/api/admin/users` |
+| DELETE, PATCH | `/api/admin/users/{id}` |
+| POST | `/api/agent-assignment/resolve` |
+| PATCH | `/api/agent/accounts` |
+| PATCH, POST | `/api/agent/action-items` |
+| GET | `/api/agent/admin/brands` |
+| DELETE, GET, PATCH | `/api/agent/admin/brands/{id}` |
+| GET, PATCH, POST | `/api/agent/brand-config` |
+| PATCH | `/api/agent/insights` |
+| GET, POST | `/api/agent/pending-approvals` |
+| GET, PATCH | `/api/agent/profile` |
+| POST | `/api/agent/snapshots` |
+| GET | `/api/agents` |
+| DELETE, GET, PATCH | `/api/agents/{id}` |
+| POST | `/api/agents/keys` |
+| GET, POST | `/api/agents/profile` |
+| POST | `/api/agents/register` |
+| GET | `/api/analytics/activity` |
+| GET | `/api/analytics/agents/{id}/weekly` |
+| GET | `/api/analytics/benchmarks` |
+| POST | `/api/auth/login` |
+| GET, POST | `/api/auth/logout` |
+| GET | `/api/auth/me` |
+| POST | `/api/auth/register` |
+| GET, POST | `/api/brands` |
+| DELETE, GET, PATCH | `/api/brands/{id}` |
+| GET, POST | `/api/brands/{id}/accounts` |
+| DELETE, PATCH | `/api/brands/{id}/accounts/{aid}` |
+| GET | `/api/brands/{id}/actions` |
+| PATCH | `/api/brands/{id}/actions/{aid}/approve` |
+| PATCH | `/api/brands/{id}/actions/{aid}/reject` |
+| DELETE, GET, POST | `/api/brands/{id}/agents` |
+| GET | `/api/brands/{id}/analytics` |
+| GET, POST | `/api/brands/{id}/apify-sync` |
+| GET, PATCH, POST | `/api/brands/{id}/assets` |
+| DELETE, PATCH | `/api/brands/{id}/assets/{assetId}` |
+| POST | `/api/brands/{id}/assets/{assetId}/design` |
+| POST | `/api/brands/{id}/assets/confirm-upload` |
+| GET | `/api/brands/{id}/assets/presign-upload` |
+| GET, POST | `/api/brands/{id}/assets/upload` |
+| GET | `/api/brands/{id}/companion/context` |
+| GET, POST | `/api/brands/{id}/companion/history` |
+| GET | `/api/brands/{id}/companion/sessions` |
+| POST | `/api/brands/{id}/copywriter-log` |
+| POST | `/api/brands/{id}/copywriter/bulk-generate` |
+| POST | `/api/brands/{id}/copywriter/voice-chat` |
+| POST | `/api/brands/{id}/copywriter/voice-stream` |
+| POST | `/api/brands/{id}/documents` |
+| POST | `/api/brands/{id}/documents/{docId}/sync` |
+| GET, POST | `/api/brands/{id}/drafts` |
+| DELETE, GET, PATCH | `/api/brands/{id}/drafts/{draftId}` |
+| PATCH, POST | `/api/brands/{id}/drafts/{draftId}/approve` |
+| PATCH | `/api/brands/{id}/drafts/{draftId}/reject` |
+| PATCH | `/api/brands/{id}/drafts/{draftId}/submit` |
+| POST | `/api/brands/{id}/drafts/{draftId}/trigger-copywriter` |
+| DELETE, GET, POST | `/api/brands/{id}/folders` |
+| GET, PATCH | `/api/brands/{id}/knowledge` |
+| POST | `/api/brands/{id}/logo` |
+| POST | `/api/brands/{id}/mcp/execute` |
+| GET, POST | `/api/brands/{id}/memory` |
+| POST | `/api/brands/{id}/notifications` |
+| GET, POST | `/api/brands/{id}/owners` |
+| DELETE, PATCH | `/api/brands/{id}/owners/{userId}` |
+| GET, POST | `/api/brands/{id}/posts` |
+| GET, POST | `/api/brands/{id}/posts/publish` |
+| GET, PATCH | `/api/brands/{id}/profile` |
+| GET, POST | `/api/brands/{id}/reviews` |
+| POST | `/api/brands/{id}/scheduling/recommend` |
+| GET, PATCH | `/api/brands/{id}/settings` |
+| GET | `/api/brands/{id}/social-insight` |
+| GET, PATCH, POST | `/api/brands/{id}/subscription` |
+| POST | `/api/brands/{id}/subscription/confirm` |
+| GET, POST | `/api/brands/{id}/topics` |
+| DELETE, GET, PATCH | `/api/brands/{id}/topics/{topicId}` |
+| POST | `/api/brands/{id}/video-director` |
+| GET | `/api/client-config` |
+| POST | `/api/copywriter/generate-hooks` |
+| GET | `/api/dashboard/assets` |
+| GET | `/api/dashboard/brand-activity` |
+| GET | `/api/dashboard/calendar` |
+| GET | `/api/dashboard/summary` |
+| GET | `/api/data-analysis` |
+| POST | `/api/data-analysis/upload` |
+| GET | `/api/events` |
+| GET, POST | `/api/game/config` |
+| POST | `/api/game/spin` |
+| GET | `/api/game/status` |
+| POST | `/api/game/tasks` |
+| POST | `/api/game/tasks/override` |
+| GET | `/api/integrations/extension/download` |
+| GET | `/api/integrations/extension/events` |
+| POST | `/api/integrations/extension/response` |
+| POST | `/api/integrations/extension/test-trigger` |
+| GET | `/api/integrations/google/oauth` |
+| GET | `/api/integrations/google/oauth/callback` |
+| POST | `/api/integrations/google/oauth/disconnect` |
+| GET | `/api/integrations/google/oauth/mock-consent` |
+| GET | `/api/integrations/google/places` |
+| GET, POST | `/api/integrations/google/reviews` |
+| GET | `/api/integrations/lark/file/{fileToken}` |
+| POST | `/api/integrations/lark/upload/{id}` |
+| GET, POST | `/api/integrations/postfast` |
+| GET | `/api/integrations/postfast/file/{brandId}/{key...}` |
+| GET | `/api/integrations/social/public-profile` |
+| GET | `/api/integrations/status` |
+| POST | `/api/integrations/stripe/webhook` |
+| GET, POST | `/api/invite/{token}` |
+| DELETE, GET, POST | `/api/learn/faq` |
+| DELETE, GET, POST | `/api/learn/school` |
+| GET, POST | `/api/learn/templates` |
+| GET | `/api/logs/agent` |
+| GET | `/api/maps-config` |
+| DELETE, GET, POST | `/api/mcp` |
+| GET | `/api/meta/avatar-guide` |
+| GET | `/api/meta/openapi` |
+| GET | `/api/meta/skills/amc-integrations` |
+| GET | `/api/meta/sop` |
+| GET, PATCH, POST | `/api/mm/bd/leads` |
+| POST | `/api/mm/bd/onboard` |
+| GET | `/api/mm/bd/performance` |
+| POST | `/api/mm/brands` |
+| GET | `/api/mm/health` |
+| POST | `/api/mm/subscription` |
+| POST | `/api/mm/tts-proxy` |
+| GET, PATCH | `/api/profile` |
+| GET, POST | `/api/profile/organization-members` |
+| GET | `/api/profile/principal-dashboard` |
+| POST | `/api/promo/validate` |
+| GET | `/api/public/snapshots` |
+| POST | `/api/researcher/capture-snapshots` |
+| POST | `/api/researcher/login-instagram` |
+| GET, POST | `/api/scheduler/daily-check` |
+| GET | `/api/scheduler/reports` |
+| POST | `/api/settings/bg` |
+| GET | `/api/snapshots/{accountId}/{filename}` |
+| GET, POST | `/api/subscription` |
+| POST | `/api/subscription/confirm` |
+| GET, POST | `/api/tasks` |
+| DELETE, GET, PATCH | `/api/tasks/{id}` |
+| GET, POST | `/api/tasks/{id}/comments` |
+| POST | `/api/tasks/{id}/retry-publish` |
+| PATCH | `/api/tasks/{id}/status` |
+| DELETE | `/api/tasks/unassigned` |
+<!-- API_ROUTE_INVENTORY:END -->
