@@ -1301,4 +1301,23 @@ RolePermission 表：
 - **BrandSwitcher"添加新品牌"**：恢复按钮，指向 `/admin`（而非已删除的 `/board/subscription`）。
 - **Admin BrandsTab「新建品牌」表单**：与 MM 端逻辑完全一致的创建表单，额外包含"品牌主邮件"字段，调用相同的 `createBrandForActivatedSubscription` 服务层逻辑。
 
+---
+
+## Changelog
+
+### 2026-07-03 | fix(assets): 修复 presign-upload 接口 25s 超时（504）
+
+**问题根因**：
+- amc-mm 上传素材时，先向 amc-kanban 请求 presigned URL（`GET /api/brands/[id]/assets/presign-upload`）
+- 该接口生成签名本身是纯同步 crypto 操作（毫秒级），但在此之前的 Auth 和 品牌鉴权 会发出 4-5 条串行 Prisma 查询
+- 在 Render 托管的 PostgreSQL 上，当连接池被其他长任务耗尽时，这些串行查询会全部排队等待，导致整个请求超时 25s
+
+**决策**：
+- 对 ADMIN 用户：JWT token 中已有 `role=ADMIN`，完全跳过 DB 鉴权（fast-path）
+- 对普通用户：将原 4-5 条串行查询合并为 1 条 Prisma 查询（`brand.findFirst` 带 OR 条件同时检查 ownerId 和 crew 成员）
+- 添加分阶段耗时日志（`[presign]`），便于在 Render 日志中精确定位未来潜在瓶颈
+
+**同期修复（amc-mm 侧）**：
+- `BrandOwnerDashboard.tsx` 中已补回 presign 502/504 时自动 fallback 到旧版 `/api/brands/[id]/assets/upload`
+- fallback 仅对文件大小 <= 10MB 生效（Render 请求体大小限制）
 

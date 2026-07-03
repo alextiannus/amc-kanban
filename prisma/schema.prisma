@@ -31,7 +31,7 @@ model User {
   
   // AI Agent self-relation for ownership (AI Avatar)
   ownerId      String?
-  owner        User?    @relation("UserAvatars", fields: [ownerId], references: [id])
+  owner        User?    @relation("UserAvatars", fields: [ownerId], references: [id], onDelete: SetNull)
   avatars      User[]   @relation("UserAvatars")
 
   // API Keys for human users
@@ -43,7 +43,7 @@ model User {
   // Referral / Invite Code System
   inviteCode   String?  @unique
   referredById String?
-  referredBy   User?    @relation("UserReferrals", fields: [referredById], references: [id])
+  referredBy   User?    @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
   referrals    User[]   @relation("UserReferrals")
   salesLeads   SalesLead[]
   
@@ -113,7 +113,7 @@ model WorkUnit {
   deadline       DateTime?
   tags           String[]  @default([])
   assigneeId     String?
-  assignee       User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  assignee       User?     @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   brandId        String?
   brand          Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
   
@@ -214,10 +214,10 @@ model IdempotencyRecord {
 model Invitation {
   id             String   @id @default(cuid())
   inviterId      String?
-  inviter        User?    @relation("InvitationInviter", fields: [inviterId], references: [id])
+  inviter        User?    @relation("InvitationInviter", fields: [inviterId], references: [id], onDelete: SetNull)
   inviteeEmail   String
   inviteeUserId  String?
-  inviteeUser    User?    @relation("InvitationInvitee", fields: [inviteeUserId], references: [id])
+  inviteeUser    User?    @relation("InvitationInvitee", fields: [inviteeUserId], references: [id], onDelete: SetNull)
   status         String   @default("PENDING") // PENDING | CLAIMED | EXPIRED | REVOKED
   claimedAt      DateTime?
   revokedAt      DateTime?
@@ -235,8 +235,8 @@ model AgentPermission {
   id           String @id @default(cuid())
   humanId      String
   agentId      String
-  human        User   @relation("HumanUser", fields: [humanId], references: [id])
-  agent        User   @relation("AiAgent", fields: [agentId], references: [id])
+  human        User   @relation("HumanUser", fields: [humanId], references: [id], onDelete: Cascade)
+  agent        User   @relation("AiAgent", fields: [agentId], references: [id], onDelete: Cascade)
   @@unique([humanId, agentId])
 }
 
@@ -246,7 +246,7 @@ model BrandAgent {
   brandId   String
   brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   agentId   String
-  agent     User     @relation("BrandAgents", fields: [agentId], references: [id])
+  agent     User     @relation("BrandAgents", fields: [agentId], references: [id], onDelete: Cascade)
   role      String   @default("worker") // worker | lead
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -259,7 +259,7 @@ model BrandOwner {
   brandId   String
   brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   userId    String
-  user      User     @relation("BrandOwners", fields: [userId], references: [id])
+  user      User     @relation("BrandOwners", fields: [userId], references: [id], onDelete: Cascade)
   role      String   @default("owner") // owner | collaborator
   createdAt DateTime @default(now())
   @@unique([brandId, userId])
@@ -404,7 +404,7 @@ model BrandSubscription {
   brandId            String?
   brand              Brand?   @relation(fields: [brandId], references: [id], onDelete: SetNull)
   createdById        String?
-  createdBy          User?    @relation(fields: [createdById], references: [id])
+  createdBy          User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -703,7 +703,7 @@ model Comment {
   taskId     String
   task       WorkUnit @relation(fields: [taskId], references: [id], onDelete: Cascade)
   authorId   String
-  author     User     @relation(fields: [authorId], references: [id])
+  author     User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   content    String   // Markdown string
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -987,9 +987,9 @@ model CampaignPromoCode {
   
   // Creators & Owners
   createdById   String
-  createdBy     User      @relation("CreatedPromoCodes", fields: [createdById], references: [id])
+  createdBy     User      @relation("CreatedPromoCodes", fields: [createdById], references: [id], onDelete: Cascade)
   ownerId       String?                     // The BD or Principal who owns this campaign
-  owner         User?     @relation("OwnedPromoCodes", fields: [ownerId], references: [id])
+  owner         User?     @relation("OwnedPromoCodes", fields: [ownerId], references: [id], onDelete: SetNull)
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -1011,7 +1011,7 @@ model PromoCodeUsage {
 // ── BD Sales Leads ──────────────────────────────────────────────────────────
 model SalesLead {
   id          String   @id @default(cuid())
-  bdUserId    String
+  bdUserId    String?
   name        String   // Restaurant / Contact Name
   phone       String?
   email       String?
@@ -1020,7 +1020,7 @@ model SalesLead {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  bdUser      User     @relation(fields: [bdUserId], references: [id])
+  bdUser      User?    @relation(fields: [bdUserId], references: [id], onDelete: SetNull)
   @@index([bdUserId])
 }
 
