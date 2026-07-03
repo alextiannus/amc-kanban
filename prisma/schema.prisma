@@ -353,6 +353,9 @@ model Brand {
   larkBotWebhook         String?
   larkOwnerId            String?
 
+  postfastSnapshot     Json?     // cached PostFast accounts + 7-day operations report
+  postfastSyncedAt     DateTime? // timestamp of last successful PostFast sync
+
   owners      BrandOwner[]
   tasks       WorkUnit[]
   accounts    SocialAccount[]

@@ -2,27 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canHumanAccessBrandProject, canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { postfastFetchAccounts, postfastListPosts } from '@/lib/integrations/postfast'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
-
-// Increase route timeout so PostFast sync + Prisma queries never hit Render's 30s cutoff
-export const maxDuration = 60
 
 type Params = { params: Promise<{ id: string }> }
 
-const GOOGLE_PLATFORM_ALIASES = [
-  'google',
-  'google_business_profile',
-  'googlebusinessprofile',
-  'google_my_business',
-  'googlemybusiness',
-  'google_maps',
-  'googlemaps',
-  'gbp',
-  'gmb',
-]
-
 // GET /api/brands/[id] — brand detail with accounts, pending counts, conversion summary, recent drafts
+// PostFast data (postfastSnapshot) is populated nightly by /api/cron/postfast-sync-all — no external calls here.
 export async function GET(_req: NextRequest, { params }: Params) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -36,151 +21,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
     session.user.role
   )
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  // PostFast account sync is only needed by the kanban back-office dashboard.
-  // Skip entirely for merchant app (MM) requests to avoid blocking on external API calls.
-  const isMmClient = _req.headers.get('x-client-type') === 'mm'
-
-  // Keep dashboard accounts fresh: sync PostFast-bound accounts into SocialAccount
-  // before returning brand detail. Non-fatal if PostFast is temporarily unavailable.
-  const syncBrand = await prisma.brand.findUnique({
-    where: { id },
-    select: { id: true, postfastApiKey: true },
-  })
-  if (!syncBrand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-  let postfastSync: { ok: boolean; error?: string } | undefined
-
-  if (!isMmClient && syncBrand.postfastApiKey) {
-    try {
-      const pfResult = await postfastFetchAccounts(syncBrand.postfastApiKey)
-      if (pfResult.success) {
-        postfastSync = { ok: true }
-        for (const acc of pfResult.accounts) {
-          if (!acc.platformId || !acc.handle) continue
-
-          // For Google Business Profile, treat legacy aliases as the same platform
-          // and keep a single canonical "google" row to avoid stale duplicates.
-          if (acc.platformId === 'google') {
-            const existing = await prisma.socialAccount.findFirst({
-              where: { brandId: id, platformId: { in: GOOGLE_PLATFORM_ALIASES } },
-              orderBy: { updatedAt: 'desc' },
-              select: { id: true },
-            })
-            if (existing) {
-              await prisma.socialAccount.update({
-                where: { id: existing.id },
-                data: {
-                  platformId: 'google',
-                  handle: acc.handle,
-                  displayName: acc.displayName ?? acc.handle,
-                  profileUrl: acc.profileUrl ?? null,
-                  ratingScore: acc.ratingScore ?? null,
-                  snapshotAt: new Date(),
-                },
-              })
-              continue
-            }
-          }
-
-            // Handle rename cases: same platform + same profile URL should be
-            // considered the same account even if handle changed in PostFast.
-            if (acc.profileUrl) {
-              const existingByProfile = await prisma.socialAccount.findFirst({
-                where: { brandId: id, platformId: acc.platformId, profileUrl: acc.profileUrl },
-                select: { id: true },
-              })
-              if (existingByProfile) {
-                await prisma.socialAccount.update({
-                  where: { id: existingByProfile.id },
-                  data: {
-                    handle: acc.handle,
-                    displayName: acc.displayName ?? acc.handle,
-                    followerCount: acc.followerCount ?? null,
-                    followerDelta: acc.followerDelta ?? 0,
-                    ratingScore: acc.ratingScore ?? null,
-                    snapshotAt: new Date(),
-                  },
-                })
-                continue
-              }
-            }
-
-          await prisma.socialAccount.upsert({
-            where: {
-              brandId_platformId_handle: {
-                brandId: id,
-                platformId: acc.platformId,
-                handle: acc.handle,
-              },
-            },
-            create: {
-              brandId: id,
-              platformId: acc.platformId,
-              handle: acc.handle,
-              displayName: acc.displayName ?? acc.handle,
-              profileUrl: acc.profileUrl ?? null,
-              followerCount: acc.followerCount ?? null,
-              followerDelta: acc.followerDelta ?? 0,
-              ratingScore: acc.ratingScore ?? null,
-              snapshotAt: new Date(),
-            },
-            update: {
-              displayName: acc.displayName ?? acc.handle,
-              profileUrl: acc.profileUrl ?? null,
-              followerCount: acc.followerCount ?? null,
-              followerDelta: acc.followerDelta ?? 0,
-              ratingScore: acc.ratingScore ?? null,
-              snapshotAt: new Date(),
-            },
-          })
-        }
-
-        // Prune stale accounts: delete any account that is not in the PostFast synced accounts list,
-        // unless it's a direct Google Business Profile account.
-        const postfastPlatformHandles = pfResult.accounts.map((acc: any) => ({
-          platformId: acc.platformId,
-          handle: acc.handle
-        }))
-
-        const dbAccounts = await prisma.socialAccount.findMany({
-          where: { brandId: id },
-          select: { id: true, platformId: true, handle: true }
-        })
-
-        const brandInfo = await prisma.brand.findUnique({
-          where: { id },
-          select: { googlePreferOAuth: true, googleRefreshToken: true, googleLocationId: true }
-        })
-
-        const isDirectGoogleConfigured = brandInfo?.googlePreferOAuth && brandInfo?.googleRefreshToken && brandInfo?.googleLocationId
-
-        const accountsToDelete = dbAccounts.filter((dbAcc: any) => {
-          if (dbAcc.platformId === 'google' && isDirectGoogleConfigured) {
-            return false
-          }
-          const isMatched = postfastPlatformHandles.some((pfAcc: any) => 
-            pfAcc.platformId.toLowerCase() === dbAcc.platformId.toLowerCase() &&
-            pfAcc.handle.toLowerCase() === dbAcc.handle.toLowerCase()
-          )
-          return !isMatched
-        })
-
-        if (accountsToDelete.length > 0) {
-          const idsToDelete = accountsToDelete.map((a: any) => a.id)
-          await prisma.socialAccount.deleteMany({
-            where: { id: { in: idsToDelete } }
-          })
-          console.log(`[Sync] Deleted ${accountsToDelete.length} stale social accounts for brand ${id}:`, accountsToDelete.map((a: any) => `${a.platformId}:${a.handle}`))
-        }
-      } else {
-        postfastSync = { ok: false, error: pfResult.error }
-      }
-    } catch (e) {
-      console.warn('[GET /api/brands/:id] PostFast account sync failed (non-fatal):', e)
-      postfastSync = { ok: false, error: 'PostFast sync failed' }
-    }
-  }
 
   const brand = await prisma.brand.findFirst({
     where: { id },
@@ -234,104 +74,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
     },
   })
 
-  let operationsReport:
-    | {
-        windowDays: number
-        publishedCount: number
-        engagement: {
-          likes: number
-          comments: number
-          shares: number
-          impressions: number
-          reach: number
-          interactions: number
-          interactionRate: number
-        }
-        topPosts: Array<{
-          id: string
-          platform: string
-          caption: string
-          postUrl: string | null
-          publishedAt: string | null
-          interactions: number
-          impressions: number
-        }>
-      }
-    | undefined
+  // PostFast data is synced nightly by /api/cron/postfast-sync-all.
+  // Read from DB — never call PostFast in this request path.
+  const snapshot = (brand as any).postfastSnapshot as { accounts?: any[]; operationsReport?: any } | null
+  const operationsReport = snapshot?.operationsReport ?? null
+  const postfastSyncedAt = (brand as any).postfastSyncedAt ?? null
 
-  if (!isMmClient && syncBrand.postfastApiKey) {
-    try {
-      const pfPosts = await postfastListPosts(syncBrand.postfastApiKey, {
-        status: 'published',
-        limit: 100,
-      })
-      if (pfPosts.success) {
-        const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-        const recent = pfPosts.posts.filter((post) => {
-          const publishedAt = post.publishedAt ? new Date(post.publishedAt) : null
-          return publishedAt ? publishedAt >= since : false
-        })
-
-        const engagement = recent.reduce(
-          (acc, post) => {
-            const likes = post.engagementStats?.likes ?? 0
-            const comments = post.engagementStats?.comments ?? 0
-            const shares = post.engagementStats?.shares ?? 0
-            const impressions = post.engagementStats?.impressions ?? 0
-            const reach = post.engagementStats?.reach ?? 0
-            acc.likes += likes
-            acc.comments += comments
-            acc.shares += shares
-            acc.impressions += impressions
-            acc.reach += reach
-            acc.interactions += likes + comments + shares
-            return acc
-          },
-          {
-            likes: 0,
-            comments: 0,
-            shares: 0,
-            impressions: 0,
-            reach: 0,
-            interactions: 0,
-          }
-        )
-
-        operationsReport = {
-          windowDays: 7,
-          publishedCount: recent.length,
-          engagement: {
-            ...engagement,
-            interactionRate: engagement.impressions > 0
-              ? Number(((engagement.interactions / engagement.impressions) * 100).toFixed(2))
-              : 0,
-          },
-          topPosts: recent
-            .map((post: any) => {
-              const likes = post.engagementStats?.likes ?? 0
-              const comments = post.engagementStats?.comments ?? 0
-              const shares = post.engagementStats?.shares ?? 0
-              const impressions = post.engagementStats?.impressions ?? 0
-              return {
-                id: post.id,
-                platform: post.platformId || post.platform,
-                caption: post.caption,
-                postUrl: post.postUrl ?? null,
-                publishedAt: post.publishedAt ?? null,
-                interactions: likes + comments + shares,
-                impressions,
-              }
-            })
-            .sort((a: any, b: any) => b.interactions - a.interactions)
-            .slice(0, 5),
-        }
-      }
-    } catch (e) {
-      console.warn('[GET /api/brands/:id] PostFast analytics sync failed (non-fatal):', e)
-    }
-  }
-
-  return NextResponse.json({ ...brand, weekConversions: conversions, recentDrafts, postfastSync, operationsReport })
+  return NextResponse.json({ ...brand, weekConversions: conversions, recentDrafts, operationsReport, postfastSyncedAt })
 }
 
 // PATCH /api/brands/[id] — update editable brand profile fields
