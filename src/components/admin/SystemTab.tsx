@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import {
   Shield, Key, Save, RefreshCw, Layers, ShieldCheck, Mail, CalendarClock, History, Settings,
-  Sparkles, Plus, Trash2, Edit3, Loader2, Check, Clock, AlertTriangle, MessageSquare
+  Sparkles, Plus, Trash2, Edit3, Loader2, Check, Clock, AlertTriangle, MessageSquare, Volume2
 } from 'lucide-react'
 import EmailConfigPanel from './EmailConfigPanel'
 import SchedulerPanel from './SchedulerPanel'
@@ -96,6 +96,39 @@ export default function SystemTab({
   const [editingLLMConfig, setEditingLLMConfig] = useState<LLMConfigRecord | null>(null)
   const [savingLLMConfig, setSavingLLMConfig] = useState(false)
   const [llmFormError, setLlmFormError] = useState<string | null>(null)
+
+  // MiniMax TTS test
+  const [testingTts, setTestingTts] = useState(false)
+  const [ttsTestResult, setTtsTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null)
+
+  const handleTestTts = async () => {
+    setTestingTts(true)
+    setTtsTestResult(null)
+    try {
+      const res = await fetch('/api/mm/tts-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: '你好！MiniMax 语音配置测试成功，语音合成功能正常！' }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        setTtsTestResult({ ok: false, msg: err?.error ?? `HTTP ${res.status}` })
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      ttsAudioRef.current = audio
+      audio.play()
+      audio.onended = () => URL.revokeObjectURL(url)
+      setTtsTestResult({ ok: true, msg: '✅ 语音合成成功，正在播放...' })
+    } catch (e: any) {
+      setTtsTestResult({ ok: false, msg: e?.message ?? '请求失败' })
+    } finally {
+      setTestingTts(false)
+    }
+  }
 
   const [llmForm, setLlmForm] = useState({
     provider: 'google',
@@ -420,6 +453,17 @@ export default function SystemTab({
                     placeholder={systemConfig?.minimaxConfigured ? '•••••••• (已配置，留空保持不变)' : '请输入 MiniMax API Key'}
                     className="flex-1 rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
+                  {systemConfig?.minimaxConfigured && (
+                    <button
+                      onClick={handleTestTts}
+                      disabled={testingTts}
+                      title="发送测试语音，验证 API Key 是否有效"
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex-shrink-0 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {testingTts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Volume2 className="h-3.5 w-3.5" />}
+                      {testingTts ? '测试中...' : '测试'}
+                    </button>
+                  )}
                   <button
                     onClick={onSaveSystemConfig}
                     disabled={savingSystemConfig || !systemConfig}
@@ -428,8 +472,13 @@ export default function SystemTab({
                     {savingSystemConfig ? '保存中...' : '保存'}
                   </button>
                 </div>
+                {ttsTestResult && (
+                  <p className={`text-[10px] font-medium mt-1 ${ttsTestResult.ok ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {ttsTestResult.msg}
+                  </p>
+                )}
                 <p className="text-[10px] text-slate-405 leading-normal">
-                  用于商家端 AI 语音伴侣的 TTS 合成（MiniMax speech-2.8-turbo 模型，中文暖姐音色）。Key 存储于数据库，不用在 Render 配置环境变量。
+                  用于商家端 AI 语音伴侣的 TTS 合成（MiniMax speech-02-turbo 模型，female-shaonv 音色）。Key 存储于数据库，不用在 Render 配置环境变量。
                 </p>
               </div>
             </div>
