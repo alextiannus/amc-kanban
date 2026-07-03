@@ -196,7 +196,10 @@ export function getHuaweiObsPresignedPutUrl(input: {
   const host = `${config.bucket}.${config.endpoint}`
   const objectPath = `/${encodeObjectKey(input.key)}`
 
-  const signedHeaders = 'content-type;host'
+  // Per file-storage-rules: do NOT include volatile headers (Content-Type) in
+  // SignedHeaders — browsers may normalize or alter them during PUT, causing
+  // 403 SignatureDoesNotMatch. Only sign stable headers (host).
+  const signedHeaders = 'host'
   const credentialScope = `${dateStamp}/${config.region}/s3/aws4_request`
 
   const queryParams: Record<string, string> = {
@@ -212,7 +215,8 @@ export function getHuaweiObsPresignedPutUrl(input: {
     .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
     .join('&')
 
-  const canonicalHeaders = `content-type:${input.contentType.trim()}\nhost:${host.trim()}\n`
+  // Only canonical-sign 'host' — content-type is NOT signed
+  const canonicalHeaders = `host:${host.trim()}\n`
 
   const canonicalRequest = [
     'PUT',
