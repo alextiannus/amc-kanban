@@ -13,6 +13,7 @@
 | v1.1 | 2026-07-02 | 对齐主站订阅 API 契约 | 新品牌注册和续订逻辑调整为“先订阅”，集成 Stripe 支付确认及多设备重定向修复，对齐支付字段为 paymentMode（兼容 paymentMethod） |
 | v1.2 | 2026-07-02 | 顶部及右侧抽屉导航 UI/UX 优化 | 1. 无品牌时，左上角文案由 "AI Staff" 调整为 "AMC"；2. 右侧菜单中，将信息套餐和品牌信息合并展示于顶部组件；3. 底部原订阅套餐卡片替换为“用户设置”入口，支持点击修改注册信息。 |
 | v1.3 | 2026-07-02 | 优化数据库事务防止 500 异常 | 优化品牌与订阅创建流程中的 Prisma 事务范围，将非核心元数据写入移至事务外部，彻底消除在高网络延迟下的 5 秒事务超时（P2028）报错。 |
+| v1.21 | 2026-07-03 | 修复品牌注册挂起 25 秒根本原因 + 移除 Azure/Maps 依赖 | **根本原因**：`bcryptjs`（纯 JS bcrypt）在 Render 限速 CPU 上 cost=12 阻塞 Node.js 事件循环 15-30 秒，导致 `/api/mm/subscription` POST 全程无响应。修复：cost factor 12→8，临时密码（从不直接使用）用 8 轮已足够安全。**同步移除**：(1) Azure Speech 集成（`/api/mm/speech-token`、useCompanionLive、useVoiceCompanion 改为始终返回 null → 降级 Web Speech API）；(2) Google Maps Places Autocomplete（地址改为纯文本输入，用户自行粘贴 Google Maps 链接）；(3) amc-mm 所有 maps-config/speech-token proxy 路由改为即时 503（Cache-Control: 24h），不再触达 kanban。影响文件：`brandOwnerAccount.ts`、`BrandOwnerDashboard.tsx`、`useCompanionLive.ts`、`useVoiceCompanion.ts`、`proxy.ts`、`api/maps-config/route.ts`、`api/mm/speech-token/route.ts`。 |
 
 ---
 
