@@ -33,16 +33,22 @@ export default async function proxy(request: NextRequest) {
       pathname.startsWith('/_next/') ||
       pathname === '/favicon.ico'
 
-    // Auth guard: redirect unauthenticated users to /login on this domain
-    if (!isPublic) {
-      const sessionExists = await hasValidSession(request)
-      if (!sessionExists) {
-        const loginUrl = new URL('/login', request.url)
-        return NextResponse.redirect(loginUrl)
-      }
+    // Public paths (API routes, /_next/*, /login, /register, /favicon.ico):
+    // pass straight through — do NOT rewrite back to amc-mm.
+    // Rewiring API calls back to localhost:3001 causes a circular proxy loop:
+    //   amc-mm → proxy to amc-kanban → rewrite to amc-mm → ECONNREFUSED / 500
+    if (isPublic) {
+      return NextResponse.next()
     }
 
-    // Rewrite all other requests to the brand-owner Next.js app
+    // Auth guard: redirect unauthenticated page requests to /login
+    const sessionExists = await hasValidSession(request)
+    if (!sessionExists) {
+      const loginUrl = new URL('/login', request.url)
+      return NextResponse.redirect(loginUrl)
+    }
+
+    // Rewrite authenticated page requests to the brand-owner Next.js app
     const brandOwnerUrl = process.env.BRAND_OWNER_URL || 'http://localhost:3001'
     const targetUrl = new URL(pathname + request.nextUrl.search, brandOwnerUrl)
     return NextResponse.rewrite(targetUrl, {
