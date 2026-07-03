@@ -61,7 +61,9 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     return { ok: false as const, reason: 'owner_email_required' as const }
   }
 
-  const now = new Date()
+  const t0 = Date.now()
+  console.log(`[createBrand] start: name=${name}, ownerEmail=${normalizedOwnerEmail}`)
+
   const subscription = await prisma.brandSubscription.findFirst({
     where: {
       id: input.subscriptionId,
@@ -70,6 +72,7 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     },
     select: { id: true, brandId: true },
   })
+  console.log(`[createBrand] findFirst subscription (${Date.now() - t0}ms): found=${!!subscription}`)
 
   if (!subscription) {
     return { ok: false as const, reason: 'subscription_not_active' as const }
@@ -77,18 +80,21 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
 
   if (subscription.brandId) {
     const existingBrand = await prisma.brand.findUnique({ where: { id: subscription.brandId } })
+    console.log(`[createBrand] existing brand check (${Date.now() - t0}ms): found=${!!existingBrand}`)
     if (!existingBrand) {
       return { ok: false as const, reason: 'brand_not_found' as const }
     }
 
     ensureBrandWorkspace(existingBrand.id).catch((workspaceError) => {
-      console.error('[createBrandForActivatedSubscription] existing workspace init failed:', workspaceError)
+      console.error('[createBrand] existing workspace init failed:', workspaceError)
     })
 
     return { ok: true as const, brand: existingBrand, alreadyCreated: true as const, agentId: null }
   }
 
+  console.log(`[createBrand] calling findOrCreateBrandOwnerAccount (${Date.now() - t0}ms)`)
   const brandOwner = await findOrCreateBrandOwnerAccount(normalizedOwnerEmail)
+  console.log(`[createBrand] findOrCreateBrandOwnerAccount done (${Date.now() - t0}ms): ok=${brandOwner.ok}`)
 
   if (!brandOwner.ok) {
     return { ok: false as const, reason: 'brand_owner_not_found' as const }
@@ -96,6 +102,7 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
 
   const brandOwnerId = brandOwner.user.id
 
+  console.log(`[createBrand] starting $transaction brand.create (${Date.now() - t0}ms)`)
   const brand = await prisma.$transaction(async (tx: any) => {
     const created = await tx.brand.create({
       data: {
@@ -116,26 +123,39 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
 
     return created
   })
+  console.log(`[createBrand] $transaction done, brand.id=${brand.id} (${Date.now() - t0}ms)`)
 
   // 4. Outside transaction: initialize crew and compatibility mappings
   try {
+    console.log(`[createBrand] createMarketingCrew start (${Date.now() - t0}ms)`)
     const crew = await createMarketingCrew(brand.id)
+    console.log(`[createBrand] createMarketingCrew done, crew.id=${crew.id} (${Date.now() - t0}ms)`)
+
+    console.log(`[createBrand] addCrewMember(brandOwner) start (${Date.now() - t0}ms)`)
     await addCrewMember(crew.id, brandOwnerId)
+    console.log(`[createBrand] addCrewMember(brandOwner) done (${Date.now() - t0}ms)`)
+
     if (brandOwnerId !== input.ownerId) {
+      console.log(`[createBrand] addCrewMember(submitter) start (${Date.now() - t0}ms)`)
       await addCrewMember(crew.id, input.ownerId)
+      console.log(`[createBrand] addCrewMember(submitter) done (${Date.now() - t0}ms)`)
     }
 
+    console.log(`[createBrand] brandOwner.upsert start (${Date.now() - t0}ms)`)
     await prisma.brandOwner.upsert({
       where: { brandId_userId: { brandId: brand.id, userId: brandOwnerId } },
       create: { brandId: brand.id, userId: brandOwnerId, role: 'owner' },
       update: { role: 'owner' },
     })
+    console.log(`[createBrand] brandOwner.upsert done (${Date.now() - t0}ms)`)
 
+    console.log(`[createBrand] userBusinessRole.upsert start (${Date.now() - t0}ms)`)
     await prisma.userBusinessRole.upsert({
       where: { userId_role: { userId: brandOwnerId, role: 'BRAND_OWNER' } },
       create: { userId: brandOwnerId, role: 'BRAND_OWNER' },
       update: {},
     })
+    console.log(`[createBrand] userBusinessRole.upsert done (${Date.now() - t0}ms)`)
 
     if (brandOwnerId !== input.ownerId) {
       await prisma.brandOwner.upsert({
@@ -145,13 +165,15 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       })
     }
   } catch (syncError) {
-    console.error('[createBrandForActivatedSubscription] Auxiliary mappings setup failed (non-fatal):', syncError)
+    console.error('[createBrand] Auxiliary mappings setup failed (non-fatal):', syncError)
   }
 
+  console.log(`[createBrand] ensureBrandWorkspace (async, non-blocking) (${Date.now() - t0}ms)`)
   ensureBrandWorkspace(brand.id).catch((workspaceError) => {
-
-    console.error('[createBrandForActivatedSubscription] workspace init failed:', workspaceError)
+    console.error('[createBrand] workspace init failed:', workspaceError)
   })
+
+  console.log(`[createBrand] resolveAssignment (async, non-blocking) (${Date.now() - t0}ms)`)
 
   // Assign an AMC principal from the pool asynchronously
   resolveAssignment({
