@@ -5,11 +5,29 @@ import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = global as unknown as { prisma: any }
 
+// Limit connection pool size to prevent exhausting PostgreSQL max_connections.
+// Render Starter DB allows ~25 connections total; cap each instance at 10
+// to leave headroom for migrations and rolling deploy overlap.
+const DB_POOL_SIZE = parseInt(process.env.DB_POOL_SIZE || '10', 10)
+
 const basePrisma =
   globalForPrisma.prisma ||
-  new PrismaClient()
+  new PrismaClient({
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL
+          ? `${process.env.DATABASE_URL}${process.env.DATABASE_URL.includes('?') ? '&' : '?'}connection_limit=${DB_POOL_SIZE}&pool_timeout=20`
+          : undefined,
+      },
+    },
+  })
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = basePrisma
+// Cache the client globally in ALL environments.
+// In production, Next.js can re-evaluate modules per-request (especially in
+// serverless/edge scenarios), so we MUST cache to avoid creating a new
+// PrismaClient (+ connection pool) on every request, which exhausts
+// PostgreSQL's max_connections and causes 25s+ query stalls.
+globalForPrisma.prisma = basePrisma
 
 // Helper function to mark media assets associated with specified drafts as '已使用'
 async function markDraftAssetsAsUsed(draftIds: string[]) {
