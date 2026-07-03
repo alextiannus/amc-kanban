@@ -1337,3 +1337,34 @@ RolePermission 表：
 - 默认音色从 `zh-CN-XiaoxiaoNeural` 改为 `Chinese (Mandarin)_Warm_Bestie`
 - 数据库迁移：`20260703000001` 添加 `minimaxApiKey` 列、`20260703000002` 种入 API Key、`20260703000003` 删除 `azureSpeechKey/azureSpeechRegion` 列
 
+---
+
+## Changelog v1.8.35 — 2026-07-03（代码库瘦身与性能清理）
+
+**背景**：代码库膨胀至 82,685 行 / 324 文件，dev/tsc 速度慢，需系统性清理。
+
+### Phase 1 — 死代码删除（-12 文件，~3,962 行）
+
+| 删除文件 | 原因 |
+|----------|------|
+| `src/app/mock-merchant/` (5 files) | 本地测试 mock，无生产入口 |
+| `src/app/faq/page.tsx` (1,025行) | 无内部导航链接 |
+| `src/app/game/[brandId]/page.tsx` (1,386行) | 已由 `/board/game` 替代 |
+| `src/app/board/agents/page.tsx` | 无引用 |
+| `src/app/board/game/poster/[brandId]/page.tsx` | 无引用 |
+
+**构建配置优化**：
+- `next.config.js`：移除 8 个多余的 `micromark-*` transpilePackages
+- `tsconfig.json`：新增 `tsBuildInfoFile: ".next/tsbuildinfo"` 开启增量 tsc 缓存
+
+### Phase 2a — 大文件组件化（MMDashboard.tsx: 3,037 → 2,350 行）
+
+- 提取 `MMSubPageOverlay.tsx`：calendar / assets / market / settings 4 个子页面内联 JSX
+- 提取 `MMSideMenu.tsx`：右滑抽屉导航菜单（品牌切换 + 导航 + 订阅展示）
+
+### Phase 3 — 数据库查询优化
+
+- `social-insight/route.ts`：为 `conversionEvent.findMany`（×2）和 `auditLog.findFirst` 添加 `select`
+- `drafts/route.ts`：N 条串行 DB 写入改为单条 `prisma.$transaction([...updates])`
+
+**净效果**：约 -12 文件，-4,700 行代码，tsc 增量加速。

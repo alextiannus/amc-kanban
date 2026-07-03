@@ -381,6 +381,7 @@ export async function GET(req: Request, { params }: Params) {
     fetchRealGoogleReviews(brand),
     prisma.conversionEvent.findMany({
       where: { brandId: id, occurredAt: { gte: previousFrom, lte: previousTo } },
+      select: { id: true, eventType: true, occurredAt: true, channel: true, value: true },
     }),
     prisma.actionItem.findMany({
       where: { brandId: id, type: { in: ['sentiment_alert', 'apify_review'] } },
@@ -407,12 +408,14 @@ export async function GET(req: Request, { params }: Params) {
     }),
     prisma.conversionEvent.findMany({
       where: { brandId: id, occurredAt: { gte: from, lte: to } },
+      select: { id: true, eventType: true, occurredAt: true, channel: true, value: true },
       orderBy: { occurredAt: 'asc' },
     }),
     // Latest Apify sync result (cached in AuditLog)
     prisma.auditLog.findFirst({
       where: { resourceId: id, resourceType: 'ApifySync' },
       orderBy: { timestamp: 'desc' },
+      select: { id: true, timestamp: true, metadata: true, action: true },
     }),
   ])
 

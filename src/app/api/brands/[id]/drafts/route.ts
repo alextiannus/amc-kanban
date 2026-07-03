@@ -93,27 +93,30 @@ export async function GET(request: Request, { params }: Params) {
       const { postfastListPosts } = await import('@/lib/integrations/postfast')
       const pfResult = await postfastListPosts(brand.postfastApiKey, { status: 'published' })
       if (pfResult.success) {
-        resolvedDrafts = await Promise.all(drafts.map(async (d: any) => {
+        // Build resolved drafts and collect cache updates
+        const urlsToCache: { id: string; postUrl: string }[] = []
+        resolvedDrafts = drafts.map((d: any) => {
           if (d.status === 'published' && d.platformPostId) {
-            if (d.postUrl) {
-              return { ...d, postUrl: d.postUrl }
-            }
+            if (d.postUrl) return { ...d, postUrl: d.postUrl }
             const pfPost = pfResult.posts.find((p: any) => p.id === d.platformPostId)
             const resolvedUrl = pfPost?.postUrl
-            if (resolvedUrl) {
-              // Cache to database
-              await prisma.contentDraft.update({
-                where: { id: d.id },
-                data: { postUrl: resolvedUrl }
-              }).catch((err: any) => console.error('Failed to cache draft postUrl:', err))
-            }
+            if (resolvedUrl) urlsToCache.push({ id: d.id, postUrl: resolvedUrl })
             return { ...d, postUrl: resolvedUrl }
           }
           return { ...d, postUrl: undefined }
-        }))
+        })
+        // Batch-cache resolved URLs in a single transaction (fire & forget)
+        if (urlsToCache.length > 0) {
+          prisma.$transaction(
+            urlsToCache.map(({ id, postUrl }) =>
+              prisma.contentDraft.update({ where: { id }, data: { postUrl } })
+            )
+          ).catch((err: any) => console.error('Failed to batch-cache draft postUrls:', err))
+        }
       }
     }
   }
+
 
   return NextResponse.json({ drafts: resolvedDrafts })
 }
