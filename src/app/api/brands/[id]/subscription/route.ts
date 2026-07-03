@@ -74,6 +74,7 @@ export async function GET(request: Request, { params }: Params) {
   else if (planId === 'advanced') platform_coverage = ['Instagram', 'Facebook', 'TikTok', 'Xiaohongshu', 'Dianping', 'WhatsApp', 'WeChat', 'Ads']
 
   return NextResponse.json({
+    plan_id: planId,
     plan_name: plan?.name || subscription.planName,
     included_services,
     monthly_content_quota,
