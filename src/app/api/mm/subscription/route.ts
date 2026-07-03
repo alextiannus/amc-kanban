@@ -12,7 +12,12 @@ const stripeKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeKey ? new Stripe(stripeKey) : null
 
 export async function POST(request: NextRequest) {
+  const t0 = Date.now()
+  console.log('[MM-Sub] POST received — calling getSession()')
+
   const session = await getSession()
+  console.log(`[MM-Sub] getSession() done (${Date.now() - t0}ms)`, session ? `user=${session.user.id}` : 'NO SESSION')
+
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -34,7 +39,6 @@ export async function POST(request: NextRequest) {
     const pendingBrandTimezone = String(body.timezone ?? '').trim() || 'America/New_York'
     const pendingBrandDescription = String(body.pendingBrandDescription ?? '').trim()
 
-    const t0 = Date.now()
     console.log('[MM-Sub] POST start', {
       userId: session.user.id,
       brandId,
