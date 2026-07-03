@@ -62,6 +62,7 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
   }
 
   const t0 = Date.now()
+  const now = new Date()
   console.log(`[createBrand] start: name=${name}, ownerEmail=${normalizedOwnerEmail}`)
 
   const subscription = await prisma.brandSubscription.findFirst({
