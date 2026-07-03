@@ -71,9 +71,8 @@ function AdminPageInner() {
   const [systemConfig, setSystemConfig] = useState<{
     geminiApiKey: string
     geminiConfigured: boolean
-    azureSpeechKey: string
-    azureSpeechRegion: string
-    azureSpeechConfigured: boolean
+    minimaxApiKey: string
+    minimaxConfigured: boolean
     // SMTP
     smtpHost: string
     smtpPort: number | null
@@ -574,8 +573,7 @@ function AdminPageInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           geminiApiKey: systemConfig.geminiApiKey,
-          azureSpeechKey: systemConfig.azureSpeechKey,
-          azureSpeechRegion: systemConfig.azureSpeechRegion,
+          minimaxApiKey: systemConfig.minimaxApiKey,
           metaAppId: systemConfig.metaAppId,
           metaAppSecret: systemConfig.metaAppSecret,
           metaRedirectUri: systemConfig.metaRedirectUri,

@@ -39,9 +39,8 @@ interface SystemTabProps {
   systemConfig: {
     geminiApiKey: string
     geminiConfigured: boolean
-    azureSpeechKey: string
-    azureSpeechRegion: string
-    azureSpeechConfigured: boolean
+    minimaxApiKey: string
+    minimaxConfigured: boolean
     smtpHost: string
     smtpPort: number | null
     smtpUser: string
@@ -365,8 +364,10 @@ export default function SystemTab({
               <Key size={15} className="text-indigo-500" />
               <span>全局默认 AI 秘钥与语音 (Gemini & Azure keys)</span>
             </span>
-            {systemConfig?.geminiConfigured && systemConfig?.azureSpeechConfigured && (
-              <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 px-2.5 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/30">主控秘钥已配置</span>
+            {(systemConfig?.geminiConfigured || systemConfig?.minimaxConfigured) && (
+              <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 px-2.5 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/30">
+                {[systemConfig?.geminiConfigured && 'Gemini', systemConfig?.minimaxConfigured && 'MiniMax'].filter(Boolean).join(' & ')} 已配置
+              </span>
             )}
           </button>
 
@@ -401,37 +402,34 @@ export default function SystemTab({
                 </p>
               </div>
 
-              {/* Azure Speech TTS */}
+              {/* MiniMax TTS */}
               <div className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800/80">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">
-                    Microsoft Azure Speech TTS
+                    MiniMax TTS API Key
                   </label>
-                  {systemConfig?.azureSpeechConfigured && (
-                    <span className="text-[9px] font-bold text-emerald-500">● 语音服务已配置</span>
+                  {systemConfig?.minimaxConfigured && (
+                    <span className="text-[9px] font-bold text-emerald-500">● MiniMax 语音已配置</span>
                   )}
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex gap-2">
                   <input
                     type="password"
-                    value={systemConfig?.azureSpeechKey ?? ''}
-                    onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, azureSpeechKey: e.target.value } : null)}
-                    placeholder="请输入 Azure Speech Key 1 (留空则使用浏览器自带原生语音)"
+                    value={systemConfig?.minimaxApiKey ?? ''}
+                    onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, minimaxApiKey: e.target.value } : null)}
+                    placeholder={systemConfig?.minimaxConfigured ? '•••••••• (已配置，留空保持不变)' : '请输入 MiniMax API Key'}
                     className="flex-1 rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
-                  <select
-                    value={systemConfig?.azureSpeechRegion ?? 'eastasia'}
-                    onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, azureSpeechRegion: e.target.value } : null)}
-                    className="w-full sm:w-44 rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  <button
+                    onClick={onSaveSystemConfig}
+                    disabled={savingSystemConfig || !systemConfig}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex-shrink-0 flex items-center gap-1.5 cursor-pointer"
                   >
-                    <option value="eastasia">East Asia (香港)</option>
-                    <option value="southeastasia">Southeast Asia (新加坡)</option>
-                    <option value="eastus">East US (美国东部)</option>
-                    <option value="westeurope">West Europe (西欧)</option>
-                  </select>
+                    {savingSystemConfig ? '保存中...' : '保存'}
+                  </button>
                 </div>
                 <p className="text-[10px] text-slate-405 leading-normal">
-                  配置后，商家端语音播报将使用 Azure XiaoxiaoNeural（高保真中文女声）。
+                  用于商家端 AI 语音伴侣的 TTS 合成（MiniMax speech-2.8-turbo 模型，中文暖姐音色）。Key 存储于数据库，不用在 Render 配置环境变量。
                 </p>
               </div>
             </div>

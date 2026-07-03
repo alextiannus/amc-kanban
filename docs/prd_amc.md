@@ -1321,3 +1321,19 @@ RolePermission 表：
 - `BrandOwnerDashboard.tsx` 中已补回 presign 502/504 时自动 fallback 到旧版 `/api/brands/[id]/assets/upload`
 - fallback 仅对文件大小 <= 10MB 生效（Render 请求体大小限制）
 
+---
+
+### 2026-07-03 | feat(tts): 切换语音引擎为 MiniMax TTS，废弃 Azure TTS
+
+**决策**：完全停用 Azure Cognitive Speech TTS，改用 MiniMax TTS（speech-2.8-turbo 模型）。
+
+**实施内容**：
+- 新增 amc-kanban `/api/mm/tts-proxy` 路由：从 SystemConfig DB 读取 MiniMax API Key，直接调用 MiniMax T2A v2 接口，返回 MP3 音频流
+- 新增 `getMiniMaxApiKey()` helper 于 `systemConfig.ts`
+- Admin UI（全局 AI 秘钥 Accordion）新增 MiniMax TTS API Key 配置项，key 入库不走 Render 环境变量
+- 删除 amc-kanban `/api/speech-token` 及 amc-mm `/api/mm/speech-token` 两个废弃路由
+- 删除 `getAzureSpeechConfig()` 函数及 `azureSpeechKey/azureSpeechRegion` Prisma 字段
+- `SettingsSubPage.tsx` 语音列表从 Azure Neural 语音改为 MiniMax 5 种中文音色（暖姐/活力妹/知性姐/稳哥/播音）
+- 默认音色从 `zh-CN-XiaoxiaoNeural` 改为 `Chinese (Mandarin)_Warm_Bestie`
+- 数据库迁移：`20260703000001` 添加 `minimaxApiKey` 列、`20260703000002` 种入 API Key、`20260703000003` 删除 `azureSpeechKey/azureSpeechRegion` 列
+

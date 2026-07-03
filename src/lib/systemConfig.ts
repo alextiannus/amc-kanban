@@ -8,8 +8,6 @@ export async function ensureSystemConfig() {
     data: {
       id: 'default',
       geminiApiKey: null,
-      azureSpeechKey: null,
-      azureSpeechRegion: null,
       metaAppId: null,
       metaAppSecret: null,
       metaRedirectUri: null,
@@ -107,22 +105,22 @@ export async function getGeminiApiKey(): Promise<string | null> {
 }
 
 /**
- * Azure Cognitive Speech config (TTS).
+ * MiniMax API key (chat completions, OpenAI-compatible).
  * Credentials are stored in SystemConfig (DB), NOT in environment variables.
- * Configure via the Admin → System Config UI.
+ * Configure via Admin → System Config UI, or fallback to MINIMAX_API_KEY env var.
  */
-export async function getAzureSpeechConfig(): Promise<{ key: string; region: string } | null> {
+export async function getMiniMaxApiKey(): Promise<string | null> {
   try {
     const config = await ensureSystemConfig()
-    const key = config.azureSpeechKey
-    const region = config.azureSpeechRegion || 'eastasia'
-    if (!key) return null
-    return { key, region }
+    return (config as any).minimaxApiKey || process.env.MINIMAX_API_KEY || null
   } catch (error) {
-    console.error('[getAzureSpeechConfig Error]', error)
-    return null
+    console.error('[getMiniMaxApiKey Error]', error)
+    return process.env.MINIMAX_API_KEY || null
   }
 }
+
+
+
 
 /** ─── Publishing Standards ─────────────────────────────────────────────────
  * 系统统一发布频率标准。

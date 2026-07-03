@@ -767,8 +767,8 @@ model BrandAgentCheckpoint {
 model SystemConfig {
   id                   String   @id @default("default")
   geminiApiKey         String?
-  azureSpeechKey       String?  // Microsoft Azure Speech TTS key
-  azureSpeechRegion    String?  // e.g. "eastasia", "southeastasia"
+  minimaxApiKey        String?  // MiniMax LLM API key (chat completions, OpenAI-compatible)
+
   publishingStandards  Json?    // 系统统一发布频率标准，见 getPublishingStandards()
   // SMTP email configuration
   smtpHost             String?  // e.g. smtp.gmail.com

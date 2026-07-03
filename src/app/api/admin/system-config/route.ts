@@ -50,9 +50,8 @@ export async function GET() {
     id: config.id,
     geminiApiKey: maskKey(config.geminiApiKey),
     geminiConfigured: !!config.geminiApiKey,
-    azureSpeechKey: maskKey(config.azureSpeechKey),
-    azureSpeechRegion: config.azureSpeechRegion || '',
-    azureSpeechConfigured: !!config.azureSpeechKey,
+    minimaxApiKey: maskKey((config as any).minimaxApiKey),
+    minimaxConfigured: !!(config as any).minimaxApiKey,
     // SMTP
     smtpHost: config.smtpHost || '',
     smtpPort: config.smtpPort ?? null,
@@ -98,8 +97,7 @@ export async function PATCH(request: Request) {
   const current = await ensureSystemConfig()
 
   const nextGeminiKey     = resolveField(body, 'geminiApiKey', current.geminiApiKey)
-  const nextAzureKey      = resolveField(body, 'azureSpeechKey', current.azureSpeechKey)
-  const nextAzureRegion   = resolveField(body, 'azureSpeechRegion', current.azureSpeechRegion)
+  const nextMinimaxKey    = resolveField(body, 'minimaxApiKey', (current as any).minimaxApiKey)
   // SMTP fields
   const nextSmtpHost      = resolveField(body, 'smtpHost', current.smtpHost)
   const nextSmtpPort      = resolveIntField(body, 'smtpPort', current.smtpPort)
@@ -124,8 +122,7 @@ export async function PATCH(request: Request) {
     where: { id: 'default' },
     data: {
       ...(nextGeminiKey    !== undefined && { geminiApiKey: nextGeminiKey }),
-      ...(nextAzureKey     !== undefined && { azureSpeechKey: nextAzureKey }),
-      ...(nextAzureRegion  !== undefined && { azureSpeechRegion: nextAzureRegion }),
+      ...(nextMinimaxKey   !== undefined && { minimaxApiKey: nextMinimaxKey }),
       ...(nextSmtpHost     !== undefined && { smtpHost: nextSmtpHost }),
       ...(nextSmtpPort     !== undefined && { smtpPort: nextSmtpPort }),
       ...(nextSmtpUser     !== undefined && { smtpUser: nextSmtpUser }),
@@ -150,7 +147,7 @@ export async function PATCH(request: Request) {
   const maskedOld = {
     ...current,
     geminiApiKey: maskKey(current.geminiApiKey),
-    azureSpeechKey: maskKey(current.azureSpeechKey),
+    minimaxApiKey: maskKey((current as any).minimaxApiKey),
     smtpPassword: maskPassword(current.smtpPassword),
     metaAppSecret: maskKey(current.metaAppSecret),
     googleClientSecret: maskKey(current.googleClientSecret),
@@ -159,7 +156,7 @@ export async function PATCH(request: Request) {
   const maskedNew = {
     ...updated,
     geminiApiKey: maskKey(updated.geminiApiKey),
-    azureSpeechKey: maskKey(updated.azureSpeechKey),
+    minimaxApiKey: maskKey((updated as any).minimaxApiKey),
     smtpPassword: maskPassword(updated.smtpPassword),
     metaAppSecret: maskKey(updated.metaAppSecret),
     googleClientSecret: maskKey(updated.googleClientSecret),
@@ -183,9 +180,8 @@ export async function PATCH(request: Request) {
     id: updated.id,
     geminiApiKey: maskKey(updated.geminiApiKey),
     geminiConfigured: !!updated.geminiApiKey,
-    azureSpeechKey: maskKey(updated.azureSpeechKey),
-    azureSpeechRegion: updated.azureSpeechRegion || '',
-    azureSpeechConfigured: !!updated.azureSpeechKey,
+    minimaxApiKey: maskKey((updated as any).minimaxApiKey),
+    minimaxConfigured: !!(updated as any).minimaxApiKey,
     smtpHost: updated.smtpHost || '',
     smtpPort: updated.smtpPort ?? null,
     smtpUser: updated.smtpUser || '',

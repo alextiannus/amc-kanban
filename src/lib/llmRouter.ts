@@ -1,5 +1,5 @@
 import { prisma } from './prisma.ts'
-import { getGeminiApiKey } from './systemConfig.ts'
+import { getGeminiApiKey, getMiniMaxApiKey } from './systemConfig.ts'
 
 export interface LLMCallResult {
   text: string | null
@@ -84,9 +84,11 @@ async function executeSingleLLMCall(
         console.error(`[LLM Router] ${errorMsg}`)
       }
     }
-    else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim') {
+    else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim' || provider === 'minimax') {
       const defaultEndpoint = provider === 'deepseek'
         ? 'https://api.deepseek.com/v1'
+        : provider === 'minimax'
+        ? 'https://api.minimaxi.chat/v1'
         : 'https://api.openai.com/v1'
       const endpoint = `${baseUrl || defaultEndpoint}/chat/completions`
 
@@ -233,9 +235,13 @@ async function executeSingleLLMChatCall(
         console.error(`[LLM Chat] ${errorMsg}`)
       }
     }
-    else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim') {
-      // OpenAI-compatible — works for GLM-4-Flash, DeepSeek, and any OpenAI-format endpoint
-      const defaultBase = provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1'
+    else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim' || provider === 'minimax') {
+      // OpenAI-compatible — works for GLM-4-Flash, DeepSeek, MiniMax, and any OpenAI-format endpoint
+      const defaultBase = provider === 'deepseek'
+        ? 'https://api.deepseek.com/v1'
+        : provider === 'minimax'
+        ? 'https://api.minimaxi.chat/v1'
+        : 'https://api.openai.com/v1'
       const endpoint = `${baseUrl || defaultBase}/chat/completions`
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -329,6 +335,7 @@ export async function callLLMChat(
       else if (provider === 'openai') apiKey = process.env.OPENAI_API_KEY || ''
       else if (provider === 'anthropic') apiKey = process.env.ANTHROPIC_API_KEY || ''
       else if (provider === 'deepseek') apiKey = process.env.DEEPSEEK_API_KEY || ''
+      else if (provider === 'minimax') apiKey = (await getMiniMaxApiKey()) || process.env.MINIMAX_API_KEY || ''
     }
     if (!apiKey) { errors.push(`${config.displayName}: no API key`); continue }
 
@@ -428,6 +435,8 @@ export async function callLLM(
         apiKey = process.env.ANTHROPIC_API_KEY || ''
       } else if (provider === 'deepseek') {
         apiKey = process.env.DEEPSEEK_API_KEY || ''
+      } else if (provider === 'minimax') {
+        apiKey = (await getMiniMaxApiKey()) || process.env.MINIMAX_API_KEY || ''
       }
     }
 
