@@ -1368,3 +1368,38 @@ RolePermission 表：
 - `drafts/route.ts`：N 条串行 DB 写入改为单条 `prisma.$transaction([...updates])`
 
 **净效果**：约 -12 文件，-4,700 行代码，tsc 增量加速。
+
+---
+
+### v1.8.36 — 2026-07-03 · Critical Fix: Prisma 连接池耗尽 + OBS 签名 + MiniMax TTS
+
+**背景**：生产环境所有 API 接口出现 25 秒超时（presign-upload 504、TTS 502/503、assets/upload 502），监控日志显示每秒十几条来自 amc-mm IP 的 25s 超时请求。
+
+---
+
+**修复 1 — Prisma 单例 Bug（根本原因）**
+- 文件：`src/lib/prisma.ts`
+- 问题：`globalForPrisma.prisma = basePrisma` 仅在非生产环境执行。生产环境每个请求均创建新 PrismaClient，每个带默认10连接池，并发请求打满 PostgreSQL max_connections → 所有查询挂起25s
+- 修复：改为所有环境均缓存单例；同时加 `connection_limit=10&pool_timeout=20` 到 DATABASE_URL，防止单实例打满连接
+
+**修复 2 — OBS Presigned URL 签名**
+- 文件：`src/lib/integrations/huaweiObs.ts`
+- 问题：`getHuaweiObsPresignedPutUrl()` 将 `Content-Type` 纳入 `SignedHeaders`（`content-type;host`）。浏览器 fetch 发送二进制 PUT 时可能修改 Content-Type（如追加 charset），导致 OBS 返回 403 SignatureDoesNotMatch
+- 修复：`SignedHeaders` 改为仅 `host`，不签 Content-Type
+
+**修复 3 — MiniMax TTS API Key 丢失（503）**
+- 文件：`src/lib/systemConfig.ts`，新增 `prisma/migrations/20260703000004_reseed_minimax_key/migration.sql`
+- 问题：migration 000002 在 SystemConfig 行创建前执行，ON CONFLICT 无效；后来 `ensureSystemConfig()` 创建了行但没有 `minimaxApiKey` 字段 → null → tts-proxy 返回 503
+- 修复：
+  1. `ensureSystemConfig()` create 中添加 `minimaxApiKey: env || null`
+  2. `getMiniMaxApiKey()` 读到 null 时自动从 env var backfill 并写回 DB
+  3. Migration 000004：COALESCE UPSERT，只填 null 不覆盖 Admin UI 已有值
+
+**影响文件（amc-kanban）**：
+- `src/lib/prisma.ts`
+- `src/lib/systemConfig.ts`
+- `src/lib/integrations/huaweiObs.ts`
+- `prisma/migrations/20260703000004_reseed_minimax_key/migration.sql`
+
+**影响文件（amc-mm）**：
+- `src/components/BrandOwnerDashboard.tsx`：OBS PUT 失败时降级到 server-side 上传；greeting 重复 speak 去重（`_sessionGreetingSpokenTexts`）
