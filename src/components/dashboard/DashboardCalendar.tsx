@@ -1805,7 +1805,9 @@ ${contentIdea || 'No details provided.'}`
                 }
 
                 const healthOrder: Record<string, number> = { red: 0, yellow: 1, green: 2, unknown: 3 }
-                const sortedBrands = [...allBrands].sort((a, b) => {
+                const sortedBrands = [...allBrands]
+                  .filter((b: any) => b.accounts && b.accounts.length > 0)
+                  .sort((a, b) => {
                   return (healthOrder[getBrandHealth(a.id)] ?? 3) - (healthOrder[getBrandHealth(b.id)] ?? 3)
                 })
 

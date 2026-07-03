@@ -296,7 +296,7 @@ export default function PostEditDrawer({
       setSelectedDraft(null)
       setCaption('')
       setHashtags('')
-      // Default: select all accounts. XHS (小红书) is always included when configured.
+      // Default: select all accounts configured for this brand (XHS included when set up)
       setSelectedAccountIds(accounts.map(a => a.id))
       setScheduledAt('')
       setAgentNote('')
@@ -1132,14 +1132,29 @@ Return the output strictly in a valid JSON array format, containing:
             <>
               {/* Theme / Material Description — simple text field, AI auto-generates hooks */}
               {!isPublished && (
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">今日主题 / 素材说明</label>
-                  <textarea
-                    value={contentIdea}
-                    onChange={(event) => setContentIdea(event.target.value)}
-                    placeholder="描述今日主题或素材创意，AI 将自动提炼 Hook 并创作各平台文案。留空时 AI 将根据已选素材自动构思。"
-                    className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 resize-none"
-                  />
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">今日主题 / 素材说明</label>
+                    <textarea
+                      value={contentIdea}
+                      onChange={(event) => setContentIdea(event.target.value)}
+                      placeholder="描述今日主题或素材创意，AI 将自动提炼 Hook 并创作各平台文案。留空时 AI 将根据已选素材自动构思。"
+                      className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 resize-none"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      创意开场白 / Hooks
+                      <span className="ml-1.5 normal-case font-normal text-slate-400 dark:text-slate-600">（选填，留空由 AI 自动生成）</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={creativeHooks}
+                      onChange={e => setCreativeHooks(e.target.value)}
+                      placeholder="例：没想到这家餐厅环境如此好！ / You won't believe this place exists..."
+                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                    />
+                  </div>
                 </div>
               )}
 
