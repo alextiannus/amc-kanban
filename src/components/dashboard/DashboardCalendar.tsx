@@ -1805,9 +1805,7 @@ ${contentIdea || 'No details provided.'}`
                 }
 
                 const healthOrder: Record<string, number> = { red: 0, yellow: 1, green: 2, unknown: 3 }
-                const sortedBrands = [...allBrands]
-                  .filter((b: any) => b.accounts && b.accounts.length > 0)
-                  .sort((a, b) => {
+                const sortedBrands = [...allBrands].sort((a, b) => {
                   return (healthOrder[getBrandHealth(a.id)] ?? 3) - (healthOrder[getBrandHealth(b.id)] ?? 3)
                 })
 
@@ -1904,7 +1902,10 @@ ${contentIdea || 'No details provided.'}`
             
             {activeBrandId && brandDetails?.accounts && brandDetails.accounts.length > 0 ? (
               <ul className="space-y-1.5">
-                {brandDetails.accounts.map((acc: any) => {
+                {brandDetails.accounts.filter((acc: any) => {
+                    const label = (acc.handle || acc.displayName || '').trim().toLowerCase()
+                    return label && label !== 'unconfigured' && label !== 'unknown' && label !== '未配置'
+                  }).map((acc: any) => {
                   const normPlatform = normalizePlatformLabel(acc.platformId)
                   const isExpired = acc.expiresAt && new Date(acc.expiresAt) < new Date()
                   return (
