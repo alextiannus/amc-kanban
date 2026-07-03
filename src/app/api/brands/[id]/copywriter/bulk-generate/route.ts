@@ -226,10 +226,11 @@ ${brand.location ? `Location: ${brand.location}` : ""}
 ${brand.address ? `Address: ${brand.address}` : ""}
 
 Goal: Generate a complete social media post for this platform.
+${(!rawIdea || !rawIdea.trim()) ? `IMPORTANT: No specific theme was provided. You MUST invent a creative, attention-grabbing Hook based on the brand, images, and context. Choose a hook style (e.g., Curiosity Gap, Direct Value, Social Proof, Counter-Narrative, or Pain-Point) that fits the platform.` : ''}
 Requirements:
-1. For Xiaohongshu: Starts with eye-catching emojis, ends with "！！", uses conversational Chinese, bullet points with emojis, and neat spacing. Output hashtags at the end.
-2. For Instagram: Catchy opening hook, neat spacing, English, relevant hashtags at the bottom.
-3. For Facebook: Engaging, informative, English, address/contact info naturally included, hashtags at the bottom.
+1. For Xiaohongshu: MUST start with a powerful 爆款 Hook (e.g., "竟然有这种好地方！""你不知道的XX秘密""去了就后悔没早去"). Followed by emojis, conversational Chinese, bullet points. Ends with "！！". Output hashtags at the end.
+2. For Instagram: MUST start with a catchy opening hook sentence in English. Neat spacing, relevant hashtags at the bottom.
+3. For Facebook: Engaging opening hook, informative, English, address/contact info naturally included, hashtags at the bottom.
 
 Output ONLY a valid JSON object with the following structure:
 {

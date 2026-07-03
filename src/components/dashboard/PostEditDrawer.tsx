@@ -296,6 +296,7 @@ export default function PostEditDrawer({
       setSelectedDraft(null)
       setCaption('')
       setHashtags('')
+      // Default: select all accounts. XHS (小红书) is always included when configured.
       setSelectedAccountIds(accounts.map(a => a.id))
       setScheduledAt('')
       setAgentNote('')
@@ -1129,163 +1130,19 @@ Return the output strictly in a valid JSON array format, containing:
             </div>
           ) : (
             <>
-              {/* Material Ideas (only if not published) */}
+              {/* Theme / Material Description — simple text field, AI auto-generates hooks */}
               {!isPublished && (
-                <div className="space-y-3.5">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">今日主题 / 素材说明</label>
-                    <textarea
-                      value={contentIdea}
-                      onChange={(event) => setContentIdea(event.target.value)}
-                      placeholder="输入内容创意或AI生成指令，例如：‘介绍我们的新菜单，突出新鲜食材和南洋风味’，AI将自动按所选平台特性重构文案..."
-                      className="min-h-[60px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-805 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-105"
-                    />
-                  </div>
-
-                  {/* Selectors for Industry and Hook Framework */}
-                  <div className="grid grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">行业品类 (Industry)</label>
-                      <select
-                        value={hookBusinessType}
-                        onChange={(e) => setHookBusinessType(e.target.value)}
-                        className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2 outline-none font-bold text-slate-700 dark:text-slate-350"
-                      >
-                        <option value="F&B">餐饮美食 (F&B)</option>
-                        <option value="eCommerce">线上电商 (eCommerce)</option>
-                        <option value="Local Service">本地生活/实体店 (Local Service)</option>
-                        <option value="Beauty & Lifestyle">美妆生活/时尚 (Beauty & Lifestyle)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">爆款公式 (Framework)</label>
-                      <select
-                        value={hookStyle}
-                        onChange={(e) => setHookStyle(e.target.value)}
-                        className="w-full text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2 outline-none font-bold text-slate-700 dark:text-slate-350"
-                      >
-                        <option value="Contra-Narrative">反向叙事 (Contra-Narrative)</option>
-                        <option value="Pain Point">痛点打击 (Pain Point)</option>
-                        <option value="Curiosity Gap">好奇心留白 (Curiosity Gap)</option>
-                        <option value="Direct Value">直接价值 (Direct Value)</option>
-                        <option value="Social Proof">社交背书 (Social Proof)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Generate Hooks Button */}
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      disabled={isGeneratingHooks}
-                      onClick={triggerGenerateHooks}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 text-xs font-black transition-all disabled:opacity-50"
-                    >
-                      {isGeneratingHooks ? (
-                        <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          <span>正在分析上下文并生成 Hooks...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-3.5 w-3.5" />
-                          <span>Generate Hooks (生成爆款 Hooks)</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Active Selected Hook Preview Card */}
-                  {creativeHooks && (
-                    <div className="rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50/20 dark:bg-indigo-950/20 p-3.5 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400">已选择的 Hook 创意：</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCreativeHooks('')
-                            setGeneratedHooks([])
-                          }}
-                          className="text-[10px] text-rose-500 hover:underline font-bold"
-                        >
-                          清除选择
-                        </button>
-                      </div>
-                      <div className="text-xs text-slate-750 dark:text-slate-300 whitespace-pre-line leading-relaxed font-medium">
-                        {creativeHooks}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 3 Generated Hooks Cards to select from */}
-                  {generatedHooks.length > 0 && (
-                    <div className="space-y-2 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500">
-                          推荐的 3 个爆款 Hooks ({attachedMedia.some(m => isVideoUrl(m.url)) ? '视频' : '图文'}类型):
-                        </span>
-                        <button
-                          type="button"
-                          onClick={triggerGenerateHooks}
-                          className="text-[10px] text-indigo-600 hover:underline font-bold dark:text-indigo-400"
-                        >
-                          重新生成
-                        </button>
-                      </div>
-                      <div className="space-y-2.5">
-                        {generatedHooks.map((h, i) => {
-                          const isVid = attachedMedia.some(m => isVideoUrl(m.url))
-                          const labelVisual = isVid ? '画面设计' : '图片设计'
-                          const labelOverlay = isVid ? '屏幕贴纸' : '排版文字'
-                          const labelAudio = isVid ? '口播开头' : '正文开头'
-                          
-                          const hookTextStr = `【${labelVisual}】：${h.visual}\n【${labelOverlay}】：${h.overlay}\n【${labelAudio}】：${h.audio}`
-                          const isSelected = creativeHooks === hookTextStr
-
-                          return (
-                            <div
-                              key={i}
-                              onClick={() => setCreativeHooks(hookTextStr)}
-                              className={`group relative rounded-md border p-3 cursor-pointer transition-all ${
-                                isSelected 
-                                  ? 'border-indigo-500 bg-indigo-50/20 dark:border-indigo-900 dark:bg-indigo-950/20 shadow-sm ring-1 ring-indigo-500' 
-                                  : 'border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-950 hover:border-indigo-400 dark:hover:border-indigo-900'
-                              }`}
-                            >
-                              <div className="space-y-1.5 text-xs">
-                                <div className="flex items-start gap-1.5">
-                                  <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 shrink-0 uppercase tracking-wide">
-                                    {labelOverlay}
-                                  </span>
-                                  <span className="font-extrabold text-slate-900 dark:text-white leading-relaxed">{h.overlay}</span>
-                                </div>
-                                <div className="flex items-start gap-1.5">
-                                  <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 shrink-0 uppercase tracking-wide">
-                                    {labelAudio}
-                                  </span>
-                                  <span className="text-slate-600 dark:text-slate-300 leading-relaxed font-medium">{h.audio}</span>
-                                </div>
-                                <div className="flex items-start gap-1.5">
-                                  <span className="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0 uppercase tracking-wide">
-                                    {labelVisual}
-                                  </span>
-                                  <span className="text-slate-505 dark:text-slate-400 text-[11px] leading-relaxed italic">{h.visual}</span>
-                                </div>
-                              </div>
-                              {isSelected && (
-                                <div className="absolute top-2.5 right-2.5 text-indigo-600 dark:text-indigo-400">
-                                  <Check className="h-4 w-4" />
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">今日主题 / 素材说明</label>
+                  <textarea
+                    value={contentIdea}
+                    onChange={(event) => setContentIdea(event.target.value)}
+                    placeholder="描述今日主题或素材创意，AI 将自动提炼 Hook 并创作各平台文案。留空时 AI 将根据已选素材自动构思。"
+                    className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 resize-none"
+                  />
                 </div>
               )}
+
 
               {/* Caption and Hashtags */}
               {(selectedDraft || isPublished) && (
