@@ -90,12 +90,10 @@ export async function POST(req: NextRequest) {
     const audioHex = payload?.data?.audio
 
     if (statusCode !== 0 || typeof audioHex !== 'string' || !audioHex) {
-      console.error('[MiniMax TTS Proxy] Invalid response:', {
-        statusCode,
-        statusMessage: payload?.base_resp?.status_msg,
-        traceId: payload?.trace_id,
-      })
-      return NextResponse.json({ error: 'MiniMax TTS returned no audio' }, { status: 502 })
+      const msg = payload?.base_resp?.status_msg ?? 'unknown'
+      const trace = payload?.trace_id ?? ''
+      console.error(`[MiniMax TTS Proxy] Invalid response: statusCode=${statusCode} msg="${msg}" trace=${trace}`)
+      return NextResponse.json({ error: `MiniMax TTS error: ${statusCode} - ${msg}` }, { status: 502 })
     }
 
     const audio = Buffer.from(audioHex, 'hex')
