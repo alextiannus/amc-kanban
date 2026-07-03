@@ -333,7 +333,9 @@ export default function BrandsTab({
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                   {filteredBrands.map((brand) => {
                     const subscription = brand.subscriptions[0]
-                    const planName = subscription?.planName || '未绑定套餐'
+                    const planLabel = subscription?.planId
+                      ? subscription.planId.charAt(0).toUpperCase() + subscription.planId.slice(1).toLowerCase()
+                      : '未绑定'
                     const status = subscription?.status || '无订阅'
                     
                     const endDate = subscription?.contractEndDate
@@ -365,7 +367,7 @@ export default function BrandsTab({
                         </td>
                         <td className="px-5 py-4">
                           <span className="inline-flex items-center px-2.5 py-1 rounded-xl text-[10px] font-bold bg-indigo-50 dark:bg-indigo-955/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/30">
-                            {planName}
+                            {planLabel}
                           </span>
                         </td>
                         <td className="px-5 py-4">

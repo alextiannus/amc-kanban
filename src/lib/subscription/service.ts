@@ -68,7 +68,7 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
   const subscription = await prisma.brandSubscription.findFirst({
     where: {
       id: input.subscriptionId,
-      status: 'ACTIVE',
+      // Note: allow PENDING and ACTIVE — for BILLING mode, brand is created while subscription is still PENDING
       OR: [{ contractEndDate: null }, { contractEndDate: { gt: now } }],
     },
     select: { id: true, brandId: true },

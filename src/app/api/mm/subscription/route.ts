@@ -204,16 +204,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (paymentMode === 'BILLING') {
-      console.log(`[MM-Sub] BILLING path — activating subscription (${Date.now() - t0}ms)`)
-      const activationData = buildBillingActivationData(summary.durationMonths)
-      await prisma.brandSubscription.update({
-        where: { id: pendingSub.id },
-        data: activationData,
-      })
-      console.log(`[MM-Sub] subscription updated to ACTIVE (${Date.now() - t0}ms)`)
+      console.log(`[MM-Sub] BILLING path — subscription stays PENDING until payment confirmed (${Date.now() - t0}ms)`)
+
+      // Create the brand and link it to the PENDING subscription
+      // (subscription stays PENDING until Admin confirms payment receipt)
       const createdBrand = pendingBrandName
         ? await (async () => {
-            console.log(`[MM-Sub] calling createBrandForActivatedSubscription (${Date.now() - t0}ms)`)
+            console.log(`[MM-Sub] calling createBrandForActivatedSubscription for PENDING sub (${Date.now() - t0}ms)`)
             const result = await createBrandForActivatedSubscription({
               subscriptionId: pendingSub.id,
               ownerId: session.user.id,
@@ -224,50 +221,26 @@ export async function POST(request: NextRequest) {
               timezone: pendingBrandTimezone,
               address: pendingBrandAddress || null,
             })
-            console.log(`[MM-Sub] createBrandForActivatedSubscription done (${Date.now() - t0}ms):`, result.ok, 'reason' in result ? result.reason : `brand=${result.brand?.id}`)
+            console.log(`[MM-Sub] brand created (${Date.now() - t0}ms):`, result.ok, 'reason' in result ? result.reason : `brand=${result.brand?.id}`)
             return result
           })()
         : null
+
       if (pendingBrandName && !createdBrand?.ok) {
         console.error(`[MM-Sub] brand creation failed (${Date.now() - t0}ms):`, (createdBrand as any)?.reason)
         return NextResponse.json(
-          { error: '订阅已激活，但品牌创建失败', reason: createdBrand?.reason || 'unknown' },
+          { error: '订阅已提交，但品牌初始化失败', reason: createdBrand?.reason || 'unknown' },
           { status: 500 }
         )
       }
-      const activatedSubscription = await prisma.brandSubscription.findUnique({
-        where: { id: pendingSub.id },
-      })
-      const keyResult = { agentId: createdBrand?.ok ? createdBrand.agentId || null : null }
 
-      // Send Subscription Success Confirmation Email to brand owner
-      // resolvedOwnerEmail already prefers pendingBrandOwnerEmail, falls back to session.user.email
-      try {
-        const toEmail = resolvedOwnerEmail || session.user.email
-        if (toEmail) {
-          const targetBrandName = pendingBrandName || (brandId ? (await prisma.brand.findUnique({ where: { id: brandId }, select: { name: true } }))?.name : null) || '您的品牌'
-          sendSubscriptionSuccessEmail({
-            to: toEmail,
-            nickname: toEmail.split('@')[0],
-            brandName: targetBrandName,
-            planName: pendingSub.planName,
-          }).catch((emailErr) => {
-            console.error('[billing_subscription_email] background email failed:', emailErr)
-          })
-        }
-      } catch (emailErr) {
-        console.error('[billing_subscription_email] failed to initiate success email:', emailErr)
-      }
-
-      console.log(`[MM-Sub] BILLING success, responding (${Date.now() - t0}ms)`)
+      console.log(`[MM-Sub] BILLING pending — responding (${Date.now() - t0}ms)`)
       return NextResponse.json({
         success: true,
-        ...buildBillingActivatedResponse({
-          subscriptionId: pendingSub.id,
-          totalDueUsd: summary.totalDueUsd,
-          agentId: keyResult.agentId,
-        }),
-        subscription: activatedSubscription,
+        status: 'PENDING',
+        message: '订阅申请已提交，等待付款确认后由 Admin 激活',
+        subscriptionId: pendingSub.id,
+        subscription: pendingSub,
         brand: createdBrand?.ok ? createdBrand.brand : null,
       })
     }
