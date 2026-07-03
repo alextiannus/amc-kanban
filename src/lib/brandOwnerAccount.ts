@@ -30,7 +30,10 @@ export async function findOrCreateBrandOwnerAccount(email: string): Promise<Bran
   }
 
   const temporaryPassword = crypto.randomBytes(18).toString('base64url')
-  const hashedPassword = await bcrypt.hash(temporaryPassword, 12)
+  // bcryptjs is pure-JS (not native) — it blocks the event loop during hashing.
+  // Cost factor 12 takes 15-30s on Render's throttled CPU. Use 8 for auto-generated
+  // temporary passwords: still secure (2^8=256 rounds), ~50ms even on slow hardware.
+  const hashedPassword = await bcrypt.hash(temporaryPassword, 8)
   const user = await prisma.user.create({
     data: {
       email: normalizedEmail,
