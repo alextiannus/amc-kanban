@@ -57,13 +57,13 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: process.env.MINIMAX_TTS_MODEL || 'speech-2.8-turbo',
+        model: process.env.MINIMAX_TTS_MODEL || 'speech-02-turbo',
         text,
         stream: false,
         language_boost: 'Chinese',
         output_format: 'hex',
         voice_setting: {
-          voice_id: process.env.MINIMAX_TTS_VOICE_ID || 'Chinese (Mandarin)_Warm_Bestie',
+          voice_id: process.env.MINIMAX_TTS_VOICE_ID || 'female-shaonv',
           speed: 0.98,
           vol: 1,
           pitch: 0,
