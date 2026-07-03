@@ -269,6 +269,45 @@ export async function DELETE(_req: Request, { params }: Params) {
     }
   }
 
-  await prisma.user.delete({ where: { id } })
-  return NextResponse.json({ ok: true })
+  try {
+    // Cascade-delete all related records first to avoid FK constraint violations.
+    // Many relations on User lack onDelete:Cascade in the schema, so we clean up
+    // manually. This also handles "empty" accounts that only have invitation records.
+    await prisma.$transaction(async (tx: any) => {
+      // Auth / API keys
+      await tx.userApiKey.deleteMany({ where: { userId: id } })
+      // Invitations (both as inviter and invitee)
+      await tx.invitation.deleteMany({ where: { OR: [{ inviterId: id }, { inviteeUserId: id }] } })
+      // Business roles
+      await tx.userBusinessRole.deleteMany({ where: { userId: id } })
+      // Agent permissions (humanId/agentId are the FK field names in AgentPermission)
+      await tx.agentPermission.deleteMany({ where: { OR: [{ humanId: id }, { agentId: id }] } })
+      // Crew memberships
+      await tx.crewMember.deleteMany({ where: { userId: id } })
+      // Brand memberships (BrandAgent.agentId → User.id)
+      await tx.brandAgent.deleteMany({ where: { agentId: id } })
+      // Brand ownership
+      await tx.brandOwner.deleteMany({ where: { userId: id } })
+      // Assignment pool membership
+      await tx.assignmentPoolMember.deleteMany({ where: { userId: id } }).catch(() => {/* table may not exist */})
+      // OrganizationMember already has onDelete:Cascade but delete anyway for safety
+      await tx.organizationMember.deleteMany({
+        where: { OR: [{ ownerId: id }, { memberId: id }] },
+      }).catch(() => {})
+      // Sales leads
+      await tx.salesLead.deleteMany({ where: { userId: id } }).catch(() => {})
+      // School items owned by this agent
+      await tx.schoolItem.deleteMany({ where: { agentId: id } }).catch(() => {})
+      // Finally delete the user
+      await tx.user.delete({ where: { id } })
+    })
+
+    return NextResponse.json({ ok: true })
+  } catch (err: any) {
+    console.error(`[DELETE /api/admin/users/${id}] Failed:`, err)
+    const msg = err?.message?.includes('Foreign key constraint')
+      ? '删除失败：该账号仍有关联数据，请先转移或删除相关内容后重试。'
+      : `删除失败：${err?.message ?? '未知错误'}`
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
 }

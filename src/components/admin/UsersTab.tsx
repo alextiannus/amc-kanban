@@ -159,7 +159,7 @@ export default function UsersTab({
           }`}
         >
           <User size={14} />
-          <span>人类账号管理 ({humans.length})</span>
+          <span>账号管理 ({humans.length})</span>
         </button>
         <button
           onClick={() => setSubTab('groups')}
