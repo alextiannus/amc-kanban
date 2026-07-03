@@ -17,6 +17,8 @@
     "test:phase1-e2e": "node --experimental-strip-types scripts/test-phase1-e2e.mts",
     "test:phase1-local": "./scripts/run-phase1-local-checks.sh",
     "test:api": "node --experimental-strip-types scripts/test-api.mts",
+    "docs:api": "node scripts/generate-api-reference.mjs",
+    "docs:api:check": "node scripts/generate-api-reference.mjs --check",
     "test:subscription": "node --experimental-strip-types scripts/test-subscription-pricing.mts && node --experimental-strip-types scripts/test-subscription-workflow.mts",
     "test:subscription-workflow": "node --experimental-strip-types scripts/test-subscription-workflow.mts",
     "test:user-management": "DATABASE_URL=\"postgresql://alextian@127.0.0.1:5432/amc_dev\" node --experimental-strip-types scripts/test-user-management-e2e.mts",

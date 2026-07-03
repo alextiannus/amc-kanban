@@ -1,10 +1,12 @@
 # AI Marketing Crew API Services
 
-版本日期：2026-06-08
+版本日期：2026-07-03
 
 ## 1. 服务总览
 
 当前系统采用 Next.js Route Handlers 提供 REST API，并通过 `/api/mcp`、`/api/meta/openapi`、`/api/meta/sop`、`/api/meta/skills/amc-integrations` 对外暴露 Agent 接入能力。
+
+本文前半部分按业务域说明稳定接口；第 8 节是由 Route Handler 源码自动生成的完整清单。`/api/meta/openapi` 仅描述允许外部 Agent 使用的子集，不代表全部内部 API。
 
 Agent 视角的连接与工作流手册见：[AGENT_CONNECTIVITY.md](AGENT_CONNECTIVITY.md)。
 
@@ -74,11 +76,12 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 接口：
 
 - `GET /api/agents`
-- `GET/PATCH /api/agents/:id`
-- `POST /api/agents/profile`
+- `GET/PATCH/DELETE /api/agents/:id`
+- `GET/POST /api/agents/profile`
 - `POST /api/agents/register`
 - `POST /api/agents/keys`
 - `GET/PATCH /api/agent/profile`
+- `PATCH /api/agent/accounts`
 - `PATCH /api/agent/insights`
 
 说明：
@@ -98,8 +101,8 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 - `GET/PATCH /api/brands/:id/settings`
 - `GET/PATCH /api/brands/:id/profile`
 - `GET/POST /api/brands/:id/owners`
-- `DELETE /api/brands/:id/owners/:userId`
-- `GET/POST /api/brands/:id/agents`
+- `PATCH/DELETE /api/brands/:id/owners/:userId`
+- `GET/POST/DELETE /api/brands/:id/agents`
 - `GET/POST/PATCH /api/agent/brand-config`
 - `GET /api/agent/admin/brands`
 - `GET/PATCH /api/agent/admin/brands/:id`
@@ -122,7 +125,7 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 
 - `GET/POST /api/subscription`
 - `POST /api/subscription/confirm`
-- `GET/POST /api/brands/:id/subscription`
+- `GET/POST/PATCH /api/brands/:id/subscription`
 - `POST /api/brands/:id/subscription/confirm`
 - `PATCH /api/admin/subscriptions/:id`
 - `POST /api/integrations/stripe/webhook`
@@ -144,7 +147,7 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 - `PATCH /api/tasks/:id/status`
 - `GET/POST /api/tasks/:id/comments`
 - `POST /api/tasks/:id/retry-publish`
-- `GET /api/tasks/unassigned`
+- `DELETE /api/tasks/unassigned`
 
 状态：
 
@@ -166,11 +169,11 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 
 接口：
 
-- `GET/POST /api/brands/:id/actions`
+- `GET /api/brands/:id/actions`
 - `PATCH /api/brands/:id/actions/:aid/approve`
 - `PATCH /api/brands/:id/actions/:aid/reject`
-- `GET /api/agent/action-items`
-- `GET /api/agent/pending-approvals`
+- `POST/PATCH /api/agent/action-items`
+- `GET/POST /api/agent/pending-approvals`
 
 典型场景：
 
@@ -283,8 +286,8 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 接口：
 
 - `GET/POST /api/brands/:id/accounts`
-- `GET/PATCH/DELETE /api/brands/:id/accounts/:aid`
-- `GET /api/agent/accounts`
+- `PATCH/DELETE /api/brands/:id/accounts/:aid`
+- `PATCH /api/agent/accounts`
 
 字段：
 
@@ -349,11 +352,11 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 
 接口：
 
-- `GET/PATCH /api/game/config`
+- `GET/POST /api/game/config`
 - `POST /api/game/spin`
 - `GET /api/game/status`
-- `GET/POST /api/game/tasks`
-- `PATCH /api/game/tasks/override`
+- `POST /api/game/tasks`
+- `POST /api/game/tasks/override`
 
 前端页面：
 
@@ -383,7 +386,7 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 - `POST /api/agent-assignment/resolve`
 - `GET/PATCH /api/admin/agent-assignment-pool/config`
 - `GET/POST /api/admin/agent-assignment-pool/members`
-- `GET/PATCH/DELETE /api/admin/agent-assignment-pool/members/:agentId`
+- `PATCH/DELETE /api/admin/agent-assignment-pool/members/:agentId`
 - `GET /api/admin/agent-assignment/decisions`
 
 数据模型：
@@ -399,10 +402,10 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 接口：
 
 - `GET/POST /api/admin/users`
-- `GET/PATCH/DELETE /api/admin/users/:id`
+- `PATCH/DELETE /api/admin/users/:id`
 - `POST /api/admin/permissions`
 - `GET /api/admin/logs`
-- `GET/PATCH /api/admin/brand-credentials`
+- `GET /api/admin/brand-credentials`
 - `GET /api/admin/debug/avatar`
 - `PATCH /api/admin/subscriptions/:id`
 
@@ -412,7 +415,7 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 
 接口：
 
-- `GET/POST /api/integrations/extension/events`
+- `GET /api/integrations/extension/events`
 - `POST /api/integrations/extension/response`
 - `POST /api/integrations/extension/test-trigger`
 - `POST /api/integrations/lark/upload/:id`
