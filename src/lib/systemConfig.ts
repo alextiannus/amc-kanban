@@ -18,6 +18,7 @@ export async function ensureSystemConfig() {
       tiktokClientSecret: null,
       tiktokRedirectUri: null,
       useDirectPublishing: false,
+      minimaxApiKey: process.env.MINIMAX_API_KEY || null,
     },
   })
 }
@@ -105,14 +106,33 @@ export async function getGeminiApiKey(): Promise<string | null> {
 }
 
 /**
- * MiniMax API key (chat completions, OpenAI-compatible).
- * Credentials are stored in SystemConfig (DB), NOT in environment variables.
- * Configure via Admin → System Config UI, or fallback to MINIMAX_API_KEY env var.
+ * MiniMax API key (TTS / chat completions).
+ * Stored in SystemConfig DB. Falls back to MINIMAX_API_KEY env var.
+ * Auto-upserts from env var on first call if DB key is missing.
  */
 export async function getMiniMaxApiKey(): Promise<string | null> {
   try {
     const config = await ensureSystemConfig()
-    return (config as any).minimaxApiKey || process.env.MINIMAX_API_KEY || null
+    const dbKey = (config as any).minimaxApiKey as string | null
+
+    if (dbKey) return dbKey
+
+    // DB has no key — check env var and backfill into DB for future calls
+    const envKey = process.env.MINIMAX_API_KEY || null
+    if (envKey) {
+      try {
+        await prisma.systemConfig.update({
+          where: { id: 'default' },
+          data: { minimaxApiKey: envKey } as any,
+        })
+        console.log('[getMiniMaxApiKey] Auto-backfilled minimaxApiKey from env var into DB')
+      } catch (upsertErr) {
+        console.warn('[getMiniMaxApiKey] Could not backfill key into DB:', upsertErr)
+      }
+      return envKey
+    }
+
+    return null
   } catch (error) {
     console.error('[getMiniMaxApiKey Error]', error)
     return process.env.MINIMAX_API_KEY || null
