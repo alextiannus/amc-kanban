@@ -327,7 +327,7 @@ export async function GET(_req: Request, { params }: Params) {
   return NextResponse.json({ ...brand, weekConversions: conversions, recentDrafts, postfastSync, operationsReport })
 }
 
-// PATCH /api/brands/[id] — update name, location, autoPilot
+// PATCH /api/brands/[id] — update editable brand profile fields
 export async function PATCH(request: Request, { params }: Params) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -341,13 +341,21 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   const body = await request.json()
-  const { name, location, timezone, autoPilot } = body
+  const { name, description, logoUrl, location, timezone, autoPilot } = body
 
   const updated = await prisma.brand.update({
     where: { id },
     data: {
-      ...(name !== undefined && { name: name.trim() }),
-      ...(location !== undefined && { location: location?.trim() || null }),
+      ...(name !== undefined && { name: typeof name === 'string' ? name.trim() : name }),
+      ...(description !== undefined && {
+        description: typeof description === 'string' ? description.trim() || null : description,
+      }),
+      ...(logoUrl !== undefined && {
+        logoUrl: typeof logoUrl === 'string' ? logoUrl.trim() || null : logoUrl,
+      }),
+      ...(location !== undefined && {
+        location: typeof location === 'string' ? location.trim() || null : location,
+      }),
       ...(timezone !== undefined && { timezone }),
       ...(autoPilot !== undefined && { autoPilot }),
     },

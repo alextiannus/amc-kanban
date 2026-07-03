@@ -4,7 +4,7 @@ import { getMiniMaxApiKey } from '@/lib/systemConfig'
 
 export const dynamic = 'force-dynamic'
 
-const DEFAULT_ENDPOINT = 'https://api.minimaxi.chat/v1/t2a_v2'
+const DEFAULT_ENDPOINT = 'https://api.minimaxi.com/v1/t2a_v2'
 const MAX_TEXT_LENGTH = 600
 const UPSTREAM_TIMEOUT_MS = 8_000
 
@@ -57,14 +57,13 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: process.env.MINIMAX_TTS_MODEL || 'speech-02-turbo',
+        model: process.env.MINIMAX_TTS_MODEL || 'speech-2.8-hd',
         text,
         stream: false,
-        language_boost: 'Chinese',
-        output_format: 'hex',
+        output_format: 'hex',  // tell API to return audio as hex string in data.audio
         voice_setting: {
           voice_id: process.env.MINIMAX_TTS_VOICE_ID || 'female-shaonv',
-          speed: 0.98,
+          speed: 1,
           vol: 1,
           pitch: 0,
         },
