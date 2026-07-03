@@ -34,15 +34,29 @@ export async function POST(request: NextRequest) {
     const pendingBrandTimezone = String(body.timezone ?? '').trim() || 'America/New_York'
     const pendingBrandDescription = String(body.pendingBrandDescription ?? '').trim()
 
+    const t0 = Date.now()
+    console.log('[MM-Sub] POST start', {
+      userId: session.user.id,
+      brandId,
+      pendingBrandName: pendingBrandName || undefined,
+      planId: body.planId,
+      durationMonths: body.durationMonths,
+      paymentMode: body.paymentMode ?? body.paymentMethod,
+    })
+
     if (brandId && pendingBrandName) {
       return NextResponse.json({ error: 'brandId and pendingBrandName cannot be used together' }, { status: 400 })
     }
 
-    // ownerEmail is REQUIRED when creating a new brand
-    if (pendingBrandName && !pendingBrandOwnerEmail) {
-      return NextResponse.json({ error: '新建品牌必须提供品牌主邮件 (pendingBrandOwnerEmail)' }, { status: 400 })
+    // ownerEmail: if not provided by caller, auto-populate from session (MM side: brand owner = logged-in user)
+    const resolvedOwnerEmail = pendingBrandOwnerEmail
+      || (pendingBrandName ? (session.user.email ?? '') : '')
+
+    // Validate ownerEmail when creating a new brand
+    if (pendingBrandName && !resolvedOwnerEmail) {
+      return NextResponse.json({ error: '新建品牌必须提供品牌主邮件，且登录账号需绑定邮件地址' }, { status: 400 })
     }
-    if (pendingBrandName && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pendingBrandOwnerEmail)) {
+    if (pendingBrandName && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resolvedOwnerEmail)) {
       return NextResponse.json({ error: '品牌主邮件格式无效' }, { status: 400 })
     }
 
@@ -120,6 +134,7 @@ export async function POST(request: NextRequest) {
 
     const finalTotalDue = Math.max(0, Math.round(summary.totalDueUsd - promoDiscountAmount))
 
+    console.log(`[MM-Sub] creating BrandSubscription (${Date.now() - t0}ms since start)`)
     const pendingSub = await prisma.brandSubscription.create({
       data: {
         brandId,
@@ -139,6 +154,7 @@ export async function POST(request: NextRequest) {
         createdById: session.user.id,
       },
     })
+    console.log(`[MM-Sub] BrandSubscription created: ${pendingSub.id}, status=${pendingSub.status} (${Date.now() - t0}ms)`)
 
     if (campaignId) {
       await prisma.campaignPromoCode.update({
@@ -184,24 +200,32 @@ export async function POST(request: NextRequest) {
     }
 
     if (paymentMode === 'BILLING') {
+      console.log(`[MM-Sub] BILLING path — activating subscription (${Date.now() - t0}ms)`)
       const activationData = buildBillingActivationData(summary.durationMonths)
       await prisma.brandSubscription.update({
         where: { id: pendingSub.id },
         data: activationData,
       })
+      console.log(`[MM-Sub] subscription updated to ACTIVE (${Date.now() - t0}ms)`)
       const createdBrand = pendingBrandName
-        ? await createBrandForActivatedSubscription({
-            subscriptionId: pendingSub.id,
-            ownerId: session.user.id,
-            name: pendingBrandName,
-            description: pendingBrandDescription || null,
-            location: pendingBrandLocation || null,
-            ownerEmail: pendingBrandOwnerEmail || '',
-            timezone: pendingBrandTimezone,
-            address: pendingBrandAddress || null,
-          })
+        ? await (async () => {
+            console.log(`[MM-Sub] calling createBrandForActivatedSubscription (${Date.now() - t0}ms)`)
+            const result = await createBrandForActivatedSubscription({
+              subscriptionId: pendingSub.id,
+              ownerId: session.user.id,
+              name: pendingBrandName,
+              description: pendingBrandDescription || null,
+              location: pendingBrandLocation || null,
+              ownerEmail: resolvedOwnerEmail,
+              timezone: pendingBrandTimezone,
+              address: pendingBrandAddress || null,
+            })
+            console.log(`[MM-Sub] createBrandForActivatedSubscription done (${Date.now() - t0}ms):`, result.ok, 'reason' in result ? result.reason : `brand=${result.brand?.id}`)
+            return result
+          })()
         : null
       if (pendingBrandName && !createdBrand?.ok) {
+        console.error(`[MM-Sub] brand creation failed (${Date.now() - t0}ms):`, (createdBrand as any)?.reason)
         return NextResponse.json(
           { error: '订阅已激活，但品牌创建失败', reason: createdBrand?.reason || 'unknown' },
           { status: 500 }
@@ -213,14 +237,9 @@ export async function POST(request: NextRequest) {
       const keyResult = { agentId: createdBrand?.ok ? createdBrand.agentId || null : null }
 
       // Send Subscription Success Confirmation Email to brand owner
-      // When admin creates on behalf of owner, email goes to ownerEmail not admin
+      // resolvedOwnerEmail already prefers pendingBrandOwnerEmail, falls back to session.user.email
       try {
-        const emailTarget = pendingBrandOwnerEmail || null
-        const sessionUser = await prisma.user.findUnique({
-          where: { id: session.user.id },
-          select: { email: true, nickname: true }
-        })
-        const toEmail = emailTarget || sessionUser?.email
+        const toEmail = resolvedOwnerEmail || session.user.email
         if (toEmail) {
           const targetBrandName = pendingBrandName || (brandId ? (await prisma.brand.findUnique({ where: { id: brandId }, select: { name: true } }))?.name : null) || '您的品牌'
           sendSubscriptionSuccessEmail({
@@ -236,6 +255,7 @@ export async function POST(request: NextRequest) {
         console.error('[billing_subscription_email] failed to initiate success email:', emailErr)
       }
 
+      console.log(`[MM-Sub] BILLING success, responding (${Date.now() - t0}ms)`)
       return NextResponse.json({
         success: true,
         ...buildBillingActivatedResponse({
@@ -249,6 +269,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (paymentMode === 'OFFLINE') {
+      console.log(`[MM-Sub] OFFLINE path — responding invoice (${Date.now() - t0}ms)`)
       return NextResponse.json(
         buildOfflineInvoiceResponse({
           subscriptionId: pendingSub.id,
@@ -259,8 +280,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!stripe) {
+      console.error('[MM-Sub] Stripe not configured')
       return NextResponse.json({ error: 'Stripe is not configured on main server' }, { status: 503 })
     }
+
+    console.log(`[MM-Sub] ONLINE path — creating Stripe checkout session (${Date.now() - t0}ms)`)  
 
     const origin = request.headers.get('x-forwarded-host')
       ? `${request.headers.get('x-forwarded-proto') || 'http'}://${request.headers.get('x-forwarded-host')}`
@@ -315,6 +339,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    console.log(`[MM-Sub] Stripe checkout session created: ${sessionCheckout.id} (${Date.now() - t0}ms)`)
+
     await prisma.brandSubscription.update({
       where: { id: pendingSub.id },
       data: {
@@ -323,6 +349,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    console.log(`[MM-Sub] ONLINE success, responding with checkoutUrl (${Date.now() - t0}ms)`)
     return NextResponse.json({
       success: true,
       subscriptionId: pendingSub.id,
@@ -331,7 +358,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (err: any) {
-    console.error('[MM-API-Sub-Create] POST failed:', err)
+    console.error('[MM-Sub] POST failed:', err)
     return NextResponse.json({ error: 'Internal Server Error', details: String(err) }, { status: 500 })
   }
 }
