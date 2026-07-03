@@ -132,10 +132,10 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     const crew = await createMarketingCrew(brand.id)
     console.log(`[createBrand] createMarketingCrew done, crew.id=${crew.id} (${Date.now() - t0}ms)`)
 
-    console.log(`[createBrand] addCrewMember(brandOwner) start (${Date.now() - t0}ms)`)
-    await addCrewMember(crew.id, brandOwnerId)
-    console.log(`[createBrand] addCrewMember(brandOwner) done (${Date.now() - t0}ms)`)
-
+    // Brand owner is NOT a crew member — they are the client/principal.
+    // Only add the submitter (ownerId) to the crew if they are a different
+    // person from the brand owner (e.g. an AMC staff member who created the
+    // brand on behalf of the client).
     if (brandOwnerId !== input.ownerId) {
       console.log(`[createBrand] addCrewMember(submitter) start (${Date.now() - t0}ms)`)
       await addCrewMember(crew.id, input.ownerId)
