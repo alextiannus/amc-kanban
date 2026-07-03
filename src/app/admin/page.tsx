@@ -130,8 +130,8 @@ function AdminPageInner() {
           location: brand.location || '',
           status: brand.status,
           ownerUserId: brand.owners[0]?.userId || '',
-          planId: subscription?.planId || 'essential',
-          subscriptionStatus: subscription?.status || 'ACTIVE',
+          planId: subscription?.planId || '',
+          subscriptionStatus: subscription?.status || '',
           durationMonths: subscription?.durationMonths || 12,
           agentIds: brand.brandAgents.map((link) => link.agentId),
         }]

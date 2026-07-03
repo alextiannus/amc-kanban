@@ -206,6 +206,8 @@ export default function PostEditDrawer({
   const [draftCaptions, setDraftCaptions] = useState<Record<string, string>>({})
   const [draftHashtags, setDraftHashtags] = useState<Record<string, string>>({})
   const [draftStatuses, setDraftStatuses] = useState<Record<string, 'generating' | 'completed' | 'failed'>>({})
+  // Per-account LLM Token/API error message (non-fatal: fallback content was generated)
+  const [draftWarnings, setDraftWarnings] = useState<Record<string, string>>({})
   const [previewOnly, setPreviewOnly] = useState(false)
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
 
@@ -427,6 +429,14 @@ export default function PostEditDrawer({
                   updatedStatuses[draft.accountId] = 'completed'
                   setDraftCaptions(prev => ({ ...prev, [draft.accountId]: updatedDraft.caption }))
                   setDraftHashtags(prev => ({ ...prev, [draft.accountId]: (updatedDraft.hashtags || []).join(' ') }))
+                  // Detect LLM Token/API failure — publisher saved fallback content as 'draft'
+                  const note: string = updatedDraft.agentNote || ''
+                  if (note.includes('AI 智能写作失败') || note.includes('LLM') || note.includes('token') || note.includes('Token')) {
+                    setDraftWarnings(prev => ({
+                      ...prev,
+                      [draft.accountId]: `AI Token 错误：${note}`,
+                    }))
+                  }
                 }
               }
             }
@@ -778,7 +788,11 @@ export default function PostEditDrawer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: '智能排期发布' }),
       })
-      if (!submitRes.ok) throw new Error('排期通道提交失败')
+      if (!submitRes.ok) {
+        const errData = await submitRes.json().catch(() => ({}))
+        const errMsg = errData?.error || `排期通道提交失败 (${submitRes.status})`
+        throw new Error(errMsg)
+      }
 
       alert(`已成功排期发布！排期时间：${new Date(targetDateISO).toLocaleString()}`)
       onClose()
@@ -1924,6 +1938,7 @@ Return the output strictly in a valid JSON array format, containing:
         draftHashtags={draftHashtags}
         setDraftHashtags={setDraftHashtags}
         draftStatuses={draftStatuses}
+        draftWarnings={draftWarnings}
         isAiGenerating={isAiGenerating}
         saving={saving}
         attachedMedia={attachedMedia}

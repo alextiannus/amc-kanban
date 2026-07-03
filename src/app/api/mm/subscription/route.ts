@@ -39,6 +39,11 @@ export async function POST(request: NextRequest) {
     const pendingBrandTimezone = String(body.timezone ?? '').trim() || 'America/New_York'
     const pendingBrandDescription = String(body.pendingBrandDescription ?? '').trim()
 
+    // Distinguish MM app requests from kanban-originated requests.
+    // The MM proxy always sets x-client-type: mm (see amc-mm/src/app/api/subscription/route.ts).
+    // Kanban-originated requests (admin panel, brand owner dashboard) have no such header.
+    const isMmRequest = body.clientType === 'mm' || request.headers.get('x-client-type') === 'mm'
+
     console.log('[MM-Sub] POST start', {
       userId: session.user.id,
       brandId,
@@ -204,10 +209,60 @@ export async function POST(request: NextRequest) {
     }
 
     if (paymentMode === 'BILLING') {
-      console.log(`[MM-Sub] BILLING path — subscription stays PENDING until payment confirmed (${Date.now() - t0}ms)`)
+      // Kanban-originated requests (admin, brand owner on kanban) → activate immediately.
+      // MM app requests → keep PENDING until Admin confirms payment.
+      const shouldActivate = !isMmRequest
 
-      // Create the brand and link it to the PENDING subscription
-      // (subscription stays PENDING until Admin confirms payment receipt)
+      if (shouldActivate) {
+        const activationData = buildBillingActivationData(summary.durationMonths)
+        await prisma.brandSubscription.update({
+          where: { id: pendingSub.id },
+          data: activationData,
+        })
+        console.log(`[MM-Sub] subscription ACTIVATED (${Date.now() - t0}ms)`)
+
+        const createdBrand = pendingBrandName
+          ? await (async () => {
+              console.log(`[MM-Sub] calling createBrandForActivatedSubscription (ADMIN, ${Date.now() - t0}ms)`)
+              const result = await createBrandForActivatedSubscription({
+                subscriptionId: pendingSub.id,
+                ownerId: session.user.id,
+                name: pendingBrandName,
+                description: pendingBrandDescription || null,
+                location: pendingBrandLocation || null,
+                ownerEmail: resolvedOwnerEmail,
+                timezone: pendingBrandTimezone,
+                address: pendingBrandAddress || null,
+              })
+              console.log(`[MM-Sub] brand created (ADMIN, ${Date.now() - t0}ms):`, result.ok)
+              return result
+            })()
+          : null
+
+        if (pendingBrandName && !createdBrand?.ok) {
+          return NextResponse.json(
+            { error: '订阅已激活，但品牌创建失败', reason: createdBrand?.reason || 'unknown' },
+            { status: 500 }
+          )
+        }
+
+        const activatedSubscription = await prisma.brandSubscription.findUnique({ where: { id: pendingSub.id } })
+        console.log(`[MM-Sub] BILLING ADMIN success (${Date.now() - t0}ms)`)
+        return NextResponse.json({
+          success: true,
+          ...buildBillingActivatedResponse({
+            subscriptionId: pendingSub.id,
+            totalDueUsd: summary.totalDueUsd,
+            agentId: createdBrand?.ok ? (createdBrand as any).agentId || null : null,
+          }),
+          subscription: activatedSubscription,
+          brand: createdBrand?.ok ? createdBrand.brand : null,
+        })
+      }
+
+      // Non-admin (MM user): subscription stays PENDING until Admin confirms payment
+      console.log(`[MM-Sub] BILLING path — MM user, subscription stays PENDING (${Date.now() - t0}ms)`)
+
       const createdBrand = pendingBrandName
         ? await (async () => {
             console.log(`[MM-Sub] calling createBrandForActivatedSubscription for PENDING sub (${Date.now() - t0}ms)`)
@@ -267,9 +322,8 @@ export async function POST(request: NextRequest) {
       ? `${request.headers.get('x-forwarded-proto') || 'http'}://${request.headers.get('x-forwarded-host')}`
       : new URL(request.url).origin
     
-    // Check if called from mobile companion client
-    const isMm = body.clientType === 'mm' || request.headers.get('x-client-type') === 'mm'
-    const successRedirectUrl = isMm ? 'https://amc-mm.immedi.ai/dashboard' : `${origin}/dashboard`
+    // Check if called from mobile companion client (isMmRequest defined at top of handler)
+    const successRedirectUrl = isMmRequest ? 'https://amc-mm.immedi.ai/dashboard' : `${origin}/dashboard`
 
     const pendingBrandParams = new URLSearchParams()
     if (pendingBrandName) pendingBrandParams.set('newBrandName', pendingBrandName)

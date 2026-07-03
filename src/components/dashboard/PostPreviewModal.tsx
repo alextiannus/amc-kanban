@@ -59,6 +59,7 @@ interface PostPreviewModalProps {
   draftHashtags: Record<string, string>
   setDraftHashtags: React.Dispatch<React.SetStateAction<Record<string, string>>>
   draftStatuses: Record<string, 'generating' | 'completed' | 'failed'>
+  draftWarnings?: Record<string, string>  // per-account LLM Token/API error (non-fatal fallback)
   isAiGenerating: boolean
   saving: boolean
   attachedMedia: any[]
@@ -80,6 +81,7 @@ export default function PostPreviewModal({
   draftHashtags,
   setDraftHashtags,
   draftStatuses,
+  draftWarnings = {},
   isAiGenerating,
   saving,
   attachedMedia,
@@ -112,6 +114,22 @@ export default function PostPreviewModal({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Token Error Warning Banner — shown when LLM failed and rule-based fallback was used */}
+        {Object.keys(draftWarnings).length > 0 && (
+          <div className="mx-6 mt-3 mb-1 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-950/30 px-4 py-2.5">
+            <span className="text-base mt-0.5">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-black text-amber-800 dark:text-amber-300">
+                AI Token / API 错误 — 已自动降级为规则引擎内容
+              </p>
+              <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5 leading-relaxed">
+                部分账号 AI 生成失败（Token 额度不足或 API Key 无效），内容已由规则引擎自动生成。
+                请前往 <strong>Admin → AI 模型配置</strong> 检查并更新 API Key。
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Modal Content - Scrollable list/grid of previews */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950 scrollbar-thin">

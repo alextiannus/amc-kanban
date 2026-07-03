@@ -57,3 +57,6 @@ public/uploads/optimized/opt-cmqs6ln6n0003skc8obblqric-1-1782314409974.jpg
 
 # Local Docker dev — production DB dump (contains real data, never commit)
 docker/prod-dump.sql
+
+# Runtime snapshot files (served via API route, not committed)
+public/snapshots/
