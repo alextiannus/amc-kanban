@@ -1,6 +1,7 @@
 import type { IndustryVertical } from 'amc-content'
 import { prisma } from '../prisma.ts'
 import { tryGenerateWithAmcContent } from './legacyCopywriterBridge.ts'
+import { tryGenerateWithRemoteContentService } from './remoteContentService.ts'
 
 export type ContentGenerationRequest = {
   brandId: string
@@ -23,12 +24,14 @@ export type ContentGenerationRequest = {
   taskId?: string | null
   fallbackToLegacy?: boolean
   actorId?: string
+  actorType?: string
+  actorRole?: string
 }
 
 export type ContentGenerationResult = {
   caption: string
   hashtags: string[]
-  contentEngine: 'amc-content' | 'legacy-copywriter' | 'rule-based-fallback'
+  contentEngine: 'amc-content-remote' | 'amc-content' | 'legacy-copywriter' | 'rule-based-fallback'
   fallbackUsed: boolean
   fallbackReason?: string
   quality?: unknown
@@ -38,6 +41,15 @@ export type ContentGenerationResult = {
 export async function generateContentWithFallback(
   input: ContentGenerationRequest,
 ): Promise<ContentGenerationResult> {
+  let remoteFallbackReason: string | undefined
+  try {
+    const remote = await tryGenerateWithRemoteContentService(input)
+    if (remote) return remote
+  } catch (err: any) {
+    remoteFallbackReason = err?.message || String(err)
+    console.warn('[ContentGenerationService] remote amc-content failed; falling back local:', remoteFallbackReason)
+  }
+
   const brand = await prisma.brand.findUnique({
     where: { id: input.brandId },
     include: { knowledge: true },
@@ -103,7 +115,10 @@ export async function generateContentWithFallback(
       provenance: result.provenance,
     }
   } catch (err: any) {
-    const fallbackReason = err?.message || String(err)
+    const localFallbackReason = err?.message || String(err)
+    const fallbackReason = remoteFallbackReason
+      ? `remote: ${remoteFallbackReason}; local: ${localFallbackReason}`
+      : localFallbackReason
     if (input.fallbackToLegacy === false) {
       throw err
     }

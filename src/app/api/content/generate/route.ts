@@ -77,6 +77,8 @@ export async function POST(request: Request) {
       taskId: optionalString(body.taskId) ?? null,
       fallbackToLegacy: body.fallbackToLegacy !== false,
       actorId: actor.id,
+      actorType: actor.type,
+      actorRole: actor.role,
     })
 
     return NextResponse.json({

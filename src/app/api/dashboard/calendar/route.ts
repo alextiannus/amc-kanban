@@ -114,7 +114,39 @@ export async function GET(request: Request) {
     where: { brandId: { in: scopedBrandIds } }
   })
 
-  // Dynamically resolve postUrl for published drafts using PostFast
+  // ── Phase A: Sync scheduled→published for past-due drafts ─────────────────────────────────
+  // PostFast publishes scheduled posts automatically. AMC doesn't receive a webhook,
+  // so we proactively check here (on calendar load) for any 'scheduled' drafts whose
+  // scheduledAt has already passed and sync their status from PostFast.
+  const pastDueDrafts = drafts.filter(
+    (d: any) => d.status === 'scheduled' && d.platformPostId && d.scheduledAt && new Date(d.scheduledAt) < new Date()
+  )
+  if (pastDueDrafts.length > 0) {
+    const brandIdsToSync = Array.from(new Set(pastDueDrafts.map((d: any) => d.brandId)))
+    const brandsForSync = await prisma.brand.findMany({
+      where: { id: { in: brandIdsToSync }, postfastApiKey: { not: null } },
+      select: { id: true, postfastApiKey: true }
+    })
+    const { syncBrandDraftStatuses } = await import('@/lib/syncDraftStatuses')
+    for (const brand of brandsForSync) {
+      if (!brand.postfastApiKey) continue
+      try {
+        const syncResult = await syncBrandDraftStatuses(brand.id, brand.postfastApiKey)
+        // Reflect status changes in the in-memory draft array so the response is fresh
+        for (const update of syncResult.updates) {
+          const d = (drafts as any[]).find((dr: any) => dr.id === update.draftId)
+          if (d) {
+            d.status = update.to
+            if (update.publishedAt) d.publishedAt = new Date(update.publishedAt)
+          }
+        }
+      } catch (e: any) {
+        console.error('[calendar] syncBrandDraftStatuses error (non-fatal):', e?.message ?? e)
+      }
+    }
+  }
+
+  // ── Phase B: Dynamically resolve postUrl for published drafts using PostFast ──────────────
   const needsUrlResolution = drafts.some((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
   const draftPostUrlMap = new Map<string, string>()
 
@@ -160,6 +192,7 @@ export async function GET(request: Request) {
       }
     }
   }
+
 
   const events = drafts.map((draft: any) => {
     const eventAt = draft.status === 'published'

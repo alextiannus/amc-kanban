@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts, postfastListPosts, postfastGetAnalytics } from '@/lib/integrations/postfast'
+import { syncBrandDraftStatuses } from '@/lib/syncDraftStatuses'
 
 // Allow up to 5 minutes for the full batch across all brands
 export const maxDuration = 300
@@ -73,6 +74,16 @@ export async function POST(req: NextRequest) {
       })
       results.push({ brandId: brand.id, ok: true, accountCount: syncedAccounts.length, analyticsPostCount: analyticsPosts.length })
       console.log(`[PostFast Cron] ✅ brand ${brand.id}: ${syncedAccounts.length} accounts, ${analyticsPosts.length} analytics posts synced`)
+
+      // Phase 4: Sync scheduled→published draft statuses
+      try {
+        const syncResult = await syncBrandDraftStatuses(brand.id, brand.postfastApiKey!)
+        if (syncResult.updated > 0) {
+          console.log(`[PostFast Cron] 📬 brand ${brand.id}: synced ${syncResult.updated}/${syncResult.checked} scheduled drafts to published/failed`)
+        }
+      } catch (syncErr: any) {
+        console.warn(`[PostFast Cron] ⚠️ brand ${brand.id}: draft status sync failed (non-fatal):`, syncErr?.message ?? syncErr)
+      }
     } catch (e: any) {
       results.push({ brandId: brand.id, ok: false, error: e?.message ?? String(e) })
       console.error(`[PostFast Cron] ❌ brand ${brand.id} failed:`, e)

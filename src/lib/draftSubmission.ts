@@ -251,12 +251,18 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     }
   }
 
+  // For immediate publish: even though we pass scheduledAt 2 minutes ahead to PostFast
+  // (required by their API), the user explicitly chose immediate publish — the post will
+  // be live within minutes. Write 'published' directly so the UI reflects reality.
+  // For scheduled posts: only mark as 'scheduled' if the time is genuinely in the future.
+  const scheduled = !input.immediatePublish && isFuture(resolvedScheduledAt)
+
   const mediaUrls = uniq([
     ...draft.mediaUrls,
     ...draft.assetRefs.map((ref: any) => ref.asset.url),
   ])
 
-  console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${draft.account.platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, draftId: ${draft.id}`)
+  console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${draft.account.platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, immediatePublish: ${input.immediatePublish}, draftId: ${draft.id}`)
   const result = await postfastPublish({
     apiKey: brand.postfastApiKey,
     platform: draft.account.platformId,
@@ -268,7 +274,6 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   })
   console.log(`[submitDraftForDelivery] postfastPublish result: success=${result.success}, postId=${result.postId ?? 'none'}, error=${result.error ?? 'none'}`)
 
-  const scheduled = isFuture(resolvedScheduledAt)
   const updated = await prisma.contentDraft.update({
     where: { id: draft.id },
     data: result.success

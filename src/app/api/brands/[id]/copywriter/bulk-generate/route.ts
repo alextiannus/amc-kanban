@@ -191,6 +191,8 @@ export async function POST(request: Request, { params }: Params) {
             mediaUrls: mediaUrls || [],
             assetIds: assetIds || [],
             actorId: actor.id,
+            actorType: actor.type,
+            actorRole: actor.role,
             fallbackToLegacy: true,
           })
 

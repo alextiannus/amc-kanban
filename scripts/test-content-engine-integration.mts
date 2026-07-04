@@ -33,10 +33,15 @@ function testContentGenerateApi() {
 
 function testContentGenerationService() {
   const service = read('src/lib/amc-content/contentGenerationService.ts')
+  const remoteClient = read('src/lib/amc-content/remoteContentService.ts')
+  const internalContextRoute = read('src/app/api/internal/content-context/route.ts')
 
   assertIncludes(service, "import { prisma } from '../prisma.ts'", 'service prisma access')
   assertIncludes(service, "import { tryGenerateWithAmcContent } from './legacyCopywriterBridge.ts'", 'service amc-content bridge')
+  assertIncludes(service, "import { tryGenerateWithRemoteContentService } from './remoteContentService.ts'", 'service remote bridge')
   assertIncludes(service, 'export async function generateContentWithFallback', 'service public facade')
+  assertIncludes(service, 'const remote = await tryGenerateWithRemoteContentService(input)', 'service tries remote first')
+  assertIncludes(service, 'falling back local', 'service logs remote-to-local fallback')
   assertIncludes(service, 'const result = await tryGenerateWithAmcContent({', 'service primary engine')
   assertIncludes(service, "contentEngine: 'amc-content'", 'service amc-content result marker')
   assertIncludes(service, 'if (input.fallbackToLegacy === false)', 'service fallback opt-out')
@@ -44,6 +49,17 @@ function testContentGenerationService() {
   assertIncludes(service, 'skipAmcContent: true', 'service recursion guard')
   assertIncludes(service, "contentEngine: legacy.aiFailed ? 'rule-based-fallback' : 'legacy-copywriter'", 'service legacy engine marker')
   assertIncludes(service, 'async function resolveMediaUrls', 'service media resolver')
+
+  assertIncludes(remoteClient, 'AMC_CONTENT_SERVICE_URL', 'remote client service url env')
+  assertIncludes(remoteClient, 'AMC_CONTENT_REMOTE_ENABLED', 'remote client feature flag')
+  assertIncludes(remoteClient, '/v1/content/generate', 'remote client generate endpoint')
+  assertIncludes(remoteClient, "contentEngine: 'amc-content-remote'", 'remote client engine marker')
+  assertIncludes(remoteClient, "headers['x-amc-actor-id']", 'remote client forwards actor id')
+
+  assertIncludes(internalContextRoute, 'CONTENT_SERVICE_INTERNAL_TOKEN', 'internal context token env')
+  assertIncludes(internalContextRoute, 'canSessionAccessBrandProject', 'internal context uses kanban ACL')
+  assertIncludes(internalContextRoute, 'prisma.brand.findUnique', 'internal context returns brand context')
+  assertIncludes(internalContextRoute, 'resolveMedia', 'internal context resolves media')
 }
 
 function testLegacyEntrypointsUseFacade() {
