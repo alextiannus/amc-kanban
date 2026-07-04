@@ -641,10 +641,6 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
 
   if (input.scheduledAt) {
     post.scheduledAt = input.scheduledAt
-  } else {
-    // No scheduledAt = publish immediately.
-    // PostFast defaults to SCHEDULED when status is absent, so we must be explicit.
-    post.status = 'PUBLISHED'
   }
 
   if (mediaKeys.length > 0) {
@@ -657,11 +653,13 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
 
   // PostFast requires the post(s) wrapped in a "posts" array (max 15 per request)
   const body = JSON.stringify({ posts: [post] })
+  console.log(`[postfastPublish] REQUEST body: ${body}`)
 
   const r = await pfFetch(input.apiKey, '/social-posts', {
     method: 'POST',
     body,
   })
+  console.log(`[postfastPublish] RESPONSE ok=${r.ok} status=${r.status} data=${JSON.stringify(r.data).slice(0, 300)}`)
   if (!r.ok) return { success: false, error: r.error }
 
   // Response may be array of created posts or a single object

@@ -178,7 +178,11 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     (input.note.includes('重新智能排期') || input.note.includes('智能重新排期'))
 
   if (input.immediatePublish) {
-    resolvedScheduledAt = null
+    // Pass the current time as scheduledAt — PostFast will publish immediately
+    // when the scheduled time is now or in the past.
+    // Setting null would cause PostFast to default to SCHEDULED and require a time.
+    resolvedScheduledAt = new Date()
+    console.log(`[submitDraftForDelivery] IMMEDIATE PUBLISH requested for draft ${draft.id}. Using current time: ${resolvedScheduledAt.toISOString()}`)
   } else if (!resolvedScheduledAt || isRescheduleRequested) {
     const recommended = await fetchRecommendedScheduleTime(
       input.brandId,
@@ -204,6 +208,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     ...draft.assetRefs.map((ref: any) => ref.asset.url),
   ])
 
+  console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${draft.account.platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, draftId: ${draft.id}`)
   const result = await postfastPublish({
     apiKey: brand.postfastApiKey,
     platform: draft.account.platformId,
@@ -213,6 +218,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     hashtags: draft.hashtags,
     scheduledAt: resolvedScheduledAt?.toISOString(),
   })
+  console.log(`[submitDraftForDelivery] postfastPublish result: success=${result.success}, postId=${result.postId ?? 'none'}, error=${result.error ?? 'none'}`)
 
   const scheduled = isFuture(resolvedScheduledAt)
   const updated = await prisma.contentDraft.update({
