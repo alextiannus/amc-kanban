@@ -14,6 +14,7 @@ import type {
 const PROMPT_VERSION = 'amc-content-v0.1'
 
 export async function createPlatformContent(input: PlatformContentInput): Promise<PlatformContentResult> {
+  const startedAt = Date.now()
   const provider = getPlatformProvider(input.platform)
   const copywriter = getPlatformCopywriter(input.platform)
   const vertical = getVerticalSpec(input.brief.industryVertical)
@@ -100,6 +101,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     draftId: input.draftId,
     promptVersion: PROMPT_VERSION,
     modelId: provenance.modelId,
+    latencyMs: Date.now() - startedAt,
     input: {
       brandId: input.brand.id,
       brief: input.brief,

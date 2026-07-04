@@ -118,6 +118,7 @@ export interface GenerationLog {
   draftId?: string
   promptVersion: string
   modelId?: string
+  latencyMs?: number
   input: unknown
   output: unknown
   quality?: QualityResult

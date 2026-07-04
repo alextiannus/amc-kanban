@@ -35,6 +35,8 @@ function testContentGenerationService() {
   const service = read('src/lib/amc-content/contentGenerationService.ts')
   const remoteClient = read('src/lib/amc-content/remoteContentService.ts')
   const internalContextRoute = read('src/app/api/internal/content-context/route.ts')
+  const internalLogRoute = read('src/app/api/internal/content-log/route.ts')
+  const prismaLogger = read('src/lib/amc-content/loggerAdapter.ts')
 
   assertIncludes(service, "import { prisma } from '../prisma.ts'", 'service prisma access')
   assertIncludes(service, "import { tryGenerateWithAmcContent } from './legacyCopywriterBridge.ts'", 'service amc-content bridge')
@@ -60,6 +62,14 @@ function testContentGenerationService() {
   assertIncludes(internalContextRoute, 'canSessionAccessBrandProject', 'internal context uses kanban ACL')
   assertIncludes(internalContextRoute, 'prisma.brand.findUnique', 'internal context returns brand context')
   assertIncludes(internalContextRoute, 'resolveMedia', 'internal context resolves media')
+
+  assertIncludes(internalLogRoute, 'CONTENT_SERVICE_INTERNAL_TOKEN', 'internal log token env')
+  assertIncludes(internalLogRoute, 'prisma.copywriterLog.create', 'internal log persists copywriter logs')
+  assertIncludes(internalLogRoute, "engine: 'amc-content-remote'", 'internal log marks remote engine')
+  assertIncludes(internalLogRoute, 'latencyMs: optionalInt(body.latencyMs)', 'internal log stores latency')
+  assertIncludes(internalLogRoute, 'tokenEstimate: optionalInt(body.tokenEstimate)', 'internal log stores token estimates')
+  assertIncludes(prismaLogger, 'prisma.copywriterLog.create', 'local content logger persists copywriter logs')
+  assertIncludes(prismaLogger, 'latencyMs: event.latencyMs ?? null', 'local content logger stores latency')
 }
 
 function testLegacyEntrypointsUseFacade() {
@@ -111,11 +121,24 @@ function testPlatformCopywriterRegistry() {
   assertIncludes(modelRouterAdapter, "callLLM('copywriting'", 'adapter keeps legacy router fallback')
 }
 
+function testContentLabReviewUi() {
+  const page = read('src/app/admin/content-lab/page.tsx')
+
+  assertIncludes(page, 'type CopywriterLogRecord', 'content lab has copywriter log record type')
+  assertIncludes(page, '/api/admin/copywriter-logs?', 'content lab loads log list')
+  assertIncludes(page, '/annotate', 'content lab saves review annotations')
+  assertIncludes(page, 'Review Logs', 'content lab exposes review logs UI')
+  assertIncludes(page, 'Training Review', 'content lab exposes training review UI')
+  assertIncludes(page, 'Corrected content', 'content lab exposes corrected content editor')
+  assertIncludes(page, 'await loadReviewLogs()', 'content lab refreshes logs after generation')
+}
+
 function main() {
   testContentGenerateApi()
   testContentGenerationService()
   testLegacyEntrypointsUseFacade()
   testPlatformCopywriterRegistry()
+  testContentLabReviewUi()
   console.log('SUCCESS: content engine integration guards passed')
 }
 
