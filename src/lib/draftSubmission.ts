@@ -178,11 +178,11 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     (input.note.includes('重新智能排期') || input.note.includes('智能重新排期'))
 
   if (input.immediatePublish) {
-    // Pass the current time as scheduledAt — PostFast will publish immediately
-    // when the scheduled time is now or in the past.
-    // Setting null would cause PostFast to default to SCHEDULED and require a time.
-    resolvedScheduledAt = new Date()
-    console.log(`[submitDraftForDelivery] IMMEDIATE PUBLISH requested for draft ${draft.id}. Using current time: ${resolvedScheduledAt.toISOString()}`)
+    // PostFast API docs: status only accepts DRAFT or SCHEDULED.
+    // scheduledAt is required when status=SCHEDULED (the default), and MUST be in the future.
+    // For "immediate" publish, set scheduledAt 2 minutes ahead — PostFast picks it up within minutes.
+    resolvedScheduledAt = new Date(Date.now() + 2 * 60 * 1000)
+    console.log(`[submitDraftForDelivery] IMMEDIATE PUBLISH: setting scheduledAt 2 min ahead → ${resolvedScheduledAt.toISOString()}`)
   } else if (!resolvedScheduledAt || isRescheduleRequested) {
     const recommended = await fetchRecommendedScheduleTime(
       input.brandId,
