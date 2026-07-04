@@ -70,6 +70,8 @@ model User {
   createdCampaigns CampaignPromoCode[] @relation("CreatedPromoCodes")
   ownedCampaigns   CampaignPromoCode[] @relation("OwnedPromoCodes")
 
+  passwordResetTokens PasswordResetToken[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -229,6 +231,21 @@ model Invitation {
 
   @@index([inviteeEmail, status])
   @@index([inviteeUserId, status])
+  @@index([expiresAt])
+}
+
+// 密码重置 Token（自助找回密码 & 管理员触发重置密码）
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@index([userId])
   @@index([expiresAt])
 }
 

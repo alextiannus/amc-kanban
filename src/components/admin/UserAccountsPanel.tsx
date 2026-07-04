@@ -492,7 +492,7 @@ export default function UserAccountsPanel({
                   className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 border border-amber-200 dark:border-amber-800 rounded-xl text-[10.5px] font-extrabold text-amber-600 dark:text-amber-450 bg-amber-50/20 hover:bg-amber-50 dark:hover:bg-amber-955/30 transition-all cursor-pointer shadow-sm"
                 >
                   <Key size={11} className="text-amber-500" />
-                  <span>密码初始化</span>
+                  <span>重置密码</span>
                 </button>
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
@@ -584,8 +584,8 @@ export default function UserAccountsPanel({
               <h2 className="text-base font-black">重设用户密码确认</h2>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed font-medium">
-              确认要为成员 <strong className="text-slate-800 dark:text-white">{selectedUser.nickname || selectedUser.email}</strong> 重置密码吗？
-              重置后，系统将自动生成一个新的临时密码并发送至该邮箱。
+              确认要为成员 <strong className="text-slate-800 dark:text-white">{selectedUser.nickname || selectedUser.email}</strong> 发送密码重置链接吗？
+              系统将向该用户的登录邮箱发送一个安全的重置链接，有效期 <strong>24 小时</strong>。用户点击链接后可自行设置新密码。
             </p>
             <div className="flex justify-end gap-3 pt-2">
               <button

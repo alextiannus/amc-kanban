@@ -2,17 +2,15 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import crypto from 'crypto'
-import { generateInvitationLink } from '@/lib/invitation'
-import { sendPasswordResetEmail } from '@/lib/email'
+import { sendResetPasswordLinkEmail } from '@/lib/email'
 import type { Prisma } from '@prisma/client'
 import {
   apiKeyPrefix,
   createApiKeyToken,
   hashApiKeyToken,
-  hashPassword,
 } from '@/lib/auth-v2'
 
-const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const ADMIN_RESET_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours for admin-triggered resets
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -166,79 +164,54 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ ok: true, role: updated.role })
   }
 
-  // password reset
+  // Password reset — issue a secure token link instead of a plaintext temp password
   if (body.resetPassword) {
-    const temporaryPassword = crypto.randomBytes(18).toString('base64url')
-    const hashedPassword = await hashPassword(temporaryPassword)
-    await prisma.user.update({
-      where: { id },
-      data: { password: hashedPassword, authVersion: { increment: 1 } },
+    // Revoke existing pending tokens for this user
+    await prisma.passwordResetToken.updateMany({
+      where: { userId: id, usedAt: null },
+      data: { usedAt: new Date() },
     })
 
-    const expiresAt = new Date(Date.now() + INVITATION_TTL_MS)
-    await prisma.invitation.updateMany({
-      where: {
-        status: 'PENDING',
-        OR: [{ inviteeEmail: target.email }, { inviteeUserId: target.id }],
-      },
-      data: {
-        status: 'REVOKED',
-        revokedAt: new Date(),
-      },
-    })
-    const invitation = await prisma.invitation.create({
-      data: {
-        inviterId: session.user.id,
-        inviteeEmail: target.email,
-        inviteeUserId: target.id,
-        status: 'PENDING',
-        expiresAt,
-      },
+    // Create a 24-hour token (admin resets give users more time than self-service 15 min)
+    const rawToken = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + ADMIN_RESET_TTL_MS)
+    await prisma.passwordResetToken.create({
+      data: { userId: id, token: rawToken, expiresAt },
     })
 
     const requestUrl = new URL(request.url)
     const baseUrl =
       process.env.NEXT_PUBLIC_KANBAN_HOST ||
       (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai')
-    const { link: invitationLink } = generateInvitationLink(
-      target.email,
-      temporaryPassword,
-      (target.nickname ?? target.email.split('@')[0]),
-      baseUrl,
-      {
-        invitationId: invitation.id,
-        expiresAt: expiresAt.getTime(),
-      }
-    )
+    const resetLink = `${baseUrl}/reset-password/${rawToken}`
 
     await prisma.auditLog.create({
       data: {
         actorId: session.user.id,
         actorType: 'HUMAN',
         actorName: session.user.email || null,
-        action: 'INVITATION_CREATED',
-        resourceId: invitation.id,
-        resourceType: 'Invitation',
+        action: 'PASSWORD_RESET_LINK_SENT',
+        resourceId: id,
+        resourceType: 'User',
         newValue: {
-          inviteeEmail: invitation.inviteeEmail,
-          inviteeUserId: invitation.inviteeUserId,
-          expiresAt: invitation.expiresAt,
-          status: invitation.status,
-          reason: 'password_reset',
+          userId: id,
+          email: target.email,
+          expiresAt: expiresAt.toISOString(),
+          triggeredBy: session.user.email,
         },
       },
     })
 
-    // Attempt to send password reset email (non-blocking)
+    // Send reset link email (non-blocking)
     let emailSent = false
     let emailError: string | undefined
     try {
-      const emailResult = await sendPasswordResetEmail({
+      const emailResult = await sendResetPasswordLinkEmail({
         to: target.email,
         nickname: target.nickname ?? target.email.split('@')[0],
-        temporaryPassword,
-        invitationLink,
-        adminEmail: session.user.email ?? undefined,
+        resetLink,
+        expiresInMinutes: 1440,  // 24 hours
+        adminTriggered: true,
       })
       emailSent = emailResult.success
       if (!emailResult.success) emailError = emailResult.error
@@ -246,7 +219,7 @@ export async function PATCH(request: Request, { params }: Params) {
       emailError = e?.message ?? 'Email send error'
     }
 
-    return NextResponse.json({ ok: true, temporaryPassword, invitationLink, emailSent, emailError })
+    return NextResponse.json({ ok: true, resetLink, emailSent, emailError })
   }
 
   // API Key regeneration

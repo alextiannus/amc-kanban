@@ -49,6 +49,32 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  // Forgot-password modal state
+  const [showForgotModal, setShowForgotModal] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
+  const [forgotError, setForgotError] = useState('')
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setForgotError('')
+    setForgotLoading(true)
+    try {
+      await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail }),
+      })
+      setForgotSent(true)
+    } catch {
+      setForgotError('网络错误，请稍后重试')
+    } finally {
+      setForgotLoading(false)
+    }
+  }
+
   const router = useRouter()
 
   const [terminalLines, setTerminalLines] = useState<string[]>([
@@ -490,7 +516,13 @@ export default function Login() {
                 <div className="flex justify-between items-center mb-2 ml-1 mr-1">
                   <label className="block font-jetbrains text-xs text-slate-500" htmlFor="password">Password / 密码</label>
                   {!isRegister && (
-                    <a className="font-jetbrains text-xs text-purple-600 hover:text-purple-700 transition-colors hover:underline" href="#">Forgot?</a>
+                    <button
+                      type="button"
+                      onClick={() => { setShowForgotModal(true); setForgotSent(false); setForgotEmail(email); setForgotError('') }}
+                      className="font-jetbrains text-xs text-purple-600 hover:text-purple-700 transition-colors hover:underline"
+                    >
+                      忘记密码？
+                    </button>
                   )}
                 </div>
                 <div className="relative">
@@ -575,7 +607,76 @@ export default function Login() {
           </div>
         </section>
       </main>
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowForgotModal(false) }}
+        >
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-5">
+              <h2 className="text-lg font-bold text-white">重置密码</h2>
+              <p className="text-indigo-100 text-xs mt-1">输入账号邮箱，我们会发送重置链接</p>
+            </div>
+            <div className="p-6">
+              {forgotSent ? (
+                <div className="text-center space-y-4">
+                  <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto">
+                    <svg className="w-7 h-7 text-emerald-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">邮件已发送！</p>
+                    <p className="text-xs text-slate-500 mt-1">若该邮箱已注册，您将收到一封含重置链接的邮件。链接有效期 15 分钟。</p>
+                  </div>
+                  <button
+                    onClick={() => setShowForgotModal(false)}
+                    className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors"
+                  >
+                    关闭
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">账号邮箱</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="email"
+                        required
+                        autoFocus
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-all"
+                      />
+                    </div>
+                  </div>
+                  {forgotError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{forgotError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotModal(false)}
+                      className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold text-sm transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={forgotLoading || !forgotEmail}
+                      className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      {forgotLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : '发送重置邮件'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-

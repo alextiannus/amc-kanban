@@ -189,11 +189,15 @@ export async function PATCH(request: Request) {
         updateData.avatar = `/uploads/${fileName}`
       }
     } else {
-      const body = await request.json() as { password?: unknown; nickname?: unknown }
-      const { password, nickname } = body
+      const body = await request.json() as { password?: unknown; nickname?: unknown; introduction?: unknown }
+      const { password, nickname, introduction } = body
 
       if (nickname !== undefined) {
         updateData.nickname = typeof nickname === 'string' ? (nickname.trim() || null) : null
+      }
+
+      if (introduction !== undefined) {
+        updateData.introduction = typeof introduction === 'string' ? (introduction.trim() || null) : null
       }
 
       if (password !== undefined && password !== null && password !== '') {

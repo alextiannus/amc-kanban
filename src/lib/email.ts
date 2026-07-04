@@ -659,3 +659,89 @@ export async function sendSubscriptionSuccessEmail(params: {
   })
 }
 
+
+/**
+ * 密码重置链接邮件（安全 token 链接，无明文临时密码）
+ */
+export async function sendResetPasswordLinkEmail(params: {
+  to: string
+  nickname: string
+  resetLink: string
+  expiresInMinutes: number
+  adminTriggered?: boolean
+}): Promise<EmailResult> {
+  const { to, nickname, resetLink, expiresInMinutes, adminTriggered = false } = params
+
+  const expiryText = expiresInMinutes < 60
+    ? `${expiresInMinutes} 分钟`
+    : `${Math.round(expiresInMinutes / 60)} 小时`
+
+  const triggerNote = adminTriggered
+    ? '您的账号密码已由管理员发起重置申请。'
+    : '我们收到了您的密码重置申请。'
+
+  const subject = '【AMC】密码重置链接'
+
+  const html = `<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>密码重置</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .container { max-width: 540px; margin: 40px auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 32px 40px; }
+    .header h1 { margin: 0; color: #fff; font-size: 22px; font-weight: 700; }
+    .header p { margin: 4px 0 0; color: rgba(255,255,255,0.8); font-size: 13px; }
+    .body { padding: 32px 40px; }
+    .body p { color: #374151; font-size: 15px; line-height: 1.7; margin: 0 0 16px; }
+    .cta-wrap { text-align: center; margin: 32px 0; }
+    .cta { display: inline-block; padding: 14px 36px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff !important; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 15px; }
+    .link-box { background: #f1f5f9; border-radius: 10px; padding: 14px 18px; margin: 16px 0; word-break: break-all; font-size: 12px; color: #475569; font-family: monospace; }
+    .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 20px 0; }
+    .warning p { color: #92400e; font-size: 13px; margin: 0; }
+    .footer { padding: 20px 40px; border-top: 1px solid #e2e8f0; }
+    .footer p { font-size: 12px; color: #94a3b8; margin: 0; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔐 密码重置</h1>
+      <p>AI Marketing Crew (AMC)</p>
+    </div>
+    <div class="body">
+      <p>你好 <strong>${nickname}</strong>，</p>
+      <p>${triggerNote}请点击下方按钮设置新密码：</p>
+      <div class="cta-wrap">
+        <a href="${resetLink}" class="cta">立即重置密码 →</a>
+      </div>
+      <p style="font-size:13px;color:#64748b;text-align:center;">若按钮无法点击，请复制以下链接到浏览器：</p>
+      <div class="link-box">${resetLink}</div>
+      <div class="warning">
+        <p>⚠️ 此重置链接有效期为 <strong>${expiryText}</strong>，且只能使用一次。过期后需重新申请。</p>
+      </div>
+      <p>如果您没有发起此操作，请忽略本邮件，您的密码不会有任何变化。</p>
+    </div>
+    <div class="footer">
+      <p>此邮件由 AI Marketing Crew 系统自动发送，请勿回复。</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+  const text = `密码重置 — AI Marketing Crew
+
+你好 ${nickname}，
+
+${triggerNote}请点击以下链接设置新密码：
+
+${resetLink}
+
+此链接有效期为 ${expiryText}，且只能使用一次。
+
+如果您没有发起此操作，请忽略本邮件。`
+
+  return sendEmail({ to, subject, html, text })
+}

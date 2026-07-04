@@ -46,7 +46,7 @@ function AdminPageInner() {
 
   // Modals state
   const [invitationData, setInvitationData] = useState<InvitationResult | null>(null)
-  const [resetData, setResetData] = useState<{ email: string; temporaryPassword: string; invitationLink: string; emailSent?: boolean } | null>(null)
+  const [resetData, setResetData] = useState<{ email: string; resetLink: string; emailSent?: boolean } | null>(null)
   const [editingUser, setEditingUser] = useState<{ id: string; email: string; nickname: string | null; role: string; type: string } | null>(null)
   
   const [savingPerms, setSavingPerms] = useState(false)
@@ -311,7 +311,7 @@ function AdminPageInner() {
   }
 
   const handleResetPassword = async (user: UserRecord) => {
-    if (!confirm(`重置 ${user.email} 的密码？`)) return
+    if (!confirm(`确认要为 ${user.email} 发送密码重置链接吗？`)) return
     setActionLoading(p => ({ ...p, [user.id + '_reset']: '1' }))
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, {
@@ -321,7 +321,7 @@ function AdminPageInner() {
       })
       if (res.ok) {
         const data = await res.json()
-        setResetData({ email: user.email, temporaryPassword: data.temporaryPassword, invitationLink: data.invitationLink, emailSent: data.emailSent })
+        setResetData({ email: user.email, resetLink: data.resetLink, emailSent: data.emailSent })
       }
     } catch (e) {
       console.error(e)
@@ -878,20 +878,37 @@ function AdminPageInner() {
       )}
       {resetData && (
         <div>
-          {renderInviteModal({ 
-            title: '🔑 密码重置凭证', 
-            data: resetData, 
-            onClose: () => setResetData(null) 
-          })}
-          {resetData.emailSent !== undefined && (
-            <div className={`fixed bottom-6 right-6 z-[200] flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl text-xs font-black ${
-              resetData.emailSent
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-700 text-slate-200'
-            }`}>
-              {resetData.emailSent ? '📧 密码重置邮件已发送至用户邮箱' : '📭 SMTP 服务未就绪，请手动将凭证发给用户'}
+          {/* Simple result panel — the reset link was emailed, no need to show it in admin UI */}
+          <div className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setResetData(null)}>
+            <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-4" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white">密码重置链接已生成</h3>
+                  <p className="text-xs text-slate-500">{resetData.email}</p>
+                </div>
+              </div>
+              {resetData.emailSent ? (
+                <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 leading-relaxed">
+                  ✅ 密码重置邮件已发送至用户邮箱。用户点击邮件中的链接即可设置新密码，有效期 24 小时。
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 leading-relaxed">
+                    ⚠️ SMTP 未配置，邮件未发出。请手动将以下重置链接发给用户（有效期 24h）：
+                  </p>
+                  <div className="bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-3 text-xs font-mono text-slate-600 dark:text-slate-300 break-all select-all border border-slate-200 dark:border-slate-700">
+                    {resetData.resetLink}
+                  </div>
+                </div>
+              )}
+              <button onClick={() => setResetData(null)} className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-sm transition-colors">
+                关闭
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 
