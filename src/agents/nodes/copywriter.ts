@@ -227,27 +227,49 @@ You MUST base the hooks directly on the "User Custom Theme / Creative Idea"${cre
 
 Rules:
 1. Catchy and high click-through-rate.
-2. Platform-native visual formatting:
+2. HOOK DIVERSITY — MANDATORY: Each of the 3 hooks MUST use a completely DIFFERENT formula/category. Do NOT use the same opening pattern, sentence structure, or emotional angle more than once across the 3 hooks.
+3. Platform-native visual formatting:
    - For Xiaohongshu (小红书/Rednote) (Note: MUST generate in Simplified Chinese):
-     * Must start with highly eye-catching emojis (e.g. 🔥, 😭, 😱, 📍, 🌟, ⚠️, 🧐).
+     * Must start with highly eye-catching emojis (e.g. 🔥, 😭, 😱, 📍, 🌟, ⚠️, 🧐, 👀, 💥, 🤯).
      * Must end with double exclamation marks ("！！").
-     * Enforce proven viral hook formulas:
-       a. Surprise/Disbelief: "我不允许还有人不知道..." (I won't allow anyone to not know about...), "天呐！这家店也太..." (Heavens! This shop is too...), "直接封神！..." (Directly canonized!).
-       b. Local Geotargeting focus: "新加坡克拉码头必吃..." (Clarke Quay Singapore must eat...), "克拉码头这家店绝了..." (This shop at Clarke Quay is amazing...).
-       c. Urgency/FOMO: "听我劝！去这家店前一定要..." (Hear my advice! Before going to this shop, you must...), "Bojio! 别说我不提前分享..." (Don't say I didn't share...).
+     * Pick ONE formula per hook from the categories below. Each hook must use a DIFFERENT category:
+
+       CATEGORY A — 惊喜/震惊 (Surprise/Disbelief):
+       - "天呐！[Brand]的[Feature]真的太[Adjective]了！！"
+       - "直接封神！这家[Type]让我当场泪目！！"
+       - "被惊到了！[Feature]居然可以这么[Adjective]！！"
+
+       CATEGORY B — 地理/打卡 (Local Geo / Check-in):
+       - "[Location]宝藏店！附近[Target]必打卡！！"
+       - "[Location]这家店彻底拿捏我了！！"
+       - "住在[Location]的宝子们有福了！[Brand]真的太[Adjective]！！"
+
+       CATEGORY C — FOMO/紧迫 (FOMO / Urgency):
+       - "听我的！去[Brand]之前一定要看这篇！！"
+       - "Bojio！！[Brand]这个[Feature]我憋了好久了终于要分享了！！"
+       - "悄悄告诉你们这个消息，[Brand]现在[Event]！千万别错过！！"
+
+       CATEGORY D — 痛点共鸣 (Pain-point Resonance):
+       - "老是[Problem]的[TargetGroup]，这家店是救星！！"
+       - "后悔没早点知道[Brand]！！[Problem]的朋友看过来！！"
+       - "[Problem]？！来[Brand]一次就解决了！！"
+
+       CATEGORY E — 反常识/冲突 (Counter-intuitive / Conflict):
+       - "别再相信那些[CommonMistake]了！！[Brand]教我重新认识[Topic]！！"
+       - "打破认知！！原来[Topic]可以这样[UnexpectedWay]！！"
+       - "我以为[WrongBelief]，结果[Brand]让我傻眼了！！"
+
    - For Instagram/TikTok/Facebook/Google Business (Note: MUST generate in English):
      * Write an intriguing, premium, and direct opening sentence.
-     * Must be punchy and fit within 80-125 characters (since Instagram folds captions after 125 characters, the primary message must be visible before the fold).
-3. Brand Context and Visual Integration:
-   - Carefully review the brand context details (tone, menu, contact, location) and attached images' metadata (AI tags, category, description).
-   - Carefully inspect if the attached images' tags or description contain any physical locations, neighborhood names, cities, landmarks, or address details.
-   - If any physical location, landmark, neighborhood, or brand address/location is specified in the brand contact info or the attached images' metadata:
-     * You MUST naturally integrate these location/address/neighborhood details into the hook variants (e.g. including Singapore neighborhood name, landmark, or specific store name).
-     * Align the hooks closely with these visual assets.
-4. STRICT Negative prompt: Avoid weird hooks starting with clichés like "Discover the secrets...", "The best...", "The most...", "The top...". Do not use cringy or over-the-top AI language.
-5. Utilize the historical analytics and top-performing posts in the Research Notes (if provided) to guide your hook structure. Emulate hooks that received high impressions and engagement.
-6. Output your response as a JSON array of strings:
-   ["Hook 1", "Hook 2", "Hook 3"]
+     * Each of the 3 hooks must use a different angle: (1) curiosity/intrigue, (2) direct benefit/value prop, (3) social proof/FOMO.
+     * Must be punchy and fit within 80-125 characters.
+4. Brand Context and Visual Integration:
+   - Carefully review the brand context details (tone, menu, contact, location) and attached images' metadata.
+   - If any physical location, landmark, neighborhood, or brand address/location is specified, you MUST naturally integrate these into the hook variants.
+5. STRICT Negative prompt: Never reuse the same opening word, emoji sequence, or sentence structure between the 3 hooks. Avoid clichés like "Discover the secrets...", "The best...". Do not use cringe or over-the-top AI language.
+6. Use historical analytics and top-performing posts in Research Notes to guide hook structure.
+7. Output your response as a JSON array of strings:
+   ["Hook 1 (Category A or different)", "Hook 2 (different category)", "Hook 3 (different category)"]
 Please output ONLY a valid JSON array of strings.`;
 
   let generatedHooks: string[] = [];
@@ -275,7 +297,8 @@ Please output ONLY a valid JSON array of strings.`;
     ];
   }
 
-  const selectedHook = generatedHooks[0];
+  const selectedHook = generatedHooks[Math.floor(Math.random() * generatedHooks.length)]
+  console.log(`AI Copywriter: randomly selected hook [${generatedHooks.indexOf(selectedHook) + 1}/${generatedHooks.length}]: "${selectedHook.slice(0, 60)}..."`)
 
   // --- STAGE 2: BODY & CTA GENERATION ---
   const bodyPrompt = `${dbPromptInstructions}You are a professional social media manager and copywriter for the brand "${brand.name}".
