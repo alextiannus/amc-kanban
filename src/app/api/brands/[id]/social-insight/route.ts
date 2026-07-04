@@ -86,13 +86,60 @@ export interface AnalyticsPost {
   engRate: number
 }
 
-// ── Fetch published posts from PostFast ──────────────────────────────────────
+// ── Fetch published posts from PostFast (DB-first, live fallback) ─────────────
+// Reads from brand.postfastSnapshot.analyticsPosts when available and fresh
+// (synced within last 25 hours by the daily cron). Falls back to live API
+// only when cache is missing or stale, to avoid 504s on every page load.
 async function fetchPostfastPosts(
   apiKey: string,
   from: Date,
-  to: Date
-): Promise<{ posts: AnalyticsPost[]; error?: string; durationMs: number }> {
+  to: Date,
+  cachedPosts?: any[] | null,
+  cacheUpdatedAt?: string | null
+): Promise<{ posts: AnalyticsPost[]; error?: string; durationMs: number; fromCache?: boolean }> {
   const t0 = Date.now()
+
+  // ── Try DB cache first ───────────────────────────────────────────────────
+  const CACHE_TTL_MS = 25 * 60 * 60 * 1000 // 25 hours (daily cron + buffer)
+  const cacheAge = cacheUpdatedAt ? Date.now() - new Date(cacheUpdatedAt).getTime() : Infinity
+  if (cachedPosts && cachedPosts.length > 0 && cacheAge < CACHE_TTL_MS) {
+    // Filter cached posts to the requested date range
+    const filtered = cachedPosts.filter((p: any) => {
+      if (!p.publishedAt) return true
+      const d = new Date(p.publishedAt).getTime()
+      return d >= from.getTime() && d <= to.getTime()
+    })
+    const posts: AnalyticsPost[] = filtered.map((p: any) => {
+      const m = p.latestMetric
+      const likes       = m ? parseInt(m.likes ?? '0', 10) : 0
+      const comments    = m ? parseInt(m.comments ?? '0', 10) : 0
+      const shares      = m ? parseInt(m.shares ?? '0', 10) : 0
+      const impressions = m ? parseInt(m.impressions ?? '0', 10) : 0
+      const reach       = m ? parseInt(m.reach ?? '0', 10) : 0
+      const interactions = likes + comments + shares
+      return {
+        id: `pf_${p.id}`,
+        source: 'postfast',
+        platform: (p as any).platform ?? 'unknown',
+        handle: (p as any).handle ?? '',
+        caption: p.content,
+        postUrl: null,
+        publishedAt: p.publishedAt,
+        contentType: detectContentType(p.content, [], []),
+        status: 'published',
+        hashtags: [],
+        mediaUrls: [],
+        scheduledAt: null,
+        likes, comments, shares, impressions, reach,
+        engRate: impressions > 0 ? Number(((interactions / impressions) * 100).toFixed(2)) : 0,
+      }
+    })
+    console.log(`[SocialInsight] Using DB-cached Postfast data: ${posts.length} posts (cache age: ${Math.round(cacheAge / 3600000)}h)`)
+    return { posts, durationMs: Date.now() - t0, fromCache: true }
+  }
+
+  // ── Fallback: live API call ───────────────────────────────────────────────
+  console.log(`[SocialInsight] Cache miss or stale (age: ${Math.round(cacheAge / 3600000)}h), fetching from Postfast API`)
   try {
     const [analyticsResult, accountsResult] = await Promise.all([
       postfastGetAnalytics(apiKey, { startDate: from.toISOString(), endDate: to.toISOString() }),
@@ -130,16 +177,12 @@ async function fetchPostfastPosts(
         hashtags: [],
         mediaUrls: [],
         scheduledAt: null,
-        likes,
-        comments,
-        shares,
-        impressions,
-        reach,
+        likes, comments, shares, impressions, reach,
         engRate: impressions > 0 ? Number(((interactions / impressions) * 100).toFixed(2)) : 0,
       }
     })
 
-    return { posts, durationMs: Date.now() - t0 }
+    return { posts, durationMs: Date.now() - t0, fromCache: false }
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'PostFast fetch failed'
     return { posts: [], error: message, durationMs: Date.now() - t0 }
@@ -335,6 +378,8 @@ export async function GET(req: Request, { params }: Params) {
     select: {
       id: true, name: true, location: true,
       postfastApiKey: true,
+      postfastSnapshot: true,
+      postfastSyncedAt: true,
       googlePlaceId: true, googleApiKey: true,
       googleRefreshToken: true, googleAccountId: true, googleLocationId: true,
       subscriptions: {
@@ -375,7 +420,13 @@ export async function GET(req: Request, { params }: Params) {
     latestApifyLog,
   ] = await Promise.all([
     brand.postfastApiKey
-      ? fetchPostfastPosts(brand.postfastApiKey, from, to)
+      ? fetchPostfastPosts(
+          brand.postfastApiKey,
+          from,
+          to,
+          (brand.postfastSnapshot as any)?.analyticsPosts ?? null,
+          (brand.postfastSnapshot as any)?.analyticsUpdatedAt ?? null
+        )
       : Promise.resolve({ posts: [] as AnalyticsPost[], error: 'no API key configured' as string, durationMs: 0 }),
     fetchInternalDrafts(id, from, to, platformFilter),
     fetchRealGoogleReviews(brand),

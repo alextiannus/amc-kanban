@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { postfastFetchAccounts, postfastListPosts } from '@/lib/integrations/postfast'
+import { postfastFetchAccounts, postfastListPosts, postfastGetAnalytics } from '@/lib/integrations/postfast'
 
 // Allow up to 5 minutes for the full batch across all brands
 export const maxDuration = 300
@@ -57,22 +57,22 @@ export async function POST(req: NextRequest) {
 
   console.log(`[PostFast Cron] Found ${brands.length} brands to sync`)
 
-  const results: Array<{ brandId: string; ok: boolean; accountCount?: number; error?: string }> = []
+  const results: Array<{ brandId: string; ok: boolean; accountCount?: number; analyticsPostCount?: number; error?: string }> = []
 
   for (const brand of brands) {
     if (!brand.postfastApiKey) continue
     try {
-      const { syncedAccounts, operationsReport } = await syncBrand(brand)
+      const { syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt } = await syncBrand(brand)
       const syncedAt = new Date()
       await prisma.brand.update({
         where: { id: brand.id },
         data: {
-          postfastSnapshot: { accounts: syncedAccounts, operationsReport },
+          postfastSnapshot: { accounts: syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt },
           postfastSyncedAt: syncedAt,
         },
       })
-      results.push({ brandId: brand.id, ok: true, accountCount: syncedAccounts.length })
-      console.log(`[PostFast Cron] ✅ brand ${brand.id}: ${syncedAccounts.length} accounts synced`)
+      results.push({ brandId: brand.id, ok: true, accountCount: syncedAccounts.length, analyticsPostCount: analyticsPosts.length })
+      console.log(`[PostFast Cron] ✅ brand ${brand.id}: ${syncedAccounts.length} accounts, ${analyticsPosts.length} analytics posts synced`)
     } catch (e: any) {
       results.push({ brandId: brand.id, ok: false, error: e?.message ?? String(e) })
       console.error(`[PostFast Cron] ❌ brand ${brand.id} failed:`, e)
@@ -94,7 +94,7 @@ async function syncBrand(brand: {
   googlePreferOAuth: boolean
   googleRefreshToken: string | null
   googleLocationId: string | null
-}): Promise<{ syncedAccounts: any[]; operationsReport: any }> {
+}): Promise<{ syncedAccounts: any[]; operationsReport: any; analyticsPosts: any[]; analyticsUpdatedAt: string }> {
   if (!brand.postfastApiKey) throw new Error('No PostFast API key')
 
   // 1. Sync accounts
@@ -190,5 +190,25 @@ async function syncBrand(brand: {
     }
   }
 
-  return { syncedAccounts, operationsReport }
+  // 3. Sync last 9 days of post analytics → stored in postfastSnapshot.analyticsPosts
+  let analyticsPosts: any[] = []
+  const analyticsFrom = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000)
+  const analyticsTo = new Date()
+  try {
+    const analyticsResult = await postfastGetAnalytics(brand.postfastApiKey, {
+      startDate: analyticsFrom.toISOString(),
+      endDate: analyticsTo.toISOString(),
+    })
+    if (analyticsResult.success && analyticsResult.posts.length > 0) {
+      analyticsPosts = analyticsResult.posts
+      console.log(`[PostFast Cron] brand ${brand.id}: fetched ${analyticsPosts.length} analytics posts (last 9 days)`)
+    } else if (analyticsResult.error) {
+      console.warn(`[PostFast Cron] brand ${brand.id}: analytics fetch warning — ${analyticsResult.error}`)
+    }
+  } catch (e: any) {
+    // Non-fatal: accounts + operationsReport still sync even if analytics fails
+    console.error(`[PostFast Cron] brand ${brand.id}: analytics fetch failed (non-fatal):`, e?.message ?? e)
+  }
+
+  return { syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt: analyticsTo.toISOString() }
 }

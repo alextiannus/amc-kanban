@@ -1,5 +1,7 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
+> **PRD 维护原则（2026-07-04 起生效）**：本文件只描述当前有效的产品与架构理解。决策变化时必须直接改写所有受影响章节并清除冲突描述；历史版本由 Git 保存，不在 PRD 正文中保留已废止方案。用户、组织与权限的执行级规范以 [`prd_user_organization_permissions.md`](./prd_user_organization_permissions.md) 为准。
+
 ## 目标用户：中小出海中餐商家老板
 
 针对中小出海中餐商家老板这个极具代表性的群体，其核心痛点在于：**极度缺人、极其忙碌、对海外多平台运营不熟悉（语言/文化壁垒）、且极其看重现金流和实际进店客流**。
@@ -22,7 +24,7 @@
 *   **设计落点：** 看板不应该是老板“自己干活”的工具，而是**“给 AI 员工派活”**和**“审核结果”**的待办列表（这也是 AI Marketing Crew 的核心理念）。
 *   **核心功能：**
     *   **一键分发与多语言适配：** 老板只需上传几张新菜品的原图，AI Agent 自动生成适合 Instagram 的英文/本地语言文案，以及适合小红书的中文文案，老板在看板上点击“Approve（通过）”即可自动分发。
-    *   **任务卡片化：** 所有的运营动作变成一张张清晰的 Task Card（如：“周五晚市促销文案撰写”、“回应 3 条 Google Maps 差评”），老板只需做选择题，而不是填空题。
+    *   **业务结果卡片化：** 运营动作直接呈现为内容草稿、发布排期、评价预警或 `ActionItem`。老板只需审核结果和处理必要事项；系统不再创建泳道任务卡或 `WorkUnit`。
     *   **自动化授权开关 (Trust Progression)：** 支持为 AI 设定“自动驾驶”级别。默认采用“需人工审核（Human-in-the-loop）”，老板在看板点击 Approve 才会发布；建立信任后，老板可通过全局或按平台设置的开关，一键开启“全自动发帖（Auto-Pilot）”，让 AI 完全自主接管日常更新。
 
 ### 3. 救火式的“舆情预警”与口碑防御体系
@@ -215,7 +217,7 @@
 
 ### 7. 品牌列表加载机制 (Brand Loading & Visibility Scope)
 *   **全量加载原则**：在 `amc-mm` 专属控制台首页，取消 `assignedOnly=true` 的强行过滤，以匹配品牌主/餐饮老板的视点。
-*   **业务逻辑**：根据当前登录账户，加载该用户作为直接拥有者（`ownerId`）、联合拥有者（`BrandOwner` 表中关联）或者具备管理权限的所有品牌，确保老板登录后能够一屏掌控名下所有的餐饮品牌。
+*   **业务逻辑**：品牌直接访问范围只由有效 `CrewMember` 决定；组织成员通过其 Organization Owner 的有效 `CrewMember` 自动继承品牌范围。`Brand.ownerId`、`BrandOwner`、`BrandAgent` 和 `AgentPermission` 不再参与运行时授权。
 
 ---
 
@@ -275,21 +277,18 @@ model SystemConfig {
 
 ### v1.1.0 — 2026-06-28
 
-#### 功能变更：移除 AI 泳道池 + 工作日志状态过滤
+#### 功能变更：彻底移除 AI 泳道池，阶段分类仅保留在工作日志
 
-**决策背景**：运营看板 Dashboard 首页的"AI 活动战报 — 品牌泳道工作看板"（BrandKanbanLane）区域在实际使用中被认为冗余，且信息与工作日志重叠。同时工作日志缺乏按任务状态筛查的能力。
+**决策背景**：泳道看板与内容草稿、Action Item、工作日志重复，并迫使后台长期维护 `WorkUnit` 任务模型。AMC Agent 已统一为正常系统用户，应直接执行业务操作。
 
 **变更内容**：
-1. **移除 AI 泳道池**：从 `DashboardHome.tsx` 移除"AI 活动战报"section，删除 `BrandKanbanLane` 组件引用。`BrandKanbanLane.tsx` 文件保留（不删除组件文件），以供未来扩展使用。
+1. **彻底移除泳道前端**：删除泳道入口、组件、任务弹窗、任务卡、归档任务页及相关请求，不保留未来复用文件。
 
-2. **工作日志记录全操作**：`/api/logs/agent` 路由移除 `actorType: 'AI_AGENT'` 的限制，改为记录所有类型操作者（人工 + AI）的 AuditLog，实现真正意义上的"全工作日志"。
+2. **移除任务后台模型**：业务流程改为直接操作 `ContentDraft`、`ActionItem`、素材、评价和发布资源；完成迁移后删除 `WorkUnit`、Task API 和 Kanban MCP Tool。
 
-3. **工作日志状态多选 Filter**：在 `AgentLogsView.tsx` 过滤栏顶部新增泳道状态多选胶囊组（todo / in_progress / pending / done / void），支持多选。
-   - 未选中任何状态 = 显示全部日志
-   - 选中状态 = 仅显示 `STATUS_CHANGED` 类型日志中 `newValue.status` 匹配的记录（其他类型日志如 TASK_CREATED、DRAFT_CREATED 始终显示）
-   - "重置筛选"按钮同步清空状态选择
+3. **工作日志记录所有员工操作**：人类和 AMC Agent 使用同一工作日志，`actorType` 仅用于辨识操作者类型。
 
-**冲突检查**：无冲突。本次变更不影响 PRD 核心功能（内容创作、发布日历、素材管理）。
+4. **仅日志保留工作阶段**：使用 `workStage`（计划中、执行中、等待人工、已完成、失败）进行筛选，不再复用任务状态或泳道状态。
 
 ---
 
@@ -504,7 +503,7 @@ model SystemConfig {
 | `BD` | 商务拓展 | 开拓客户、提交线索、查看收入 | 📅 未排期 |
 | `BRAND_OWNER` | 品牌主 | 商家，拥有自己的品牌 | ✅ 已有 |
 | `AGENT` | 代理商 | 更高级的管理权限 + 同时具备其他权限 | 📅 未排期（Phase 3+） |
-| `AI_AGENT` | AI 员工 | 系统执行角色，不登录界面 | ✅ 已有 |
+| `AI_AGENT` | AMC Agent | 正常系统用户，通过专属 API Key/API/MCP 操作 | ✅ 已确认统一权限 |
 
 ### 确认的访问控制决策
 
@@ -529,34 +528,30 @@ model SystemConfig {
 **Q6 — 高级管理人员看板（缺失功能）**  
 🆕 确认缺少：当前缺少一个面向 ADMIN/代理商的**跨品牌管理总览看板**（品牌数量、运营状态、收入汇总、BD 业绩等）。作为独立功能模块规划。
 
-### 技术方案决策：RBAC（基于角色的访问控制）
+### 技术方案决策：显式角色 + Capability + Crew 数据范围
 
-**核心要求**：权限系统应做成 **角色 + 资源 + 权限** 三维可配置，方便后续扩展新角色时无需改代码。
+**核心要求**：
 
-**推荐技术方案（未来实施）**：
+- `UserBusinessRole` 是全局角色唯一来源，禁止动态推导。
+- `CrewMember` 是唯一直接品牌权限关系。
+- 组织成员通过 Organization Owner 的 CrewMember 继承品牌范围。
+- 人类和 AMC Agent 使用相同 Capability，不根据用户类型设置额外权限。
+- 网页、REST API、MCP 复用同一认证、授权和业务服务。
 
 ```
-Permission 模型：
-  Role (角色)      → e.g. AMC_PRINCIPAL, BD, BRAND_OWNER
-  Resource (资源)  → e.g. "brand.drafts", "brand.calendar", "admin.users", "revenue.summary"  
-  Action (操作)    → e.g. "read", "write", "publish", "delete"
-
-RolePermission 表：
-  roleId → resourceId → action → allowed: bool
+授权结果 =
+  显式全局角色拥有目标 Capability
+  AND
+  用户具有目标品牌的数据范围
 ```
 
-**当前阶段（临时方案）**：继续使用 `HUMAN.role(ADMIN|USER)` + `UserBusinessRole(AMC_PRINCIPAL|BRAND_OWNER)` 的组合判断，配合前端菜单控制可见性。
-
-**迁移路径**：
-1. 当前：hardcode 权限检查（if role === 'ADMIN'...）
-2. 中期（Phase 2）：抽取 `src/lib/permissions.ts`，集中化权限判断函数
-3. 长期（Phase 3+）：引入数据库驱动的 RBAC 表，Admin 可在界面配置角色权限
+第一阶段 Capability 在代码中集中、类型安全地定义，不建设可在 Admin UI 任意编辑的动态权限引擎。完整数据模型、迁移、API Key、性能与回滚要求见 [`prd_user_organization_permissions.md`](./prd_user_organization_permissions.md)。
 
 ### amc-kanban 菜单可见性矩阵（确认版）
 
 | 菜单 | Admin | 主理人 | BD | 品牌主 |
 |------|:-----:|:------:|:--:|:------:|
-| 品牌主看板（Kanban） | ✅ 全部 | ✅ 分配品牌 | ❌ | ✅ 自己品牌 |
+| 品牌运营首页 | ✅ 全部 | ✅ 分配品牌 | ❌ | ✅ 自己品牌 |
 | 发布日历 | ✅ | ✅ | ❌ | ✅ |
 | 发布内容（Post/Drafts） | ✅ | ✅ | ❌ | ✅（可审批） |
 | 素材库 | ✅ | ✅ | ❌ | ✅ |
@@ -1064,33 +1059,18 @@ RolePermission 表：
 
 ---
 
-## Changelog v1.8.27 — 2026-07-02（基于 Crew 营销战队的权限治理决策）
+## 用户、组织与权限管理（当前有效方案）
 
-### Crew 营销战队设计与生命周期决策
-- **引入 Crew 营销战队实体**：为解决人类员工与 AI Agent 的权限推导混乱，引入统一的 `MarketingCrew`（战队）与 `CrewMember`（战队成员）模型，1 个品牌对应 1 个 Crew。
-- **废除隐式主理人推导**：废除根据 AgentPermission 关联数量动态升级用户为 `AMC_PRINCIPAL` 的机制，所有商业角色采用显式角色关系绑定。
-- **品牌创建与主理人优先绑定**：
-  - 新建品牌时，自动为该品牌初始化 `MarketingCrew`。
-  - 自动为该 Crew 绑定指派一名人类主理人（`AMC_PRINCIPAL`），取消新品牌创建时自动克隆/初始化默认 AI Agent 的行为。
-- **由主理人手动添加 AI 员工**：新品牌创建后初始 Crew 中无 AI 员工。后续由绑定的人类主理人扮演战队指挥官，根据品牌业务需求，在后台手动挑选并添加（配属）合适的 AI 同事（AI Agent）进入该战队。
-- **品牌主基于邮箱激活与识别**：
-  - 品牌在创建时录入商户（品牌主）的唯一邮箱地址。
-  - 只有当拥有此邮箱的客户注册并首次登录系统时，系统才会通过邮箱字段识别，将其自动识别并拉入该品牌的 Crew，以 `BRAND_OWNER` 角色激活，解决了 BD 或主理人代建品牌的场景。
-- **细粒度角色与操作控制 (Action-based ACL)**：
-  - 战队成员可以包含主理人、高级主理人、管理人员、BD、品牌主和 AI 员工等多种角色。
-  - 权限判定不再使用粗颗粒布尔值 `canHumanAccess`，转而使用 Action-based 判断（例如：BD 仅允许 `read_summary` 读取汇总，拒绝其 `read_drafts` / `write_drafts` 等具体草稿的编辑）。
-- **配套数据迁移与平滑并轨决策**：
-  - **历史关联无损灌入**：通过数据库迁移脚本将原 `BrandOwner` 和活跃的 `BrandAgent` 数据无损映射灌入新 `CrewMember` 表。
-  - **间接绑定权限补齐**：对于历史中仅通过 `AgentPermission` 间接关联品牌的人类用户，脚本自动为其在相应品牌下创建 `CrewMember` 记录（角色由全局角色推导，如主理人设为 `AMC_PRINCIPAL`），防止因架构变更导致历史权限断档。
-  - **商家端组织权限的级联继承 (MM端)**：明确 Organization 功能在 MM 商家端专门服务于“品牌主老板 ── 店员/店长”行政授权关系。为了兼顾多店铺一键批量授权的便利，无需强行在底层拆解拍平 Organization 数据，而是引入**双层级联鉴权模型**（直接战队成员通过 OR 组织店员权限继承通过），在 `brandAccess.ts` 中实现跨层级级联判定。
-  - **支持局部多角色**：`CrewMember` 表的物理字段（如 `role`）设计为支持单用户在单 Crew 内拥有多角色（如逗号分隔或多记录），以便支撑局部多身份（如“主理人兼 BD”）。
-- **支持未来代理商模式 (Agency Model)**：
-  - **引入 Agency 与 AgencyEmployee 实体**：自上而下将营销战队 `Crew` 挂钩归属于特定代理商，实现多代理商的业务实体表达。
-  - **基于 AgencyId 的范围物理隔离**：升级 API 鉴权，非平台管理员（如代理商管理员、代理商主理人、代理商BD）的数据操作范围被自动拦截限定在其所属代理商旗下品牌的 Crew 范围内，确保代理商间的数据完全物理保密与安全。
-  - **代理商专属人才库与代建品牌流**：代理商可录入自己的员工并定制其专属 AI 员工。由代理商员工创建的新品牌，其 Crew 自动绑定该代理商 ID，战队成员仅能从该代理商的私有人才库中选拔指派。
+- 人类和 AMC Agent 都是正常 `User`，使用相同的显式角色、Capability 和品牌范围判断。
+- `UserBusinessRole` 是全局角色唯一来源；一个用户可以拥有多个角色，权限取 Capability 并集。
+- `CrewMember` 是唯一直接品牌权限关系；`BrandOwner`、`BrandAgent`、`AgentPermission` 和 `Brand.ownerId` 不再参与运行时授权。
+- 组织成员通过 Organization Owner 的有效 CrewMember 自动继承品牌范围；退出组织后继承立即失效，直接 CrewMember 不受影响。
+- AMC Agent 使用绑定自身 User 的专属 API Key。旧 Human Key + `x-agent-id` 仅保留 24 小时迁移窗口。
+- AMC Agent 获得 `ADMIN` 后，与人类 ADMIN 具有完全相同的权限；`actorType` 只用于工作日志。
+- 网页、REST API 和 MCP 使用统一 `AuthPrincipal`、Capability、业务服务和工作日志。
+- 新密码使用 Argon2id；旧 bcrypt 在成功登录时渐进升级。
 
-### 影响文件
-- `docs/prd_amc.md`
+完整执行规范见 [`prd_user_organization_permissions.md`](./prd_user_organization_permissions.md)。
 
 ---
 
@@ -1145,6 +1125,8 @@ RolePermission 表：
 ---
 
 ## Changelog v1.8.30 — 2026-07-02（基于人类 API Key 委托的 AI 智能体权限继承与 Crew 扁平化设计方案）
+
+> **已废止（2026-07-04）**：本节中的“Human API Key + `X-Agent-ID` 委托”“AI Avatar 双层 ACL”和基于 Agent 类型的职能限制，不再作为实施依据。最新且已完成 Review 的用户、组织与权限方案见 [`docs/prd_user_organization_permissions.md`](./prd_user_organization_permissions.md)。历史内容保留仅用于追踪决策变化。
 
 ### 1. 品牌与 Crew 营销战队的去中心化独立设计
 - **品牌与人/AI 物理模型解耦**：从数据库与实体模型层面，品牌（`Brand`）作为独立业务实体建立，不强行将人类负责人或 AI 智能体作为硬编码字段绑定，而是统一通过 `MarketingCrew` 进行关联。
@@ -1402,4 +1384,47 @@ RolePermission 表：
 - `prisma/migrations/20260703000004_reseed_minimax_key/migration.sql`
 
 **影响文件（amc-mm）**：
+---
+
+## Changelog v1.8.37 — 2026-07-04 · Postfast 帖子分析数据每日同步入库
+
+### 背景
+
+`/api/brands/:id/social-insight` 每次请求时实时调用 Postfast API 拉取帖子分析数据，存在以下问题：
+- Postfast API 超时 / 不可用时，数据分析页直接报错
+- 无法积累历史数据（Postfast 只返回当前实时数据）
+- 每次页面加载都产生 Postfast API 调用，增加外部依赖
+
+### 决策
+
+在现有的每日 cron 同步 (`/api/cron/postfast-sync-all`) 中，增加近 9 天帖子分析数据的同步，缓存到 `brand.postfastSnapshot.analyticsPosts[]`。
+
+`social-insight` 路由改为优先读 DB 缓存，Postfast 实时 API 作为 fallback（仅当 DB 无缓存数据时调用）。
+
+### 实现范围
+
+**amc-kanban**：
+- `src/app/api/cron/postfast-sync-all/route.ts`：`syncBrand()` 新增第 3 步，调用 `postfastGetAnalytics()` 拉近 9 天数据，写入 `postfastSnapshot.analyticsPosts`
+- `src/app/api/brands/[id]/social-insight/route.ts`：`fetchPostfastPosts()` 改为 DB-first 模式（读 `brand.postfastSnapshot.analyticsPosts`），无缓存时 fallback 到实时 API
+
+### 数据结构（`brand.postfastSnapshot`）
+
+```json
+{
+  "accounts": [...],
+  "operationsReport": {...},
+  "analyticsPosts": [
+    {
+      "id": "pf_xxx",
+      "content": "...",
+      "socialMediaId": "...",
+      "publishedAt": "2026-06-25T...",
+      "latestMetric": {
+        "likes": "12", "comments": "3", "shares": "1",
+        "impressions": "450", "reach": "380"
+      }
+    }
+  ],
+  "analyticsUpdatedAt": "2026-07-04T02:00:00.000Z"
+}
 - `src/components/BrandOwnerDashboard.tsx`：OBS PUT 失败时降级到 server-side 上传；greeting 重复 speak 去重（`_sessionGreetingSpokenTexts`）
