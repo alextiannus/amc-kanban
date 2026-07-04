@@ -1,4 +1,4 @@
-import type { IndustryVertical } from '../types'
+import type { IndustryVertical } from '../types.ts'
 
 export interface VerticalSpec {
   vertical: IndustryVertical

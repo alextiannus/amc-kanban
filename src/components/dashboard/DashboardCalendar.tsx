@@ -440,7 +440,7 @@ ${contentIdea || 'No details provided.'}`
     if (!hasGoogle) {
       list.push({
         id: 'unconfigured_google_business',
-        platformId: 'google_business',
+        platformId: 'google',
         handle: 'unconfigured',
         displayName: 'Google Business (未配置)',
         autoPilot: false,

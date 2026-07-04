@@ -764,7 +764,14 @@ function AdminPageInner() {
         </nav>
 
         {/* Footer overview count */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-[10px] text-slate-450 leading-relaxed font-semibold">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-[10px] text-slate-450 leading-relaxed font-semibold space-y-3">
+          <button
+            onClick={() => router.push('/admin/content-lab')}
+            className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-black text-white shadow-sm hover:bg-indigo-700 transition-all cursor-pointer"
+          >
+            <Sparkles size={14} />
+            Content Lab
+          </button>
           <p>人类用户: {humans.length} | AI: {agents.length}</p>
           <p>管理品牌: {brands.length} | 模型: {llmConfigs.length}</p>
         </div>

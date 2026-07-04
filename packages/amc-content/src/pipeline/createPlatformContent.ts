@@ -1,13 +1,14 @@
-import { getPlatformProvider } from '../platforms/registry'
-import { getVerticalSpec } from '../verticals/registry'
-import { runDeterministicGate } from '../quality/deterministicGate'
+import { getPlatformProvider } from '../platforms/registry.ts'
+import { getVerticalSpec } from '../verticals/registry.ts'
+import { runDeterministicGate } from '../quality/deterministicGate.ts'
 import type {
   ComposedContent,
   HookCandidate,
+  HookCategory,
   KnowledgeEntry,
   PlatformContentInput,
   PlatformContentResult,
-} from '../types'
+} from '../types.ts'
 
 const PROMPT_VERSION = 'amc-content-v0.1'
 
@@ -31,7 +32,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     maxTokens: 900,
   })
 
-  const selectedHook = selectHook(hookModel.data.hooks, input.recentHooks)
+  const selectedHook = selectHook(normalizeHookCandidates(hookModel.data.hooks, input), input.recentHooks)
 
   const bodyModel = await input.adapters.modelRouter.generateJson<ComposedContent>({
     task: 'body_composition',
@@ -41,7 +42,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     maxTokens: 1400,
   })
 
-  let content = bodyModel.data
+  let content = normalizeComposedContent(bodyModel.data, input.platform)
   let quality = runDeterministicGate({
     platform: input.platform,
     vertical: input.brief.industryVertical,
@@ -58,7 +59,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
       prompt: buildRewritePrompt(input, selectedHook, content, quality.rewriteInstruction),
       maxTokens: 1400,
     })
-    content = rewriteModel.data
+    content = normalizeComposedContent(rewriteModel.data, input.platform)
     quality = runDeterministicGate({
       platform: input.platform,
       vertical: input.brief.industryVertical,
@@ -117,6 +118,62 @@ function selectHook(hooks: HookCandidate[], recentHooks: HookCandidate[] = []): 
   return [...pool].sort((a, b) => b.score - a.score)[0]
 }
 
+function normalizeHookCandidates(
+  hooks: HookCandidate[] | undefined,
+  input: PlatformContentInput,
+): HookCandidate[] {
+  const provider = getPlatformProvider(input.platform)
+  const allowedCategories = new Set<HookCategory>(provider.hookCategories)
+  const normalized = (hooks ?? [])
+    .filter((hook) => hook && typeof hook.text === 'string' && hook.text.trim().length > 0)
+    .map((hook) => ({
+      text: hook.text.trim(),
+      category: allowedCategories.has(hook.category) ? hook.category : provider.hookCategories[0],
+      score: clampScore(hook.score),
+      reason: hook.reason,
+    }))
+
+  return normalized.length > 0
+    ? normalized
+    : [{
+      text: fallbackHookText(input),
+      category: provider.hookCategories[0],
+      score: 0.5,
+      reason: 'Fallback hook generated because the model returned no usable hook candidates.',
+    }]
+}
+
+function normalizeComposedContent(content: ComposedContent, platform: PlatformContentInput['platform']): ComposedContent {
+  const provider = getPlatformProvider(platform)
+  const caption = (content.caption ?? '').trim()
+  const seen = new Set<string>()
+  const hashtags = (content.hashtags ?? [])
+    .map((tag) => String(tag).trim().replace(/^#+/, '').replace(/\s+/g, ''))
+    .filter(Boolean)
+    .filter((tag) => {
+      const key = tag.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+  return {
+    caption,
+    hashtags: provider.hashtagRules.allowHashtags ? hashtags : [],
+  }
+}
+
+function clampScore(score: number | undefined): number {
+  if (typeof score !== 'number' || Number.isNaN(score)) return 0.5
+  return Math.max(0, Math.min(1, score))
+}
+
+function fallbackHookText(input: PlatformContentInput): string {
+  return input.platform === 'xiaohongshu'
+    ? `${input.brand.name} 本地生活新灵感`
+    : `${input.brand.name}: a local update worth checking out`
+}
+
 function buildHookPrompt(input: PlatformContentInput, knowledge: KnowledgeEntry[]): string {
   const provider = getPlatformProvider(input.platform)
   const vertical = getVerticalSpec(input.brief.industryVertical)
@@ -126,10 +183,15 @@ function buildHookPrompt(input: PlatformContentInput, knowledge: KnowledgeEntry[
     `Vertical: ${vertical.displayName}`,
     `Theme: ${input.brief.theme}`,
     `Angle: ${input.brief.angle ?? 'choose the strongest local-service angle'}`,
+    input.brief.customerIntent ? `Customer intent: ${input.brief.customerIntent}` : '',
+    input.brief.locationFocus ? `Location focus: ${input.brief.locationFocus}` : '',
+    input.brief.mustAvoid?.length ? `Must avoid: ${input.brief.mustAvoid.join(', ')}` : '',
     `Allowed hook categories: ${provider.hookCategories.join(', ')}`,
     `Return JSON: { "hooks": [{ "text": string, "category": string, "score": number, "reason": string }] }`,
+    `Rules: avoid generic AI phrases, make every hook platform-native, and use a different category for each hook.`,
+    formatMedia(input.media),
     formatKnowledge(knowledge),
-  ].join('\n')
+  ].filter(Boolean).join('\n')
 }
 
 function buildBodyPrompt(input: PlatformContentInput, hook: HookCandidate, knowledge: KnowledgeEntry[]): string {
@@ -147,6 +209,10 @@ function buildBodyPrompt(input: PlatformContentInput, hook: HookCandidate, knowl
     `Brief theme: ${input.brief.theme}`,
     input.brief.customerIntent ? `Customer intent: ${input.brief.customerIntent}` : '',
     input.brief.localProof?.length ? `Local proof: ${input.brief.localProof.join(', ')}` : '',
+    input.brief.mustMention?.length ? `Must mention: ${input.brief.mustMention.join(', ')}` : '',
+    input.brief.mustAvoid?.length ? `Must avoid: ${input.brief.mustAvoid.join(', ')}` : '',
+    vertical.complianceNotes.length ? `Vertical compliance: ${vertical.complianceNotes.join(' ')}` : '',
+    formatMedia(input.media),
     `Use this hook: ${hook.text}`,
     `Max caption length: ${provider.maxCaptionLength}`,
     `Hashtag rule: allow=${provider.hashtagRules.allowHashtags}, max=${provider.hashtagRules.max ?? 'none'}`,
@@ -174,4 +240,14 @@ function buildRewritePrompt(
 function formatKnowledge(knowledge: KnowledgeEntry[]): string {
   if (knowledge.length === 0) return 'Knowledge: none'
   return `Knowledge:\n${knowledge.map((entry) => `- [${entry.category}] ${entry.title}: ${entry.content}`).join('\n')}`
+}
+
+function formatMedia(media: PlatformContentInput['media']): string {
+  if (!media?.length) return 'Media: none'
+  return `Media:\n${media.map((item, index) => [
+    `- Asset ${index + 1}: ${item.url}`,
+    item.category ? `category=${item.category}` : '',
+    item.tags?.length ? `tags=${item.tags.join(', ')}` : '',
+    item.caption ? `caption=${item.caption}` : '',
+  ].filter(Boolean).join('; ')).join('\n')}`
 }

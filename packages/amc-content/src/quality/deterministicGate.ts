@@ -5,10 +5,10 @@ import type {
   PlatformType,
   QualityIssue,
   QualityResult,
-} from '../types'
-import { getPlatformProvider } from '../platforms/registry'
-import { getVerticalSpec } from '../verticals/registry'
-import type { IndustryVertical } from '../types'
+} from '../types.ts'
+import { getPlatformProvider } from '../platforms/registry.ts'
+import { getVerticalSpec } from '../verticals/registry.ts'
+import type { IndustryVertical } from '../types.ts'
 
 export interface DeterministicGateInput {
   platform: PlatformType
@@ -92,6 +92,13 @@ function validateRequiredFields(input: DeterministicGateInput): QualityIssue[] {
       message: `${provider.displayName} content should include a website when available.`,
     })
   }
+  if (provider.requiredFields?.includes('cta') && !hasClearCta(input.content.caption)) {
+    issues.push({
+      code: 'missing_cta',
+      severity: 'warning',
+      message: `${provider.displayName} content should include a clear call to action.`,
+    })
+  }
   return issues
 }
 
@@ -131,4 +138,25 @@ function findAny(caption: string, phrases: string[], code: string): QualityIssue
       severity: 'error' as const,
       message: `Caption contains restricted claim: ${phrase}`,
     }))
+}
+
+function hasClearCta(caption: string): boolean {
+  const normalized = caption.toLowerCase()
+  return [
+    'book',
+    'reserve',
+    'visit',
+    'call',
+    'contact',
+    'message',
+    'learn more',
+    'enquire',
+    'inquire',
+    'appointment',
+    'whatsapp',
+    '预约',
+    '预订',
+    '联系',
+    '到店',
+  ].some((phrase) => normalized.includes(phrase))
 }

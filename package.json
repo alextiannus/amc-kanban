@@ -13,6 +13,7 @@
     "lint": "eslint",
     "typecheck": "tsc --project tsconfig.check.json",
     "typecheck:amc-content": "tsc --project packages/amc-content/tsconfig.json",
+    "test:amc-content": "node --experimental-strip-types scripts/test-amc-content.mts",
     "test:execution": "node --experimental-strip-types scripts/test-project-execution.mts",
     "test:assignment-pool": "node --experimental-strip-types scripts/test-assignment-pool.mts",
     "test:assignment-flow": "node --experimental-strip-types scripts/test-assignment-flow.mts",

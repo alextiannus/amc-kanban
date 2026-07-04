@@ -1,6 +1,6 @@
-import type { PlatformType } from '../types'
-import type { PlatformContentProvider } from './base'
-import { createBasicPlatformValidator } from './base'
+import type { PlatformType } from '../types.ts'
+import type { PlatformContentProvider } from './base.ts'
+import { createBasicPlatformValidator } from './base.ts'
 
 const commonAiToneBannedPhrases = [
   'as an ai',

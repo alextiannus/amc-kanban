@@ -52,12 +52,15 @@ const PLATFORM_MAP: Record<string, string> = {
   GOOGLE:         'google',
   GBP:            'google',
   GMB:            'google',
+  // All Google Business Profile variants → canonical 'google'
+  GOOGLE_BUSINESS:         'google',   // ← added: handles legacy DB records with platformId='google_business'
   GOOGLE_BUSINESS_PROFILE: 'google',
-  GOOGLE_MY_BUSINESS: 'google',
-  GOOGLEBUSINESSPROFILE: 'google',
-  GOOGLEMYBUSINESS: 'google',
-  GOOGLE_MAPS: 'google',
-  GOOGLEMAPS: 'google',
+  GOOGLE_MY_BUSINESS:      'google',
+  GOOGLEBUSINESS:          'google',   // ← added: no-underscore variant
+  GOOGLEBUSINESSPROFILE:   'google',
+  GOOGLEMYBUSINESS:        'google',
+  GOOGLE_MAPS:             'google',
+  GOOGLEMAPS:              'google',
 }
 
 function normalizePlatform(rawPlatform: unknown): string {

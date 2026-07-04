@@ -635,7 +635,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     if (!hasGoogle && !list.some(a => a.id === 'unconfigured_google_business' || (a.handle === 'unconfigured' && ['google', 'google_business'].includes(a.platformId.toLowerCase())))) {
       list.push({
         id: 'unconfigured_google_business',
-        platformId: 'google_business',
+        platformId: 'google',
         handle: 'unconfigured',
         displayName: 'Google Business (未配置)',
         autoPilot: false,
