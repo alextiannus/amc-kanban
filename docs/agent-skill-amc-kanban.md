@@ -33,7 +33,9 @@ All agent endpoints require an `Authorization` header with the agent's API key:
 Authorization: Bearer <agentApiKey>
 ```
 
-The `agentApiKey` is set in the agent's User profile (`User.apiKey`) in the Kanban database.
+The `agentApiKey` is generated only when an Agent key is created or rotated.
+Kanban stores only the hashed key in `UserApiKey`; the plaintext key is never
+returned by list/detail APIs and is not stored in `User.apiKey`.
 
 ---
 

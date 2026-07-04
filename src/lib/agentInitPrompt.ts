@@ -67,7 +67,7 @@ export function buildLaunchInstruction(params: {
 }) {
   const { context, apiBaseUrl } = params
   const baseHost = apiBaseUrl.replace(/\/api\/?$/, '')
-  const apiKey = context.agent.apiKey || '<AGENT_API_KEY — activate subscription first>'
+  const apiKey = context.agent.apiKey || '<AGENT_API_KEY — generated once during Agent key creation/rotation>'
 
   return `【AMC Agent 初始化指令 v3.0】
 

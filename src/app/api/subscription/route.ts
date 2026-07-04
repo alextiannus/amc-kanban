@@ -255,7 +255,6 @@ export async function GET(request: Request) {
   })
 
   let resolvedAgentId: string | null = null
-  let resolvedAgentKey: string | null = null
 
   if (!brand) {
     const instructionContext = resolvedAgentId
@@ -288,7 +287,7 @@ export async function GET(request: Request) {
           ownedBrands: ownedBrands.map((b: any) => ({ id: b.id, name: b.name, location: b.location })),
           agent: {
             id: resolvedAgentId,
-            apiKey: resolvedAgentKey,
+            apiKey: null,
           },
         }
       : null
@@ -318,7 +317,6 @@ export async function GET(request: Request) {
         agent: {
           select: {
             id: true,
-            apiKey: true,
           },
         },
       },
@@ -327,7 +325,6 @@ export async function GET(request: Request) {
   ])
 
   resolvedAgentId = brandAgent?.agent.id || resolvedAgentId
-  resolvedAgentKey = hasEffectiveActiveSubscription ? brandAgent?.agent.apiKey || resolvedAgentKey : null
 
   const parsedStores = profileMarkdown?.markdown ? extractStoresFromMarkdown(profileMarkdown.markdown) : []
   const stores = parsedStores.length
@@ -374,7 +371,7 @@ export async function GET(request: Request) {
       .map((b: any) => ({ id: b.id, name: b.name, location: b.location })),
     agent: {
       id: resolvedAgentId,
-      apiKey: resolvedAgentKey,
+      apiKey: null,
     },
   }
 

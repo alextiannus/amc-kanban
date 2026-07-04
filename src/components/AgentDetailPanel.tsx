@@ -1,6 +1,3 @@
-'use client'
-
-import { useState } from 'react'
 import { Bot } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -11,42 +8,20 @@ const markdownComponents = {
 
 export type AgentDetailPanelAgent = {
   id: string
-  apiKey?: string | null
   introduction?: string | null
   workflow?: string | null
 }
 
 export default function AgentDetailPanel({ agent }: { agent: AgentDetailPanelAgent }) {
-  const [copiedKey, setCopiedKey] = useState(false)
-
   return (
     <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800 space-y-5 animate-in fade-in slide-in-from-top-2">
-      {agent.apiKey && (
-        <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-3">🔑 凭证管理</span>
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                readOnly
-                value={agent.apiKey}
-                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-600 dark:text-slate-300 font-mono text-xs focus:outline-none"
-              />
-              <button
-                onClick={(event) => {
-                  event.stopPropagation()
-                  navigator.clipboard.writeText(agent.apiKey ?? '')
-                  setCopiedKey(true)
-                  setTimeout(() => setCopiedKey(false), 2000)
-                }}
-                className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold transition-colors whitespace-nowrap flex-shrink-0"
-              >
-                {copiedKey ? '已复制 Key' : '复制 Key'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-2">🔑 凭证管理</span>
+        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          Agent API Key 只在创建或轮换时显示一次；系统不会在详情页读取或展示已保存的密钥。
+          如需重新配置外部 Agent，请使用「生成 / 重置 API Key」流程。
+        </p>
+      </div>
 
       {agent.introduction && (
         <div>

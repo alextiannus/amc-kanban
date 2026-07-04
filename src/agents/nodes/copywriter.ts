@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma.ts";
 import { callLLM } from "../../lib/llmRouter.ts";
 import { getFewShotExamples } from "../../lib/feedbackService.ts";
 import { getJaccardSimilarity } from "../knowledgeBase.ts";
+import { loadPlatformSkill, formatSkillForPrompt } from "../skills/skillLoader.ts";
 
 export async function copywriterNode(state: any) {
   console.log("=== CopywriterNode Running (Composition Mode) ===");
@@ -11,6 +12,10 @@ export async function copywriterNode(state: any) {
   const { brandId, taskId, platform, researchNotes, marketingStrategy } = state;
   const platformLower = (platform || "").toLowerCase();
   const isRednote = platformLower === "xiaohongshu" || platformLower === "red" || platformLower === "xhs";
+
+  // Load platform-specific skill (AIERA v2)
+  const platformSkill = await loadPlatformSkill(platformLower)
+  const skillPromptBlock = formatSkillForPrompt(platformSkill)
 
   if (!brandId) {
     throw new Error("Missing brandId in state.");
@@ -220,7 +225,7 @@ ${negativePromptText}
 ${fewShotText}
 ${refinementPromptText}
 ${formattedResearchNotes}
-
+${skillPromptBlock}
 Goal: Generate 3 different engaging hook variants (opening lines/titles) optimized for "${platform}".
 CRITICAL REQUIREMENT:
 You MUST base the hooks directly on the "User Custom Theme / Creative Idea"${creativeHooks ? ` and "Creative Hooks / Writing Angles"` : ''} provided above. Do NOT write generic hooks. Your generated hooks must strongly reflect these ideas, angles, and specific writing directions. This is the most important constraint.
@@ -320,7 +325,7 @@ ${negativePromptText}
 ${fewShotText}
 ${refinementPromptText}
 ${formattedResearchNotes}
-
+${skillPromptBlock}
 Here is the approved Hook (opening line/title) generated for this post:
 "${selectedHook}"
 

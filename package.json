@@ -27,6 +27,8 @@
     "verify:permissions": "node scripts/verify-permissions.mjs",
     "verify:auth-routes": "node scripts/audit-route-auth.mjs --strict",
     "audit:auth-routes": "node scripts/audit-route-auth.mjs",
+    "verify:auth-v2-debt": "node scripts/audit-auth-v2-debt.mjs --strict",
+    "audit:auth-v2-debt": "node scripts/audit-auth-v2-debt.mjs",
     "test:auth-v2": "node --experimental-strip-types scripts/test-auth-v2.mts",
     "migrate:auth-v2": "node --experimental-strip-types scripts/migrate-auth-v2.mts",
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",

@@ -63,8 +63,6 @@ export async function GET() {
       }
     }
 
-    const isAdmin = session.user.role === 'ADMIN'
-
     const agents = await prisma.user.findMany({
       where: whereClause,
       select: {
@@ -75,7 +73,6 @@ export async function GET() {
         introduction: true,
         workflow: true,
         themeColor: true,
-        ...(isAdmin ? { apiKey: true } : {}),
         ...avatarSelect,
         createdAt: true,
         tasksAsAssignee: {

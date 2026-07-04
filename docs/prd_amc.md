@@ -1375,3 +1375,45 @@ model SystemConfig {
   "analyticsUpdatedAt": "2026-07-04T02:00:00.000Z"
 }
 - `src/components/BrandOwnerDashboard.tsx`：OBS PUT 失败时降级到 server-side 上传；greeting 重复 speak 去重（`_sessionGreetingSpokenTexts`）
+
+---
+
+## AIERA v2 — AI 内容生产引擎（2026-07 新增模块）
+
+> 详细设计见 `docs/prd_aiera_v2.md`
+
+### 模块概述
+
+AIERA（AI Era Architecture）是 AMC-Kanban Copywriter Agent 的下一代架构，包含六大升级方向：
+
+1. **Copywriter 智能升级**：三阶段流水线（意图理解→Hook竞选→Body精炼），消除 AI 腔，Hook 多样化
+2. **开源 Skill 加载**：文件系统 + DB 配置动态加载平台创作规范，无需重新部署
+3. **内部知识库**：KnowledgeEntry + pgvector，将人工修改后的优质内容沉淀为可检索知识
+4. **平台专属 Skill**：每个平台（小红书/Instagram/TikTok/Facebook/GBP）独立 SKILL.md 维护
+5. **高并发架构**：BullMQ + Redis Worker Pool，支持 100+ 品牌并发
+6. **图生视频 + 脚本写作**：Script Writer Agent + Kling/Runway API 集成
+
+### 实施状态
+
+| Phase | 功能 | 状态 |
+|-------|------|------|
+| Phase 1 | Hook 多样化 + 随机选取 | ✅ 完成 |
+| Phase 1 | 5 个平台 SKILL.md 文件 | ✅ 完成 |
+| Phase 1 | Skill 动态加载器 (skillLoader.ts) | ✅ 完成 |
+| Phase 1 | Copywriter 集成 Skill 注入 | ✅ 完成 |
+| Phase 2 | 知识库 KnowledgeEntry + pgvector | 计划中 |
+| Phase 3 | BullMQ Worker 队列 | 计划中 |
+| Phase 4 | 图生视频 + Script Writer | 计划中 |
+
+### Skill 文件位置
+
+```
+src/agents/skills/
+├── platforms/
+│   ├── xiaohongshu/SKILL.md
+│   ├── instagram/SKILL.md
+│   ├── tiktok/SKILL.md
+│   ├── facebook/SKILL.md
+│   └── google_business/SKILL.md
+└── skillLoader.ts
+```

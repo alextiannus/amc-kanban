@@ -26,7 +26,6 @@ type DashboardPayload = {
     workflow?: string | null
     themeColor?: string | null
     avatar?: string | null
-    apiKey?: string | null
     isOnline: boolean
     boundBrands: Array<{ id: string; name: string; role: string }>
   }>
@@ -543,7 +542,7 @@ export default function PrincipalDashboardPage() {
 
               <AgentDetailPanel agent={selectedAgent} />
 
-              {!selectedAgent.apiKey && !selectedAgent.introduction && !selectedAgent.workflow && (
+              {!selectedAgent.introduction && !selectedAgent.workflow && (
                 <div className="mt-5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-4 text-sm text-slate-500 dark:text-slate-400">
                   <Bot className="mb-2 h-5 w-5" /> 暂无更多 Agent 详情。
                 </div>
