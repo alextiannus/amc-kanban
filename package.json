@@ -84,6 +84,7 @@
     "typescript": "^5"
   },
   "overrides": {
+    "@rollup/plugin-terser": "^1.0.0",
     "postcss": "^8.5.10"
   }
 }
