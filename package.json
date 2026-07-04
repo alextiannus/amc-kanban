@@ -12,6 +12,7 @@
     "start:direct": "node node_modules/next/dist/cli/next-start.js -p 3000",
     "lint": "eslint",
     "typecheck": "tsc --project tsconfig.check.json",
+    "typecheck:amc-content": "tsc --project packages/amc-content/tsconfig.json",
     "test:execution": "node --experimental-strip-types scripts/test-project-execution.mts",
     "test:assignment-pool": "node --experimental-strip-types scripts/test-assignment-pool.mts",
     "test:assignment-flow": "node --experimental-strip-types scripts/test-assignment-flow.mts",

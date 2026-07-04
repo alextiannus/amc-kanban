@@ -160,11 +160,22 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   if (draft.platformPostId && !draft.publishedAt) {
     const cancelResult = await postfastDeletePost(brand.postfastApiKey, draft.platformPostId)
     if (!cancelResult.success) {
-      await prisma.contentDraft.update({
-        where: { id: draft.id },
-        data: { status: 'failed', agentNote: `更新排期失败：无法取消旧排期 ${draft.platformPostId}。${cancelResult.error || ''}` },
-      })
-      return { ok: false as const, status: 400, error: cancelResult.error || '无法取消旧排期，未创建新排期。' }
+      if (input.immediatePublish) {
+        // 立即发布模式：取消旧排期失败不阻断流程
+        // 旧帖可能已发出或窗口期内无法删除，记录警告继续执行
+        console.warn(`[submitDraftForDelivery] Could not cancel old scheduled post ${draft.platformPostId} (${cancelResult.error}), proceeding with immediate publish anyway`)
+        // 清除 DB 中的旧 platformPostId，避免二次删除
+        await prisma.contentDraft.update({
+          where: { id: draft.id },
+          data: { platformPostId: null },
+        })
+      } else {
+        await prisma.contentDraft.update({
+          where: { id: draft.id },
+          data: { status: 'failed', agentNote: `更新排期失败：无法取消旧排期 ${draft.platformPostId}。${cancelResult.error || ''}` },
+        })
+        return { ok: false as const, status: 400, error: cancelResult.error || '无法取消旧排期，未创建新排期。' }
+      }
     }
   }
 

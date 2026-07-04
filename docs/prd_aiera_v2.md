@@ -3,8 +3,8 @@
 > **Product**: AMC-Kanban — AI Content Engine
 > **Version**: v2.1 AIERA (AI Era Architecture)
 > **Author**: Research + Design Session — 2026-07-04
-> **Last Updated**: 2026-07-04 — 决策已确认，进入设计锁定
-> **Status**: ✅ 设计锁定，Phase 1 已实施，Phase 2-4 待开发
+> **Last Updated**: 2026-07-04 — Copywriter 能力建设方案补充完成
+> **Status**: ✅ 设计锁定，Phase 1 已实施，Phase 2A Copywriter 质量闭环为下一步优先项
 
 ---
 
@@ -20,11 +20,79 @@
 | 不可扩展 | 并发高时会阻塞 | 同步调用 LLM，无任务队列 |
 | 纯文字 | 无视频脚本/图生视频能力 | 只集成了文字 LLM |
 
-**AIERA v2 的目标**：将 Copywriter 从一个"写死的 AI 模板"升级为一个**自学习、可扩展、高并发、多模态的 AI 内容生产引擎**。
+**AIERA v2 的目标**：将 Copywriter 从一个"写死的 AI 模板"升级为一个面向**本地生活商户（Local Lifestyle / Local Services）**的**自学习、可扩展、高并发、多模态 AI 内容生产引擎**。
+
+> 定位说明：AMC 的主体行业不是单一餐饮，而是本地生活。餐饮/F&B 是高频切入垂类之一；同一套内容引擎必须支持美容美甲、健身普拉提、家装维修、宠物服务、教育培训、酒水零售、诊所护理、休闲娱乐等线下服务商户。
 
 ---
 
-## 二、六大核心需求与设计方案
+## 二、下一步设计结论 — Copywriter 能力优先升级
+
+开场白能力已经达到当前阶段要求，AIERA v2 的下一步不再优先扩展 Companion Greeting，而是集中提升 AMC Copywriter 的内容生产质量、可控性和可持续学习能力。
+
+### 2.1 设计原则
+
+| 原则 | 说明 |
+|------|------|
+| 先质量，后规模 | 在引入 BullMQ、视频生成和大规模并发前，先把单篇文案的质量、稳定性和可解释性打牢。 |
+| 先闭环，后微调 | 不直接跳到 SFT/DPO；先建立从生成、人工编辑、评分、知识沉淀、下次检索的闭环。 |
+| 行业泛化优先 | 所有 Brief、Skill、Knowledge、Quality Gate 设计必须以本地生活行业族群为边界，避免把餐饮术语写死进核心流水线。 |
+| Skill 管规范，Knowledge 管经验 | Platform Skill 负责平台规则、格式、禁忌词；KnowledgeEntry 负责历史高表现样本、品牌偏好和人工修正。 |
+| Agent 可执行，但必须可审计 | 每次生成必须留下 CopywriterLog，记录 promptVersion、platform、draftId、modelId、输出和后续人工修正。 |
+| 不让模型凭感觉决定发布 | Copywriter 只负责生成与修订；审批、排期、发布继续走 ContentDraft / ActionItem / Publisher 的显式状态机。 |
+
+### 2.2 目标能力分层
+
+```
+用户创意 / 素材 / 排期任务
+        ↓
+Brief Normalizer（意图理解与创意简报结构化）
+        ↓
+Context Builder（品牌、素材、历史表现、Skill、知识库）
+        ↓
+Hook Competition（多类别 Hook 候选 + 去重 + 评分）
+        ↓
+Body Composer（平台正文、CTA、Hashtag）
+        ↓
+Quality Gate（AI 腔、平台格式、合规、品牌知识校验）
+        ↓
+Draft Writer（写入 ContentDraft，创建待审 ActionItem）
+        ↓
+Feedback Loop（人工编辑 / 发布表现 → CopywriterLog / UserCorrectionFeedback / KnowledgeEntry）
+```
+
+### 2.3 本阶段最终方案
+
+下一阶段定义为 **Phase 2A — Copywriter Quality Loop**，目标是在不大改业务入口的前提下，让现有 `/copywriter/bulk-generate`、`trigger-copywriter` 和 `copywriterNode` 具备稳定的四阶段生成、质量门禁和学习闭环。
+
+**必须实现：**
+- `copywriterNode` 从当前的 Hook + Body 两阶段升级为 Brief + Hook + Body + Quality Gate 的流水线。
+- Brief 结构化必须先识别 `industryVertical`、`offerType`、`customerIntent` 和 `localProof`，再决定文案角度；不能默认按餐饮/菜单/菜品生成。
+- Hook 生成从“随机抽一个”升级为“候选评分 + 最近历史去重 + 平台类别均衡”。
+- `CopywriterLog` 成为训练与审计主记录，必须绑定 `draftId`、`platform`、`promptVersion` 和模型信息。
+- 人工编辑后的最终发布文案进入 `UserCorrectionFeedback`，作为短期 few-shot；高质量样本再晋升为 `KnowledgeEntry`。
+- Platform Skill 只读 Markdown 继续保留，作为平台规范来源；不在短期引入外部 GitHub/URL Skill 执行链路。
+- Quality Gate 必须在写入草稿前执行 AI 腔词、平台格式、品牌禁忌词和基础合规检查；失败时自动重写一次，仍失败则以 `ActionItem` 交给人工审核。
+
+**暂不实现：**
+- 暂不启动专属模型微调；仅保留训练数据导出。
+- 暂不做 URL/GitHub 外部 Skill 自动同步；避免 prompt injection 与供应链风险。
+- 暂不把视频生成并入 Copywriter 主链路；视频作为 Phase 4 的用户主动触发能力。
+- 暂不把所有 Copywriter 请求改为队列；Phase 2A 保持同步接口，Phase 3 再做 BullMQ。
+
+### 2.4 成功指标
+
+| 指标 | 目标 |
+|------|------|
+| 人工大改率 | 发布前人工修改 diffRatio > 0.4 的比例下降 30% |
+| AI 腔拦截率 | Quality Gate 能识别并拦截内置禁忌词，命中后自动重写 |
+| Hook 重复率 | 同品牌同平台最近 10 篇 Hook 类别重复率低于 30% |
+| 生成可用率 | LLM 正常时 90% 以上生成结果可直接进入 pending_review |
+| 审计完整性 | 95% 以上 Copywriter 输出可追溯到 CopywriterLog + draftId |
+
+---
+
+## 三、六大核心需求与设计方案
 
 ---
 
@@ -32,17 +100,29 @@
 
 **目标**：提升每篇内容的创作质量和多样性，消除 AI 腔。
 
-#### 1.1 两阶段 → 三阶段创作流水线
+#### 1.1 两阶段 → 四阶段创作流水线
 
 ```
 当前:  [Hook生成] → [Body生成]
-升级:  [意图理解] → [Hook竞选] → [Body精炼]
+升级:  [Brief结构化] → [Hook竞选] → [Body精炼] → [Quality Gate]
 ```
 
-**Stage 0 — 意图理解（新增）**
+**Stage 0 — Brief 结构化（新增）**
 - 输入：task + mediaUrls + brand context
-- 输出：`{ theme, angle, targetEmotion, contentType, formatHint }`
+- 输出：`{ industryVertical, offerType, customerIntent, theme, angle, targetEmotion, contentType, formatHint, mustMention, mustAvoid, locationFocus, localProof }`
 - 使用轻量模型（Gemini Flash）降低延迟和成本
+- 行业识别必须支持本地生活垂类：
+  - `food_beverage`
+  - `beauty_wellness`
+  - `fitness_pilates`
+  - `home_renovation`
+  - `pet_services`
+  - `education_training`
+  - `healthcare_clinic`
+  - `retail_specialty`
+  - `events_entertainment`
+  - `professional_services`
+  - `general_local_service`
 
 **Stage 1 — Hook 竞选（升级）**
 - 生成 5 个 hooks（比当前 3 个更多），分属 5 大心理类别
@@ -54,6 +134,17 @@
 - 加入「AI 腔检测」指令：禁用特定高频 AI 词汇清单
 - 加入「平台 Skill」调用（见需求 4）
 - 支持多轮自我修订：Body 生成后自动检查是否满足平台格式规范
+
+**Stage 3 — Quality Gate（新增）**
+- 输入：caption + hashtags + platform + brand compliance + selected skill
+- 输出：`{ passed, score, reasons[], rewriteInstruction? }`
+- 检查项：
+  - AI 腔词汇与平台 Skill 禁忌词
+  - 品牌 `negPrompts` 与合规禁用词
+  - 平台格式要求（小红书换行/emoji/标签数、GBP 无 hashtag 等）
+  - 必填信息（地址、预约方式、活动日期、促销条款）
+  - 与最近同品牌同平台内容的 Hook/主题重复度
+- 处理策略：第一次失败自动带 `rewriteInstruction` 重写；第二次失败仍写入草稿但标记 `pending_review`，并创建高优先级 ActionItem 给人工检查。
 
 #### 1.2 AI 腔词汇黑名单（内置）
 
@@ -84,8 +175,9 @@ src/agents/skills/
 │   ├── facebook/
 │   └── google_business/
 ├── formats/
-│   ├── food_review.md       ← 美食探店格式 Skill
-│   ├── product_launch.md    ← 新品上市格式 Skill
+│   ├── local_discovery.md   ← 本地探店/服务发现格式 Skill
+│   ├── service_offer.md     ← 服务项目/套餐促销格式 Skill
+│   ├── product_launch.md    ← 新品/新项目上市格式 Skill
 │   └── event_promotion.md   ← 活动促销格式 Skill
 └── external/                ← 从开源社区导入的 Skill
     └── [git submodule or URL]
@@ -138,17 +230,41 @@ const hookPrompt = buildHookPrompt({
 Level 1 — 平台公共知识（Platform Commons）
   ├── 各平台格式规范（字数/emoji/换行规则）
   ├── 验证过的 Hook 公式库（按效果打分）
-  └── 行业词汇表（餐饮/健身/零售/美妆）
+  └── 本地生活行业词汇表（餐饮、美业、健身、家装、宠物、教育、诊所、零售等）
 
 Level 2 — 品牌私有知识（Brand Private）
   ├── 品牌语气模板（BrandKnowledge 现有）
-  ├── 人工修改后的爆文样本（CorrectionFeedback 现有）
+  ├── 人工修改后的爆文样本（UserCorrectionFeedback 现有）
   └── 历史高表现帖子（按互动率排序）
 
 Level 3 — 动态生成知识（Generated）
   ├── CopywriterLog 记录（每次生成的 prompt + output）
   └── 自动提炼的「最优写法」（定期蒸馏任务）
 ```
+
+#### 3.1.1 本地生活行业族群（Local Lifestyle Verticals）
+
+AIERA 的 KnowledgeEntry 与 Format Skill 必须按“本地生活”行业族群组织，而不是按餐饮单行业组织。每个行业族群至少包含：核心顾客意图、常见 offer 类型、可信证明、本地化 CTA、禁忌表达和高表现样例。
+
+| industryVertical | 覆盖商户 | 典型顾客意图 | 内容重点 |
+|------------------|----------|--------------|----------|
+| `food_beverage` | 餐厅、咖啡、酒吧、烘焙、档口 | 想吃什么、去哪吃、有什么优惠 | 菜品/体验/位置/预约/堂食外卖 |
+| `beauty_wellness` | 美甲、美睫、美容、SPA、按摩 | 变美、放松、修复、节日护理 | 前后对比、服务流程、卫生安全、套餐 |
+| `fitness_pilates` | 健身房、普拉提、瑜伽、私教 | 改善体态、减脂、塑形、试课 | 训练收益、教练资质、体验课、会员转化 |
+| `home_renovation` | 装修、维修、清洁、空调、水电 | 解决家庭问题、提升空间 | 案例前后对比、工艺、报价透明、预约上门 |
+| `pet_services` | 宠物美容、寄养、训练、兽医周边 | 宠物健康、护理、安全托管 | 宠物友好、护理细节、环境可信、预约 |
+| `education_training` | 补习、语言、音乐、儿童课程 | 提升成绩/技能、试听、报名 | 学习成果、师资、课程体系、试听 CTA |
+| `healthcare_clinic` | 牙科、理疗、皮肤管理、诊所 | 安全、专业、预约咨询 | 合规表达、资质、流程说明、风险避免 |
+| `retail_specialty` | 花店、礼品、酒水、精品零售 | 购买礼物、节日需求、本地配送 | 商品亮点、场景化、限时款、到店/配送 |
+| `events_entertainment` | KTV、密室、亲子活动、工作坊 | 周末去处、聚会、体验 | 活动氛围、人数/时间/价格、预订 |
+| `professional_services` | 摄影、会计、法律、设计、顾问 | 解决专业问题、建立信任 | 案例、专业可信、咨询 CTA、合规边界 |
+| `general_local_service` | 无法归类的新本地服务 | 发现、了解、咨询 | 先走通用本地服务框架，再沉淀垂类知识 |
+
+**实现要求：**
+- `industryVertical` 来自 BrandKnowledge、品牌描述、历史内容和用户 brief 的综合判断。
+- 若无法判断行业，默认 `general_local_service`，不允许默认写成餐饮。
+- Platform Skill 只回答“这个平台怎么写”；Vertical Skill 回答“这个行业该强调什么”。
+- Quality Gate 必须根据行业切换禁忌项。例如诊所/健康护理避免夸大疗效，家装避免虚假最低价，美业避免不实前后对比。
 
 #### 3.2 知识库存储方案
 
@@ -181,7 +297,7 @@ CREATE TABLE knowledge_entries (
 ```
 人工修改帖子
     ↓
-CorrectionFeedback 表 (已有)
+UserCorrectionFeedback 表 (已有)
     ↓ 每日定时任务
 质量评估 (LLM-as-Judge)
     ↓ 通过评分阈值
@@ -482,7 +598,7 @@ CREATE TABLE video_generation_jobs (
 
 ---
 
-## 三、系统架构总图
+## 四、系统架构总图
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -496,12 +612,12 @@ CREATE TABLE video_generation_jobs (
 │                         │ inject                                   │
 │  ┌──────────────────────▼──────────────────────────────────────┐  │
 │  │                Knowledge Base (RAG)                          │  │
-│  │  KnowledgeEntry (pgvector) | CorrectionFeedback | BrandKB   │  │
+│  │  KnowledgeEntry (pgvector) | UserCorrectionFeedback | BrandKB│  │
 │  └──────────────────────┬──────────────────────────────────────┘  │
 │                         │ retrieve                                 │
 │  ┌──────────────────────▼──────────────────────────────────────┐  │
-│  │              Copywriter Pipeline (3-Stage)                   │  │
-│  │  [Intent Understanding] → [Hook Competition] → [Body Polish] │  │
+│  │              Copywriter Pipeline (4-Stage)                   │  │
+│  │  [Brief] → [Hook Competition] → [Body] → [Quality Gate]      │  │
 │  └──────────────────────┬──────────────────────────────────────┘  │
 │                         │ result                                   │
 │  ┌──────────────────────▼──────────────────────────────────────┐  │
@@ -520,9 +636,60 @@ CREATE TABLE video_generation_jobs (
 └──────────────────────────────────────────────────────────────────┘
 ```
 
+### 4.1 `amc-content` Package 边界（已开始实施）
+
+AIERA v2 的内容生成核心统一沉淀为本地 package：`packages/amc-content`。该 package 供 `amc-kanban` 调用，但不直接依赖 Next.js Route、Prisma、Session、Capability 或发布系统。
+
+**职责边界：**
+
+| 模块 | 负责 |
+|------|------|
+| `packages/amc-content` | 内容生成核心逻辑、平台策略、行业策略、质量门禁、知识检索接口、生成 provenance |
+| `amc-kanban` | 鉴权、品牌权限、DB 读取写入、Job/Worker、ContentDraft/ActionItem、发布与通知 |
+
+**首批目录结构：**
+
+```
+packages/amc-content/
+  src/
+    types.ts
+    pipeline/createPlatformContent.ts
+    platforms/
+      base.ts
+      registry.ts
+    verticals/
+      registry.ts
+    quality/
+      deterministicGate.ts
+```
+
+**调用方式：**
+
+```typescript
+import { createPlatformContent } from 'amc-content'
+
+const result = await createPlatformContent({
+  brand,
+  brief,
+  platform: 'xiaohongshu',
+  media,
+  adapters: {
+    modelRouter,
+    knowledgeRepository,
+    logger,
+  },
+})
+```
+
+**设计原则：**
+- `amc-content` 只定义 adapter interface，不直接 import `prisma` 或 `callLLM`。
+- `amc-kanban` 提供 `modelRouter`、`knowledgeRepository`、`logger` 的具体实现。
+- 平台差异走 `PlatformContentProvider`，行业差异走 `VerticalSpec`。
+- 后续 BullMQ/Worker 只需调用同一个 `createPlatformContent()` 入口。
+
 ---
 
-## 四、实施路线图
+## 五、实施路线图
 
 ### Phase 1 — 基础能力升级 ✅ 已完成
 - [x] Option A：Hook 多样化 + 随机选取
@@ -530,9 +697,49 @@ CREATE TABLE video_generation_jobs (
 - [x] Skill 动态加载器（`skillLoader.ts`）
 - [x] Copywriter 集成 Skill 注入（Hook 阶段 + Body 阶段）
 
-### Phase 2 — 知识库建立（3-4周）
+### Phase 2A — Copywriter 质量闭环（1-2周，下一步优先）
+- [x] 建立 `packages/amc-content` package 骨架
+- [x] 定义 `PlatformType`、`IndustryVertical`、`CopyBrief`、`PlatformContentResult`、`QualityResult` 等核心类型
+- [x] 建立 `PlatformContentProvider` registry（xiaohongshu / instagram / facebook / google_business / tiktok）
+- [x] 建立 `VerticalSpec` registry（本地生活行业族群）
+- [x] 建立 deterministic Quality Gate 初版（长度、hashtag、禁词、必填字段、media rules、行业合规基础项）
+- [ ] `Brief Normalizer`：将用户创意、素材、任务说明结构化为 `CopyBrief`
+  - `industryVertical` / `offerType` / `customerIntent` / `theme` / `angle` / `targetEmotion` / `contentType` / `mustMention` / `mustAvoid` / `locationFocus` / `localProof`
+- [ ] `Vertical Skill` 基础包：建立本地生活行业族群 Skill，不再把餐饮作为默认行业
+  - `food_beverage`
+  - `beauty_wellness`
+  - `fitness_pilates`
+  - `home_renovation`
+  - `pet_services`
+  - `education_training`
+  - `healthcare_clinic`
+  - `retail_specialty`
+  - `events_entertainment`
+  - `professional_services`
+  - `general_local_service`
+- [ ] Hook 候选结构升级：从 `string[]` 改为 `HookCandidate[]`
+  ```typescript
+  interface HookCandidate {
+    text: string
+    category: 'surprise' | 'geo' | 'fomo' | 'pain_point' | 'counter_intuitive' | 'benefit' | 'social_proof'
+    score: number
+    reason: string
+  }
+  ```
+- [ ] Hook 选择器：按 score 加权选择，并排除最近 10 篇同品牌同平台重复 category 或相似开头
+- [ ] `Quality Gate`：新增 `src/agents/nodes/copywriterQualityGate.ts`
+  - AI 腔词汇检测
+  - Platform Skill 格式校验
+  - BrandKnowledge `negPrompts` 校验
+  - GBP 地址/联系方式必填、小红书标签数量、Instagram 首 125 字符等平台规则
+- [ ] 自动重写一次：Quality Gate 未通过时，把 `reasons[]` 转为 `rewriteInstruction` 重新调用 Body Composer
+- [ ] 审计增强：CopywriterLog 必须写入 `draftId`、`platform`、`promptVersion`、`modelId`、`rawOutput`；失败也记录降级原因
+- [ ] 人工反馈闭环：确认发布或人工修改后，继续复用 `processDraftCuration()` 写入 `CopywriterLog.correctedContent` 与 `UserCorrectionFeedback`
+- [ ] Admin 标注工作台增强：在 CopywriterLogPanel 中展示 `qualityScore`、失败原因和 “Promote to Knowledge” 操作入口
+
+### Phase 2B — 知识库建立（3-4周）
 - [ ] KnowledgeEntry 表 + pgvector 扩展（Render Postgres）
-- [ ] 从 CorrectionFeedback 自动提炼候选知识（AI 评分）
+- [ ] 从 UserCorrectionFeedback 自动提炼候选知识（AI 评分）
 - [ ] Admin 知识库管理 UI（/admin 页新 panel）
   - 候选内容列表，人工打分（1-5星，≥0.7 = 4星+才入库）
   - 批量导入模板功能
@@ -558,7 +765,7 @@ CREATE TABLE video_generation_jobs (
 
 ---
 
-## 五、设计决策记录
+## 六、设计决策记录
 
 | # | 问题 | 决策 | 日期 |
 |---|------|------|------|
@@ -568,12 +775,15 @@ CREATE TABLE video_generation_jobs (
 | Q4 | 视频生成引擎 | **Seedance（ByteDance / BytePlus ModelArk）** — 替代 Kling/Runway/Pika | 2026-07-04 |
 | Q5 | 视频旁白 TTS | 暂不集成，Seedance 2.0 支持原生音视频联合生成，未来直接用 Seedance 能力 | 2026-07-04 |
 | Q6 | Skill 安全沙箱 | 仅允许 Markdown 格式，禁止可执行代码，未来视需求再评估 | 2026-07-04 |
+| Q7 | 下一步优先级 | 开场白已达当前要求；优先进入 **Phase 2A Copywriter 质量闭环**，暂缓队列、微调、视频主链路 | 2026-07-04 |
+| Q8 | 外部 Skill | 短期只启用本地 Markdown Skill；GitHub/URL Skill 保留设计但不进入 Phase 2A | 2026-07-04 |
+| Q9 | 主体行业定位 | AMC 主体行业为**本地生活**，餐饮只是高频垂类；核心 Copywriter 不允许默认写死餐饮语境 | 2026-07-04 |
 
 ---
 
-## 六、Seedance API 集成设计
+## 七、Seedance API 集成设计
 
-### 6.1 API 端点（BytePlus ModelArk）
+### 7.1 API 端点（BytePlus ModelArk）
 
 ```typescript
 // 核心 API 流程（异步任务制）
@@ -599,7 +809,7 @@ GET /contents/generations/tasks/{task_id}
 // 需立即下载并上传到 OBS（URL 有效期有限）
 ```
 
-### 6.2 成本计算公式
+### 7.2 成本计算公式
 
 ```typescript
 // Seedance Token 计算
@@ -619,7 +829,7 @@ function estimateCost(scenes: VideoScene[]): CostEstimate {
 }
 ```
 
-### 6.3 Admin 配置项（SystemConfig）
+### 7.3 Admin 配置项（SystemConfig）
 
 | 配置项 | 类型 | 说明 |
 |--------|------|------|

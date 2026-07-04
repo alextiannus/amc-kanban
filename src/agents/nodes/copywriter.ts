@@ -3,6 +3,7 @@ import { callLLM } from "../../lib/llmRouter.ts";
 import { getFewShotExamples } from "../../lib/feedbackService.ts";
 import { getJaccardSimilarity } from "../knowledgeBase.ts";
 import { loadPlatformSkill, formatSkillForPrompt } from "../skills/skillLoader.ts";
+import { tryGenerateWithAmcContent } from "../../lib/amc-content/legacyCopywriterBridge.ts";
 
 export async function copywriterNode(state: any) {
   console.log("=== CopywriterNode Running (Composition Mode) ===");
@@ -105,6 +106,14 @@ export async function copywriterNode(state: any) {
 
   // Retrieve attached assets metadata for multi-modal context alignment
   let attachedAssetsText = "";
+  let attachedAssetRecords: Array<{
+    id?: string;
+    url: string;
+    mimeType?: string;
+    aiTags?: string[];
+    aiCategory?: string | null;
+    aiCaption?: string | null;
+  }> = [];
   const mediaUrlsToUse = (draftMediaUrls && draftMediaUrls.length > 0) ? draftMediaUrls : (state.mediaUrls || []);
   if (mediaUrlsToUse && mediaUrlsToUse.length > 0) {
     try {
@@ -114,6 +123,14 @@ export async function copywriterNode(state: any) {
           url: { in: mediaUrlsToUse }
         }
       });
+      attachedAssetRecords = attachedAssets.map((asset: any) => ({
+        id: asset.id,
+        url: asset.url,
+        mimeType: asset.mimeType,
+        aiTags: asset.aiTags,
+        aiCategory: asset.aiCategory,
+        aiCaption: asset.aiCaption,
+      }));
       if (attachedAssets.length > 0) {
         attachedAssetsText = "\nHere are the attached images for this post. You MUST write the caption and tags based on these images:\n" +
           attachedAssets.map((asset: any, idx: number) => `[Image ${idx + 1}]
@@ -204,6 +221,39 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
   let aiCaption = "";
   let aiHashtags: string[] = [];
   let geminiUsed = false;
+
+  if (process.env.AMC_CONTENT_ENGINE_ENABLED !== 'false') {
+    try {
+      const amcContentResult = await tryGenerateWithAmcContent({
+        brand,
+        platform,
+        task,
+        userPrompt,
+        creativeHooks,
+        marketingStrategy,
+        draftId: existingDraftId,
+        mediaUrls: mediaUrlsToUse,
+        attachedAssets: attachedAssetRecords,
+        assigneeId: state.assigneeId,
+      });
+
+      if (amcContentResult) {
+        console.log(
+          `AI Copywriter generated via amc-content: platform=${amcContentResult.platform}, vertical=${amcContentResult.vertical}, quality=${amcContentResult.quality.score}`,
+        );
+        return {
+          caption: amcContentResult.caption,
+          hashtags: amcContentResult.hashtags,
+          aiFailed: false,
+          quality: amcContentResult.quality,
+          provenance: amcContentResult.provenance,
+          contentEngine: 'amc-content',
+        };
+      }
+    } catch (err) {
+      console.error("amc-content generation failed; falling back to legacy copywriter:", err);
+    }
+  }
 
   // --- STAGE 1: HOOK GENERATION ---
   const hookPrompt = `${dbPromptInstructions}You are a professional social media manager and copywriter for the brand "${brand.name}".
