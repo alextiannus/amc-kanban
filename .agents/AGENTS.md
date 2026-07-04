@@ -99,3 +99,52 @@ git push
 
 > ⚠️ 教训：`tsc` 通过 ≠ 路由正常。曾因 i18n middleware 引入导致全站 404，`createIntlMiddleware` 需要 `[locale]` 目录而项目未使用该结构。
 <!-- END:modular-design-principles -->
+
+<!-- BEGIN:render-instance-map -->
+## Render 生产实例映射（新加坡迁移后，2026-07-05）
+
+> ⚠️ 关键规则：AMC 项目已从美国实例迁移到新加坡实例。Agent 在使用 Render CLI 操作时，**必须使用 `-sg` 后缀的实例**，旧美国实例均已暂停（suspended）。
+
+### 活跃实例（Singapore ✅）
+
+| 服务名 | Render ID | 类型 | 说明 |
+|--------|-----------|------|------|
+| `amc-kanban-sg` | `srv-d94hhbt7vvec73dk7uig` | Web Service | **主业务后端**（Next.js），对外域名 `amc-kanban.immedi.ai` |
+| `amc-kanban-sg` DB | `dpg-d94hejlckfvc73a18nc0-a` | PostgreSQL | 主业务数据库，DB名 `amc_cupw_0n3f` |
+| `amc-mm-sg` | `srv-d94hhgtckfvc73a1dla0` | Web Service | MM 商家端（Next.js），对外域名 `amc-mm.immedi.ai` |
+| `amc-content` | `srv-d94h66gjs32c73ehcfu0` | Web Service | 内容生成服务 |
+| `apify-daily-sync-sg` | `crn-d94hq35ckfvc73a1rqgg` | Cron Job | Apify 每日同步 |
+| `postfast-daily-sync-sg` | `crn-d94hq3kvikkc73cepl70` | Cron Job | Postfast 每日同步 |
+
+### 已暂停实例（US 旧实例 ❌ 勿操作）
+
+| 服务名 | Render ID | 说明 |
+|--------|-----------|------|
+| `amc-kanban` | `srv-d7v9em7aqgkc739167kg` | 旧美国 Web Service |
+| `amc-db` | `dpg-d7v9ec7aqgkc73915tcg-a` | 旧美国 PostgreSQL |
+| `amc-mm` | `srv-d8vk5am8bjmc738cnf1g` | 旧美国 MM 服务 |
+| `apify-daily-sync` | `crn-d946k7vlk1mc73ait6ag` | 旧美国 Cron |
+| `postfast-daily-sync` | `crn-d93sln5ckfvc73959gtg` | 旧美国 Cron |
+
+### Render CLI 操作规范
+
+```bash
+# ✅ 正确：查看生产日志
+render logs --resources srv-d94hhbt7vvec73dk7uig --output text --limit 50
+
+# ✅ 正确：对生产 DB 执行 SQL
+render psql dpg-d94hejlckfvc73a18nc0-a --confirm --output text -c "SELECT ..."
+
+# ✅ 正确：触发部署
+render deploys create srv-d94hhbt7vvec73dk7uig --output text --confirm
+
+# ❌ 错误：操作美国旧实例（已暂停）
+# render logs --resources srv-d7v9em7aqgkc739167kg  ← 旧美国，WRONG
+# render psql dpg-d7v9ec7aqgkc73915tcg-a           ← 旧美国 DB，WRONG
+```
+
+### 部署流程说明
+- **Pre-deploy**：`npx prisma migrate deploy`（自动运行 prisma/migrations/ 下的迁移文件）
+- **Schema 变更**：必须创建 migration 文件（`prisma/migrations/YYYYMMDDXXXXXX_name/migration.sql`），不能只用 `prisma db push`
+- **Git push 自动触发部署**：push 到 `main` 分支后 Render 自动构建并部署
+<!-- END:render-instance-map -->
