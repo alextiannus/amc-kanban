@@ -188,10 +188,16 @@ export async function callGeminiChat(
     },
     orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
   })
-  const companionConfigs = allConfigs.filter((c: any) => c.taskTags?.includes('companion'))
-  const companionIds = new Set(companionConfigs.map((c: any) => c.id))
-  const defaultOnly = allConfigs.filter((c: any) => c.isDefault && !companionIds.has(c.id))
-  const configsToTry = [...companionConfigs, ...defaultOnly]
+  // Use DB priority order directly — do NOT re-sort by companion tag.
+  // The DB query already returns configs ordered by priority desc.
+  // Splitting by companion/default and forcing companion first was incorrectly
+  // overriding the priority field: any companion-tagged config (e.g. Gemini) would
+  // always run first, regardless of which LLM the user set as highest priority.
+  //
+  // The companion tag just controls which configs are *candidates* (via the WHERE clause).
+  // The priority field on LLMConfig is the user's explicit ordering intent.
+  const configsToTry = allConfigs   // already sorted by priority desc from DB
+
 
   // If no DB configs exist, fall back to env-var system default.
   // Only add the system-default entry if SYSTEM_DEFAULT_LLM_PROVIDER env is explicitly set,
