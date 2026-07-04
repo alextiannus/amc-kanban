@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
-import bcrypt from 'bcryptjs'
-import { getSession, encrypt } from '@/lib/auth'
+import {
+  apiKeyPrefix,
+  authenticateCurrentSession,
+  createApiKeyToken,
+  hashApiKeyToken,
+  hashPassword,
+  requireCapability,
+} from '@/lib/auth-v2'
 
 function normalizeAgentId(raw: string): string {
   return raw.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-')
@@ -21,11 +27,14 @@ function isSystemRegistrationAuthorized(request: Request): boolean {
 
 export async function POST(request: Request) {
   try {
-    const session = await getSession()
+    const principal = await authenticateCurrentSession()
     const authorizedBySystemKey = isSystemRegistrationAuthorized(request)
 
-    if (!authorizedBySystemKey && !session?.user) {
+    if (!authorizedBySystemKey && !principal) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (!authorizedBySystemKey && principal) {
+      await requireCapability(principal, 'agent.manage')
     }
 
     const body = await request.json()
@@ -64,40 +73,45 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'agentId already exists' }, { status: 409 })
     }
 
-    const placeholderApiKey = `placeholder-${crypto.randomUUID()}`
     const randomPassword = crypto.randomBytes(24).toString('hex')
-    const hashedPassword = await bcrypt.hash(randomPassword, 12)
+    const hashedPassword = await hashPassword(randomPassword)
+    const plaintextApiKey = createApiKeyToken('amc_agent')
 
-    const newAgent = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        type: 'AI_AGENT',
-        role: 'USER',
-        nickname: nickname.trim(),
-        introduction: typeof introduction === 'string' ? introduction : null,
-        workflow: typeof workflow === 'string' ? workflow : null,
-        themeColor: typeof themeColor === 'string' ? themeColor : null,
-        avatar: typeof avatar === 'string' ? avatar : null,
-        insights: typeof insights === 'string' ? insights : null,
-        chatLink: typeof chatLink === 'string' ? chatLink : null,
-        driveFolder: typeof driveFolder === 'string' ? driveFolder : null,
-        apiKey: placeholderApiKey,
-      },
-      select: {
-        id: true,
-        email: true,
-        nickname: true,
-        type: true,
-        createdAt: true,
-      }
-    })
-
-    const plaintextApiKey = await encrypt({ agentId: newAgent.id, type: 'AI_AGENT' }, '36500d')
-
-    await prisma.user.update({
-      where: { id: newAgent.id },
-      data: { apiKey: plaintextApiKey }
+    const newAgent = await prisma.$transaction(async (tx: any) => {
+      const agent = await tx.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          type: 'AI_AGENT',
+          role: 'USER',
+          nickname: nickname.trim(),
+          introduction: typeof introduction === 'string' ? introduction : null,
+          workflow: typeof workflow === 'string' ? workflow : null,
+          themeColor: typeof themeColor === 'string' ? themeColor : null,
+          avatar: typeof avatar === 'string' ? avatar : null,
+          insights: typeof insights === 'string' ? insights : null,
+          chatLink: typeof chatLink === 'string' ? chatLink : null,
+          driveFolder: typeof driveFolder === 'string' ? driveFolder : null,
+          ownerId: principal?.userId ?? null,
+          businessRoles: { create: { role: 'AMC_PRINCIPAL' } },
+        },
+        select: {
+          id: true,
+          email: true,
+          nickname: true,
+          type: true,
+          createdAt: true,
+        },
+      })
+      await tx.userApiKey.create({
+        data: {
+          userId: agent.id,
+          tokenHash: hashApiKeyToken(plaintextApiKey),
+          prefix: apiKeyPrefix(plaintextApiKey),
+          name: 'Initial AMC Agent API Key',
+        },
+      })
+      return agent
     })
 
     return NextResponse.json({
@@ -113,7 +127,10 @@ export async function POST(request: Request) {
       },
       apiKey: plaintextApiKey,
     })
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status === 403) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     console.error('Agent register error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }

@@ -1,48 +1,37 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import bcrypt from 'bcryptjs'
-import { encrypt } from '@/lib/auth'
 import { cookies } from 'next/headers'
-import { SYSTEM_ADMIN_EMAIL, isSystemAdminEmail } from '@/lib/amcOperator'
+import {
+  createSessionToken,
+  hashPassword,
+  sessionCookieName,
+  verifyPassword,
+} from '@/lib/auth-v2'
 
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
-    const bootstrapAdminEmail = SYSTEM_ADMIN_EMAIL
-    const bootstrapAdminPassword = process.env.BOOTSTRAP_ADMIN_INITIAL_PASSWORD
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : ''
 
     let user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
 
-    const userCount = await prisma.user.count()
-    if (userCount === 0) {
-      if (!bootstrapAdminPassword) {
-        console.error('Bootstrap admin configuration is missing')
-        return NextResponse.json(
-          { error: 'System is not initialized. Please set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_INITIAL_PASSWORD.' },
-          { status: 500 }
-        )
-      }
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
+    }
 
-      const hashedPassword = await bcrypt.hash(bootstrapAdminPassword, 12)
-      await prisma.user.create({
+    const passwordResult = await verifyPassword(String(password ?? ''), user.password)
+    if (!passwordResult.valid) {
+      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
+    }
+
+    if (passwordResult.needsRehash) {
+      user = await prisma.user.update({
+        where: { id: user.id },
         data: {
-          email: bootstrapAdminEmail,
-          password: hashedPassword,
-          role: 'ADMIN',
-        }
+          password: await hashPassword(String(password)),
+          authVersion: { increment: 1 },
+        },
       })
-      // Refetch the user attempting to log in after potential initialization
-      user = await prisma.user.findUnique({ where: { email: normalizedEmail } })
-    }
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    const isValid = await bcrypt.compare(password, user.password)
-    if (!isValid) {
-      return NextResponse.json({ error: 'Invalid password' }, { status: 401 })
     }
 
     await prisma.invitation.updateMany({
@@ -57,13 +46,6 @@ export async function POST(request: Request) {
       },
     })
 
-    if (isSystemAdminEmail(user.email) && user.role !== 'ADMIN') {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { role: 'ADMIN' }
-      })
-    }
-
     const sessionData = {
       user: {
         id: user.id,
@@ -72,13 +54,19 @@ export async function POST(request: Request) {
         type: user.type ?? 'HUMAN',  // AI_AGENT or HUMAN — used for brand access control
       }
     }
-    const encryptedSession = await encrypt(sessionData)
+    const encryptedSession = await createSessionToken({
+      userId: user.id,
+      type: user.type ?? 'HUMAN',
+      authVersion: user.authVersion,
+    })
     const cookieStore = await cookies()
-    cookieStore.set('session', encryptedSession, {
+    cookieStore.set(sessionCookieName, encryptedSession, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+      priority: 'high',
     })
 
     return NextResponse.json({ success: true, user: sessionData.user })

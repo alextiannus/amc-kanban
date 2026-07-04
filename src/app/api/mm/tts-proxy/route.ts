@@ -30,9 +30,11 @@ export async function POST(req: NextRequest) {
   }
 
   let text = ''
+  let voiceId = ''
   try {
     const body = await req.json()
     text = typeof body?.text === 'string' ? body.text.trim() : ''
+    voiceId = typeof body?.voiceId === 'string' ? body.voiceId.trim() : ''
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
         stream: false,
         output_format: 'hex',  // tell API to return audio as hex string in data.audio
         voice_setting: {
-          voice_id: process.env.MINIMAX_TTS_VOICE_ID || 'female-shaonv',
+          voice_id: voiceId || process.env.MINIMAX_TTS_VOICE_ID || 'female-shaonv',
           speed: 1,
           vol: 1,
           pitch: 0,

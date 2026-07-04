@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { authenticateRequest } from '@/lib/auth-v2'
 
 export const BRAND_ADMIN_STATUSES = ['ACTIVE', 'PAUSED', 'ARCHIVED'] as const
 
@@ -24,37 +23,22 @@ export function isBrandAdminStatus(value: unknown): value is BrandAdminStatus {
 }
 
 export async function requireAdminAgent(request: Request): Promise<AdminAgentAuthResult> {
-  const apiKey = extractApiKey(request)
-  if (!apiKey) {
+  const principal = await authenticateRequest(request)
+  if (!principal) {
     return {
       ok: false,
       response: NextResponse.json({ error: 'Unauthorized: Bearer token required' }, { status: 401 }),
     }
   }
 
-  const authenticatedAgent = await getAgentFromApiKey(apiKey)
-  if (!authenticatedAgent || authenticatedAgent.type !== 'AI_AGENT') {
+  if (principal.actorType !== 'AMC_AGENT') {
     return {
       ok: false,
       response: NextResponse.json({ error: 'Unauthorized: AI Agent API key required' }, { status: 401 }),
     }
   }
 
-  const adminPermissions = await prisma.agentPermission.findMany({
-    where: { agentId: authenticatedAgent.id },
-    include: {
-      human: {
-        select: {
-          id: true,
-          role: true,
-        },
-      },
-    },
-  })
-
-  const authorizedAdminIds = adminPermissions.filter((permission: any) => permission.human.role === 'ADMIN').map((permission: any) => permission.human.id)
-
-  if (authorizedAdminIds.length === 0) {
+  if (!principal.globalRoles.includes('ADMIN')) {
     return {
       ok: false,
       response: NextResponse.json({ error: 'Forbidden: admin-capable AI Agent required' }, { status: 403 }),
@@ -65,11 +49,11 @@ export async function requireAdminAgent(request: Request): Promise<AdminAgentAut
     ok: true,
     context: {
       agent: {
-        id: authenticatedAgent.id,
-        email: authenticatedAgent.email || null,
-        role: authenticatedAgent.role || null,
+        id: principal.userId,
+        email: principal.email || null,
+        role: 'ADMIN',
       },
-      authorizedAdminIds,
+      authorizedAdminIds: [principal.userId],
     },
   }
 }

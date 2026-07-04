@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { getSession } from '@/lib/auth'
 import { generateInvitationLink } from '@/lib/invitation'
+import {
+  apiKeyPrefix,
+  createApiKeyToken,
+  hashApiKeyToken,
+  hashPassword,
+} from '@/lib/auth-v2'
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -102,7 +107,7 @@ export async function POST(request: Request) {
     if (existing) return NextResponse.json({ error: 'User already exists' }, { status: 400 })
 
     const temporaryPassword = crypto.randomBytes(18).toString('base64url')
-    const hashedPassword = await bcrypt.hash(temporaryPassword, 12)
+    const hashedPassword = await hashPassword(temporaryPassword)
     const userType = type === 'AI_AGENT' ? 'AI_AGENT' : 'HUMAN'
 
     const requestedRole = userType === 'HUMAN' && body.role === 'ADMIN' ? 'ADMIN' : 'USER'
@@ -117,17 +122,24 @@ export async function POST(request: Request) {
         }
       })
 
-      let keyToken = null
-      if (userType === 'HUMAN') {
-        const randomToken = `amc_usr_${crypto.randomBytes(16).toString('hex')}`
-        const newKey = await tx.userApiKey.create({
-          data: {
-            userId: u.id,
-            token: randomToken,
-            name: 'Initial Personal API Key'
-          }
+      const keyToken = createApiKeyToken(userType === 'AI_AGENT' ? 'amc_agent' : 'amc_user')
+      await tx.userApiKey.create({
+        data: {
+          userId: u.id,
+          tokenHash: hashApiKeyToken(keyToken),
+          prefix: apiKeyPrefix(keyToken),
+          name: userType === 'AI_AGENT' ? 'Initial AMC Agent API Key' : 'Initial User API Key',
+        },
+      })
+
+      if (userType === 'AI_AGENT') {
+        await tx.userBusinessRole.create({
+          data: { userId: u.id, role: 'AMC_PRINCIPAL' },
         })
-        keyToken = newKey.token
+      } else if (requestedRole === 'ADMIN') {
+        await tx.userBusinessRole.create({
+          data: { userId: u.id, role: 'ADMIN' },
+        })
       }
 
       return { user: u, apiKey: keyToken }

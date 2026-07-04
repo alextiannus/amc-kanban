@@ -11,8 +11,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { verifyUserApiKey } from '@/lib/user-management/auth'
-import { canHumanAccessBrand, isUserInBrandCrew } from '@/lib/user-management/brandAccess'
+import { authenticateApiKey, type AuthPrincipal } from '@/lib/auth-v2'
+import { canUserAccessBrand } from '@/lib/user-management/brandAccess'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { writeAuditLog, actorFromContext } from '@/lib/audit'
 import { readBrandProfileMarkdown, refreshBrandProfileMarkdown, writeBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
@@ -54,27 +54,13 @@ function getSkillUpdateNotice(): string | null {
 export async function getAgentFromKey(apiKey: string) {
   const key = apiKey.replace(/^Bearer\s+/i, '').trim()
   if (!key) return null
-  return prisma.user.findFirst({ where: { apiKey: key, type: 'AI_AGENT' } })
+  const principal = await authenticateApiKey(key)
+  if (!principal || principal.actorType !== 'AMC_AGENT') return null
+  return prisma.user.findUnique({ where: { id: principal.userId } })
 }
 
 async function requireActiveBrandLink(brandId: string, agentId: string) {
-  // Check if the agent's human owner has access to the brand
-  const agent = await prisma.user.findUnique({
-    where: { id: agentId },
-    select: { ownerId: true }
-  })
-  
-  if (agent?.ownerId) {
-    const hasAccess = await canHumanAccessBrand(brandId, agent.ownerId)
-    if (hasAccess) return { id: 'granted' }
-  }
-
-  // Fallback direct crew membership check
-  const isMember = await isUserInBrandCrew(brandId, agentId)
-  if (isMember) return { id: 'granted' }
-
-  // Backward compatibility fallback to BrandAgent table (legacy check)
-  return prisma.brandAgent.findFirst({ where: { brandId, agentId, active: true }, select: { id: true } })
+  return (await canUserAccessBrand(brandId, agentId, 'READ')) ? { id: 'granted' } : null
 }
 
 async function requireOwnedTask(taskId: string, agentId: string) {
@@ -88,33 +74,27 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 // ── Build and return a configured McpServer ────────────────────────────────
-export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string | null) {
+export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken?: string) {
   const server = new McpServer({
     name: 'amc-kanban',
     version: '1.0.0',
   })
+  const agentApiKey = typeof auth === 'string' ? auth : credentialToken ?? ''
+
+  let principalPromise: Promise<AuthPrincipal | null> | null = null
+  const resolvePrincipal = () => {
+    if (!principalPromise) {
+      principalPromise =
+        typeof auth === 'string' ? authenticateApiKey(auth) : Promise.resolve(auth)
+    }
+    return principalPromise
+  }
 
   const resolveAgent = async () => {
-    // 1. Resolve human via UserApiKey
-    const human = await verifyUserApiKey(agentApiKey)
-    if (!human) return null
-
-    // 2. Resolve agentId
-    let agentId = requestAgentId || null
-    if (!agentId) {
-      // Fallback: If human only has one agent avatar, use it
-      const avatars = await prisma.user.findMany({ where: { ownerId: human.id, type: 'AI_AGENT' } })
-      if (avatars.length === 1) {
-        agentId = avatars[0].id
-      }
-    }
-
-    if (!agentId) return null
-
-    // Return the AI Agent object
-    const agent = await prisma.user.findUnique({ where: { id: agentId } })
+    const principal = await resolvePrincipal()
+    if (!principal || principal.actorType !== 'AMC_AGENT') return null
+    const agent = await prisma.user.findUnique({ where: { id: principal.userId } })
     if (!agent || agent.type !== 'AI_AGENT') return null
-
     return agent
   }
 
@@ -130,7 +110,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       if (brandId) {
-        const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+        const link = await requireActiveBrandLink(brandId, agent.id)
         if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
         const brand = await prisma.brand.findUnique({
           where: { id: brandId },
@@ -170,30 +150,36 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
         return { content: [{ type: 'text' as const, text: JSON.stringify(safeBrand, null, 2) }] }
       }
 
-      const links = await prisma.brandAgent.findMany({
+      const links = await prisma.crewMember.findMany({
         where: {
-          agentId: agent.id,
+          userId: agent.id,
           active: true,
-          brand: {
-            status: { not: 'ARCHIVED' },
-            subscriptions: {
-              some: {
-                status: 'ACTIVE',
-                OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+          crew: {
+            brand: {
+              status: { not: 'ARCHIVED' },
+              subscriptions: {
+                some: {
+                  status: 'ACTIVE',
+                  OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+                },
               },
             },
           },
         },
         include: {
-          brand: {
-            select: {
-              id: true, name: true, description: true, location: true, timezone: true, autoPilot: true,
-              accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
+          crew: {
+            include: {
+              brand: {
+                select: {
+                  id: true, name: true, description: true, location: true, timezone: true, autoPilot: true,
+                  accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
+                },
+              },
             },
           },
         },
       })
-      return { content: [{ type: 'text' as const, text: JSON.stringify(links.map((l: any) => l.brand), null, 2) }] }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(links.map((l: any) => l.crew.brand), null, 2) }] }
     }
   )
 
@@ -209,7 +195,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const profile = await readBrandProfileMarkdown(brandId, { ensureExists: true, refresh: !!refresh })
@@ -230,7 +216,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const refreshed = await refreshBrandProfileMarkdown(brandId)
@@ -257,7 +243,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
       if (!markdown.trim()) return { content: [{ type: 'text' as const, text: 'Error: markdown is required' }], isError: true }
 
@@ -501,7 +487,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
         const link = await requireActiveBrandLink(brandId, agent.id)
         if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
       } else {
-        const linkedBrandCount = await prisma.brandAgent.count({ where: { agentId: agent.id, active: true } })
+        const linkedBrandCount = await prisma.crewMember.count({ where: { userId: agent.id, active: true } })
         if (linkedBrandCount > 1) {
           return { content: [{ type: 'text' as const, text: 'Error: brandId is required when this agent manages multiple brands' }], isError: true }
         }
@@ -677,7 +663,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
 
   // ── Board Unified Publish/Info Tools (with deprecated postfast_* aliases) ──
   const requireBrandAgentLink = async (brandId: string, agentId: string) => {
-    return prisma.brandAgent.findFirst({ where: { brandId, agentId, active: true } })
+    return (await canUserAccessBrand(brandId, agentId, 'READ')) ? { id: 'granted' } : null
   }
 
   const getBrandPostfastKey = async (brandId: string) => {
@@ -993,7 +979,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const brand = await prisma.brand.findUnique({ 
@@ -1047,7 +1033,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
@@ -1102,7 +1088,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
@@ -1173,7 +1159,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
@@ -1382,7 +1368,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
@@ -1427,7 +1413,7 @@ export function createAmcMcpServer(agentApiKey: string, requestAgentId?: string 
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await prisma.brandAgent.findFirst({ where: { brandId, agentId: agent.id, active: true } })
+      const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const brand = await prisma.brand.findUnique({

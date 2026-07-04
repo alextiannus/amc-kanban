@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { prisma } from './prisma.ts'
+import { addCrewMember } from './user-management/crew.ts'
 
 export const OVERFLOW_POLICIES = ['fallback_only', 'pending_queue', 'allow_soft_overflow'] as const
 export const REBALANCE_POLICIES = ['manual_only', 'scheduled_daily'] as const
@@ -403,19 +404,7 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
           select: { id: true }
         })
         if (crew) {
-          await tx.crewMember.upsert({
-            where: {
-              crewId_userId: {
-                crewId: crew.id,
-                userId: selected.agentId,
-              },
-            },
-            create: {
-              crewId: crew.id,
-              userId: selected.agentId,
-            },
-            update: {},
-          })
+          await addCrewMember(crew.id, selected.agentId, tx)
         }
       }
     }

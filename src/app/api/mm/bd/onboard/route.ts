@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
-import bcrypt from 'bcryptjs'
+import { hashPassword } from '@/lib/auth-v2'
 import { sendBrandOnboardingWelcomeEmail } from '@/lib/email'
 import { generateInvitationLink } from '@/lib/invitation'
 
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Generate temporary password
     const tempPassword = Math.random().toString(36).substring(2, 10) + 'A1!'
-    const hashedPassword = await bcrypt.hash(tempPassword, 12)
+    const hashedPassword = await hashPassword(tempPassword)
 
     // 3. Create User, Brand, BrandOwner and Subscription inside a transaction
     const result = await prisma.$transaction(async (tx: any) => {

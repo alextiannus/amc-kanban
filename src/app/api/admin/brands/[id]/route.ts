@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { calculatePricing, SUBSCRIPTION_PLANS, type PlanId } from '@/lib/subscription/catalog'
+import { addCrewMember } from '@/lib/user-management/crew'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -110,19 +111,7 @@ export async function PATCH(request: Request, { params }: Params) {
       if (!crew) {
         crew = await tx.marketingCrew.create({ data: { brandId: id } })
       }
-      await tx.crewMember.upsert({
-        where: {
-          crewId_userId: {
-            crewId: crew.id,
-            userId: resolvedOwnerId
-          }
-        },
-        create: {
-          crewId: crew.id,
-          userId: resolvedOwnerId
-        },
-        update: {}
-      })
+      await addCrewMember(crew.id, resolvedOwnerId, tx)
     }
 
     if (nextAgentIds) {
@@ -147,29 +136,19 @@ export async function PATCH(request: Request, { params }: Params) {
       const keepUserIds = [...nextAgentIds]
       if (ownerId) keepUserIds.push(ownerId)
 
-      // 移除不在保留列表中的旧成员
-      await tx.crewMember.deleteMany({
+      // Disable members removed from the explicit Crew selection.
+      await tx.crewMember.updateMany({
         where: {
           crewId: crew.id,
-          userId: { notIn: keepUserIds }
-        }
+          userId: { notIn: keepUserIds },
+          active: true,
+        },
+        data: { active: false },
       })
 
-      // 将最新勾选的团队成员（人类与 AI）全部加入 CrewMember
+      // Human and AMC Agent users share the same Crew membership path.
       for (const agentId of nextAgentIds) {
-        await tx.crewMember.upsert({
-          where: {
-            crewId_userId: {
-              crewId: crew.id,
-              userId: agentId
-            }
-          },
-          create: {
-            crewId: crew.id,
-            userId: agentId
-          },
-          update: {}
-        })
+        await addCrewMember(crew.id, agentId, tx)
       }
     }
 

@@ -90,7 +90,7 @@ export async function getAgentFromApiKey(apiKey: string) {
   if (!principal || principal.actorType !== 'AMC_AGENT') return null
   return {
     id: principal.userId,
-    email: principal.email ?? null,
+    email: principal.email,
     type: 'AI_AGENT',
     role: principal.globalRoles.includes('ADMIN') ? 'ADMIN' : 'USER',
     userRoles: principal.globalRoles,

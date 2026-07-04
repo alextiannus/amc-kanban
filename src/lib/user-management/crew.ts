@@ -1,8 +1,5 @@
 import { prisma } from '../prisma.ts'
 
-/**
- * Creates a MarketingCrew for a brand if it does not already exist.
- */
 export async function createMarketingCrew(brandId: string, tx: any = prisma) {
   return tx.marketingCrew.upsert({
     where: { brandId },
@@ -11,98 +8,56 @@ export async function createMarketingCrew(brandId: string, tx: any = prisma) {
   })
 }
 
-/**
- * Pulls all AI avatars owned by a human user into a brand's crew.
- */
-export async function cascadePullAvatars(crewId: string, humanUserId: string, tx: any = prisma) {
-  const avatars = await tx.user.findMany({
-    where: { ownerId: humanUserId, type: 'AI_AGENT' },
-    select: { id: true }
-  })
-
-  for (const avatar of avatars) {
-    await tx.crewMember.upsert({
-      where: {
-        crewId_userId: {
-          crewId,
-          userId: avatar.id
-        }
-      },
-      create: {
-        crewId,
-        userId: avatar.id
-      },
-      update: {}
-    })
+function resolveCrewRole(user: {
+  type: string
+  role: string
+  businessRoles: Array<{ role: string }>
+}) {
+  const roles = new Set(user.businessRoles.map((entry) => entry.role))
+  if (user.role === 'ADMIN' || roles.has('ADMIN') || roles.has('AMC_PRINCIPAL')) {
+    return 'PRINCIPAL'
   }
+  if (roles.has('BRAND_OWNER')) return 'OWNER'
+  if (user.type === 'AI_AGENT') return 'EDITOR'
+  return 'VIEWER'
 }
 
 /**
- * Adds a user to a brand's crew and cascades their AI avatars if the user is a HUMAN.
+ * Add one real system user to a Crew. AMC Agents are independent users and are
+ * never implicitly cascaded from a human owner.
  */
 export async function addCrewMember(crewId: string, userId: string, tx: any = prisma) {
   const user = await tx.user.findUnique({
     where: { id: userId },
-    select: { type: true }
-  })
-
-  if (!user) {
-    throw new Error(`User with ID ${userId} not found`)
-  }
-
-  const member = await tx.crewMember.upsert({
-    where: {
-      crewId_userId: {
-        crewId,
-        userId
-      }
+    select: {
+      type: true,
+      role: true,
+      businessRoles: { select: { role: true } },
     },
+  })
+  if (!user) throw new Error(`User with ID ${userId} not found`)
+
+  const role = resolveCrewRole(user)
+  return tx.crewMember.upsert({
+    where: { crewId_userId: { crewId, userId } },
     create: {
       crewId,
-      userId
+      userId,
+      role,
+      active: true,
+      source: 'DIRECT',
     },
-    update: {}
+    update: {
+      role,
+      active: true,
+      source: 'DIRECT',
+    },
   })
-
-  // Disabled automatic pulling of AI avatars to support AMC Principal pool assignment instead.
-
-  return member
 }
 
-/**
- * Removes a user from a brand's crew.
- */
 export async function removeCrewMember(crewId: string, userId: string, tx: any = prisma) {
-  // 1. Delete the direct membership
-  const deleted = await tx.crewMember.deleteMany({
-    where: {
-      crewId,
-      userId
-    }
+  return tx.crewMember.updateMany({
+    where: { crewId, userId, active: true },
+    data: { active: false },
   })
-
-  // 2. Cascade remove AI avatars of this human from the crew
-  const user = await tx.user.findUnique({
-    where: { id: userId },
-    select: { type: true }
-  })
-
-  if (user?.type === 'HUMAN') {
-    const avatars = await tx.user.findMany({
-      where: { ownerId: userId, type: 'AI_AGENT' },
-      select: { id: true }
-    })
-    const avatarIds = avatars.map((a: any) => a.id)
-
-    if (avatarIds.length > 0) {
-      await tx.crewMember.deleteMany({
-        where: {
-          crewId,
-          userId: { in: avatarIds }
-        }
-      })
-    }
-  }
-
-  return deleted
 }

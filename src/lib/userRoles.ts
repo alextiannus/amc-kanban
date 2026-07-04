@@ -1,5 +1,5 @@
 export type BusinessRole = 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD'
-export type EffectiveUserRole = 'ADMIN' | BusinessRole | 'AMC_AGENT'
+export type EffectiveUserRole = 'ADMIN' | BusinessRole
 
 export function computeEffectiveUserRoles(input: {
   userType: string | null | undefined
@@ -8,16 +8,14 @@ export function computeEffectiveUserRoles(input: {
   ownerCount?: number
   principalCount?: number
 }): EffectiveUserRole[] {
-  if (input.userType === 'AI_AGENT') return ['AMC_AGENT']
-
   const roles = new Set<EffectiveUserRole>()
   const explicitRoles = input.explicitRoles || []
-  const ownerCount = input.ownerCount || 0
-  const principalCount = input.principalCount || 0
 
+  // Transitional fallback until User.role is removed after Auth V2 cutover.
   if (input.systemRole === 'ADMIN') roles.add('ADMIN')
-  if (explicitRoles.includes('BRAND_OWNER') || ownerCount > 0) roles.add('BRAND_OWNER')
-  if (explicitRoles.includes('AMC_PRINCIPAL') || principalCount > 0) roles.add('AMC_PRINCIPAL')
+  if (explicitRoles.includes('ADMIN')) roles.add('ADMIN')
+  if (explicitRoles.includes('BRAND_OWNER')) roles.add('BRAND_OWNER')
+  if (explicitRoles.includes('AMC_PRINCIPAL')) roles.add('AMC_PRINCIPAL')
   if (explicitRoles.includes('BD')) roles.add('BD')
 
   return Array.from(roles)

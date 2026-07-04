@@ -80,7 +80,7 @@ export async function GET(request: Request) {
       {
         crew: {
           members: {
-            some: { userId: sessionUser.id }
+            some: { userId: sessionUser.id, active: true }
           }
         }
       }
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
       queryOr.push({
         crew: {
           members: {
-            some: { userId: { in: orgOwnerIds } }
+            some: { userId: { in: orgOwnerIds }, active: true }
           }
         }
       })
@@ -190,12 +190,8 @@ export async function POST(request: Request) {
   }
 
   // ── Wizard path: AMC_PRINCIPAL or BD creates a brand on behalf of a merchant ──
-  const dbRoles = await prisma.userBusinessRole.findMany({
-    where: { userId: sessionUser.id },
-    select: { role: true },
-  })
-  const roleNames = dbRoles.map((r: { role: string }) => r.role)
-  const isAdminUser = sessionUser.role === 'ADMIN'
+  const roleNames = context.principal.globalRoles
+  const isAdminUser = roleNames.includes('ADMIN')
   const canWizardCreate = isAdminUser || roleNames.includes('AMC_PRINCIPAL') || roleNames.includes('BD')
 
   if (canWizardCreate) {

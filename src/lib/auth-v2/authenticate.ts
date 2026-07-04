@@ -43,11 +43,45 @@ async function principalFromSessionToken(token: string): Promise<AuthPrincipal |
 
 export async function authenticateRequest(request: Request): Promise<AuthPrincipal | null> {
   const apiKey = extractBearerToken(request)
-  if (apiKey) return authenticateApiKey(apiKey)
+  if (apiKey) {
+    const principal = await authenticateApiKey(apiKey)
+    if (!principal) return null
+
+    const delegatedAgentId = request.headers.get('x-agent-id')?.trim()
+    if (!delegatedAgentId) return principal
+    if (principal.actorType !== 'HUMAN' || !isLegacyDelegationActive()) return null
+
+    const agent = await prisma.user.findFirst({
+      where: {
+        id: delegatedAgentId,
+        ownerId: principal.userId,
+        type: 'AI_AGENT',
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        email: true,
+        type: true,
+        role: true,
+        status: true,
+        authVersion: true,
+        businessRoles: { select: { role: true } },
+      },
+    })
+    return agent ? principalFromUser(agent, 'legacy_api_key', principal.credentialId) : null
+  }
 
   const sessionToken = readSessionTokenFromRequest(request)
   if (!sessionToken) return null
   return principalFromSessionToken(sessionToken)
+}
+
+export function isLegacyDelegationActive(now = Date.now()): boolean {
+  if (process.env.AUTH_V2_LEGACY_KEYS !== 'true') return false
+  const cutoff = process.env.AUTH_V2_LEGACY_KEY_CUTOFF_AT
+  if (!cutoff) return false
+  const cutoffAt = Date.parse(cutoff)
+  return Number.isFinite(cutoffAt) && now < cutoffAt
 }
 
 export async function authenticateCurrentSession(): Promise<AuthPrincipal | null> {

@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import bcrypt from 'bcryptjs'
-import { encrypt } from '@/lib/auth'
 import { cookies } from 'next/headers'
 import { resolveAssignment } from '@/lib/assignmentPool'
+import { createSessionToken, hashPassword, sessionCookieName } from '@/lib/auth-v2'
 
 const MIN_PASSWORD_LENGTH = 8
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -43,7 +42,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 409 })
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12)
+    const hashedPassword = await hashPassword(password)
     const user = await prisma.user.create({
       data: {
         email: normalizedEmail,
@@ -80,13 +79,19 @@ export async function POST(request: Request) {
         type: user.type ?? 'HUMAN',
       },
     }
-    const encryptedSession = await encrypt(sessionData)
+    const encryptedSession = await createSessionToken({
+      userId: user.id,
+      type: user.type ?? 'HUMAN',
+      authVersion: user.authVersion,
+    })
     const cookieStore = await cookies()
-    cookieStore.set('session', encryptedSession, {
+    cookieStore.set(sessionCookieName, encryptedSession, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+      priority: 'high',
     })
 
     return NextResponse.json(

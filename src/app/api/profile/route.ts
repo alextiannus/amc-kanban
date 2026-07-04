@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { hashPassword } from '@/lib/auth-v2'
 import fs from 'fs/promises'
 import path from 'path'
 import { computeEffectiveUserRoles, getLegacyDashboardRole } from '@/lib/userRoles'
@@ -159,7 +159,8 @@ export async function PATCH(request: Request) {
         if (password.trim().length < 4) {
           return NextResponse.json({ error: 'Password must be at least 4 characters' }, { status: 400 })
         }
-        updateData.password = await bcrypt.hash(password, 10)
+        updateData.password = await hashPassword(password)
+        updateData.authVersion = { increment: 1 }
       }
 
       if (avatarFile && avatarFile.size > 0) {
@@ -199,7 +200,8 @@ export async function PATCH(request: Request) {
         if (String(password).trim().length < 4) {
           return NextResponse.json({ error: 'Password must be at least 4 characters' }, { status: 400 })
         }
-        updateData.password = await bcrypt.hash(String(password), 10)
+        updateData.password = await hashPassword(String(password))
+        updateData.authVersion = { increment: 1 }
       }
     }
 
