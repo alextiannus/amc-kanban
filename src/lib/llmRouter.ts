@@ -1,5 +1,4 @@
 import { prisma } from './prisma.ts'
-import { getGeminiApiKey, getMiniMaxApiKey } from './systemConfig.ts'
 import type { ResolvedContentModelProfile } from 'amc-content'
 
 export interface LLMCallResult {
@@ -350,13 +349,13 @@ async function executeSingleLLMChatCall(
  * Same failover chain as callLLM() but accepts OpenAI-style messages[]
  * (system + user + assistant history) instead of a plain prompt.
  *
- * How to add GLM to the fallback chain (Admin → LLM Config):
+ * How to configure GLM (Admin → AI 模型配置):
  *   provider:   "openai"   (OpenAI-compatible endpoint)
  *   baseUrl:    "https://open.bigmodel.cn/api/paas/v4"
  *   modelName:  "glm-4-flash"
  *   taskTags:   ["companion", "copywriting", "default"]
  *   isDefault:  true
- *   priority:   80  (below Gemini at 100 → Gemini tried first)
+ *   priority:   100 (higher = tried first)
  */
 export async function callLLMChat(
   taskTag: string,
@@ -383,15 +382,9 @@ export async function callLLMChat(
     const { provider, modelName, baseUrl } = config
     if (isCircuitOpen(provider, modelName)) { errors.push(`${config.displayName}: circuit open`); continue }
 
-    let apiKey = config.apiKey || ''
-    if (!apiKey) {
-      if (provider === 'google') apiKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
-      else if (provider === 'openai') apiKey = process.env.OPENAI_API_KEY || ''
-      else if (provider === 'anthropic') apiKey = process.env.ANTHROPIC_API_KEY || ''
-      else if (provider === 'deepseek') apiKey = process.env.DEEPSEEK_API_KEY || ''
-      else if (provider === 'minimax') apiKey = (await getMiniMaxApiKey()) || process.env.MINIMAX_API_KEY || ''
-    }
-    if (!apiKey) { errors.push(`${config.displayName}: no API key`); continue }
+    // Key must be stored in LLMConfig.apiKey — no SystemConfig fallback.
+    const apiKey = config.apiKey || ''
+    if (!apiKey) { errors.push(`${config.displayName}: no API key (set it in Admin → AI 模型配置)`); continue }
 
     console.log(`[LLM Chat] Trying: ${config.displayName} (${provider}/${modelName})`)
     const result = await executeSingleLLMChatCall(provider, modelName, apiKey, baseUrl, messages, maxTokens)
@@ -404,13 +397,13 @@ export async function callLLMChat(
     console.warn(`[LLM Chat] ${config.displayName} failed, trying next…`)
   }
 
-  // 3. System env fallback
-  const sysProvider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || 'google'
-  const sysModel = process.env.SYSTEM_DEFAULT_LLM_MODEL || 'gemini-2.0-flash'
-  let sysKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
-  if (!sysKey && sysProvider === 'google') sysKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
+  // 3. System env fallback — only if SYSTEM_DEFAULT_LLM_* vars are fully set.
+  // Configure AI models via Admin → AI 模型配置 instead of relying on this.
+  const sysProvider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || ''
+  const sysModel = process.env.SYSTEM_DEFAULT_LLM_MODEL || ''
+  const sysKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
 
-  if (sysKey && !isCircuitOpen(sysProvider, sysModel)) {
+  if (sysProvider && sysModel && sysKey && !isCircuitOpen(sysProvider, sysModel)) {
     const result = await executeSingleLLMChatCall(sysProvider, sysModel, sysKey, null, messages, maxTokens)
     if (result.text && !result.error) {
       console.log(`[LLM Chat] ✅ System env fallback success`)
@@ -421,7 +414,7 @@ export async function callLLMChat(
   }
 
   console.error('[LLM Chat] All providers failed:', errors)
-  return { text: null, provider: sysProvider, modelName: sysModel, error: errors.join('; ') }
+  return { text: null, provider: 'none', modelName: 'none', error: errors.join('; ') }
 }
 
 /**
@@ -477,26 +470,12 @@ export async function callLLM(
       continue
     }
 
-    let apiKey = config.apiKey || ''
-
-    // Resolve API key fallbacks if empty
-    if (!apiKey) {
-      if (provider === 'google') {
-        apiKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
-      } else if (provider === 'openai') {
-        apiKey = process.env.OPENAI_API_KEY || ''
-      } else if (provider === 'anthropic') {
-        apiKey = process.env.ANTHROPIC_API_KEY || ''
-      } else if (provider === 'deepseek') {
-        apiKey = process.env.DEEPSEEK_API_KEY || ''
-      } else if (provider === 'minimax') {
-        apiKey = (await getMiniMaxApiKey()) || process.env.MINIMAX_API_KEY || ''
-      }
-    }
+    // Key must be stored in LLMConfig.apiKey — no SystemConfig fallback.
+    const apiKey = config.apiKey || ''
 
     if (!apiKey) {
-      const errorMsg = `API key missing for provider: ${provider}, model: ${modelName}`
-      console.warn(`[LLM Router] Failover warning: ${errorMsg}`)
+      const errorMsg = `API key missing for ${provider}/${modelName} — store the key in Admin → AI 模型配置`
+      console.warn(`[LLM Router] ${errorMsg}`)
       errors.push(`${config.displayName} (${provider}): ${errorMsg}`)
       continue
     }
@@ -519,50 +498,37 @@ export async function callLLM(
     errors.push(`${config.displayName} (${provider}): ${errDetail}`)
   }
 
-  // 3. Fallback to system env / default config
-  console.log('[LLM Router] All database configurations exhausted. Trying system env fallback...')
+  // 3. System env fallback — only if SYSTEM_DEFAULT_LLM_* vars are fully set.
+  // Configure AI models via Admin → AI 模型配置 instead of relying on this.
+  console.log('[LLM Router] All DB configs exhausted. Checking system env fallback...')
 
-  const sysProvider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || 'google'
-  const sysModelName = process.env.SYSTEM_DEFAULT_LLM_MODEL || 'gemini-2.0-flash'
-  let sysApiKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
+  const sysProvider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || ''
+  const sysModelName = process.env.SYSTEM_DEFAULT_LLM_MODEL || ''
+  const sysApiKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
 
-  if (!sysApiKey) {
-    if (sysProvider === 'google') {
-      sysApiKey = (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
-    } else if (sysProvider === 'openai') {
-      sysApiKey = process.env.OPENAI_API_KEY || ''
-    } else if (sysProvider === 'anthropic') {
-      sysApiKey = process.env.ANTHROPIC_API_KEY || ''
-    } else if (sysProvider === 'deepseek') {
-      sysApiKey = process.env.DEEPSEEK_API_KEY || ''
-    }
-  }
-
-  if (sysApiKey) {
+  if (sysProvider && sysModelName && sysApiKey) {
     if (isCircuitOpen(sysProvider, sysModelName)) {
-      errors.push(`System Fallback (${sysProvider}): skipped — circuit open (rate-limited)`)
+      errors.push(`System Fallback (${sysProvider}): skipped — circuit open`)
     } else {
       const result = await executeSingleLLMCall(sysProvider, sysModelName, sysApiKey, null, prompt, maxTokens)
       if (result.text && !result.error) {
-        console.log(`[LLM Router] \u2705 Success via system env fallback (${sysProvider}/${sysModelName})`)
+        console.log(`[LLM Router] ✅ System env fallback (${sysProvider}/${sysModelName})`)
         return result
       }
-      if (result.rateLimited) {
-        tripCircuit(sysProvider, sysModelName)
-      }
+      if (result.rateLimited) tripCircuit(sysProvider, sysModelName)
       errors.push(`System Fallback (${sysProvider}): ${result.error || 'Unknown error'}`)
     }
   } else {
-    errors.push(`System Fallback (${sysProvider}): API key missing`)
+    errors.push('System Fallback: SYSTEM_DEFAULT_LLM_* env vars not fully configured')
   }
 
-  const combinedError = `All LLM configurations in fallback chain failed:\n- ` + errors.join('\n- ')
+  const combinedError = `All LLM configurations failed:\n- ` + errors.join('\n- ')
   console.error(`[LLM Router] ${combinedError}`)
 
   return {
     text: null,
-    provider: sysProvider,
-    modelName: sysModelName,
+    provider: 'none',
+    modelName: 'none',
     error: combinedError
   }
 }

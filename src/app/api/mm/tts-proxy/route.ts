@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { getMiniMaxApiKey } from '@/lib/systemConfig'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,9 +11,8 @@ const UPSTREAM_TIMEOUT_MS = 8_000
 /**
  * POST /api/mm/tts-proxy
  *
- * Server-side MiniMax TTS proxy used by amc-mm when the key lives in
- * amc-kanban SystemConfig DB. Requires a valid user session (forwarded
- * cookie from amc-mm).
+ * Server-side MiniMax TTS proxy. API key is now read from LLMConfig
+ * (provider='minimax', taskTags includes 'tts') instead of SystemConfig.
  */
 export async function POST(req: NextRequest) {
   const session = await getSession()
@@ -21,13 +20,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const apiKey = await getMiniMaxApiKey()
+  // Read TTS config from LLMConfig[tts] — no SystemConfig dependency
+  const ttsConfig = await prisma.lLMConfig.findFirst({
+    where: { isEnabled: true, provider: 'minimax', taskTags: { has: 'tts' } },
+    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+  })
+
+  const apiKey = ttsConfig?.apiKey || null
   if (!apiKey) {
     return NextResponse.json(
-      { error: 'MiniMax TTS is not configured. Set the API key in Admin → System Config.' },
+      { error: 'MiniMax TTS is not configured. Add a LLMConfig entry: provider=minimax, taskTags=[tts], apiKey=<key>.' },
       { status: 503 },
     )
   }
+
+  // Allow model override from LLMConfig.modelName; env var still supported for backward compat
+  const ttsModel = ttsConfig?.modelName || process.env.MINIMAX_TTS_MODEL || 'speech-2.8-hd'
+  const ttsEndpoint = ttsConfig?.baseUrl || process.env.MINIMAX_TTS_ENDPOINT || DEFAULT_ENDPOINT
 
   let text = ''
   let voiceId = ''
@@ -52,14 +61,14 @@ export async function POST(req: NextRequest) {
   const startedAt = performance.now()
 
   try {
-    const response = await fetch(process.env.MINIMAX_TTS_ENDPOINT || DEFAULT_ENDPOINT, {
+    const response = await fetch(ttsEndpoint, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: process.env.MINIMAX_TTS_MODEL || 'speech-2.8-hd',
+        model: ttsModel,
         text,
         stream: false,
         output_format: 'hex',  // tell API to return audio as hex string in data.audio

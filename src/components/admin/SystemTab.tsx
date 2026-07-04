@@ -323,7 +323,7 @@ export default function SystemTab({
                 <div className="p-8 text-center text-xs text-slate-450">加载模型配置中...</div>
               ) : llmConfigs.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-400 border border-dashed rounded-xl">
-                  暂无备用大模型路由配置。将直接退回主 Gemini 秘钥或环境变量。
+                  暂无 AI 模型配置。请在 AI 模型配置 中添加至少一个模型。
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
@@ -395,90 +395,25 @@ export default function SystemTab({
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
               <Key size={15} className="text-indigo-500" />
-              <span>全局默认 AI 秘钥与语音 (Gemini & Azure keys)</span>
+              <span>全局 AI 模型配置</span>
             </span>
-            {(systemConfig?.geminiConfigured || systemConfig?.minimaxConfigured) && (
-              <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 px-2.5 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/30">
-                {[systemConfig?.geminiConfigured && 'Gemini', systemConfig?.minimaxConfigured && 'MiniMax'].filter(Boolean).join(' & ')} 已配置
-              </span>
-            )}
           </button>
 
           {activeAccordion === 'ai' && (
-            <div className="px-6 pb-6 pt-1 space-y-5 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
-              {/* Gemini API Key */}
-              <div className="space-y-2 pt-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Gemini API Key</label>
-                  {systemConfig?.geminiConfigured && (
-                    <span className="text-[9px] font-bold text-emerald-500">● 秘钥已就绪</span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={systemConfig?.geminiApiKey ?? ''}
-                    onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, geminiApiKey: e.target.value } : { geminiApiKey: e.target.value })}
-                    placeholder="请输入全局 Gemini API Key"
-                    className="flex-1 rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                  <button
-                    onClick={onSaveSystemConfig}
-                    disabled={savingSystemConfig || !systemConfig}
-                    className="px-4 py-2 bg-blue-650 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex-shrink-0 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    {savingSystemConfig ? '保存中...' : '保存默认 API'}
-                  </button>
-                </div>
-                <p className="text-[10px] text-slate-405 leading-normal">
-                  说明：系统调用 AI 模块时优先使用此 Key。若未配置任何外部大模型路由且此处留空，系统将退回取服务器环境变量 `GEMINI_API_KEY`。
+            <div className="px-6 pb-6 pt-1 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
+              <div className="mt-4 rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50 dark:bg-indigo-950/20 p-4 space-y-2">
+                <p className="text-sm font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
+                  <Key size={14} />
+                  AI 模型与 API Key 已迁移至 AI 模型配置
                 </p>
-              </div>
-
-              {/* MiniMax TTS */}
-              <div className="space-y-2 pt-4 border-t border-slate-100 dark:border-slate-800/80">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">
-                    MiniMax TTS API Key
-                  </label>
-                  {systemConfig?.minimaxConfigured && (
-                    <span className="text-[9px] font-bold text-emerald-500">● MiniMax 语音已配置</span>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={systemConfig?.minimaxApiKey ?? ''}
-                    onChange={e => onUpdateSystemConfig(prev => prev ? { ...prev, minimaxApiKey: e.target.value } : null)}
-                    placeholder={systemConfig?.minimaxConfigured ? '•••••••• (已配置，留空保持不变)' : '请输入 MiniMax API Key'}
-                    className="flex-1 rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                  {systemConfig?.minimaxConfigured && (
-                    <button
-                      onClick={handleTestTts}
-                      disabled={testingTts}
-                      title="发送测试语音，验证 API Key 是否有效"
-                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex-shrink-0 flex items-center gap-1.5 cursor-pointer"
-                    >
-                      {testingTts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Volume2 className="h-3.5 w-3.5" />}
-                      {testingTts ? '测试中...' : '测试'}
-                    </button>
-                  )}
-                  <button
-                    onClick={onSaveSystemConfig}
-                    disabled={savingSystemConfig || !systemConfig}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex-shrink-0 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    {savingSystemConfig ? '保存中...' : '保存'}
-                  </button>
-                </div>
-                {ttsTestResult && (
-                  <p className={`text-[10px] font-medium mt-1 ${ttsTestResult.ok ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {ttsTestResult.msg}
-                  </p>
-                )}
-                <p className="text-[10px] text-slate-405 leading-normal">
-                  用于商家端 AI 语音伴侣的 TTS 合成（MiniMax speech-02-turbo 模型，female-shaonv 音色）。Key 存储于数据库，不用在 Render 配置环境变量。
+                <p className="text-[11px] text-indigo-600 dark:text-indigo-400 leading-relaxed">
+                  Gemini、MiniMax TTS 及所有其他 AI 模型的密钥现在统一在 <strong>AI 模型配置</strong> 中管理。
+                  在那里可以配置多个模型、设置优先级、启用/禁用，并为不同场景（语音、文案、多模态）指定专用模型。
+                </p>
+                <p className="text-[10px] text-indigo-500 dark:text-indigo-500">
+                  MiniMax TTS：provider=minimax，taskTags 含 tts<br/>
+                  文案生成：taskTags 含 copywriting<br/>
+                  AI 语音伴侣：taskTags 含 companion
                 </p>
               </div>
             </div>

@@ -171,7 +171,7 @@ export default function MMDashboard() {
   }, [queryBrandId, brands, activeBrand?.id])
 
   // --- Prefetch Gemini key for direct browser calls (Option C) ---
-  useEffect(() => { getClientGeminiKey() }, [])
+
 
   // --- Reusable: fetch & update drafts list for active brand ---
   const fetchDrafts = useCallback(async (brandId?: string) => {

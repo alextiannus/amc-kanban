@@ -1,10 +1,9 @@
-import { getGeminiApiKey } from './systemConfig.ts'
 import { callLLM } from './llmRouter.ts'
+import { prisma } from './prisma'
 
 /**
  * Call the best available LLM to generate text.
- * Tries Gemini first, then falls back to any configured LLMConfig
- * (GLM-4-Flash, DeepSeek, etc.) with automatic circuit-breaking on 429s.
+ * Routes through LLMConfig by taskTag — no hardcoded provider.
  */
 export async function generateText(prompt: string, maxTokens: number = 800): Promise<string | null> {
   const result = await callLLM('copywriting', prompt, maxTokens)
@@ -14,7 +13,12 @@ export async function generateText(prompt: string, maxTokens: number = 800): Pro
 }
 
 /**
- * Call the Gemini 2.0 Flash API with multimodal input (text prompt + image inlineData).
+ * Call a Google Gemini model with multimodal input (text + image inlineData).
+ *
+ * Reads the API key from the first enabled LLMConfig row with provider='google'.
+ * If no Google LLMConfig is configured, returns null (feature is silently unavailable).
+ *
+ * To enable: Admin → AI 模型配置 → 新建 → provider=google, modelName=gemini-2.0-flash, apiKey=<key>
  */
 export async function generateMultimodalText(
   prompt: string,
@@ -22,15 +26,22 @@ export async function generateMultimodalText(
   base64Data: string,
   maxTokens: number = 500
 ): Promise<string | null> {
-  const apiKey = await getGeminiApiKey()
-  if (!apiKey) {
-    console.warn('[Gemini Multimodal] API Key is missing. Skipping request.')
+  // Look up Google config from LLMConfig — no SystemConfig dependency
+  const googleConfig = await prisma.lLMConfig.findFirst({
+    where: { isEnabled: true, provider: 'google' },
+    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+  })
+
+  if (!googleConfig?.apiKey) {
+    console.warn('[generateMultimodalText] No Google LLMConfig with API key found. Skipping multimodal request.')
     return null
   }
 
+  const { apiKey, modelName } = googleConfig
+
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,12 +50,7 @@ export async function generateMultimodalText(
             {
               parts: [
                 { text: prompt },
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data,
-                  },
-                },
+                { inlineData: { mimeType, data: base64Data } },
               ],
             },
           ],
@@ -54,7 +60,7 @@ export async function generateMultimodalText(
     )
 
     if (!response.ok) {
-      console.error(`[Gemini Multimodal] API failed with status ${response.status}: ${response.statusText}`)
+      console.error(`[generateMultimodalText] API failed ${response.status}: ${response.statusText}`)
       return null
     }
 
@@ -62,7 +68,7 @@ export async function generateMultimodalText(
     const text = json.candidates?.[0]?.content?.parts?.[0]?.text
     return text ? text.trim() : null
   } catch (error) {
-    console.error('[Gemini Multimodal] Request failed:', error)
+    console.error('[generateMultimodalText] Request failed:', error)
     return null
   }
 }

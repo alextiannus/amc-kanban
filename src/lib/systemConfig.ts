@@ -109,53 +109,25 @@ export async function isDirectPublishingEnabled(): Promise<boolean> {
   }
 }
 
+/**
+ * @deprecated AI keys are now managed via Admin → AI 模型配置 (LLMConfig table).
+ * This function only checks the GEMINI_API_KEY env var as a last resort.
+ * Do NOT add calls to this function — configure Google models in LLMConfig instead.
+ */
 export async function getGeminiApiKey(): Promise<string | null> {
-  const cached = getCachedKey('gemini')
-  if (cached !== undefined) return cached
-  try {
-    const config = await ensureSystemConfig()
-    const key = config.geminiApiKey || process.env.GEMINI_API_KEY || null
-    setCachedKey('gemini', key)
-    return key
-  } catch (error) {
-    console.error('[getGeminiApiKey Error]', error)
-    return process.env.GEMINI_API_KEY || null
-  }
+  return process.env.GEMINI_API_KEY || null
 }
+
 
 /**
- * MiniMax API key (TTS / chat completions).
- * Stored in SystemConfig DB. Falls back to MINIMAX_API_KEY env var.
- * Auto-upserts from env var on first call if DB key is missing.
+ * @deprecated AI keys are now managed via Admin → AI 模型配置 (LLMConfig table).
+ * MiniMax TTS key should be stored in a LLMConfig row with provider='minimax', taskTags=['tts'].
+ * This function only checks the MINIMAX_API_KEY env var as a last resort.
  */
 export async function getMiniMaxApiKey(): Promise<string | null> {
-  try {
-    const config = await ensureSystemConfig()
-    const dbKey = (config as any).minimaxApiKey as string | null
-
-    if (dbKey) return dbKey
-
-    // DB has no key — check env var and backfill into DB for future calls
-    const envKey = process.env.MINIMAX_API_KEY || null
-    if (envKey) {
-      try {
-        await prisma.systemConfig.update({
-          where: { id: 'default' },
-          data: { minimaxApiKey: envKey } as any,
-        })
-        console.log('[getMiniMaxApiKey] Auto-backfilled minimaxApiKey from env var into DB')
-      } catch (upsertErr) {
-        console.warn('[getMiniMaxApiKey] Could not backfill key into DB:', upsertErr)
-      }
-      return envKey
-    }
-
-    return null
-  } catch (error) {
-    console.error('[getMiniMaxApiKey Error]', error)
-    return process.env.MINIMAX_API_KEY || null
-  }
+  return process.env.MINIMAX_API_KEY || null
 }
+
 
 
 

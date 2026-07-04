@@ -1,21 +1,17 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { getGeminiApiKey } from '@/lib/systemConfig'
 import { prisma } from '@/lib/prisma'
 
 /**
  * GET /api/client-config
  *
  * Returns client-side configuration for authenticated users.
- * Exposes LLM credentials so the browser can call LLMs directly
- * for ultra-low-latency streaming chat (no server round-trip).
+ * Previously exposed Gemini API keys to the browser; now only returns
+ * LLMConfig metadata for OpenAI-compatible providers if needed by any
+ * client-side tool. AI keys are no longer sent to the browser.
  *
- * Priority:
- *   1. First enabled GLM / OpenAI-compat LLMConfig from DB (custom_shim / openai / deepseek)
- *   2. Gemini API key from SystemConfig (fallback)
- *
- * ⚠️  Keys are visible in browser DevTools/sessionStorage.
- *     Acceptable for internal operator tools. Not for public consumer apps.
+ * Note: callGeminiDirect() now routes through /api/llm/chat server-side,
+ * so this endpoint is no longer required for AI calls.
  */
 export async function GET() {
   const session = await getSession()
@@ -23,45 +19,26 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // 1. Look for best OpenAI-compat LLM (GLM, DeepSeek, etc.) from LLMConfig table
-  let llmConfig: { provider: string; modelName: string; apiKey: string; baseUrl: string | null } | null = null
+  // Return best enabled LLMConfig for any client-side metadata needs
+  // (e.g. showing which AI model is active in UI). Keys are NOT included.
   try {
     const configs = await prisma.lLMConfig.findMany({
-      where: {
-        isEnabled: true,
-        provider: { in: ['custom-shim', 'custom_shim', 'openai', 'deepseek'] },
-      },
+      where: { isEnabled: true },
       orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
       take: 1,
+      select: { provider: true, modelName: true, displayName: true },
     })
+
     if (configs.length > 0) {
       const c = configs[0]
-      llmConfig = {
-        provider: c.provider,
-        modelName: c.modelName,
-        apiKey: c.apiKey || '',
-        baseUrl: c.baseUrl || null,
-      }
+      return NextResponse.json(
+        { llmConfig: { provider: c.provider, modelName: c.modelName, displayName: c.displayName } },
+        { headers: { 'Cache-Control': 'no-store' } },
+      )
     }
   } catch (err) {
     console.warn('[client-config] LLMConfig query failed:', err)
   }
 
-  if (llmConfig?.apiKey) {
-    return NextResponse.json(
-      { llmConfig },
-      { headers: { 'Cache-Control': 'no-store' } },
-    )
-  }
-
-  // 2. Fallback: Gemini key
-  const geminiApiKey = await getGeminiApiKey()
-  if (geminiApiKey) {
-    return NextResponse.json(
-      { geminiApiKey, llmConfig: null },
-      { headers: { 'Cache-Control': 'no-store' } },
-    )
-  }
-
-  return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
+  return NextResponse.json({ llmConfig: null }, { headers: { 'Cache-Control': 'no-store' } })
 }

@@ -1,6 +1,6 @@
-import { getGeminiApiKey } from './systemConfig'
-import { callLLMChat, type ChatMessage } from './llmRouter'
 import { prisma } from './prisma'
+import { callLLMChat, type ChatMessage } from './llmRouter'
+
 
 /**
  * A single turn in a conversation (Gemini multi-turn format).
@@ -221,13 +221,9 @@ export async function callGeminiChat(
   // Any provider without a resolvable key is filtered out here — never attempted in the loop.
   async function resolveKey(config: any): Promise<string> {
     if (config.apiKey) return config.apiKey
-    switch (config.provider) {
-      case 'google':    return (await getGeminiApiKey()) || process.env.GEMINI_API_KEY || ''
-      case 'openai':    return process.env.OPENAI_API_KEY || ''
-      case 'anthropic': return process.env.ANTHROPIC_API_KEY || ''
-      case 'deepseek':  return process.env.DEEPSEEK_API_KEY || ''
-      default:          return ''
-    }
+    // Key must be in LLMConfig.apiKey — no SystemConfig fallback.
+    // If empty, this provider is skipped (filtered out below).
+    return ''
   }
 
   const keyResults = await Promise.all(rawConfigs.map(resolveKey))

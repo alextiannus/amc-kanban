@@ -10,7 +10,7 @@ import {
   getGoogleAccessToken,
   replyGoogleGBPReview,
 } from '@/lib/integrations/google'
-import { getGeminiApiKey } from '@/lib/systemConfig'
+import { callLLM } from '@/lib/llmRouter'
 
 type GoogleReview = {
   reviewId: string
@@ -22,7 +22,7 @@ type GoogleReview = {
   replyTime?: string
 }
 
-// Gemini reply generator helper
+// LLM-powered review reply generator
 async function generateReviewReply(
   comment: string,
   rating: number,
@@ -30,9 +30,8 @@ async function generateReviewReply(
   brandName: string,
   compensationLink?: string
 ): Promise<string> {
-  const apiKey = await getGeminiApiKey()
-
-  if (!apiKey) {
+  // Static fallback — used when no LLM is configured
+  function staticReply(): string {
     if (rating >= 4) {
       return `非常感谢 ${reviewer} 对我们【${brandName}】的支持和五星好评！我们会继续努力提供更优质的产品和服务，期待您的再次光临！`
     } else {
@@ -41,8 +40,7 @@ async function generateReviewReply(
     }
   }
 
-  try {
-    const prompt = `你是一家名为“${brandName}”的本地生活商户的 AI 客服经理。
+  const prompt = `你是一家名为“${brandName}”的本地生活商户的 AI 客服经理。
 请针对以下客户给出的评价写一段客气、礼貌且得体的回复：
 客户名称：${reviewer}
 评分星级：${rating} 星 (共5星)
@@ -59,29 +57,14 @@ ${
 }
 请直接输出回复文本，不要包含任何 markdown 标记、HTML 代码或外部包裹符号，字数控制在 150 字以内。`
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 200 },
-        }),
-      }
-    )
-
-    if (!response.ok) throw new Error('Gemini API failed')
-    const json = await response.json()
-    const text = json.candidates?.[0]?.content?.parts?.[0]?.text
-    return text ? text.trim() : '非常感谢您的反馈！'
+  try {
+    const result = await callLLM('copywriting', prompt, 200)
+    if (result.text) return result.text.trim()
+    console.warn('[generateReviewReply] LLM failed, using static fallback:', result.error)
+    return staticReply()
   } catch (e: unknown) {
-    console.error('[Gemini Reply Generator Error]', e)
-    if (rating >= 4) {
-      return `非常感谢对我们【${brandName}】的五星好评！我们会继续保持，期待您的再次光临！`
-    } else {
-      return `非常抱歉这次就餐体验不佳，我们已经将意见反馈给店长整改，期待能为您提供更好的服务。`
-    }
+    console.error('[generateReviewReply] Error:', e)
+    return staticReply()
   }
 }
 

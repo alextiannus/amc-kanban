@@ -48,10 +48,8 @@ export async function GET() {
   const config = await ensureSystemConfig()
   return NextResponse.json({
     id: config.id,
-    geminiApiKey: maskKey(config.geminiApiKey),
-    geminiConfigured: !!config.geminiApiKey,
-    minimaxApiKey: maskKey((config as any).minimaxApiKey),
-    minimaxConfigured: !!(config as any).minimaxApiKey,
+    // Note: geminiApiKey and minimaxApiKey are retained in the DB schema but
+    // are no longer managed here. AI keys are now in Admin → AI 模型配置 (LLMConfig).
     // SMTP
     smtpHost: config.smtpHost || '',
     smtpPort: config.smtpPort ?? null,
@@ -96,8 +94,6 @@ export async function PATCH(request: Request) {
 
   const current = await ensureSystemConfig()
 
-  const nextGeminiKey     = resolveField(body, 'geminiApiKey', current.geminiApiKey)
-  const nextMinimaxKey    = resolveField(body, 'minimaxApiKey', (current as any).minimaxApiKey)
   // SMTP fields
   const nextSmtpHost      = resolveField(body, 'smtpHost', current.smtpHost)
   const nextSmtpPort      = resolveIntField(body, 'smtpPort', current.smtpPort)
@@ -121,8 +117,6 @@ export async function PATCH(request: Request) {
   const updated = await prisma.systemConfig.update({
     where: { id: 'default' },
     data: {
-      ...(nextGeminiKey    !== undefined && { geminiApiKey: nextGeminiKey }),
-      ...(nextMinimaxKey   !== undefined && { minimaxApiKey: nextMinimaxKey }),
       ...(nextSmtpHost     !== undefined && { smtpHost: nextSmtpHost }),
       ...(nextSmtpPort     !== undefined && { smtpPort: nextSmtpPort }),
       ...(nextSmtpUser     !== undefined && { smtpUser: nextSmtpUser }),
@@ -146,8 +140,6 @@ export async function PATCH(request: Request) {
   // Mask credentials in audit log
   const maskedOld = {
     ...current,
-    geminiApiKey: maskKey(current.geminiApiKey),
-    minimaxApiKey: maskKey((current as any).minimaxApiKey),
     smtpPassword: maskPassword(current.smtpPassword),
     metaAppSecret: maskKey(current.metaAppSecret),
     googleClientSecret: maskKey(current.googleClientSecret),
@@ -155,8 +147,6 @@ export async function PATCH(request: Request) {
   }
   const maskedNew = {
     ...updated,
-    geminiApiKey: maskKey(updated.geminiApiKey),
-    minimaxApiKey: maskKey((updated as any).minimaxApiKey),
     smtpPassword: maskPassword(updated.smtpPassword),
     metaAppSecret: maskKey(updated.metaAppSecret),
     googleClientSecret: maskKey(updated.googleClientSecret),
@@ -178,10 +168,8 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json({
     id: updated.id,
-    geminiApiKey: maskKey(updated.geminiApiKey),
-    geminiConfigured: !!updated.geminiApiKey,
-    minimaxApiKey: maskKey((updated as any).minimaxApiKey),
-    minimaxConfigured: !!(updated as any).minimaxApiKey,
+    // Note: geminiApiKey/minimaxApiKey remain in DB but are no longer managed here.
+    // SMTP
     smtpHost: updated.smtpHost || '',
     smtpPort: updated.smtpPort ?? null,
     smtpUser: updated.smtpUser || '',
