@@ -92,6 +92,7 @@ export interface ModelRequest {
   platform: PlatformType
   vertical: IndustryVertical
   prompt: string
+  modelProfileId?: string
   maxTokens?: number
 }
 
@@ -175,6 +176,7 @@ export interface ContentProvenance {
   verticalSkillVersion: string
   knowledgeEntryIds: string[]
   modelId?: string
+  modelProfileId?: string
   promptVersion: string
 }
 

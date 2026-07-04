@@ -61,6 +61,21 @@ type CopywriterOption = {
   maxConcurrentJobs: number
 }
 
+type ModelProfileOption = {
+  id: string
+  displayName: string
+  providerId: string
+  provider: string
+  providerDisplayName: string
+  apiKeyEnv: string
+  modelName: string
+  temperature: number
+  jsonMode: boolean
+  maxTokensByTask: Partial<Record<PromptTask, number>>
+  fallbackProfileIds: string[]
+  rationale: string
+}
+
 type VerticalOption = {
   vertical: IndustryVertical
   displayName: string
@@ -86,6 +101,7 @@ type LabResult = {
     verticalSkillVersion: string
     knowledgeEntryIds: string[]
     modelId?: string
+    modelProfileId?: string
     promptVersion: string
   }
 }
@@ -188,6 +204,8 @@ export default function ContentLabPage() {
   const [brands, setBrands] = useState<BrandOption[]>([])
   const [platforms, setPlatforms] = useState<PlatformOption[]>([])
   const [copywriters, setCopywriters] = useState<CopywriterOption[]>([])
+  const [modelProfiles, setModelProfiles] = useState<ModelProfileOption[]>([])
+  const [platformModelProfiles, setPlatformModelProfiles] = useState<Record<PlatformType, Partial<Record<PromptTask, string>>>>({} as Record<PlatformType, Partial<Record<PromptTask, string>>>)
   const [verticals, setVerticals] = useState<VerticalOption[]>([])
   const [form, setForm] = useState<FormState>(initialForm)
   const [loading, setLoading] = useState(true)
@@ -210,6 +228,8 @@ export default function ContentLabPage() {
   const selectedPlatform = platforms.find((platform) => platform.platform === form.platform)
   const selectedCopywriter = copywriters.find((copywriter) => copywriter.platform === form.platform)
   const selectedVertical = verticals.find((vertical) => vertical.vertical === form.industryVertical)
+  const selectedModelProfileId = platformModelProfiles[form.platform]?.body_composition
+  const selectedModelProfile = modelProfiles.find((profile) => profile.id === selectedModelProfileId)
 
   useEffect(() => {
     void loadLabData()
@@ -235,6 +255,8 @@ export default function ContentLabPage() {
       setBrands(data.brands || [])
       setPlatforms(data.platforms || [])
       setCopywriters(data.copywriters || [])
+      setModelProfiles(data.modelProfiles || [])
+      setPlatformModelProfiles(data.platformModelProfiles || {})
       setVerticals(data.verticals || [])
       const firstBrandId = data.brands?.[0]?.id || ''
       setForm((current) => ({
@@ -572,6 +594,22 @@ export default function ContentLabPage() {
           </section>
 
           <section className="rounded-md border border-slate-200 bg-white p-4">
+            <h2 className="mb-3 text-sm font-semibold">Model Profile</h2>
+            {selectedModelProfile ? (
+              <dl className="space-y-2 text-sm">
+                <Row label="Profile" value={selectedModelProfile.displayName} />
+                <Row label="Provider" value={selectedModelProfile.providerDisplayName} />
+                <Row label="Model" value={selectedModelProfile.modelName} />
+                <Row label="API key" value={selectedModelProfile.apiKeyEnv} />
+                <Row label="Temp" value={`${selectedModelProfile.temperature}`} />
+                <Row label="Fallback" value={selectedModelProfile.fallbackProfileIds.join(', ') || 'legacy router'} />
+              </dl>
+            ) : (
+              <p className="text-sm text-slate-400">No model profile selected</p>
+            )}
+          </section>
+
+          <section className="rounded-md border border-slate-200 bg-white p-4">
             <h2 className="mb-3 text-sm font-semibold">Platform Rules</h2>
             {selectedPlatform ? (
               <dl className="space-y-2 text-sm">
@@ -590,6 +628,7 @@ export default function ContentLabPage() {
               <dl className="space-y-2 text-sm">
                 <Row label="Latency" value={`${response.latencyMs}ms`} />
                 <Row label="Model" value={response.result.provenance.modelId || 'unknown'} />
+                <Row label="Profile" value={response.result.provenance.modelProfileId || selectedModelProfileId || 'unknown'} />
                 <Row label="Prompt" value={response.result.provenance.promptVersion} />
                 <Row label="Platform skill" value={response.result.provenance.platformSkillVersion} />
                 <Row label="Vertical skill" value={response.result.provenance.verticalSkillVersion} />

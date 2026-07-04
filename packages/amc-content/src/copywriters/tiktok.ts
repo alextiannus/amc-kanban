@@ -22,6 +22,8 @@ export class TikTokCopywriter extends BasePlatformCopywriter {
   protected bodyDirectives(_context: BodyPromptContext): string[] {
     return [
       'Caption must be short and video-first.',
+      'Reinforce a hook-body-close video structure: stop the scroll, show the local proof, close with one action.',
+      'Prefer human, DIY, creator-style wording over polished ad copy.',
       'Use one simple CTA, not a long sales paragraph.',
       'Hashtags should be 2-5 compact tags.',
       'Do not explain too much; leave room for the video to carry the story.',

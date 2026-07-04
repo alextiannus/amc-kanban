@@ -3,7 +3,9 @@ import {
   createPlatformContent,
   getPlatformCopywriter,
   getPlatformProvider,
+  listContentModelProfiles,
   listPlatformCopywriters,
+  platformModelProfiles,
   runDeterministicGate,
   type ContentLogger,
   type GenerationLog,
@@ -17,6 +19,7 @@ import {
 async function main() {
   testPlatformValidators()
   testPlatformCopywriterRegistry()
+  testModelProfileRegistry()
   testDeterministicGate()
   await testPipelineRewriteAndNormalization()
   console.log('SUCCESS: amc-content tests passed')
@@ -56,6 +59,15 @@ function testPlatformCopywriterRegistry() {
 
   assert.match(prompt, /Google Business Copywriter/)
   assert.match(prompt, /Return an empty hashtags array/)
+}
+
+function testModelProfileRegistry() {
+  const profiles = listContentModelProfiles()
+  assert.ok(profiles.some((profile) => profile.id === 'local_social_balanced_v1'))
+  assert.equal(platformModelProfiles.instagram.body_composition, 'local_social_balanced_v1')
+  assert.equal(platformModelProfiles.google_business.body_composition, 'local_seo_precise_v1')
+  assert.equal(platformModelProfiles.xiaohongshu.body_composition, 'local_social_creative_v1')
+  assert.equal(platformModelProfiles.tiktok.body_composition, 'short_video_native_v1')
 }
 
 function testPlatformValidators() {
@@ -119,6 +131,14 @@ function testDeterministicGate() {
     content: { caption: 'Visit us this weekend for the event.', hashtags: [] },
   })
   assertIssue(googleVideo.issues, 'video_not_allowed')
+
+  const googlePhone = runDeterministicGate({
+    platform: 'google_business',
+    vertical: 'beauty_wellness',
+    brand: { id: 'brand-6', name: 'Glow Studio', address: '1 Test Street' },
+    content: { caption: 'Visit Glow Studio at 1 Test Street or call +65 6123 4567 to book.', hashtags: [] },
+  })
+  assertIssue(googlePhone.issues, 'google_business_phone_stuffing')
 }
 
 async function testPipelineRewriteAndNormalization() {
@@ -227,8 +247,14 @@ async function testPipelineRewriteAndNormalization() {
   assert.equal(result.hook.category, 'seo')
   assert.equal(result.hook.score, 1)
   assert.deepEqual(result.provenance.knowledgeEntryIds, ['knowledge-1'])
+  assert.equal(result.provenance.modelProfileId, 'local_seo_precise_v1')
   assert.equal(logs.length, 1)
   assert.equal(calls.map((call) => call.task).join(','), 'hook_generation,body_composition,quality_rewrite')
+  assert.deepEqual(calls.map((call) => call.modelProfileId), [
+    'local_seo_precise_v1',
+    'local_seo_precise_v1',
+    'local_seo_precise_v1',
+  ])
   assert.match(calls[0].prompt, /Media:/)
   assert.match(calls[1].prompt, /Vertical compliance:/)
   assert.match(calls[1].prompt, /Preferred booking CTA/)

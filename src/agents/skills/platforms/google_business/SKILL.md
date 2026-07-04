@@ -19,17 +19,17 @@ language: en
 ### Type 1 — What's New (新消息)
 Opening: "[Brand] is now offering [new thing]."
 Body: Brief, factual description of what's new. Include keywords naturally.
-CTA: "Visit us at [address] or book online at [URL]."
+CTA: "Visit us at [address], book online at [URL], or tap Call now on Google."
 
 ### Type 2 — Offer / Promotion
 Opening: "[Discount/Special] at [Brand] — [timeframe]."
 Body: Clear terms. What's included, what's excluded, expiry date.
-CTA: "Call [phone] or visit [website] to redeem."
+CTA: "Visit [website] to redeem, or tap Call now on Google."
 
 ### Type 3 — Event
 Opening: "[Event Name] at [Brand] — [Date]."
 Body: What, when, where, why attend. Include any ticketing info.
-CTA: "Reserve your spot at [URL] or call [phone]."
+CTA: "Reserve your spot at [URL], or tap Call now on Google."
 
 ## Format Rules
 
@@ -37,7 +37,8 @@ CTA: "Reserve your spot at [URL] or call [phone]."
 - Length: 100-300 words (Google may truncate at 1,500 chars)
 - Language: Professional, clear, no slang
 - Keywords: Include primary local keywords naturally (e.g., "Singapore restaurant", "Clarke Quay dining")
-- Contact info: ALWAYS include address + phone or website in every post
+- Contact info: include address/area and website or booking link when available
+- Phone policy: do NOT write phone numbers in the post body. Use the native Google Business Profile "Call now" button instead.
 - No Emoji (or maximum 1-2 for visual break only)
 - No hashtags (not supported/indexed on GBP)
 
@@ -67,7 +68,6 @@ The menu features [specific items], with options for [dietary needs]. All dishes
 Reservations recommended. Walk-ins welcome based on availability.
 
 📍 [Address], Clarke Quay, Singapore [postcode]
-📞 [Phone number]
 🌐 [Website URL]
 
 Opening hours: [Hours]
@@ -82,7 +82,6 @@ This promotion applies to [specific items/services]. Minimum spend of $[amount] 
 To redeem, mention this post when you visit or booking online using code [CODE].
 
 📍 [Address]
-📞 [Phone]
 🌐 [Website]
 
 Valid until [expiry date]. While stocks last.

@@ -1,20 +1,66 @@
-import type { ModelRequest, ModelRouter } from 'amc-content'
-import { callLLM } from '../llmRouter.ts'
+import {
+  resolveContentModelProfile,
+  resolveContentModelProfileById,
+  type ModelRequest,
+  type ModelRouter,
+  type ResolvedContentModelProfile,
+} from 'amc-content'
+import { callLLM, callLLMWithContentModelProfile } from '../llmRouter.ts'
 
 export function createAmcContentModelRouter(): ModelRouter {
   return {
     async generateJson<T>(input: ModelRequest): Promise<{ data: T; modelId?: string }> {
-      const result = await callLLM('copywriting', input.prompt, input.maxTokens ?? 1200)
+      const profile = resolveContentModelProfile(input.platform, input.task, input.modelProfileId)
+      const profilesToTry = resolveProfileChain(profile)
+      const errors: string[] = []
+
+      for (const candidate of profilesToTry) {
+        const maxTokens = input.maxTokens ?? candidate.maxTokensByTask[input.task] ?? 1200
+        const result = await callLLMWithContentModelProfile(candidate, input.prompt, maxTokens)
+        if (result.text) {
+          return {
+            data: parseJsonResponse<T>(result.text),
+            modelId: `${candidate.id}:${result.modelName || result.provider}`,
+          }
+        }
+        errors.push(`${candidate.id}: ${result.error || 'empty response'}`)
+      }
+
+      const result = await callLLM('copywriting', input.prompt, input.maxTokens ?? profile.maxTokensByTask[input.task] ?? 1200)
       if (!result.text) {
-        throw new Error(result.error || `Empty LLM response for ${input.task}`)
+        throw new Error([
+          `Empty LLM response for ${input.task}`,
+          ...errors,
+          result.error || 'legacy router returned empty response',
+        ].join('; '))
       }
 
       return {
         data: parseJsonResponse<T>(result.text),
-        modelId: result.modelName || result.provider,
+        modelId: `legacy-copywriting:${result.modelName || result.provider}`,
       }
     },
   }
+}
+
+function resolveProfileChain(profile: ResolvedContentModelProfile): ResolvedContentModelProfile[] {
+  const seen = new Set<string>()
+  const chain: ResolvedContentModelProfile[] = []
+  const queue = [profile]
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    if (seen.has(current.id)) continue
+    seen.add(current.id)
+    chain.push(current)
+    for (const fallbackId of current.fallbackProfileIds) {
+      try {
+        queue.push(resolveContentModelProfileById(fallbackId))
+      } catch {
+        // Ignore stale fallback ids so one bad config does not block the whole chain.
+      }
+    }
+  }
+  return chain
 }
 
 function parseJsonResponse<T>(text: string): T {

@@ -10,7 +10,7 @@ language: en
 
 ## Platform Characteristics
 - Primary users: 18-45, lifestyle-conscious, visual-first
-- Content drivers: Aesthetic appeal + Storytelling + Hashtag discovery
+- Content drivers: Aesthetic appeal + Storytelling + Caption keywords + selective hashtags
 - Algorithm: Save rate + Comment depth + Share rate → reach amplification
 - Key insight: First 125 characters appear before "More" fold — make them count
 
@@ -45,10 +45,11 @@ language: en
 - Location: Include neighborhood/area naturally near the CTA
 
 ### Hashtag Strategy
-- Total: 5-15 hashtags
-- Mix: 3 niche (#clarkequayeats), 3 mid (#singaporerestaurant), 2 broad (#foodie)
+- Total: 3-5 highly relevant hashtags
+- Mix: local/place + category/service + brand/campaign/search-intent tags
 - Placement: Separate from caption by 2+ line breaks, or in first comment
 - Never: Spam irrelevant trending hashtags
+- Caption SEO: include the most important local/search terms naturally in the caption itself.
 
 ### Emoji Usage
 - Sparse and purposeful (2-5 per caption max)

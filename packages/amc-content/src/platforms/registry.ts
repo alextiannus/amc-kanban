@@ -35,6 +35,9 @@ export const platformProviders: Record<PlatformType, PlatformContentProvider> = 
       '截至我的知识截止日期',
       '综上所述',
       '总的来说',
+      '话不多说',
+      '不得不说',
+      '宝藏店铺',
     ],
   }),
   instagram: provider({
@@ -44,7 +47,7 @@ export const platformProviders: Record<PlatformType, PlatformContentProvider> = 
     defaultLanguage: 'en',
     maxCaptionLength: 2200,
     hookCategories: ['benefit', 'social_proof', 'geo', 'fomo'],
-    hashtagRules: { allowHashtags: true, min: 5, max: 15 },
+    hashtagRules: { allowHashtags: true, min: 3, max: 5 },
     mediaRules: { required: true, maxItems: 10, allowImages: true, allowVideo: true },
     aiToneBannedPhrases: commonAiToneBannedPhrases,
   }),

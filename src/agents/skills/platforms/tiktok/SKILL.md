@@ -13,6 +13,7 @@ language: en
 - Content drivers: First 3 seconds retention + completion rate + shares
 - Algorithm: Watch-through rate is #1 signal — hook determines everything
 - Key insight: Caption is secondary to video. Hook text (on-screen or voiceover) matters most.
+- Creative structure: hook -> body -> close. The caption should support that structure, not replace the video.
 
 ## Hook Formula Library (3 types, use different type each time)
 
@@ -42,6 +43,7 @@ language: en
 - First line: Reinforce or extend the video hook
 - Tone: Conversational, like texting a friend
 - CTA: "Follow for more" / "Comment your [X]" / "Share with someone who needs this"
+- Style: DIY, human, creator-led, sound-on, and not overly polished.
 
 ### Hashtag Strategy
 - Total: 3-5 hashtags only (TikTok algorithm is topic-based, not tag-based)

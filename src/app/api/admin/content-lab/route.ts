@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   createPlatformContent,
+  listContentModelProfiles,
   listPlatformCopywriters,
   listPlatformProviders,
   listVerticalSpecs,
+  platformModelProfiles,
   type BrandContext,
   type CopyBrief,
   type IndustryVertical,
@@ -78,6 +80,21 @@ export async function GET() {
       skillVersion: provider.skillVersion,
     })),
     copywriters: listPlatformCopywriters(),
+    modelProfiles: listContentModelProfiles().map((profile) => ({
+      id: profile.id,
+      displayName: profile.displayName,
+      providerId: profile.providerId,
+      provider: profile.provider.provider,
+      providerDisplayName: profile.provider.displayName,
+      apiKeyEnv: profile.provider.apiKeyEnv,
+      modelName: profile.modelName,
+      temperature: profile.temperature,
+      jsonMode: profile.jsonMode,
+      maxTokensByTask: profile.maxTokensByTask,
+      fallbackProfileIds: profile.fallbackProfileIds,
+      rationale: profile.rationale,
+    })),
+    platformModelProfiles,
     verticals: listVerticalSpecs().map((vertical) => ({
       vertical: vertical.vertical,
       displayName: vertical.displayName,

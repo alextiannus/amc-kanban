@@ -222,7 +222,7 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
   let aiHashtags: string[] = [];
   let geminiUsed = false;
 
-  if (process.env.AMC_CONTENT_ENGINE_ENABLED !== 'false') {
+  if (!state.skipAmcContent && process.env.AMC_CONTENT_ENGINE_ENABLED !== 'false') {
     try {
       const amcContentResult = await tryGenerateWithAmcContent({
         brand,

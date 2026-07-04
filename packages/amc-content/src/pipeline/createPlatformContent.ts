@@ -1,6 +1,7 @@
 import { getPlatformProvider } from '../platforms/registry.ts'
 import { getVerticalSpec } from '../verticals/registry.ts'
 import { getPlatformCopywriter } from '../copywriters/registry.ts'
+import { resolveContentModelProfile } from '../modelProfiles.ts'
 import type {
   ComposedContent,
   HookCandidate,
@@ -16,6 +17,9 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
   const provider = getPlatformProvider(input.platform)
   const copywriter = getPlatformCopywriter(input.platform)
   const vertical = getVerticalSpec(input.brief.industryVertical)
+  const hookProfile = resolveContentModelProfile(input.platform, 'hook_generation')
+  const bodyProfile = resolveContentModelProfile(input.platform, 'body_composition')
+  const rewriteProfile = resolveContentModelProfile(input.platform, 'quality_rewrite')
   const knowledge = await input.adapters.knowledgeRepository?.retrieve({
     brandId: input.brand.id,
     platform: input.platform,
@@ -30,7 +34,8 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     platform: input.platform,
     vertical: input.brief.industryVertical,
     prompt: await withTuningNotes(input, 'hook_generation', copywriter.buildHookPrompt({ input, knowledge })),
-    maxTokens: 900,
+    modelProfileId: hookProfile.id,
+    maxTokens: hookProfile.maxTokensByTask.hook_generation ?? 900,
   })
 
   const selectedHook = selectHook(normalizeHookCandidates(hookModel.data.hooks, input), input.recentHooks)
@@ -40,7 +45,8 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     platform: input.platform,
     vertical: input.brief.industryVertical,
     prompt: await withTuningNotes(input, 'body_composition', copywriter.buildBodyPrompt({ input, hook: selectedHook, knowledge })),
-    maxTokens: 1400,
+    modelProfileId: bodyProfile.id,
+    maxTokens: bodyProfile.maxTokensByTask.body_composition ?? 1400,
   })
 
   let content = normalizeComposedContent(bodyModel.data, input.platform)
@@ -61,7 +67,8 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
           rewriteInstruction: quality.rewriteInstruction,
         }),
       ),
-      maxTokens: 1400,
+      modelProfileId: rewriteProfile.id,
+      maxTokens: rewriteProfile.maxTokensByTask.quality_rewrite ?? 1400,
     })
     content = normalizeComposedContent(rewriteModel.data, input.platform)
     quality = copywriter.validate(input, content)
@@ -72,6 +79,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     verticalSkillVersion: vertical.skillVersion,
     knowledgeEntryIds: knowledge.map((entry) => entry.id),
     modelId: bodyModel.modelId ?? hookModel.modelId,
+    modelProfileId: bodyProfile.id,
     promptVersion: PROMPT_VERSION,
   }
 
@@ -97,6 +105,11 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
       brief: input.brief,
       media: input.media,
       platformCopywriter: copywriter.profile,
+      modelProfiles: {
+        hook: hookProfile.id,
+        body: bodyProfile.id,
+        rewrite: rewriteProfile.id,
+      },
       knowledgeEntryIds: provenance.knowledgeEntryIds,
     },
     output: result,

@@ -28,8 +28,8 @@ Gold output:
 
 ```json
 {
-  "caption": "A stronger lunch break starts here.\n\nStep into a 45-minute reformer pilates trial designed for busy Tanjong Pagar workdays: focused coaching, calm pacing, and movements that help you reset before the afternoon.\n\n• Beginner-friendly class flow\n• Small-group guidance\n• Easy access from the CBD\n\nVisit Core Form Studio at 12 Tanjong Pagar Road or book your trial via our website.",
-  "hashtags": ["sgpilates", "reformerpilates", "tanjongpagar", "sgfitness", "pilatesstudio"]
+  "caption": "A stronger Tanjong Pagar lunch break starts here.\n\nStep into a 45-minute reformer pilates trial designed for busy CBD workdays: focused coaching, calm pacing, and movements that help you reset before the afternoon.\n\n• Beginner-friendly class flow\n• Small-group guidance\n• Easy access from the CBD\n\nVisit Core Form Studio at 12 Tanjong Pagar Road or book your trial via our website.",
+  "hashtags": ["sgpilates", "reformerpilates", "tanjongpagar", "pilatesstudio"]
 }
 ```
 
@@ -37,7 +37,7 @@ Quality notes:
 
 - Uses a clear benefit hook without overclaiming body transformation.
 - Includes local proof and address.
-- Keeps Instagram hashtags within the 5-15 range.
+- Keeps Instagram hashtags within the 3-5 focused range.
 - Avoids generic AI phrases such as "game-changer" or "discover the secrets".
 
 ## 2. Google Business Profile / Google Maps - Beauty & Wellness
@@ -66,7 +66,7 @@ Gold output:
 
 ```json
 {
-  "caption": "Glow Haus Facial Bar is now offering a weekday hydration facial package for guests looking for a calm 60-minute skin maintenance session in East Coast.\n\nVisit us at 88 East Coast Road, Singapore. To book an appointment, call +65 6123 4567 or visit https://glowhaus.example.",
+  "caption": "Glow Haus Facial Bar is now offering a weekday hydration facial package for guests looking for a calm 60-minute skin maintenance session in East Coast.\n\nVisit us at 88 East Coast Road, Singapore. To book an appointment, visit https://glowhaus.example or use the Call now button on Google.",
   "hashtags": []
 }
 ```
@@ -76,6 +76,7 @@ Quality notes:
 - Google Business content is concise, location-centric, and contact-led.
 - Includes address and a direct CTA.
 - Uses no hashtags.
+- Avoids writing a phone number in the post text; Google Business Profile should use the native Call now button.
 - Avoids medical or guaranteed transformation claims.
 
 ## 3. Xiaohongshu - Home Renovation / Local Service

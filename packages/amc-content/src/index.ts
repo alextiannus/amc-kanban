@@ -1,4 +1,5 @@
 export * from './types.ts'
+export * from './modelProfiles.ts'
 export * from './pipeline/createPlatformContent.ts'
 export * from './platforms/base.ts'
 export * from './platforms/registry.ts'

@@ -22,9 +22,11 @@ export class InstagramCopywriter extends BasePlatformCopywriter {
   protected bodyDirectives(_context: BodyPromptContext): string[] {
     return [
       'Write with clean line breaks and image-aware details.',
+      'Put the strongest search keywords and local place terms naturally in the caption, not only in hashtags.',
+      'Make the first 125 characters work above the fold.',
       'Use short bullets only when they improve scanning.',
       'End with a soft CTA for booking, visiting, saving, or sharing.',
-      'Hashtags should mix local, vertical, and brand/search intent tags.',
+      'Use only 3-5 highly relevant hashtags; mix local, vertical, and brand/search intent tags.',
     ]
   }
 }

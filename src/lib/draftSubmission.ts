@@ -64,19 +64,36 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   })
   if (!draft) return { ok: false as const, status: 404, error: 'Draft not found' }
 
-  // ── 防重复发布锁 ──────────────────────────────────────────────────────────
-  // 如果草稿已经在发布流程中（status='publishing'），拒绝重复提交
-  // 这是防止用户多次点击或并发请求造成 PostFast 重复排期的第一道防线
-  if (draft.status === 'publishing') {
-    return { ok: false as const, status: 409, error: '发布正在进行中，请稍候再试。' }
-  }
-
+  // ── 快速校验（在抢锁之前，避免空跑）────────────────────────────────────────
   if (!draft.caption || !draft.caption.trim()) {
     return { ok: false as const, status: 400, error: '草稿正文不能为空。' }
   }
 
   if (!draft.accountId) {
     return { ok: false as const, status: 400, error: '请先为草稿选择发布账号（确定发布平台）。' }
+  }
+
+  // ── 原子互斥锁：防止并发重复发布 ──────────────────────────────────────────
+  // 用 updateMany + WHERE status != 'publishing' 代替 findFirst+check 的 TOCTOU 模式。
+  // 只有成功把状态从「非 publishing」改成「publishing」的那一个请求才能继续，
+  // 其余并发请求 count=0 直接返回 409，与人工点击"审批"完全等效。
+  //
+  // 例外：autoPilot=false 且非 forcePublish 时走 pending_review 路径，无需抢锁。
+  const needsPublishingLock = brand.autoPilot || input.forcePublish
+  if (needsPublishingLock) {
+    const lockResult = await prisma.contentDraft.updateMany({
+      where: {
+        id: input.draftId,
+        brandId: input.brandId,
+        status: { not: 'publishing' },
+      },
+      data: { status: 'publishing' },
+    })
+    if (lockResult.count === 0) {
+      console.warn(`[submitDraftForDelivery] Draft ${input.draftId} already locked (status=publishing), rejecting concurrent request`)
+      return { ok: false as const, status: 409, error: '发布正在进行中，请稍候再试。' }
+    }
+    console.log(`[submitDraftForDelivery] Lock acquired for draft ${input.draftId}`)
   }
 
   if (!brand.autoPilot && !input.forcePublish) {
@@ -197,7 +214,9 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     }
   }
 
-  await prisma.contentDraft.update({ where: { id: draft.id }, data: { status: 'publishing', rejectionNote: null } })
+  // status is already 'publishing' — set by the atomic lock above. Only clear rejectionNote.
+  await prisma.contentDraft.update({ where: { id: draft.id }, data: { rejectionNote: null } })
+
 
   // ── Auto-schedule: if no scheduledAt, get the optimal time from the scheduling API ──
   // This is the unified enforcement point: ALL submissions (AI, human, voice, bulk)

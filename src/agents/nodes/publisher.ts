@@ -200,6 +200,28 @@ export async function publisherNode(state: any) {
 
   // 3. Execute publishing via PostFast if API Key is configured and account is connected and supports auto-publish
   if (brand.postfastApiKey && !isMockAccount && !isManualPlatform) {
+    // ── 原子互斥锁：与 submitDraftForDelivery（人工审批路径）保持完全一致 ──
+    // 如果 existingDraftId 已通过其他路径（API approve/submit）进入 'publishing' 或
+    // 'published' 状态，则跳过发布，防止 Agent 路径与 API 路径双重发帖。
+    if (existingDraftId) {
+      const lockResult = await prisma.contentDraft.updateMany({
+        where: {
+          id: existingDraftId,
+          status: { notIn: ['publishing', 'published', 'scheduled'] },
+        },
+        data: { status: 'publishing' },
+      })
+      if (lockResult.count === 0) {
+        console.warn(`[publisherNode] Draft ${existingDraftId} is already being published or published by another path, skipping PostFast call to prevent duplicate post`)
+        await prisma.workUnit.update({
+          where: { id: taskId },
+          data: { status: 'done', requiredInput: 'Draft already published by another path. Skipped duplicate PostFast call.' },
+        })
+        return { ...state, status: 'done', publishedUrl: `skipped://duplicate/${existingDraftId}` }
+      }
+      console.log(`[publisherNode] Lock acquired for draft ${existingDraftId}, proceeding with PostFast publish`)
+    }
+
     console.log(`Brand ${brand.name} has PostFast API key. Initiating actual social media publish...`);
     try {
       const publishRes = await postfastPublish({

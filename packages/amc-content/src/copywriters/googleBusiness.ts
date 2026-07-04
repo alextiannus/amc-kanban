@@ -23,7 +23,8 @@ export class GoogleBusinessCopywriter extends BasePlatformCopywriter {
     return [
       'Keep the post concise, factual, and location-centric.',
       'Include address or area when available.',
-      'Include a direct CTA such as call, visit, book, contact, or learn more.',
+      'Include a direct CTA such as visit, book, contact, learn more, or use the Google Business call button.',
+      'Do not write a phone number in the post text; Google Business Profile posts should use the native Call now button.',
       'Return an empty hashtags array because Google Business should not use hashtags.',
     ]
   }
@@ -31,6 +32,7 @@ export class GoogleBusinessCopywriter extends BasePlatformCopywriter {
   protected rewriteDirectives(_context: RewritePromptContext): string[] {
     return [
       'Remove hashtags and social slang.',
+      'Remove phone numbers from the post text and refer to the native Call now button instead.',
       'Ensure the rewrite includes a clear CTA and address/location if available.',
     ]
   }

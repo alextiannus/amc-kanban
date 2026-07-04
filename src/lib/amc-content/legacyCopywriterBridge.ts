@@ -15,10 +15,19 @@ import { createFilePromptTuningRepository } from './promptTuningRepositoryAdapte
 type LegacyCopywriterBridgeInput = {
   brand: any
   platform?: string
+  industryVertical?: IndustryVertical
   task?: { title?: string | null; description?: string | null } | null
   userPrompt?: string
   creativeHooks?: string
   marketingStrategy?: string
+  offerType?: string
+  customerIntent?: string
+  targetEmotion?: string
+  formatHint?: string
+  locationFocus?: string
+  localProof?: string[]
+  mustMention?: string[]
+  mustAvoid?: string[]
   draftId?: string | null
   mediaUrls?: string[]
   attachedAssets?: Array<{
@@ -38,7 +47,7 @@ export async function tryGenerateWithAmcContent(
   const platform = normalizePlatform(input.platform)
   if (!platform) return null
 
-  const vertical = inferVertical(input)
+  const vertical = input.industryVertical ?? inferVertical(input)
   const brand = toBrandContext(input.brand)
   const brief = toCopyBrief(input, vertical)
   const media = toMediaContext(input)
@@ -93,12 +102,19 @@ function toCopyBrief(input: LegacyCopywriterBridgeInput, industryVertical: Indus
 
   return {
     industryVertical,
+    offerType: input.offerType,
     theme,
     angle: input.creativeHooks || input.marketingStrategy || undefined,
-    customerIntent: inferCustomerIntent(theme, input.creativeHooks),
-    locationFocus: input.brand.location || input.brand.address || undefined,
-    localProof: inferLocalProof(input),
-    mustAvoid: input.brand.knowledge?.negPrompts ?? undefined,
+    customerIntent: input.customerIntent || inferCustomerIntent(theme, input.creativeHooks),
+    targetEmotion: input.targetEmotion,
+    formatHint: input.formatHint,
+    locationFocus: input.locationFocus || input.brand.location || input.brand.address || undefined,
+    localProof: input.localProof?.length ? input.localProof : inferLocalProof(input),
+    mustMention: input.mustMention,
+    mustAvoid: [
+      ...(input.mustAvoid ?? []),
+      ...(input.brand.knowledge?.negPrompts ?? []),
+    ],
   }
 }
 

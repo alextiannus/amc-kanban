@@ -37,6 +37,9 @@ export function runDeterministicGate(input: DeterministicGateInput): QualityResu
   if (vertical.vertical === 'home_renovation') {
     issues.push(...findAny(input.content.caption, ['cheapest', 'lowest price guaranteed'], 'price_claim'))
   }
+  if (input.platform === 'google_business') {
+    issues.push(...validateGoogleBusinessPostPolicy(input.content.caption))
+  }
 
   const errorCount = issues.filter((issue) => issue.severity === 'error').length
   const warningCount = issues.filter((issue) => issue.severity === 'warning').length
@@ -50,6 +53,19 @@ export function runDeterministicGate(input: DeterministicGateInput): QualityResu
       ? `Rewrite to fix: ${issues.map((issue) => issue.message).join('; ')}`
       : undefined,
   }
+}
+
+function validateGoogleBusinessPostPolicy(caption: string): QualityIssue[] {
+  const issues: QualityIssue[] = []
+  const hasPhoneNumber = /(?:\+?\d[\d\s().-]{6,}\d)/.test(caption)
+  if (hasPhoneNumber) {
+    issues.push({
+      code: 'google_business_phone_stuffing',
+      severity: 'error',
+      message: 'Google Business Profile post text should not include a phone number; use the native Call now button instead.',
+    })
+  }
+  return issues
 }
 
 function validateBrandRules(brand: BrandContext, caption: string): QualityIssue[] {

@@ -3,8 +3,8 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { callLLM } from '@/lib/llmRouter'
-import { copywriterNode } from '@/agents/nodes/copywriter'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
+import { generateContentWithFallback } from '@/lib/amc-content/contentGenerationService'
 
 // Allow enough time for parallel LLM calls across all platforms
 export const maxDuration = 120
@@ -184,30 +184,31 @@ export async function POST(request: Request, { params }: Params) {
             targetPlatform = 'xiaohongshu'
           }
 
-          const cwResult = await copywriterNode({
+          const cwResult = await generateContentWithFallback({
             brandId,
             platform: targetPlatform,
-            caption: idea,
+            theme: idea,
             mediaUrls: mediaUrls || [],
             assetIds: assetIds || [],
-            copywriteOnly: true
+            actorId: actor.id,
+            fallbackToLegacy: true,
           })
 
           if (cwResult && cwResult.caption) {
             caption = cwResult.caption
             hashtags = cwResult.hashtags || []
-            contentEngine = cwResult.contentEngine || 'legacy-copywriter'
-            const promptVersion = cwResult.provenance?.promptVersion || (contentEngine === 'amc-content' ? 'amc-content' : 'legacy-copywriter')
+            contentEngine = cwResult.contentEngine
+            const promptVersion = (cwResult.provenance as any)?.promptVersion || (contentEngine === 'amc-content' ? 'amc-content' : 'legacy-copywriter')
             logCopywriterOutput({
               brandId,
               userId: actor.id,
-              systemPrompt: `[via copywriterNode/${contentEngine}] ${JSON.stringify({
+              systemPrompt: `[via contentService/${contentEngine}] ${JSON.stringify({
                 quality: cwResult.quality,
                 provenance: cwResult.provenance,
               })}`,
               userInput: idea,
               rawOutput: JSON.stringify({ caption, hashtags, contentEngine, quality: cwResult.quality, provenance: cwResult.provenance }),
-              modelId: cwResult.provenance?.modelId,
+              modelId: (cwResult.provenance as any)?.modelId,
               platform,
             })
             console.log(`[BulkGenerate] Generated ${platform} with engine=${contentEngine}, promptVersion=${promptVersion}`)

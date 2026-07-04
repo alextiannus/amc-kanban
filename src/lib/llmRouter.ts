@@ -1,5 +1,6 @@
 import { prisma } from './prisma.ts'
 import { getGeminiApiKey, getMiniMaxApiKey } from './systemConfig.ts'
+import type { ResolvedContentModelProfile } from 'amc-content'
 
 export interface LLMCallResult {
   text: string | null
@@ -50,7 +51,8 @@ async function executeSingleLLMCall(
   apiKey: string,
   baseUrl: string | null,
   prompt: string,
-  maxTokens: number
+  maxTokens: number,
+  options: { temperature?: number; jsonMode?: boolean } = {},
 ): Promise<LLMCallResult & { rateLimited?: boolean }> {
   try {
     let responseText: string | null = null
@@ -64,7 +66,11 @@ async function executeSingleLLMCall(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: maxTokens },
+          generationConfig: {
+            maxOutputTokens: maxTokens,
+            ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+            ...(options.jsonMode ? { responseMimeType: 'application/json' } : {}),
+          },
         }),
       })
 
@@ -102,6 +108,8 @@ async function executeSingleLLMCall(
           model: modelName,
           messages: [{ role: 'user', content: prompt }],
           max_tokens: maxTokens,
+          ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+          ...(options.jsonMode ? { response_format: { type: 'json_object' } } : {}),
         }),
       })
 
@@ -133,6 +141,7 @@ async function executeSingleLLMCall(
         body: JSON.stringify({
           model: modelName,
           max_tokens: maxTokens,
+          ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
           messages: [{ role: 'user', content: prompt }],
         }),
       })
@@ -170,6 +179,51 @@ async function executeSingleLLMCall(
     console.error(`[LLM Router]`, error)
     return { text: null, provider, modelName, error: errorMsg, rateLimited: false }
   }
+}
+
+export async function callLLMWithContentModelProfile(
+  profile: ResolvedContentModelProfile,
+  prompt: string,
+  maxTokens: number,
+): Promise<LLMCallResult> {
+  const provider = profile.provider.provider
+  const modelName = process.env[`AMC_CONTENT_MODEL_${profile.id.toUpperCase()}_MODEL`] || profile.modelName
+  const baseUrl = process.env[profile.provider.baseUrlEnv || ''] || profile.provider.baseUrl || null
+  const apiKey = process.env[profile.provider.apiKeyEnv] || ''
+
+  if (!apiKey) {
+    return {
+      text: null,
+      provider,
+      modelName,
+      error: `API key missing for content model provider ${profile.provider.id}; expected env ${profile.provider.apiKeyEnv}`,
+    }
+  }
+
+  if (isCircuitOpen(provider, modelName)) {
+    return {
+      text: null,
+      provider,
+      modelName,
+      error: `Circuit open for content model profile ${profile.id}`,
+    }
+  }
+
+  const result = await executeSingleLLMCall(
+    provider,
+    modelName,
+    apiKey,
+    baseUrl,
+    prompt,
+    maxTokens,
+    {
+      temperature: profile.temperature,
+      jsonMode: profile.jsonMode,
+    },
+  )
+
+  if (result.rateLimited) tripCircuit(provider, modelName)
+  return result
 }
 
 // ============================================================
