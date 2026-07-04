@@ -306,7 +306,7 @@ model CrewMember {
   active      Boolean       @default(true)
   source      String        @default("DIRECT") // DIRECT | MIGRATION
   joinedAt    DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  updatedAt   DateTime      @default(now()) @updatedAt
 
   @@unique([crewId, userId])
   @@index([crewId])
