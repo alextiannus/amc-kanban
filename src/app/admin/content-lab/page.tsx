@@ -51,6 +51,16 @@ type PlatformOption = {
   requiredFields: string[]
 }
 
+type CopywriterOption = {
+  platform: PlatformType
+  name: string
+  version: string
+  description: string
+  bestFor: string[]
+  promptStyle: string
+  maxConcurrentJobs: number
+}
+
 type VerticalOption = {
   vertical: IndustryVertical
   displayName: string
@@ -177,6 +187,7 @@ export default function ContentLabPage() {
   const router = useRouter()
   const [brands, setBrands] = useState<BrandOption[]>([])
   const [platforms, setPlatforms] = useState<PlatformOption[]>([])
+  const [copywriters, setCopywriters] = useState<CopywriterOption[]>([])
   const [verticals, setVerticals] = useState<VerticalOption[]>([])
   const [form, setForm] = useState<FormState>(initialForm)
   const [loading, setLoading] = useState(true)
@@ -197,6 +208,7 @@ export default function ContentLabPage() {
     [brands, form.brandId],
   )
   const selectedPlatform = platforms.find((platform) => platform.platform === form.platform)
+  const selectedCopywriter = copywriters.find((copywriter) => copywriter.platform === form.platform)
   const selectedVertical = verticals.find((vertical) => vertical.vertical === form.industryVertical)
 
   useEffect(() => {
@@ -222,6 +234,7 @@ export default function ContentLabPage() {
       if (!res.ok) throw new Error(data.error || 'Failed to load content lab')
       setBrands(data.brands || [])
       setPlatforms(data.platforms || [])
+      setCopywriters(data.copywriters || [])
       setVerticals(data.verticals || [])
       const firstBrandId = data.brands?.[0]?.id || ''
       setForm((current) => ({
@@ -399,19 +412,22 @@ export default function ContentLabPage() {
               </label>
 
               <div>
-                <span className="mb-2 block text-xs font-medium text-slate-600">Platform</span>
-                <div className="grid grid-cols-2 gap-2">
+                <span className="mb-2 block text-xs font-medium text-slate-600">Platform Copywriter</span>
+                <div className="grid grid-cols-1 gap-2">
                   {platforms.map((platform) => (
                     <button
                       key={platform.platform}
                       onClick={() => applyPlatform(platform.platform)}
-                      className={`h-10 rounded-md border px-2 text-sm font-medium ${
+                      className={`min-h-14 rounded-md border px-3 py-2 text-left ${
                         form.platform === platform.platform
                           ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                       }`}
                     >
-                      {platform.displayName}
+                      <span className="block text-sm font-semibold">{platform.displayName}</span>
+                      <span className="block truncate text-xs opacity-75">
+                        {copywriters.find((copywriter) => copywriter.platform === platform.platform)?.name || 'Default provider'}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -532,6 +548,26 @@ export default function ContentLabPage() {
               </div>
             ) : (
               <p className="text-sm text-slate-400">No result yet</p>
+            )}
+          </section>
+
+          <section className="rounded-md border border-slate-200 bg-white p-4">
+            <h2 className="mb-3 text-sm font-semibold">Copywriter Provider</h2>
+            {selectedCopywriter ? (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{selectedCopywriter.name}</p>
+                  <p className="mt-1 text-xs text-slate-500">{selectedCopywriter.version}</p>
+                </div>
+                <p className="text-sm leading-5 text-slate-600">{selectedCopywriter.description}</p>
+                <dl className="space-y-2 text-sm">
+                  <Row label="Style" value={selectedCopywriter.promptStyle} />
+                  <Row label="Concurrency" value={`${selectedCopywriter.maxConcurrentJobs}`} />
+                  <Row label="Best for" value={selectedCopywriter.bestFor.join(', ')} />
+                </dl>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">No provider selected</p>
             )}
           </section>
 

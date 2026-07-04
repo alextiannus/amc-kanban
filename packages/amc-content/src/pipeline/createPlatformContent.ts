@@ -1,6 +1,6 @@
 import { getPlatformProvider } from '../platforms/registry.ts'
 import { getVerticalSpec } from '../verticals/registry.ts'
-import { runDeterministicGate } from '../quality/deterministicGate.ts'
+import { getPlatformCopywriter } from '../copywriters/registry.ts'
 import type {
   ComposedContent,
   HookCandidate,
@@ -14,6 +14,7 @@ const PROMPT_VERSION = 'amc-content-v0.1'
 
 export async function createPlatformContent(input: PlatformContentInput): Promise<PlatformContentResult> {
   const provider = getPlatformProvider(input.platform)
+  const copywriter = getPlatformCopywriter(input.platform)
   const vertical = getVerticalSpec(input.brief.industryVertical)
   const knowledge = await input.adapters.knowledgeRepository?.retrieve({
     brandId: input.brand.id,
@@ -28,7 +29,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     task: 'hook_generation',
     platform: input.platform,
     vertical: input.brief.industryVertical,
-    prompt: await withTuningNotes(input, 'hook_generation', buildHookPrompt(input, knowledge)),
+    prompt: await withTuningNotes(input, 'hook_generation', copywriter.buildHookPrompt({ input, knowledge })),
     maxTokens: 900,
   })
 
@@ -38,18 +39,12 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     task: 'body_composition',
     platform: input.platform,
     vertical: input.brief.industryVertical,
-    prompt: await withTuningNotes(input, 'body_composition', buildBodyPrompt(input, selectedHook, knowledge)),
+    prompt: await withTuningNotes(input, 'body_composition', copywriter.buildBodyPrompt({ input, hook: selectedHook, knowledge })),
     maxTokens: 1400,
   })
 
   let content = normalizeComposedContent(bodyModel.data, input.platform)
-  let quality = runDeterministicGate({
-    platform: input.platform,
-    vertical: input.brief.industryVertical,
-    brand: input.brand,
-    media: input.media,
-    content,
-  })
+  let quality = copywriter.validate(input, content)
 
   if (!quality.passed && quality.rewriteInstruction) {
     const rewriteModel = await input.adapters.modelRouter.generateJson<ComposedContent>({
@@ -59,22 +54,21 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
       prompt: await withTuningNotes(
         input,
         'quality_rewrite',
-        buildRewritePrompt(input, selectedHook, content, quality.rewriteInstruction),
+        copywriter.buildRewritePrompt({
+          input,
+          hook: selectedHook,
+          content,
+          rewriteInstruction: quality.rewriteInstruction,
+        }),
       ),
       maxTokens: 1400,
     })
     content = normalizeComposedContent(rewriteModel.data, input.platform)
-    quality = runDeterministicGate({
-      platform: input.platform,
-      vertical: input.brief.industryVertical,
-      brand: input.brand,
-      media: input.media,
-      content,
-    })
+    quality = copywriter.validate(input, content)
   }
 
   const provenance = {
-    platformSkillVersion: provider.skillVersion,
+    platformSkillVersion: copywriter.profile.version,
     verticalSkillVersion: vertical.skillVersion,
     knowledgeEntryIds: knowledge.map((entry) => entry.id),
     modelId: bodyModel.modelId ?? hookModel.modelId,
@@ -102,6 +96,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
       brandId: input.brand.id,
       brief: input.brief,
       media: input.media,
+      platformCopywriter: copywriter.profile,
       knowledgeEntryIds: provenance.knowledgeEntryIds,
     },
     output: result,
@@ -196,82 +191,4 @@ function fallbackHookText(input: PlatformContentInput): string {
   return input.platform === 'xiaohongshu'
     ? `${input.brand.name} 本地生活新灵感`
     : `${input.brand.name}: a local update worth checking out`
-}
-
-function buildHookPrompt(input: PlatformContentInput, knowledge: KnowledgeEntry[]): string {
-  const provider = getPlatformProvider(input.platform)
-  const vertical = getVerticalSpec(input.brief.industryVertical)
-  return [
-    `Generate hook candidates for ${provider.displayName}.`,
-    `Brand: ${input.brand.name}`,
-    `Vertical: ${vertical.displayName}`,
-    `Theme: ${input.brief.theme}`,
-    `Angle: ${input.brief.angle ?? 'choose the strongest local-service angle'}`,
-    input.brief.customerIntent ? `Customer intent: ${input.brief.customerIntent}` : '',
-    input.brief.locationFocus ? `Location focus: ${input.brief.locationFocus}` : '',
-    input.brief.mustAvoid?.length ? `Must avoid: ${input.brief.mustAvoid.join(', ')}` : '',
-    `Allowed hook categories: ${provider.hookCategories.join(', ')}`,
-    `Return JSON: { "hooks": [{ "text": string, "category": string, "score": number, "reason": string }] }`,
-    `Rules: avoid generic AI phrases, make every hook platform-native, and use a different category for each hook.`,
-    formatMedia(input.media),
-    formatKnowledge(knowledge),
-  ].filter(Boolean).join('\n')
-}
-
-function buildBodyPrompt(input: PlatformContentInput, hook: HookCandidate, knowledge: KnowledgeEntry[]): string {
-  const provider = getPlatformProvider(input.platform)
-  const vertical = getVerticalSpec(input.brief.industryVertical)
-  return [
-    `Compose a ${provider.displayName} caption for a ${vertical.displayName} local business.`,
-    `Default language: ${provider.defaultLanguage}`,
-    `Brand: ${input.brand.name}`,
-    input.brand.description ? `Brand description: ${input.brand.description}` : '',
-    input.brand.tone ? `Brand tone: ${input.brand.tone}` : '',
-    input.brand.address ? `Address: ${input.brand.address}` : '',
-    input.brand.website ? `Website: ${input.brand.website}` : '',
-    input.brand.phone ? `Phone: ${input.brand.phone}` : '',
-    `Brief theme: ${input.brief.theme}`,
-    input.brief.customerIntent ? `Customer intent: ${input.brief.customerIntent}` : '',
-    input.brief.localProof?.length ? `Local proof: ${input.brief.localProof.join(', ')}` : '',
-    input.brief.mustMention?.length ? `Must mention: ${input.brief.mustMention.join(', ')}` : '',
-    input.brief.mustAvoid?.length ? `Must avoid: ${input.brief.mustAvoid.join(', ')}` : '',
-    vertical.complianceNotes.length ? `Vertical compliance: ${vertical.complianceNotes.join(' ')}` : '',
-    formatMedia(input.media),
-    `Use this hook: ${hook.text}`,
-    `Max caption length: ${provider.maxCaptionLength}`,
-    `Hashtag rule: allow=${provider.hashtagRules.allowHashtags}, max=${provider.hashtagRules.max ?? 'none'}`,
-    `Return JSON: { "caption": string, "hashtags": string[] }`,
-    formatKnowledge(knowledge),
-  ].filter(Boolean).join('\n')
-}
-
-function buildRewritePrompt(
-  input: PlatformContentInput,
-  hook: HookCandidate,
-  content: ComposedContent,
-  rewriteInstruction: string,
-): string {
-  return [
-    `Rewrite the ${input.platform} content while preserving the brief and hook.`,
-    `Hook: ${hook.text}`,
-    `Current caption: ${content.caption}`,
-    `Current hashtags: ${content.hashtags.join(', ')}`,
-    rewriteInstruction,
-    `Return JSON: { "caption": string, "hashtags": string[] }`,
-  ].join('\n')
-}
-
-function formatKnowledge(knowledge: KnowledgeEntry[]): string {
-  if (knowledge.length === 0) return 'Knowledge: none'
-  return `Knowledge:\n${knowledge.map((entry) => `- [${entry.category}] ${entry.title}: ${entry.content}`).join('\n')}`
-}
-
-function formatMedia(media: PlatformContentInput['media']): string {
-  if (!media?.length) return 'Media: none'
-  return `Media:\n${media.map((item, index) => [
-    `- Asset ${index + 1}: ${item.url}`,
-    item.category ? `category=${item.category}` : '',
-    item.tags?.length ? `tags=${item.tags.join(', ')}` : '',
-    item.caption ? `caption=${item.caption}` : '',
-  ].filter(Boolean).join('; ')).join('\n')}`
 }

@@ -14,6 +14,12 @@ Initial integration should inject adapters for model routing, knowledge retrieva
 ## Current capabilities
 
 - Platform providers for Xiaohongshu, Instagram, Facebook, Google Business Profile, and TikTok.
+- Postiz-style platform copywriter registry:
+  - `InstagramCopywriter`
+  - `GoogleBusinessCopywriter`
+  - `XiaohongshuCopywriter`
+  - `FacebookCopywriter`
+  - `TikTokCopywriter`
 - Local lifestyle vertical strategy for F&B, beauty/wellness, fitness, home renovation, pets, education, healthcare, retail, events, professional services, and general local services.
 - Deterministic quality gates for caption length, hashtag policy, media requirements, brand negative prompts, required address/CTA fields, and vertical-specific risky claims.
 - Two-stage generation pipeline:
@@ -22,6 +28,31 @@ Initial integration should inject adapters for model routing, knowledge retrieva
   3. one quality rewrite pass when deterministic gates fail
 - Output normalization for hook candidates, score ranges, duplicated hashtags, `#` prefixes, and no-hashtag platforms.
 - Admin prompt tuning notes that can be appended to hook generation, body composition, or quality rewrite prompts by platform and vertical.
+
+## Platform copywriter architecture
+
+The external API remains simple:
+
+```ts
+createPlatformContent(input)
+```
+
+Internally, the pipeline resolves a dedicated copywriter provider:
+
+```ts
+const copywriter = getPlatformCopywriter(input.platform)
+```
+
+Each provider owns its own:
+
+- hook strategy
+- body prompt strategy
+- rewrite strategy
+- validation handoff
+- profile metadata for UI display
+- concurrency recommendation
+
+This mirrors the Postiz provider pattern: a registry maps platform identifiers to dedicated provider objects, while the orchestration layer stays platform-agnostic.
 
 ## Admin UI
 
@@ -34,6 +65,7 @@ Initial integration should inject adapters for model routing, knowledge retrieva
 The lab can:
 
 - Generate real content through `amc-content`.
+- Show the active platform copywriter provider, version, prompt style, best-fit use cases, and concurrency setting.
 - Inspect output, hook, quality issues, and provenance.
 - Review and edit legacy platform `SKILL.md` files.
 - Review and edit active prompt tuning notes for the new engine.
@@ -60,7 +92,7 @@ Run the package typecheck:
 npm run typecheck:amc-content
 ```
 
-The test suite currently covers provider rules, deterministic quality gates, Google Business rewrite flow, knowledge/logger/prompt-tuning adapter contracts, media prompt inclusion, and output normalization.
+The test suite currently covers provider rules, platform copywriter registry, deterministic quality gates, Google Business rewrite flow, knowledge/logger/prompt-tuning adapter contracts, media prompt inclusion, and output normalization.
 
 ## Examples
 

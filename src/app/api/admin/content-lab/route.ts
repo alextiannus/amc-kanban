@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   createPlatformContent,
+  listPlatformCopywriters,
   listPlatformProviders,
   listVerticalSpecs,
   type BrandContext,
@@ -76,6 +77,7 @@ export async function GET() {
       requiredFields: provider.requiredFields ?? [],
       skillVersion: provider.skillVersion,
     })),
+    copywriters: listPlatformCopywriters(),
     verticals: listVerticalSpecs().map((vertical) => ({
       vertical: vertical.vertical,
       displayName: vertical.displayName,

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import {
   createPlatformContent,
+  getPlatformCopywriter,
   getPlatformProvider,
+  listPlatformCopywriters,
   runDeterministicGate,
   type ContentLogger,
   type GenerationLog,
@@ -14,9 +16,46 @@ import {
 
 async function main() {
   testPlatformValidators()
+  testPlatformCopywriterRegistry()
   testDeterministicGate()
   await testPipelineRewriteAndNormalization()
   console.log('SUCCESS: amc-content tests passed')
+}
+
+function testPlatformCopywriterRegistry() {
+  const copywriters = listPlatformCopywriters()
+  assert.deepEqual(
+    copywriters.map((copywriter) => copywriter.platform).sort(),
+    ['facebook', 'google_business', 'instagram', 'tiktok', 'xiaohongshu'],
+  )
+
+  const google = getPlatformCopywriter('google_business')
+  const prompt = google.buildBodyPrompt({
+    input: {
+      platform: 'google_business',
+      brand: {
+        id: 'brand-copywriter',
+        name: 'Glow Studio',
+        address: '1 Test Street',
+      },
+      brief: {
+        industryVertical: 'beauty_wellness',
+        theme: 'Hydration facial package',
+      },
+      adapters: {
+        modelRouter: {
+          async generateJson() {
+            throw new Error('not used')
+          },
+        },
+      },
+    },
+    hook: { text: 'Book a calm weekday facial in East Coast', category: 'seo', score: 0.9 },
+    knowledge: [],
+  })
+
+  assert.match(prompt, /Google Business Copywriter/)
+  assert.match(prompt, /Return an empty hashtags array/)
 }
 
 function testPlatformValidators() {

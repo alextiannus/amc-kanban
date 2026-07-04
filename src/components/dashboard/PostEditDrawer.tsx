@@ -113,13 +113,13 @@ const PLATFORM_SLOTS: Array<{ key: string; icon: string; label: string; ids: str
 
 /** Returns the effective default selectedAccountIds:
  *  - all configured accounts
- *  - plus 'unconfigured_red' if no XHS account is configured (XHS always included) */
+ *  - plus 'unconfigured_xhs' if no XHS account is configured (XHS always included by default) */
 function buildDefaultAccountIds(accounts: SocialAccountOption[]): string[] {
   const ids = accounts.map(a => a.id)
   const hasXhs = accounts.some(a =>
     ['red', 'xiaohongshu', 'xhs', 'rednote'].includes((a.platformId || '').toLowerCase())
   )
-  if (!hasXhs) ids.push('unconfigured_red')
+  if (!hasXhs) ids.push('unconfigured_xhs')
   return ids
 }
 
@@ -192,6 +192,8 @@ interface PostEditDrawerProps {
   brandId: string
   brandName?: string
   onSuccess: () => void
+  /** Pre-fill media when opening from asset library */
+  initialAttachedMedia?: Array<{ id: string; type: 'asset' | 'url'; url: string }>
 }
 
 export default function PostEditDrawer({
@@ -200,7 +202,8 @@ export default function PostEditDrawer({
   postId,
   brandId,
   brandName = '当前品牌',
-  onSuccess
+  onSuccess,
+  initialAttachedMedia,
 }: PostEditDrawerProps) {
   const [selectedDraft, setSelectedDraft] = useState<DraftItem | null>(null)
   const [accounts, setAccounts] = useState<SocialAccountOption[]>([])
@@ -317,14 +320,15 @@ export default function PostEditDrawer({
       setSelectedDraft(null)
       setCaption('')
       setHashtags('')
-      // Default: select all configured accounts + XHS (always, via unconfigured_red if needed)
+      // Default: select all configured accounts + XHS (always, via unconfigured_xhs if needed)
       setSelectedAccountIds(buildDefaultAccountIds(accounts))
       setScheduledAt('')
       setAgentNote('')
       setReviewNote('')
       setContentIdea('')
       setCreativeHooks('')
-      setAttachedMedia([])
+      // Pre-fill media if coming from asset library
+      setAttachedMedia(initialAttachedMedia ?? [])
       setMediaUrlsInput('')
       setNewUrlInput('')
       setCommentsList([])
@@ -616,29 +620,12 @@ export default function PostEditDrawer({
     setError(null)
     try {
       const targetAccountIds = [...selectedAccountIds]
-      const hasRed = targetAccountIds.some(id => {
-        const acc = accounts.find(a => a.id === id)
-        return acc && ['red', 'xiaohongshu', 'xhs'].includes(String(acc.platformId || '').toLowerCase())
-      })
-      if (!hasRed) {
-        const configRed = accounts.find(a => ['red', 'xiaohongshu', 'xhs'].includes(String(a.platformId || '').toLowerCase()))
-        if (configRed) {
-          targetAccountIds.push(configRed.id)
-        } else {
-          targetAccountIds.push('unconfigured_red')
-        }
-      }
-
+      // XHS is always in the default selection; respect user's choice here
       // Save draft first to commit latest edits to contentIdea/attachedMedia
       const saved = await saveDraft(selectedDraft?.status || 'draft', '【AI 正在创作中...】', targetAccountIds)
       if (saved && saved.length > 0) {
-        const newSelectedIds = targetAccountIds.map(id => {
-          if (id === 'unconfigured_red') {
-            const match = saved.find(d => ['red', 'xiaohongshu', 'xhs'].includes(String(d.account?.platformId || '').toLowerCase()))
-            return match ? (match.accountId || id) : id
-          }
-          return id
-        }).filter((id): id is string => !!id)
+        // Remap: after backend resolves unconfigured_* IDs, use real accountIds from saved drafts
+        const newSelectedIds = saved.map(d => d.accountId || '').filter(Boolean)
 
         const newCaptions: Record<string, string> = {}
         const newHashtags: Record<string, string> = {}
@@ -1209,15 +1196,15 @@ Return the output strictly in a valid JSON array format, containing:
               {/* Social Channels and Scheduled At */}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 min-h-[44px]">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">发布账号 (多选) <span className="text-red-500">*</span></p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">创作平台 <span className="text-red-500">*</span></p>
                   <div className="flex flex-wrap gap-1.5">
                     {PLATFORM_SLOTS.map(slot => {
                       // Find the configured account for this platform slot
                       const configuredAccount = accounts.find(a =>
                         slot.ids.some(id => id === (a.platformId || '').toLowerCase())
                       )
-                      const effectiveId = configuredAccount?.id ?? (slot.key === 'xhs' ? 'unconfigured_red' : null)
-                      if (!effectiveId) return null   // non-XHS unconfigured slots are hidden (optional: show greyed)
+                      // Always show all slots — unconfigured get a synthetic ID
+                      const effectiveId = configuredAccount?.id ?? `unconfigured_${slot.key}`
                       const isConfigured = !!configuredAccount
                       const isSelected = selectedAccountIds.includes(effectiveId)
                       return (
@@ -1225,7 +1212,7 @@ Return the output strictly in a valid JSON array format, containing:
                           key={slot.key}
                           type="button"
                           disabled={isPublished}
-                          title={isConfigured ? (configuredAccount?.displayName || configuredAccount?.handle || slot.label) : `${slot.label}（未配置，仍可生成内容）`}
+                          title={isConfigured ? (configuredAccount?.displayName || configuredAccount?.handle || slot.label) : `${slot.label}（未配置，仍可生成内容草稿）`}
                           onClick={() => {
                             setSelectedAccountIds(prev =>
                               prev.includes(effectiveId)

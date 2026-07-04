@@ -289,6 +289,8 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
   // Draft Creation Workspace states
   const [isCreatingPost, setIsCreatingPost] = useState(false)
   const [isCreatingNewPost, setIsCreatingNewPost] = useState(false)
+  /** Media pre-filled when navigating here from asset library */
+  const [pendingInitialMedia, setPendingInitialMedia] = useState<Array<{ id: string; type: 'asset'; url: string }> | null>(null)
   const [contentIdea, setContentIdea] = useState('')
   const [creativeHooks, setCreativeHooks] = useState('')
   const [caption, setCaption] = useState('')
@@ -726,7 +728,7 @@ ${contentIdea || 'No details provided.'}`
   }, [lightboxIndex, filteredAssets.length])
 
   useEffect(() => {
-    if (preselectedAssetIds && preselectedAssetIds.length > 0 && brandAssets.length > 0 && accounts.length > 0) {
+    if (preselectedAssetIds && preselectedAssetIds.length > 0 && brandAssets.length > 0) {
       const mappedAssets = preselectedAssetIds
         .map((id) => {
           const found = brandAssets.find((a) => a.id === id)
@@ -735,32 +737,14 @@ ${contentIdea || 'No details provided.'}`
         .filter((a): a is { id: string; type: 'asset'; url: string } => !!a)
 
       if (mappedAssets.length > 0) {
-        setIsCreatingPost(true)
-        setCaption('')
-        setContentIdea('')
-        setCreativeHooks('')
-        setHashtags('')
-
-        const hasRed = accounts.some((a) => ['red', 'xiaohongshu', 'xhs'].includes(String(a.platformId || '').toLowerCase()))
-        const initialSelected = accounts.map((a) => a.id)
-        if (!hasRed) {
-          initialSelected.push('unconfigured_red')
-        }
-        setSelectedAccountIds(initialSelected)
-        setScheduledAt('')
-        setAgentNote('')
-        setAttachedMedia(mappedAssets)
-        setNewUrlInput('')
-        setCreatedDrafts(null)
-        setIsAiGenerating(false)
-        setDraftCaptions({})
-        setDraftHashtags({})
-        setDraftStatuses({})
+        // Store media to pre-fill in PostEditDrawer, then open drawer
+        setPendingInitialMedia(mappedAssets)
+        setIsCreatingNewPost(true)
       }
 
       clearPreselectedAssets?.()
     }
-  }, [preselectedAssetIds, brandAssets, accounts, clearPreselectedAssets])
+  }, [preselectedAssetIds, brandAssets, clearPreselectedAssets])
 
   // API triggers
   const triggerCopywriter = async (draftId: string, silent = false) => {
@@ -2480,11 +2464,13 @@ ${contentIdea || 'No details provided.'}`
         onClose={() => {
           setSelectedEventId(null);
           setIsCreatingNewPost(false);
+          setPendingInitialMedia(null);
         }}
         postId={selectedEventId}
         brandId={activeBrandId || brandId || ''}
         brandName={brandDetails?.name}
         onSuccess={refreshCalendar}
+        initialAttachedMedia={isCreatingNewPost && !selectedEventId ? pendingInitialMedia ?? undefined : undefined}
       />
     </div>
   )
