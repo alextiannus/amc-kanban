@@ -15,6 +15,7 @@ export {
 export type DelegatedSessionUser = {
   id: string
   email?: string
+  nickname?: string | null
   role: string
   type: string
   userRoles: string[]
