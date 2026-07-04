@@ -9,6 +9,7 @@ import {
   type KnowledgeRepository,
   type ModelRequest,
   type ModelRouter,
+  type PromptTuningRepository,
 } from '../packages/amc-content/src/index.ts'
 
 async function main() {
@@ -134,6 +135,14 @@ async function testPipelineRewriteAndNormalization() {
     },
   }
 
+  const promptTuningRepository: PromptTuningRepository = {
+    async getTuningNotes(input) {
+      return input.task === 'body_composition'
+        ? 'Use calm, concrete wording and avoid luxury hype.'
+        : null
+    },
+  }
+
   const logs: GenerationLog[] = []
   const logger: ContentLogger = {
     async logGeneration(event: GenerationLog) {
@@ -168,6 +177,7 @@ async function testPipelineRewriteAndNormalization() {
     adapters: {
       modelRouter,
       knowledgeRepository,
+      promptTuningRepository,
       logger,
     },
   })
@@ -183,6 +193,8 @@ async function testPipelineRewriteAndNormalization() {
   assert.match(calls[0].prompt, /Media:/)
   assert.match(calls[1].prompt, /Vertical compliance:/)
   assert.match(calls[1].prompt, /Preferred booking CTA/)
+  assert.match(calls[1].prompt, /ADMIN PROMPT TUNING NOTES/)
+  assert.match(calls[1].prompt, /Use calm, concrete wording/)
 }
 
 function assertIssue(issues: Array<{ code: string }>, code: string) {

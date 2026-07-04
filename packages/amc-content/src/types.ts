@@ -100,6 +100,16 @@ export interface ModelRouter {
   generateText?(input: ModelRequest): Promise<{ text: string; modelId?: string }>
 }
 
+export interface PromptTuningQuery {
+  task: ModelRequest['task']
+  platform: PlatformType
+  vertical: IndustryVertical
+}
+
+export interface PromptTuningRepository {
+  getTuningNotes(input: PromptTuningQuery): Promise<string | null>
+}
+
 export interface GenerationLog {
   brandId: string
   platform: PlatformType
@@ -120,6 +130,7 @@ export interface ContentLogger {
 export interface ContentAdapters {
   modelRouter: ModelRouter
   knowledgeRepository?: KnowledgeRepository
+  promptTuningRepository?: PromptTuningRepository
   logger?: ContentLogger
 }
 

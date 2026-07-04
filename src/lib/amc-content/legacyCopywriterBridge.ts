@@ -10,6 +10,7 @@ import {
 import { createAmcContentModelRouter } from './modelRouterAdapter.ts'
 import { createPrismaKnowledgeRepository } from './knowledgeRepositoryAdapter.ts'
 import { createPrismaContentLogger } from './loggerAdapter.ts'
+import { createFilePromptTuningRepository } from './promptTuningRepositoryAdapter.ts'
 
 type LegacyCopywriterBridgeInput = {
   brand: any
@@ -51,6 +52,7 @@ export async function tryGenerateWithAmcContent(
     adapters: {
       modelRouter: createAmcContentModelRouter(),
       knowledgeRepository: createPrismaKnowledgeRepository(),
+      promptTuningRepository: createFilePromptTuningRepository(),
       logger: createPrismaContentLogger(input.assigneeId || 'copywriter@platform.amc'),
     },
   })

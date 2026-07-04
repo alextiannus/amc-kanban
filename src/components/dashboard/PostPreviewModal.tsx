@@ -98,8 +98,8 @@ export default function PostPreviewModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-955/65 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative w-full max-w-5xl h-[85vh] overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900 flex flex-col shadow-2xl animate-in zoom-in-95 duration-205" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md" onClick={onClose}>
+      <div className="relative w-full max-w-5xl h-[85vh] overflow-hidden rounded-2xl border border-slate-200/60 bg-slate-50/98 dark:border-slate-800/60 dark:bg-slate-900/98 flex flex-col shadow-2xl animate-in zoom-in-95 duration-205 backdrop-blur" onClick={(e) => e.stopPropagation()}>
         
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4 shrink-0">
@@ -387,30 +387,54 @@ function PlatformPreviewCard({
           onOpenEdit()
         }
       }}
-      className={`space-y-4 border-b border-slate-100 dark:border-slate-800 pb-6 last:border-0 last:pb-0 transition-all ${
-        !isGenerating ? 'cursor-pointer hover:bg-slate-100/30 dark:hover:bg-slate-800/10 p-2 rounded-2xl' : ''
-      }`}
+      className={`rounded-2xl transition-all ${
+        !isGenerating
+          ? 'cursor-pointer hover:shadow-md hover:bg-white/80 dark:hover:bg-slate-800/40'
+          : ''
+      } bg-white/60 dark:bg-slate-800/20 border border-slate-100/80 dark:border-slate-800/60 shadow-sm overflow-hidden`}
     >
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-            {platform.toUpperCase()}
+      {/* Platform Label Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100/60 dark:border-slate-800/60">
+        <div className="flex items-center gap-2.5">
+          {/* Platform colored dot */}
+          <div className={`w-2 h-2 rounded-full shrink-0 ${
+            platform === 'ig' ? 'bg-gradient-to-tr from-yellow-500 via-pink-500 to-purple-600'
+            : platform === 'xhs' ? 'bg-red-500'
+            : platform === 'fb' ? 'bg-blue-600'
+            : platform === 'tiktok' ? 'bg-slate-900 dark:bg-white'
+            : 'bg-amber-500'
+          }`} />
+          <span className={`text-[10px] font-black tracking-wider ${
+            platform === 'ig' ? 'text-pink-600 dark:text-pink-400'
+            : platform === 'xhs' ? 'text-red-600 dark:text-red-400'
+            : platform === 'fb' ? 'text-blue-700 dark:text-blue-400'
+            : platform === 'tiktok' ? 'text-slate-800 dark:text-slate-200'
+            : 'text-amber-700 dark:text-amber-400'
+          }`}>
+            {platform === 'ig' ? 'INSTAGRAM'
+            : platform === 'xhs' ? '小红书'
+            : platform === 'fb' ? 'FACEBOOK'
+            : platform === 'tiktok' ? 'TIKTOK'
+            : 'GOOGLE BUSINESS'}
           </span>
-          <span className="text-[10px] text-slate-400 font-bold">({account.displayName || account.handle})</span>
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
+            {account.displayName || account.handle}
+          </span>
         </div>
         {!isGenerating && !isFailed && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenEdit() }}
-            className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+            className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
           >
-            <Edit3 className="w-3 h-3" />
-            <span>编辑内容</span>
+            <Edit3 className="w-2.5 h-2.5" />
+            <span>编辑</span>
           </button>
         )}
       </div>
 
-      <div className="relative" onClick={(e) => {
+      {/* Phone Mockup Area */}
+      <div className="p-4" onClick={(e) => {
         if (e.target instanceof HTMLButtonElement || e.target instanceof SVGElement || (e.target instanceof HTMLElement && e.target.closest('button'))) {
           e.stopPropagation()
         }

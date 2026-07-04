@@ -28,7 +28,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     task: 'hook_generation',
     platform: input.platform,
     vertical: input.brief.industryVertical,
-    prompt: buildHookPrompt(input, knowledge),
+    prompt: await withTuningNotes(input, 'hook_generation', buildHookPrompt(input, knowledge)),
     maxTokens: 900,
   })
 
@@ -38,7 +38,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     task: 'body_composition',
     platform: input.platform,
     vertical: input.brief.industryVertical,
-    prompt: buildBodyPrompt(input, selectedHook, knowledge),
+    prompt: await withTuningNotes(input, 'body_composition', buildBodyPrompt(input, selectedHook, knowledge)),
     maxTokens: 1400,
   })
 
@@ -56,7 +56,11 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
       task: 'quality_rewrite',
       platform: input.platform,
       vertical: input.brief.industryVertical,
-      prompt: buildRewritePrompt(input, selectedHook, content, quality.rewriteInstruction),
+      prompt: await withTuningNotes(
+        input,
+        'quality_rewrite',
+        buildRewritePrompt(input, selectedHook, content, quality.rewriteInstruction),
+      ),
       maxTokens: 1400,
     })
     content = normalizeComposedContent(rewriteModel.data, input.platform)
@@ -106,6 +110,26 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
   })
 
   return result
+}
+
+async function withTuningNotes(
+  input: PlatformContentInput,
+  task: 'hook_generation' | 'body_composition' | 'quality_rewrite',
+  prompt: string,
+): Promise<string> {
+  const notes = await input.adapters.promptTuningRepository?.getTuningNotes({
+    task,
+    platform: input.platform,
+    vertical: input.brief.industryVertical,
+  })
+  if (!notes?.trim()) return prompt
+  return [
+    prompt,
+    '',
+    '--- ADMIN PROMPT TUNING NOTES ---',
+    notes.trim(),
+    '--- END ADMIN PROMPT TUNING NOTES ---',
+  ].join('\n')
 }
 
 function selectHook(hooks: HookCandidate[], recentHooks: HookCandidate[] = []): HookCandidate {

@@ -21,6 +21,30 @@ Initial integration should inject adapters for model routing, knowledge retrieva
   2. platform caption/body composition
   3. one quality rewrite pass when deterministic gates fail
 - Output normalization for hook candidates, score ranges, duplicated hashtags, `#` prefixes, and no-hashtag platforms.
+- Admin prompt tuning notes that can be appended to hook generation, body composition, or quality rewrite prompts by platform and vertical.
+
+## Admin UI
+
+`amc-kanban` exposes an internal tuning workspace at:
+
+```text
+/admin/content-lab
+```
+
+The lab can:
+
+- Generate real content through `amc-content`.
+- Inspect output, hook, quality issues, and provenance.
+- Review and edit legacy platform `SKILL.md` files.
+- Review and edit active prompt tuning notes for the new engine.
+
+Prompt tuning notes are stored in:
+
+```text
+packages/amc-content/config/prompt-tuning.json
+```
+
+These notes are injected into the live `amc-content` pipeline through the `PromptTuningRepository` adapter.
 
 ## Tests
 
@@ -36,7 +60,7 @@ Run the package typecheck:
 npm run typecheck:amc-content
 ```
 
-The test suite currently covers provider rules, deterministic quality gates, Google Business rewrite flow, knowledge/logger adapter contracts, media prompt inclusion, and output normalization.
+The test suite currently covers provider rules, deterministic quality gates, Google Business rewrite flow, knowledge/logger/prompt-tuning adapter contracts, media prompt inclusion, and output normalization.
 
 ## Examples
 

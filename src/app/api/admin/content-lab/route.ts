@@ -14,6 +14,7 @@ import { prisma } from '@/lib/prisma'
 import { createAmcContentModelRouter } from '@/lib/amc-content/modelRouterAdapter'
 import { createPrismaKnowledgeRepository } from '@/lib/amc-content/knowledgeRepositoryAdapter'
 import { createPrismaContentLogger } from '@/lib/amc-content/loggerAdapter'
+import { createFilePromptTuningRepository } from '@/lib/amc-content/promptTuningRepositoryAdapter'
 
 const platforms = ['xiaohongshu', 'instagram', 'facebook', 'google_business', 'tiktok'] as const
 const verticals = [
@@ -59,6 +60,11 @@ export async function GET() {
   })
 
   return NextResponse.json({
+    engine: {
+      name: 'amc-content',
+      enabled: process.env.AMC_CONTENT_ENGINE_ENABLED !== 'false',
+      disabledByEnv: process.env.AMC_CONTENT_ENGINE_ENABLED === 'false',
+    },
     brands,
     platforms: listPlatformProviders().map((provider) => ({
       platform: provider.platform,
@@ -143,6 +149,7 @@ export async function POST(request: NextRequest) {
     adapters: {
       modelRouter: createAmcContentModelRouter(),
       knowledgeRepository: createPrismaKnowledgeRepository(),
+      promptTuningRepository: createFilePromptTuningRepository(),
       logger: createPrismaContentLogger(session.user.id),
     },
   })

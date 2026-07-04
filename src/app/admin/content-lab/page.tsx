@@ -85,6 +85,28 @@ type LabResponse = {
   latencyMs: number
 }
 
+type PlatformSkillRecord = {
+  platform: PlatformType
+  path: string
+  markdown: string
+}
+
+type PromptTuningEntry = {
+  platform?: string
+  vertical?: string
+  task?: string
+  notes: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
+type SkillConfigResponse = {
+  platformSkills: PlatformSkillRecord[]
+  promptTuning: { entries: PromptTuningEntry[] }
+}
+
+type PromptTask = 'hook_generation' | 'body_composition' | 'quality_rewrite'
+
 const starterByPlatform: Record<PlatformType, Partial<FormState>> = {
   instagram: {
     industryVertical: 'fitness_pilates',
@@ -162,6 +184,13 @@ export default function ContentLabPage() {
   const [error, setError] = useState('')
   const [response, setResponse] = useState<LabResponse | null>(null)
   const [copied, setCopied] = useState(false)
+  const [skillConfig, setSkillConfig] = useState<SkillConfigResponse | null>(null)
+  const [selectedSkillPlatform, setSelectedSkillPlatform] = useState<PlatformType>('instagram')
+  const [skillMarkdown, setSkillMarkdown] = useState('')
+  const [promptTask, setPromptTask] = useState<PromptTask>('body_composition')
+  const [promptNotes, setPromptNotes] = useState('')
+  const [savingSkill, setSavingSkill] = useState(false)
+  const [savingPrompt, setSavingPrompt] = useState(false)
 
   const selectedBrand = useMemo(
     () => brands.find((brand) => brand.id === form.brandId) ?? null,
@@ -173,6 +202,16 @@ export default function ContentLabPage() {
   useEffect(() => {
     void loadLabData()
   }, [])
+
+  useEffect(() => {
+    const record = skillConfig?.platformSkills.find((skill) => skill.platform === selectedSkillPlatform)
+    setSkillMarkdown(record?.markdown || '')
+  }, [selectedSkillPlatform, skillConfig])
+
+  useEffect(() => {
+    const entry = findPromptEntry(skillConfig?.promptTuning.entries || [], form.platform, form.industryVertical, promptTask)
+    setPromptNotes(entry?.notes || '')
+  }, [form.platform, form.industryVertical, promptTask, skillConfig])
 
   async function loadLabData() {
     setLoading(true)
@@ -189,11 +228,19 @@ export default function ContentLabPage() {
         ...current,
         brandId: current.brandId || firstBrandId,
       }))
+      await loadSkillConfig()
     } catch (err: any) {
       setError(err.message || 'Failed to load content lab')
     } finally {
       setLoading(false)
     }
+  }
+
+  async function loadSkillConfig() {
+    const res = await fetch('/api/admin/content-lab/skills')
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to load skill config')
+    setSkillConfig(data)
   }
 
   function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -247,6 +294,54 @@ export default function ContentLabPage() {
     await navigator.clipboard.writeText(output.trim())
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1200)
+  }
+
+  async function savePlatformSkill() {
+    setSavingSkill(true)
+    setError('')
+    try {
+      const res = await fetch('/api/admin/content-lab/skills', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'platformSkill',
+          platform: selectedSkillPlatform,
+          markdown: skillMarkdown,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save skill')
+      await loadSkillConfig()
+    } catch (err: any) {
+      setError(err.message || 'Failed to save skill')
+    } finally {
+      setSavingSkill(false)
+    }
+  }
+
+  async function savePromptTuning() {
+    setSavingPrompt(true)
+    setError('')
+    try {
+      const res = await fetch('/api/admin/content-lab/skills', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'promptTuning',
+          platform: form.platform,
+          vertical: form.industryVertical,
+          task: promptTask,
+          notes: promptNotes,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save prompt tuning')
+      setSkillConfig((current) => current ? { ...current, promptTuning: data.promptTuning } : current)
+    } catch (err: any) {
+      setError(err.message || 'Failed to save prompt tuning')
+    } finally {
+      setSavingPrompt(false)
+    }
   }
 
   return (
@@ -478,8 +573,77 @@ export default function ContentLabPage() {
               </div>
             ) : null}
           </section>
+
+          <section className="rounded-md border border-slate-200 bg-white p-4">
+            <h2 className="mb-3 text-sm font-semibold">Prompt Tuning</h2>
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-slate-600">Task</span>
+                <select
+                  value={promptTask}
+                  onChange={(event) => setPromptTask(event.target.value as PromptTask)}
+                  className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-indigo-500"
+                >
+                  <option value="hook_generation">Hook generation</option>
+                  <option value="body_composition">Body composition</option>
+                  <option value="quality_rewrite">Quality rewrite</option>
+                </select>
+              </label>
+              <textarea
+                value={promptNotes}
+                rows={7}
+                onChange={(event) => setPromptNotes(event.target.value)}
+                placeholder="Add admin tuning notes for the selected platform, vertical, and task."
+                className="w-full resize-y rounded-md border border-slate-200 px-3 py-2 text-sm leading-5 outline-none focus:border-indigo-500"
+              />
+              <button
+                onClick={() => void savePromptTuning()}
+                disabled={savingPrompt}
+                className="flex h-9 w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+              >
+                {savingPrompt ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Save Prompt Notes
+              </button>
+            </div>
+          </section>
         </aside>
       </div>
+
+      <section className="mx-auto max-w-7xl px-5 pb-6">
+        <div className="rounded-md border border-slate-200 bg-white p-4">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold">Platform Skill Editor</h2>
+              <p className="text-xs text-slate-500">These markdown skills are still used by the legacy fallback chain and as review references.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedSkillPlatform}
+                onChange={(event) => setSelectedSkillPlatform(event.target.value as PlatformType)}
+                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500"
+              >
+                {platforms.map((platform) => (
+                  <option key={platform.platform} value={platform.platform}>{platform.displayName}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => void savePlatformSkill()}
+                disabled={savingSkill || !skillMarkdown.trim()}
+                className="flex h-9 items-center gap-2 rounded-md bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:bg-slate-300"
+              >
+                {savingSkill ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Save Skill
+              </button>
+            </div>
+          </div>
+          <textarea
+            value={skillMarkdown}
+            rows={18}
+            onChange={(event) => setSkillMarkdown(event.target.value)}
+            className="w-full resize-y rounded-md border border-slate-200 bg-slate-50 px-3 py-3 font-mono text-xs leading-5 text-slate-800 outline-none focus:border-indigo-500"
+          />
+        </div>
+      </section>
     </main>
   )
 }
@@ -563,4 +727,17 @@ function guessMimeType(url: string): string | undefined {
   if (lower.endsWith('.png')) return 'image/png'
   if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.includes('image')) return 'image/jpeg'
   return undefined
+}
+
+function findPromptEntry(
+  entries: PromptTuningEntry[],
+  platform: PlatformType,
+  vertical: IndustryVertical,
+  task: PromptTask,
+): PromptTuningEntry | undefined {
+  return entries.find((entry) =>
+    entry.platform === platform
+    && entry.vertical === vertical
+    && entry.task === task
+  )
 }

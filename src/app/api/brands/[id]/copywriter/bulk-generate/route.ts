@@ -176,6 +176,7 @@ export async function POST(request: Request, { params }: Params) {
 
         let caption = `【${platform}】美味速递！创意想法：${idea}`
         let hashtags: string[] = []
+        let contentEngine = 'fallback-default'
 
         try {
           let targetPlatform = platform
@@ -195,14 +196,21 @@ export async function POST(request: Request, { params }: Params) {
           if (cwResult && cwResult.caption) {
             caption = cwResult.caption
             hashtags = cwResult.hashtags || []
+            contentEngine = cwResult.contentEngine || 'legacy-copywriter'
+            const promptVersion = cwResult.provenance?.promptVersion || (contentEngine === 'amc-content' ? 'amc-content' : 'legacy-copywriter')
             logCopywriterOutput({
               brandId,
               userId: actor.id,
-              systemPrompt: '[via copywriterNode — see src/agents/nodes/copywriter.ts bodyPrompt]',
+              systemPrompt: `[via copywriterNode/${contentEngine}] ${JSON.stringify({
+                quality: cwResult.quality,
+                provenance: cwResult.provenance,
+              })}`,
               userInput: idea,
-              rawOutput: JSON.stringify({ caption, hashtags }),
+              rawOutput: JSON.stringify({ caption, hashtags, contentEngine, quality: cwResult.quality, provenance: cwResult.provenance }),
+              modelId: cwResult.provenance?.modelId,
               platform,
             })
+            console.log(`[BulkGenerate] Generated ${platform} with engine=${contentEngine}, promptVersion=${promptVersion}`)
           }
         } catch (err) {
           console.error(`Failed to generate copy via copywriterNode for ${platform}:`, err)
@@ -245,6 +253,7 @@ Do not include markdown wrappers around the JSON, return the raw JSON object.
               if (parsed.caption) {
                 caption = parsed.caption
                 hashtags = parsed.hashtags || []
+                contentEngine = 'bulk-generate-fallback-llm'
                 logCopywriterOutput({
                   brandId,
                   userId: actor.id,
@@ -272,6 +281,7 @@ Do not include markdown wrappers around the JSON, return the raw JSON object.
           captionLang: platform === 'xiaohongshu' ? 'zh' : 'en',
           mediaUrls: mediaUrls || [],
           hashtags,
+          contentEngine,
           scheduledAt,
           assetIds: assetIds || [],
           isConnected: account.handle !== 'unconfigured'
