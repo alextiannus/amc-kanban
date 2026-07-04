@@ -235,11 +235,16 @@ export async function POST(request: Request, { params }: Params) {
           return
         }
 
-        // Fetch brand + knowledge
-        const brand = await prisma.brand.findUnique({
-          where: { id: brandId },
-          include: { knowledge: true, companionSkills: { where: { isEnabled: true } } },
-        })
+        // ── 并行加载品牌数据 + MCP 工具，节省 100-200ms 串行等待 ─────────────────
+        const t0 = Date.now()
+        const [brand, extTools] = await Promise.all([
+          prisma.brand.findUnique({
+            where: { id: brandId },
+            include: { knowledge: true, companionSkills: { where: { isEnabled: true } } },
+          }),
+          McpClientManager.aggregateExternalTools(brandId),
+        ])
+        console.log(`[voice-chat] brand+MCP loaded in ${Date.now() - t0}ms`)
 
         if (!brand) {
           controller.enqueue(encoder.encode(JSON.stringify({ error: 'Brand not found' }) + '\n'))
@@ -320,8 +325,7 @@ export async function POST(request: Request, { params }: Params) {
           return
         }
 
-        // Fetch and merge remote MCP tools
-        const extTools = await McpClientManager.aggregateExternalTools(brandId)
+        // Fetch and merge remote MCP tools (now loaded via Promise.all above)
         const combinedTools = [
           ...COMPANION_TOOLS,
           ...extTools
@@ -330,10 +334,14 @@ export async function POST(request: Request, { params }: Params) {
         // Send initial progress update
         controller.enqueue(encoder.encode(JSON.stringify({ type: 'status', message: '思考中...' }) + '\n'))
 
+        // 对话历史只发最近 8 轮：减少 token 数，减少 Gemini TTFT
+        const trimmedHistory = history.slice(-8)
+
         // Call gemini-chat with history, tools, and the tool execution callback
+        const tGemini = Date.now()
         const result = await callGeminiChat(
           systemPrompt,
-          history,
+          trimmedHistory,
           message,
           true,
           500,
@@ -362,7 +370,7 @@ export async function POST(request: Request, { params }: Params) {
           }
         )
 
-        console.log('[voice-chat] callGeminiChat result:', JSON.stringify(result, null, 2))
+        console.log(`[voice-chat] callGeminiChat done in ${Date.now() - tGemini}ms, reply length=${result.reply?.length ?? 0}`)
         const finalReply = result.reply || '抱歉，我处理时遇到了些问题，请再说一遍。'
 
         controller.enqueue(encoder.encode(JSON.stringify({

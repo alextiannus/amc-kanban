@@ -1,5 +1,19 @@
 import { prisma } from './prisma.ts'
 
+// ── 内存缓存：避免每次语音对话都查 DB 获取 API Key ───────────────────────────
+// Gemini Key 几乎不会变，5 分钟缓存完全安全。
+const _keyCache: Record<string, { value: string | null; ts: number }> = {}
+const KEY_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+function getCachedKey(name: string): string | null | undefined {
+  const entry = _keyCache[name]
+  if (entry && Date.now() - entry.ts < KEY_CACHE_TTL) return entry.value
+  return undefined // miss
+}
+function setCachedKey(name: string, value: string | null) {
+  _keyCache[name] = { value, ts: Date.now() }
+}
+
 export async function ensureSystemConfig() {
   const existing = await prisma.systemConfig.findUnique({ where: { id: 'default' } })
   if (existing) return existing
@@ -96,9 +110,13 @@ export async function isDirectPublishingEnabled(): Promise<boolean> {
 }
 
 export async function getGeminiApiKey(): Promise<string | null> {
+  const cached = getCachedKey('gemini')
+  if (cached !== undefined) return cached
   try {
     const config = await ensureSystemConfig()
-    return config.geminiApiKey || process.env.GEMINI_API_KEY || null
+    const key = config.geminiApiKey || process.env.GEMINI_API_KEY || null
+    setCachedKey('gemini', key)
+    return key
   } catch (error) {
     console.error('[getGeminiApiKey Error]', error)
     return process.env.GEMINI_API_KEY || null
