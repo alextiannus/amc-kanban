@@ -641,6 +641,10 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
 
   if (input.scheduledAt) {
     post.scheduledAt = input.scheduledAt
+  } else {
+    // No scheduledAt = publish immediately.
+    // PostFast defaults to SCHEDULED when status is absent, so we must be explicit.
+    post.status = 'PUBLISHED'
   }
 
   if (mediaKeys.length > 0) {
