@@ -70,29 +70,33 @@ Implemented in [compliance.ts](file:///Users/alextian/Documents/Claude/Projects/
 
 ## 3. AMC Copywriter AI Automation & Knowledge Base
 
+> **目标状态，待执行**：本节已按最新 Agent、权限和去 WorkUnit 方案统一描述；当前代码中的任务驱动逻辑将在 Auth V2 与泳道后台迁移阶段替换。
+
 ### 3.1 Overview
-The AMC Copywriter (AI Agent) is automated to run on a background schedule and immediately triggers in response to specific user actions and task additions. Additionally, it references a structured Brand Knowledge Base to ensure consistent and high-quality copywriting outputs.
+The target AMC Copywriter is a normal AMC Agent system user. It runs from explicit business events or scheduled content checks, uses the same Capability and Crew authorization as a human employee, and writes all operations to the shared work log. It does not consume Kanban tasks or `WorkUnit`.
 
 ### 3.2 Automated Scheduling (6 Hours)
 - **Mechanism**: A background loop executes every 6 hours (`setInterval.unref()` to prevent thread blocking).
-- **Execution**: The scheduler queries all active Kanban tasks (`WorkUnit`) in `todo` status assigned to any active AI Agent.
-- **Workflow**: For each matched task, the agent triggers the `marketingGraph.invoke` process to complete copy generation and media assembly.
+- **Execution**: The scheduler evaluates active brands, publishing cadence, social accounts, existing drafts, available assets, and unresolved `ActionItem` records. It creates or updates the relevant business resource directly.
+- **Workflow**: When content work is required, the scheduler invokes `marketingGraph` with explicit `brandId`, `accountId`, `draftId` and actor context. Internal graph checkpoints may track technical execution, but they are not product tasks or board items.
 
 ### 3.3 Immediate Triggers
-The copywriter workflow triggers immediately under three user-driven contexts:
-1. **a. Post Draft Editing Flow**: In the post draft edit drawer, clicking the **✨ AI 创作** button saves the current draft, creates/links a corresponding Kanban task, and runs the workflow in the background.
-2. **b. Draft Review Panel**: In the pending review drawer, clicking the **✨ AI 重新创作** button runs the workflow in the background to recreate the caption based on review comments or task guidelines.
-3. **c. New Kanban Todo Task**: Whenever a new creation task is added to the `todo` lane (either via direct Kanban task addition or Asset Library scheduling), the system immediately triggers the copywriter workflow in the background.
+The copywriter workflow triggers immediately under three business contexts:
+1. **Post Draft Editing Flow**: Clicking **✨ AI 创作** saves the draft and invokes the workflow with that draft ID.
+2. **Draft Review Flow**: Clicking **✨ AI 重新创作** invokes the workflow using the draft, rejection note, brand knowledge and selected assets.
+3. **Asset or Calendar Flow**: Creating content from the Asset Library or publishing calendar creates a `ContentDraft` directly and invokes the assigned AMC Agent when AI creation is requested.
+
+If human input or approval is required, the workflow creates an `ActionItem`; it never creates a `require_input` task.
 
 ### 3.4 Brand Board & Knowledge Base Integration
 - **Structured Knowledge Base**: Implemented in [knowledgeBase.ts](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/agents/knowledgeBase.ts), storing templates, prompts, video scripts, and marketing ideas for Food & Beverage, Fitness, Renovation, Winery, and General categories.
-- **Dynamic Retrieval**: In the copywriter agent [copywriter.ts](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/agents/nodes/copywriter.ts), the AI agent detects the brand's industry from database metrics and queries the knowledge base matching the platform and task title keywords.
+- **Dynamic Retrieval**: In the copywriter agent [copywriter.ts](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/agents/nodes/copywriter.ts), the AI agent detects the brand's industry and queries the knowledge base using the target platform, draft context, campaign intent and selected assets.
 - **In-Context Prompting**: Dynamic templates, scripts, ideas, and prompts are injected directly into the Gemini prompt instructions.
 - **Fallback Templates**: If Gemini is offline/fails, the rule-based fallback system uses the templates loaded from the knowledge base rather than hardcoded rules.
 
 ### 3.5 Duplicate Prevention (In-place Draft Updates)
 - To prevent duplicate drafts when the user edits or reviews a draft and triggers the copywriter:
-  - The `publisherNode` in [publisher.ts](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/agents/nodes/publisher.ts) checks for an existing draft ID (passed in the state or parsed from task descriptions/materials).
+  - The `publisherNode` in [publisher.ts](file:///Users/alextian/Documents/Claude/Projects/AI%20Staff/amc-kanban/src/agents/nodes/publisher.ts) requires an explicit existing draft ID in workflow state.
   - If a draft ID is matched, the publisher updates the existing draft record in-place instead of creating a duplicate content draft.
 
 ---

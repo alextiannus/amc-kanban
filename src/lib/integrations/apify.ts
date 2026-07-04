@@ -568,3 +568,116 @@ export async function scrapeXiaohongshu(input: {
 
   return { posts, profiles: [], runId: result.runId, durationMs: result.durationMs, error: result.error }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Facebook  (apify/facebook-pages-scraper)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface FacebookItem {
+  pageId?: string
+  pageName?: string
+  title?: string
+  url?: string
+  likes?: number
+  followers?: number
+  postId?: string
+  id?: string
+  type?: string
+  message?: string
+  link?: string
+  postUrl?: string
+  time?: string
+  timestamp?: string
+  date?: string
+  likesCount?: number
+  commentsCount?: number
+  sharesCount?: number
+  viewsCount?: number
+  videoViewCount?: number
+  media?: Array<{ thumbnail?: string; url?: string }>
+  topImage?: string
+}
+
+export async function scrapeFacebook(input: {
+  pageUrls: string[]
+  maxPosts?: number
+}): Promise<{
+  posts: ApifyPost[]
+  profiles: ApifyProfile[]
+  runId: string
+  durationMs: number
+  error?: string
+}> {
+  if (input.pageUrls.length === 0) {
+    return { posts: [], profiles: [], runId: '', durationMs: 0, error: 'No page URLs provided' }
+  }
+
+  const result = await runActorAndWait<FacebookItem>(
+    'apify~facebook-pages-scraper',
+    {
+      startUrls: input.pageUrls.map(url => ({ url })),
+      maxPosts: input.maxPosts ?? 30,
+      maxPostComments: 0,
+      maxReviews: 0,
+      scrapeAbout: false,
+      scrapeReviews: false,
+      scrapeServices: false,
+    },
+    { timeoutSecs: 180, memoryMbytes: 1024, maxItems: (input.maxPosts ?? 30) * input.pageUrls.length + input.pageUrls.length }
+  )
+
+  const posts: ApifyPost[] = []
+  const profileMap = new Map<string, ApifyProfile>()
+
+  for (const item of result.items ?? []) {
+    // Profile item (page-level, no postId)
+    if (item.pageName && !item.postId && !item.id) {
+      const handle = item.url ?? item.pageId ?? item.pageName ?? ''
+      if (handle && !profileMap.has(handle)) {
+        profileMap.set(handle, {
+          platform: 'facebook',
+          handle,
+          displayName: item.pageName ?? item.title ?? handle,
+          followerCount: item.followers ?? item.likes ?? 0,
+        })
+      }
+      continue
+    }
+
+    // Post item
+    const postId = item.postId ?? item.id ?? ''
+    if (!postId) continue
+
+    const rawTime = item.time ?? item.timestamp ?? item.date ?? ''
+    const normalizedAt = rawTime
+      ? (/^\d{10,13}$/.test(rawTime)
+          ? new Date(Number(rawTime) * (rawTime.length === 10 ? 1000 : 1)).toISOString()
+          : rawTime)
+      : new Date().toISOString()
+
+    const pageHandle = item.url ?? item.link?.split('/posts/')[0] ?? ''
+
+    posts.push({
+      source: 'instagram' as const,   // ApifyPost.source union — platform field carries 'facebook'
+      platform: 'facebook',
+      handle: pageHandle,
+      postId,
+      caption: item.message ?? '',
+      url: item.postUrl ?? item.link ?? `https://www.facebook.com/${postId}`,
+      publishedAt: normalizedAt,
+      likes: item.likesCount ?? item.likes ?? 0,
+      comments: item.commentsCount ?? 0,
+      shares: item.sharesCount ?? 0,
+      views: item.videoViewCount ?? item.viewsCount ?? 0,
+      imageUrl: item.topImage ?? item.media?.[0]?.thumbnail ?? item.media?.[0]?.url ?? undefined,
+    })
+  }
+
+  return {
+    posts,
+    profiles: Array.from(profileMap.values()),
+    runId: result.runId,
+    durationMs: result.durationMs,
+    error: result.error,
+  }
+}

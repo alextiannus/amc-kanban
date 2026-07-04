@@ -1,7 +1,5 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose'
-import { cookies } from 'next/headers'
-import crypto from 'crypto'
-import { isSystemAdminEmail } from './amcOperator'
+import { authenticateApiKey, authenticateCurrentSession } from './auth-v2'
 
 function getJwtKey() {
   const secretKey = process.env.JWT_SECRET
@@ -26,6 +24,7 @@ export type SessionUser = {
   email?: string
   role: string
   type: string
+  userRoles?: string[]
   [key: string]: unknown
 }
 
@@ -53,39 +52,17 @@ export async function decrypt(input: string): Promise<SessionPayload> {
 }
 
 export async function getSession(): Promise<Session | null> {
-  const cookieStore = await cookies()
-  const session = cookieStore.get('session')?.value
-  if (!session) return null
-  try {
-    const payload = await decrypt(session)
-    if (!payload.user || typeof payload.user.id !== 'string') {
-      return null
-    }
-
-    const normalizedUser: SessionUser = {
-      ...payload.user,
-      id: payload.user.id,
-      email: typeof payload.user.email === 'string' ? payload.user.email : undefined,
-      role: typeof payload.user.role === 'string' ? payload.user.role : 'USER',
-      type: typeof payload.user.type === 'string' ? payload.user.type : 'HUMAN',
-    }
-
-    if (isSystemAdminEmail(normalizedUser.email) && normalizedUser.role !== 'ADMIN') {
-      return {
-        ...payload,
-        user: {
-          ...normalizedUser,
-          role: 'ADMIN'
-        }
-      }
-    }
-
-    return {
-      ...payload,
-      user: normalizedUser,
-    }
-  } catch {
-    return null
+  const principal = await authenticateCurrentSession()
+  if (!principal) return null
+  return {
+    sub: principal.userId,
+    user: {
+      id: principal.userId,
+      email: principal.email,
+      role: principal.globalRoles.includes('ADMIN') ? 'ADMIN' : 'USER',
+      type: principal.actorType === 'AMC_AGENT' ? 'AI_AGENT' : 'HUMAN',
+      userRoles: principal.globalRoles,
+    },
   }
 }
 
@@ -109,41 +86,13 @@ export function extractApiKey(request: Request): string | null {
 
 // Get agent by API key from database
 export async function getAgentFromApiKey(apiKey: string) {
-  try {
-    const { prisma } = await import('./prisma')
-    
-    // 1. Try finding it as plaintext (new format)
-    let agent = await prisma.user.findUnique({
-      where: { apiKey },
-      select: { id: true, email: true, type: true, role: true }
-    })
-
-    // 2. Fallback to hashed format (legacy support)
-    if (!agent) {
-      const hashedApiKey = crypto.createHash('sha256').update(apiKey).digest('hex')
-      agent = await prisma.user.findUnique({
-        where: { apiKey: hashedApiKey },
-        select: { id: true, email: true, type: true, role: true }
-      })
-    }
-
-    // 3. Fallback: decrypt as JWT if it starts with eyJ
-    if (!agent && apiKey.startsWith('eyJ')) {
-      try {
-        const payload = await decrypt(apiKey)
-        if (payload && payload.agentId) {
-          agent = await prisma.user.findUnique({
-            where: { id: payload.agentId },
-            select: { id: true, email: true, type: true, role: true }
-          })
-        }
-      } catch {
-        // Failed to decrypt or verify
-      }
-    }
-
-    return agent;
-  } catch {
-    return null
+  const principal = await authenticateApiKey(apiKey)
+  if (!principal || principal.actorType !== 'AMC_AGENT') return null
+  return {
+    id: principal.userId,
+    email: principal.email ?? null,
+    type: 'AI_AGENT',
+    role: principal.globalRoles.includes('ADMIN') ? 'ADMIN' : 'USER',
+    userRoles: principal.globalRoles,
   }
 }

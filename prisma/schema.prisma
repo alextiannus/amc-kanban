@@ -13,6 +13,8 @@ model User {
   password     String
   type         String   @default("HUMAN") // HUMAN or AI_AGENT
   role         String   @default("USER")  // ADMIN or USER (针对人类)
+  status       String   @default("ACTIVE") // ACTIVE | SUSPENDED | DISABLED
+  authVersion  Int      @default(1)
   country      String?
   phone        String?
   
@@ -272,13 +274,17 @@ model UserApiKey {
   id          String    @id @default(cuid())
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token       String    @unique
+  token       String?   @unique // Legacy plaintext token; cleared after hash migration
+  tokenHash   String?   @unique
+  prefix      String?
   name        String?   // Label for the key (e.g. "Zhangyi Key")
   createdAt   DateTime  @default(now())
   lastUsedAt  DateTime?
   expiresAt   DateTime?
+  revokedAt   DateTime?
 
   @@index([userId])
+  @@index([userId, revokedAt])
 }
 
 model MarketingCrew {
@@ -296,11 +302,16 @@ model CrewMember {
   crew        MarketingCrew @relation(fields: [crewId], references: [id], onDelete: Cascade)
   userId      String
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        String        @default("VIEWER") // OWNER | PRINCIPAL | EDITOR | VIEWER
+  active      Boolean       @default(true)
+  source      String        @default("DIRECT") // DIRECT | MIGRATION
   joinedAt    DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@unique([crewId, userId])
   @@index([crewId])
   @@index([userId])
+  @@index([userId, active])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1055,5 +1066,4 @@ model CompanionSkill {
 
   @@index([brandId])
 }
-
 

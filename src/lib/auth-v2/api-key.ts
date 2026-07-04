@@ -1,0 +1,107 @@
+import crypto from 'crypto'
+import { prisma } from '@/lib/prisma'
+import { principalFromUser, type AuthPrincipal } from './types'
+
+const LAST_USED_WRITE_INTERVAL_MS = 5 * 60 * 1000
+
+export function hashApiKeyToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex')
+}
+
+export function apiKeyPrefix(token: string): string {
+  return token.slice(0, 12)
+}
+
+export function createApiKeyToken(prefix = 'amc_key'): string {
+  return `${prefix}_${crypto.randomBytes(32).toString('base64url')}`
+}
+
+function isActiveDateRange(expiresAt: Date | null, revokedAt: Date | null): boolean {
+  if (revokedAt) return false
+  return !expiresAt || expiresAt.getTime() > Date.now()
+}
+
+function scheduleLastUsedUpdate(id: string, lastUsedAt: Date | null) {
+  if (lastUsedAt && Date.now() - lastUsedAt.getTime() < LAST_USED_WRITE_INTERVAL_MS) return
+  void prisma.userApiKey
+    .update({ where: { id }, data: { lastUsedAt: new Date() } })
+    .catch((error: unknown) => console.error('[auth-v2] API key lastUsedAt update failed', error))
+}
+
+export async function authenticateApiKey(token: string): Promise<AuthPrincipal | null> {
+  const tokenHash = hashApiKeyToken(token)
+  const key = await prisma.userApiKey.findFirst({
+    where: {
+      OR: [{ tokenHash }, { token }],
+    },
+    select: {
+      id: true,
+      token: true,
+      tokenHash: true,
+      lastUsedAt: true,
+      expiresAt: true,
+      revokedAt: true,
+      user: {
+        select: {
+          id: true,
+          email: true,
+          type: true,
+          role: true,
+          status: true,
+          authVersion: true,
+          businessRoles: { select: { role: true } },
+        },
+      },
+    },
+  })
+
+  if (key) {
+    if (key.user.status !== 'ACTIVE') return null
+    if (!isActiveDateRange(key.expiresAt, key.revokedAt)) return null
+
+    if (!key.tokenHash || key.token) {
+      void prisma.userApiKey
+        .update({
+          where: { id: key.id },
+          data: { tokenHash, prefix: apiKeyPrefix(token), token: null },
+        })
+        .catch((error: unknown) => console.error('[auth-v2] legacy API key hash migration failed', error))
+    }
+    scheduleLastUsedUpdate(key.id, key.lastUsedAt)
+    return principalFromUser(key.user, 'api_key', key.id)
+  }
+
+  // Temporary compatibility for legacy AI Agent keys stored on User.
+  const legacyHash = hashApiKeyToken(token)
+  const legacyUser = await prisma.user.findFirst({
+    where: {
+      status: 'ACTIVE',
+      OR: [{ apiKey: token }, { apiKey: legacyHash }],
+    },
+    select: {
+      id: true,
+      email: true,
+      type: true,
+      role: true,
+      status: true,
+      authVersion: true,
+      businessRoles: { select: { role: true } },
+    },
+  })
+  if (!legacyUser) return null
+
+  const migrated = await prisma.userApiKey.upsert({
+    where: { tokenHash },
+    create: {
+      userId: legacyUser.id,
+      tokenHash,
+      prefix: apiKeyPrefix(token),
+      name: 'Migrated legacy AMC Agent key',
+      lastUsedAt: new Date(),
+    },
+    update: { lastUsedAt: new Date() },
+    select: { id: true },
+  })
+
+  return principalFromUser(legacyUser, 'legacy_api_key', migrated.id)
+}

@@ -1,126 +1,109 @@
 import { prisma } from '../prisma.ts'
-import { isAmcOperator } from '../amcOperator.ts'
+
+const READ_ROLES = ['ADMIN', 'AMC_PRINCIPAL', 'BRAND_OWNER', 'BD']
+const WRITE_ROLES = ['ADMIN', 'AMC_PRINCIPAL', 'BRAND_OWNER']
 
 /**
- * Checks if a user is directly in the brand's MarketingCrew.
+ * Direct Crew membership only. Organization inheritance is intentionally not
+ * represented as a second CrewMember row.
  */
 export async function isUserInBrandCrew(brandId: string, userId: string): Promise<boolean> {
   const member = await prisma.crewMember.findFirst({
     where: {
+      userId,
+      active: true,
       crew: { brandId },
-      userId
     },
-    select: { id: true }
+    select: { id: true },
   })
-  return !!member
+  return Boolean(member)
 }
 
 /**
- * Evaluates human user access to a brand project.
- * Access is granted if:
- * 1. User is an ADMIN / Operator.
- * 2. User is directly in the brand's Crew.
- * 3. User is in the brand's Crew via Organization membership cascade (e.g. member of owner's org).
+ * Compatibility entry point for legacy call sites.
+ *
+ * Authorization is resolved in one User query:
+ * - explicit global role
+ * - direct active CrewMember, or Organization Owner CrewMember inheritance
+ * - ADMIN global access
  */
+export async function canUserAccessBrand(
+  brandId: string,
+  userId: string,
+  action: string = 'READ',
+): Promise<boolean> {
+  const allowedRoles = action === 'READ' ? READ_ROLES : WRITE_ROLES
+  const user = await prisma.user.findFirst({
+    where: {
+      id: userId,
+      status: 'ACTIVE',
+      OR: [
+        { businessRoles: { some: { role: 'ADMIN' } } },
+        // Transitional safety until User.role is removed.
+        { role: 'ADMIN' },
+        {
+          AND: [
+            { businessRoles: { some: { role: { in: allowedRoles } } } },
+            {
+              OR: [
+                {
+                  crewMemberships: {
+                    some: {
+                      active: true,
+                      crew: { brandId },
+                    },
+                  },
+                },
+                {
+                  organizationsJoined: {
+                    some: {
+                      owner: {
+                        crewMemberships: {
+                          some: {
+                            active: true,
+                            crew: { brandId },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    select: { id: true },
+  })
+  return Boolean(user)
+}
+
 export async function canHumanAccessBrand(brandId: string, userId: string): Promise<boolean> {
-  // 1. ADMIN operator check
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { type: true, role: true }
-  })
-  if (isAmcOperator(user)) return true
-
-  // 2. Direct Brand Owner check
-  const brand = await prisma.brand.findUnique({
-    where: { id: brandId },
-    select: { ownerId: true }
-  })
-  if (brand?.ownerId === userId) return true
-
-  // 2. Direct Crew membership check
-  const isDirect = await isUserInBrandCrew(brandId, userId)
-  if (isDirect) return true
-
-  // 3. Organization cascade check:
-  // If an organization owner has direct access to the brand, their organization members inherit access.
-  const orgOwners = await prisma.organizationMember.findMany({
-    where: { memberId: userId },
-    select: { ownerId: true }
-  })
-  const ownerIds = orgOwners.map((m: { ownerId: string }) => m.ownerId)
-
-  if (ownerIds.length > 0) {
-    const orgHasAccess = await prisma.crewMember.findFirst({
-      where: {
-        crew: { brandId },
-        userId: { in: ownerIds }
-      },
-      select: { id: true }
-    })
-    if (orgHasAccess) return true
-  }
-
-  return false
+  return canUserAccessBrand(brandId, userId, 'READ')
 }
 
 /**
- * Checks session-level brand access (for humans or AI agents).
+ * User.type does not influence authorization in Auth V2.
  */
 export async function canSessionAccessBrand(
   brandId: string,
   userId: string,
-  userType: string,
-  action: string = 'READ'
+  _userType: string,
+  action: string = 'READ',
 ): Promise<boolean> {
-  if (userType === 'AI_AGENT') {
-    // AI Agents must be in the brand's Crew
-    const inCrew = await isUserInBrandCrew(brandId, userId)
-    if (!inCrew) return false
-
-    // AI Agents are blocked from brand-level WRITE actions (Double-Layer ACL)
-    if (action === 'WRITE') return false
-    return true
-  }
-  return canHumanAccessBrand(brandId, userId)
+  return canUserAccessBrand(brandId, userId, action)
 }
 
 /**
- * Dual-Layer Access Control checking:
- * 1. Checks if the delegated human user has brand access (Data Domain boundary).
- * 2. Checks if the specific AI agent is permitted to perform the given functional action.
+ * Legacy adapter retained during the 24-hour delegated-key transition.
+ * The AMC Agent is authorized as itself and receives no type-based blacklist.
  */
 export async function checkDualLayerACL(
   brandId: string,
-  humanUserId: string,
+  _humanUserId: string,
   agentId: string,
-  action: string
+  action: string,
 ): Promise<boolean> {
-  // Layer 1: Data Domain Boundary Check (must have access to the brand)
-  const hasDomainAccess = await canHumanAccessBrand(brandId, humanUserId)
-  if (!hasDomainAccess) return false
-
-  // Layer 2: Functional Role Restrictions Check for AI Agent
-  const agent = await prisma.user.findUnique({
-    where: { id: agentId },
-    select: { type: true }
-  })
-
-  // Must be a valid AI agent
-  if (!agent || agent.type !== 'AI_AGENT') return false
-
-  // Whitelist/Blacklist functional actions
-  const RESTRICTED_ACTIONS = [
-    'delete_account',
-    'modify_subscription',
-    'manage_users',
-    'invite_users',
-    'delete_brand'
-  ]
-
-  if (RESTRICTED_ACTIONS.includes(action)) {
-    console.warn(`[ACL] AI Agent ${agentId} attempted forbidden action: ${action} under delegation of user ${humanUserId}`)
-    return false // Strictly blocked
-  }
-
-  return true
+  return canUserAccessBrand(brandId, agentId, action === 'read' ? 'READ' : 'WRITE')
 }

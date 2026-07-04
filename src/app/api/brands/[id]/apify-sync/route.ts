@@ -18,6 +18,7 @@ import {
   scrapeInstagram,
   scrapeTikTok,
   scrapeXiaohongshu,
+  scrapeFacebook,
   type ApifyReview,
   type ApifyPost,
   type ApifyProfile,
@@ -73,6 +74,11 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'APIFY_API_TOKEN is not configured on the server' }, { status: 503 })
   }
 
+  // Optional per-request overrides
+  const url = new URL(req.url)
+  const maxPostsParam = parseInt(url.searchParams.get('maxPosts') ?? '0', 10)
+  const maxPostsOverride = maxPostsParam > 0 ? maxPostsParam : null
+
   // Load brand with accounts
   const brand = await prisma.brand.findFirst({
     where: { id },
@@ -102,6 +108,11 @@ export async function POST(req: Request, { params }: Params) {
     .filter((a: any) => ['xiaohongshu', 'rednote', 'red'].includes(a.platformId.toLowerCase()) && a.handle)
     .map((a: any) => a.handle)
 
+  // Facebook: use profileUrl if available, otherwise construct from handle
+  const facebookPageUrls = brand.accounts
+    .filter((a: any) => ['facebook', 'fb'].includes(a.platformId.toLowerCase()) && (a.profileUrl || a.handle))
+    .map((a: any) => a.profileUrl || `https://www.facebook.com/${a.handle}`)
+
   const googlePlaceId = brand.googlePlaceId
   const googleSearchQuery = !googlePlaceId && brand.name
     ? `${brand.name} ${brand.location ?? brand.address ?? ''}`.trim()
@@ -111,49 +122,57 @@ export async function POST(req: Request, { params }: Params) {
   const hasInstagram     = instagramHandles.length > 0
   const hasTikTok        = tiktokHandles.length > 0
   const hasXiaohongshu   = xiaohongshuHandles.length > 0
+  const hasFacebook      = facebookPageUrls.length > 0
   const hasBrandKeywords = !!(brand.name)
 
-  if (!hasGoogleTarget && !hasInstagram && !hasTikTok && !hasXiaohongshu) {
+  if (!hasGoogleTarget && !hasInstagram && !hasTikTok && !hasXiaohongshu && !hasFacebook) {
     return NextResponse.json({
       error: 'No scrapeable targets configured. Add a Google Place ID or social accounts to proceed.',
     }, { status: 422 })
   }
 
+  // Scraping limits — can be overridden via ?maxPosts=N
+  const maxPosts     = maxPostsOverride ?? 50
+  const maxXhs       = maxPostsOverride ?? 30
+  const maxReviews   = 100
+
   const t0 = Date.now()
   const jobResults: Record<string, unknown> = {}
   const errors: string[] = []
 
-  // ── Run all scrapers in parallel ─────────────────────────────────────────
-  const [googleResult, instagramResult, tiktokResult, xiaohongshuResult] = await Promise.all([
+  // ── Run all scrapers in parallel ───────────────────────────────────────────────
+  const [googleResult, instagramResult, tiktokResult, xiaohongshuResult, facebookResult] = await Promise.all([
     hasGoogleTarget
       ? scrapeGoogleMapsReviews({
           placeId: googlePlaceId ?? undefined,
           searchQuery: googleSearchQuery,
-          maxReviews: 80,
+          maxReviews,
           language: 'en',
         })
       : Promise.resolve({ reviews: [] as ApifyReview[], runId: '', durationMs: 0, error: 'No target' }),
 
     hasInstagram
-      ? scrapeInstagram({ handles: instagramHandles, maxPosts: 30 })
+      ? scrapeInstagram({ handles: instagramHandles, maxPosts })
       : Promise.resolve({ posts: [] as ApifyPost[], profiles: [] as ApifyProfile[], runId: '', durationMs: 0, error: 'No handles' }),
 
     hasTikTok
-      ? scrapeTikTok({ handles: tiktokHandles, maxPosts: 30 })
+      ? scrapeTikTok({ handles: tiktokHandles, maxPosts })
       : Promise.resolve({ posts: [] as ApifyPost[], profiles: [] as ApifyProfile[], runId: '', durationMs: 0, error: 'No handles' }),
 
     hasXiaohongshu
-      ? scrapeXiaohongshu({ handles: xiaohongshuHandles, maxPosts: 20 })
+      ? scrapeXiaohongshu({ handles: xiaohongshuHandles, maxPosts: maxXhs })
       : (hasBrandKeywords
-          ? scrapeXiaohongshu({ keywords: [brand.name, brand.location ?? ''].filter(Boolean), maxPosts: 20 })
+          ? scrapeXiaohongshu({ keywords: [brand.name, brand.location ?? ''].filter(Boolean), maxPosts: maxXhs })
           : Promise.resolve({ posts: [] as ApifyPost[], profiles: [] as ApifyProfile[], runId: '', durationMs: 0, error: 'No target' })),
+
+    hasFacebook
+      ? scrapeFacebook({ pageUrls: facebookPageUrls, maxPosts })
+      : Promise.resolve({ posts: [] as ApifyPost[], profiles: [] as ApifyProfile[], runId: '', durationMs: 0, error: 'No Facebook pages' }),
   ])
 
   const totalDurationMs = Date.now() - t0
 
   // ── Load previous sync to preserve data for platforms that failed this run ──
-  // If TikTok / Google / etc. scraper is blocked and returns 0 items, we keep
-  // the last successful dataset for that platform rather than wiping it.
   const previousLog = await prisma.auditLog.findFirst({
     where: { resourceId: id, resourceType: 'ApifySync' },
     orderBy: { timestamp: 'desc' },
@@ -165,6 +184,7 @@ export async function POST(req: Request, { params }: Params) {
   if (instagramResult.error) errors.push(`Instagram: ${instagramResult.error}`)
   if (tiktokResult.error) errors.push(`TikTok: ${tiktokResult.error}`)
   if (xiaohongshuResult.error) errors.push(`Xiaohongshu: ${xiaohongshuResult.error}`)
+  if (facebookResult.error && hasFacebook) errors.push(`Facebook: ${facebookResult.error}`)
 
   // Smart merge: use fresh data if we got any, otherwise fall back to previous
   const googleReviews = googleResult.reviews.length > 0
@@ -191,24 +211,35 @@ export async function POST(req: Request, { params }: Params) {
     ? xiaohongshuResult.posts
     : asArray<ApifyPost>(prevMeta.xiaohongshuPosts)
 
+  const facebookPosts = facebookResult.posts.length > 0
+    ? facebookResult.posts
+    : asArray<ApifyPost>(prevMeta.facebookPosts)
+
+  const facebookProfiles = facebookResult.profiles.length > 0
+    ? facebookResult.profiles
+    : asArray<ApifyProfile>(prevMeta.facebookProfiles)
+
   jobResults.googleReviews     = googleReviews
   jobResults.instagramPosts    = instagramPosts
   jobResults.instagramProfiles = instagramProfiles
   jobResults.tiktokPosts       = tiktokPosts
   jobResults.tiktokProfiles    = tiktokProfiles
   jobResults.xiaohongshuPosts  = xiaohongshuPosts
+  jobResults.facebookPosts     = facebookPosts
+  jobResults.facebookProfiles  = facebookProfiles
 
   jobResults.summary = {
     googleReviewCount:    googleReviews.length,
     instagramPostCount:   instagramPosts.length,
     tiktokPostCount:      tiktokPosts.length,
     xiaohongshuPostCount: xiaohongshuPosts.length,
-    // Track which platforms used fresh vs cached data
+    facebookPostCount:    facebookPosts.length,
     freshSources: {
       google:      googleResult.reviews.length > 0,
       instagram:   instagramResult.posts.length > 0,
       tiktok:      tiktokResult.posts.length > 0,
       xiaohongshu: xiaohongshuResult.posts.length > 0,
+      facebook:    facebookResult.posts.length > 0,
     },
     totalDurationMs,
     scrapedAt: new Date().toISOString(),
@@ -226,7 +257,7 @@ export async function POST(req: Request, { params }: Params) {
       action: 'APIFY_SYNC',
       resourceId: id,
       resourceType: 'ApifySync',
-      reason: `Sync: ${googleReviews.length} reviews (${googleResult.reviews.length} fresh), ${instagramPosts.length} IG (${instagramResult.posts.length} fresh), ${tiktokPosts.length} TT (${tiktokResult.posts.length} fresh)`,
+      reason: `Sync: ${googleReviews.length} reviews (${googleResult.reviews.length} fresh), ${instagramPosts.length} IG (${instagramResult.posts.length} fresh), ${tiktokPosts.length} TT (${tiktokResult.posts.length} fresh), ${facebookPosts.length} FB (${facebookResult.posts.length} fresh)`,
       metadata: jobResults as Prisma.InputJsonValue,
     },
   })
@@ -286,10 +317,11 @@ export async function POST(req: Request, { params }: Params) {
     }
   }
 
-  // ── Update SocialAccount follower counts from Apify profiles ─────────────
+  // ── Update SocialAccount follower counts from Apify profiles ────────────────────
   const allProfiles: ApifyProfile[] = [
     ...instagramResult.profiles,
     ...tiktokResult.profiles,
+    ...facebookResult.profiles,
   ]
   for (const profile of allProfiles) {
     if (profile.followerCount > 0) {
@@ -314,7 +346,7 @@ export async function POST(req: Request, { params }: Params) {
     action: 'DATA_FETCH',
     resourceId: id,
     resourceType: 'SocialDataFetch',
-    reason: `Apify 全平台采集完成 — ${googleResult.reviews.length} 条 Google 评论, ${instagramResult.posts.length} 条 IG 帖子, ${tiktokResult.posts.length} 条 TikTok 帖子`,
+    reason: `Apify 全平台采集完成 — ${googleResult.reviews.length} 条 Google 评论, ${instagramResult.posts.length} 条 IG 帖子, ${tiktokResult.posts.length} 条 TikTok 帖子, ${facebookResult.posts.length} 条 Facebook 帖子`,
     metadata: {
       source: 'apify',
       logId: logEntry.id,

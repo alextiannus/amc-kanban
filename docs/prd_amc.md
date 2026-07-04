@@ -235,10 +235,9 @@
 
 | 配置项 | 存储位置 | 访问方式 | 禁止位置 |
 |--------|----------|----------|----------|
-| Gemini API Key | `SystemConfig.geminiApiKey`（DB） | `getGeminiApiKey()` | ❌ Render env |
-| Azure Speech Key | `SystemConfig.azureSpeechKey`（DB） | `getAzureSpeechConfig()` | ❌ Render env |
-| Azure Speech Region | `SystemConfig.azureSpeechRegion`（DB） | `getAzureSpeechConfig()` | ❌ Render env |
-| 未来新增 LLM/模型 Key | `SystemConfig.*ApiKey`（DB） | 对应 `get*Config()` 函数 | ❌ Render env |
+| Gemini API Key | `SystemConfig.geminiApiKey`（DB） | `getGeminiApiKey()` | ❌ Render env（仅允许迁移回填） |
+| MiniMax TTS API Key | `SystemConfig.minimaxApiKey`（DB） | `getMiniMaxApiKey()` | ❌ Render env（仅允许迁移回填） |
+| 其他 LLM/模型 Key | `LlmConfig` / 对应 SystemConfig 字段 | 对应配置读取函数 | ❌ 业务代码硬编码 |
 
 **唯一例外**：`DATABASE_URL`、`JWT_SECRET`、`NEXTAUTH_SECRET` 等基础设施级别的机密，仍放在 Render 环境变量中（这些无法从数据库读取，因为数据库连接本身需要它们）。
 
@@ -246,12 +245,11 @@
 
 ```prisma
 model SystemConfig {
-  id                 String   @id @default("default")
-  geminiApiKey       String?  // Google Gemini API Key
-  azureSpeechKey     String?  // Microsoft Azure Speech TTS Key
-  azureSpeechRegion  String?  // Azure Region: eastasia / southeastasia / eastus
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id            String   @id @default("default")
+  geminiApiKey  String?
+  minimaxApiKey String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 ```
 
@@ -260,16 +258,15 @@ model SystemConfig {
 - **API**：`PATCH /api/admin/system-config`（Admin only，带 AuditLog）
 - **读取函数**（`src/lib/systemConfig.ts`）：
   - `getGeminiApiKey()` — 返回 Gemini Key 或 null
-  - `getAzureSpeechConfig()` — 返回 `{ key, region }` 或 null
+  - `getMiniMaxApiKey()` — 返回 MiniMax TTS Key 或 null；数据库为空时允许从环境变量执行一次迁移回填
 
-### Azure Speech TTS 配置说明
-- **服务**：Microsoft Azure Cognitive Speech
-- **推荐 Voice**：`zh-CN-XiaoxiaoNeural`（高质量中文女声）
-- **免费层**：F0 定价，每月 5 小时 Neural TTS 免费
-- **申请地址**：[portal.azure.com](https://portal.azure.com) → 搜索 "Speech service" → Create
-- **推荐区域**：`eastasia`（香港，延迟最低）或 `southeastasia`（新加坡）
-- **Key 类型**：复制 KEY 1（`Ocp-Apim-Subscription-Key`）
-- **降级策略**：若 Azure Key 未配置，amc-mm 自动使用浏览器内置 `window.speechSynthesis`（已做智能声音选择优化）
+### MiniMax TTS 配置说明
+- **服务**：MiniMax T2A v2
+- **模型**：`speech-2.8-turbo`
+- **默认音色**：`Chinese (Mandarin)_Warm_Bestie`
+- **代理接口**：`/api/mm/tts-proxy`
+- **降级策略**：MiniMax 不可用时，amc-mm 降级为浏览器 Web Speech API
+- **废弃项**：Azure Speech SDK、Speech Token API、Azure Key/Region 字段均不再使用
 
 ---
 
@@ -1061,6 +1058,8 @@ model SystemConfig {
 
 ## 用户、组织与权限管理（当前有效方案）
 
+> 以下为已确认的目标状态，当前代码尚未完成迁移。执行状态与启动门以 [`prd_user_organization_permissions.md`](./prd_user_organization_permissions.md) 为准。
+
 - 人类和 AMC Agent 都是正常 `User`，使用相同的显式角色、Capability 和品牌范围判断。
 - `UserBusinessRole` 是全局角色唯一来源；一个用户可以拥有多个角色，权限取 Capability 并集。
 - `CrewMember` 是唯一直接品牌权限关系；`BrandOwner`、`BrandAgent`、`AgentPermission` 和 `Brand.ownerId` 不再参与运行时授权。
@@ -1118,59 +1117,6 @@ model SystemConfig {
   - 在地图页面设计中新增一个“🔍 搜索绑定门店地址”的输入框（集成 Google Places Autocomplete 自动补全）。
   - 若主理人在创建新品牌商家时未能成功采集或解析到完整的坐标与地址，可以在此直接输入门面名称或地址进行搜索。
   - 选择正确的 Google 门店位置后，弹出确认气泡/弹窗以将其绑定至指定的 Brand 实例。确认后，系统自动将查出的 `googlePlaceId`、`address` 及 `latitude`/`longitude` 坐标写回数据库中的该 `Brand` 纪录，并即时在地图上生成并渲染打点 Marker，大幅提高位置容错性。
-
-### 影响文件
-- `docs/prd_amc.md`
-
----
-
-## Changelog v1.8.30 — 2026-07-02（基于人类 API Key 委托的 AI 智能体权限继承与 Crew 扁平化设计方案）
-
-> **已废止（2026-07-04）**：本节中的“Human API Key + `X-Agent-ID` 委托”“AI Avatar 双层 ACL”和基于 Agent 类型的职能限制，不再作为实施依据。最新且已完成 Review 的用户、组织与权限方案见 [`docs/prd_user_organization_permissions.md`](./prd_user_organization_permissions.md)。历史内容保留仅用于追踪决策变化。
-
-### 1. 品牌与 Crew 营销战队的去中心化独立设计
-- **品牌与人/AI 物理模型解耦**：从数据库与实体模型层面，品牌（`Brand`）作为独立业务实体建立，不强行将人类负责人或 AI 智能体作为硬编码字段绑定，而是统一通过 `MarketingCrew` 进行关联。
-- **系统自动绑定与分配机制**：
-  - **AI 智能体自动分配**：在新品牌创建时，系统会自动触发分配池逻辑，从空闲且匹配该品牌行业属性的 AI 智能体中挑选并配属到该品牌的 Crew。
-  - **人类角色自动绑定**：若品牌是由 BD 协助创建或由品牌主本人创建，系统在初始化 Crew 时，会自动将该 BD 或品牌主加入为战队成员（`CrewMember`），无需后续手动邀请。
-- **用户权限的系统级判定与 Crew 边界**：
-  - 人类用户的操作权限是**系统级别 (System-Level)** 的（定义在其全局角色上，如 `AMC_PRINCIPAL`、`BD`、`BRAND_OWNER` 等）。
-  - 加入品牌的 Crew 仅代表该品牌的数据边界向该用户开放（充当访问隔离门禁）。
-  - 只要用户在某个品牌的 Crew 里，且其全局角色拥有相应权限，即可在看板中查看到该品牌并执行相应级别的操作。
-
-### 2. 委托式智能体身份与权限继承模型 (Personal API Key Delegation)
-- **人类个人 API Key (Bearer Token) 绑定与可见性**：
-  - **Profile 绑定与多 Key 支持**：人类用户的 API Key 绑定在其个人 Profile 中，支持用户生成 and 管理多个不同的 API Key。
-  - **严格的安全可见性**：所有生成的 API Key **仅允许在用户本人的个人 Profile 页面以及管理员（Admin）的管理控制台中查看与管理（撤销/新建）**，外部其他地方绝不可见。
-  - **智能体连接与身份解耦**：智能体连接时，配置并使用该人类用户的其中一个 API Key：
-    `Authorization: Bearer <HUMAN_PERSONAL_API_KEY>`
-    并在请求的自定义 Header 中声明智能体自己的 ID：
-    `X-Agent-ID: <AI_AGENT_USER_ID>`
-    后端在处理请求时，核对该 API Key 所属的“本体”人类用户是否属于目标品牌的 Crew（若人类在 Crew 中，由于级联拉入机制，其 AI 分身必定也自动在 Crew 中），从而通过继承本体的权限边界完成确权。
-- **AI 智能体作为“AI 分身”的级联自动拉入机制与多场景扩展**：
-  - **自动联动拉入**：智能体可以绑定在人类用户的个人 Profile 中，充当该用户的“AI 分身 (AI Avatar)”。当某个人类用户被分配/拉入到某个品牌的 Crew 时，系统会自动触发联动逻辑，将该用户 Profile 下绑定的 AI 分身智能体也一并自动拉入到该品牌的 Crew 中，无需人工重复添加，保证人类与 AI 分身在 Crew 边界上的强一致性。
-  - **全场景架构统一扩展 (Unified Architecture for All AI Assistants)**：
-    - 该“API Key 委托 + 级联拉入”逻辑将作为平台全场景 AI 的底层统一标准。
-    - **商家端 MM 的 AI 伴侣 (Merchant Voice Companion)**：绑定品牌主/商家（`BRAND_OWNER`）的 Profile API Key 接入系统。当商家被分派管理旗下门店品牌时，其绑定的 AI 语音伴侣自动加入 Crew，使用该商家的 API Key 进行数据读写和交互，且其功能受 `AI_COMPANION` 职能拦截。
-    - **BD 商务助理 (BD Research Assistant)**：绑定 BD 用户的 Profile API Key 接入系统，使用该 BD 的资源权限范围开展商圈调研与数据回采，其功能受 `AI_RESEARCHER` 职能拦截。
-- **双重鉴权与权限继承逻辑 (Dual-Layer ACL)**：
-  - **第一层：数据边界继承 (Authority Domain)**：后端 API 拦截器解析 API Key，将该请求的数据访问范围（即能看到哪些品牌、哪些草稿）完全限制在**该 API Key 所属人类用户**的权限边界内。若人类用户的权限被变更或收回，智能体权限立即同步生效。
-  - **第二层：职能角色拦截 (Functional Role Restrictions)**：虽然智能体继承了人类用户的权限边界，但系统对智能体自身（通过 `X-Agent-ID` 对应的 AI 智能体 `User` 记录）进行功能级权限限制。即使智能体使用了 `ADMIN` 或 `AMC_PRINCIPAL` 的 API Key，其能调用的 API/MCP 技能仍受其 `AI_AGENT` 角色职能约束。例如：
-    - `AI_COPYWRITER` 仅被允许执行 `read_drafts`、`write_drafts`，不允许执行 `delete_account` 或 `modify_subscription`。
-- **审计日志 (Audit & Traceability)**：
-  - 所有由智能体发起的写操作，系统在 `AuditLog` 中记录为：
-    - `actorId: <AI_AGENT_USER_ID>`
-    - `actorType: "AI_AGENT"`
-    - `metadata: { delegatedBy: <HUMAN_USER_ID> }`
-  - 确保满足安全合规与操作可追溯性，清晰体现“某 AI 智能体代表某人类用户执行了该操作”。
-- **配套数据迁移与平滑并轨决策 (Migration Plan)**：
-  - **全量人类 API Key 自动补建**：数据库迁移脚本运行时，遍历所有 `type: "HUMAN"` 的人类用户，为其补建对应的个人 API Key。
-  - **生产环境免改动无感映射 (Zero-Config Hot Mapping)**：
-    为避免修改已在运行的 AI 智能体外部进程/容器环境变量中的 API Key，迁移脚本将直接把历史 AI 智能体的 Key 继承转移给关联的人类账号：
-    - 将 AI 智能体 **“狄仁杰”** 的历史 `apiKey` 写入人类用户 **“Zhangyi”** 的 `UserApiKey`。
-    - 将 AI 智能体 **“唐伯虎”** 的历史 `apiKey` 写入人类用户 **“LiWei”** 的 `UserApiKey`。
-    - 将 AI 智能体 **“小桥”** 的历史 `apiKey` 写入人类用户 **“田野”** 的 `UserApiKey`。
-    - 如此，外部智能体在发起请求时无需进行任何环境变量或配置文件修改，即可通过旧 key 自动以对应人类的委托身份进行授权连接，实现生产环境无缝并轨。
 
 ### 影响文件
 - `docs/prd_amc.md`
@@ -1295,8 +1241,9 @@ model SystemConfig {
 - 在 Render 托管的 PostgreSQL 上，当连接池被其他长任务耗尽时，这些串行查询会全部排队等待，导致整个请求超时 25s
 
 **决策**：
-- 对 ADMIN 用户：JWT token 中已有 `role=ADMIN`，完全跳过 DB 鉴权（fast-path）
-- 对普通用户：将原 4-5 条串行查询合并为 1 条 Prisma 查询（`brand.findFirst` 带 OR 条件同时检查 ownerId 和 crew 成员）
+- 所有用户统一使用 Auth V2；JWT 只携带最小身份 Claims，不允许 ADMIN 通过旧角色 Claim 绕过账号状态、显式角色或 `authVersion` 检查。
+- Session 身份与显式角色最多执行 1 次查询；品牌范围最多执行 1 次额外查询。
+- 品牌范围只检查有效 CrewMember，以及通过 Organization Owner CrewMember 获得的组织继承，不再检查 `ownerId` 或其他旧授权表。
 - 添加分阶段耗时日志（`[presign]`），便于在 Render 日志中精确定位未来潜在瓶颈
 
 **同期修复（amc-mm 侧）**：
