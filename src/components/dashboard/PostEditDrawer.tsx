@@ -102,6 +102,27 @@ const PLATFORM_LABELS: Record<string, string> = {
   google_business: 'Google Business',
 }
 
+// Fixed platform slots always shown in the account list
+const PLATFORM_SLOTS: Array<{ key: string; icon: string; label: string; ids: string[] }> = [
+  { key: 'tiktok',    icon: '🎵', label: 'TikTok',      ids: ['tiktok'] },
+  { key: 'instagram', icon: '📸', label: 'Instagram',   ids: ['instagram', 'ig'] },
+  { key: 'facebook',  icon: '👥', label: 'Facebook',    ids: ['facebook', 'fb'] },
+  { key: 'google',    icon: '📍', label: 'Google Maps', ids: ['google_business', 'google', 'google_maps'] },
+  { key: 'xhs',       icon: '📕', label: '小红书',       ids: ['red', 'xiaohongshu', 'xhs', 'rednote'] },
+]
+
+/** Returns the effective default selectedAccountIds:
+ *  - all configured accounts
+ *  - plus 'unconfigured_red' if no XHS account is configured (XHS always included) */
+function buildDefaultAccountIds(accounts: SocialAccountOption[]): string[] {
+  const ids = accounts.map(a => a.id)
+  const hasXhs = accounts.some(a =>
+    ['red', 'xiaohongshu', 'xhs', 'rednote'].includes((a.platformId || '').toLowerCase())
+  )
+  if (!hasXhs) ids.push('unconfigured_red')
+  return ids
+}
+
 function normalizePlatformLabel(plat?: string): string {
   if (!plat) return ''
   const p = plat.toLowerCase()
@@ -296,8 +317,8 @@ export default function PostEditDrawer({
       setSelectedDraft(null)
       setCaption('')
       setHashtags('')
-      // Default: select all accounts configured for this brand (XHS included when set up)
-      setSelectedAccountIds(accounts.map(a => a.id))
+      // Default: select all configured accounts + XHS (always, via unconfigured_red if needed)
+      setSelectedAccountIds(buildDefaultAccountIds(accounts))
       setScheduledAt('')
       setAgentNote('')
       setReviewNote('')
@@ -324,7 +345,7 @@ export default function PostEditDrawer({
         setCaption(draft.caption || '')
         setHashtags(formatTags(draft.hashtags || []))
         const accId = draft.accountId || draft.account?.id || ''
-        setSelectedAccountIds(accId ? [accId] : accounts.map(a => a.id))
+        setSelectedAccountIds(accId ? [accId] : buildDefaultAccountIds(accounts))
         setScheduledAt(toDateTimeLocal(draft.scheduledAt))
 
         if (draft.agentNote && draft.agentNote.includes("【AI 生成指令】")) {
@@ -1189,38 +1210,44 @@ Return the output strictly in a valid JSON array format, containing:
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 min-h-[44px]">
                   <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">发布账号 (多选) <span className="text-red-500">*</span></p>
-                  {accounts.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">未绑定任何账号</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {accounts.map((account) => {
-                        const isSelected = selectedAccountIds.includes(account.id)
-                        return (
-                          <button
-                            key={account.id}
-                            type="button"
-                            disabled={isPublished}
-                            onClick={() => {
-                              setSelectedAccountIds(prev => {
-                                const next = prev.includes(account.id)
-                                  ? prev.filter(id => id !== account.id)
-                                  : [...prev, account.id]
-                                return next
-                              })
-                            }}
-                            className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all flex items-center gap-1.5 disabled:opacity-75 disabled:cursor-not-allowed ${
-                              isSelected
-                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900 dark:text-indigo-300'
-                                : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50'
-                            }`}
-                          >
-                            <span>{account.platformId.toLowerCase() === 'instagram' ? '📸' : account.platformId.toLowerCase() === 'facebook' ? '👥' : account.platformId.toLowerCase() === 'red' ? '📕' : account.platformId.toLowerCase() === 'tiktok' ? '🎵' : '🔗'}</span>
-                            <span>{account.displayName || account.handle}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {PLATFORM_SLOTS.map(slot => {
+                      // Find the configured account for this platform slot
+                      const configuredAccount = accounts.find(a =>
+                        slot.ids.some(id => id === (a.platformId || '').toLowerCase())
+                      )
+                      const effectiveId = configuredAccount?.id ?? (slot.key === 'xhs' ? 'unconfigured_red' : null)
+                      if (!effectiveId) return null   // non-XHS unconfigured slots are hidden (optional: show greyed)
+                      const isConfigured = !!configuredAccount
+                      const isSelected = selectedAccountIds.includes(effectiveId)
+                      return (
+                        <button
+                          key={slot.key}
+                          type="button"
+                          disabled={isPublished}
+                          title={isConfigured ? (configuredAccount?.displayName || configuredAccount?.handle || slot.label) : `${slot.label}（未配置，仍可生成内容）`}
+                          onClick={() => {
+                            setSelectedAccountIds(prev =>
+                              prev.includes(effectiveId)
+                                ? prev.filter(id => id !== effectiveId)
+                                : [...prev, effectiveId]
+                            )
+                          }}
+                          className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all flex items-center gap-1.5 disabled:opacity-75 disabled:cursor-not-allowed ${
+                            isSelected
+                              ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900 dark:text-indigo-300'
+                              : 'bg-white border-slate-200 text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span>{slot.icon}</span>
+                          <span>{isConfigured ? (configuredAccount?.displayName || configuredAccount?.handle || slot.label) : slot.label}</span>
+                          {!isConfigured && (
+                            <span className="text-[9px] font-semibold text-amber-500 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-1 py-0.5 rounded ml-0.5">未配置</span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
                 <div className="flex flex-col justify-end space-y-1.5">
                   <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">指定排期时间</label>
@@ -1804,7 +1831,25 @@ Return the output strictly in a valid JSON array format, containing:
         }}
         brandName={brandName}
         selectedAccountIds={selectedAccountIds}
-        accountOptions={accounts}
+        accountOptions={[
+            ...accounts,
+            // Add stub entries for any selected virtual IDs that have no real account
+            ...PLATFORM_SLOTS
+              .filter(slot => {
+                const effectiveId = accounts.find(a =>
+                  slot.ids.includes((a.platformId || '').toLowerCase())
+                )?.id ?? (slot.key === 'xhs' ? 'unconfigured_red' : null)
+                return effectiveId && selectedAccountIds.includes(effectiveId) && !accounts.find(a =>
+                  slot.ids.includes((a.platformId || '').toLowerCase())
+                )
+              })
+              .map(slot => ({
+                id: slot.key === 'xhs' ? 'unconfigured_red' : `unconfigured_${slot.key}`,
+                platformId: slot.ids[0],
+                displayName: `${slot.label}（未配置）`,
+                handle: '',
+              }))
+          ]}
         draftCaptions={draftCaptions}
         setDraftCaptions={setDraftCaptions}
         draftHashtags={draftHashtags}

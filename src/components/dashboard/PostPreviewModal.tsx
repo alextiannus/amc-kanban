@@ -142,9 +142,6 @@ export default function PostPreviewModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
               {selectedAccountIds.map((accId) => {
                 const account = accountOptions.find((a) => a.id === accId)
-                  ?? (accId === 'unconfigured_red'
-                    ? { id: 'unconfigured_red', platformId: 'red', displayName: '小红书（未配置）', handle: '' }
-                    : null)
                 if (!account) return null
 
                 const platform = normalizePlatformLabel(account.platformId)
