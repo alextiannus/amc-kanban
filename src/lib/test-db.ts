@@ -1,8 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { PrismaClient } from '@prisma/client'
-// @ts-ignore
-import { fetch as undiciFetch } from 'node:undici'
 
 const prisma = new PrismaClient()
 
@@ -28,7 +26,7 @@ async function test() {
           // @ts-ignore
           cache: 'no-store'
         },
-        fetch: undiciFetch as any
+        fetch: globalThis.fetch
       })
 
       const client = new Client({
