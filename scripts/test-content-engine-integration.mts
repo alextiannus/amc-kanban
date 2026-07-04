@@ -36,6 +36,7 @@ function testContentGenerationService() {
   const remoteClient = read('src/lib/amc-content/remoteContentService.ts')
   const internalContextRoute = read('src/app/api/internal/content-context/route.ts')
   const internalLogRoute = read('src/app/api/internal/content-log/route.ts')
+  const internalLlmRoute = read('src/app/api/internal/llm-generate/route.ts')
   const prismaLogger = read('src/lib/amc-content/loggerAdapter.ts')
 
   assertIncludes(service, "import { prisma } from '../prisma.ts'", 'service prisma access')
@@ -70,6 +71,9 @@ function testContentGenerationService() {
   assertIncludes(internalLogRoute, 'tokenEstimate: optionalInt(body.tokenEstimate)', 'internal log stores token estimates')
   assertIncludes(prismaLogger, 'prisma.copywriterLog.create', 'local content logger persists copywriter logs')
   assertIncludes(prismaLogger, 'latencyMs: event.latencyMs ?? null', 'local content logger stores latency')
+  assertIncludes(internalLlmRoute, 'CONTENT_SERVICE_INTERNAL_TOKEN', 'internal LLM route token env')
+  assertIncludes(internalLlmRoute, "callLLM(taskTag, prompt, maxTokens)", 'internal LLM route delegates to LLMConfig router')
+  assertIncludes(internalLlmRoute, "'copywriting'", 'internal LLM route defaults to copywriting tag')
 }
 
 function testLegacyEntrypointsUseFacade() {
