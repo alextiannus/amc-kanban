@@ -235,6 +235,7 @@ export default function ContentLabPage() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
+  const [skillError, setSkillError] = useState('')
   const [response, setResponse] = useState<LabResponse | null>(null)
   const [copied, setCopied] = useState(false)
   const [skillConfig, setSkillConfig] = useState<SkillConfigResponse | null>(null)
@@ -297,7 +298,7 @@ export default function ContentLabPage() {
     setError('')
     try {
       const res = await fetch('/api/admin/content-lab')
-      const data = await res.json()
+      const data = await readJson(res)
       if (!res.ok) throw new Error(data.error || 'Failed to load content lab')
       setBrands(data.brands || [])
       setPlatforms(data.platforms || [])
@@ -310,7 +311,7 @@ export default function ContentLabPage() {
         ...current,
         brandId: current.brandId || firstBrandId,
       }))
-      await loadSkillConfig()
+      void loadSkillConfig()
     } catch (err: any) {
       setError(err.message || 'Failed to load content lab')
     } finally {
@@ -319,10 +320,16 @@ export default function ContentLabPage() {
   }
 
   async function loadSkillConfig() {
-    const res = await fetch('/api/admin/content-lab/skills')
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || 'Failed to load skill config')
-    setSkillConfig(data)
+    setSkillError('')
+    try {
+      const res = await fetch('/api/admin/content-lab/skills')
+      const data = await readJson(res)
+      if (!res.ok) throw new Error(data.error || 'Failed to load skill config')
+      setSkillConfig(data)
+    } catch (err: any) {
+      setSkillError(err.message || 'Failed to load skill config')
+      setSkillConfig({ platformSkills: [], promptTuning: { entries: [] } })
+    }
   }
 
   async function loadReviewLogs() {
@@ -334,7 +341,7 @@ export default function ContentLabPage() {
         page: '1',
       })
       const res = await fetch(`/api/admin/copywriter-logs?${params.toString()}`)
-      const data = await res.json()
+      const data = await readJson(res)
       if (!res.ok) throw new Error(data.error || 'Failed to load review logs')
       const logs = data.logs || []
       setReviewLogs(logs)
@@ -381,7 +388,7 @@ export default function ContentLabPage() {
           media: lines(form.mediaText).map((url) => ({ url, mimeType: guessMimeType(url) })),
         }),
       })
-      const data = await res.json()
+      const data = await readJson(res)
       if (!res.ok) throw new Error(data.error || 'Failed to generate content')
       setResponse(data)
       await loadReviewLogs()
@@ -413,7 +420,7 @@ export default function ContentLabPage() {
           markdown: skillMarkdown,
         }),
       })
-      const data = await res.json()
+      const data = await readJson(res)
       if (!res.ok) throw new Error(data.error || 'Failed to save skill')
       await loadSkillConfig()
     } catch (err: any) {
@@ -438,7 +445,7 @@ export default function ContentLabPage() {
           notes: promptNotes,
         }),
       })
-      const data = await res.json()
+      const data = await readJson(res)
       if (!res.ok) throw new Error(data.error || 'Failed to save prompt tuning')
       setSkillConfig((current) => current ? { ...current, promptTuning: data.promptTuning } : current)
     } catch (err: any) {
@@ -463,7 +470,7 @@ export default function ContentLabPage() {
           correctedContent: logCorrectedContent,
         }),
       })
-      const data = await res.json()
+      const data = await readJson(res)
       if (!res.ok) throw new Error(data.error || 'Failed to save review')
       setReviewLogs((current) => current.map((log) => (
         log.id === selectedLog.id
@@ -523,6 +530,20 @@ export default function ContentLabPage() {
               <Loader2 className="h-4 w-4 animate-spin" />
               Loading lab data
             </div>
+          ) : error ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <AlertCircle className="mt-0.5 h-4 w-4" />
+                <span>{error}</span>
+              </div>
+              <button
+                onClick={() => void loadLabData()}
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Retry
+              </button>
+            </div>
           ) : (
             <div className="space-y-4">
               <label className="block">
@@ -532,6 +553,9 @@ export default function ContentLabPage() {
                   onChange={(event) => updateForm('brandId', event.target.value)}
                   className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500"
                 >
+                  {brands.length === 0 ? (
+                    <option value="">No active brands found</option>
+                  ) : null}
                   {brands.map((brand) => (
                     <option key={brand.id} value={brand.id}>{brand.name}</option>
                   ))}
@@ -756,6 +780,12 @@ export default function ContentLabPage() {
 
           <section className="rounded-md border border-slate-200 bg-white p-4">
             <h2 className="mb-3 text-sm font-semibold">Prompt Tuning</h2>
+            {skillError ? (
+              <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                <AlertCircle className="mt-0.5 h-4 w-4" />
+                <span>{skillError}</span>
+              </div>
+            ) : null}
             <div className="space-y-3">
               <label className="block">
                 <span className="mb-1 block text-xs font-medium text-slate-600">Task</span>
@@ -822,6 +852,12 @@ export default function ContentLabPage() {
             onChange={(event) => setSkillMarkdown(event.target.value)}
             className="w-full resize-y rounded-md border border-slate-200 bg-slate-50 px-3 py-3 font-mono text-xs leading-5 text-slate-800 outline-none focus:border-indigo-500"
           />
+          {skillError ? (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <AlertCircle className="mt-0.5 h-4 w-4" />
+              <span>{skillError}</span>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -1081,6 +1117,16 @@ function guessMimeType(url: string): string | undefined {
   if (lower.endsWith('.png')) return 'image/png'
   if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.includes('image')) return 'image/jpeg'
   return undefined
+}
+
+async function readJson(res: Response): Promise<any> {
+  const text = await res.text()
+  if (!text) return {}
+  try {
+    return JSON.parse(text)
+  } catch {
+    return { error: text.slice(0, 240) }
+  }
 }
 
 function findPromptEntry(

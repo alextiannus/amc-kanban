@@ -24,73 +24,84 @@ type PromptTuningFile = {
 }
 
 export async function GET() {
-  const auth = await requireAdmin()
-  if (auth) return auth
+  try {
+    const auth = await requireAdmin()
+    if (auth) return auth
 
-  return NextResponse.json({
-    platformSkills: readPlatformSkills(),
-    promptTuning: readPromptTuning(),
-  })
+    return NextResponse.json({
+      platformSkills: readPlatformSkills(),
+      promptTuning: readPromptTuning(),
+    })
+  } catch (error) {
+    console.error('[content-lab-skills] GET failed:', error)
+    return NextResponse.json({ error: 'Failed to load skill config' }, { status: 500 })
+  }
 }
 
 export async function PATCH(request: NextRequest) {
-  const auth = await requireAdmin()
-  if (auth) return auth
+  try {
+    const auth = await requireAdmin()
+    if (auth) return auth
 
-  const session = await getSession()
-  const body = await request.json().catch(() => null)
-  if (!body || typeof body !== 'object') {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    const session = await getSession()
+    const body = await request.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    if (body.kind === 'platformSkill') {
+      const platform = typeof body.platform === 'string' ? body.platform : ''
+      const markdown = typeof body.markdown === 'string' ? body.markdown : ''
+      if (!ALLOWED_PLATFORMS.has(platform as any)) {
+        return NextResponse.json({ error: 'Unsupported platform' }, { status: 400 })
+      }
+      if (!markdown.trim()) {
+        return NextResponse.json({ error: 'Skill markdown cannot be empty' }, { status: 400 })
+      }
+
+      const skillPath = platformSkillPath(platform)
+      mkdirSync(join(PLATFORM_SKILL_DIR, platform), { recursive: true })
+      writeFileSync(skillPath, markdown, 'utf-8')
+      return NextResponse.json({ ok: true, platform, markdown })
+    }
+
+    if (body.kind === 'promptTuning') {
+      const platform = normalizeScope(body.platform, ALLOWED_PLATFORMS)
+      const vertical = normalizeScope(body.vertical, ALLOWED_VERTICALS)
+      const task = normalizeScope(body.task, ALLOWED_TASKS)
+      const notes = typeof body.notes === 'string' ? body.notes.trim() : ''
+
+      if (!platform || !vertical || !task) {
+        return NextResponse.json({ error: 'Invalid prompt tuning scope' }, { status: 400 })
+      }
+
+      const file = readPromptTuning()
+      const nextEntry: PromptTuningEntry = {
+        platform,
+        vertical,
+        task,
+        notes,
+        updatedAt: new Date().toISOString(),
+        updatedBy: session?.user?.email || session?.user?.id || 'admin',
+      }
+
+      const entries = file.entries.filter((entry) =>
+        entry.platform !== platform || entry.vertical !== vertical || entry.task !== task
+      )
+      if (notes) entries.push(nextEntry)
+
+      const nextFile = { entries }
+      ensurePromptTuningDir()
+      writeFileSync(PROMPT_TUNING_PATH, `${JSON.stringify(nextFile, null, 2)}\n`, 'utf-8')
+
+      return NextResponse.json({ ok: true, promptTuning: nextFile })
+    }
+
+    return NextResponse.json({ error: 'Unsupported update kind' }, { status: 400 })
+  } catch (error) {
+    console.error('[content-lab-skills] PATCH failed:', error)
+    return NextResponse.json({ error: 'Failed to save skill config' }, { status: 500 })
   }
-
-  if (body.kind === 'platformSkill') {
-    const platform = typeof body.platform === 'string' ? body.platform : ''
-    const markdown = typeof body.markdown === 'string' ? body.markdown : ''
-    if (!ALLOWED_PLATFORMS.has(platform as any)) {
-      return NextResponse.json({ error: 'Unsupported platform' }, { status: 400 })
-    }
-    if (!markdown.trim()) {
-      return NextResponse.json({ error: 'Skill markdown cannot be empty' }, { status: 400 })
-    }
-
-    const skillPath = platformSkillPath(platform)
-    writeFileSync(skillPath, markdown, 'utf-8')
-    return NextResponse.json({ ok: true, platform, markdown })
-  }
-
-  if (body.kind === 'promptTuning') {
-    const platform = normalizeScope(body.platform, ALLOWED_PLATFORMS)
-    const vertical = normalizeScope(body.vertical, ALLOWED_VERTICALS)
-    const task = normalizeScope(body.task, ALLOWED_TASKS)
-    const notes = typeof body.notes === 'string' ? body.notes.trim() : ''
-
-    if (!platform || !vertical || !task) {
-      return NextResponse.json({ error: 'Invalid prompt tuning scope' }, { status: 400 })
-    }
-
-    const file = readPromptTuning()
-    const nextEntry: PromptTuningEntry = {
-      platform,
-      vertical,
-      task,
-      notes,
-      updatedAt: new Date().toISOString(),
-      updatedBy: session?.user?.email || session?.user?.id || 'admin',
-    }
-
-    const entries = file.entries.filter((entry) =>
-      entry.platform !== platform || entry.vertical !== vertical || entry.task !== task
-    )
-    if (notes) entries.push(nextEntry)
-
-    const nextFile = { entries }
-    ensurePromptTuningDir()
-    writeFileSync(PROMPT_TUNING_PATH, `${JSON.stringify(nextFile, null, 2)}\n`, 'utf-8')
-
-    return NextResponse.json({ ok: true, promptTuning: nextFile })
-  }
-
-  return NextResponse.json({ error: 'Unsupported update kind' }, { status: 400 })
 }
 
 async function requireAdmin(): Promise<NextResponse | null> {

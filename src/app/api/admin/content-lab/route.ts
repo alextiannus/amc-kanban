@@ -35,148 +35,158 @@ const verticals = [
 ] as const
 
 export async function GET() {
-  const session = await getSession()
-  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  try {
+    const session = await getSession()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const brands = await prisma.brand.findMany({
-    where: { status: { not: 'ARCHIVED' } },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      location: true,
-      address: true,
-      website: true,
-      phone: true,
-      updatedAt: true,
-      knowledge: {
-        select: {
-          brandTone: true,
-          negPrompts: true,
-          slangDict: true,
+    const brands = await prisma.brand.findMany({
+      where: { status: { not: 'ARCHIVED' } },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        location: true,
+        address: true,
+        website: true,
+        phone: true,
+        updatedAt: true,
+        knowledge: {
+          select: {
+            brandTone: true,
+            negPrompts: true,
+            slangDict: true,
+          },
         },
       },
-    },
-    orderBy: [{ updatedAt: 'desc' }],
-    take: 100,
-  })
+      orderBy: [{ updatedAt: 'desc' }],
+      take: 100,
+    })
 
-  return NextResponse.json({
-    engine: {
-      name: 'amc-content',
-      enabled: process.env.AMC_CONTENT_ENGINE_ENABLED !== 'false',
-      disabledByEnv: process.env.AMC_CONTENT_ENGINE_ENABLED === 'false',
-    },
-    brands,
-    platforms: listPlatformProviders().map((provider) => ({
-      platform: provider.platform,
-      displayName: provider.displayName,
-      defaultLanguage: provider.defaultLanguage,
-      maxCaptionLength: provider.maxCaptionLength,
-      hashtagRules: provider.hashtagRules,
-      mediaRules: provider.mediaRules,
-      requiredFields: provider.requiredFields ?? [],
-      skillVersion: provider.skillVersion,
-    })),
-    copywriters: listPlatformCopywriters(),
-    modelProfiles: listContentModelProfiles().map((profile) => ({
-      id: profile.id,
-      displayName: profile.displayName,
-      providerId: profile.providerId,
-      provider: profile.provider.provider,
-      providerDisplayName: profile.provider.displayName,
-      apiKeyEnv: profile.provider.apiKeyEnv,
-      modelName: profile.modelName,
-      temperature: profile.temperature,
-      jsonMode: profile.jsonMode,
-      maxTokensByTask: profile.maxTokensByTask,
-      fallbackProfileIds: profile.fallbackProfileIds,
-      rationale: profile.rationale,
-    })),
-    platformModelProfiles,
-    verticals: listVerticalSpecs().map((vertical) => ({
-      vertical: vertical.vertical,
-      displayName: vertical.displayName,
-      customerIntents: vertical.customerIntents,
-      proofSignals: vertical.proofSignals,
-      complianceNotes: vertical.complianceNotes,
-      skillVersion: vertical.skillVersion,
-    })),
-  })
+    return NextResponse.json({
+      engine: {
+        name: 'amc-content',
+        enabled: process.env.AMC_CONTENT_ENGINE_ENABLED !== 'false',
+        disabledByEnv: process.env.AMC_CONTENT_ENGINE_ENABLED === 'false',
+      },
+      brands,
+      platforms: listPlatformProviders().map((provider) => ({
+        platform: provider.platform,
+        displayName: provider.displayName,
+        defaultLanguage: provider.defaultLanguage,
+        maxCaptionLength: provider.maxCaptionLength,
+        hashtagRules: provider.hashtagRules,
+        mediaRules: provider.mediaRules,
+        requiredFields: provider.requiredFields ?? [],
+        skillVersion: provider.skillVersion,
+      })),
+      copywriters: listPlatformCopywriters(),
+      modelProfiles: listContentModelProfiles().map((profile) => ({
+        id: profile.id,
+        displayName: profile.displayName,
+        providerId: profile.providerId,
+        provider: profile.provider.provider,
+        providerDisplayName: profile.provider.displayName,
+        apiKeyEnv: profile.provider.apiKeyEnv,
+        modelName: profile.modelName,
+        temperature: profile.temperature,
+        jsonMode: profile.jsonMode,
+        maxTokensByTask: profile.maxTokensByTask,
+        fallbackProfileIds: profile.fallbackProfileIds,
+        rationale: profile.rationale,
+      })),
+      platformModelProfiles,
+      verticals: listVerticalSpecs().map((vertical) => ({
+        vertical: vertical.vertical,
+        displayName: vertical.displayName,
+        customerIntents: vertical.customerIntents,
+        proofSignals: vertical.proofSignals,
+        complianceNotes: vertical.complianceNotes,
+        skillVersion: vertical.skillVersion,
+      })),
+    })
+  } catch (error) {
+    console.error('[content-lab] GET failed:', error)
+    return NextResponse.json({ error: 'Failed to load content lab' }, { status: 500 })
+  }
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  try {
+    const session = await getSession()
+    if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const body = await request.json().catch(() => null)
-  if (!body || typeof body !== 'object') {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    const body = await request.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    const brandId = stringOrEmpty(body.brandId)
+    const platform = normalizePlatform(body.platform)
+    const industryVertical = normalizeVertical(body.industryVertical)
+    const theme = stringOrEmpty(body.theme)
+
+    if (!brandId) return NextResponse.json({ error: 'brandId is required' }, { status: 400 })
+    if (!platform) return NextResponse.json({ error: 'Unsupported platform' }, { status: 400 })
+    if (!industryVertical) return NextResponse.json({ error: 'Unsupported industryVertical' }, { status: 400 })
+    if (!theme) return NextResponse.json({ error: 'theme is required' }, { status: 400 })
+
+    const brand = await prisma.brand.findUnique({
+      where: { id: brandId },
+      include: { knowledge: true },
+    })
+    if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+
+    const inputBrand: BrandContext = {
+      id: brand.id,
+      name: brand.name,
+      description: brand.description ?? undefined,
+      tone: brand.knowledge?.brandTone ?? undefined,
+      address: brand.address ?? undefined,
+      location: brand.location ?? undefined,
+      website: brand.website ?? undefined,
+      phone: brand.phone ?? undefined,
+      negativePrompts: brand.knowledge?.negPrompts ?? undefined,
+      slang: normalizeRecord(brand.knowledge?.slangDict),
+    }
+
+    const brief: CopyBrief = {
+      industryVertical,
+      theme,
+      angle: optionalString(body.angle),
+      customerIntent: optionalString(body.customerIntent),
+      offerType: optionalString(body.offerType),
+      targetEmotion: optionalString(body.targetEmotion),
+      formatHint: optionalString(body.formatHint),
+      locationFocus: optionalString(body.locationFocus) || brand.location || brand.address || undefined,
+      localProof: stringArray(body.localProof),
+      mustMention: stringArray(body.mustMention),
+      mustAvoid: [...stringArray(body.mustAvoid), ...(brand.knowledge?.negPrompts ?? [])],
+    }
+
+    const startedAt = Date.now()
+    const result = await createPlatformContent({
+      brand: inputBrand,
+      brief,
+      platform,
+      media: normalizeMedia(body.media),
+      adapters: {
+        modelRouter: createAmcContentModelRouter(),
+        knowledgeRepository: createPrismaKnowledgeRepository(),
+        promptTuningRepository: createFilePromptTuningRepository(),
+        logger: createPrismaContentLogger(session.user.id),
+      },
+    })
+
+    return NextResponse.json({
+      result,
+      latencyMs: Date.now() - startedAt,
+    })
+  } catch (error) {
+    console.error('[content-lab] POST failed:', error)
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to generate content' }, { status: 500 })
   }
-
-  const brandId = stringOrEmpty(body.brandId)
-  const platform = normalizePlatform(body.platform)
-  const industryVertical = normalizeVertical(body.industryVertical)
-  const theme = stringOrEmpty(body.theme)
-
-  if (!brandId) return NextResponse.json({ error: 'brandId is required' }, { status: 400 })
-  if (!platform) return NextResponse.json({ error: 'Unsupported platform' }, { status: 400 })
-  if (!industryVertical) return NextResponse.json({ error: 'Unsupported industryVertical' }, { status: 400 })
-  if (!theme) return NextResponse.json({ error: 'theme is required' }, { status: 400 })
-
-  const brand = await prisma.brand.findUnique({
-    where: { id: brandId },
-    include: { knowledge: true },
-  })
-  if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-
-  const inputBrand: BrandContext = {
-    id: brand.id,
-    name: brand.name,
-    description: brand.description ?? undefined,
-    tone: brand.knowledge?.brandTone ?? undefined,
-    address: brand.address ?? undefined,
-    location: brand.location ?? undefined,
-    website: brand.website ?? undefined,
-    phone: brand.phone ?? undefined,
-    negativePrompts: brand.knowledge?.negPrompts ?? undefined,
-    slang: normalizeRecord(brand.knowledge?.slangDict),
-  }
-
-  const brief: CopyBrief = {
-    industryVertical,
-    theme,
-    angle: optionalString(body.angle),
-    customerIntent: optionalString(body.customerIntent),
-    offerType: optionalString(body.offerType),
-    targetEmotion: optionalString(body.targetEmotion),
-    formatHint: optionalString(body.formatHint),
-    locationFocus: optionalString(body.locationFocus) || brand.location || brand.address || undefined,
-    localProof: stringArray(body.localProof),
-    mustMention: stringArray(body.mustMention),
-    mustAvoid: [...stringArray(body.mustAvoid), ...(brand.knowledge?.negPrompts ?? [])],
-  }
-
-  const startedAt = Date.now()
-  const result = await createPlatformContent({
-    brand: inputBrand,
-    brief,
-    platform,
-    media: normalizeMedia(body.media),
-    adapters: {
-      modelRouter: createAmcContentModelRouter(),
-      knowledgeRepository: createPrismaKnowledgeRepository(),
-      promptTuningRepository: createFilePromptTuningRepository(),
-      logger: createPrismaContentLogger(session.user.id),
-    },
-  })
-
-  return NextResponse.json({
-    result,
-    latencyMs: Date.now() - startedAt,
-  })
 }
 
 function normalizePlatform(value: unknown): PlatformType | null {
