@@ -1466,3 +1466,26 @@ Admin → AI 模型配置 页面：
 - 调整 priority 控制使用顺序
 - 按 taskTags 为不同场景指定专用模型
 - 断路器状态查看（哪些模型当前被限流）
+
+## Changelog v1.8.37 — 2026-07-05（密码重置与用户资料修复）
+
+### 自助找回密码 (Self-Service Forgot Password)
+- **登录页新增「忘记密码？」入口**：点击后弹出 inline 邮箱输入框（无需跳页）。
+- **`POST /api/auth/forgot-password`**：接收邮箱 → 生成 `PasswordResetToken`（15 分钟有效）→ 发送安全重置链接邮件。无论邮箱是否存在均返回 200（防账号枚举）。
+- **`GET/POST /api/auth/reset-password`**：GET 验证 token 有效性；POST 消耗 token + 更新密码 + authVersion++ 。
+- **新页面 `/reset-password/[token]`**：含密码强度指示器的精美重置表单，三个状态：验证中 / 表单 / 成功。
+
+### 管理员重置密码改造
+- **废弃临时密码机制**：管理员点击「重置密码」不再设置随机临时密码，改为创建 `PasswordResetToken`（24 小时有效）并发送安全重置链接邮件给用户。
+- **Admin UI 更新**：按钮从「密码初始化」改为「重置密码」；确认弹窗描述更新。
+- **SMTP 未配置时 fallback**：Admin 结果弹窗直接展示重置链接（可复制后手动转发给用户）。
+
+### 用户资料 Bug 修复
+- **`PATCH /api/profile`（JSON 路径）**：修复 `introduction`（身份简介）字段在 JSON body 请求时被静默丢弃的问题，现在 nickname 和 introduction 均可正确保存。
+
+### 数据库变更
+- 新增 `PasswordResetToken` 模型：`id, userId, token (unique), expiresAt, usedAt (nullable), createdAt`。
+
+### amc-mm 同步
+- 新增 `/api/auth/forgot-password` 代理路由（转发至 amc-kanban）。
+- amc-mm 登录页同步添加「忘记密码？」链接及弹窗。
