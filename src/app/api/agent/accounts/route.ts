@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { canAgentAccessBrand } from '@/lib/brandAccess'
+import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
 
 async function getAgent(request: Request) {
-  const auth = request.headers.get('authorization') || ''
-  const key = auth.replace('Bearer ', '').trim()
-  if (!key) return null
-  return prisma.user.findFirst({ where: { apiKey: key, type: 'AI_AGENT' } })
+  const principal = await authenticateRequest(request)
+  return principal?.actorType === 'AMC_AGENT' ? principal : null
 }
 
 /**
@@ -41,7 +39,9 @@ export async function PATCH(request: Request) {
 
   const brand = await prisma.brand.findUnique({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-  if (!(await canAgentAccessBrand(brandId, agent.id))) {
+  try {
+    await requireCapability(agent, 'brand.update', { brandId })
+  } catch {
     return NextResponse.json({ error: 'Brand not linked to this agent' }, { status: 403 })
   }
 

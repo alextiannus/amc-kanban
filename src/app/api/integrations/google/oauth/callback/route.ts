@@ -53,9 +53,6 @@ export async function GET(request: Request) {
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (session.user.type === 'AI_AGENT') {
-    return NextResponse.json({ error: 'AI Agent not permitted' }, { status: 403 })
-  }
 
   // 2. Retrieve and verify state from cookie (CSRF protection)
   const cookieStore = await cookies()

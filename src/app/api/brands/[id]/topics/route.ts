@@ -43,7 +43,6 @@ export async function POST(request: Request, { params }: Params) {
   const { id: brandId } = await params
   const actor = await ensureAccess(request, brandId)
   if (!actor) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (actor.type !== 'AI_AGENT') return NextResponse.json({ error: 'Hot Topics can only be written by AMC Agents through API/MCP' }, { status: 403 })
 
   const body = await request.json().catch(() => ({}))
   const result = await createTopicFeed({

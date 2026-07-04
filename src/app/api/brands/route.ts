@@ -152,7 +152,7 @@ export async function POST(request: Request) {
 
     // 1. Write to new Crew models
     const crew = await createMarketingCrew(brand.id)
-    await addCrewMember(crew.id, owner.id)
+    await addCrewMember(crew.id, owner.id, 'OWNER')
 
     // 2. Write to legacy tables for backwards compatibility
     await prisma.brandOwner.upsert({
@@ -298,9 +298,9 @@ export async function POST(request: Request) {
     // Outside transaction: perform secondary setups (non-blocking)
     try {
       const crew = await createMarketingCrew(wizardResult.brand.id)
-      await addCrewMember(crew.id, owner.id)
+      await addCrewMember(crew.id, owner.id, 'OWNER')
       if (sessionUser.id !== owner.id) {
-        await addCrewMember(crew.id, sessionUser.id)
+        await addCrewMember(crew.id, sessionUser.id, 'PRINCIPAL')
       }
 
       await prisma.brandOwner.upsert({
@@ -437,7 +437,7 @@ export async function POST(request: Request) {
 
     // 1. Write to new Crew models inside transaction
     const crew = await createMarketingCrew(brand.id, tx)
-    await addCrewMember(crew.id, sessionUser.id, tx)
+    await addCrewMember(crew.id, sessionUser.id, 'OWNER', tx)
 
     // 2. Write to legacy tables for backwards compatibility
     await tx.brandOwner.upsert({

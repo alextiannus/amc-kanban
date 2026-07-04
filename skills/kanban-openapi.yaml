@@ -1,13 +1,15 @@
 openapi: 3.0.0
 info:
   title: AI Marketing Crew Agent API
-  description: API for AI Agents to interact with the AI Marketing Crew collaboration board. Enables task creation, state transition, human-in-the-loop requests, and task retrieval.
-  version: 1.0.0
+  description: Auth V2 API for AMC Agents to perform the same authorized brand operations as human employees. Brand scope is enforced by Capability and Crew membership; new workflows use business resources and ActionItems rather than WorkUnit swimlanes.
+  version: 3.0.0
 servers:
   - url: https://amc-kanban.immedi.ai/api
     description: Production Server
   - url: http://localhost:3000/api
     description: Local Development Server
+security:
+  - bearerAuth: []
 
 paths:
   /agents/profile:
@@ -52,6 +54,7 @@ paths:
           
   /tasks:
     post:
+      deprecated: true
       summary: Create a new task on the Kanban board
       operationId: createTask
       description: Agents create brand-scoped tasks for themselves. brandId is required when an Agent manages multiple brands.
@@ -105,6 +108,7 @@ paths:
 
   /tasks/{id}:
     get:
+      deprecated: true
       summary: Get task details
       operationId: getTaskDetails
       description: Fetch full details of a task including its current description and materials.
@@ -129,6 +133,7 @@ paths:
                 $ref: '#/components/schemas/Task'
                 
     patch:
+      deprecated: true
       summary: Update task details
       operationId: updateTaskDetails
       description: Update the content, title, or materials of an existing task. Use this to log progress in the description.
@@ -173,6 +178,7 @@ paths:
 
   /tasks/{id}/status:
     patch:
+      deprecated: true
       summary: Update task status or request human input
       operationId: updateTaskStatus
       description: Move the task between columns. Crucially, set status to "pending" and provide "requiredInput" to ask human operators for help.
@@ -215,7 +221,7 @@ paths:
     get:
       summary: List or read brands linked to the current Agent
       operationId: getAgentBrandConfig
-      description: Startup call. Omit brandId to list all active subscription-backed brands linked to this Agent, then record each id/name as KANBAN_BRAND_IDS and KANBAN_BRAND_LIST. Pass brandId to read one brand config; the server verifies the current Agent has an active BrandAgent link.
+      description: Startup call. Omit brandId to list all active subscription-backed brands in the authenticated Agent's Crew scope. Pass brandId to read one config; the server applies Capability and Crew authorization.
       parameters:
         - name: brandId
           in: query
@@ -233,7 +239,7 @@ paths:
     patch:
       summary: Update linked brand profile/config
       operationId: updateAgentBrandConfig
-      description: Update an existing brand linked to this Agent. brandId is required and the server double-checks the current Agent has an active BrandAgent link before any mutation. Brand creation is disabled for Agents and must happen through dashboard subscription flow.
+      description: Update a brand in the authenticated Agent's Crew scope. brandId is required and the server applies brand.update Capability plus Crew authorization.
       parameters:
         - name: Authorization
           in: header
@@ -702,7 +708,7 @@ paths:
                   format: uri
       responses:
         '200':
-          description: Action item and linked work task updated
+          description: Action item and linked business resource updated
 
   /brands/{brandId}/posts/publish:
     post:
@@ -983,6 +989,11 @@ paths:
           description: Weekly execution metrics and completed task list
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: AMC_API_KEY
   schemas:
     Task:
       type: object

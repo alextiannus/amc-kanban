@@ -1,8 +1,5 @@
-import {
-  authenticateApiKey,
-  authenticateRequest,
-  type AuthPrincipal,
-} from '../auth-v2/index.ts'
+import { authenticateApiKey } from '../auth-v2/api-key.ts'
+import type { AuthPrincipal } from '../auth-v2/types.ts'
 export {
   decrypt,
   encrypt,
@@ -45,6 +42,7 @@ export type AuthContext = {
 
 /** Resolve a cookie session or API key through the single Auth V2 path. */
 export async function resolveSessionOrApiKey(request: Request): Promise<AuthContext | null> {
+  const { authenticateRequest } = await import('../auth-v2/authenticate.ts')
   const principal = await authenticateRequest(request)
   if (!principal) return null
   return {

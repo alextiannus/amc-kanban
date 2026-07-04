@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
-import { canAgentAccessBrand, canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canHumanAccessBrandProject, canWriteBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
 /**
  * GET /api/brands/[id]/agents — list agents assigned to this brand
- * Accessible by: brand owner (HUMAN) OR any AI_AGENT linked to this brand
+ * Accessible by any system user with brand Crew access.
  */
 export async function GET(_req: Request, { params }: Params) {
   const session = await getSession()
@@ -16,12 +16,8 @@ export async function GET(_req: Request, { params }: Params) {
 
   const { id } = await params
 
-  const isHumanAllowed = session.user.type !== 'AI_AGENT'
-    && (await canHumanAccessBrandProject(id, session.user.id, session.user.role))
-  const isLinkedAgent = session.user.type === 'AI_AGENT'
-    && (await canAgentAccessBrand(id, session.user.id))
-
-  if (!isHumanAllowed && !isLinkedAgent) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const hasAccess = await canHumanAccessBrandProject(id, session.user.id, session.user.role)
+  if (!hasAccess) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const brandAgents = await prisma.brandAgent.findMany({
     where: { brandId: id },
@@ -55,10 +51,7 @@ export async function POST(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  if (session.user.type === 'AI_AGENT') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
-  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
+  if (!(await canWriteBrandProject(id, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -95,10 +88,7 @@ export async function DELETE(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  if (session.user.type === 'AI_AGENT') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
-  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
+  if (!(await canWriteBrandProject(id, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

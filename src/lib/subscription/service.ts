@@ -138,7 +138,7 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     // brand on behalf of the client).
     if (brandOwnerId !== input.ownerId) {
       console.log(`[createBrand] addCrewMember(submitter) start (${Date.now() - t0}ms)`)
-      await addCrewMember(crew.id, input.ownerId)
+      await addCrewMember(crew.id, input.ownerId, 'OWNER')
       console.log(`[createBrand] addCrewMember(submitter) done (${Date.now() - t0}ms)`)
     }
 

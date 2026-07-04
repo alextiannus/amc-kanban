@@ -1,137 +1,134 @@
+import assert from 'node:assert/strict'
+import crypto from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
-import { verifyUserApiKey } from '../src/lib/user-management/auth.ts'
 import { createMarketingCrew, addCrewMember } from '../src/lib/user-management/crew.ts'
 import { canSessionAccessBrand } from '../src/lib/user-management/brandAccess.ts'
-import crypto from 'crypto'
+import {
+  authenticateApiKey,
+  hashApiKeyToken,
+  apiKeyPrefix,
+} from '../src/lib/auth-v2/api-key.ts'
 
 const prisma = new PrismaClient()
+const suffix = `${Date.now()}-${crypto.randomUUID()}`
+let humanId: string | null = null
+let agentId: string | null = null
+let organizationMemberId: string | null = null
+let brandId: string | null = null
+
+async function cleanup() {
+  if (humanId && organizationMemberId) {
+    await prisma.organizationMember.deleteMany({
+      where: { ownerId: humanId, memberId: organizationMemberId },
+    })
+  }
+  if (brandId) {
+    await prisma.brand.deleteMany({ where: { id: brandId } })
+  }
+  const userIds = [humanId, agentId, organizationMemberId].filter(
+    (id): id is string => Boolean(id),
+  )
+  if (userIds.length) await prisma.user.deleteMany({ where: { id: { in: userIds } } })
+}
 
 async function testE2E() {
-  console.log('🏁 Starting User Management E2E Test Suite...')
+  console.log('Starting Auth V2 user/Crew E2E test...')
 
-  // 1. Create a dummy human user
-  console.log('\nTesting Human User Creation...')
-  const testHuman = await prisma.user.create({
+  const human = await prisma.user.create({
     data: {
-      email: `test-human-${Date.now()}@example.com`,
-      password: 'password123',
+      email: `auth-v2-owner-${suffix}@example.com`,
+      password: 'test-only',
       type: 'HUMAN',
       role: 'USER',
-      nickname: 'Test Human Owner'
-    }
+      businessRoles: { create: { role: 'BRAND_OWNER' } },
+    },
   })
-  console.log(`✓ Human user created: ${testHuman.email} (ID: ${testHuman.id})`)
+  humanId = human.id
 
-  // 2. Create a dummy AI Agent and link it as an avatar of the human
-  console.log('\nTesting AI Agent (Avatar) Onboarding & Linking...')
-  const testAgent = await prisma.user.create({
+  const agent = await prisma.user.create({
     data: {
-      email: `test-agent-${Date.now()}@example.com`,
-      password: 'password123',
+      email: `auth-v2-agent-${suffix}@example.com`,
+      password: 'test-only',
       type: 'AI_AGENT',
-      nickname: 'Test Copywriter Agent',
-      ownerId: testHuman.id // Bind as human's avatar
-    }
+      role: 'USER',
+      ownerId: human.id,
+      businessRoles: { create: { role: 'AMC_PRINCIPAL' } },
+    },
   })
-  console.log(`✓ AI Agent created and linked to Human: ${testAgent.nickname} (ID: ${testAgent.id}, Owner: ${testAgent.ownerId})`)
+  agentId = agent.id
 
-  // 3. Create a dummy brand
-  console.log('\nTesting Brand Creation...')
-  const testBrand = await prisma.brand.create({
+  const organizationMember = await prisma.user.create({
     data: {
-      name: `Test Brand ${Date.now()}`,
-      ownerId: testHuman.id
-    }
+      email: `auth-v2-org-member-${suffix}@example.com`,
+      password: 'test-only',
+      type: 'HUMAN',
+      role: 'USER',
+      businessRoles: { create: { role: 'BRAND_OWNER' } },
+    },
   })
-  console.log(`✓ Brand created: ${testBrand.name} (ID: ${testBrand.id})`)
+  organizationMemberId = organizationMember.id
 
-  // 4. Initialize MarketingCrew for the Brand
-  console.log('\nTesting MarketingCrew Initialization...')
-  const crew = await createMarketingCrew(testBrand.id)
-  console.log(`✓ MarketingCrew initialized (ID: ${crew.id}, Brand: ${crew.brandId})`)
+  const brand = await prisma.brand.create({
+    data: { name: `Auth V2 Brand ${suffix}`, ownerId: human.id },
+  })
+  brandId = brand.id
+  const crew = await createMarketingCrew(brand.id)
 
-  // 5. Add Human User to the Brand's Crew & test Cascade Pull
-  console.log('\nTesting Crew Add & Auto-Avatar Cascade Pull...')
-  await addCrewMember(crew.id, testHuman.id)
-  console.log(`✓ Human user added to MarketingCrew.`)
+  await addCrewMember(crew.id, human.id, 'OWNER')
+  assert.equal(
+    await prisma.crewMember.count({ where: { crewId: crew.id, userId: agent.id } }),
+    0,
+    'Agent must not be cascaded from a human owner',
+  )
 
-  // Verify that the AI Agent avatar was automatically pulled into the crew
-  const agentMembership = await prisma.crewMember.findUnique({
-    where: {
-      crewId_userId: {
-        crewId: crew.id,
-        userId: testAgent.id
-      }
-    }
+  await addCrewMember(crew.id, agent.id, 'EDITOR')
+  await prisma.organizationMember.create({
+    data: { ownerId: human.id, memberId: organizationMember.id, role: 'member' },
   })
 
-  if (agentMembership) {
-    console.log(`✓ SUCCESS: AI Agent avatar "${testAgent.nickname}" was automatically cascade-pulled into the Crew!`)
-  } else {
-    throw new Error('FAILED: AI Agent avatar was NOT cascade-pulled into the Crew.')
+  for (const user of [human, agent, organizationMember]) {
+    assert.equal(
+      await canSessionAccessBrand(brand.id, user.id, user.type, 'READ'),
+      true,
+      `${user.email} should read through direct Crew or organization inheritance`,
+    )
+    assert.equal(
+      await canSessionAccessBrand(brand.id, user.id, user.type, 'WRITE'),
+      true,
+      `${user.email} should write with its explicit global role`,
+    )
   }
 
-  // 6. Generate personal API Key for Human User
-  console.log('\nTesting User API Key Generation & Lookup...')
-  const keyToken = `amc_key_${crypto.randomBytes(24).toString('hex')}`
-  const userKey = await prisma.userApiKey.create({
+  const token = `amc_key_${crypto.randomBytes(32).toString('base64url')}`
+  const key = await prisma.userApiKey.create({
     data: {
-      name: 'Default Test Key',
-      token: keyToken,
-      userId: testHuman.id
-    }
+      name: 'Auth V2 E2E key',
+      tokenHash: hashApiKeyToken(token),
+      prefix: apiKeyPrefix(token),
+      userId: agent.id,
+    },
   })
-  console.log(`✓ User API Key generated: ${userKey.name}`)
+  assert.equal(key.token, null, 'New API keys must not persist plaintext')
 
-  // Verify key resolution
-  const resolvedUser = await verifyUserApiKey(keyToken)
-  if (resolvedUser && resolvedUser.id === testHuman.id) {
-    console.log(`✓ SUCCESS: Token successfully verified and resolved to Human User "${resolvedUser.nickname}"!`)
-  } else {
-    throw new Error('FAILED: Token verification failed.')
-  }
+  process.env.AUTH_V2_LEGACY_KEYS = 'false'
+  const resolved = await authenticateApiKey(token)
+  assert.equal(resolved?.userId, agent.id)
 
-  // 7. Verify Brand Access Permissions (Double-Layer ACL)
-  console.log('\nTesting Double-Layer ACL Brand Access checks...')
-  
-  // Test 7.1: Human access brand READ/WRITE
-  const humanCanRead = await canSessionAccessBrand(testBrand.id, testHuman.id, 'HUMAN', 'READ')
-  const humanCanWrite = await canSessionAccessBrand(testBrand.id, testHuman.id, 'HUMAN', 'WRITE')
+  await prisma.userApiKey.update({
+    where: { id: key.id },
+    data: { revokedAt: new Date() },
+  })
+  assert.equal(await authenticateApiKey(token), null, 'Revoked key must fail')
 
-  if (humanCanRead && humanCanWrite) {
-    console.log('✓ SUCCESS: Human owner successfully granted READ & WRITE access to Brand.')
-  } else {
-    throw new Error(`FAILED: Human owner denied access. READ=${humanCanRead}, WRITE=${humanCanWrite}`)
-  }
-
-  // Test 7.2: AI Agent avatar access brand READ
-  const agentCanRead = await canSessionAccessBrand(testBrand.id, testAgent.id, 'AI_AGENT', 'READ')
-  // Test 7.3: AI Agent avatar access brand WRITE (Double-Layer ACL should block this!)
-  const agentCanWrite = await canSessionAccessBrand(testBrand.id, testAgent.id, 'AI_AGENT', 'WRITE')
-
-  if (agentCanRead && !agentCanWrite) {
-    console.log('✓ SUCCESS: AI Agent avatar granted READ access, but correctly BLOCKED from WRITE access (Double-Layer ACL gate works!).')
-  } else {
-    throw new Error(`FAILED: AI Agent avatar access incorrect. READ=${agentCanRead}, WRITE=${agentCanWrite} (Expected WRITE to be blocked)`)
-  }
-
-  // 8. Clean up test database records
-  console.log('\nCleaning up test records...')
-  await prisma.userApiKey.delete({ where: { id: userKey.id } })
-  await prisma.crewMember.deleteMany({ where: { crewId: crew.id } })
-  await prisma.marketingCrew.delete({ where: { id: crew.id } })
-  await prisma.brand.delete({ where: { id: testBrand.id } })
-  await prisma.user.delete({ where: { id: testAgent.id } })
-  await prisma.user.delete({ where: { id: testHuman.id } })
-  console.log('✓ Cleanup complete.')
-
-  console.log('\n🎉 ALL USER MANAGEMENT E2E TESTS PASSED SUCCESSFULLY!')
+  console.log('Auth V2 user/Crew E2E test passed.')
 }
 
 testE2E()
+  .then(cleanup)
   .then(() => prisma.$disconnect())
-  .catch(async (err) => {
-    console.error('❌ E2E TEST RUN FAILED:', err)
+  .catch(async (error) => {
+    console.error('Auth V2 user/Crew E2E test failed:', error)
+    await cleanup().catch(console.error)
     await prisma.$disconnect()
     process.exit(1)
   })

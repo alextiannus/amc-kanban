@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canWriteBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
 export async function PATCH(request: Request, { params }: Params) {
   const session = await getSession()
-  if (!session?.user || session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: brandId, draftId } = await params
-  const ok = await canHumanAccessBrandProject(brandId, session.user.id, session.user.role)
+  const ok = await canWriteBrandProject(brandId, session.user.id)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))

@@ -231,47 +231,20 @@ const CORE_OPERATIONS: OperationItem[] = [
 }`
   },
   {
-    id: 'list_tasks',
-    action: 'List Kanban Tasks',
-    actionCn: '获取任务列表',
-    mcpName: 'list_tasks',
-    mcpParams: 'brandId?, status?, assignedToMe?, limit?',
-    desc: 'Query Kanban work units assigned to the agent or filtered by brand/status.',
-    payloadExample: `{
-  "brandId": "brand_id_here",
-  "status": "todo",
-  "assignedToMe": true
-}`
-  },
-  {
-    id: 'create_task',
-    action: 'Create Kanban Task',
-    actionCn: '创建看板任务',
-    mcpName: 'create_task',
-    mcpParams: 'title, description?, status?, priority?, weight?, requiredInput?, deadline?, brandId?',
+    id: 'post_action_item',
+    action: 'Create Action Item',
+    actionCn: '创建人工处理事项',
+    mcpName: 'post_action_item',
+    mcpParams: 'brandId, type, priority?, title, description, platform?',
     restMethod: 'POST',
-    restUrl: '/api/tasks',
-    desc: 'Log action items, draft notifications, or other deliverables on the Kanban board.',
+    restUrl: '/api/agent/action-items',
+    desc: 'Request human review, missing material, or a business decision without creating a WorkUnit/swimlane task.',
     payloadExample: `{
-  "title": "Analyze competitor summer designs",
   "brandId": "brand_id_here",
-  "status": "todo",
-  "priority": "high"
-}`
-  },
-  {
-    id: 'update_task',
-    action: 'Update Kanban Task',
-    actionCn: '更新看板任务',
-    mcpName: 'update_task',
-    mcpParams: 'taskId, title?, description?, status?, priority?, requiredInput?, deadline?, brandId?',
-    restMethod: 'PATCH',
-    restUrl: '/api/tasks/[id]',
-    desc: 'Modify status (todo/in_progress/pending/done), record logs, or request human input on blockages.',
-    payloadExample: `{
-  "taskId": "task_id_here",
-  "status": "pending",
-  "requiredInput": "Please provide the latest brand guidelines PDF."
+  "type": "content_approval",
+  "priority": "high",
+  "title": "Please approve the weekend campaign",
+  "description": "Review draft draft_id_here and approve or add feedback."
 }`
   }
 ]
@@ -434,7 +407,7 @@ export default function ConnectPage() {
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-200">
             <li>Create or select your AI agent in AMC dashboard.</li>
             <li>Use your own Agent API Key (do not share keys across teams).</li>
-            <li>Bind your agent to the brands you own before running write operations.</li>
+            <li>Add the Agent User to each brand Crew before running brand operations.</li>
           </ol>
         </section>
 

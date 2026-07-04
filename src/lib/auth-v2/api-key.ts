@@ -1,6 +1,7 @@
 import crypto from 'crypto'
-import { prisma } from '@/lib/prisma'
-import { principalFromUser, type AuthPrincipal } from './types'
+import { prisma } from '../prisma.ts'
+import { principalFromUser, type AuthPrincipal } from './types.ts'
+import { isLegacyKeyCompatibilityActive } from './compat.ts'
 
 const LAST_USED_WRITE_INTERVAL_MS = 5 * 60 * 1000
 
@@ -30,10 +31,9 @@ function scheduleLastUsedUpdate(id: string, lastUsedAt: Date | null) {
 
 export async function authenticateApiKey(token: string): Promise<AuthPrincipal | null> {
   const tokenHash = hashApiKeyToken(token)
+  const allowLegacyStorage = isLegacyKeyCompatibilityActive()
   const key = await prisma.userApiKey.findFirst({
-    where: {
-      OR: [{ tokenHash }, { token }],
-    },
+    where: allowLegacyStorage ? { OR: [{ tokenHash }, { token }] } : { tokenHash },
     select: {
       id: true,
       token: true,
@@ -71,7 +71,9 @@ export async function authenticateApiKey(token: string): Promise<AuthPrincipal |
     return principalFromUser(key.user, 'api_key', key.id)
   }
 
-  // Temporary compatibility for legacy AI Agent keys stored on User.
+  if (!allowLegacyStorage) return null
+
+  // One-day compatibility for legacy AI Agent keys stored on User.
   const legacyHash = hashApiKeyToken(token)
   const legacyUser = await prisma.user.findFirst({
     where: {

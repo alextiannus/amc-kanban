@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose'
-import { authenticateApiKey, authenticateCurrentSession } from './auth-v2'
+import { authenticateApiKey, authenticateCurrentSession } from './auth-v2/index.ts'
 
 function getJwtKey() {
   const secretKey = process.env.JWT_SECRET

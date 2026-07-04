@@ -46,7 +46,9 @@
 | `npm run test:execution` | 项目执行度分析 | 校验针对品牌运营效果的分析任务、数据提取统计以及看板可视化计算。 |
 | `npm run test:phase1-e2e` | 阶段一综合端到端测试 | 自动模拟管理员映射、品牌创建/删除隔离、智能体排期以及幂等冲突处理。 |
 | `npm run test:api` | REST 与 MCP 服务网关集成 | 校验 LangGraph/MCP 接口在处理自然语言意图时的响应完整性与参数限制。 |
-| `npm run test:user-management` | 用户管理与智能体委托鉴权 | E2E 验证人类 API Key 委托验证、智能体级联拉入 Crew 以及双层 ACL 权限隔离。 |
+| `npm run test:auth-v2` | Auth V2 核心 | 验证显式 Capability、Argon2id/bcrypt 升级、最小 Session 与 24 小时兼容截止。 |
+| `npm run verify:auth-routes` | Route 鉴权覆盖 | 静态扫描所有 API Route，未分类路由会阻断。 |
+| `npm run test:user-management` | 用户、组织与 Crew 鉴权 | E2E 验证显式 CrewMember、组织 Owner 继承和跨品牌隔离。 |
 | `npm run test:subscription` | 订阅计划与收费计费逻辑 | 校验新订阅版价格及服务内容调整后的订单计算与租户服务包配额。 |
 | `npm run verify:permissions` | API 边界权限与防越权校验 | 启动本地服务，模拟不同角色 Session，进行跨品牌的防水平越权审计。 |
 | `npm run verify:oss` | 生产 OSS 存储可用性与 CORS | 模拟上传临时小文件至华为 OBS 存储桶，验证签名算法、公网可读性与 CORS 首部字段。 |
@@ -110,22 +112,23 @@
     4. 模拟发起一次品牌版的支付模拟，校验生成的 Stripe Webhook/API 请求体中价格 ID 与金额是否为 S$2800 (或等额美金)。
 *   **预期结果**：界面展示文案、底层价格配置逻辑、Stripe Payload 全程一致，符合最新资助与收费标准。
 
-### 3.4 用户管理与智能体委托鉴权 (User Management & Crew Auth)
+### 3.4 用户管理与 Agent 统一鉴权 (User Management & Crew Auth)
 
-#### TC-USR-001: 智能体级联拉入与双层鉴权 (Auto-Avatar Cascade Pull & Dual-Layer ACL)
-*   **测试目的**：验证人类用户添加进 Crew 后，绑定的 AI 分身智能体也被自动添加；验证 AI 智能体拥有数据隔离边界权限，但功能上受只读/限制 WRITE 的限制。
+#### TC-USR-001: 显式 Crew 与统一权限
+*   **测试目的**：验证 Agent 作为独立系统用户使用自身角色、Capability 和 Crew 品牌范围；不存在人类身份级联或隐式委托。
 *   **测试步骤**：
-    1. 创建一个人类用户并为其绑定一个 AI 智能体作为其“AI 分身”（设置 `ownerId`）。
-    2. 创建一个新品牌，并为其生成对应的 `MarketingCrew`。
-    3. 调用 `addCrewMember` 将人类用户拉入该品牌的 Crew。
-    4. 查询该 Crew 成员，检查刚才绑定的 AI 分身智能体是否已被联动、级联自动拉入到 Crew 中。
-    5. 为人类用户生成一个 API Key Bearer Token。
-    6. 使用该 Token 请求品牌接口，验证能正常通过数据边界鉴权。
-    7. 模拟 AI 智能体使用该 Token 且携带 `x-agent-id` 头部发出 WRITE 请求。
+    1. 创建 Human 与 AMC Agent 两个独立 User，并显式配置业务角色。
+    2. 创建品牌和 `MarketingCrew`。
+    3. 分别用明确的 `OWNER`、`EDITOR` Crew role 添加成员。
+    4. 使用 Agent 自己的 Hash API Key 读取和写入授权品牌。
+    5. 使用同一 Key访问未加入 Crew 的品牌。
+    6. 禁用 Agent、撤销 Key并重复请求。
+    7. 验证组织成员可继承 Organization Owner 的 Crew 范围。
 *   **预期结果**：
-    - AI 分身智能体已被自动且成功拉入战队（Cascade Pull 成功）。
-    - 个人 API Key 正确解析并委托确权。
-    - AI 智能体被授予 READ 权限，但其试图进行的品牌级 WRITE 操作被严格拒绝（403/Forbidden），证明双层 ACL 栅栏完全生效。
+    - Agent 仅能操作显式 Crew 或组织继承范围内品牌。
+    - Capability 不足返回 403；无效/撤销凭证返回 401。
+    - Agent ADMIN 与人类 ADMIN 的允许/拒绝结果一致。
+    - 不发送 `x-agent-id`，日志 actor 是 Agent 自己。
 
 ---
 

@@ -1,12 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs/promises'
 import path from 'path'
+import { prisma } from '@/lib/prisma'
+import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
 
 type Params = { params: Promise<{ accountId: string; filename: string }> }
 
 export async function GET(request: NextRequest, { params }: Params) {
   try {
     const { accountId, filename } = await params
+    if (path.basename(accountId) !== accountId || path.basename(filename) !== filename) {
+      return new NextResponse('Snapshot not found', { status: 404 })
+    }
+
+    const principal = await authenticateRequest(request)
+    if (!principal) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const account = await prisma.socialAccount.findUnique({
+      where: { id: accountId },
+      select: { brandId: true },
+    })
+    if (!account) return new NextResponse('Snapshot not found', { status: 404 })
+    try {
+      await requireCapability(principal, 'brand.read', { brandId: account.brandId })
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     
     // Clean and validate filename to prevent path traversal
     const safeFilename = path.basename(filename)
@@ -29,7 +50,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': 'private, max-age=3600',
       },
     })
   } catch (err) {

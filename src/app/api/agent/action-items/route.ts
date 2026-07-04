@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { eventEmitter } from '@/lib/events'
 import { postfastPublish } from '@/lib/integrations/postfast'
-import { canAgentAccessBrand } from '@/lib/brandAccess'
+import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -15,10 +15,8 @@ function isValidHttpUrl(value: string): boolean {
 
 // Authenticate by Agent apiKey in Authorization header
 async function getAgent(request: Request) {
-  const auth = request.headers.get('authorization') || ''
-  const key = auth.replace('Bearer ', '').trim()
-  if (!key) return null
-  return prisma.user.findFirst({ where: { apiKey: key, type: 'AI_AGENT' } })
+  const principal = await authenticateRequest(request)
+  return principal?.actorType === 'AMC_AGENT' ? principal : null
 }
 
 // POST /api/agent/action-items
@@ -41,7 +39,9 @@ export async function POST(request: Request) {
 
   const brand = await prisma.brand.findUnique({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-  if (!(await canAgentAccessBrand(brandId, agent.id))) {
+  try {
+    await requireCapability(agent, 'action_item.create', { brandId })
+  } catch {
     return NextResponse.json({ error: 'Brand not linked to this agent' }, { status: 403 })
   }
 
@@ -58,7 +58,6 @@ export async function POST(request: Request) {
 
   let draftId: string | undefined
   let draftUrl: string = incomingDraftUrl || ''
-  let workTaskId: string | undefined
   // Resolve accountId: explicit > auto-lookup by platform
   let accountId: string | undefined = explicitAccountId || undefined
   if (!accountId && platformHint) {
@@ -67,14 +66,6 @@ export async function POST(request: Request) {
       select: { id: true },
     })
     if (found) accountId = found.id
-  }
-
-  const taskPriorityMap: Record<string, 'low' | 'medium' | 'high' | 'urgent'> = {
-    low: 'low',
-    normal: 'medium',
-    medium: 'medium',
-    high: 'high',
-    urgent: 'urgent',
   }
 
   // If agent includes draft content (draftData), create the draft first
@@ -100,7 +91,7 @@ export async function POST(request: Request) {
         // board_get_schedule_recommendation before board_submit_draft.
         scheduledAt: null,
         status: 'pending_review',
-        agentId: agent.id,
+        agentId: agent.userId,
         agentNote: draftData.agentNote || null,
         creativeHooks: draftData.creativeHooks || null,
       },
@@ -110,26 +101,6 @@ export async function POST(request: Request) {
     const appBase = process.env.NEXT_PUBLIC_APP_URL ?? ''
     const path = `/dashboard?brandId=${encodeURIComponent(brandId)}&draftId=${encodeURIComponent(draft.id)}`
     draftUrl = appBase ? `${appBase}${path}` : path
-  }
-
-  // Create WorkUnit to track this content work (with draft URL and eventual post URL)
-  if (isContentApproval && draftUrl) {
-    const draftMaterial = `草稿链接: ${draftUrl}`
-    const workTask = await prisma.workUnit.create({
-      data: {
-        title: `[${brand.autoPilot ? '自动驾驶' : '人工审批'}] ${title}`,
-        description,
-        materials: draftMaterial,
-        assigneeId: agent.id,
-        status: brand.autoPilot ? 'in_progress' : 'pending',
-        requiredInput: brand.autoPilot
-          ? null
-          : `请人工审核草稿并确认是否发布。草稿链接: ${draftUrl}`,
-        priority: taskPriorityMap[priority || 'normal'] ?? 'medium',
-        weight: 3,
-      },
-    })
-    workTaskId = workTask.id
   }
 
   // If brand is in autoPilot and it is a content approval item with draftData,
@@ -148,7 +119,7 @@ export async function POST(request: Request) {
       title,
       description,
       payload: payload || null,
-      agentId: agent.id,
+      agentId: agent.userId,
       draftId: draftId || null,
       status: initialStatus,
       resolvedAt: shouldAutoResolveImmediately ? new Date() : null,
@@ -156,18 +127,8 @@ export async function POST(request: Request) {
     },
   })
 
-  // Link the work card to this action item for deterministic callback updates.
-  if (workTaskId) {
-    await prisma.workUnit.update({
-      where: { id: workTaskId },
-      data: {
-        tags: { push: `action_item:${item.id}` },
-      },
-    })
-  }
-
   // If brand is in autoPilot and this is content approval with draft — attempt immediate publish
-  if (brand.autoPilot && isContentApproval && workTaskId) {
+  if (brand.autoPilot && isContentApproval) {
     // If we have draftId, we created an internal draft; attempt to publish it
     if (draftId) {
       const [draft, account] = await Promise.all([
@@ -281,35 +242,6 @@ export async function POST(request: Request) {
         }
       }
 
-      const materialParts = [`草稿链接: ${draftUrl}`]
-      if (publishedUrl) materialParts.push(`发布链接: ${publishedUrl}`)
-
-      const isScheduledFuture = !isDirectGoogle && draft.scheduledAt && new Date(draft.scheduledAt) > new Date()
-
-      await prisma.workUnit.update({
-        where: { id: workTaskId },
-        data: publishError
-          ? {
-              status: 'pending',
-              requiredInput: `${publishError}。请人工确认后重试发布。`,
-              materials: materialParts.filter(Boolean).join('\n'),
-            }
-          : {
-              status: isScheduledFuture ? 'in_progress' : 'done',
-              requiredInput: null,
-              materials: materialParts.filter(Boolean).join('\n'),
-            },
-      })
-    } else {
-      // Agent provided draftUrl directly (e.g., Lark doc). Keep it in_progress
-      // until the final published URL is callback-ed to the board.
-      await prisma.workUnit.update({
-        where: { id: workTaskId },
-        data: {
-          status: 'in_progress',
-          requiredInput: null,
-        },
-      })
     }
   }
 
@@ -320,7 +252,7 @@ export async function POST(request: Request) {
 }
 
 // PATCH /api/agent/action-items
-// Agent reports publishing result: actionItemId + postUrl to update WorkUnit
+// Agent reports publishing result: actionItemId + postUrl.
 // Body: { actionItemId, postUrl }
 export async function PATCH(request: Request) {
   const agent = await getAgent(request)
@@ -336,66 +268,43 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'postUrl must be a valid http/https URL' }, { status: 400 })
   }
 
-  // Find the action item and associated work unit
   const actionItem = await prisma.actionItem.findUnique({
     where: { id: actionItemId },
-    select: { id: true, agentId: true, type: true },
+    select: { id: true, agentId: true, type: true, brandId: true, draftId: true },
   })
 
   if (!actionItem) {
     return NextResponse.json({ error: 'Action item not found' }, { status: 404 })
   }
 
-  if (actionItem.agentId !== agent.id) {
+  if (actionItem.agentId !== agent.userId) {
     return NextResponse.json({ error: 'Not authorized to update this action item' }, { status: 403 })
   }
+  try {
+    await requireCapability(agent, 'action_item.resolve', { brandId: actionItem.brandId })
+  } catch {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
-  // Find the associated WorkUnit by deterministic tag.
-  const workUnits = await prisma.workUnit.findMany({
-    where: {
-      assigneeId: agent.id,
-      tags: { has: `action_item:${actionItemId}` },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 1,
-  })
-
-  if (workUnits.length === 0) {
-    // Backward-compatible fallback for old tasks created before action_item tag rollout.
-    const fallback = await prisma.workUnit.findMany({
-      where: {
-        assigneeId: agent.id,
-        status: { in: ['pending', 'in_progress'] },
+  await prisma.$transaction(async (tx: any) => {
+    await tx.actionItem.update({
+      where: { id: actionItem.id },
+      data: {
+        status: 'resolved',
+        resolvedAt: new Date(),
+        resolvedBy: agent.userId,
+        resolvedNote: `Published: ${postUrl}`,
       },
-      orderBy: { createdAt: 'desc' },
-      take: 1,
     })
-    if (fallback.length === 0) {
-      return NextResponse.json({ error: 'No pending work unit found for this action item' }, { status: 404 })
+    if (actionItem.draftId) {
+      await tx.contentDraft.update({
+        where: { id: actionItem.draftId },
+        data: { status: 'published', postUrl, publishedAt: new Date() },
+      })
     }
-    workUnits.push(fallback[0])
-  }
-
-  const workUnit = workUnits[0]
-  const currentMaterials = workUnit.materials || ''
-  const materialParts = currentMaterials.split('\n').filter(Boolean)
-
-  // Add post URL if not already present
-  if (!materialParts.find((part: string) => part.startsWith('发布链接:'))) {
-    materialParts.push(`发布链接: ${postUrl}`)
-  }
-
-  // Update WorkUnit to mark as done
-  const updated = await prisma.workUnit.update({
-    where: { id: workUnit.id },
-    data: {
-      status: 'done',
-      requiredInput: null,
-      materials: materialParts.join('\n'),
-    },
   })
 
   eventEmitter.emit('board_update')
 
-  return NextResponse.json({ ok: true, workUnitId: updated.id })
+  return NextResponse.json({ ok: true, actionItemId: actionItem.id })
 }

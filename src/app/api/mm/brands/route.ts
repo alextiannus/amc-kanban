@@ -10,9 +10,6 @@ export async function POST(request: NextRequest) {
   if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (session.user.type === 'AI_AGENT') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
 
   try {
     const body = await request.json()
@@ -38,7 +35,7 @@ export async function POST(request: NextRequest) {
     try {
       // 2. Initialize new Marketing Crew
       const crew = await createMarketingCrew(brand.id)
-      await addCrewMember(crew.id, session.user.id)
+      await addCrewMember(crew.id, session.user.id, 'OWNER')
 
       // 3. Backward compatibility mappings
       await prisma.brandOwner.upsert({

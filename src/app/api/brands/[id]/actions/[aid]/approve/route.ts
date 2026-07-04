@@ -4,19 +4,17 @@ import { prisma } from '@/lib/prisma'
 import { eventEmitter } from '@/lib/events'
 import { postfastPublish, postfastReplyReview } from '@/lib/integrations/postfast'
 import { sendLarkWebhookNotification } from '@/lib/integrations/lark'
-import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canWriteBrandProject } from '@/lib/brandAccess'
+import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 
 /** Fetch smart schedule recommendation — mirrors the helper in draftSubmission.ts */
 async function fetchRecommendedScheduleTime(brandId: string, platform: string): Promise<Date | null> {
   try {
-    const appBase = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-    const res = await fetch(`${appBase}/api/brands/${brandId}/scheduling/recommend`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-forwarded-for': 'internal' },
-      body: JSON.stringify({ platform, numberOfPosts: 1, urgency: 'normal' }),
+    const data = await getSchedulingRecommendations({
+      brandId,
+      platform,
+      urgency: 'normal',
     })
-    if (!res.ok) return null
-    const data = await res.json()
     const iso = data.recommendations?.[0]?.recommendedAt
     return iso ? new Date(iso) : null
   } catch {
@@ -34,8 +32,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const { id: brandId, aid } = await params
 
-  if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+  if (!(await canWriteBrandProject(brandId, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

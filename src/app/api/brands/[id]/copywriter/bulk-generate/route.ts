@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { callLLM } from '@/lib/llmRouter'
 import { copywriterNode } from '@/agents/nodes/copywriter'
+import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 
 // Allow enough time for parallel LLM calls across all platforms
 export const maxDuration = 120
@@ -41,14 +42,11 @@ type Params = { params: Promise<{ id: string }> }
 // Each platform queries independently so gaps are respected per-platform.
 async function getRecommendedTime(brandId: string, platformId: string): Promise<Date | null> {
   try {
-    const appBase = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-    const res = await fetch(`${appBase}/api/brands/${brandId}/scheduling/recommend`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-forwarded-for': 'internal' },
-      body: JSON.stringify({ platform: platformId, numberOfPosts: 1, urgency: 'normal' }),
+    const data = await getSchedulingRecommendations({
+      brandId,
+      platform: platformId,
+      urgency: 'normal',
     })
-    if (!res.ok) return null
-    const data = await res.json()
     const rec = data.recommendations?.[0]?.recommendedAt
     return rec ? new Date(rec) : null
   } catch {

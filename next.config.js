@@ -20,7 +20,7 @@ const nextConfig = {
 
 // PWA configuration — disabled in dev to avoid Service Worker interference
 let config = nextConfig
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && process.env.DISABLE_PWA !== 'true') {
 	try {
 		const withPWA = require('@ducanh2912/next-pwa').default({
 			dest: 'public',
@@ -49,4 +49,3 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 module.exports = config
-

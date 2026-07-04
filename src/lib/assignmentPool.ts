@@ -404,7 +404,7 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
           select: { id: true }
         })
         if (crew) {
-          await addCrewMember(crew.id, selected.agentId, tx)
+          await addCrewMember(crew.id, selected.agentId, 'EDITOR', tx)
         }
       }
     }

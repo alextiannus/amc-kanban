@@ -36,7 +36,6 @@ export async function PATCH(request: Request, { params }: Params) {
   const { id: brandId, topicId } = await params
   const actor = await ensureAccess(request, brandId)
   if (!actor) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (actor.type !== 'AI_AGENT') return NextResponse.json({ error: 'Hot Topics can only be updated by AMC Agents through API/MCP' }, { status: 403 })
 
   const body = await request.json().catch(() => ({}))
   const result = await updateTopicFeed({
@@ -58,7 +57,6 @@ export async function DELETE(request: Request, { params }: Params) {
   const { id: brandId, topicId } = await params
   const actor = await ensureAccess(request, brandId)
   if (!actor) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (actor.type !== 'AI_AGENT') return NextResponse.json({ error: 'Hot Topics can only be archived by AMC Agents through API/MCP' }, { status: 403 })
 
   const result = await archiveTopicFeed(brandId, topicId)
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })

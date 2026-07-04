@@ -1,4 +1,4 @@
-import type { GlobalRole } from './types'
+import type { GlobalRole } from './types.ts'
 
 export const CAPABILITIES = [
   'brand.read',

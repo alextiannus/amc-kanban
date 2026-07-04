@@ -111,7 +111,7 @@ export async function PATCH(request: Request, { params }: Params) {
       if (!crew) {
         crew = await tx.marketingCrew.create({ data: { brandId: id } })
       }
-      await addCrewMember(crew.id, resolvedOwnerId, tx)
+      await addCrewMember(crew.id, resolvedOwnerId, 'OWNER', tx)
     }
 
     if (nextAgentIds) {
@@ -148,7 +148,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
       // Human and AMC Agent users share the same Crew membership path.
       for (const agentId of nextAgentIds) {
-        await addCrewMember(crew.id, agentId, tx)
+        await addCrewMember(crew.id, agentId, 'EDITOR', tx)
       }
     }
 

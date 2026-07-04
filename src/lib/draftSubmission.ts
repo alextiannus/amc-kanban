@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { postfastDeletePost, postfastPublish } from '@/lib/integrations/postfast'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
+import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 
 type SubmitDraftInput = {
   brandId: string
@@ -22,7 +23,7 @@ function uniq(values: string[]) {
 }
 
 /**
- * Auto-fetch a smart recommended publish time from the scheduling API.
+ * Compute a smart recommended publish time through the shared service.
  * Called when a draft has no scheduledAt set — ensures all content goes
  * through the unified scheduling algorithm (2-day gap, preferred slots).
  *
@@ -34,17 +35,7 @@ async function fetchRecommendedScheduleTime(
   urgency: 'normal' | 'urgent' = 'normal',
 ): Promise<Date | null> {
   try {
-    const appBase = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-    const res = await fetch(`${appBase}/api/brands/${brandId}/scheduling/recommend`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-forwarded-for': 'internal', // internal bypass — no session needed
-      },
-      body: JSON.stringify({ platform, numberOfPosts: 1, urgency }),
-    })
-    if (!res.ok) return null
-    const data = await res.json()
+    const data = await getSchedulingRecommendations({ brandId, platform, urgency })
     const iso = data.recommendations?.[0]?.recommendedAt
     return iso ? new Date(iso) : null
   } catch {

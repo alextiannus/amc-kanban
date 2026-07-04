@@ -1,13 +1,14 @@
 import { cookies } from 'next/headers'
-import { prisma } from '@/lib/prisma'
-import { authenticateApiKey } from './api-key'
-import { AuthenticationError } from './errors'
+import { prisma } from '../prisma.ts'
+import { authenticateApiKey } from './api-key.ts'
+import { AuthenticationError } from './errors.ts'
 import {
   readSessionTokenFromRequest,
   sessionCookieName,
   verifySessionToken,
-} from './session'
-import { principalFromUser, type AuthPrincipal } from './types'
+} from './session.ts'
+import { principalFromUser, type AuthPrincipal } from './types.ts'
+import { isLegacyKeyCompatibilityActive } from './compat.ts'
 
 export function extractBearerToken(request: Request): string | null {
   const authorization = request.headers.get('authorization')?.trim()
@@ -49,7 +50,7 @@ export async function authenticateRequest(request: Request): Promise<AuthPrincip
 
     const delegatedAgentId = request.headers.get('x-agent-id')?.trim()
     if (!delegatedAgentId) return principal
-    if (principal.actorType !== 'HUMAN' || !isLegacyDelegationActive()) return null
+    if (principal.actorType !== 'HUMAN' || !isLegacyKeyCompatibilityActive()) return null
 
     const agent = await prisma.user.findFirst({
       where: {
@@ -68,20 +69,12 @@ export async function authenticateRequest(request: Request): Promise<AuthPrincip
         businessRoles: { select: { role: true } },
       },
     })
-    return agent ? principalFromUser(agent, 'legacy_api_key', principal.credentialId) : null
+    return agent ? principalFromUser(agent, 'legacy_delegation', principal.credentialId) : null
   }
 
   const sessionToken = readSessionTokenFromRequest(request)
   if (!sessionToken) return null
   return principalFromSessionToken(sessionToken)
-}
-
-export function isLegacyDelegationActive(now = Date.now()): boolean {
-  if (process.env.AUTH_V2_LEGACY_KEYS !== 'true') return false
-  const cutoff = process.env.AUTH_V2_LEGACY_KEY_CUTOFF_AT
-  if (!cutoff) return false
-  const cutoffAt = Date.parse(cutoff)
-  return Number.isFinite(cutoffAt) && now < cutoffAt
 }
 
 export async function authenticateCurrentSession(): Promise<AuthPrincipal | null> {

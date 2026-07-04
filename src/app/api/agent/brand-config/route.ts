@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
-import { extractApiKey, getAgentFromApiKey } from '@/lib/auth'
+import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
-import { canAgentAccessBrand } from '@/lib/brandAccess'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 
@@ -38,9 +37,8 @@ function toPublicBrand<T extends BrandWithCredentials>(brand: T) {
 }
 
 async function getAgent(request: Request) {
-  const apiKey = extractApiKey(request)
-  if (!apiKey) return null
-  return getAgentFromApiKey(apiKey)
+  const principal = await authenticateRequest(request)
+  return principal?.actorType === 'AMC_AGENT' ? principal : null
 }
 
 // GET /api/agent/brand-config?brandId=<id>
@@ -54,37 +52,43 @@ export async function GET(request: Request) {
 
   // No brandId → return all brands this agent is linked to
   if (!brandId) {
-    const links = await prisma.brandAgent.findMany({
+    const links = await prisma.crewMember.findMany({
       where: {
-        agentId: agent.id,
+        userId: agent.userId,
         active: true,
-        brand: {
-          status: { not: 'ARCHIVED' },
-          subscriptions: {
-            some: {
-              status: 'ACTIVE',
-              OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+        crew: {
+          brand: {
+            status: { not: 'ARCHIVED' },
+            subscriptions: {
+              some: {
+                status: 'ACTIVE',
+                OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
+              },
             },
           },
         },
       },
       include: {
-        brand: {
-          select: {
-            id: true, name: true, description: true, location: true, timezone: true,
-            autoPilot: true,
-            googlePlaceId: true,
-            googleAccountId: true, googleLocationId: true, googleLocationName: true,
-            larkDriveToken: true, larkDriveFolderId: true,
-            larkOwnerId: true,
-            postfastApiKey: true, googleApiKey: true,
-            larkAppId: true, larkAppSecret: true, larkBotWebhook: true,
-            accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
+        crew: {
+          include: {
+            brand: {
+              select: {
+                id: true, name: true, description: true, location: true, timezone: true,
+                autoPilot: true,
+                googlePlaceId: true,
+                googleAccountId: true, googleLocationId: true, googleLocationName: true,
+                larkDriveToken: true, larkDriveFolderId: true,
+                larkOwnerId: true,
+                postfastApiKey: true, googleApiKey: true,
+                larkAppId: true, larkAppSecret: true, larkBotWebhook: true,
+                accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
+              },
+            },
           },
         },
       },
     })
-    const safeBrands = links.map((l: any) => toPublicBrand(l.brand))
+    const safeBrands = links.map((l: any) => toPublicBrand(l.crew.brand))
     return NextResponse.json(safeBrands)
   }
 
@@ -105,7 +109,9 @@ export async function GET(request: Request) {
   })
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-  if (!(await canAgentAccessBrand(brandId, agent.id))) {
+  try {
+    await requireCapability(agent, 'brand.read', { brandId })
+  } catch {
     return NextResponse.json({ error: 'Brand not linked to this agent' }, { status: 403 })
   }
 
@@ -121,6 +127,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const agent = await getAgent(request)
   if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    await requireCapability(agent, 'brand.create')
+  } catch {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const body = await request.json()
   const { name, location, timezone, address, googlePlaceId } = body
@@ -129,37 +140,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  // Find ownerId from the agent directly
-  const agentUser = await prisma.user.findUnique({
-    where: { id: agent.id },
-    select: { ownerId: true },
-  })
-
-  let ownerId = agentUser?.ownerId
-
-  // Fallback to AgentPermission mapping
-  if (!ownerId) {
-    const permissions = await prisma.agentPermission.findMany({
-      where: { agentId: agent.id },
-      select: { userId: true },
-    })
-    ownerId = permissions[0]?.userId
-  }
-
-  // Fallback to first ADMIN human user
-  if (!ownerId) {
-    const admin = await prisma.user.findFirst({
-      where: { role: 'ADMIN' },
-      select: { id: true },
-    })
-    if (!admin) return NextResponse.json({ error: 'No admin user found to assign brand' }, { status: 500 })
-    ownerId = admin.id
-  }
-
   const brand = await prisma.$transaction(async (tx: any) => {
     const b = await tx.brand.create({
       data: {
-        ownerId,
         name: name.trim(),
         location: location?.trim() || null,
         timezone: timezone || 'America/New_York',
@@ -169,26 +152,7 @@ export async function POST(request: Request) {
     })
 
     const crew = await createMarketingCrew(b.id, tx)
-    await addCrewMember(crew.id, ownerId, tx)
-
-    await tx.brandOwner.upsert({
-      where: { brandId_userId: { brandId: b.id, userId: ownerId } },
-      create: { brandId: b.id, userId: ownerId },
-      update: {},
-    })
-
-    await tx.userBusinessRole.upsert({
-      where: { userId_role: { userId: ownerId, role: 'BRAND_OWNER' } },
-      create: { userId: ownerId, role: 'BRAND_OWNER' },
-      update: {},
-    })
-
-    // Also link the agent to this brand!
-    await tx.brandAgent.upsert({
-      where: { brandId_agentId: { brandId: b.id, agentId: agent.id } },
-      create: { brandId: b.id, agentId: agent.id, active: true },
-      update: { active: true },
-    })
+    await addCrewMember(crew.id, agent.userId, 'PRINCIPAL', tx)
 
     return b
   })
@@ -252,7 +216,9 @@ export async function PATCH(request: Request) {
 
   const brand = await prisma.brand.findUnique({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-  if (!(await canAgentAccessBrand(brandId, agent.id))) {
+  try {
+    await requireCapability(agent, 'brand.update', { brandId })
+  } catch {
     return NextResponse.json({ error: 'Brand not linked to this agent' }, { status: 403 })
   }
 

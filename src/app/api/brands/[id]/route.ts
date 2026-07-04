@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canHumanAccessBrandProject, canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject, canWriteBrandProject } from '@/lib/brandAccess'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 
 type Params = { params: Promise<{ id: string }> }
@@ -89,10 +89,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  if (session.user.type === 'AI_AGENT') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
-  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
+  if (!(await canWriteBrandProject(id, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -139,10 +136,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  if (session.user.type === 'AI_AGENT') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
-  if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
+  if (!(await canWriteBrandProject(id, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
   const existing = await prisma.brand.findUnique({ where: { id } })

@@ -80,8 +80,8 @@ All fields optional. Only include fields you want to update.
 > the system will **automatically create** a `Workspace_<品牌名>` folder inside `larkParentFolderToken`.
 > The folder token is saved to the brand and returned as `larkFolderUrl`.
 
-> **Note:** The agent is also **automatically registered** to the brand on first PATCH
-> (via `BrandAgent` upsert). The dashboard AI Agent tab will show the agent as connected.
+> **Current Auth V2:** Brand access is never created implicitly by PATCH. Add the Agent
+> User to the brand Crew with an explicit role before calling this endpoint.
 
 ### Response
 

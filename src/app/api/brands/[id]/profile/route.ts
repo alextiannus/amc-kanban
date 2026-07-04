@@ -56,9 +56,6 @@ export async function PATCH(request: Request, { params }: Params) {
 
   // Support both cookie session (human owner) and Bearer API key (AI agent)
   if (session?.user) {
-    if (session.user.type === 'AI_AGENT') {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    }
     if (!(await canOwnBrand(id, session.user.id))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }

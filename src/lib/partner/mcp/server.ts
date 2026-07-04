@@ -18,6 +18,7 @@ import { writeAuditLog, actorFromContext } from '@/lib/audit'
 import { readBrandProfileMarkdown, refreshBrandProfileMarkdown, writeBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
+import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 
 let lastCheckedTime = Date.now()
 
@@ -36,13 +37,12 @@ function getSkillUpdateNotice(): string | null {
     
     if (latestMtime > lastCheckedTime) {
       lastCheckedTime = Date.now()
-      return `[SYSTEM NOTICE] Your content creation & publishing skill instructions have been updated! Please ensure you align with the new standard workflows:
-1. All planned/not-started work must go to 'To Do' (status: 'todo').
-2. If materials are missing, set status to 'Require Input' (status: 'pending') and fill 'requiredInput'.
-3. If materials are complete, create a Lark doc draft with sharing settings 'anyone with link can edit', and save its URL to task.
-4. Auto-pilot mode: set task status to 'In Progress' (status: 'in_progress') on successful schedule/publish.
-5. Set status to 'Done' (status: 'done') once you verify the post is live (and record post URL).
-6. Set status to 'Void' (status: 'void') for cancelled/obsolete tasks.`
+      return `[SYSTEM NOTICE] AMC operating instructions were updated:
+1. Use your own Agent API Key; never use Human Key + x-agent-id.
+2. Operate only brands returned by get_brand_config (Capability + Crew scope).
+3. Work directly on drafts, assets, reviews, ActionItems and publishing resources.
+4. Request human input with post_action_item; do not create new WorkUnit/swimlane tasks.
+5. Every write is recorded with the real Agent actor in the shared work log.`
     }
   } catch (e) {
     console.error('Failed to check skill mtime:', e)
@@ -59,8 +59,12 @@ export async function getAgentFromKey(apiKey: string) {
   return prisma.user.findUnique({ where: { id: principal.userId } })
 }
 
-async function requireActiveBrandLink(brandId: string, agentId: string) {
-  return (await canUserAccessBrand(brandId, agentId, 'READ')) ? { id: 'granted' } : null
+async function requireActiveBrandLink(
+  brandId: string,
+  agentId: string,
+  action: 'READ' | 'WRITE' = 'READ',
+) {
+  return (await canUserAccessBrand(brandId, agentId, action)) ? { id: 'granted' } : null
 }
 
 async function requireOwnedTask(taskId: string, agentId: string) {
@@ -80,6 +84,10 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     version: '1.0.0',
   })
   const agentApiKey = typeof auth === 'string' ? auth : credentialToken ?? ''
+  const legacyDelegationHeaders: Record<string, string> =
+    typeof auth !== 'string' && auth.source === 'legacy_delegation'
+      ? { 'x-agent-id': auth.userId }
+      : {}
 
   let principalPromise: Promise<AuthPrincipal | null> | null = null
   const resolvePrincipal = () => {
@@ -195,7 +203,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const profile = await readBrandProfileMarkdown(brandId, { ensureExists: true, refresh: !!refresh })
@@ -216,7 +224,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const refreshed = await refreshBrandProfileMarkdown(brandId)
@@ -243,7 +251,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
       if (!markdown.trim()) return { content: [{ type: 'text' as const, text: 'Error: markdown is required' }], isError: true }
 
@@ -290,7 +298,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         return { content: [{ type: 'text' as const, text: 'Error: Brand creation via MCP is disabled. Create brands from the dashboard.' }], isError: true }
       }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const WRITABLE = ['name', 'description', 'website', 'phone', 'address', 'location', 'timezone',
@@ -484,7 +492,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       if (brandId) {
-        const link = await requireActiveBrandLink(brandId, agent.id)
+        const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
         if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
       } else {
         const linkedBrandCount = await prisma.crewMember.count({ where: { userId: agent.id, active: true } })
@@ -543,7 +551,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
       const requestedBrandId = fields.brandId === undefined ? existingTask.brandId : fields.brandId
       if (requestedBrandId) {
-        const link = await requireActiveBrandLink(requestedBrandId, agent.id)
+        const link = await requireActiveBrandLink(requestedBrandId, agent.id, 'WRITE')
         if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
       }
 
@@ -623,7 +631,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const account = await prisma.socialAccount.upsert({
@@ -651,7 +659,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const item = await prisma.actionItem.create({
@@ -662,8 +670,12 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── Board Unified Publish/Info Tools (with deprecated postfast_* aliases) ──
-  const requireBrandAgentLink = async (brandId: string, agentId: string) => {
-    return (await canUserAccessBrand(brandId, agentId, 'READ')) ? { id: 'granted' } : null
+  const requireBrandAgentLink = async (
+    brandId: string,
+    agentId: string,
+    action: 'READ' | 'WRITE' = 'READ',
+  ) => {
+    return (await canUserAccessBrand(brandId, agentId, action)) ? { id: 'granted' } : null
   }
 
   const getBrandPostfastKey = async (brandId: string) => {
@@ -725,7 +737,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     const agent = await resolveAgent()
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-    const link = await requireBrandAgentLink(brandId, agent.id)
+    const link = await requireBrandAgentLink(brandId, agent.id, 'WRITE')
     if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
     const { key } = await getBrandPostfastKey(brandId)
@@ -751,7 +763,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     const agent = await resolveAgent()
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-    const link = await requireBrandAgentLink(brandId, agent.id)
+    const link = await requireBrandAgentLink(brandId, agent.id, 'WRITE')
     if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
     const { key } = await getBrandPostfastKey(brandId)
@@ -791,7 +803,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     const agent = await resolveAgent()
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-    const link = await requireBrandAgentLink(brandId, agent.id)
+    const link = await requireBrandAgentLink(brandId, agent.id, 'WRITE')
     if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
     const { key, name } = await getBrandPostfastKey(brandId)
@@ -825,7 +837,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     const agent = await resolveAgent()
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-    const link = await requireBrandAgentLink(brandId, agent.id)
+    const link = await requireBrandAgentLink(brandId, agent.id, 'WRITE')
     if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
     const brand = await prisma.brand.findUnique({
@@ -920,7 +932,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     const agent = await resolveAgent()
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-    const link = await requireBrandAgentLink(brandId, agent.id)
+    const link = await requireBrandAgentLink(brandId, agent.id, 'WRITE')
     if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
     if (['instagram', 'tiktok', 'xiaohongshu', 'dianping', 'meituan'].includes(platform)) {
@@ -1088,7 +1100,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
@@ -1159,7 +1171,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
@@ -1368,7 +1380,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
@@ -1413,7 +1425,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
@@ -1546,7 +1558,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     async ({ brandId, topicId, title, markdown, summary, tags, sourceUrl }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const { createTopicFeed, updateTopicFeed } = await import('@/lib/topicFeed')
@@ -1569,7 +1581,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     async ({ brandId, topicId }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const { archiveTopicFeed } = await import('@/lib/topicFeed')
@@ -1632,7 +1644,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     async ({ brandId, draftId, caption, hashtags, accountId, mediaUrls, assetIds, agentNote, captionLang, creativeHooks }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       if (caption !== undefined && (!caption || !caption.trim())) {
@@ -1728,7 +1740,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     async ({ brandId, draftId, note }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const { submitDraftForDelivery } = await import('@/lib/draftSubmission')
@@ -1754,23 +1766,11 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const link = await requireActiveBrandLink(brandId, agent.id)
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
-      // Call the internal scheduling recommend logic directly (same algorithm as HTTP endpoint)
-      const appBase = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-      const res = await fetch(`${appBase}/api/brands/${brandId}/scheduling/recommend`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-agent-key': agentApiKey,
-        },
-        body: JSON.stringify({ platform: platform ?? null, numberOfPosts: numberOfPosts ?? 1, urgency: urgency ?? 'normal' }),
+      const data = await getSchedulingRecommendations({
+        brandId,
+        platform: platform ?? null,
+        urgency: urgency ?? 'normal',
       })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-        return { content: [{ type: 'text' as const, text: `Error: ${err.error ?? res.statusText}` }], isError: true }
-      }
-
-      const data = await res.json()
       return {
         content: [{
           type: 'text' as const,
@@ -1831,7 +1831,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     async ({ brandId, filename, mimeType, fileBase64, imageUrl, folder, aiTags, aiCaption }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       if (!fileBase64 && !imageUrl) {
@@ -1953,7 +1953,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     async ({ brandId, assetId, filename, folder, aiCaption, aiTags, aiReady }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const existing = await prisma.mediaAsset.findFirst({
@@ -1988,7 +1988,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     async ({ brandId, assetId }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const asset = await prisma.mediaAsset.findFirst({
@@ -2053,7 +2053,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     async ({ brandId, draftId }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const draft = await prisma.contentDraft.findFirst({
@@ -2177,7 +2177,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const createdTasks = []
@@ -2242,7 +2242,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (platform) url.searchParams.set('platform', platform)
       
       const req = new Request(url.toString(), {
-        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
       })
       
       const response = await handleGetAnalytics(req, { params: Promise.resolve({ id: brandId }) })
@@ -2274,7 +2274,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (platform) url.searchParams.set('platform', platform)
       
       const req = new Request(url.toString(), {
-        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
       })
       
       const response = await handleGetSocialInsight(req, { params: Promise.resolve({ id: brandId }) })
@@ -2302,7 +2302,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       url.searchParams.set('limit', String(limit))
       
       const req = new Request(url.toString(), {
-        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
       })
       
       const response = await handleGetReviews(req, { params: Promise.resolve({ id: brandId }) })
@@ -2359,6 +2359,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${agentApiKey}`,
+          ...legacyDelegationHeaders,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ insights })
@@ -2389,7 +2390,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
-      const link = await requireActiveBrandLink(brandId, agent.id)
+      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       let reqInputVal = description || title
@@ -2448,6 +2449,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${agentApiKey}`,
+          ...legacyDelegationHeaders,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ filename, docType, content })
@@ -2479,6 +2481,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${agentApiKey}`,
+          ...legacyDelegationHeaders,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ summary })
@@ -2510,6 +2513,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${agentApiKey}`,
+          ...legacyDelegationHeaders,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ date, content })
@@ -2542,7 +2546,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (date) url.searchParams.set('date', date)
       
       const req = new Request(url.toString(), {
-        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
       })
       
       const response = await handleGetMemory(req, { params: Promise.resolve({ id: brandId }) })
@@ -2573,7 +2577,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (platform) url.searchParams.set('platform', platform)
       
       const req = new Request(url.toString(), {
-        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
       })
       
       const response = await handleGetBenchmarks(req)
@@ -2600,7 +2604,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       url.searchParams.set('placeId', placeId)
       
       const req = new Request(url.toString(), {
-        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
       })
       
       const response = await handleGetPlaces(req)
@@ -2629,7 +2633,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       url.searchParams.set('handle', handle)
       
       const req = new Request(url.toString(), {
-        headers: { 'Authorization': `Bearer ${agentApiKey}` }
+        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
       })
       
       const response = await handleGetProfile(req)

@@ -19,7 +19,7 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { createAmcMcpServer } from '@/lib/partner/mcp/server'
 import { prisma } from '@/lib/prisma'
-import { authenticateRequest, isLegacyDelegationActive } from '@/lib/auth-v2'
+import { authenticateRequest, isLegacyKeyCompatibilityActive } from '@/lib/auth-v2'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +38,7 @@ async function handleMcp(request: Request): Promise<Response> {
   const principal = await authenticateRequest(request)
   if (!principal) {
     const legacyDisabled =
-      request.headers.has('x-agent-id') && !isLegacyDelegationActive()
+      request.headers.has('x-agent-id') && !isLegacyKeyCompatibilityActive()
     return new Response(
       JSON.stringify(
         legacyDisabled

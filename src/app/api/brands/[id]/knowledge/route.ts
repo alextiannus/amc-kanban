@@ -56,9 +56,6 @@ export async function PATCH(request: Request, { params }: Params) {
 
   // Authorize: only humans owning the brand or authorized agents can update it
   if (session?.user) {
-    if (session.user.type === 'AI_AGENT') {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    }
     if (!(await canOwnBrand(brandId, session.user.id))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }

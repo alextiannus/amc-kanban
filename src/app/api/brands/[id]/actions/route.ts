@@ -12,7 +12,6 @@ export async function GET(_req: Request, { params }: Params) {
 
   const { id } = await params
 
-  if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (!(await canHumanAccessBrandProject(id, session.user.id, session.user.role))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }

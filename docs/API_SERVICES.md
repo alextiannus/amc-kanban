@@ -1,6 +1,6 @@
 # AI Marketing Crew API Services
 
-版本日期：2026-07-03
+版本日期：2026-07-04
 
 ## 1. 服务总览
 
@@ -15,8 +15,10 @@ Agent 视角的连接与工作流手册见：[AGENT_CONNECTIVITY.md](AGENT_CONNE
 1. Dify-first：复杂工作流与知识库管理优先由 Dify 承载。
 2. API layer 负责认证、权限、数据持久化、第三方集成、fallback 和审计。
 3. 所有品牌级 API 必须执行品牌资源级授权。
-4. AI Agent 使用 Bearer API Key；人类用户使用 Cookie session。
+4. AMC Agent 使用绑定自身 User 的 Bearer API Key；人类用户使用 Cookie session。
 5. 所有品牌运营数据都以 `brandId` 作为隔离边界。
+6. 人类与 Agent 使用同一 Capability + Crew 授权；ADMIN Agent 与人类 ADMIN 权限一致。
+7. 新流程直接操作业务资源和 ActionItem，不创建 WorkUnit/泳道任务。
 
 ## 2. 认证模型
 
@@ -40,7 +42,9 @@ Authorization: Bearer <AGENT_API_KEY>
 Content-Type: application/json
 ```
 
-API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存在 active `BrandAgent` 绑定。
+API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 `expiresAt` 与 `revokedAt`。品牌级请求同时要求显式角色 Capability 和有效 Crew 范围；组织成员可继承 Organization Owner 的 Crew 范围。
+
+旧 Human Key + `x-agent-id` 仅在部署 T0 后 24 小时兼容，之后自动拒绝。新调用不得发送 `x-agent-id`。
 
 ## 3. API Service Domains
 
@@ -92,7 +96,7 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 
 ## 3.4 Brand Service
 
-职责：品牌 CRUD、品牌详情、设置、品牌 owner、品牌 Agent 绑定、品牌凭证与 workspace 初始化。
+职责：品牌 CRUD、品牌详情、设置、Crew 成员、品牌凭证与 workspace 初始化。
 
 接口：
 
@@ -108,10 +112,7 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 - `GET /api/agent/admin/brands`
 - `GET/PATCH /api/agent/admin/brands/:id`
 
-权限：
-
-- Human：ADMIN、BRAND_DIRECTOR、BrandOwner 或组织授权。
-- Agent：必须 active 绑定到目标 brand。
+权限：所有身份统一通过显式 Capability + Crew 校验；ADMIN 全局放行，非 ADMIN 必须处于目标品牌 Crew 范围。
 
 说明：
 
@@ -467,7 +468,8 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 
 核心服务层文件：
 
-- `src/lib/brandAccess.ts`：品牌访问控制。
+- `src/lib/auth-v2/`：统一认证、Capability 与 Crew 品牌授权。
+- `src/lib/brandAccess.ts`：旧调用兼容适配层，内部使用 Crew。
 - `src/lib/subscription/service.ts`：订阅与品牌创建逻辑。
 - `src/lib/brandWorkspace.ts`：品牌 workspace 初始化。
 - `src/lib/draftSubmission.ts`：草稿提交、审批后发布、排期更新。
@@ -475,7 +477,7 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 - `src/lib/integrations/huaweiObs.ts`：Huawei OBS 对象存储。
 - `src/lib/integrations/postfast.ts`：PostFast 发布、媒体、点评能力。
 - `src/lib/integrations/google.ts`：Google OAuth / GBP 能力。
-- `src/lib/mcp/server.ts`：MCP server 能力暴露。
+- `src/lib/partner/mcp/server.ts`：MCP server 能力暴露。
 
 ## 5. Data Ownership Matrix
 
@@ -483,7 +485,7 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 | --- | --- | --- | --- | --- |
 | Brand | brandId | Admin / 主理人 / 品牌主 | 部分 | Agent 可更新被授权品牌配置 |
 | Subscription | brandId / createdById | 品牌主 / Admin | 否 | 品牌必须有套餐 |
-| WorkUnit | assigneeId / brand context | Human / Agent | 是 | Agent 工作上板 |
+| WorkUnit（迁移兼容） | assigneeId / brand context | Human / Agent | 否（新流程） | 将随泳道后台迁移删除 |
 | ActionItem | brandId | Human / Agent | 是 | 审批和待办 |
 | ContentDraft | brandId | Human / Agent | 是 | autoPilot 决定审批或发布 |
 | MediaAsset | brandId | Human / Agent | 是 | OBS/PostFast/Lark/Local |
@@ -500,6 +502,8 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 5. Agent 不得跨品牌读取或写入数据。
 6. 第三方 secrets 不得写入代码、PRD、OpenAPI 示例或日志。
 7. 上传和外部请求失败应可恢复；品牌创建不应因可选 workspace 初始化失败而完全失败。
+8. `/api/brands/{id}/mcp/execute` 已关闭并返回 410；Agent 只使用 `/api/mcp`。
+9. 所有写操作以真实用户 actor 写入统一工作日志。
 
 ## 7. Open Questions / Follow-up
 
@@ -508,12 +512,12 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 3. 草稿发布是否需要支持平台原生 update scheduled post。
 4. API 是否需要统一 Zod schema 和响应 envelope。
 5. 是否需要把 Integration Service 从 Next route handlers 拆为独立 worker/service。
-6. 是否需要为 Agent API Key 增加 rate limit、scope 和过期策略。
+6. API Key rate limit 与更细粒度 scope 的后续策略；过期、撤销和 Hash 存储已实现。
 
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **166** 个 API 路径、**240** 个 HTTP 方法组合。
+共 **168** 个 API 路径、**242** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -619,6 +623,8 @@ API Key 必须映射到 `User.type = AI_AGENT`，并且访问品牌时必须存�
 | POST | `/api/brands/{id}/video-director` |
 | GET | `/api/client-config` |
 | POST | `/api/copywriter/generate-hooks` |
+| POST | `/api/cron/apify-sync-all` |
+| POST | `/api/cron/postfast-sync-all` |
 | GET | `/api/dashboard/assets` |
 | GET | `/api/dashboard/brand-activity` |
 | GET | `/api/dashboard/calendar` |

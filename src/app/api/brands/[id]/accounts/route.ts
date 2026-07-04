@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canHumanAccessBrandProject, canWriteBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -43,8 +43,7 @@ export async function POST(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: brandId } = await params
-  if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+  if (!(await canWriteBrandProject(brandId, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

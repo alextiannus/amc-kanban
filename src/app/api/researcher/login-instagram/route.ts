@@ -1,22 +1,12 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { captureAccountSnapshot } from '@/lib/captureSnapshots'
+import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
 
 export async function POST(request: Request) {
-  const session = await getSession()
-  if (!session || !session.user) {
+  const principal = await authenticateRequest(request)
+  if (!principal) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // Verify permission
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { businessRoles: true },
-  })
-  const isOwnerOrAdmin = user?.role === 'ADMIN' || user?.businessRoles.some((r: any) => r.role === 'BRAND_OWNER' || r.role === 'BRAND_DIRECTOR' || r.role === 'AMC_PRINCIPAL')
-  if (!isOwnerOrAdmin) {
-    return NextResponse.json({ error: 'Unauthorized: insufficient permissions' }, { status: 403 })
   }
 
   try {
@@ -25,6 +15,16 @@ export async function POST(request: Request) {
 
     if (!accountId || !username || !password) {
       return NextResponse.json({ error: 'Missing accountId, username or password' }, { status: 400 })
+    }
+    const account = await prisma.socialAccount.findUnique({
+      where: { id: accountId },
+      select: { brandId: true },
+    })
+    if (!account) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+    try {
+      await requireCapability(principal, 'brand.update', { brandId: account.brandId })
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // 1. Update social account credentials in DB

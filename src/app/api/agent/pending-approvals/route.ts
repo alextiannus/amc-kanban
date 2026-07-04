@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
 
 async function getAgent(request: Request) {
-  const auth = request.headers.get('authorization') || ''
-  const key = auth.replace('Bearer ', '').trim()
-  if (!key) return null
-  return prisma.user.findFirst({ where: { apiKey: key, type: 'AI_AGENT' } })
+  const principal = await authenticateRequest(request)
+  return principal?.actorType === 'AMC_AGENT' ? principal : null
 }
 
 // GET /api/agent/pending-approvals
@@ -17,11 +16,18 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const brandId = url.searchParams.get('brandId')
+  if (brandId) {
+    try {
+      await requireCapability(agent, 'draft.read', { brandId })
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
 
   const drafts = await prisma.contentDraft.findMany({
     where: {
       status: 'publishing',
-      agentId: agent.id,
+      agentId: agent.userId,
       ...(brandId ? { brandId } : {}),
     },
     include: {
@@ -52,9 +58,14 @@ export async function POST(request: Request) {
   if (!draftId) return NextResponse.json({ error: 'draftId required' }, { status: 400 })
 
   const draft = await prisma.contentDraft.findFirst({
-    where: { id: draftId, agentId: agent.id },
+    where: { id: draftId, agentId: agent.userId },
   })
   if (!draft) return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
+  try {
+    await requireCapability(agent, 'content.publish', { brandId: draft.brandId })
+  } catch {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   await prisma.contentDraft.update({
     where: { id: draftId },

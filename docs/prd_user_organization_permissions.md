@@ -1,6 +1,6 @@
 # 用户、组织与权限管理 PRD（Auth V2）
 
-> 状态：决策已确认，等待开发批准
+> 状态：Auth V2 第一阶段已开发，等待生产迁移与 24 小时兼容窗口
 > 日期：2026-07-04
 > 适用系统：amc-kanban、amc-mm、外部 REST API、AMC MCP
 > 文档性质：产品需求、技术方案与执行基线
@@ -729,7 +729,7 @@ AUTH_V2_ENFORCE=true
 - [ ] 为每个 PR 指定负责人和 Reviewer。
 - [ ] 得到明确的“开始开发”批准。
 
-在最后一项完成前，本 PRD 只作为执行准备，不授权功能开发。
+产品负责人已于 2026-07-04 明确授权开始开发。未完成的生产准备项不阻塞本地开发与测试，但会阻塞生产 Enforce 和旧权限表删除。
 
 ## 20. 当前代码基线
 
@@ -857,4 +857,43 @@ src/app/connect/page.tsx
 7. 性能基线采集方式已确认。
 8. 明确收到“开始开发”的指令。
 
-当前状态：前七项待执行，第八项未授权，因此不得开始功能开发。
+当前状态：已收到“开始开发”指令并完成第一阶段代码；T0、生产数据对账、Key 使用方通知、性能生产基线和数据库回滚责任人仍需在部署前确认。
+
+## 24. 2026-07-04 最新实施状态
+
+### 24.1 已完成
+
+- Auth V2 核心：最小 Session、`authVersion`、显式角色、Capability、Crew 品牌授权。
+- 密码：新密码使用 Argon2id；旧 bcrypt 登录成功后渐进升级。
+- API Key：新 Key 只存 SHA-256 Hash，检查账号状态、过期和撤销；提供 Dry Run/Apply 迁移脚本。
+- 兼容窗口：旧 Session、旧明文 Key、旧 `Human Key + x-agent-id` 均由显式截止时间控制，截止后自动拒绝。
+- `CrewMember` 写入改为显式传入 `OWNER/PRINCIPAL/EDITOR/VIEWER`，不再根据用户类型或全局角色动态推导。
+- 组织成员通过组织 Owner 的 Crew 关系继承品牌权限；人类和 AMC Agent 使用同一授权函数。
+- `/api/brands/[id]/mcp/execute` 已返回 410；标准 `/api/mcp` 使用 Agent 自身凭证。
+- 路由静态审计覆盖 168 个 Route，严格模式未解析项为 0。
+- 扩展下载、快照文件等审查中发现的高风险入口已补齐 Capability/Crew 鉴权。
+- 排期推荐移除可由外部伪造的 `x-forwarded-for: internal` 绕过，内部调用改为共享业务服务；REST/MCP 均执行标准权限。
+- 清除通用品牌 API 的 `AI_AGENT` 类型黑名单；权限只由显式角色、Capability 与 Crew 决定。
+- AMC-MM 已改为原样镜像主系统 Token，移除素材内部密钥 ACL 绕过、浏览器 LLM Key 和公开诊断探针。
+
+### 24.2 迁移期仍保留
+
+- 旧 `BrandOwner`、`BrandAgent`、`AgentPermission` 表继续用于非授权展示、历史任务和回滚对账；运行时品牌访问权威已切到 Crew。
+- `src/lib/auth.ts` 和部分旧命名 Helper 继续作为兼容适配层，内部已调用 Auth V2。
+- WorkUnit/泳道相关 Route 的最终删除属于已批准方案的后续独立改造，不在本次鉴权提交中直接删除。
+
+### 24.3 部署前必须完成
+
+- 确认 T0，并同时设置：
+
+```text
+AUTH_V2_LEGACY_KEYS=true
+AUTH_V2_LEGACY_KEY_CUTOFF_AT=<T0 + 24h 的 ISO 时间>
+AUTH_V2_LEGACY_SESSION_CUTOFF_AT=<T0 + 24h 的 ISO 时间>
+```
+
+- 先运行 `npm run migrate:auth-v2` Dry Run，对账后再执行 `npm run migrate:auth-v2 -- --apply`。
+- 执行数据库 Add-only Migration；不删除旧表。
+- 在 Render Node 20/CI 完成原生 Argon2 与生产构建验证。
+- 记录上线前后鉴权 P50/P95、查询次数、401/403 比例和旧 Key 命中数。
+- T+24h 设置 `AUTH_V2_LEGACY_KEYS=false`，确认旧委托与旧明文 Key 均不可用。

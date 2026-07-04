@@ -31,9 +31,6 @@ export async function GET(_req: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  if (session.user.type === 'AI_AGENT') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
   if (!(await canOwnBrand(id, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
@@ -91,9 +88,6 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  if (session.user.type === 'AI_AGENT') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
   if (!(await canOwnBrand(id, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }

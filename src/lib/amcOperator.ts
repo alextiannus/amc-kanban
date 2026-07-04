@@ -15,7 +15,7 @@ export function isSystemAdminEmail(email: string | null | undefined): boolean {
  */
 export function isAmcOperator(user: UserRoleLike | null | undefined): boolean {
   if (!user) return false
-  return user.type !== 'AI_AGENT' && user.role === 'ADMIN'
+  return user.role === 'ADMIN'
 }
 
 /**

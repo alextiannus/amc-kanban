@@ -68,6 +68,14 @@ export async function canHumanAccessBrandProject(
   return canSessionAccessBrand(brandId, userId, 'HUMAN', 'READ')
 }
 
+/** Brand mutation check shared by human and AMC Agent system users. */
+export async function canWriteBrandProject(
+  brandId: string,
+  userId: string,
+): Promise<boolean> {
+  return canSessionAccessBrand(brandId, userId, 'HUMAN', 'WRITE')
+}
+
 /**
  * Session-aware brand read check.
  */

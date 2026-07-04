@@ -1,7 +1,7 @@
-import { prisma } from '@/lib/prisma'
-import { AuthorizationError } from './errors'
-import { hasCapability, type Capability } from './capabilities'
-import type { AuthPrincipal } from './types'
+import { prisma } from '../prisma.ts'
+import { AuthorizationError } from './errors.ts'
+import { hasCapability, type Capability } from './capabilities.ts'
+import type { AuthPrincipal } from './types.ts'
 
 export function isAdmin(principal: AuthPrincipal): boolean {
   return principal.globalRoles.includes('ADMIN')

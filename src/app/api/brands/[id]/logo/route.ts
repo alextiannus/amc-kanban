@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canWriteBrandProject } from '@/lib/brandAccess'
 import { makeBrandAssetKey, uploadHuaweiObsObject } from '@/lib/integrations/huaweiObs'
 import { prisma } from '@/lib/prisma'
 
@@ -11,12 +11,12 @@ const MAX_LOGO_BYTES = 5 * 1024 * 1024
 // POST /api/brands/[id]/logo — upload and assign a brand logo
 export async function POST(request: Request, { params }: Params) {
   const session = await getSession()
-  if (!session?.user || session.user.type === 'AI_AGENT') {
+  if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const { id: brandId } = await params
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+  if (!(await canWriteBrandProject(brandId, session.user.id))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 

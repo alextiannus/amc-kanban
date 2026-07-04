@@ -2,14 +2,25 @@ import { NextResponse } from 'next/server'
 import { spawn } from 'child_process'
 import path from 'path'
 import fs from 'fs'
+import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
 
 /**
  * GET /api/integrations/extension/download
  * Dynamically packages the local chrome-extension folder into a ZIP file
  * and streams it directly to the user.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const principal = await authenticateRequest(request)
+    if (!principal) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    try {
+      await requireCapability(principal, 'system.configure')
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const extensionPath = path.resolve(/*turbopackIgnore: true*/ 'chrome-extension')
     if (!fs.existsSync(extensionPath)) {
       return NextResponse.json({ error: 'Extension directory not found' }, { status: 404 })

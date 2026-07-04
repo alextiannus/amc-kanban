@@ -15,7 +15,7 @@ async function verifyAdminAuth(req: NextRequest): Promise<boolean> {
   const apiKey = extractApiKey(req)
   if (apiKey) {
     const agent = await getAgentFromApiKey(apiKey)
-    if (agent && (agent.role === 'ADMIN' || agent.type === 'AI_AGENT')) {
+    if (agent?.role === 'ADMIN') {
       return true
     }
   }

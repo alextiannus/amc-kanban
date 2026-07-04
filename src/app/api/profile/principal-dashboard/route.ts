@@ -11,7 +11,6 @@ function uniq(values: string[]) {
 export async function GET(request: Request) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (session.user.type === 'AI_AGENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const userId = session.user.id
   const isAdmin = isAmcOperatorRole(session.user.role)

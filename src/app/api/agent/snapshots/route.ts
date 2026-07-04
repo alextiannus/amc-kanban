@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
 
 async function getAgent(request: Request) {
-  const auth = request.headers.get('authorization') || ''
-  const key = auth.replace('Bearer ', '').trim()
-  if (!key) return null
-  return prisma.user.findFirst({ where: { apiKey: key, type: 'AI_AGENT' } })
+  const principal = await authenticateRequest(request)
+  return principal?.actorType === 'AMC_AGENT' ? principal : null
 }
 
 // POST /api/agent/snapshots
@@ -20,6 +19,25 @@ export async function POST(request: Request) {
 
   if (!Array.isArray(updates) || updates.length === 0) {
     return NextResponse.json({ error: 'updates array required' }, { status: 400 })
+  }
+
+  const accountIds: string[] = (updates as Array<{ accountId?: unknown }>)
+    .map((update: { accountId?: unknown }) => update.accountId)
+    .filter((id: unknown): id is string => typeof id === 'string')
+  const accounts = await prisma.socialAccount.findMany({
+    where: { id: { in: accountIds } },
+    select: { id: true, brandId: true },
+  })
+  if (accounts.length !== new Set(accountIds).size) {
+    return NextResponse.json({ error: 'Unknown account' }, { status: 404 })
+  }
+  const brandIds: string[] = accounts.map((account: { brandId: string }) => account.brandId)
+  for (const brandId of new Set(brandIds)) {
+    try {
+      await requireCapability(agent, 'brand.update', { brandId })
+    } catch {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
   }
 
   const results = await Promise.allSettled(
