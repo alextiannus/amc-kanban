@@ -6,9 +6,11 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clipboard,
+  Eye,
   FlaskConical,
   Loader2,
   RefreshCw,
+  Save,
   Sparkles,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -133,6 +135,28 @@ type SkillConfigResponse = {
 
 type PromptTask = 'hook_generation' | 'body_composition' | 'quality_rewrite'
 
+type CopywriterLogRecord = {
+  id: string
+  brandId: string
+  userId: string
+  promptVersion?: string | null
+  systemPrompt: string
+  userInput: string
+  rawOutput: string
+  modelId?: string | null
+  latencyMs?: number | null
+  tokenEstimate?: number | null
+  platform?: string | null
+  draftId?: string | null
+  createdAt: string
+  rating?: number | null
+  adminNote?: string | null
+  correctedContent?: string | null
+  isAnnotated: boolean
+  trainingTag?: string | null
+  brand?: { name: string }
+}
+
 const starterByPlatform: Record<PlatformType, Partial<FormState>> = {
   instagram: {
     industryVertical: 'fitness_pilates',
@@ -220,6 +244,15 @@ export default function ContentLabPage() {
   const [promptNotes, setPromptNotes] = useState('')
   const [savingSkill, setSavingSkill] = useState(false)
   const [savingPrompt, setSavingPrompt] = useState(false)
+  const [reviewLogs, setReviewLogs] = useState<CopywriterLogRecord[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsError, setLogsError] = useState('')
+  const [selectedLogId, setSelectedLogId] = useState('')
+  const [logRating, setLogRating] = useState('3')
+  const [logTrainingTag, setLogTrainingTag] = useState('include')
+  const [logAdminNote, setLogAdminNote] = useState('')
+  const [logCorrectedContent, setLogCorrectedContent] = useState('')
+  const [savingLogReview, setSavingLogReview] = useState(false)
 
   const selectedBrand = useMemo(
     () => brands.find((brand) => brand.id === form.brandId) ?? null,
@@ -230,9 +263,14 @@ export default function ContentLabPage() {
   const selectedVertical = verticals.find((vertical) => vertical.vertical === form.industryVertical)
   const selectedModelProfileId = platformModelProfiles[form.platform]?.body_composition
   const selectedModelProfile = modelProfiles.find((profile) => profile.id === selectedModelProfileId)
+  const selectedLog = reviewLogs.find((log) => log.id === selectedLogId) ?? reviewLogs[0] ?? null
 
   useEffect(() => {
     void loadLabData()
+  }, [])
+
+  useEffect(() => {
+    void loadReviewLogs()
   }, [])
 
   useEffect(() => {
@@ -244,6 +282,15 @@ export default function ContentLabPage() {
     const entry = findPromptEntry(skillConfig?.promptTuning.entries || [], form.platform, form.industryVertical, promptTask)
     setPromptNotes(entry?.notes || '')
   }, [form.platform, form.industryVertical, promptTask, skillConfig])
+
+  useEffect(() => {
+    if (!selectedLog) return
+    setSelectedLogId(selectedLog.id)
+    setLogRating(String(selectedLog.rating ?? 3))
+    setLogTrainingTag(selectedLog.trainingTag || 'include')
+    setLogAdminNote(selectedLog.adminNote || '')
+    setLogCorrectedContent(selectedLog.correctedContent || '')
+  }, [selectedLog?.id])
 
   async function loadLabData() {
     setLoading(true)
@@ -276,6 +323,27 @@ export default function ContentLabPage() {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Failed to load skill config')
     setSkillConfig(data)
+  }
+
+  async function loadReviewLogs() {
+    setLogsLoading(true)
+    setLogsError('')
+    try {
+      const params = new URLSearchParams({
+        limit: '25',
+        page: '1',
+      })
+      const res = await fetch(`/api/admin/copywriter-logs?${params.toString()}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load review logs')
+      const logs = data.logs || []
+      setReviewLogs(logs)
+      setSelectedLogId((current) => current || logs[0]?.id || '')
+    } catch (err: any) {
+      setLogsError(err.message || 'Failed to load review logs')
+    } finally {
+      setLogsLoading(false)
+    }
   }
 
   function updateForm<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -316,6 +384,7 @@ export default function ContentLabPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to generate content')
       setResponse(data)
+      await loadReviewLogs()
     } catch (err: any) {
       setError(err.message || 'Failed to generate content')
     } finally {
@@ -376,6 +445,42 @@ export default function ContentLabPage() {
       setError(err.message || 'Failed to save prompt tuning')
     } finally {
       setSavingPrompt(false)
+    }
+  }
+
+  async function saveLogReview() {
+    if (!selectedLog) return
+    setSavingLogReview(true)
+    setLogsError('')
+    try {
+      const res = await fetch(`/api/admin/copywriter-logs/${selectedLog.id}/annotate`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating: Number(logRating),
+          trainingTag: logTrainingTag,
+          adminNote: logAdminNote,
+          correctedContent: logCorrectedContent,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save review')
+      setReviewLogs((current) => current.map((log) => (
+        log.id === selectedLog.id
+          ? {
+              ...log,
+              rating: data.log.rating,
+              trainingTag: data.log.trainingTag,
+              adminNote: data.log.adminNote,
+              correctedContent: data.log.correctedContent,
+              isAnnotated: data.log.isAnnotated,
+            }
+          : log
+      )))
+    } catch (err: any) {
+      setLogsError(err.message || 'Failed to save review')
+    } finally {
+      setSavingLogReview(false)
     }
   }
 
@@ -719,6 +824,140 @@ export default function ContentLabPage() {
           />
         </div>
       </section>
+
+      <section className="mx-auto max-w-7xl px-5 pb-8">
+        <div className="rounded-md border border-slate-200 bg-white p-4">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold">Review Logs</h2>
+              <p className="text-xs text-slate-500">Stored copywriter inputs, outputs, provenance, and training annotations.</p>
+            </div>
+            <button
+              onClick={() => void loadReviewLogs()}
+              className="flex h-9 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              {logsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Reload Logs
+            </button>
+          </div>
+
+          {logsError ? (
+            <div className="mb-4 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <AlertCircle className="mt-0.5 h-4 w-4" />
+              <span>{logsError}</span>
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
+            <div className="min-h-[360px] rounded-md border border-slate-200">
+              {logsLoading && reviewLogs.length === 0 ? (
+                <div className="flex h-40 items-center justify-center gap-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading logs
+                </div>
+              ) : null}
+
+              {!logsLoading && reviewLogs.length === 0 ? (
+                <div className="flex h-40 items-center justify-center text-sm text-slate-400">
+                  No copywriter logs yet.
+                </div>
+              ) : null}
+
+              {reviewLogs.map((log) => (
+                <button
+                  key={log.id}
+                  onClick={() => setSelectedLogId(log.id)}
+                  className={`block w-full border-b border-slate-100 px-3 py-3 text-left last:border-b-0 ${
+                    selectedLog?.id === log.id ? 'bg-indigo-50' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-semibold text-slate-900">{log.brand?.name || log.brandId}</span>
+                    <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-medium ${
+                      log.isAnnotated ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {log.isAnnotated ? 'reviewed' : 'new'}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                    <span>{log.platform || 'all'}</span>
+                    <span>·</span>
+                    <span>{log.modelId || 'unknown model'}</span>
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-600">{log.userInput}</p>
+                  <p className="mt-2 text-[11px] text-slate-400">{formatDateTime(log.createdAt)}</p>
+                </button>
+              ))}
+            </div>
+
+            {selectedLog ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <Metric label="Brand" value={selectedLog.brand?.name || selectedLog.brandId} />
+                  <Metric label="Platform" value={selectedLog.platform || 'all'} />
+                  <Metric label="Model" value={selectedLog.modelId || 'unknown'} />
+                  <Metric label="Latency" value={selectedLog.latencyMs ? `${selectedLog.latencyMs}ms` : 'n/a'} />
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <LogPanel title="Input" value={selectedLog.userInput} />
+                  <LogPanel title="Output" value={formatJsonLike(selectedLog.rawOutput)} />
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <LogPanel title="System Prompt / Provenance" value={formatJsonLike(selectedLog.systemPrompt)} />
+                  <div className="rounded-md border border-slate-200 p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Eye className="h-4 w-4 text-indigo-600" />
+                      <h3 className="text-sm font-semibold">Training Review</h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-medium text-slate-600">Rating</span>
+                        <select
+                          value={logRating}
+                          onChange={(event) => setLogRating(event.target.value)}
+                          className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-indigo-500"
+                        >
+                          <option value="3">3 · good</option>
+                          <option value="2">2 · ok</option>
+                          <option value="1">1 · bad</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-medium text-slate-600">Training tag</span>
+                        <select
+                          value={logTrainingTag}
+                          onChange={(event) => setLogTrainingTag(event.target.value)}
+                          className="h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-indigo-500"
+                        >
+                          <option value="include">include</option>
+                          <option value="exclude">exclude</option>
+                          <option value="needs_rewrite">needs_rewrite</option>
+                        </select>
+                      </label>
+                    </div>
+                    <TextArea label="Admin note" value={logAdminNote} rows={4} onChange={setLogAdminNote} />
+                    <TextArea label="Corrected content" value={logCorrectedContent} rows={7} onChange={setLogCorrectedContent} />
+                    <button
+                      onClick={() => void saveLogReview()}
+                      disabled={savingLogReview}
+                      className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-md bg-slate-900 px-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+                    >
+                      {savingLogReview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      Save Review
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex min-h-[360px] items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-400">
+                Select a log to review input, output, and training fields.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
     </main>
   )
 }
@@ -790,6 +1029,46 @@ function IssueList({ issues }: { issues: LabResult['quality']['issues'] }) {
       ))}
     </div>
   )
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className="mt-1 truncate text-sm font-semibold text-slate-900">{value}</div>
+    </div>
+  )
+}
+
+function LogPanel({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 p-4">
+      <div className="mb-2 text-xs font-semibold uppercase text-slate-500">{title}</div>
+      <pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-50 p-3 font-mono text-xs leading-5 text-slate-700">
+        {value || 'Empty'}
+      </pre>
+    </div>
+  )
+}
+
+function formatJsonLike(value: string): string {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
+function formatDateTime(value: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-SG', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      hour12: false,
+    }).format(new Date(value))
+  } catch {
+    return value
+  }
 }
 
 function lines(text: string): string[] {

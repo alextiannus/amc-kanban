@@ -7,6 +7,55 @@ import { submitDraftForDelivery } from '@/lib/draftSubmission'
 import { postfastDeletePost } from '@/lib/integrations/postfast'
 import { McpClientManager } from '@/lib/mcp/clientManager'
 
+/**
+ * Synthesise speech server-side via MiniMax TTS (LLMConfig[tts]) and return
+ * the audio as a base64 string so the caller can play it directly without a
+ * second network round-trip.
+ *
+ * Returns null if TTS is not configured or on any error (caller falls back to
+ * client-side TTS request).
+ */
+async function synthesizeSpeechB64(text: string, voiceId: string): Promise<string | null> {
+  try {
+    const ttsConfig = await prisma.lLMConfig.findFirst({
+      where: { isEnabled: true, provider: 'minimax', taskTags: { has: 'tts' } },
+      orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+    })
+    const apiKey = ttsConfig?.apiKey || null
+    if (!apiKey) return null
+
+    const ttsModel = ttsConfig?.modelName || 'speech-2.8-hd'
+    const endpoint = ttsConfig?.baseUrl || 'https://api.minimaxi.com/v1/t2a_v2'
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: ttsModel,
+        text: text.slice(0, 600),
+        stream: false,
+        output_format: 'hex',
+        voice_setting: { voice_id: voiceId || 'female-shaonv', speed: 1.0, vol: 1.0, pitch: 0 },
+        audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3' },
+      }),
+      signal: AbortSignal.timeout(8_000),
+    })
+
+    if (!response.ok) return null
+
+    const json = await response.json()
+    const hex: string = json.data?.audio || json.data?.audio_file || ''
+    if (!hex) return null
+
+    // Convert hex → binary buffer → base64
+    const raw = hex.match(/.{1,2}/g)?.map((b: string) => parseInt(b, 16)) ?? []
+    return Buffer.from(new Uint8Array(raw)).toString('base64')
+  } catch (err) {
+    console.warn('[voice-chat] TTS inline synthesis failed, client will fallback:', err)
+    return null
+  }
+}
+
 type Params = { params: Promise<{ id: string }> }
 
 async function getActor(request: Request) {
@@ -220,9 +269,11 @@ export async function POST(request: Request, { params }: Params) {
           message,
           history = [],
           context = {},
+          voiceId = '',
         } = body as {
           message?: string
           history?: ChatTurn[]
+          voiceId?: string
           context?: {
             activeDraftId?: string
             pendingDraftIds?: string[]
@@ -344,7 +395,7 @@ export async function POST(request: Request, { params }: Params) {
           trimmedHistory,
           message,
           true,
-          500,
+          120,  // 语音回复必须简短—max_tokens 从 500 降至 120，减少 LLM TTFT
           combinedTools,
           async (toolName, toolArgs) => {
             let statusMsg = '正在处理...'
@@ -373,11 +424,21 @@ export async function POST(request: Request, { params }: Params) {
         console.log(`[voice-chat] callGeminiChat done in ${Date.now() - tGemini}ms, reply length=${result.reply?.length ?? 0}`)
         const finalReply = result.reply || '抱歉，我处理时遇到了些问题，请再说一遍。'
 
+        // 合并 TTS：如果客户端提供了 voiceId，就在服务端就地合成音频并随返回结果一起发回。
+        // 这样可以减少一次浏览器↔服务器的往返，把总延迟降低 300-500ms。
+        let audiob64: string | null = null
+        if (voiceId) {
+          const tts0 = Date.now()
+          audiob64 = await synthesizeSpeechB64(finalReply, voiceId)
+          console.log(`[voice-chat] TTS inline ${audiob64 ? 'ok' : 'skipped'} in ${Date.now() - tts0}ms`)
+        }
+
         controller.enqueue(encoder.encode(JSON.stringify({
           type: 'done',
           reply: finalReply,
           action: result.action || 'NONE',
           params: result.params || {},
+          ...(audiob64 ? { audiob64 } : {}),
         }) + '\n'))
         controller.close()
       } catch (error: any) {
