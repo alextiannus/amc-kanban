@@ -1,10 +1,24 @@
 import type { KnowledgeEntry, KnowledgeQuery, KnowledgeRepository } from 'amc-content'
 import { prisma } from '../prisma.ts'
 
+const CACHE_TTL_MS = 5 * 60 * 1000
+const cache = new Map<string, { expiresAt: number; entries: KnowledgeEntry[] }>()
+
 export function createPrismaKnowledgeRepository(): KnowledgeRepository {
   return {
     async retrieve(input: KnowledgeQuery): Promise<KnowledgeEntry[]> {
       const limit = input.limit ?? 8
+      const cacheKey = JSON.stringify({
+        brandId: input.brandId,
+        platform: input.platform,
+        vertical: input.vertical,
+        theme: input.theme,
+        categories: input.categories,
+        limit,
+      })
+      const cached = cache.get(cacheKey)
+      if (cached && cached.expiresAt > Date.now()) return cached.entries
+
       const entries: KnowledgeEntry[] = []
 
       const feedback = await prisma.userCorrectionFeedback.findMany({
@@ -69,7 +83,9 @@ export function createPrismaKnowledgeRepository(): KnowledgeRepository {
         })
       }
 
-      return entries.slice(0, limit)
+      const result = entries.slice(0, limit)
+      cache.set(cacheKey, { expiresAt: Date.now() + CACHE_TTL_MS, entries: result })
+      return result
     },
   }
 }

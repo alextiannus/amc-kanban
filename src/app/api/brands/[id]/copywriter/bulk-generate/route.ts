@@ -173,6 +173,7 @@ export async function POST(request: Request, { params }: Params) {
     const draftResults = await Promise.all(
       accounts.map(async (account: any) => {
         const platform = account.platformId.toLowerCase()
+        const scheduledAtPromise = getRecommendedTime(brandId, platform)
 
         let caption = `【${platform}】美味速递！创意想法：${idea}`
         let hashtags: string[] = []
@@ -273,8 +274,7 @@ Do not include markdown wrappers around the JSON, return the raw JSON object.
           }
         }
 
-        // Get smart recommended publish time for this platform (parallel with other platforms)
-        const scheduledAt = await getRecommendedTime(brandId, platform)
+        const scheduledAt = await scheduledAtPromise
 
         return {
           platform: account.platformId,

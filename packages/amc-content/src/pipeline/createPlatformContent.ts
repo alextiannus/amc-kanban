@@ -18,7 +18,6 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
   const provider = getPlatformProvider(input.platform)
   const copywriter = getPlatformCopywriter(input.platform)
   const vertical = getVerticalSpec(input.brief.industryVertical)
-  const hookProfile = resolveContentModelProfile(input.platform, 'hook_generation')
   const bodyProfile = resolveContentModelProfile(input.platform, 'body_composition')
   const rewriteProfile = resolveContentModelProfile(input.platform, 'quality_rewrite')
   const knowledge = await input.adapters.knowledgeRepository?.retrieve({
@@ -30,16 +29,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     limit: 8,
   }) ?? []
 
-  const hookModel = await input.adapters.modelRouter.generateJson<{ hooks: HookCandidate[] }>({
-    task: 'hook_generation',
-    platform: input.platform,
-    vertical: input.brief.industryVertical,
-    prompt: await withTuningNotes(input, 'hook_generation', copywriter.buildHookPrompt({ input, knowledge })),
-    modelProfileId: hookProfile.id,
-    maxTokens: hookProfile.maxTokensByTask.hook_generation ?? 900,
-  })
-
-  const selectedHook = selectHook(normalizeHookCandidates(hookModel.data.hooks, input), input.recentHooks)
+  const selectedHook = selectHook([directHookCandidate(input)], input.recentHooks)
 
   const bodyModel = await input.adapters.modelRouter.generateJson<ComposedContent>({
     task: 'body_composition',
@@ -79,7 +69,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
     platformSkillVersion: copywriter.profile.version,
     verticalSkillVersion: vertical.skillVersion,
     knowledgeEntryIds: knowledge.map((entry) => entry.id),
-    modelId: bodyModel.modelId ?? hookModel.modelId,
+    modelId: bodyModel.modelId,
     modelProfileId: bodyProfile.id,
     promptVersion: PROMPT_VERSION,
   }
@@ -108,7 +98,7 @@ export async function createPlatformContent(input: PlatformContentInput): Promis
       media: input.media,
       platformCopywriter: copywriter.profile,
       modelProfiles: {
-        hook: hookProfile.id,
+        hook: 'direct',
         body: bodyProfile.id,
         rewrite: rewriteProfile.id,
       },
@@ -150,6 +140,19 @@ function selectHook(hooks: HookCandidate[], recentHooks: HookCandidate[] = []): 
   const filtered = candidates.filter((hook) => !recentCategories.has(hook.category))
   const pool = filtered.length > 0 ? filtered : candidates
   return [...pool].sort((a, b) => b.score - a.score)[0]
+}
+
+function directHookCandidate(input: PlatformContentInput): HookCandidate {
+  const provider = getPlatformProvider(input.platform)
+  const text = input.brief.angle?.trim()
+    || input.brief.theme?.trim()
+    || fallbackHookText(input)
+  return {
+    text,
+    category: provider.hookCategories[0],
+    score: 0.75,
+    reason: 'Direct hook from brief to avoid an extra LLM round on the fast path.',
+  }
 }
 
 function normalizeHookCandidates(

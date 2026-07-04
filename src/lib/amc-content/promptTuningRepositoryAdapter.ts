@@ -16,6 +16,8 @@ type PromptTuningFile = {
 }
 
 const PROMPT_TUNING_PATH = join(process.cwd(), 'packages', 'amc-content', 'config', 'prompt-tuning.json')
+const CACHE_TTL_MS = 5 * 60 * 1000
+let cachedEntries: { expiresAt: number; entries: PromptTuningEntry[] } | null = null
 
 export function createFilePromptTuningRepository(): PromptTuningRepository {
   return {
@@ -37,10 +39,13 @@ export function createFilePromptTuningRepository(): PromptTuningRepository {
 }
 
 function readEntries(): PromptTuningEntry[] {
+  if (cachedEntries && cachedEntries.expiresAt > Date.now()) return cachedEntries.entries
   if (!existsSync(PROMPT_TUNING_PATH)) return []
   try {
     const parsed = JSON.parse(readFileSync(PROMPT_TUNING_PATH, 'utf-8')) as PromptTuningFile
-    return Array.isArray(parsed.entries) ? parsed.entries : []
+    const entries = Array.isArray(parsed.entries) ? parsed.entries : []
+    cachedEntries = { expiresAt: Date.now() + CACHE_TTL_MS, entries }
+    return entries
   } catch (err) {
     console.error('[PromptTuning] Failed to read prompt tuning config:', err)
     return []

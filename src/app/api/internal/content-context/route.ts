@@ -72,9 +72,15 @@ async function resolveMedia(brandId: string, body: any): Promise<MediaAssetConte
   const assetIds = stringArray(body.assetIds)
   const byUrl = new Map<string, MediaAssetContext>()
 
-  if (assetIds.length) {
+  if (assetIds.length || mediaUrls.length) {
     const assets = await prisma.mediaAsset.findMany({
-      where: { brandId, id: { in: assetIds } },
+      where: {
+        brandId,
+        OR: [
+          ...(assetIds.length ? [{ id: { in: assetIds } }] : []),
+          ...(mediaUrls.length ? [{ url: { in: mediaUrls } }] : []),
+        ],
+      },
     })
     for (const asset of assets) {
       byUrl.set(asset.url, {

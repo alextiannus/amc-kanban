@@ -156,16 +156,6 @@ async function testPipelineRewriteAndNormalization() {
   const modelRouter: ModelRouter = {
     async generateJson<T>(input: ModelRequest): Promise<{ data: T; modelId?: string }> {
       calls.push(input)
-      if (input.task === 'hook_generation') {
-        return {
-          data: {
-            hooks: [
-              { text: '  Your weekend reset starts in Tanjong Pagar  ', category: 'surprise', score: 4 },
-            ],
-          } as T,
-          modelId: 'fake-model',
-        }
-      }
       if (input.task === 'body_composition') {
         return {
           data: {
@@ -245,21 +235,20 @@ async function testPipelineRewriteAndNormalization() {
   assert.deepEqual(result.hashtags, [])
   assert.equal(result.quality.passed, true)
   assert.equal(result.hook.category, 'seo')
-  assert.equal(result.hook.score, 1)
+  assert.equal(result.hook.score, 0.75)
   assert.deepEqual(result.provenance.knowledgeEntryIds, ['knowledge-1'])
   assert.equal(result.provenance.modelProfileId, 'local_seo_precise_v1')
   assert.equal(logs.length, 1)
-  assert.equal(calls.map((call) => call.task).join(','), 'hook_generation,body_composition,quality_rewrite')
+  assert.equal(calls.map((call) => call.task).join(','), 'body_composition,quality_rewrite')
   assert.deepEqual(calls.map((call) => call.modelProfileId), [
-    'local_seo_precise_v1',
     'local_seo_precise_v1',
     'local_seo_precise_v1',
   ])
   assert.match(calls[0].prompt, /Media:/)
-  assert.match(calls[1].prompt, /Vertical compliance:/)
-  assert.match(calls[1].prompt, /Preferred booking CTA/)
-  assert.match(calls[1].prompt, /ADMIN PROMPT TUNING NOTES/)
-  assert.match(calls[1].prompt, /Use calm, concrete wording/)
+  assert.match(calls[0].prompt, /Vertical compliance:/)
+  assert.match(calls[0].prompt, /Preferred booking CTA/)
+  assert.match(calls[0].prompt, /ADMIN PROMPT TUNING NOTES/)
+  assert.match(calls[0].prompt, /Use calm, concrete wording/)
 }
 
 function assertIssue(issues: Array<{ code: string }>, code: string) {

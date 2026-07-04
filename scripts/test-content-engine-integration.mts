@@ -108,7 +108,7 @@ function testPlatformCopywriterRegistry() {
   }
 
   assertIncludes(pipeline, 'const copywriter = getPlatformCopywriter(input.platform)', 'pipeline resolves platform copywriter')
-  assertIncludes(pipeline, 'copywriter.buildHookPrompt', 'pipeline delegates hook prompt')
+  assertIncludes(pipeline, 'directHookCandidate(input)', 'pipeline uses direct hook fast path')
   assertIncludes(pipeline, 'copywriter.buildBodyPrompt', 'pipeline delegates body prompt')
   assertIncludes(pipeline, 'copywriter.buildRewritePrompt', 'pipeline delegates rewrite prompt')
   assertIncludes(pipeline, 'copywriter.validate(input, content)', 'pipeline delegates platform validation')
