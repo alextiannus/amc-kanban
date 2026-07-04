@@ -1468,19 +1468,24 @@ ${contentIdea || 'No details provided.'}`
   }, [viewYear, viewMonth, activeBrandId])
 
   // Reset selectedEventId to the first event of the selected day when day changes
+  // NOTE: do NOT include selectedEventId in deps — that would cause the drawer to
+  // reopen immediately after the user closes it (onClose sets selectedEventId=null,
+  // then the effect fires and sets it back to selectedDayEvents[0].id).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedDay) {
       if (selectedDayEvents.length > 0) {
-        if (!selectedDayEvents.some(e => e.id === selectedEventId)) {
-          setSelectedEventId(selectedDayEvents[0].id)
-        }
+        setSelectedEventId(prev => {
+          if (prev && selectedDayEvents.some(e => e.id === prev)) return prev
+          return null   // don't auto-open; let the user click an event
+        })
       } else {
         setSelectedEventId(null)
       }
     } else {
       setSelectedEventId(null)
     }
-  }, [selectedDay, selectedDayEvents, selectedEventId])
+  }, [selectedDay, selectedDayEvents])
 
 
 

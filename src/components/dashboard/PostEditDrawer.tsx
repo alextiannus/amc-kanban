@@ -324,7 +324,7 @@ export default function PostEditDrawer({
         setCaption(draft.caption || '')
         setHashtags(formatTags(draft.hashtags || []))
         const accId = draft.accountId || draft.account?.id || ''
-        setSelectedAccountIds(accId ? [accId] : [])
+        setSelectedAccountIds(accId ? [accId] : accounts.map(a => a.id))
         setScheduledAt(toDateTimeLocal(draft.scheduledAt))
 
         if (draft.agentNote && draft.agentNote.includes("【AI 生成指令】")) {
