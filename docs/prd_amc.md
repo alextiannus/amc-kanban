@@ -1407,7 +1407,6 @@ AIERA（AI Era Architecture）是 AMC-Kanban Copywriter Agent 的下一代架构
 
 ### Skill 文件位置
 
-```
 src/agents/skills/
 ├── platforms/
 │   ├── xiaohongshu/SKILL.md
@@ -1417,3 +1416,53 @@ src/agents/skills/
 │   └── google_business/SKILL.md
 └── skillLoader.ts
 ```
+
+---
+
+## AI 模型路由架构（当前实现状态）
+
+> 已实现。2026-07-04 完成从 SystemConfig hardcode → LLMConfig 统一配置的迁移。
+
+### 核心原则
+
+**所有 AI 模型调用统一通过 `LLMConfig` 表驱动，无任何 hardcode 模型或 API key。**
+
+- 不同场景（文案生成、语音伴侣、TTS、多模态）通过 `taskTags` 字段区分
+- 优先级由 `priority` 字段控制（数值越高越优先）
+- 断路器（Circuit Breaker）自动跳过 5 分钟内限流（429）的模型
+- Admin → AI 模型配置 是唯一的 key 管理入口
+
+### 路由路径
+
+| 场景 | taskTag | 调用路径 |
+|------|---------|---------|
+| 文案生成、评论回复 | `copywriting` | `callLLM('copywriting')` → `llmRouter.ts` |
+| AI 语音伴侣对话 | `companion` | `callLLMChat('companion')` → `llmRouter.ts` |
+| 商家端 TTS 语音合成 | `tts` | `tts-proxy/route.ts` → `LLMConfig[tts]` → MiniMax T2A API |
+| 多模态图像分析 | `google` provider | `generateMultimodalText()` → `LLMConfig[provider=google]` |
+| 管理后台 AI 建议 | `companion` | browser → `/api/llm/chat` → `callLLMChat` |
+
+### 关键文件
+
+```
+src/lib/llmRouter.ts        — 核心路由，callLLM() + callLLMChat()，含断路器
+src/lib/gemini-chat.ts      — 语音伴侣专用 chat，LLMConfig 驱动
+src/lib/gemini.ts           — generateText / generateMultimodalText（均走 LLMConfig）
+src/lib/gemini-direct.ts    — 浏览器端 LLM 调用封装（现已改为 POST /api/llm/chat）
+src/app/api/llm/chat/       — 通用服务端 LLM chat 端点，供前端组件调用
+src/app/api/mm/tts-proxy/   — MiniMax TTS 代理，key 来自 LLMConfig[tts]
+```
+
+### 已废弃（不再使用）
+
+- `SystemConfig.geminiApiKey` — 字段保留但代码不再读取，AI key 请配置在 LLMConfig
+- `SystemConfig.minimaxApiKey` — 同上，MiniMax TTS key 已迁移至 LLMConfig[tts]
+- 浏览器直调 Google Generative Language API — 已改为服务端路由
+
+### 配置管理
+
+Admin → AI 模型配置 页面：
+- 新增/编辑/删除 LLMConfig 记录
+- 调整 priority 控制使用顺序
+- 按 taskTags 为不同场景指定专用模型
+- 断路器状态查看（哪些模型当前被限流）
