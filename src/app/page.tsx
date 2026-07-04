@@ -62,14 +62,19 @@ export default function Login() {
     setForgotError('')
     setForgotLoading(true)
     try {
-      await fetch('/api/auth/forgot-password', {
+      const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setForgotError(data.error || `请求失败 (${res.status})，请稍后重试`)
+        return
+      }
       setForgotSent(true)
     } catch {
-      setForgotError('网络错误，请稍后重试')
+      setForgotError('网络错误，请检查连接后重试')
     } finally {
       setForgotLoading(false)
     }
