@@ -848,7 +848,7 @@ export default function PostEditDrawer({
       const res = await fetch(`/api/brands/${brandId}/drafts/${selectedDraft.id}/approve`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: '立即发布' }),
+        body: JSON.stringify({ note: '立即发布', publishType: 'immediate' }),
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))

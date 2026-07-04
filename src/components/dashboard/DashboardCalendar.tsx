@@ -47,16 +47,16 @@ import {
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 const MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
 
-// Platform pill colors
+// Platform pill — no background fill, subtle colored text + thin border
 const PLATFORM_COLORS: Record<string, string> = {
-  'IG': 'bg-pink-100 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 border-pink-200 dark:border-pink-800/50',
-  '小红书': 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50',
-  'TikTok': 'bg-slate-900 text-white border-slate-700',
-  'Google': 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50',
-  'Facebook': 'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/50',
-  'Email': 'bg-cyan-100 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800/50',
-  '任务': 'bg-violet-100 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800/50',
-  '全平台': 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50',
+  'IG':   'bg-white dark:bg-slate-900 text-pink-500 dark:text-pink-400 border-pink-200 dark:border-pink-800/60',
+  '小红书': 'bg-white dark:bg-slate-900 text-red-500 dark:text-red-400 border-red-200 dark:border-red-800/60',
+  'TikTok': 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700',
+  'Google': 'bg-white dark:bg-slate-900 text-blue-500 dark:text-blue-400 border-blue-200 dark:border-blue-800/60',
+  'Facebook': 'bg-white dark:bg-slate-900 text-indigo-500 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/60',
+  'Email': 'bg-white dark:bg-slate-900 text-cyan-500 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800/60',
+  '任务': 'bg-white dark:bg-slate-900 text-violet-500 dark:text-violet-400 border-violet-200 dark:border-violet-800/60',
+  '全平台': 'bg-white dark:bg-slate-900 text-emerald-500 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60',
 }
 
 function normalizePlatformLabel(platform: string) {
@@ -1384,10 +1384,10 @@ ${contentIdea || 'No details provided.'}`
   // Derived state memoizations
   const filteredEvents = useMemo(() => {
     return events.filter(ev => {
-      if (activeFilter === 'all') return true
-      if (activeFilter === 'done') {
-        return ev.status === 'done' && ev.type !== 'task'
-      }
+      // Calendar grid only shows published (done) and scheduled events
+      const isVisible = ev.status === 'done' || ev.status === 'scheduled'
+      if (activeFilter === 'all') return isVisible
+      if (activeFilter === 'done') return ev.status === 'done' && ev.type !== 'task'
       return ev.status === activeFilter
     })
   }, [events, activeFilter])
@@ -2109,9 +2109,15 @@ ${contentIdea || 'No details provided.'}`
                                     key={group.id}
                                     onClick={(e) => { e.stopPropagation(); setSelectedDay(day); setSelectedEventId(group.id) }}
                                     className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
-                                      PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
-                                    } ${group.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
+                                      PLATFORM_COLORS[normPlatform] || 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200'
+                                    }`}
                                   >
+                                    {group.status === 'scheduled' && (
+                                      <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                                      </span>
+                                    )}
                                     {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
                                     {group.status === 'scheduled' && normPlatform === 'Google' && (
                                       <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
@@ -2170,7 +2176,8 @@ ${contentIdea || 'No details provided.'}`
                   const evDate = new Date(ev.scheduledAt)
                   return evDate.getDate() === d.getDate() &&
                          evDate.getMonth() === d.getMonth() &&
-                         evDate.getFullYear() === d.getFullYear()
+                         evDate.getFullYear() === d.getFullYear() &&
+                         (activeFilter === 'all' ? ['scheduled', 'done'].includes(ev.status) : ev.status === activeFilter)
                 })
 
                 return (
@@ -2206,9 +2213,15 @@ ${contentIdea || 'No details provided.'}`
                                 key={group.id}
                                 onClick={(e) => { e.stopPropagation(); setSelectedDay(d.getDate()); setSelectedEventId(group.id) }}
                                 className={`text-[9px] font-bold px-1.5 py-1 rounded-lg border flex items-center gap-1 truncate transition-transform hover:scale-[1.02] shadow-sm relative ${
-                                  PLATFORM_COLORS[normPlatform] || 'bg-slate-100 text-slate-500 border-slate-200'
-                                } ${group.status === 'pending' ? 'border-amber-300/40 bg-amber-500/5' : ''}`}
+                                  PLATFORM_COLORS[normPlatform] || 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200'
+                                }`}
                               >
+                                {group.status === 'scheduled' && (
+                                  <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                                  </span>
+                                )}
                                 {hasVideo && <Video className="w-2.5 h-2.5 inline-block shrink-0 text-pink-500" />}
                                 {group.status === 'scheduled' && normPlatform === 'Google' && (
                                   <Shield className="w-2.5 h-2.5 text-blue-500 fill-blue-500/10 shrink-0" />
