@@ -63,7 +63,14 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     },
   })
   if (!draft) return { ok: false as const, status: 404, error: 'Draft not found' }
-  
+
+  // ── 防重复发布锁 ──────────────────────────────────────────────────────────
+  // 如果草稿已经在发布流程中（status='publishing'），拒绝重复提交
+  // 这是防止用户多次点击或并发请求造成 PostFast 重复排期的第一道防线
+  if (draft.status === 'publishing') {
+    return { ok: false as const, status: 409, error: '发布正在进行中，请稍候再试。' }
+  }
+
   if (!draft.caption || !draft.caption.trim()) {
     return { ok: false as const, status: 400, error: '草稿正文不能为空。' }
   }
@@ -160,21 +167,32 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   if (draft.platformPostId && !draft.publishedAt) {
     const cancelResult = await postfastDeletePost(brand.postfastApiKey, draft.platformPostId)
     if (!cancelResult.success) {
-      if (input.immediatePublish) {
-        // 立即发布模式：取消旧排期失败不阻断流程
-        // 旧帖可能已发出或窗口期内无法删除，记录警告继续执行
-        console.warn(`[submitDraftForDelivery] Could not cancel old scheduled post ${draft.platformPostId} (${cancelResult.error}), proceeding with immediate publish anyway`)
-        // 清除 DB 中的旧 platformPostId，避免二次删除
+      // 检查是否是「帖子已不存在」的错误（说明 PostFast 已经发出或删除了该帖）
+      // 这种情况下可以安全清除旧 ID 并继续
+      const isNotFound = cancelResult.error?.includes('404') ||
+        cancelResult.error?.toLowerCase().includes('not found') ||
+        cancelResult.error?.includes('does not exist')
+
+      if (isNotFound) {
+        // 旧帖已不在 PostFast 中（已发布或已被删除），安全清除后继续
+        console.warn(`[submitDraftForDelivery] Old post ${draft.platformPostId} not found in PostFast (already published or deleted), clearing and proceeding`)
         await prisma.contentDraft.update({
           where: { id: draft.id },
           data: { platformPostId: null },
         })
       } else {
+        // 取消失败（未知错误）— 阻断流程，防止重复帖子
         await prisma.contentDraft.update({
           where: { id: draft.id },
-          data: { status: 'failed', agentNote: `更新排期失败：无法取消旧排期 ${draft.platformPostId}。${cancelResult.error || ''}` },
+          data: { status: 'failed', agentNote: `发布失败：无法取消旧排期 ${draft.platformPostId}，请稍后重试。${cancelResult.error || ''}` },
         })
-        return { ok: false as const, status: 400, error: cancelResult.error || '无法取消旧排期，未创建新排期。' }
+        return {
+          ok: false as const,
+          status: 400,
+          error: input.immediatePublish
+            ? `PostFast 无法取消旧排期，请稍等几秒后重试立即发布。（${cancelResult.error || '未知错误'}）`
+            : `无法取消旧排期，未创建新排期。（${cancelResult.error || '未知错误'}）`,
+        }
       }
     }
   }
