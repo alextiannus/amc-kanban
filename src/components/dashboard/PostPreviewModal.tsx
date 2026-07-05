@@ -99,13 +99,16 @@ export default function PostPreviewModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-slate-950" onClick={onClose}>
+    {/* Backdrop — semi-transparent so creation page is visible behind */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm" onClick={onClose}>
+      {/* Floating panel — contained, not full-screen */}
       <div
-        className="relative w-full h-full flex flex-col"
+        className="relative flex flex-col w-full max-w-5xl bg-slate-900 rounded-2xl shadow-2xl border border-slate-700/60 overflow-hidden"
+        style={{ height: 'min(88vh, 900px)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-8 pt-6 pb-3 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 shrink-0 bg-slate-900">
           <div className="flex items-center gap-3">
             {isAiGenerating && (
               <span className="flex items-center gap-1.5 text-indigo-400">
@@ -131,8 +134,10 @@ export default function PostPreviewModal({
           </div>
         )}
 
-        {/* Horizontal cards row — horizontal AND vertical scroll */}
-        <div className="flex-1 flex items-start overflow-x-auto overflow-y-auto px-8 py-6 gap-5 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+        {/* Scroll region: outer=block flex-item (overflow both axes); inner=flex row for alignment */}
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+          {/* flex row on a NON-overflowing div so items-start reliably aligns all cards at same Y */}
+          <div className="flex items-start px-8 py-6 gap-5 min-w-max">
           {selectedCopywriters.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-600">
               <Eye className="w-10 h-10 opacity-30" />
@@ -157,7 +162,8 @@ export default function PostPreviewModal({
               const platformLabel = platform === 'ig' ? 'Instagram' : platform === 'xhs' ? '小红书' : platform === 'fb' ? 'Facebook' : platform === 'tiktok' ? 'TikTok' : 'Google Business'
 
               return (
-                <div key={cwId} className="flex-shrink-0 flex flex-col" style={{ width: 300 }}>
+                {/* self-start keeps each card aligned to the flex-start baseline */}
+                <div key={cwId} className="flex-shrink-0 flex flex-col self-start" style={{ width: 300 }}>
                   {/* Unified top bar — platform + copywriter name on left, cancel on right */}
                   <div className="flex items-center justify-between px-3 h-9 bg-slate-800/90 rounded-t-xl border-b border-slate-700/60 shrink-0">
                     <div className="flex items-center gap-2 min-w-0">
@@ -210,7 +216,9 @@ export default function PostPreviewModal({
 
             })
           )}
+          </div>
         </div>
+
 
         {/* Hint text */}
         {selectedCopywriters.length > 0 && (
