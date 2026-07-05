@@ -112,6 +112,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   const [activeBrand, setActiveBrand] = useState<Brand | null>(null)
 
   const [newApiKey, setNewApiKey] = useState<string | null>(null)
+  const [subscriptionCheckMs, setSubscriptionCheckMs] = useState<number>(Date.now())
   const [showSystemLog, setShowSystemLog] = useState(false)
   const [subscriptionActive, setSubscriptionActive] = useState<boolean | null>(null)
   const userRoles = resolveRoles(user)
@@ -167,10 +168,12 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   }
 
   const fetchSubscriptionState = async () => {
+    setSubscriptionCheckMs(Date.now())
     try {
       const res = await fetch('/api/subscription')
       if (!res.ok) {
-        setSubscriptionActive(false)
+        // On API error, don't permanently block — reset to null so user can retry
+        setSubscriptionActive(null)
         return
       }
 
@@ -178,7 +181,8 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       setSubscriptionActive(isEffectiveActiveSubscription(data?.latestSubscription))
     } catch (e) {
       console.error('[KanbanBoard] fetchSubscriptionState error', e)
-      setSubscriptionActive(false)
+      // Network error — don't permanently block the UI
+      setSubscriptionActive(null)
     }
   }
 
@@ -236,6 +240,15 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     }
   }, [activeBrand?.id])
 
+  // After user is loaded, bypass subscription gate for ADMIN / AMC_PRINCIPAL roles
+  useEffect(() => {
+    if (!user) return
+    const roles = resolveRoles(user)
+    if (roles.includes('ADMIN') || roles.includes('AMC_PRINCIPAL')) {
+      setSubscriptionActive(true)
+    }
+  }, [user])
+
   useEffect(() => {
     let eventSource: EventSource | null = null
     queueMicrotask(() => {
@@ -270,18 +283,32 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
               当前账号还没有生效的订阅计划，因此暂不展示品牌主看板、品牌切换器和其他需要品牌上下文的页面。
             </p>
           </div>
-
+          <button
+            onClick={() => { setSubscriptionActive(null); void fetchSubscriptionState() }}
+            className="mt-2 px-4 py-2 text-sm font-medium rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            重新检查
+          </button>
         </div>
       </div>
     )
   }
 
   if (subscriptionActive === null) {
+    const elapsed = Date.now() - subscriptionCheckMs
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-slate-500 dark:text-slate-400">
+        <div className="flex flex-col items-center gap-4 text-slate-500 dark:text-slate-400">
           <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin" />
           <p className="text-sm font-medium">检查订阅状态...</p>
+          {elapsed > 8000 && (
+            <button
+              onClick={() => { setSubscriptionActive(null); void fetchSubscriptionState() }}
+              className="px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              重试
+            </button>
+          )}
         </div>
       </div>
     )
