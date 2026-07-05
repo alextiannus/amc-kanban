@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { 
-  Shield, User, Bot, RefreshCw, Copy, Check, ArrowLeft, Users, Store, CreditCard, Sparkles, MessageSquare, Menu, Settings
+  Shield, User, Bot, RefreshCw, Copy, Check, ArrowLeft, Users, Store, CreditCard, Menu, Settings
 } from 'lucide-react'
 
 // Import Tab Components
@@ -11,10 +11,9 @@ import UsersTab, { type UserRecord } from '@/components/admin/UsersTab'
 import BrandsTab, { type BrandRecord } from '@/components/admin/BrandsTab'
 import SystemTab, { type LLMConfigRecord } from '@/components/admin/SystemTab'
 import { type AssignmentPoolConfig, type AssignmentPoolMember, type AssignmentDecision } from '@/components/shared/types'
-import PlatformAiTab from '@/components/admin/PlatformAiTab'
 import EditUserModal from '@/components/admin/EditUserModal'
 
-type AdminTab = 'users' | 'brands' | 'system' | 'platform-ai'
+type AdminTab = 'users' | 'brands' | 'system'
 
 interface InvitationResult {
   user: { id: string; email: string; type: string }
@@ -231,7 +230,7 @@ function AdminPageInner() {
   }, [])
 
   useEffect(() => {
-    if (tabParam && ['users', 'brands', 'system', 'platform-ai'].includes(tabParam)) {
+    if (tabParam && ['users', 'brands', 'system'].includes(tabParam)) {
       setActiveAdminTab(tabParam as AdminTab)
     }
   }, [tabParam])
@@ -673,7 +672,6 @@ function AdminPageInner() {
       title: '系统架构配置 (Infrastructure)',
       items: [
         { id: 'system' as const, label: '系统服务与设置', icon: Settings },
-        { id: 'platform-ai' as const, label: '平台AI与语料学习', icon: MessageSquare },
       ]
     }
   ]
@@ -1005,13 +1003,6 @@ function AdminPageInner() {
 
         {/* Footer overview count */}
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-[10px] text-slate-450 leading-relaxed font-semibold space-y-3">
-          <button
-            onClick={() => router.push('/admin/content-lab')}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-black text-white shadow-sm hover:bg-indigo-700 transition-all cursor-pointer"
-          >
-            <Sparkles size={14} />
-            Content Lab
-          </button>
           <p>人类用户: {humans.length} | AI: {agents.length}</p>
           <p>管理品牌: {brands.length} | 模型: {llmConfigs.length}</p>
         </div>
@@ -1091,17 +1082,6 @@ function AdminPageInner() {
           />
         )}
 
-        {activeAdminTab === 'platform-ai' && (
-          <PlatformAiTab 
-            users={users}
-            brands={brands.map(b => ({ id: b.id, name: b.name }))}
-            loading={loading}
-            actionLoading={actionLoading}
-            onSaveAgentDraft={handleSaveAgentDraft}
-            onCreateUser={handleCreateUser}
-            onFetchUsers={fetchUsers}
-          />
-        )}
       </main>
 
       {/* Global Modals */}

@@ -252,7 +252,7 @@ export default function UserAccountsPanel({
               <th className="text-left">邮箱</th>
               <th className="text-left">系统身份</th>
               <th className="text-left">业务角色</th>
-              <th className="text-left">关联资产</th>
+              <th className="text-left">关联AI</th>
               <th className="text-right">操作</th>
             </tr>
           </thead>

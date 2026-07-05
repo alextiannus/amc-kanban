@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     if (body.action === 'catalog') return NextResponse.json(await getCatalogData())
     if (body.action === 'logs') return NextResponse.json(await getLogs(body))
     if (body.action === 'annotateLog') return NextResponse.json(await annotateLog(body))
+    if (body.action === 'trainingExport') return NextResponse.json(await exportTrainingData(body))
     return NextResponse.json({ error: 'Unsupported action' }, { status: 400 })
   } catch (error) {
     console.error('[content-lab-admin] failed:', error)
@@ -133,6 +134,219 @@ async function annotateLog(body: any) {
     },
   })
   return { ok: true, log }
+}
+
+async function exportTrainingData(body: any) {
+  const type = optionalString(body.type) ?? 'all'
+  const tagFilter = optionalString(body.trainingTag) ?? 'include'
+  const brandId = optionalString(body.brandId)
+  const startDate = optionalString(body.startDate)
+  const endDate = optionalString(body.endDate)
+  const format = optionalString(body.format) ?? 'jsonl'
+  const limit = Math.min(5000, intValue(body.limit, 1000))
+  const dateFilter = startDate || endDate
+    ? {
+        createdAt: {
+          ...(startDate ? { gte: new Date(startDate) } : {}),
+          ...(endDate ? { lte: new Date(endDate) } : {}),
+        },
+      }
+    : {}
+  const tagWhere = tagFilter === 'any'
+    ? { isAnnotated: true }
+    : { trainingTag: tagFilter }
+  const records: { jsonl: object; csv: Record<string, string> }[] = []
+
+  if (type === 'companion' || type === 'all') {
+    const assistantMessages = await prisma.companionMessage.findMany({
+      where: {
+        role: 'assistant',
+        ...tagWhere,
+        ...(brandId ? { brandId } : {}),
+        ...dateFilter,
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+      select: {
+        id: true,
+        brandId: true,
+        userId: true,
+        sessionId: true,
+        content: true,
+        correctedContent: true,
+        rating: true,
+        adminNote: true,
+        trainingTag: true,
+        createdAt: true,
+        brand: { select: { name: true, description: true } },
+      },
+    })
+
+    for (const msg of assistantMessages) {
+      if (msg.trainingTag === 'exclude') continue
+      const userMsg = await prisma.companionMessage.findFirst({
+        where: {
+          brandId: msg.brandId,
+          userId: msg.userId,
+          sessionId: msg.sessionId,
+          role: 'user',
+          createdAt: { lt: msg.createdAt },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { content: true },
+      })
+      const systemPrompt = `你是${msg.brand.name}的AI营销助手。${msg.brand.description ? `\n\n品牌简介：${msg.brand.description}` : ''}`
+      const userContent = userMsg?.content ?? '[无用户消息]'
+      const assistantContent = msg.correctedContent ?? msg.content
+      records.push({
+        jsonl: {
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent },
+            { role: 'assistant', content: assistantContent },
+          ],
+          metadata: {
+            source: 'companion',
+            brandId: msg.brandId,
+            messageId: msg.id,
+            rating: msg.rating,
+            trainingTag: msg.trainingTag,
+            isCorrected: !!msg.correctedContent,
+            createdAt: msg.createdAt.toISOString(),
+          },
+        },
+        csv: {
+          type: 'companion',
+          id: msg.id,
+          brandId: msg.brandId,
+          brandName: msg.brand.name,
+          rating: String(msg.rating ?? ''),
+          trainingTag: msg.trainingTag ?? '',
+          isCorrected: msg.correctedContent ? 'yes' : 'no',
+          adminNote: msg.adminNote ?? '',
+          system: systemPrompt,
+          user: userContent,
+          assistant: assistantContent,
+          createdAt: msg.createdAt.toISOString(),
+        },
+      })
+    }
+  }
+
+  if (type === 'copywriter' || type === 'all') {
+    const logs = await prisma.copywriterLog.findMany({
+      where: {
+        ...tagWhere,
+        ...(brandId ? { brandId } : {}),
+        ...dateFilter,
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+      select: {
+        id: true,
+        brandId: true,
+        promptVersion: true,
+        systemPrompt: true,
+        userInput: true,
+        rawOutput: true,
+        correctedContent: true,
+        rating: true,
+        adminNote: true,
+        trainingTag: true,
+        platform: true,
+        modelId: true,
+        createdAt: true,
+        brand: { select: { name: true } },
+      },
+    })
+
+    for (const log of logs) {
+      if (log.trainingTag === 'exclude') continue
+      const rejectedText = extractCaption(log.rawOutput)
+      const assistantContent = log.correctedContent ?? log.rawOutput
+      const chosenText = log.correctedContent ?? rejectedText
+      const metadata = {
+        brandId: log.brandId,
+        logId: log.id,
+        rating: log.rating,
+        trainingTag: log.trainingTag,
+        platform: log.platform,
+        promptVersion: log.promptVersion,
+        createdAt: log.createdAt.toISOString(),
+      }
+      records.push({
+        jsonl: format === 'jsonl_dpo'
+          ? {
+              prompt: log.userInput,
+              system: log.systemPrompt,
+              chosen: chosenText,
+              rejected: rejectedText,
+              metadata: { source: 'copywriter_dpo', ...metadata },
+            }
+          : {
+              messages: [
+                { role: 'system', content: log.systemPrompt },
+                { role: 'user', content: log.userInput },
+                { role: 'assistant', content: assistantContent },
+              ],
+              metadata: { source: 'copywriter', isCorrected: !!log.correctedContent, ...metadata },
+            },
+        csv: {
+          type: format === 'jsonl_dpo' ? 'copywriter_dpo' : 'copywriter',
+          id: log.id,
+          brandId: log.brandId,
+          brandName: log.brand.name,
+          promptVersion: log.promptVersion ?? '',
+          platform: log.platform ?? '',
+          modelId: log.modelId ?? '',
+          rating: String(log.rating ?? ''),
+          trainingTag: log.trainingTag ?? '',
+          isCorrected: log.correctedContent ? 'yes' : 'no',
+          adminNote: log.adminNote ?? '',
+          system: log.systemPrompt,
+          user: log.userInput,
+          assistant: format === 'jsonl_dpo' ? chosenText : assistantContent,
+          createdAt: log.createdAt.toISOString(),
+        },
+      })
+    }
+  }
+
+  const baseName = `training_export_${type}_${new Date().toISOString().slice(0, 10)}`
+  if (format === 'csv') {
+    const headers = ['type', 'id', 'brandId', 'brandName', 'promptVersion', 'platform', 'modelId', 'rating', 'trainingTag', 'isCorrected', 'adminNote', 'system', 'user', 'assistant', 'createdAt']
+    const content = [
+      headers.join(','),
+      ...records.map((record) => headers.map((header) => csvEscape(record.csv[header] ?? '')).join(',')),
+    ].join('\n')
+    return {
+      content,
+      contentType: 'text/csv; charset=utf-8',
+      filename: `${baseName}.csv`,
+      totalRecords: records.length,
+    }
+  }
+
+  return {
+    content: records.map((record) => JSON.stringify(record.jsonl)).join('\n'),
+    contentType: 'application/jsonl',
+    filename: `${baseName}.jsonl`,
+    totalRecords: records.length,
+  }
+}
+
+function extractCaption(rawOutput: string): string {
+  try {
+    const cleanJson = rawOutput.replace(/```json/g, '').replace(/```/g, '').trim()
+    const parsed = JSON.parse(cleanJson)
+    return typeof parsed?.caption === 'string' ? parsed.caption : rawOutput
+  } catch {
+    return rawOutput
+  }
+}
+
+function csvEscape(value: string): string {
+  return `"${value.replace(/"/g, '""').replace(/\n/g, '\\n')}"`
 }
 
 function intValue(value: unknown, fallback: number): number {

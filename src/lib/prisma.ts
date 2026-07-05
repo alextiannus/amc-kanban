@@ -1,7 +1,4 @@
 import { PrismaClient } from '@prisma/client'
-// Schedulers disabled — uncomment to re-enable background polling
-// import { startCopywriterScheduler } from './copywriterScheduler.ts'
-// import { startResearcherScheduler } from './researcherScheduler.ts'
 
 const globalForPrisma = global as unknown as { prisma: any }
 
@@ -100,7 +97,3 @@ const extendedPrisma = basePrisma.$extends({
 })
 
 export const prisma = extendedPrisma
-
-// Background schedulers disabled (noisy + unnecessary polling)
-// startCopywriterScheduler()
-// startResearcherScheduler()

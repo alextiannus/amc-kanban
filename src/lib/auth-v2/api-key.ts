@@ -34,7 +34,6 @@ export async function authenticateApiKey(token: string): Promise<AuthPrincipal |
     where: { tokenHash },
     select: {
       id: true,
-      token: true,
       tokenHash: true,
       lastUsedAt: true,
       expiresAt: true,
@@ -57,11 +56,11 @@ export async function authenticateApiKey(token: string): Promise<AuthPrincipal |
     if (key.user.status !== 'ACTIVE') return null
     if (!isActiveDateRange(key.expiresAt, key.revokedAt)) return null
 
-    if (!key.tokenHash || key.token) {
+    if (!key.tokenHash) {
       void prisma.userApiKey
         .update({
           where: { id: key.id },
-          data: { tokenHash, prefix: apiKeyPrefix(token), token: null },
+          data: { tokenHash, prefix: apiKeyPrefix(token) },
         })
         .catch((error: unknown) => console.error('[auth-v2] legacy API key hash migration failed', error))
     }

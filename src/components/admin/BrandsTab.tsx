@@ -319,15 +319,23 @@ export default function BrandsTab({
             </div>
           ) : (
             <div className="admin-list">
-              <table className="min-w-full text-xs">
+              <table className="w-full min-w-[1240px] table-fixed text-xs">
+                <colgroup>
+                  <col className="w-[360px]" />
+                  <col className="w-[140px]" />
+                  <col className="w-[120px]" />
+                  <col className="w-[180px]" />
+                  <col className="w-[260px]" />
+                  <col className="w-[180px]" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th className="text-left px-5 py-4">品牌名称</th>
-                    <th className="text-left px-5 py-4">物理位置</th>
                     <th className="text-left px-5 py-4">订阅套餐</th>
                     <th className="text-left px-5 py-4">状态</th>
                     <th className="text-left px-5 py-4">过期日期</th>
                     <th className="text-left px-5 py-4">团队成员</th>
+                    <th className="text-left px-5 py-4">物理位置</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -353,17 +361,11 @@ export default function BrandsTab({
                             <div className="w-8.5 h-8.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 flex items-center justify-center font-black text-xs shrink-0">
                               {brand.name.charAt(0).toUpperCase()}
                             </div>
-                            <div>
-                              <span className="text-slate-900 dark:text-white block font-black text-sm">{brand.name}</span>
-                              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono font-medium block mt-0.5">{brand.id}</span>
+                            <div className="min-w-0">
+                              <span className="text-slate-900 dark:text-white block truncate font-black text-sm">{brand.name}</span>
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono font-medium block mt-0.5 truncate">{brand.id}</span>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="inline-flex items-center gap-1 text-slate-650 dark:text-slate-350 font-medium">
-                            <MapPin size={12} className="text-slate-400" />
-                            {brand.location || '未标注'}
-                          </span>
                         </td>
                         <td className="px-5 py-4">
                           <span className="inline-flex items-center px-2.5 py-1 rounded-xl text-[10px] font-bold bg-indigo-50 dark:bg-indigo-955/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100/50 dark:border-indigo-900/30">
@@ -405,6 +407,12 @@ export default function BrandsTab({
                               <span className="text-slate-400 dark:text-slate-500 font-medium">暂无绑定成员</span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className="inline-flex max-w-full items-center gap-1 text-slate-650 dark:text-slate-350 font-medium">
+                            <MapPin size={12} className="shrink-0 text-slate-400" />
+                            <span className="truncate">{brand.location || '未标注'}</span>
+                          </span>
                         </td>
                       </tr>
                     )
