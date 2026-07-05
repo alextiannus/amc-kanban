@@ -11,9 +11,6 @@ services:
     env: node
     buildCommand: npm install --ignore-scripts && npx prisma generate && npx prisma migrate deploy && npm run build
     startCommand: npm run start
-    # Only redeploy when main app files change (ignore brand-owner changes)
-    paths:
-      - "!packages/brand-owner/**"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -45,7 +42,3 @@ services:
         sync: false
       - key: FRONTEND_ORIGINS
         sync: false
-      # URL of the brand-owner Next.js service (set after amc-mm deploys)
-      - key: BRAND_OWNER_URL
-        sync: false
-

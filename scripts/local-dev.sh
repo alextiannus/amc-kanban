@@ -21,13 +21,12 @@ case "$CMD" in
     echo ""
     echo "✅ Services running:"
     echo "   http://localhost:3000          → amc-kanban (direct)"
-    echo "   http://localhost:3001          → amc-mm     (direct)"
     echo "   http://amc-kanban.localhost    → amc-kanban (via nginx)"
-    echo "   http://amc-mm.localhost        → amc-mm     (via nginx)"
     echo ""
     echo "💡 Add to /etc/hosts if subdomain routing isn't working:"
     echo "   127.0.0.1  amc-kanban.localhost"
-    echo "   127.0.0.1  amc-mm.localhost"
+    echo ""
+    echo "ℹ️  amc-mm now lives in its own repository. Run it separately on port 3001."
     ;;
   build)
     echo "🔨 Rebuilding all images..."

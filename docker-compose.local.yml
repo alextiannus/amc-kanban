@@ -38,8 +38,6 @@ services:
       # Allow amc-mm to access API (CORS)
       FRONTEND_ORIGINS: "http://amc-mm.localhost,http://localhost:3001"
       APP_BASE_URL: "http://amc-kanban.localhost"
-      # proxy.ts: brand-owner URL for subdomain routing
-      BRAND_OWNER_URL: "http://amc-mm:3001"
     command: >
       sh -c "
       npx prisma generate &&
@@ -54,34 +52,16 @@ services:
     ports:
       - "3000:3000"     # also accessible directly at localhost:3000
 
-  # ── AMC-MM Brand Owner Frontend ────────────────────────────────────────────
-  amc-mm:
-    build:
-      context: .                                # monorepo root (has package-lock.json)
-      dockerfile: packages/brand-owner/Dockerfile
-    container_name: amc_local_mm
-    depends_on:
-      amc-kanban:
-        condition: service_healthy
-    environment:
-      # Proxy all /api/* calls to the main app
-      MAIN_APP_URL: "http://amc-kanban:3000"
-      JWT_SECRET: local-dev-jwt-secret-amc-2026
-      NODE_ENV: production
-    ports:
-      - "3001:3001"     # also accessible directly at localhost:3001
-
   # ── Nginx Reverse Proxy (simulates subdomain routing) ─────────────────────
   nginx:
     image: nginx:alpine
     container_name: amc_local_nginx
     depends_on:
       - amc-kanban
-      - amc-mm
     volumes:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
-      - "80:80"         # http://amc-kanban.localhost  /  http://amc-mm.localhost
+      - "80:80"         # http://amc-kanban.localhost
 
 volumes:
   amc_local_pgdata:

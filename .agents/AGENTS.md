@@ -156,10 +156,14 @@ render deploys create srv-d94hhbt7vvec73dk7uig --output text --confirm
 
 AMC 系统使用**数据库驱动的多供应商 LLM 路由架构**，当前生效配置来源于 `LLMConfig` 数据表。
 
-**绝对禁止**：
-- 在代码中硬编码任何 LLM provider（如 `new GoogleGenerativeAI(...)` 直接实例化）
-- 向 Render Dashboard 添加 `GEMINI_API_KEY`、`OPENAI_API_KEY` 等 AI 模型 key 环境变量
-- 读取 `SystemConfig.geminiApiKey` 或调用 `getGeminiApiKey()`（废弃，新代码禁止）
+**Gemini 是合法的 LLM 提供商 — 关键限制在于 key 的来源和调用路径，而不是 provider 本身**：
+
+| 场景 | 是否允许 | 说明 |
+|------|----------|------|
+| 在 LLMConfig 表配置 Gemini API Key 后由 `llmRouter.ts` 调用 | ✅ **允许** | 这是正确路径 |
+| 通过 `SystemConfig.geminiApiKey` 字段读取 key | ❌ **禁止** | 该字段已废弃 |
+| 在 Render 环境变量中配置 `GEMINI_API_KEY` | ❌ **禁止** | 无法动态更换且不支持 Fallback |
+| 浏览器端直连任何 LLM API（包括 Gemini） | ❌ **禁止** | key 不得暴露给客户端 |
 
 **正确做法**：
 - 所有 AI 推理调用 → 通过 `src/lib/llmRouter.ts` 的 `callLLMByTag(taskTag, messages)` 接口

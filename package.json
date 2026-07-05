@@ -40,8 +40,6 @@
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
-    "@dnd-kit/sortable": "^10.0.0",
-    "@dnd-kit/utilities": "^3.2.2",
     "@ducanh2912/next-pwa": "^10.2.9",
     "@langchain/core": "^1.2.1",
     "@langchain/langgraph": "^1.4.5",
@@ -50,7 +48,6 @@
     "@prisma/client": "^6.19.3",
     "@tailwindcss/typography": "^0.5.19",
     "@types/nodemailer": "^8.0.1",
-    "ajv-formats": "^3.0.1",
     "bcryptjs": "^3.0.3",
     "framer-motion": "^11.18.2",
     "jose": "^6.2.3",
