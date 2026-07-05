@@ -1902,6 +1902,29 @@ Return the output strictly in a valid JSON array format, containing:
         onSaveDraft={handleSaveDraftsFromModal}
         onSchedule={handleScheduleFromModal}
         onRegenerate={handleAiCopywrite}
+        onCancelCopywriter={async (cwId) => {
+          // Find the draft associated with this copywriter
+          const draftEntry = Object.entries(draftCopywriterMap).find(([, v]) => v === cwId)
+          if (draftEntry) {
+            const draftId = draftEntry[0]
+            // Delete the draft in the background
+            fetch(`/api/brands/${brandId}/drafts/${draftId}`, { method: 'DELETE' }).catch(() => {})
+            // Remove from createdDrafts
+            setCreatedDrafts(prev => prev ? prev.filter(d => d.id !== draftId) : null)
+            setDraftCopywriterMap(prev => { const n = { ...prev }; delete n[draftId]; return n })
+          }
+          // Remove the copywriter's account from selectedAccountIds
+          setSelectedAccountIds(prev => {
+            const cw = COPYWRITER_ROSTER.find(c => c.id === cwId)
+            if (!cw) return prev
+            const effectiveId = draftAccountIdForCopywriter(cw, accounts)
+            return prev.filter(id => id !== effectiveId)
+          })
+          // Clean up caption/status state for this copywriter
+          setDraftCaptions(prev => { const n = { ...prev }; delete n[cwId]; return n })
+          setDraftHashtags(prev => { const n = { ...prev }; delete n[cwId]; return n })
+          setDraftStatuses(prev => { const n = { ...prev }; delete n[cwId]; return n })
+        }}
         previewOnly={previewOnly}
       />
     </div>
