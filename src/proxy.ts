@@ -29,7 +29,9 @@ export default async function proxy(request: NextRequest) {
     const isPublic =
       pathname === '/login' ||
       pathname === '/register' ||
-      pathname.startsWith('/api/') ||        // all API routes (incl. /api/logout)
+      pathname.startsWith('/reset-password/') || // token-based reset (no session needed)
+      pathname.startsWith('/invite/') ||          // invitation acceptance
+      pathname.startsWith('/api/') ||             // all API routes (incl. /api/logout)
       pathname.startsWith('/_next/') ||
       pathname === '/favicon.ico'
 
@@ -60,7 +62,9 @@ export default async function proxy(request: NextRequest) {
   const isPublicPage = 
     pathname === '/game' || 
     pathname.startsWith('/game/') ||
-    pathname.startsWith('/presentation/')
+    pathname.startsWith('/presentation/') ||
+    pathname.startsWith('/reset-password/') || // token-based reset (no session needed)
+    pathname.startsWith('/invite/')             // invitation acceptance
   const isApiRoute = pathname.startsWith('/api')
 
   // Bypass API and public routes
