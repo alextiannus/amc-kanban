@@ -267,7 +267,7 @@ export default function BrandsTab({
       {subTab === 'brands' && (
         <div className="space-y-4">
           {/* Top Search & Filter Bar */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+          <div className="admin-toolbar flex-col sm:flex-row sm:justify-between">
             <div className="flex flex-wrap items-center gap-2.5 flex-1 max-w-2xl">
               {/* Search Box */}
               <div className="relative flex-1 min-w-[200px]">
@@ -276,7 +276,7 @@ export default function BrandsTab({
                   placeholder="搜索品牌名称、物理地点..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3.5 py-2 pl-9 text-xs text-slate-850 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="admin-input pl-9"
                 />
                 <Search size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               </div>
@@ -302,7 +302,7 @@ export default function BrandsTab({
             <button
               id="admin-create-brand-btn"
               onClick={() => { setShowCreateForm(true); setCreateError(null) }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black transition-all shadow-sm cursor-pointer shrink-0"
+              className="admin-primary-button shrink-0"
             >
               <Plus size={13} />
               <span>新建品牌</span>
@@ -318,9 +318,9 @@ export default function BrandsTab({
               暂无托管品牌记录
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <div className="admin-list">
               <table className="min-w-full text-xs">
-                <thead className="bg-slate-50/80 dark:bg-slate-950/80 text-slate-455 dark:text-slate-400 font-extrabold uppercase tracking-wider border-b border-slate-200/60 dark:border-slate-800">
+                <thead>
                   <tr>
                     <th className="text-left px-5 py-4">品牌名称</th>
                     <th className="text-left px-5 py-4">物理位置</th>
@@ -330,7 +330,7 @@ export default function BrandsTab({
                     <th className="text-left px-5 py-4">团队成员</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                <tbody>
                   {filteredBrands.map((brand) => {
                     const subscription = brand.subscriptions[0]
                     const planLabel = subscription?.planId
@@ -350,7 +350,7 @@ export default function BrandsTab({
                       >
                         <td className="px-5 py-4 font-black">
                           <div className="flex items-center gap-3">
-                            <div className="w-8.5 h-8.5 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-650 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-sm">
+                            <div className="w-8.5 h-8.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 flex items-center justify-center font-black text-xs shrink-0">
                               {brand.name.charAt(0).toUpperCase()}
                             </div>
                             <div>
@@ -392,13 +392,13 @@ export default function BrandsTab({
                         <td className="px-5 py-4">
                           <div className="flex flex-wrap gap-1.5 max-w-[280px]">
                             {brand.owners.map((o) => (
-                              <span key={o.userId} className="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-955/20 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900/30 px-2 py-0.5 rounded-lg text-[10px] font-bold">
-                                👤 {o.user.nickname || o.user.email.split('@')[0]}
+                              <span key={o.userId} className="admin-badge admin-badge-blue">
+                                {o.user.nickname || o.user.email.split('@')[0]}
                               </span>
                             ))}
                             {brand.brandAgents.map((a) => (
-                              <span key={a.agentId} className="inline-flex items-center gap-1 bg-indigo-50 dark:bg-indigo-955/20 text-indigo-700 dark:text-indigo-300 border border-indigo-100/50 dark:border-indigo-900/30 px-2 py-0.5 rounded-lg text-[10px] font-bold">
-                                🤖 {a.agent.nickname || a.agent.email.split('@')[0]}
+                              <span key={a.agentId} className="admin-badge admin-badge-indigo">
+                                {a.agent.nickname || a.agent.email.split('@')[0]}
                               </span>
                             ))}
                             {brand.owners.length === 0 && brand.brandAgents.length === 0 && (

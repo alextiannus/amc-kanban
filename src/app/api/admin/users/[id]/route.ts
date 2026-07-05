@@ -223,6 +223,96 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   // API Key regeneration
+  if (body.createApiKey) {
+    const keyName = typeof body.name === 'string' && body.name.trim()
+      ? body.name.trim()
+      : `AI Staff Key ${new Date().toISOString().slice(0, 10)}`
+    const randomToken = createApiKeyToken(target.type === 'AI_AGENT' ? 'amc_agent' : 'amc_user')
+    const created = await prisma.userApiKey.create({
+      data: {
+        userId: id,
+        tokenHash: hashApiKeyToken(randomToken),
+        prefix: apiKeyPrefix(randomToken),
+        name: keyName,
+      },
+      select: {
+        id: true,
+        name: true,
+        prefix: true,
+        createdAt: true,
+        lastUsedAt: true,
+        expiresAt: true,
+        revokedAt: true,
+      },
+    })
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: session.user.id,
+        actorType: 'HUMAN',
+        actorName: session.user.email || null,
+        action: 'USER_API_KEY_CREATED',
+        resourceId: created.id,
+        resourceType: 'UserApiKey',
+        newValue: {
+          userId: id,
+          email: target.email,
+          keyId: created.id,
+          keyName,
+          prefix: created.prefix,
+        },
+      },
+    })
+
+    return NextResponse.json({ ok: true, apiKey: randomToken, key: created })
+  }
+
+  if (body.revokeApiKeyId) {
+    if (typeof body.revokeApiKeyId !== 'string') {
+      return NextResponse.json({ error: 'revokeApiKeyId must be a string' }, { status: 400 })
+    }
+    const key = await prisma.userApiKey.findFirst({
+      where: { id: body.revokeApiKeyId, userId: id },
+      select: { id: true, revokedAt: true, name: true, prefix: true },
+    })
+    if (!key) return NextResponse.json({ error: 'API key not found' }, { status: 404 })
+    if (key.revokedAt) return NextResponse.json({ ok: true, key })
+
+    const revoked = await prisma.userApiKey.update({
+      where: { id: key.id },
+      data: { revokedAt: new Date() },
+      select: {
+        id: true,
+        name: true,
+        prefix: true,
+        createdAt: true,
+        lastUsedAt: true,
+        expiresAt: true,
+        revokedAt: true,
+      },
+    })
+
+    await prisma.auditLog.create({
+      data: {
+        actorId: session.user.id,
+        actorType: 'HUMAN',
+        actorName: session.user.email || null,
+        action: 'USER_API_KEY_REVOKED',
+        resourceId: key.id,
+        resourceType: 'UserApiKey',
+        oldValue: {
+          userId: id,
+          email: target.email,
+          keyId: key.id,
+          keyName: key.name,
+          prefix: key.prefix,
+        },
+      },
+    })
+
+    return NextResponse.json({ ok: true, key: revoked })
+  }
+
   if (body.regenerateApiKey) {
     const randomToken = createApiKeyToken(target.type === 'AI_AGENT' ? 'amc_agent' : 'amc_user')
     await prisma.$transaction(async (tx: any) => {

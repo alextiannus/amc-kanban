@@ -681,6 +681,246 @@ function AdminPageInner() {
   return (
     <div className="admin-page min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row text-slate-800 dark:text-slate-200">
       <style>{`
+        .admin-page {
+          --admin-border: rgb(226 232 240);
+          --admin-muted: rgb(100 116 139);
+          --admin-panel: #ffffff;
+          --admin-soft: rgb(248 250 252);
+          --admin-accent: rgb(37 99 235);
+        }
+        .dark .admin-page {
+          --admin-border: rgb(30 41 59);
+          --admin-muted: rgb(148 163 184);
+          --admin-panel: rgb(15 23 42);
+          --admin-soft: rgb(2 6 23);
+          --admin-accent: rgb(96 165 250);
+        }
+        .admin-toolbar {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          border: 1px solid var(--admin-border);
+          background: var(--admin-panel);
+          padding: 0.75rem;
+          border-radius: 0.5rem;
+        }
+        .admin-list {
+          overflow-x: auto;
+          border: 1px solid var(--admin-border);
+          background: var(--admin-panel);
+          border-radius: 0.5rem;
+        }
+        .admin-list table th,
+        .admin-list table td {
+          padding: 0.75rem 1rem;
+          vertical-align: middle;
+          white-space: nowrap;
+        }
+        .admin-list table th {
+          border-bottom: 1px solid var(--admin-border);
+          background: var(--admin-soft);
+          color: var(--admin-muted);
+          font-size: 0.68rem;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+        .admin-list table tbody tr {
+          border-bottom: 1px solid color-mix(in srgb, var(--admin-border) 70%, transparent);
+        }
+        .admin-list table tbody tr:last-child {
+          border-bottom: 0;
+        }
+        .admin-list table tbody tr:hover {
+          background: color-mix(in srgb, var(--admin-soft) 72%, transparent);
+        }
+        .admin-input {
+          width: 100%;
+          min-height: 2.25rem;
+          border: 1px solid var(--admin-border);
+          border-radius: 0.375rem;
+          background: var(--admin-panel);
+          padding: 0.5rem 0.75rem;
+          font-size: 0.75rem;
+          outline: none;
+        }
+        .admin-input:focus {
+          border-color: var(--admin-accent);
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--admin-accent) 16%, transparent);
+        }
+        .admin-primary-button,
+        .admin-secondary-button,
+        .admin-danger-button,
+        .admin-icon-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.375rem;
+          min-height: 2.25rem;
+          border-radius: 0.375rem;
+          font-size: 0.75rem;
+          font-weight: 700;
+          transition: background-color .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease;
+          cursor: pointer;
+        }
+        .admin-primary-button {
+          border: 1px solid rgb(37 99 235);
+          background: rgb(37 99 235);
+          color: white;
+          padding: 0.5rem 0.875rem;
+        }
+        .admin-primary-button:hover {
+          background: rgb(29 78 216);
+        }
+        .admin-primary-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .admin-secondary-button {
+          border: 1px solid var(--admin-border);
+          background: var(--admin-panel);
+          color: rgb(51 65 85);
+          padding: 0.5rem 0.875rem;
+        }
+        .dark .admin-secondary-button {
+          color: rgb(203 213 225);
+        }
+        .admin-secondary-button:hover,
+        .admin-icon-button:hover {
+          background: var(--admin-soft);
+        }
+        .admin-danger-button {
+          border: 1px solid rgb(225 29 72);
+          background: rgb(225 29 72);
+          color: white;
+          padding: 0.5rem 0.875rem;
+        }
+        .admin-danger-button:hover {
+          background: rgb(190 18 60);
+        }
+        .admin-icon-button {
+          width: 2.25rem;
+          border: 1px solid var(--admin-border);
+          background: var(--admin-panel);
+          color: rgb(71 85 105);
+        }
+        .dark .admin-icon-button {
+          color: rgb(203 213 225);
+        }
+        .admin-danger-icon {
+          color: rgb(225 29 72);
+        }
+        .admin-badge {
+          display: inline-flex;
+          align-items: center;
+          border-radius: 0.25rem;
+          border: 1px solid transparent;
+          padding: 0.125rem 0.4rem;
+          font-size: 0.65rem;
+          font-weight: 800;
+        }
+        .admin-badge-indigo {
+          border-color: rgb(199 210 254);
+          background: rgb(238 242 255);
+          color: rgb(79 70 229);
+        }
+        .admin-badge-blue {
+          border-color: rgb(191 219 254);
+          background: rgb(239 246 255);
+          color: rgb(37 99 235);
+        }
+        .admin-badge-green {
+          border-color: rgb(187 247 208);
+          background: rgb(240 253 244);
+          color: rgb(22 101 52);
+        }
+        .dark .admin-badge-indigo,
+        .dark .admin-badge-blue,
+        .dark .admin-badge-green {
+          background: rgb(15 23 42);
+          border-color: rgb(51 65 85);
+          color: rgb(203 213 225);
+        }
+        .admin-check {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.375rem;
+          color: rgb(71 85 105);
+          font-size: 0.75rem;
+          font-weight: 700;
+        }
+        .dark .admin-check {
+          color: rgb(203 213 225);
+        }
+        .admin-field {
+          display: grid;
+          gap: 0.375rem;
+        }
+        .admin-field > span {
+          color: var(--admin-muted);
+          font-size: 0.7rem;
+          font-weight: 800;
+        }
+        .admin-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 100;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgb(15 23 42 / 0.55);
+          padding: 1rem;
+        }
+        .admin-modal {
+          width: 100%;
+          overflow: hidden;
+          border: 1px solid var(--admin-border);
+          border-radius: 0.5rem;
+          background: var(--admin-panel);
+          box-shadow: 0 18px 48px rgb(15 23 42 / 0.18);
+        }
+        .admin-modal-header,
+        .admin-modal-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          border-bottom: 1px solid var(--admin-border);
+          padding: 1rem 1.25rem;
+        }
+        .admin-modal-header h2 {
+          font-size: 0.9rem;
+          font-weight: 800;
+          color: rgb(15 23 42);
+        }
+        .dark .admin-modal-header h2 {
+          color: white;
+        }
+        .admin-modal-header p {
+          margin-top: 0.125rem;
+          color: var(--admin-muted);
+          font-size: 0.75rem;
+        }
+        .admin-modal-footer {
+          border-top: 1px solid var(--admin-border);
+          border-bottom: 0;
+          padding: 1rem 0 0;
+        }
+        .admin-page .rounded-2xl,
+        .admin-page .rounded-3xl,
+        .admin-page .rounded-xl {
+          border-radius: 0.5rem !important;
+        }
+        .admin-page .shadow-sm,
+        .admin-page .shadow-md,
+        .admin-page .shadow-xl,
+        .admin-page .shadow-2xl {
+          box-shadow: none !important;
+        }
+        .admin-page p.leading-relaxed,
+        .admin-page .tracking-widest {
+          letter-spacing: 0 !important;
+        }
         html:not(.dark) .admin-page,
         html:not(.dark) .admin-page input,
         html:not(.dark) .admin-page select,
@@ -778,7 +1018,7 @@ function AdminPageInner() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-5xl mx-auto w-full">
+      <main className="flex-1 p-4 md:p-6 overflow-y-auto max-w-7xl mx-auto w-full">
         {activeAdminTab === 'users' && (
           <UsersTab 
             users={users}

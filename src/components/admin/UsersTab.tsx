@@ -41,7 +41,15 @@ export interface UserRecord {
   brandMemberships?: Array<{
     brand: { id: string; name: string; status: string }
   }>
-  apiKeys?: Array<{ id: string; name: string }>
+  apiKeys?: Array<{
+    id: string
+    name: string | null
+    prefix: string | null
+    createdAt: string
+    lastUsedAt: string | null
+    expiresAt: string | null
+    revokedAt: string | null
+  }>
 }
 
 interface UsersTabProps {

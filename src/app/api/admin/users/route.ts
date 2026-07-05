@@ -60,7 +60,16 @@ export async function GET() {
           select: { brand: { select: { id: true, name: true, status: true } } },
         },
         apiKeys: {
-          select: { id: true, name: true }
+          select: {
+            id: true,
+            name: true,
+            prefix: true,
+            createdAt: true,
+            lastUsedAt: true,
+            expiresAt: true,
+            revokedAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
         }
       },
       orderBy: { createdAt: 'desc' }
