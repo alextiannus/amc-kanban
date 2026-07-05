@@ -1,5 +1,6 @@
 'use client'
 import React, { useState } from 'react'
+import { COPYWRITER_ROSTER, platformAliases } from '@/lib/copywriters'
 import {
   X,
   Eye,
@@ -141,10 +142,30 @@ export default function PostPreviewModal({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
               {selectedAccountIds.map((accId) => {
+                // Prefer a real configured account; fall back to copywriter persona for content-only preview
                 const account = accountOptions.find((a) => a.id === accId)
-                if (!account) return null
+                const copywriter = !account
+                  ? COPYWRITER_ROSTER.find((c) =>
+                      accId === `unconfigured_${c.platform}` ||
+                      platformAliases(c.platform).some((alias) =>
+                        accId.toLowerCase().includes(alias)
+                      )
+                    )
+                  : undefined
 
-                const platform = normalizePlatformLabel(account.platformId)
+                // Derive a synthetic account-like object from copywriter persona when no real account exists
+                const resolvedAccount = account ?? (copywriter
+                  ? {
+                      id: accId,
+                      platformId: copywriter.platform,
+                      displayName: copywriter.name,
+                      handle: copywriter.handle,
+                    }
+                  : null)
+
+                if (!resolvedAccount) return null
+
+                const platform = normalizePlatformLabel(resolvedAccount.platformId)
                 const status = draftStatuses[accId] || 'completed'
                 const isGenerating = status === 'generating'
                 const isFailed = status === 'failed'
@@ -155,7 +176,7 @@ export default function PostPreviewModal({
                 return (
                   <PlatformPreviewCard
                     key={accId}
-                    account={account}
+                    account={resolvedAccount}
                     platform={platform}
                     isGenerating={isGenerating}
                     isFailed={isFailed}

@@ -1867,23 +1867,7 @@ Return the output strictly in a valid JSON array format, containing:
         }}
         brandName={brandName}
         selectedAccountIds={selectedAccountIds}
-        accountOptions={[
-            ...accounts,
-            // Add stub entries for selected copywriters whose publishing account is not configured yet.
-            ...COPYWRITER_ROSTER
-              .filter(copywriter => {
-                const effectiveId = draftAccountIdForCopywriter(copywriter, accounts)
-                return selectedAccountIds.includes(effectiveId) && !accounts.find(a =>
-                  platformAliases(copywriter.platform).includes((a.platformId || '').toLowerCase())
-                )
-              })
-              .map(copywriter => ({
-                id: draftAccountIdForCopywriter(copywriter, accounts),
-                platformId: copywriter.platform,
-                displayName: `${copywriter.handle}（未配置）`,
-                handle: '',
-              }))
-          ]}
+        accountOptions={accounts}
         draftCaptions={draftCaptions}
         setDraftCaptions={setDraftCaptions}
         draftHashtags={draftHashtags}
