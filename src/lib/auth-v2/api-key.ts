@@ -1,7 +1,6 @@
 import crypto from 'crypto'
 import { prisma } from '../prisma.ts'
 import { principalFromUser, type AuthPrincipal } from './types.ts'
-import { isLegacyKeyCompatibilityActive } from './compat.ts'
 
 const LAST_USED_WRITE_INTERVAL_MS = 5 * 60 * 1000
 
@@ -31,9 +30,8 @@ function scheduleLastUsedUpdate(id: string, lastUsedAt: Date | null) {
 
 export async function authenticateApiKey(token: string): Promise<AuthPrincipal | null> {
   const tokenHash = hashApiKeyToken(token)
-  const allowLegacyStorage = isLegacyKeyCompatibilityActive()
   const key = await prisma.userApiKey.findFirst({
-    where: allowLegacyStorage ? { OR: [{ tokenHash }, { token }] } : { tokenHash },
+    where: { tokenHash },
     select: {
       id: true,
       token: true,
@@ -70,40 +68,5 @@ export async function authenticateApiKey(token: string): Promise<AuthPrincipal |
     scheduleLastUsedUpdate(key.id, key.lastUsedAt)
     return principalFromUser(key.user, 'api_key', key.id)
   }
-
-  if (!allowLegacyStorage) return null
-
-  // One-day compatibility for legacy AI Agent keys stored on User.
-  const legacyHash = hashApiKeyToken(token)
-  const legacyUser = await prisma.user.findFirst({
-    where: {
-      status: 'ACTIVE',
-      OR: [{ apiKey: token }, { apiKey: legacyHash }],
-    },
-    select: {
-      id: true,
-      email: true,
-      type: true,
-      role: true,
-      status: true,
-      authVersion: true,
-      businessRoles: { select: { role: true } },
-    },
-  })
-  if (!legacyUser) return null
-
-  const migrated = await prisma.userApiKey.upsert({
-    where: { tokenHash },
-    create: {
-      userId: legacyUser.id,
-      tokenHash,
-      prefix: apiKeyPrefix(token),
-      name: 'Migrated legacy AMC Agent key',
-      lastUsedAt: new Date(),
-    },
-    update: { lastUsedAt: new Date() },
-    select: { id: true },
-  })
-
-  return principalFromUser(legacyUser, 'legacy_api_key', migrated.id)
+  return null
 }

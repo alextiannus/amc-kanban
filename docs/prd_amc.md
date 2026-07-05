@@ -223,42 +223,55 @@
 
 ## 系统配置架构决策 (System Config Architecture)
 
-### 核心原则：所有 AI 模型与第三方服务的 API Key 必须存储在数据库 SystemConfig，不写入 Render 环境变量
+### 核心原则：所有 AI 模型 API Key 统一存储在 `LLMConfig` 数据表，不写入 Render 环境变量，不使用 SystemConfig 旧字段
 
-**背景**：早期实现中，Gemini API Key 等凭证被放入 Render 服务的 Environment 变量中。但这种方式有以下问题：
+**背景**：早期实现中，Gemini API Key 等凭证被放入 Render 服务的 Environment 变量中。随后迁移到 `SystemConfig.geminiApiKey` 数据库字段。**当前最终架构（2026-06 已全面生效）**：所有 AI 模型 Key 统一迁移至 `LLMConfig` 数据表，实现多供应商动态路由。
+
+**为何不再使用 Render 环境变量或 SystemConfig 的旧字段**：
 - 凭证更新需要重新部署（延迟高）
 - 多服务实例之间无法共享配置
 - 无审计追踪（无法知道谁在什么时间修改了哪个 Key）
-- 开发人员/AI Agent 容易误以为需要修改 Render 配置，产生职责混乱
+- 无法支持多供应商按任务标签、优先级动态路由
 
-**架构决策（2026-06-27 确认）**：
+### 当前 LLM 配置架构（LLMConfig 表）
 
 | 配置项 | 存储位置 | 访问方式 | 禁止位置 |
 |--------|----------|----------|----------|
-| Gemini API Key | `SystemConfig.geminiApiKey`（DB） | `getGeminiApiKey()` | ❌ Render env（仅允许迁移回填） |
-| MiniMax TTS API Key | `SystemConfig.minimaxApiKey`（DB） | `getMiniMaxApiKey()` | ❌ Render env（仅允许迁移回填） |
-| 其他 LLM/模型 Key | `LlmConfig` / 对应 SystemConfig 字段 | 对应配置读取函数 | ❌ 业务代码硬编码 |
+| 所有 AI 模型 Key（OpenAI、Claude、Gemini、DeepSeek 等） | `LLMConfig` 表（DB） | `llmRouter.ts` 按任务标签路由 | ❌ Render env / SystemConfig 旧字段 |
+| MiniMax TTS Key | `LLMConfig`（provider=`minimax`, taskTags=[`tts`]） | `llmRouter.ts` | ❌ SystemConfig.minimaxApiKey（废弃） |
+| 其他第三方服务 Key（PostFast、地图等） | 对应数据库配置字段 | 对应读取函数 | ❌ 业务代码硬编码 |
 
-**唯一例外**：`DATABASE_URL`、`JWT_SECRET`、`NEXTAUTH_SECRET` 等基础设施级别的机密，仍放在 Render 环境变量中（这些无法从数据库读取，因为数据库连接本身需要它们）。
+**唯一例外**：`DATABASE_URL`、`JWT_SECRET`、`NEXTAUTH_SECRET`、`OBS_*` 等基础设施机密，仍放在 Render 环境变量中（这些无法从数据库读取，因为数据库连接本身依赖它们）。
 
-### SystemConfig 数据模型
+### LLMConfig 数据模型
 
 ```prisma
-model SystemConfig {
-  id            String   @id @default("default")
-  geminiApiKey  String?
-  minimaxApiKey String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+model LLMConfig {
+  id           String   @id @default(cuid())
+  provider     String   // "openai" | "anthropic" | "google" | "deepseek" | "minimax" | "custom_shim"
+  displayName  String   // 展示名称（如 "GPT-4o"、"DeepSeek-R1"）
+  modelName    String   // 实际模型 ID（如 "gpt-4o-2024-05-13"）
+  apiKey       String   // 加密存储的 API Key
+  baseUrl      String?  // 自定义代理 Endpoint（可选）
+  isEnabled    Boolean  @default(true)
+  isDefault    Boolean  @default(false)
+  priority     Int      @default(0)  // 数值越大优先级越高（高优先先尝试）
+  taskTags     String[] // 任务适用标签，如 ["copywriting", "reasoning", "tts"]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 ```
 
 ### 管理入口
-- **后台路径**：`/admin` → 全局 AI 接口配置面板
-- **API**：`PATCH /api/admin/system-config`（Admin only，带 AuditLog）
-- **读取函数**（`src/lib/systemConfig.ts`）：
-  - `getGeminiApiKey()` — 返回 Gemini Key 或 null
-  - `getMiniMaxApiKey()` — 返回 MiniMax TTS Key 或 null；数据库为空时允许从环境变量执行一次迁移回填
+- **后台路径**：`/admin` → **AI 模型配置（LLMConfig）** 面板
+- **说明**：在此页面添加/启用/禁用各大模型供应商，配置 API Key、代理地址、优先级、任务标签
+- **路由逻辑**（`src/lib/llmRouter.ts`）：按 `taskTags`、`isEnabled`、`priority` 字段从 LLMConfig 表中动态选取最优模型，支持 Fallback 链
+
+### 废弃字段说明
+- `SystemConfig.geminiApiKey` — 字段保留但代码不再读取，**配置 Google 模型请在 LLMConfig 中添加 provider='google' 的条目**
+- `SystemConfig.minimaxApiKey` — 同上废弃，**TTS 请在 LLMConfig 添加 provider='minimax', taskTags=['tts']**
+- `getGeminiApiKey()` / `getMiniMaxApiKey()` — 函数保留（兼容旧数据迁移），新代码不得调用
+- `GEMINI_API_KEY` 环境变量 — 从未作为主要配置来源，不使用
 
 ### MiniMax TTS 配置说明
 - **服务**：MiniMax T2A v2

@@ -110,7 +110,6 @@ async function testE2E() {
   })
   assert.equal(key.token, null, 'New API keys must not persist plaintext')
 
-  process.env.AUTH_V2_LEGACY_KEYS = 'false'
   const resolved = await authenticateApiKey(token)
   assert.equal(resolved?.userId, agent.id)
 

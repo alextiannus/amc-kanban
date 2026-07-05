@@ -5,8 +5,6 @@ export type ActorType = 'HUMAN' | 'AMC_AGENT'
 export type AuthSource =
   | 'session'
   | 'api_key'
-  | 'legacy_api_key'
-  | 'legacy_delegation'
 
 export type AuthPrincipal = {
   userId: string

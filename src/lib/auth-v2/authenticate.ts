@@ -8,7 +8,6 @@ import {
   verifySessionToken,
 } from './session.ts'
 import { principalFromUser, type AuthPrincipal } from './types.ts'
-import { isLegacyKeyCompatibilityActive } from './compat.ts'
 
 export function extractBearerToken(request: Request): string | null {
   const authorization = request.headers.get('authorization')?.trim()
@@ -47,29 +46,7 @@ export async function authenticateRequest(request: Request): Promise<AuthPrincip
   if (apiKey) {
     const principal = await authenticateApiKey(apiKey)
     if (!principal) return null
-
-    const delegatedAgentId = request.headers.get('x-agent-id')?.trim()
-    if (!delegatedAgentId) return principal
-    if (principal.actorType !== 'HUMAN' || !isLegacyKeyCompatibilityActive()) return null
-
-    const agent = await prisma.user.findFirst({
-      where: {
-        id: delegatedAgentId,
-        ownerId: principal.userId,
-        type: 'AI_AGENT',
-        status: 'ACTIVE',
-      },
-      select: {
-        id: true,
-        email: true,
-        type: true,
-        role: true,
-        status: true,
-        authVersion: true,
-        businessRoles: { select: { role: true } },
-      },
-    })
-    return agent ? principalFromUser(agent, 'legacy_delegation', principal.credentialId) : null
+    return principal
   }
 
   const sessionToken = readSessionTokenFromRequest(request)

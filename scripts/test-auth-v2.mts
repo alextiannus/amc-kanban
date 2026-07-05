@@ -3,7 +3,6 @@ import bcrypt from 'bcryptjs'
 import { SignJWT } from 'jose'
 import { CAPABILITIES, hasCapability } from '../src/lib/auth-v2/capabilities.ts'
 import { hashPassword, isArgon2Hash, verifyPassword } from '../src/lib/auth-v2/password.ts'
-import { isLegacyKeyCompatibilityActive } from '../src/lib/auth-v2/compat.ts'
 import {
   createSessionToken,
   verifySessionToken,
@@ -57,35 +56,10 @@ async function testSessions() {
     .setIssuedAt()
     .setExpirationTime('5m')
     .sign(key)
-  process.env.AUTH_V2_LEGACY_SESSION_CUTOFF_AT = new Date(Date.now() + 60_000).toISOString()
-  const legacyClaims = await verifySessionToken(legacy)
-  assert.equal(legacyClaims?.sub, 'legacy-user')
-  assert.equal(legacyClaims?.authVersion, 0)
-
-  process.env.AUTH_V2_LEGACY_SESSION_CUTOFF_AT = new Date(Date.now() - 1).toISOString()
   assert.equal(await verifySessionToken(legacy), null)
-}
-
-function testCompatibilityCutoff() {
-  process.env.AUTH_V2_LEGACY_KEYS = 'true'
-  process.env.AUTH_V2_LEGACY_KEY_CUTOFF_AT = '2026-07-05T00:00:00.000Z'
-  assert.equal(
-    isLegacyKeyCompatibilityActive(Date.parse('2026-07-04T23:59:59.000Z')),
-    true,
-  )
-  assert.equal(
-    isLegacyKeyCompatibilityActive(Date.parse('2026-07-05T00:00:00.000Z')),
-    false,
-  )
-  process.env.AUTH_V2_LEGACY_KEYS = 'false'
-  assert.equal(
-    isLegacyKeyCompatibilityActive(Date.parse('2026-07-04T00:00:00.000Z')),
-    false,
-  )
 }
 
 await testCapabilities()
 await testPasswords()
 await testSessions()
-testCompatibilityCutoff()
 console.log('Auth V2 unit tests passed.')

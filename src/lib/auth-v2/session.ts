@@ -1,5 +1,4 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose'
-import { isLegacySessionCompatibilityActive } from './compat.ts'
 
 const SESSION_ISSUER = 'amc-kanban'
 const SESSION_AUDIENCE = 'amc-users'
@@ -9,13 +8,6 @@ export type SessionClaims = JWTPayload & {
   sub: string
   type: string
   authVersion: number
-  user?: {
-    id?: string
-    email?: string
-    role?: string
-    type?: string
-    [key: string]: unknown
-  }
 }
 
 function getJwtKey() {
@@ -58,33 +50,7 @@ export async function verifySessionToken(token: string): Promise<SessionClaims |
     ) return null
     return payload as SessionClaims
   } catch {
-    if (!isLegacySessionCompatibilityActive()) return null
-
-    // One-day compatibility for pre-V2 nested-user sessions only.
-    try {
-      const { payload } = await jwtVerify(token, getJwtKey(), {
-        algorithms: ['HS256'],
-      })
-      const userId =
-        typeof (payload as SessionClaims).user?.id === 'string'
-          ? (payload as SessionClaims).user!.id!
-          : null
-      if (!userId) return null
-      return {
-        ...payload,
-        sub: userId,
-        type:
-          typeof (payload as SessionClaims).type === 'string'
-            ? (payload as SessionClaims).type
-            : (payload as SessionClaims).user?.type ?? 'HUMAN',
-        authVersion:
-          typeof (payload as SessionClaims).authVersion === 'number'
-            ? (payload as SessionClaims).authVersion
-            : 0,
-      } as SessionClaims
-    } catch {
-      return null
-    }
+    return null
   }
 }
 

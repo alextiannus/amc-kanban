@@ -148,3 +148,32 @@ render deploys create srv-d94hhbt7vvec73dk7uig --output text --confirm
 - **Schema 变更**：必须创建 migration 文件（`prisma/migrations/YYYYMMDDXXXXXX_name/migration.sql`），不能只用 `prisma db push`
 - **Git push 自动触发部署**：push 到 `main` 分支后 Render 自动构建并部署
 <!-- END:render-instance-map -->
+
+<!-- BEGIN:llm-config-rules -->
+## LLM 配置规范 — 必须使用 LLMConfig 数据表（Admin UI）
+
+### ⚠️ 核心规则：系统不默认使用 Gemini API，也不使用单一固定 LLM 提供商
+
+AMC 系统使用**数据库驱动的多供应商 LLM 路由架构**，当前生效配置来源于 `LLMConfig` 数据表。
+
+**绝对禁止**：
+- 在代码中硬编码任何 LLM provider（如 `new GoogleGenerativeAI(...)` 直接实例化）
+- 向 Render Dashboard 添加 `GEMINI_API_KEY`、`OPENAI_API_KEY` 等 AI 模型 key 环境变量
+- 读取 `SystemConfig.geminiApiKey` 或调用 `getGeminiApiKey()`（废弃，新代码禁止）
+
+**正确做法**：
+- 所有 AI 推理调用 → 通过 `src/lib/llmRouter.ts` 的 `callLLMByTag(taskTag, messages)` 接口
+- 模型配置变更 → 引导用户到 `/admin` → **AI 模型配置** 面板操作
+- 需要新增 AI 功能 → 在 LLMConfig 添加对应 provider 条目，并打上对应 taskTag
+
+### LLMConfig 路由机制
+1. 系统从 `LLMConfig` 表取出所有 `isEnabled=true` 的配置
+2. 按 `taskTags` 过滤（如 `"copywriting"`、`"tts"`、`"reasoning"`）
+3. 按 `priority` 降序排列，依次尝试直到成功（Fallback 链）
+4. API Key 存储在 `LLMConfig.apiKey`，服务端读取，不暴露给浏览器
+
+### 管理入口
+- **后台路径**：`/admin` → **AI 模型配置（LLMConfig）**
+- **核心文件**：`src/lib/llmRouter.ts`（路由逻辑）、`src/lib/gemini-chat.ts`（语音聊天，实际走 LLMConfig）
+
+<!-- END:llm-config-rules -->

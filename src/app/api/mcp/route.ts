@@ -19,7 +19,7 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { createAmcMcpServer } from '@/lib/partner/mcp/server'
 import { prisma } from '@/lib/prisma'
-import { authenticateRequest, isLegacyKeyCompatibilityActive } from '@/lib/auth-v2'
+import { authenticateRequest } from '@/lib/auth-v2'
 
 export const dynamic = 'force-dynamic'
 
@@ -37,17 +37,8 @@ async function handleMcp(request: Request): Promise<Response> {
 
   const principal = await authenticateRequest(request)
   if (!principal) {
-    const legacyDisabled =
-      request.headers.has('x-agent-id') && !isLegacyKeyCompatibilityActive()
     return new Response(
-      JSON.stringify(
-        legacyDisabled
-          ? {
-              error: 'legacy_credential_disabled',
-              message: 'X-Agent-ID delegation has expired. Use an AMC Agent-owned API key.',
-            }
-          : { error: 'Invalid or expired API key' },
-      ),
+      JSON.stringify({ error: 'Invalid or expired API key' }),
       { status: 401, headers: { 'Content-Type': 'application/json' } }
     )
   }

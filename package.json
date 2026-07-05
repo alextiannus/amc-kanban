@@ -33,7 +33,6 @@
     "verify:auth-v2-debt": "node scripts/audit-auth-v2-debt.mjs --strict",
     "audit:auth-v2-debt": "node scripts/audit-auth-v2-debt.mjs",
     "test:auth-v2": "node --experimental-strip-types scripts/test-auth-v2.mts",
-    "migrate:auth-v2": "node --experimental-strip-types scripts/migrate-auth-v2.mts",
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",
     "test:e2e-basic": "node --experimental-strip-types scripts/test-e2e-basic-flows.mts",
     "migrate:crew-auth": "node --experimental-strip-types scripts/migrate-crew-auth.mts",

@@ -84,10 +84,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     version: '1.0.0',
   })
   const agentApiKey = typeof auth === 'string' ? auth : credentialToken ?? ''
-  const legacyDelegationHeaders: Record<string, string> =
-    typeof auth !== 'string' && auth.source === 'legacy_delegation'
-      ? { 'x-agent-id': auth.userId }
-      : {}
 
   let principalPromise: Promise<AuthPrincipal | null> | null = null
   const resolvePrincipal = () => {
@@ -2242,7 +2238,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (platform) url.searchParams.set('platform', platform)
       
       const req = new Request(url.toString(), {
-        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
+        headers: { Authorization: `Bearer ${agentApiKey}` }
       })
       
       const response = await handleGetAnalytics(req, { params: Promise.resolve({ id: brandId }) })
@@ -2274,7 +2270,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (platform) url.searchParams.set('platform', platform)
       
       const req = new Request(url.toString(), {
-        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
+        headers: { Authorization: `Bearer ${agentApiKey}` }
       })
       
       const response = await handleGetSocialInsight(req, { params: Promise.resolve({ id: brandId }) })
@@ -2302,7 +2298,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       url.searchParams.set('limit', String(limit))
       
       const req = new Request(url.toString(), {
-        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
+        headers: { Authorization: `Bearer ${agentApiKey}` }
       })
       
       const response = await handleGetReviews(req, { params: Promise.resolve({ id: brandId }) })
@@ -2359,7 +2355,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${agentApiKey}`,
-          ...legacyDelegationHeaders,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ insights })
@@ -2449,7 +2444,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${agentApiKey}`,
-          ...legacyDelegationHeaders,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ filename, docType, content })
@@ -2481,7 +2475,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${agentApiKey}`,
-          ...legacyDelegationHeaders,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ summary })
@@ -2513,7 +2506,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${agentApiKey}`,
-          ...legacyDelegationHeaders,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ date, content })
@@ -2546,7 +2538,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (date) url.searchParams.set('date', date)
       
       const req = new Request(url.toString(), {
-        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
+        headers: { Authorization: `Bearer ${agentApiKey}` }
       })
       
       const response = await handleGetMemory(req, { params: Promise.resolve({ id: brandId }) })
@@ -2577,7 +2569,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (platform) url.searchParams.set('platform', platform)
       
       const req = new Request(url.toString(), {
-        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
+        headers: { Authorization: `Bearer ${agentApiKey}` }
       })
       
       const response = await handleGetBenchmarks(req)
@@ -2604,7 +2596,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       url.searchParams.set('placeId', placeId)
       
       const req = new Request(url.toString(), {
-        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
+        headers: { Authorization: `Bearer ${agentApiKey}` }
       })
       
       const response = await handleGetPlaces(req)
@@ -2633,7 +2625,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       url.searchParams.set('handle', handle)
       
       const req = new Request(url.toString(), {
-        headers: { Authorization: `Bearer ${agentApiKey}`, ...legacyDelegationHeaders }
+        headers: { Authorization: `Bearer ${agentApiKey}` }
       })
       
       const response = await handleGetProfile(req)
