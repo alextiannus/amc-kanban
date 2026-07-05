@@ -102,7 +102,7 @@ export default function PostPreviewModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm" onClick={onClose}>
       {/* Floating panel — contained, not full-screen */}
       <div
-        className="relative flex flex-col w-full max-w-5xl bg-slate-900 rounded-2xl shadow-2xl border border-slate-700/60 overflow-hidden"
+        className="relative flex flex-col w-full max-w-5xl bg-slate-950 rounded-2xl shadow-2xl border border-white/8 overflow-hidden"
         style={{ height: 'min(88vh, 900px)' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -161,22 +161,22 @@ export default function PostPreviewModal({
               const platformLabel = platform === 'ig' ? 'Instagram' : platform === 'xhs' ? '小红书' : platform === 'fb' ? 'Facebook' : platform === 'tiktok' ? 'TikTok' : 'Google Business'
 
               return (
-                <div key={cwId} className="flex-shrink-0 flex flex-col self-start" style={{ width: 300 }}>
-                  {/* Unified top bar — platform + copywriter name on left, cancel on right */}
-                  <div className="flex items-center justify-between px-3 h-9 bg-slate-800/90 rounded-t-xl border-b border-slate-700/60 shrink-0">
-                    <div className="flex items-center gap-2 min-w-0">
+                <div key={cwId} className="flex-shrink-0 flex flex-col self-start" style={{ width: 270 }}>
+                  {/* Title row: plain floating label, NOT a box. Sits above the phone screenshot. */}
+                  <div className="flex items-center justify-between px-1 pb-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        platform === 'ig' ? 'bg-gradient-to-tr from-yellow-500 via-pink-500 to-purple-600'
-                        : platform === 'xhs' ? 'bg-red-500'
-                        : platform === 'fb' ? 'bg-blue-600'
-                        : platform === 'tiktok' ? 'bg-white'
-                        : 'bg-amber-500'
+                        platform === 'ig' ? 'bg-gradient-to-tr from-yellow-400 via-pink-400 to-purple-400'
+                        : platform === 'xhs' ? 'bg-red-400'
+                        : platform === 'fb' ? 'bg-blue-400'
+                        : platform === 'tiktok' ? 'bg-slate-300'
+                        : 'bg-amber-400'
                       }`} />
-                      <span className="text-[10px] font-black text-slate-200 truncate">{platformLabel}</span>
-                      <span className="text-[9px] text-slate-500">·</span>
-                      <span className="text-[9px] text-slate-400 truncate">{copywriter.name}</span>
+                      <span className="text-[10px] font-bold text-slate-300 truncate">{platformLabel}</span>
+                      <span className="text-[9px] text-slate-600">·</span>
+                      <span className="text-[9px] text-slate-500 truncate">{copywriter.name}</span>
                       {isGenerating && (
-                        <span className="flex items-center gap-0.5 text-[8px] text-indigo-400 font-bold ml-1">
+                        <span className="flex items-center gap-0.5 text-[8px] text-indigo-400 font-semibold">
                           <Loader2 className="w-2.5 h-2.5 animate-spin" />
                           创作中
                         </span>
@@ -185,16 +185,16 @@ export default function PostPreviewModal({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onCancelCopywriter(cwId) }}
-                      className="shrink-0 w-5 h-5 rounded-full bg-slate-700 hover:bg-rose-600 text-slate-400 hover:text-white flex items-center justify-center transition-all ml-2"
+                      className="shrink-0 w-5 h-5 rounded-full text-slate-600 hover:text-rose-400 hover:bg-rose-950/40 flex items-center justify-center transition-all ml-2"
                       title={`取消 ${copywriter.name} 的草稿`}
                     >
                       <X className="w-2.5 h-2.5" />
                     </button>
                   </div>
-                  {/* Phone content — no frame, edge-to-edge, click to edit */}
+                  {/* Phone screenshot: no outer frame, content IS the phone screen */}
                   <div
                     onClick={() => setEditingCopywriterId(cwId)}
-                    className="overflow-hidden rounded-b-xl cursor-pointer"
+                    className="overflow-hidden rounded-xl cursor-pointer shadow-lg"
                   >
                     <PlatformPreviewCard
                       account={displayAccount}
