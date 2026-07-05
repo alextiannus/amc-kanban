@@ -1,6 +1,6 @@
 'use client'
 import React, { useState } from 'react'
-import { COPYWRITER_ROSTER, platformAliases } from '@/lib/copywriters'
+import { COPYWRITER_ROSTER, CopywriterPersona, platformAliases } from '@/lib/copywriters'
 import {
   X,
   Eye,
@@ -53,14 +53,13 @@ interface PostPreviewModalProps {
   isOpen: boolean
   onClose: () => void
   brandName?: string
-  selectedAccountIds: string[]
-  accountOptions: any[]
+  selectedCopywriters: CopywriterPersona[]
   draftCaptions: Record<string, string>
   setDraftCaptions: React.Dispatch<React.SetStateAction<Record<string, string>>>
   draftHashtags: Record<string, string>
   setDraftHashtags: React.Dispatch<React.SetStateAction<Record<string, string>>>
   draftStatuses: Record<string, 'generating' | 'completed' | 'failed'>
-  draftWarnings?: Record<string, string>  // per-account LLM Token/API error (non-fatal fallback)
+  draftWarnings?: Record<string, string>  // per-copywriter LLM Token/API error (non-fatal fallback)
   isAiGenerating: boolean
   saving: boolean
   attachedMedia: any[]
@@ -75,8 +74,7 @@ export default function PostPreviewModal({
   isOpen,
   onClose,
   brandName = 'Your Brand',
-  selectedAccountIds,
-  accountOptions,
+  selectedCopywriters,
   draftCaptions,
   setDraftCaptions,
   draftHashtags,
@@ -92,7 +90,7 @@ export default function PostPreviewModal({
   onRegenerate,
   previewOnly = false
 }: PostPreviewModalProps) {
-  const [editingAccountId, setEditingAccountId] = useState<string | null>(null)
+  const [editingCopywriterId, setEditingCopywriterId] = useState<string | null>(null)
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false)
   const [customTime, setCustomTime] = useState('')
 
@@ -107,7 +105,7 @@ export default function PostPreviewModal({
           <div>
             <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
               <Eye className="w-4 h-4 text-indigo-500" />
-              多平台发布预览 ({selectedAccountIds.length} 个账号)
+              多平台发布预览 ({selectedCopywriters.length} 个平台)
             </h3>
             <p className="text-[10px] text-slate-400 dark:text-slate-550 mt-0.5">实时预览不同平台的内容渲染效果</p>
           </div>
@@ -134,49 +132,35 @@ export default function PostPreviewModal({
 
         {/* Modal Content - Scrollable list/grid of previews */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950 scrollbar-thin">
-          {selectedAccountIds.length === 0 ? (
+          {selectedCopywriters.length === 0 ? (
             <div className="py-20 text-center text-slate-400 dark:text-slate-555">
               <Eye className="w-10 h-10 mx-auto mb-3 opacity-20" />
               <p className="text-xs font-extrabold">请选择 Copywriter 以查看预览</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">
-              {selectedAccountIds.map((accId) => {
-                // Prefer a real configured account; fall back to copywriter persona for content-only preview
-                const account = accountOptions.find((a) => a.id === accId)
-                const copywriter = !account
-                  ? COPYWRITER_ROSTER.find((c) =>
-                      accId === `unconfigured_${c.platform}` ||
-                      platformAliases(c.platform).some((alias) =>
-                        accId.toLowerCase().includes(alias)
-                      )
-                    )
-                  : undefined
-
-                // Derive a synthetic account-like object from copywriter persona when no real account exists
-                const resolvedAccount = account ?? (copywriter
-                  ? {
-                      id: accId,
-                      platformId: copywriter.platform,
-                      displayName: copywriter.name,
-                      handle: copywriter.handle,
-                    }
-                  : null)
-
-                if (!resolvedAccount) return null
-
-                const platform = normalizePlatformLabel(resolvedAccount.platformId)
-                const status = draftStatuses[accId] || 'completed'
+              {selectedCopywriters.map((copywriter) => {
+                const cwId = copywriter.id
+                const platform = normalizePlatformLabel(copywriter.platform)
+                const status = draftStatuses[cwId] || 'completed'
                 const isGenerating = status === 'generating'
                 const isFailed = status === 'failed'
 
-                const currentCaption = draftCaptions[accId] !== undefined ? draftCaptions[accId] : ''
-                const currentHashtagsString = draftHashtags[accId] !== undefined ? draftHashtags[accId] : ''
+                const currentCaption = draftCaptions[cwId] !== undefined ? draftCaptions[cwId] : ''
+                const currentHashtagsString = draftHashtags[cwId] !== undefined ? draftHashtags[cwId] : ''
+
+                // Synthetic account-like object for display — purely from copywriter persona, no account lookup
+                const displayAccount = {
+                  id: cwId,
+                  platformId: copywriter.platform,
+                  displayName: copywriter.name,
+                  handle: copywriter.handle,
+                }
 
                 return (
                   <PlatformPreviewCard
-                    key={accId}
-                    account={resolvedAccount}
+                    key={cwId}
+                    account={displayAccount}
                     platform={platform}
                     isGenerating={isGenerating}
                     isFailed={isFailed}
@@ -184,7 +168,7 @@ export default function PostPreviewModal({
                     hashtags={currentHashtagsString}
                     attachedMedia={attachedMedia}
                     brandName={brandName}
-                    onOpenEdit={() => setEditingAccountId(accId)}
+                    onOpenEdit={() => setEditingCopywriterId(cwId)}
                   />
                 )
               })}
@@ -314,21 +298,21 @@ export default function PostPreviewModal({
         )}
 
         {/* Nested Inline Edit Modal */}
-        {editingAccountId && (() => {
-          const account = accountOptions.find(a => a.id === editingAccountId)
-          if (!account) return null
-          const currentCap = draftCaptions[editingAccountId] !== undefined ? draftCaptions[editingAccountId] : ''
-          const currentHash = draftHashtags[editingAccountId] !== undefined ? draftHashtags[editingAccountId] : ''
-          
+        {editingCopywriterId && (() => {
+          const copywriter = selectedCopywriters.find(c => c.id === editingCopywriterId)
+          if (!copywriter) return null
+          const currentCap = draftCaptions[editingCopywriterId] !== undefined ? draftCaptions[editingCopywriterId] : ''
+          const currentHash = draftHashtags[editingCopywriterId] !== undefined ? draftHashtags[editingCopywriterId] : ''
+          const platformId = copywriter.platform
           return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onClick={() => setEditingAccountId(null)}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onClick={() => setEditingCopywriterId(null)}>
               <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                   <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                    <span>{account.platformId.toLowerCase() === 'instagram' ? '📸' : account.platformId.toLowerCase() === 'facebook' ? '👥' : (account.platformId.toLowerCase() === 'red' || account.platformId.toLowerCase() === 'xiaohongshu' || account.platformId.toLowerCase() === 'xhs') ? '📕' : account.platformId.toLowerCase() === 'tiktok' ? '🎵' : '📍'}</span>
-                    编辑 {account.displayName || account.handle} 的发布内容
+                    <span>{(platformId as string) === 'instagram' ? '📸' : (platformId as string) === 'facebook' ? '👥' : ((platformId as string) === 'xiaohongshu' || (platformId as string) === 'xhs') ? '📕' : (platformId as string) === 'tiktok' ? '🎵' : '📍'}</span>
+                    编辑 {copywriter.name} 的发布内容
                   </h3>
-                  <button onClick={() => setEditingAccountId(null)} className="rounded-md p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500">
+                  <button onClick={() => setEditingCopywriterId(null)} className="rounded-md p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -338,7 +322,7 @@ export default function PostPreviewModal({
                     <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider">专属正文 (Caption)</label>
                     <textarea
                       value={currentCap}
-                      onChange={(e) => setDraftCaptions(prev => ({ ...prev, [editingAccountId]: e.target.value }))}
+                      onChange={(e) => setDraftCaptions(prev => ({ ...prev, [editingCopywriterId]: e.target.value }))}
                       placeholder="输入该渠道的专属文案..."
                       className="w-full min-h-[160px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                     />
@@ -349,7 +333,7 @@ export default function PostPreviewModal({
                     <input
                       type="text"
                       value={currentHash}
-                      onChange={(e) => setDraftHashtags(prev => ({ ...prev, [editingAccountId]: e.target.value }))}
+                      onChange={(e) => setDraftHashtags(prev => ({ ...prev, [editingCopywriterId]: e.target.value }))}
                       placeholder="例如: 美食 探店 推荐 (空格分隔，无需加#)"
                       className="w-full h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs text-slate-850 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-955 dark:text-slate-100"
                     />
@@ -359,7 +343,7 @@ export default function PostPreviewModal({
                 <div className="mt-6 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
                   <button
                     type="button"
-                    onClick={() => setEditingAccountId(null)}
+                    onClick={() => setEditingCopywriterId(null)}
                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-md transition-all"
                   >
                     确定

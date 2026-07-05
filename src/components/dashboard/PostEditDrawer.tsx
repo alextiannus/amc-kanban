@@ -221,8 +221,8 @@ export default function PostEditDrawer({
   const [draftWarnings, setDraftWarnings] = useState<Record<string, string>>({})
   const [previewOnly, setPreviewOnly] = useState(false)
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
-  // Enriched account list for preview: includes placeholder accounts created by the backend for unconfigured platforms
-  const [previewAccountOptions, setPreviewAccountOptions] = useState<any[]>(accounts)
+  // Maps draft.id → copywriter.id so save/schedule handlers can look up captions by copywriter
+  const [draftCopywriterMap, setDraftCopywriterMap] = useState<Record<string, string>>({})
 
   // Hooks generator states
   const [showHookGenerator, setShowHookGenerator] = useState(false)
@@ -416,7 +416,7 @@ export default function PostEditDrawer({
     if (!isAiGenerating || !createdDrafts || createdDrafts.length === 0) return
 
     const interval = setInterval(async () => {
-      const generatingDrafts = createdDrafts.filter(d => draftStatuses[d.accountId] === 'generating')
+      const generatingDrafts = createdDrafts.filter(d => draftStatuses[draftCopywriterMap[d.id] || d.accountId] === 'generating')
       if (generatingDrafts.length === 0) {
         setIsAiGenerating(false)
         clearInterval(interval)
@@ -426,10 +426,11 @@ export default function PostEditDrawer({
       const updatedStatuses = { ...draftStatuses }
       await Promise.all(
         generatingDrafts.map(async (draft) => {
+          const cwKey = draftCopywriterMap[draft.id] || draft.accountId
           try {
             const checkRes = await fetch(`/api/brands/${brandId}/drafts/${draft.id}`)
             if (checkRes.status === 404) {
-              updatedStatuses[draft.accountId] = 'failed'
+              updatedStatuses[cwKey] = 'failed'
               return
             }
             if (checkRes.ok) {
@@ -437,19 +438,19 @@ export default function PostEditDrawer({
               const updatedDraft = checkData.draft
               if (updatedDraft) {
                 if (updatedDraft.status === 'failed') {
-                  updatedStatuses[draft.accountId] = 'failed'
+                  updatedStatuses[cwKey] = 'failed'
                   // Clean up failed draft
                   fetch(`/api/brands/${brandId}/drafts/${draft.id}`, { method: 'DELETE' }).catch(() => {})
                 } else if (updatedDraft.caption && updatedDraft.caption !== '【AI 正在创作中...】') {
-                  updatedStatuses[draft.accountId] = 'completed'
-                  setDraftCaptions(prev => ({ ...prev, [draft.accountId]: updatedDraft.caption }))
-                  setDraftHashtags(prev => ({ ...prev, [draft.accountId]: (updatedDraft.hashtags || []).join(' ') }))
+                  updatedStatuses[cwKey] = 'completed'
+                  setDraftCaptions(prev => ({ ...prev, [cwKey]: updatedDraft.caption }))
+                  setDraftHashtags(prev => ({ ...prev, [cwKey]: (updatedDraft.hashtags || []).join(' ') }))
                   // Detect LLM Token/API failure — publisher saved fallback content as 'draft'
                   const note: string = updatedDraft.agentNote || ''
                   if (note.includes('AI 智能写作失败') || note.includes('LLM') || note.includes('token') || note.includes('Token')) {
                     setDraftWarnings(prev => ({
                       ...prev,
-                      [draft.accountId]: `AI Token 错误：${note}`,
+                      [cwKey]: `AI Token 错误：${note}`,
                     }))
                   }
                 }
@@ -465,7 +466,7 @@ export default function PostEditDrawer({
     }, 2000)
 
     return () => clearInterval(interval)
-  }, [isAiGenerating, createdDrafts, brandId, draftStatuses])
+  }, [isAiGenerating, createdDrafts, brandId, draftStatuses, draftCopywriterMap])
 
   // Action methods
   const saveDraft = async (nextStatus?: string, captionOverride?: string, accountIdsOverride?: string[]): Promise<DraftItem[] | null> => {
@@ -616,14 +617,23 @@ export default function PostEditDrawer({
         // Remap: after backend resolves unconfigured_* IDs, use real accountIds from saved drafts
         const newSelectedIds = saved.map(d => d.accountId || '').filter(Boolean)
 
+        // Key captions/statuses by copywriter.id (not accountId) — preview is copywriter-driven
         const newCaptions: Record<string, string> = {}
         const newHashtags: Record<string, string> = {}
         const newStatuses: Record<string, 'generating' | 'completed' | 'failed'> = {}
-        saved.forEach(d => {
-          const accId = d.accountId || ''
-          newCaptions[accId] = '【AI 正在创作中...】'
-          newHashtags[accId] = ''
-          newStatuses[accId] = 'generating'
+        const newDraftCopywriterMap: Record<string, string> = {}
+
+        saved.forEach((d: any) => {
+          // Map draft back to a copywriter by matching account.platformId to COPYWRITER_ROSTER
+          const platformId = (d.account?.platformId || '').toLowerCase()
+          const cw = COPYWRITER_ROSTER.find(c =>
+            platformAliases(c.platform).includes(platformId) || c.platform === platformId
+          )
+          const cwKey = cw?.id || d.accountId || ''
+          newCaptions[cwKey] = '【AI 正在创作中...】'
+          newHashtags[cwKey] = ''
+          newStatuses[cwKey] = 'generating'
+          if (d.id) newDraftCopywriterMap[d.id] = cwKey
         })
 
         setCreatedDrafts(saved)
@@ -631,23 +641,9 @@ export default function PostEditDrawer({
         setDraftCaptions(newCaptions)
         setDraftHashtags(newHashtags)
         setDraftStatuses(newStatuses)
+        setDraftCopywriterMap(newDraftCopywriterMap)
         setIsAiGenerating(true)
         setPreviewOnly(false)
-        // Build enriched account options: merge configured accounts with placeholder accounts
-        // returned by the backend for copywriters whose publishing account is not yet set up.
-        // This ensures PostPreviewModal can always resolve a platform/displayName for every panel.
-        const savedAccountMap = new Map(
-          saved
-            .filter((d: any) => d.account && d.accountId)
-            .map((d: any) => [d.accountId, d.account])
-        )
-        const mergedAccounts = [
-          ...accounts,
-          ...Array.from(savedAccountMap.entries())
-            .filter(([id]) => !accounts.find((a) => a.id === id))
-            .map(([id, acc]: [string, any]) => ({ id, platformId: acc.platformId, displayName: acc.displayName || '', handle: acc.handle || '' })),
-        ]
-        setPreviewAccountOptions(mergedAccounts)
         setPreviewModalOpen(true)
 
         // Trigger AI copywriting in parallel
@@ -670,8 +666,9 @@ export default function PostEditDrawer({
     try {
       await Promise.all(
         createdDrafts.map(async (d) => {
-          const cap = draftCaptions[d.accountId] || ''
-          const hash = draftHashtags[d.accountId] || ''
+          const cwKey = draftCopywriterMap[d.id] || d.accountId || ''
+          const cap = draftCaptions[cwKey] || ''
+          const hash = draftHashtags[cwKey] || ''
           await fetch(`/api/brands/${brandId}/drafts/${d.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -723,8 +720,9 @@ export default function PostEditDrawer({
 
       await Promise.all(
         createdDrafts.map(async (d) => {
-          const cap = draftCaptions[d.accountId] || ''
-          const hash = draftHashtags[d.accountId] || ''
+          const cwKey = draftCopywriterMap[d.id] || d.accountId || ''
+          const cap = draftCaptions[cwKey] || ''
+          const hash = draftHashtags[cwKey] || ''
           
           await fetch(`/api/brands/${brandId}/drafts/${d.id}`, {
             method: 'PATCH',
@@ -1717,11 +1715,14 @@ Return the output strictly in a valid JSON array format, containing:
               const newCaptions: Record<string, string> = {}
               const newHashtags: Record<string, string> = {}
               const newStatuses: Record<string, 'generating' | 'completed' | 'failed'> = {}
-              selectedAccountIds.forEach(accId => {
-                newCaptions[accId] = caption
-                newHashtags[accId] = hashtags
-                newStatuses[accId] = 'completed'
-              })
+              // Key by copywriter.id — derive selected copywriters from selectedAccountIds
+              COPYWRITER_ROSTER
+                .filter(c => selectedAccountIds.includes(draftAccountIdForCopywriter(c, accounts)))
+                .forEach(c => {
+                  newCaptions[c.id] = caption
+                  newHashtags[c.id] = hashtags
+                  newStatuses[c.id] = 'completed'
+                })
               setDraftCaptions(newCaptions)
               setDraftHashtags(newHashtags)
               setDraftStatuses(newStatuses)
@@ -1883,8 +1884,7 @@ Return the output strictly in a valid JSON array format, containing:
           setIsAiGenerating(false)
         }}
         brandName={brandName}
-        selectedAccountIds={selectedAccountIds}
-        accountOptions={previewAccountOptions}
+        selectedCopywriters={COPYWRITER_ROSTER.filter(c => selectedAccountIds.includes(draftAccountIdForCopywriter(c, accounts)) || Object.keys(draftCaptions).includes(c.id))}
         draftCaptions={draftCaptions}
         setDraftCaptions={setDraftCaptions}
         draftHashtags={draftHashtags}
