@@ -131,8 +131,8 @@ export default function PostPreviewModal({
           </div>
         )}
 
-        {/* Horizontal cards row */}
-        <div className="flex-1 flex items-center overflow-x-auto overflow-y-hidden px-8 py-4 gap-6 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent min-h-0">
+        {/* Horizontal cards row — horizontal AND vertical scroll */}
+        <div className="flex-1 flex items-start overflow-x-auto overflow-y-auto px-8 py-6 gap-5 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
           {selectedCopywriters.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-600">
               <Eye className="w-10 h-10 opacity-30" />
@@ -154,54 +154,56 @@ export default function PostPreviewModal({
                 handle: copywriter.handle,
               }
 
+              const platformLabel = platform === 'ig' ? 'Instagram' : platform === 'xhs' ? '小红书' : platform === 'fb' ? 'Facebook' : platform === 'tiktok' ? 'TikTok' : 'Google Business'
+
               return (
-                <div key={cwId} className="flex-shrink-0 flex flex-col" style={{ width: 260 }}>
-                  {/* Card with top header: name + cancel */}
-                  <div className="w-full rounded-2xl overflow-hidden border shadow-xl transition-all cursor-pointer hover:border-slate-600/80 bg-slate-900/60 border-slate-800/60">
-                    {/* Top header row: copywriter name + cancel button */}
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800/60">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                          platform === 'ig' ? 'bg-gradient-to-tr from-yellow-500 via-pink-500 to-purple-600'
-                          : platform === 'xhs' ? 'bg-red-500'
-                          : platform === 'fb' ? 'bg-blue-600'
-                          : platform === 'tiktok' ? 'bg-white'
-                          : 'bg-amber-500'
-                        }`} />
-                        <span className="text-[10px] font-black text-slate-200 truncate">{copywriter.name}</span>
-                        <span className="text-[9px] text-slate-500 truncate">
-                          · {platform === 'ig' ? 'Instagram' : platform === 'xhs' ? '小红书' : platform === 'fb' ? 'Facebook' : platform === 'tiktok' ? 'TikTok' : 'Google'}
+                <div key={cwId} className="flex-shrink-0 flex flex-col" style={{ width: 300 }}>
+                  {/* Unified top bar — platform + copywriter name on left, cancel on right */}
+                  <div className="flex items-center justify-between px-3 h-9 bg-slate-800/90 rounded-t-xl border-b border-slate-700/60 shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        platform === 'ig' ? 'bg-gradient-to-tr from-yellow-500 via-pink-500 to-purple-600'
+                        : platform === 'xhs' ? 'bg-red-500'
+                        : platform === 'fb' ? 'bg-blue-600'
+                        : platform === 'tiktok' ? 'bg-white'
+                        : 'bg-amber-500'
+                      }`} />
+                      <span className="text-[10px] font-black text-slate-200 truncate">{platformLabel}</span>
+                      <span className="text-[9px] text-slate-500">·</span>
+                      <span className="text-[9px] text-slate-400 truncate">{copywriter.name}</span>
+                      {isGenerating && (
+                        <span className="flex items-center gap-0.5 text-[8px] text-indigo-400 font-bold ml-1">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                          创作中
                         </span>
-                        {isGenerating && (
-                          <span className="flex items-center gap-0.5 text-[8px] text-indigo-400 font-bold">
-                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                            创作中
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); onCancelCopywriter(cwId) }}
-                        className="shrink-0 w-5 h-5 rounded-full bg-slate-700 hover:bg-rose-600 text-slate-400 hover:text-white flex items-center justify-center transition-all ml-2"
-                        title={`取消 ${copywriter.name} 的草稿`}
-                      >
-                        <X className="w-2.5 h-2.5" />
-                      </button>
+                      )}
                     </div>
-                    {/* Phone mockup — always clickable to edit */}
-                    <div onClick={() => setEditingCopywriterId(cwId)}>
-                      <PlatformPreviewCard
-                        account={displayAccount}
-                        platform={platform}
-                        isGenerating={isGenerating}
-                        isFailed={isFailed}
-                        caption={currentCaption}
-                        hashtags={currentHashtagsString}
-                        attachedMedia={attachedMedia}
-                        brandName={brandName}
-                        onOpenEdit={() => setEditingCopywriterId(cwId)}
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onCancelCopywriter(cwId) }}
+                      className="shrink-0 w-5 h-5 rounded-full bg-slate-700 hover:bg-rose-600 text-slate-400 hover:text-white flex items-center justify-center transition-all ml-2"
+                      title={`取消 ${copywriter.name} 的草稿`}
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                  {/* Phone content — no frame, edge-to-edge, click to edit */}
+                  <div
+                    onClick={() => setEditingCopywriterId(cwId)}
+                    className="overflow-hidden rounded-b-xl cursor-pointer"
+                  >
+                    <PlatformPreviewCard
+                      account={displayAccount}
+                      platform={platform}
+                      isGenerating={isGenerating}
+                      isFailed={isFailed}
+                      caption={currentCaption}
+                      hashtags={currentHashtagsString}
+                      attachedMedia={attachedMedia}
+                      brandName={brandName}
+                      onOpenEdit={() => setEditingCopywriterId(cwId)}
+                      noFrame
+                    />
                   </div>
                 </div>
               )
@@ -386,6 +388,7 @@ interface PlatformPreviewCardProps {
   attachedMedia: any[]
   brandName: string
   onOpenEdit: () => void
+  noFrame?: boolean
 }
 
 function PlatformPreviewCard({
@@ -397,11 +400,201 @@ function PlatformPreviewCard({
   hashtags,
   attachedMedia,
   brandName,
-  onOpenEdit
+  onOpenEdit,
+  noFrame = false,
 }: PlatformPreviewCardProps) {
   const [mediaIndex, setMediaIndex] = useState(0)
 
-  return (
+  // When noFrame: render content directly, no outer card border, no platform header
+  if (noFrame) {
+    return (
+      <div className="relative overflow-hidden">
+        <div className={`${isGenerating ? 'opacity-60' : ''} transition-all duration-300`}>
+          {platform === 'ig' && (
+            <div className="w-full overflow-hidden bg-white text-black">
+              {/* Instagram Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 p-[1px]">
+                    <div className="h-full w-full rounded-full border border-white bg-slate-200 overflow-hidden">
+                      <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold leading-tight">{account.displayName || account.handle || brandName}</p>
+                    <p className="text-[8px] text-slate-500 leading-none mt-0.5">Singapore</p>
+                  </div>
+                </div>
+                <MoreVertical className="h-3.5 w-3.5 text-slate-400" />
+              </div>
+              {/* Media */}
+              <div className="relative aspect-square w-full bg-slate-50 flex items-center justify-center">
+                {attachedMedia.length > 0 ? (
+                  <>
+                    {isVideoUrl(attachedMedia[mediaIndex % attachedMedia.length]?.url) ? (
+                      <video src={attachedMedia[mediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
+                    ) : (
+                      <img src={attachedMedia[mediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
+                    )}
+                    {attachedMedia.length > 1 && (
+                      <>
+                        <span className="absolute right-2 top-2 rounded-full bg-black/65 px-1.5 py-0.5 text-[8px] font-black text-white z-10">{(mediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}</span>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setMediaIndex(p => p > 0 ? p - 1 : attachedMedia.length - 1) }} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 z-10"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setMediaIndex(p => (p + 1) % attachedMedia.length) }} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full p-1 z-10"><ChevronRight className="w-3.5 h-3.5" /></button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-1.5 text-slate-400"><ImageIcon className="h-8 w-8 text-slate-300" /><span className="text-[10px]">暂无媒体</span></div>
+                )}
+              </div>
+              {/* Actions + Caption */}
+              <div className="px-3 py-2.5">
+                <div className="flex items-center justify-between"><div className="flex items-center gap-3"><Heart className="w-4.5 h-4.5 text-slate-800" /><MessageCircle className="w-4.5 h-4.5 text-slate-800" /><Send className="w-4.5 h-4.5 text-slate-800 rotate-45 -translate-y-0.5" /></div><Bookmark className="w-4.5 h-4.5 text-slate-800" /></div>
+                <div className="mt-2 text-[10px] leading-normal text-slate-800 text-left"><span className="font-bold mr-1.5">{account.displayName || account.handle || brandName}</span><span className="whitespace-pre-wrap text-[9px]">{caption}</span>{parseTags(hashtags).length > 0 && <span className="block mt-1 text-blue-600 font-medium text-[9px]">{parseTags(hashtags).map(t => `#${t}`).join(' ')}</span>}</div>
+              </div>
+            </div>
+          )}
+
+          {platform === 'xhs' && (
+            <div className="w-full overflow-hidden bg-[#f9f9f9] text-black">
+              <div className="relative aspect-[3/4] w-full bg-slate-100 flex items-center justify-center">
+                {attachedMedia.length > 0 ? (
+                  <>
+                    {isVideoUrl(attachedMedia[mediaIndex % attachedMedia.length]?.url) ? (
+                      <video src={attachedMedia[mediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
+                    ) : (
+                      <img src={attachedMedia[mediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
+                    )}
+                    {attachedMedia.length > 1 && (
+                      <>
+                        <span className="absolute right-2.5 top-2.5 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-black text-white z-10">{(mediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}</span>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setMediaIndex(p => p > 0 ? p - 1 : attachedMedia.length - 1) }} className="absolute left-2.5 top-1/2 -translate-y-1/2 bg-black/45 hover:bg-black/60 text-white rounded-full p-1 z-10"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setMediaIndex(p => (p + 1) % attachedMedia.length) }} className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-black/45 hover:bg-black/60 text-white rounded-full p-1 z-10"><ChevronRight className="w-3.5 h-3.5" /></button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-1.5 text-slate-400"><ImageIcon className="h-8 w-8 text-slate-300" /><span className="text-[10px]">暂无媒体</span></div>
+                )}
+              </div>
+              <div className="p-3 bg-white border-t border-slate-100">
+                <div className="text-[10px] font-black text-slate-900 text-left leading-snug">{caption.substring(0, 36) || '这里是小红书的精彩标题...'}</div>
+                <div className="mt-1.5 text-[9px] leading-relaxed text-slate-700 text-left"><p className="whitespace-pre-wrap">{caption}</p>{parseTags(hashtags).length > 0 && <p className="mt-1.5 text-[#3b5998] font-medium">{parseTags(hashtags).map(t => `#${t}`).join(' ')}</p>}</div>
+                <div className="mt-3 border-t border-slate-50 pt-2.5 flex items-center justify-between text-[8px] font-bold text-slate-400">
+                  <div className="flex items-center gap-1"><div className="h-4 w-4 rounded-full overflow-hidden bg-slate-200"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" /></div><span className="text-[9px] text-slate-600">{account.displayName || account.handle || brandName}</span></div>
+                  <div className="flex items-center gap-1"><span className="text-red-500">❤️</span><span>888</span></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {platform === 'fb' && (
+            <div className="w-full overflow-hidden bg-white text-black">
+              <div className="flex items-center gap-2 px-3 py-2.5">
+                <div className="h-6 w-6 rounded-full overflow-hidden bg-slate-200"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" /></div>
+                <div className="text-left"><p className="text-[10px] font-bold leading-none">{account.displayName || account.handle || brandName}</p><p className="text-[7px] text-slate-500 leading-none mt-1">刚刚 · 地球 🌐</p></div>
+              </div>
+              <div className="px-3 pb-2 text-[9px] leading-normal text-slate-800 text-left"><p className="whitespace-pre-wrap">{caption}</p>{parseTags(hashtags).length > 0 && <p className="mt-1 text-indigo-600 font-medium">{parseTags(hashtags).map(t => `#${t}`).join(' ')}</p>}</div>
+              <div className="relative aspect-[16/10] w-full bg-slate-50 flex items-center justify-center border-y border-slate-100">
+                {attachedMedia.length > 0 ? (
+                  <>
+                    {isVideoUrl(attachedMedia[mediaIndex % attachedMedia.length]?.url) ? (
+                      <video src={attachedMedia[mediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
+                    ) : (
+                      <img src={attachedMedia[mediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
+                    )}
+                    {attachedMedia.length > 1 && (
+                      <>
+                        <span className="absolute right-2 top-2 rounded-full bg-black/65 px-1.5 py-0.5 text-[8px] font-black text-white z-10">{(mediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}</span>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setMediaIndex(p => p > 0 ? p - 1 : attachedMedia.length - 1) }} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 text-white rounded-full p-1 z-10"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setMediaIndex(p => (p + 1) % attachedMedia.length) }} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 text-white rounded-full p-1 z-10"><ChevronRight className="w-3.5 h-3.5" /></button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-1 text-slate-400"><ImageIcon className="h-6 w-6 text-slate-300" /><span className="text-[9px]">无媒体</span></div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {platform === 'tiktok' && (
+            <div className="relative w-full aspect-[9/16] overflow-hidden bg-black text-white">
+              {attachedMedia.length > 0 && isVideoUrl(attachedMedia[0].url) ? (
+                <video src={attachedMedia[0].url} className="absolute inset-0 h-full w-full object-cover" controls muted />
+              ) : attachedMedia.length > 0 ? (
+                <img src={attachedMedia[0].url} className="absolute inset-0 h-full w-full object-cover opacity-60" alt="" />
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-500 bg-slate-950"><Video className="h-10 w-10 opacity-30" /><span className="text-[10px]">添加视频以实现 TikTok 全屏预览</span></div>
+              )}
+              <div className="absolute right-3.5 bottom-28 flex flex-col items-center gap-4 z-10">
+                <div className="h-8 w-8 rounded-full bg-slate-200 border border-white overflow-hidden"><img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&fit=crop&auto=format" className="h-full w-full object-cover" alt="" /></div>
+                <div className="flex flex-col items-center gap-0.5"><span className="text-lg">❤️</span><span className="text-[8px] font-black">99k</span></div>
+                <div className="flex flex-col items-center gap-0.5"><span className="text-lg">💬</span><span className="text-[8px] font-black">888</span></div>
+                <div className="flex flex-col items-center gap-0.5"><span className="text-lg">⭐</span><span className="text-[8px] font-black">666</span></div>
+              </div>
+              <div className="absolute left-3 right-12 bottom-6 z-10 text-left bg-gradient-to-t from-black/80 to-transparent p-2 rounded-xl">
+                <p className="text-[10px] font-black">@{account.displayName || account.handle || brandName}</p>
+                <p className="text-[9px] leading-normal mt-1 opacity-90 line-clamp-3 whitespace-pre-wrap">{caption}</p>
+                {parseTags(hashtags).length > 0 && <p className="mt-1 text-[9px] text-cyan-300 font-medium">{parseTags(hashtags).map(t => `#${t}`).join(' ')}</p>}
+                <p className="text-[8px] mt-1.5 opacity-70 truncate">🎵 原声音轨 - {brandName}</p>
+              </div>
+            </div>
+          )}
+
+          {platform === 'gbp' && (
+            <div className="w-full overflow-hidden bg-white text-black p-4">
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+                <div className="h-7 w-7 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center text-slate-500"><span className="text-xs">🏪</span></div>
+                <div className="text-left"><p className="text-[10px] font-bold leading-none">{account.displayName || account.handle || brandName}</p><p className="text-[7px] text-slate-500 leading-none mt-1">Google Maps Post</p></div>
+              </div>
+              <div className="relative aspect-[16/9] w-full bg-slate-50 flex items-center justify-center rounded-xl overflow-hidden mt-3 border border-slate-100">
+                {attachedMedia.length > 0 ? (
+                  <>
+                    {isVideoUrl(attachedMedia[mediaIndex % attachedMedia.length]?.url) ? (
+                      <video src={attachedMedia[mediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" controls muted />
+                    ) : (
+                      <img src={attachedMedia[mediaIndex % attachedMedia.length]?.url} className="h-full w-full object-cover" alt="" />
+                    )}
+                    {attachedMedia.length > 1 && (
+                      <>
+                        <span className="absolute right-2 top-2 rounded-full bg-black/65 px-1.5 py-0.5 text-[8px] font-black text-white z-10">{(mediaIndex % attachedMedia.length) + 1}/{attachedMedia.length}</span>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setMediaIndex(p => p > 0 ? p - 1 : attachedMedia.length - 1) }} className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 text-white rounded-full p-1 z-10"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setMediaIndex(p => (p + 1) % attachedMedia.length) }} className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 text-white rounded-full p-1 z-10"><ChevronRight className="w-3.5 h-3.5" /></button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-1 text-slate-400"><ImageIcon className="h-6 w-6 text-slate-300" /><span className="text-[8px]">无媒体</span></div>
+                )}
+              </div>
+              <div className="mt-3 text-[9px] leading-normal text-slate-700 text-left"><p className="whitespace-pre-wrap">{caption}</p>{parseTags(hashtags).length > 0 && <p className="mt-1 text-blue-600 font-medium">{parseTags(hashtags).map(t => `#${t}`).join(' ')}</p>}</div>
+              <div className="mt-3 border-t border-slate-100 pt-2.5"><button className="w-full rounded-md bg-[#1a73e8] py-2 text-[9px] font-bold text-white tracking-wide uppercase">了解更多 (Learn More)</button></div>
+            </div>
+          )}
+        </div>
+
+        {isGenerating && (
+          <div className="absolute inset-0 bg-slate-900/20 flex flex-col items-center justify-center z-10 pointer-events-none">
+            <div className="bg-slate-900/80 border border-indigo-800/40 px-3 py-2 rounded-xl shadow-xl flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+              <span className="text-[10px] font-black text-indigo-300">AI 创作中...</span>
+            </div>
+          </div>
+        )}
+        {isFailed && (
+          <div className="absolute inset-0 bg-rose-500/10 flex flex-col items-center justify-center z-10">
+            <div className="bg-white border border-rose-200 p-4 rounded-2xl shadow-2xl max-w-[220px] text-center">
+              <span className="text-2xl">⚠️</span>
+              <h4 className="text-xs font-black text-rose-600 mt-2">内容生成失败</h4>
+              <p className="text-[9px] text-slate-400 mt-1 leading-normal">AI 在为此平台生成内容时遇到错误。</p>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
     <div
       onClick={() => {
         if (!isGenerating) {
