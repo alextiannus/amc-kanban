@@ -125,16 +125,18 @@ function testPlatformCopywriterRegistry() {
   assertIncludes(modelRouterAdapter, "callLLM('copywriting'", 'adapter keeps legacy router fallback')
 }
 
-function testContentLabReviewUi() {
+function testContentLabStandaloneEntry() {
   const page = read('src/app/admin/content-lab/page.tsx')
+  const internalAdmin = read('src/app/api/internal/content-lab-admin/route.ts')
 
-  assertIncludes(page, 'type CopywriterLogRecord', 'content lab has copywriter log record type')
-  assertIncludes(page, '/api/admin/copywriter-logs?', 'content lab loads log list')
-  assertIncludes(page, '/annotate', 'content lab saves review annotations')
-  assertIncludes(page, 'Review Logs', 'content lab exposes review logs UI')
-  assertIncludes(page, 'Training Review', 'content lab exposes training review UI')
-  assertIncludes(page, 'Corrected content', 'content lab exposes corrected content editor')
-  assertIncludes(page, 'await loadReviewLogs()', 'content lab refreshes logs after generation')
+  assertIncludes(page, 'AMC_CONTENT_SERVICE_URL', 'kanban content lab entry redirects to standalone service')
+  assertIncludes(page, 'signLabToken', 'kanban signs standalone lab token after admin auth')
+  assertIncludes(page, "role: 'ADMIN'", 'lab token is admin-scoped')
+  assertIncludes(page, 'redirect(`${contentUrl}/admin/content-lab#labToken=', 'entry uses URL fragment to avoid token in request logs')
+  assertIncludes(internalAdmin, "body.action === 'catalog'", 'internal admin bridge exposes catalog data')
+  assertIncludes(internalAdmin, "body.action === 'logs'", 'internal admin bridge exposes review logs')
+  assertIncludes(internalAdmin, "body.action === 'annotateLog'", 'internal admin bridge exposes log annotation')
+  assertIncludes(internalAdmin, 'CONTENT_SERVICE_INTERNAL_TOKEN', 'internal admin bridge is service-token protected')
 }
 
 function main() {
@@ -142,7 +144,7 @@ function main() {
   testContentGenerationService()
   testLegacyEntrypointsUseFacade()
   testPlatformCopywriterRegistry()
-  testContentLabReviewUi()
+  testContentLabStandaloneEntry()
   console.log('SUCCESS: content engine integration guards passed')
 }
 
