@@ -21,7 +21,7 @@ export interface PlatformContentProvider {
   platform: PlatformType
   displayName: string
   skillVersion: string
-  defaultLanguage: 'zh' | 'en'
+  defaultLanguage: 'zh' | 'en' | 'random'
   maxCaptionLength: number
   hookCategories: HookCategory[]
   hashtagRules: HashtagRules

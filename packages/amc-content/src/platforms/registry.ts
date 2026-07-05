@@ -66,7 +66,7 @@ export const platformProviders: Record<PlatformType, PlatformContentProvider> = 
     platform: 'google_business',
     displayName: 'Google Business Profile',
     skillVersion: 'google_business@1.0.0',
-    defaultLanguage: 'en',
+    defaultLanguage: 'random',
     maxCaptionLength: 1500,
     hookCategories: ['seo', 'benefit', 'geo'],
     hashtagRules: { allowHashtags: false, min: 0, max: 0 },
