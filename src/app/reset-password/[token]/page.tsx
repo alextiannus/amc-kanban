@@ -6,6 +6,23 @@ import { Eye, EyeOff, CheckCircle2, XCircle, Lock, Loader2 } from 'lucide-react'
 
 type State = 'loading' | 'valid' | 'invalid' | 'submitting' | 'success'
 
+// ── Card wrapper ── defined at MODULE level so React never remounts it
+// (if defined inside the page component, every state change creates a new
+//  function reference → React treats it as a new component → unmounts inputs → focus lost)
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/40 to-slate-900 flex items-center justify-center p-4">
+      <div className="relative w-full max-w-md">
+        {/* Glow */}
+        <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-indigo-500/30 via-purple-500/20 to-pink-500/10 blur-xl" />
+        <div className="relative bg-slate-900/90 border border-white/10 rounded-2xl p-8 shadow-2xl backdrop-blur-xl">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ResetPasswordPage() {
   const params = useParams()
   const router = useRouter()
@@ -62,20 +79,8 @@ export default function ResetPasswordPage() {
     }
   }
 
-  // ── Shared card wrapper ────────────────────────────────────────────────────
-  const Card = ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/40 to-slate-900 flex items-center justify-center p-4">
-      <div className="relative w-full max-w-md">
-        {/* Glow */}
-        <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-indigo-500/30 via-purple-500/20 to-pink-500/10 blur-xl" />
-        <div className="relative bg-slate-900/90 border border-white/10 rounded-2xl p-8 shadow-2xl backdrop-blur-xl">
-          {children}
-        </div>
-      </div>
-    </div>
-  )
-
   // ── Loading ────────────────────────────────────────────────────────────────
+
   if (state === 'loading') {
     return (
       <Card>
