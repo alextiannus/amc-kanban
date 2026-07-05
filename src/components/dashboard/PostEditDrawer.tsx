@@ -1260,7 +1260,7 @@ Return the output strictly in a valid JSON array format, containing:
                         className="relative flex flex-col items-center gap-1.5 group disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none"
                       >
                         {/* Avatar circle */}
-                        <div className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-150 ${
+                        <div className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-150 ${
                           isSelected
                             ? 'ring-[3px] ring-offset-2 ring-indigo-500 shadow-lg shadow-indigo-200 dark:shadow-indigo-900/40 scale-105'
                             : 'ring-1 ring-slate-200 dark:ring-slate-700 hover:ring-2 hover:ring-indigo-300 hover:scale-105'
