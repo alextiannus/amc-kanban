@@ -104,10 +104,18 @@ const PLATFORM_LABELS: Record<string, string> = {
 }
 
 /** Returns the effective default selectedAccountIds:
- *  - one creative target per copywriter
- *  - configured platform account when available, otherwise a virtual draft target */
+ *  - copywriters whose platform the brand has a real account configured
+ *  - plus 小红书 (XHS) is always included as a default target regardless of account config */
 function buildDefaultAccountIds(accounts: SocialAccountOption[]): string[] {
-  return COPYWRITER_ROSTER.map((copywriter) => draftAccountIdForCopywriter(copywriter, accounts))
+  return COPYWRITER_ROSTER
+    .filter((copywriter) => {
+      // Always include XHS
+      if (['xiaohongshu', 'xhs'].includes(copywriter.platform.toLowerCase())) return true
+      // Include if brand has a real account configured for this platform
+      const aliases = platformAliases(copywriter.platform)
+      return accounts.some((a) => aliases.includes((a.platformId || '').toLowerCase()))
+    })
+    .map((copywriter) => draftAccountIdForCopywriter(copywriter, accounts))
 }
 
 function normalizePlatformLabel(plat?: string): string {
