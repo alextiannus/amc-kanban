@@ -1196,10 +1196,10 @@ Return the output strictly in a valid JSON array format, containing:
                       ? (configuredAccount?.displayName || configuredAccount?.handle || copywriter.handle)
                       : `${copywriter.handle}（未配置发布账号，仍可先创作内容）`
 
-                    // Platform logo SVGs — larger, filling the circle
+                    // Platform logo SVGs — fills the circle container
                     const platformLogo: Record<string, React.ReactNode> = {
                       instagram: (
-                        <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
+                        <svg viewBox="0 0 32 32" className="w-full h-full" fill="none">
                           <defs>
                             <linearGradient id="ig-g" x1="0%" y1="100%" x2="100%" y2="0%">
                               <stop offset="0%" stopColor="#f09433"/>
@@ -1209,27 +1209,27 @@ Return the output strictly in a valid JSON array format, containing:
                               <stop offset="100%" stopColor="#bc1888"/>
                             </linearGradient>
                           </defs>
-                          <rect width="32" height="32" rx="9" fill="url(#ig-g)"/>
+                          <rect width="32" height="32" rx="0" fill="url(#ig-g)"/>
                           <circle cx="16" cy="16" r="5.5" stroke="white" strokeWidth="2.2" fill="none"/>
                           <circle cx="22.5" cy="9.5" r="1.5" fill="white"/>
                         </svg>
                       ),
                       tiktok: (
-                        <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
-                          <rect width="32" height="32" rx="9" fill="#010101"/>
+                        <svg viewBox="0 0 32 32" className="w-full h-full" fill="none">
+                          <rect width="32" height="32" rx="0" fill="#010101"/>
                           <path d="M22 11.2a4.8 4.8 0 01-4.8-4.8v-.4h-2.8V18a2 2 0 11-2-2v-2.8A4.8 4.8 0 009.6 18a4.8 4.8 0 109.6 0V12.6A8.6 8.6 0 0022 13V11.2z" fill="white"/>
                           <path d="M22 10a4.8 4.8 0 01-4.8-4.8" stroke="#69C9D0" strokeWidth="2" strokeLinecap="round" fill="none"/>
                         </svg>
                       ),
                       facebook: (
-                        <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
-                          <rect width="32" height="32" rx="9" fill="#1877F2"/>
+                        <svg viewBox="0 0 32 32" className="w-full h-full" fill="none">
+                          <rect width="32" height="32" rx="0" fill="#1877F2"/>
                           <path d="M18 11.5h2.5V8H18c-2.2 0-4 1.8-4 4v2H12V17h2v10h3V17h2.5l.5-3H17v-2c0-.28.22-.5.5-.5l.5 0z" fill="white"/>
                         </svg>
                       ),
                       google_business: (
-                        <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
-                          <rect width="32" height="32" rx="9" fill="white" stroke="#e2e8f0" strokeWidth="0.8"/>
+                        <svg viewBox="0 0 32 32" className="w-full h-full" fill="none">
+                          <rect width="32" height="32" rx="0" fill="white"/>
                           <path d="M16 7c2.35 0 4.43.88 6 2.32L24.4 7C22.24 5.1 19.27 4 16 4 10.8 4 6.4 7.12 4.5 11.5l3.4 2.66A8 8 0 0116 7z" fill="#EA4335"/>
                           <path d="M28 16.5c0-1.12-.1-2.2-.3-3.22H16v6h6.72a5.76 5.76 0 01-2.5 3.76l4.12 3.2C26.4 24.12 28 20.6 28 16.5z" fill="#4285F4"/>
                           <path d="M7.9 19.16A8 8 0 0116 25c2.86 0 5.42-1.04 7.34-2.76l-4.12-3.2a5 5 0 01-7.44-1.84l-3.88 2.96z" fill="#34A853"/>
@@ -1237,8 +1237,8 @@ Return the output strictly in a valid JSON array format, containing:
                         </svg>
                       ),
                       xiaohongshu: (
-                        <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
-                          <rect width="32" height="32" rx="9" fill="#FF2442"/>
+                        <svg viewBox="0 0 32 32" className="w-full h-full" fill="none">
+                          <rect width="32" height="32" rx="0" fill="#FF2442"/>
                           <text x="16" y="21" textAnchor="middle" fontSize="15" fontWeight="900" fill="white" fontFamily="sans-serif">小</text>
                         </svg>
                       ),
