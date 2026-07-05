@@ -157,9 +157,7 @@ export default function PostPreviewModal({
               return (
                 <div key={cwId} className="flex-shrink-0 flex flex-col" style={{ width: 260 }}>
                   {/* Card with top header: name + cancel */}
-                  <div className={`w-full rounded-2xl overflow-hidden border shadow-xl transition-all ${
-                    !isGenerating ? 'cursor-pointer hover:border-slate-600/80' : ''
-                  } bg-slate-900/60 border-slate-800/60`}>
+                  <div className="w-full rounded-2xl overflow-hidden border shadow-xl transition-all cursor-pointer hover:border-slate-600/80 bg-slate-900/60 border-slate-800/60">
                     {/* Top header row: copywriter name + cancel button */}
                     <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800/60">
                       <div className="flex items-center gap-2 min-w-0">
@@ -174,6 +172,12 @@ export default function PostPreviewModal({
                         <span className="text-[9px] text-slate-500 truncate">
                           · {platform === 'ig' ? 'Instagram' : platform === 'xhs' ? '小红书' : platform === 'fb' ? 'Facebook' : platform === 'tiktok' ? 'TikTok' : 'Google'}
                         </span>
+                        {isGenerating && (
+                          <span className="flex items-center gap-0.5 text-[8px] text-indigo-400 font-bold">
+                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                            创作中
+                          </span>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -184,8 +188,8 @@ export default function PostPreviewModal({
                         <X className="w-2.5 h-2.5" />
                       </button>
                     </div>
-                    {/* Phone mockup */}
-                    <div onClick={() => { if (!isGenerating) setEditingCopywriterId(cwId) }}>
+                    {/* Phone mockup — always clickable to edit */}
+                    <div onClick={() => setEditingCopywriterId(cwId)}>
                       <PlatformPreviewCard
                         account={displayAccount}
                         platform={platform}
@@ -438,14 +442,18 @@ function PlatformPreviewCard({
             {account.displayName || account.handle}
           </span>
         </div>
-        {!isGenerating && !isFailed && (
+        {!isFailed && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenEdit() }}
-            className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors"
+            className={`text-[9px] font-black px-2 py-1 rounded-lg flex items-center gap-1 transition-colors ${
+              isGenerating
+                ? 'text-indigo-300 hover:bg-indigo-900/40'
+                : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
+            }`}
           >
             <Edit3 className="w-2.5 h-2.5" />
-            <span>编辑</span>
+            <span>{isGenerating ? '预编辑' : '编辑'}</span>
           </button>
         )}
       </div>
@@ -456,7 +464,7 @@ function PlatformPreviewCard({
           e.stopPropagation()
         }
       }}>
-        <div className={`${isGenerating ? 'blur-[2px] opacity-70 pointer-events-none' : ''} transition-all duration-300`}>
+        <div className={`${isGenerating ? 'opacity-60' : ''} transition-all duration-300 relative`}>
           {platform === 'ig' && (
             <div className="relative mx-auto w-full max-w-[300px] overflow-hidden rounded-[24px] border-[8px] border-slate-900 bg-white shadow-lg dark:border-slate-800 dark:bg-black text-black dark:text-white">
               {/* Instagram Header */}
@@ -818,15 +826,11 @@ function PlatformPreviewCard({
           )}
         </div>
 
-        {/* Loading Overlay */}
         {isGenerating && (
-          <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] flex flex-col items-center justify-center z-10 pointer-events-none">
-            <div className="bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-pulse pointer-events-auto">
-              <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
-              <div className="text-left">
-                <span className="text-xs font-black text-slate-800 dark:text-slate-100">AI 正在创作中...</span>
-                <span className="block text-[9px] text-slate-450 mt-0.5">请耐心等待</span>
-              </div>
+          <div className="absolute inset-0 bg-slate-900/10 flex flex-col items-center justify-center z-10 pointer-events-none">
+            <div className="bg-slate-900/80 border border-indigo-800/40 px-3 py-2 rounded-xl shadow-xl flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+              <span className="text-[10px] font-black text-indigo-300">AI 创作中...</span>
             </div>
           </div>
         )}
