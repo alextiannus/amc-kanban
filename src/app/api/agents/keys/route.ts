@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import crypto from 'crypto'
 import {
   apiKeyPrefix,
   authenticateCurrentSession,
   createApiKeyToken,
   hashApiKeyToken,
-  hashPassword,
   requireCapability,
 } from '@/lib/auth-v2'
 
@@ -17,37 +15,33 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     await requireCapability(principal, 'agent.manage')
+    if (principal.actorType !== 'HUMAN') {
+      return NextResponse.json({ error: 'Agent API Keys must be created under a human user' }, { status: 400 })
+    }
 
-    const agentUuid = crypto.randomUUID()
-    const tempEmail = `pending-${agentUuid}@agent.amc.local`
     const plaintextApiKey = createApiKeyToken('amc_agent')
 
-    const newAgent = await prisma.$transaction(async (tx: any) => {
-      const agent = await tx.user.create({
-        data: {
-          email: tempEmail,
-          password: await hashPassword(crypto.randomBytes(32).toString('base64url')),
-          type: 'AI_AGENT',
-          nickname: '🤖 未初始化龙虾',
-          ownerId: principal.userId,
-          businessRoles: { create: { role: 'AMC_PRINCIPAL' } },
-        },
-      })
-      await tx.userApiKey.create({
-        data: {
-          userId: agent.id,
-          tokenHash: hashApiKeyToken(plaintextApiKey),
-          prefix: apiKeyPrefix(plaintextApiKey),
-          name: 'Initial AMC Agent API Key',
-        },
-      })
-      return agent
+    const key = await prisma.userApiKey.create({
+      data: {
+        userId: principal.userId,
+        token: plaintextApiKey,
+        tokenHash: hashApiKeyToken(plaintextApiKey),
+        prefix: apiKeyPrefix(plaintextApiKey),
+        name: 'AI Staff API Key',
+      },
+      select: {
+        id: true,
+        name: true,
+        prefix: true,
+        createdAt: true,
+      },
     })
 
     return NextResponse.json({ 
       apiKey: plaintextApiKey,
-      agentId: newAgent.id,
-      message: 'Agent Key generated successfully. Please configure this in your OpenClaw MCP plugin.'
+      key,
+      userId: principal.userId,
+      message: 'Agent Key generated successfully under the current user. Please configure this in your OpenClaw MCP plugin.'
     })
   } catch (error: any) {
     if (error?.status === 403) {

@@ -58,31 +58,49 @@ export async function syncBrandDraftStatuses(
 
 
   // 3. Fetch published + failed from PostFast (both may contain our scheduled posts)
-  //    PostFast returns newest first — a recently published post will be in the first page (50 items).
-  //    We also fetch page 2 for brands that publish heavily.
+  //    Use full pagination (bounded) to avoid missing older items.
   const pfStatusMap = new Map<string, { status: 'published' | 'failed'; publishedAt?: string }>()
+  const PAGE_LIMIT = 50
+  const MAX_PAGES_PER_STATUS = 20
 
-  const fetchPage = async (status: 'published' | 'failed', page?: number) => {
+  const fetchStatusPages = async (status: 'published' | 'failed') => {
+    let page = 1
     try {
-      const res = await postfastListPosts(postfastApiKey, { status, limit: 50, page })
-      for (const post of res.posts) {
-        if (wantedIds.has(post.id)) {
-          pfStatusMap.set(post.id, {
-            status,
-            publishedAt: post.publishedAt,
-          })
+      while (page <= MAX_PAGES_PER_STATUS) {
+        const res = await postfastListPosts(postfastApiKey, { status, limit: PAGE_LIMIT, page })
+        if (!res.success) {
+          result.errors.push(`PostFast ${status} fetch failed on page ${page}: ${res.error ?? 'unknown error'}`)
+          return
         }
+
+        for (const post of res.posts) {
+          if (wantedIds.has(post.id)) {
+            pfStatusMap.set(post.id, {
+              status,
+              publishedAt: post.publishedAt,
+            })
+          }
+        }
+
+        // Early stop: all wanted IDs are resolved.
+        if (pfStatusMap.size >= wantedIds.size) return
+
+        const noMoreByTotal = typeof res.total === 'number' && page * PAGE_LIMIT >= res.total
+        const noMoreByData = res.posts.length < PAGE_LIMIT
+        if (noMoreByTotal || noMoreByData) return
+
+        page += 1
       }
-      // Fetch page 2 if there are more results and first page didn't cover all wanted IDs
-      if (page == null && res.total && res.total > 50) {
-        await fetchPage(status, 2)
-      }
+
+      result.errors.push(
+        `PostFast ${status} pagination capped at ${MAX_PAGES_PER_STATUS} pages; sync may be partial for brand ${brandId}`,
+      )
     } catch (e: any) {
       result.errors.push(`PostFast ${status} fetch failed: ${e?.message ?? String(e)}`)
     }
   }
 
-  await Promise.all([fetchPage('published'), fetchPage('failed')])
+  await Promise.all([fetchStatusPages('published'), fetchStatusPages('failed')])
 
   // 4. Update DB for any drafts whose PostFast status has changed
   for (const draft of scheduledDrafts) {

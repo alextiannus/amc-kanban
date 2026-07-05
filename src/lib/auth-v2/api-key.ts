@@ -31,9 +31,10 @@ function scheduleLastUsedUpdate(id: string, lastUsedAt: Date | null) {
 export async function authenticateApiKey(token: string): Promise<AuthPrincipal | null> {
   const tokenHash = hashApiKeyToken(token)
   const key = await prisma.userApiKey.findFirst({
-    where: { tokenHash },
+    where: { OR: [{ tokenHash }, { token }] },
     select: {
       id: true,
+      token: true,
       tokenHash: true,
       lastUsedAt: true,
       expiresAt: true,
@@ -57,12 +58,14 @@ export async function authenticateApiKey(token: string): Promise<AuthPrincipal |
     if (!isActiveDateRange(key.expiresAt, key.revokedAt)) return null
 
     if (!key.tokenHash) {
-      void prisma.userApiKey
-        .update({
+      try {
+        await prisma.userApiKey.update({
           where: { id: key.id },
           data: { tokenHash, prefix: apiKeyPrefix(token) },
         })
-        .catch((error: unknown) => console.error('[auth-v2] legacy API key hash migration failed', error))
+      } catch (error: unknown) {
+        console.error('[auth-v2] legacy API key hash migration failed', error)
+      }
     }
     scheduleLastUsedUpdate(key.id, key.lastUsedAt)
     return principalFromUser(key.user, 'api_key', key.id)

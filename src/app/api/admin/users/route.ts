@@ -63,6 +63,7 @@ export async function GET() {
           select: {
             id: true,
             name: true,
+            token: true,
             prefix: true,
             createdAt: true,
             lastUsedAt: true,
@@ -107,6 +108,11 @@ export async function POST(request: Request) {
     }
 
     const { email, type, role: body_role } = await request.json()
+    if (type === 'AI_AGENT') {
+      return NextResponse.json({
+        error: 'AI Agent 不再作为独立用户创建。请在人类用户下生成 API Key，让 AI 使用该 Key 连接 AMC。',
+      }, { status: 400 })
+    }
     const body = { role: body_role }
     if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 })
     const normalizedEmail = String(email).trim().toLowerCase()
@@ -117,7 +123,7 @@ export async function POST(request: Request) {
 
     const temporaryPassword = crypto.randomBytes(18).toString('base64url')
     const hashedPassword = await hashPassword(temporaryPassword)
-    const userType = type === 'AI_AGENT' ? 'AI_AGENT' : 'HUMAN'
+    const userType = 'HUMAN'
 
     const requestedRole = userType === 'HUMAN' && body.role === 'ADMIN' ? 'ADMIN' : 'USER'
     
@@ -131,21 +137,18 @@ export async function POST(request: Request) {
         }
       })
 
-      const keyToken = createApiKeyToken(userType === 'AI_AGENT' ? 'amc_agent' : 'amc_user')
+      const keyToken = createApiKeyToken('amc_user')
       await tx.userApiKey.create({
         data: {
           userId: u.id,
+          token: keyToken,
           tokenHash: hashApiKeyToken(keyToken),
           prefix: apiKeyPrefix(keyToken),
-          name: userType === 'AI_AGENT' ? 'Initial AMC Agent API Key' : 'Initial User API Key',
+          name: 'Initial User API Key',
         },
       })
 
-      if (userType === 'AI_AGENT') {
-        await tx.userBusinessRole.create({
-          data: { userId: u.id, role: 'AMC_PRINCIPAL' },
-        })
-      } else if (requestedRole === 'ADMIN') {
+      if (requestedRole === 'ADMIN') {
         await tx.userBusinessRole.create({
           data: { userId: u.id, role: 'ADMIN' },
         })

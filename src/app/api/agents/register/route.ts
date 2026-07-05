@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import crypto from 'crypto'
 import {
   apiKeyPrefix,
   authenticateCurrentSession,
   createApiKeyToken,
   hashApiKeyToken,
-  hashPassword,
   requireCapability,
 } from '@/lib/auth-v2'
 
@@ -41,13 +39,8 @@ export async function POST(request: Request) {
     const {
       agentId,
       nickname,
-      introduction,
-      workflow,
-      themeColor,
-      avatar,
-      insights,
-      chatLink,
-      driveFolder,
+      ownerUserId,
+      ownerEmail,
     } = body
 
     if (!agentId || typeof agentId !== 'string') {
@@ -63,68 +56,52 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'agentId is invalid' }, { status: 400 })
     }
 
-    const email = `${normalizedAgentId}@agent.amc.local`
-    const existingAgent = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true }
-    })
-
-    if (existingAgent) {
-      return NextResponse.json({ error: 'agentId already exists' }, { status: 409 })
+    let targetUserId = principal?.actorType === 'HUMAN' ? principal.userId : null
+    if (!targetUserId) {
+      const owner = await prisma.user.findFirst({
+        where: ownerUserId
+          ? { id: String(ownerUserId), type: 'HUMAN' }
+          : ownerEmail
+            ? { email: String(ownerEmail).trim().toLowerCase(), type: 'HUMAN' }
+            : { id: '' },
+        select: { id: true },
+      })
+      targetUserId = owner?.id || null
     }
 
-    const randomPassword = crypto.randomBytes(24).toString('hex')
-    const hashedPassword = await hashPassword(randomPassword)
+    if (!targetUserId) {
+      return NextResponse.json({ error: 'A human owner is required to create an Agent API Key' }, { status: 400 })
+    }
+
     const plaintextApiKey = createApiKeyToken('amc_agent')
 
-    const newAgent = await prisma.$transaction(async (tx: any) => {
-      const agent = await tx.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          type: 'AI_AGENT',
-          role: 'USER',
-          nickname: nickname.trim(),
-          introduction: typeof introduction === 'string' ? introduction : null,
-          workflow: typeof workflow === 'string' ? workflow : null,
-          themeColor: typeof themeColor === 'string' ? themeColor : null,
-          avatar: typeof avatar === 'string' ? avatar : null,
-          insights: typeof insights === 'string' ? insights : null,
-          chatLink: typeof chatLink === 'string' ? chatLink : null,
-          driveFolder: typeof driveFolder === 'string' ? driveFolder : null,
-          ownerId: principal?.userId ?? null,
-          businessRoles: { create: { role: 'AMC_PRINCIPAL' } },
-        },
-        select: {
-          id: true,
-          email: true,
-          nickname: true,
-          type: true,
-          createdAt: true,
-        },
-      })
-      await tx.userApiKey.create({
-        data: {
-          userId: agent.id,
-          tokenHash: hashApiKeyToken(plaintextApiKey),
-          prefix: apiKeyPrefix(plaintextApiKey),
-          name: 'Initial AMC Agent API Key',
-        },
-      })
-      return agent
+    const key = await prisma.userApiKey.create({
+      data: {
+        userId: targetUserId,
+        token: plaintextApiKey,
+        tokenHash: hashApiKeyToken(plaintextApiKey),
+        prefix: apiKeyPrefix(plaintextApiKey),
+        name: `AI Staff - ${nickname.trim()}`,
+      },
+      select: {
+        id: true,
+        name: true,
+        prefix: true,
+        createdAt: true,
+      },
     })
 
     return NextResponse.json({
       success: true,
-      message: 'Agent registered successfully',
+      message: 'Agent API Key created successfully',
       agent: {
-        id: newAgent.id,
+        id: key.id,
         agentId: normalizedAgentId,
-        email: newAgent.email,
-        nickname: newAgent.nickname,
-        type: newAgent.type,
-        createdAt: newAgent.createdAt,
+        nickname: nickname.trim(),
+        type: 'USER_API_KEY',
       },
+      key,
+      userId: targetUserId,
       apiKey: plaintextApiKey,
     })
   } catch (error: any) {

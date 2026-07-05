@@ -44,6 +44,7 @@ export interface UserRecord {
   apiKeys?: Array<{
     id: string
     name: string | null
+    token: string | null
     prefix: string | null
     createdAt: string
     lastUsedAt: string | null
@@ -189,7 +190,7 @@ export default function UsersTab({
           }`}
         >
           <Bot size={14} />
-          <span>AI 序列与 Prompt 人设 ({agents.length})</span>
+          <span>历史 AI 序列 ({agents.length})</span>
         </button>
       </div>
 
@@ -226,9 +227,7 @@ export default function UsersTab({
         <AiAgentsPanel 
           users={users}
           loading={loading}
-          creating={creating}
           actionLoading={actionLoading}
-          onCreateUser={onCreateUser}
           onDeleteUser={onDeleteUser}
           onSaveAgentPrincipals={onSaveAgentPrincipals}
           onSaveAgentDraft={onSaveAgentDraft}

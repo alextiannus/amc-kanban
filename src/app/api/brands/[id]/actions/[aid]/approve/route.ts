@@ -102,8 +102,8 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   // ── Resolve the action item ──────────────────────────────────────────────
-  const resolved = await prisma.actionItem.update({
-    where: { id: aid },
+  const resolveResult = await prisma.actionItem.updateMany({
+    where: { id: aid, brandId, status: 'pending' },
     data: {
       status: 'approved',
       resolvedAt: new Date(),
@@ -111,6 +111,9 @@ export async function PATCH(request: Request, { params }: Params) {
       resolvedNote: body.note || null,
     },
   })
+  if (resolveResult.count === 0) {
+    return NextResponse.json({ error: 'Already resolved' }, { status: 409 })
+  }
 
   await updateLinkedWorkUnit({ status: 'in_progress', requiredInput: null })
 
@@ -126,6 +129,7 @@ export async function PATCH(request: Request, { params }: Params) {
       // Fire-and-forget publish
       ;(async () => {
         let result: { success: boolean; postId?: string; url?: string; error?: string }
+        let resolvedScheduledAt = draft.scheduledAt ? new Date(draft.scheduledAt) : null
 
         const combinedMediaUrls = Array.from(new Set([
           ...(draft.mediaUrls || []),
@@ -164,7 +168,6 @@ export async function PATCH(request: Request, { params }: Params) {
           }
         } else {
           // Auto-schedule: if no scheduledAt on this draft, get recommended time first
-          let resolvedScheduledAt = draft.scheduledAt ? new Date(draft.scheduledAt) : null
           const isRescheduleRequested = typeof body.note === 'string' &&
             (body.note.includes('重新智能排期') || body.note.includes('智能重新排期'))
 
@@ -190,8 +193,12 @@ export async function PATCH(request: Request, { params }: Params) {
           })
         }
 
-        const finalScheduledAt = draft.scheduledAt ? new Date(draft.scheduledAt) : null
-        const isScheduled = !isDirectGoogle && finalScheduledAt && finalScheduledAt > new Date()
+        // Ensure subsequent status decision uses the final, resolved schedule time.
+        if (!result.success) {
+          resolvedScheduledAt = null
+        }
+
+        const isScheduled = !isDirectGoogle && !!resolvedScheduledAt && resolvedScheduledAt > new Date()
 
         await prisma.contentDraft.update({
           where: { id: draft.id },
@@ -201,11 +208,12 @@ export async function PATCH(request: Request, { params }: Params) {
                 publishedAt: isScheduled ? null : new Date(),
                 platformPostId: result.postId ?? null,
                 postUrl: isScheduled ? null : (result.url ?? null),
+                scheduledAt: resolvedScheduledAt,
               }
             : { status: 'draft', agentNote: `发布失败: ${result.error}` },
         })
 
-        const isScheduledFutureForWorkUnit = !isDirectGoogle && draft.scheduledAt && new Date(draft.scheduledAt) > new Date()
+        const isScheduledFutureForWorkUnit = !isDirectGoogle && !!resolvedScheduledAt && resolvedScheduledAt > new Date()
         await updateLinkedWorkUnit(
           result.success
             ? { status: isScheduledFutureForWorkUnit ? 'in_progress' : 'done', requiredInput: null, publishedUrl: result.url ?? null }
@@ -268,5 +276,6 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   eventEmitter.emit('board_update')
+  const resolved = await prisma.actionItem.findUnique({ where: { id: aid } })
   return NextResponse.json(resolved)
 }

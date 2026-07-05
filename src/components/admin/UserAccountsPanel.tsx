@@ -59,6 +59,7 @@ export default function UserAccountsPanel({
   const [keyNameDrafts, setKeyNameDrafts] = useState<Record<string, string>>({})
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [showKeyPlaintext, setShowKeyPlaintext] = useState(false)
+  const [visibleApiKeys, setVisibleApiKeys] = useState<Record<string, boolean>>({})
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [newRole, setNewRole] = useState('USER')
@@ -213,6 +214,10 @@ export default function UserAccountsPanel({
     })
   }
 
+  const displayKeyPrefix = (key: { prefix?: string | null; token?: string | null }) => {
+    return key.prefix || key.token?.slice(0, 12) || '-'
+  }
+
   const roleBadges = (user: UserRecord) => {
     const roles = new Set((user.businessRoles || []).map((r) => r.role))
     return (
@@ -272,7 +277,6 @@ export default function UserAccountsPanel({
               filteredHumans.map((user) => {
                 const isEditing = editingUserId === user.id
                 const ownedBrandCount = (user.ownedBrands || []).length + (user.legacyOwnedBrands || []).length
-                const agentCount = user.permittedAgents?.length || 0
                 const apiKeys = user.apiKeys || []
                 const activeKeyCount = apiKeys.filter((key) => !key.revokedAt).length
                 const isKeyExpanded = expandedKeyUserId === user.id
@@ -347,7 +351,7 @@ export default function UserAccountsPanel({
                           </div>
                         ) : (
                           <span className="text-slate-500 dark:text-slate-400">
-                            {ownedBrandCount > 0 || agentCount > 0 ? `${ownedBrandCount} 品牌 / ${agentCount} AI` : '无绑定'}
+                            {ownedBrandCount > 0 || activeKeyCount > 0 ? `${ownedBrandCount} 品牌 / ${activeKeyCount} AI` : '无绑定'}
                           </span>
                         )}
                       </td>
@@ -449,7 +453,7 @@ export default function UserAccountsPanel({
                                 <thead>
                                   <tr>
                                     <th className="text-left">名称</th>
-                                    <th className="text-left">Prefix</th>
+                                    <th className="text-left">API Key</th>
                                     <th className="text-left">创建时间</th>
                                     <th className="text-left">最近使用</th>
                                     <th className="text-left">状态</th>
@@ -464,10 +468,41 @@ export default function UserAccountsPanel({
                                   ) : (
                                     apiKeys.map((key) => {
                                       const isRevoked = !!key.revokedAt
+                                      const canReadToken = !!key.token
+                                      const isTokenVisible = !!visibleApiKeys[key.id]
                                       return (
                                         <tr key={key.id}>
                                           <td className="font-semibold text-slate-800 dark:text-slate-100">{key.name || '未命名 Key'}</td>
-                                          <td className="font-mono text-slate-500">{key.prefix || '-'}</td>
+                                          <td className="max-w-[320px]">
+                                            {canReadToken ? (
+                                              <div className="flex items-center gap-2">
+                                                <span className="min-w-0 flex-1 select-all truncate font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                                                  {isTokenVisible ? key.token : `${displayKeyPrefix(key)}_••••••••••••••••••••••••`}
+                                                </span>
+                                                <button
+                                                  onClick={() => setVisibleApiKeys((prev) => ({ ...prev, [key.id]: !prev[key.id] }))}
+                                                  className="admin-icon-button"
+                                                  title={isTokenVisible ? '隐藏完整 API Key' : '查看完整 API Key'}
+                                                  type="button"
+                                                >
+                                                  {isTokenVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                                                </button>
+                                                <button
+                                                  onClick={() => copyToClipboard(key.token!, key.id)}
+                                                  className="admin-icon-button"
+                                                  title="复制完整 API Key"
+                                                  type="button"
+                                                >
+                                                  {copiedKey === key.id ? <Check size={14} /> : <Copy size={14} />}
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <div className="space-y-0.5">
+                                                <p className="font-mono text-slate-500">{displayKeyPrefix(key)}</p>
+                                                <p className="text-[10px] text-amber-600 dark:text-amber-300">旧 Key 无法查看完整值，请生成新 Key 后复制给 AI。</p>
+                                              </div>
+                                            )}
+                                          </td>
                                           <td className="text-slate-500">{formatDateTime(key.createdAt)}</td>
                                           <td className="text-slate-500">{formatDateTime(key.lastUsedAt)}</td>
                                           <td>

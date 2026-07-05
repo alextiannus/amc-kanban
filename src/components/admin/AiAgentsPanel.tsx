@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { 
-  Bot, Plus, Search, Edit3, Trash2, Key, RefreshCw, FolderOpen, Link, Save, Users, Info, Bot as BotIcon, AlertCircle
+  Bot, Plus, Search, Edit3, Trash2, Key, RefreshCw, FolderOpen, Link, Save, Users, Info, AlertCircle
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
 import { type AssignmentPoolMember } from '@/components/shared/types'
@@ -10,9 +10,7 @@ import { type AssignmentPoolMember } from '@/components/shared/types'
 interface AiAgentsPanelProps {
   users: UserRecord[]
   loading: boolean
-  creating: boolean
   actionLoading: Record<string, string>
-  onCreateUser: (email: string, type: string, role: string) => Promise<void>
   onDeleteUser: (user: UserRecord) => Promise<void>
   onSaveAgentPrincipals: (agentId: string, humanIds: string[]) => Promise<void>
   onSaveAgentDraft: (agentId: string, draft: any) => Promise<boolean>
@@ -31,9 +29,7 @@ interface AiAgentsPanelProps {
 export default function AiAgentsPanel({
   users,
   loading,
-  creating,
   actionLoading,
-  onCreateUser,
   onDeleteUser,
   onSaveAgentPrincipals,
   onSaveAgentDraft,
@@ -50,8 +46,6 @@ export default function AiAgentsPanel({
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
   
   // Modals state
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [newEmail, setNewEmail] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const [editingAgent, setEditingAgent] = useState<UserRecord | null>(null)
@@ -78,14 +72,6 @@ export default function AiAgentsPanel({
   )
 
   const selectedAgent = agents.find(a => a.id === selectedAgentId)
-
-  const handleCreateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newEmail.trim()) return
-    await onCreateUser(newEmail.trim(), 'AI_AGENT', 'USER')
-    setNewEmail('')
-    setShowCreateModal(false)
-  }
 
   const poolMemberForAgent = (agentId: string) => poolMembers.find(member => member.agentId === agentId)
 
@@ -162,11 +148,12 @@ export default function AiAgentsPanel({
         <div className="flex flex-wrap items-center gap-2">
           {/* Create Button */}
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-1 px-3.5 py-2 bg-blue-650 hover:bg-blue-700 text-white font-extrabold text-xs transition-all shadow-sm rounded-xl cursor-pointer"
+            disabled
+            title="AI Agent 现在通过账号管理中的用户 API Key 连接 AMC"
+            className="inline-flex items-center gap-1 px-3.5 py-2 bg-slate-200 text-slate-500 font-extrabold text-xs transition-all shadow-sm rounded-xl cursor-not-allowed dark:bg-slate-800 dark:text-slate-400"
           >
             <Plus size={13} />
-            <span>新建 AI 序列</span>
+            <span>改用用户 Key</span>
           </button>
 
           {/* Edit Prompt Button */}
@@ -206,7 +193,7 @@ export default function AiAgentsPanel({
         <div className="bg-blue-50/50 dark:bg-slate-900/30 border border-blue-100 dark:border-slate-800 px-4 py-2.5 rounded-xl text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center justify-between gap-3 animate-in slide-in-from-top-2 duration-200">
           <span className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-550 animate-ping" />
-            已选择 AI 序列：<strong className="text-slate-850 dark:text-slate-200">{selectedAgent.nickname || selectedAgent.email}</strong>（{selectedAgent.email}）
+            已选择历史 AI 序列：<strong className="text-slate-850 dark:text-slate-200">{selectedAgent.nickname || selectedAgent.email}</strong>（{selectedAgent.email}）
           </span>
           <button onClick={() => setSelectedAgentId(null)} className="text-blue-650 hover:underline dark:text-blue-400 cursor-pointer">清除选择</button>
         </div>
@@ -217,11 +204,11 @@ export default function AiAgentsPanel({
         {loading ? (
           <div className="p-12 text-center text-xs text-slate-450">
             <RefreshCw className="animate-spin inline-block mr-2 text-slate-400" size={16} />
-            正在载入 AI 序列列表...
+            正在载入历史 AI 序列列表...
           </div>
         ) : filteredAgents.length === 0 ? (
           <div className="p-12 text-center text-xs text-slate-450">
-            暂无 AI 员工代理序列数据，请在上方“新建 AI 序列”
+            暂无历史 AI 员工代理序列数据。新的 AI 请在账号管理中通过用户 API Key 连接。
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -313,52 +300,6 @@ export default function AiAgentsPanel({
           </div>
         )}
       </div>
-
-      {/* Modal 1: 新建 AI 序列 */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-4">
-            <div>
-              <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-                <BotIcon size={16} className="text-blue-500" />
-                <span>注册 AI 代理人设序列</span>
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">设置专有的标识邮箱以创建全新的 AI 员工序列，注册后系统会自动发放 API 授权凭证。</p>
-            </div>
-
-            <form onSubmit={handleCreateSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">Agent 标识邮箱</label>
-                <input 
-                  required 
-                  type="email" 
-                  value={newEmail} 
-                  onChange={e => setNewEmail(e.target.value)} 
-                  placeholder="例如: brand-assistant@openclaw.ai" 
-                  className="w-full border border-slate-200 dark:border-slate-700 bg-slate-55 dark:bg-slate-850 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-555 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-5 py-2 rounded-xl text-xs font-black bg-blue-650 hover:bg-blue-700 text-white disabled:opacity-50 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  {creating ? '初始化中...' : '注册 AI 序列'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Modal 2: 详情人设修改 */}
       {editingAgent && (
@@ -528,7 +469,7 @@ export default function AiAgentsPanel({
           <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-4">
             <div className="flex items-center gap-2 text-rose-500">
               <AlertCircle size={20} />
-              <h2 className="text-base font-black">删除 AI 序列确认</h2>
+              <h2 className="text-base font-black">删除历史 AI 序列确认</h2>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed font-medium">
               确认要彻底删除 AI 员工序列账户 <strong className="text-slate-850 dark:text-white">{selectedAgent.nickname || selectedAgent.email}</strong> 吗？

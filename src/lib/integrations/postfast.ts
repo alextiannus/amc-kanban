@@ -71,6 +71,25 @@ function normalizePlatform(rawPlatform: unknown): string {
   return PLATFORM_MAP[upper] ?? PLATFORM_MAP[compact] ?? PLATFORM_MAP[noUnderscore] ?? compact.toLowerCase()
 }
 
+function normalizePostStatus(rawStatusInput: unknown): PostFastPost['status'] {
+  const raw = asString(rawStatusInput).toLowerCase().trim()
+  if (!raw) return 'draft'
+
+  if (raw === 'published' || raw === 'posted' || raw === 'done' || raw === 'success') {
+    return 'published'
+  }
+
+  if (raw === 'failed' || raw === 'error' || raw === 'cancelled' || raw === 'canceled') {
+    return 'failed'
+  }
+
+  if (raw === 'scheduled' || raw === 'queued' || raw === 'queue' || raw === 'pending') {
+    return 'scheduled'
+  }
+
+  return 'draft'
+}
+
 // ── Shared fetch helper ────────────────────────────────────────────────────
 
 async function pfFetch(
@@ -322,11 +341,7 @@ export async function postfastListPosts(apiKey: string, options?: {
     : (Array.isArray(dataObj.data) ? dataObj.data as JsonRecord[] : (Array.isArray(dataObj.posts) ? dataObj.posts as JsonRecord[] : []))
   const posts: PostFastPost[] = rawPosts.map(p => {
     const pfPlatform = asString(p.platform).toUpperCase()
-    const rawStatus = asString(p.status).toLowerCase()
-    const status: PostFastPost['status'] =
-      rawStatus === 'scheduled' || rawStatus === 'published' || rawStatus === 'failed' || rawStatus === 'draft'
-        ? rawStatus
-        : 'draft'
+    const status = normalizePostStatus(p.status)
 
     const mediaItems = Array.isArray(p.mediaItems) ? (p.mediaItems as Array<{ url?: unknown }>) : []
 

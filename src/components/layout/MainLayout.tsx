@@ -39,7 +39,7 @@ const VIEW_LABEL_MAP: Record<BoardView, string> = {
   game: '店内活动',
   socialInsight: '数据分析',
   dataAnalysis: '账号快照',
-  agents: 'AI 序列',
+  agents: '历史 AI 序列',
   logs: '工作日志',
   managementOverview: '主理人总览',
 }

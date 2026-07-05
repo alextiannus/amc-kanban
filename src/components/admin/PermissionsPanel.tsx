@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { 
-  ShieldCheck, Shield, Bot, Store, Users, Edit3, Save, Check, RefreshCw
+  ShieldCheck, Bot, Store, Users, RefreshCw
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
 import { type BrandRecord } from './BrandsTab'
@@ -19,32 +19,15 @@ interface PermissionsPanelProps {
 
 export default function PermissionsPanel({
   users,
-  agents,
   brands,
-  onSavePermissions,
-  savingPerms,
   onFetchUsers,
   onFetchBrands
 }: PermissionsPanelProps) {
-  // Modal for editing principal agent permissions
-  const [editingHuman, setEditingHuman] = useState<UserRecord | null>(null)
-  const [assignedAgentIds, setAssignedAgentIds] = useState<string[]>([])
   const [savingBrandOwnerId, setSavingBrandOwnerId] = useState<string | null>(null)
 
   const humans = users.filter(u => u.type === 'HUMAN')
   const principals = humans.filter(u => u.businessRoles?.some(r => r.role === 'AMC_PRINCIPAL'))
   const brandOwners = humans.filter(u => u.businessRoles?.some(r => r.role === 'BRAND_OWNER'))
-
-  const handleOpenAssignModal = (human: UserRecord) => {
-    setEditingHuman(human)
-    setAssignedAgentIds(human.permittedAgents.map(link => link.agent.id))
-  }
-
-  const handleSavePermissionsLocal = async () => {
-    if (!editingHuman) return
-    await onSavePermissions(editingHuman.id, assignedAgentIds)
-    setEditingHuman(null)
-  }
 
   const handleUpdateBrandOwner = async (brandId: string, ownerUserId: string) => {
     setSavingBrandOwnerId(brandId)
@@ -76,7 +59,7 @@ export default function PermissionsPanel({
   // Functional permissions audit matrix data
   const matrixRows = [
     { group: '系统管理员组 (Admin)', viewBrand: '读写 / 所有', viewCalendar: '读写 / 所有', configActivity: '读写 / 所有', analytics: '查看 / 所有', aiAgents: '管理 / 所有', sysSettings: '是' },
-    { group: '运营主理人组 (Principal)', viewBrand: '读写 / 授权品牌', viewCalendar: '读写 / 授权品牌', configActivity: '读写 / 授权品牌', analytics: '查看 / 授权品牌', aiAgents: '托管 / 授权Agent', sysSettings: '否' },
+    { group: '运营主理人组 (Principal)', viewBrand: '读写 / 授权品牌', viewCalendar: '读写 / 授权品牌', configActivity: '读写 / 授权品牌', analytics: '查看 / 授权品牌', aiAgents: '用户 Key 分身', sysSettings: '否' },
     { group: '品牌业主组 (Brand Owner)', viewBrand: '只读 / 自有品牌', viewCalendar: '只读 / 自有品牌', configActivity: '审批 / 自有品牌', analytics: '查看 / 自有品牌', aiAgents: '不可见', sysSettings: '否' },
     { group: '普通运营成员 (USER)', viewBrand: '只读 / 无', viewCalendar: '只读 / 无', configActivity: '否', analytics: '否', aiAgents: '不可见', sysSettings: '否' }
   ]
@@ -89,7 +72,7 @@ export default function PermissionsPanel({
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-205 dark:border-slate-800 p-6 shadow-sm space-y-4">
           <h3 className="text-sm font-black text-slate-850 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3 flex items-center gap-2">
             <Users size={16} className="text-blue-500" />
-            <span>主理人运营代管范围 (Principal & Agent Scope)</span>
+            <span>主理人 AI 分身 Key (Principal AI Keys)</span>
           </h3>
           {principals.length === 0 ? (
             <p className="text-xs text-slate-400 py-6 text-center">暂无运营主理人。请先将用户添加至“平台运营主理人组”。</p>
@@ -102,22 +85,19 @@ export default function PermissionsPanel({
                       <p className="text-xs font-black text-slate-800 dark:text-white">{p.nickname || p.email}</p>
                       <p className="text-[9px] text-slate-400 font-mono mt-0.5">{p.email}</p>
                     </div>
-                    <button
-                      onClick={() => handleOpenAssignModal(p)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 dark:border-slate-750 rounded-lg text-[10px] font-bold text-slate-700 dark:text-slate-350 bg-white hover:bg-slate-50 dark:bg-slate-900 transition-all cursor-pointer shadow-sm"
-                    >
-                      <Edit3 size={11} className="text-indigo-500" />
-                      <span>分配代管 AI</span>
-                    </button>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1.5 border border-slate-200 dark:border-slate-750 rounded-lg text-[10px] font-bold text-slate-500 dark:text-slate-350 bg-white dark:bg-slate-900 shadow-sm">
+                      <Bot size={11} className="text-indigo-500" />
+                      <span>{(p.apiKeys || []).filter(key => !key.revokedAt).length} active AI</span>
+                    </span>
                   </div>
                   <div className="text-[10px] text-slate-450 font-bold">
-                    <span>托管代工 AI 员工:</span>{' '}
-                    {p.permittedAgents.length > 0 ? (
+                    <span>AI 分身连接方式:</span>{' '}
+                    {(p.apiKeys || []).filter(key => !key.revokedAt).length > 0 ? (
                       <span className="text-indigo-650 dark:text-indigo-400 font-bold">
-                        {p.permittedAgents.map(link => link.agent.nickname || link.agent.email).join('、')}
+                        使用账号管理中的用户 API Key 连接 AMC，并继承该用户权限。
                       </span>
                     ) : (
-                      <span className="text-slate-400">暂无托管 AI（无法访问主理人看板）</span>
+                      <span className="text-slate-400">暂无 AI Key。请到账号管理中生成 Key。</span>
                     )}
                   </div>
                 </div>
@@ -187,7 +167,7 @@ export default function PermissionsPanel({
                 <th className="text-left px-4 py-3">发布日历</th>
                 <th className="text-left px-4 py-3">店内活动 (游戏)</th>
                 <th className="text-left px-4 py-3">数据分析</th>
-                <th className="text-left px-4 py-3">AI 序列/日志</th>
+                <th className="text-left px-4 py-3">AI 分身/日志</th>
                 <th className="text-left px-4 py-3">Admin 控制台</th>
               </tr>
             </thead>
@@ -208,74 +188,6 @@ export default function PermissionsPanel({
         </div>
       </div>
 
-      {/* Editing permission modal */}
-      {editingHuman && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-4">
-            <div>
-              <h2 className="text-base font-black text-slate-900 dark:text-white">配置【{editingHuman.nickname || editingHuman.email}】代管范围</h2>
-              <p className="text-xs text-slate-400 mt-1">勾选指派该主理人有权监督和操作的 AI Agent：</p>
-            </div>
-
-            <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-thin">
-              {agents.length === 0 ? (
-                <p className="text-xs text-slate-450 py-4 text-center">暂无 AI Agents 员工可分配</p>
-              ) : (
-                agents.map(agent => {
-                  const isChecked = assignedAgentIds.includes(agent.id)
-                  return (
-                    <label 
-                      key={agent.id}
-                      className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs font-bold cursor-pointer transition-all bg-white dark:bg-slate-905 ${
-                        isChecked 
-                          ? 'border-indigo-500 ring-1 ring-indigo-500/20 text-indigo-750 dark:text-indigo-300 font-extrabold' 
-                          : 'border-slate-150 dark:border-slate-800 text-slate-650 dark:text-slate-405 hover:bg-slate-50/30'
-                      }`}
-                    >
-                      <input 
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {
-                          const nextIds = isChecked
-                            ? assignedAgentIds.filter(id => id !== agent.id)
-                            : [...assignedAgentIds, agent.id]
-                          setAssignedAgentIds(nextIds)
-                        }}
-                        className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                      />
-                      <span>{agent.nickname || agent.email}</span>
-                    </label>
-                  )
-                })
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setEditingHuman(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-550 dark:text-slate-350 hover:bg-slate-105 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-755 bg-white dark:bg-slate-900 cursor-pointer"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleSavePermissionsLocal}
-                disabled={savingPerms}
-                className="px-5 py-2 rounded-xl text-xs font-black bg-blue-650 hover:bg-blue-700 text-white disabled:opacity-50 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                {savingPerms ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>保存中...</span>
-                  </>
-                ) : (
-                  <span>保存配置</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
