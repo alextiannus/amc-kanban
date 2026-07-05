@@ -221,6 +221,8 @@ export default function PostEditDrawer({
   const [draftWarnings, setDraftWarnings] = useState<Record<string, string>>({})
   const [previewOnly, setPreviewOnly] = useState(false)
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
+  // Enriched account list for preview: includes placeholder accounts created by the backend for unconfigured platforms
+  const [previewAccountOptions, setPreviewAccountOptions] = useState<any[]>(accounts)
 
   // Hooks generator states
   const [showHookGenerator, setShowHookGenerator] = useState(false)
@@ -631,6 +633,21 @@ export default function PostEditDrawer({
         setDraftStatuses(newStatuses)
         setIsAiGenerating(true)
         setPreviewOnly(false)
+        // Build enriched account options: merge configured accounts with placeholder accounts
+        // returned by the backend for copywriters whose publishing account is not yet set up.
+        // This ensures PostPreviewModal can always resolve a platform/displayName for every panel.
+        const savedAccountMap = new Map(
+          saved
+            .filter((d: any) => d.account && d.accountId)
+            .map((d: any) => [d.accountId, d.account])
+        )
+        const mergedAccounts = [
+          ...accounts,
+          ...Array.from(savedAccountMap.entries())
+            .filter(([id]) => !accounts.find((a) => a.id === id))
+            .map(([id, acc]: [string, any]) => ({ id, platformId: acc.platformId, displayName: acc.displayName || '', handle: acc.handle || '' })),
+        ]
+        setPreviewAccountOptions(mergedAccounts)
         setPreviewModalOpen(true)
 
         // Trigger AI copywriting in parallel
@@ -1867,7 +1884,7 @@ Return the output strictly in a valid JSON array format, containing:
         }}
         brandName={brandName}
         selectedAccountIds={selectedAccountIds}
-        accountOptions={accounts}
+        accountOptions={previewAccountOptions}
         draftCaptions={draftCaptions}
         setDraftCaptions={setDraftCaptions}
         draftHashtags={draftHashtags}
