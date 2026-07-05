@@ -5,6 +5,7 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { callLLM } from '@/lib/llmRouter'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 import { generateContentWithFallback } from '@/lib/amc-content/contentGenerationService'
+import { COPYWRITER_ROSTER, copywritersFromIds, platformAliases } from '@/lib/copywriters'
 
 // Allow enough time for parallel LLM calls across all platforms
 export const maxDuration = 120
@@ -77,7 +78,7 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    const { assetIds, mediaUrls, idea: rawIdea, accountId: singleAccountId, targetPlatform } = await request.json().catch(() => ({}))
+    const { assetIds, mediaUrls, idea: rawIdea, accountId: singleAccountId, targetPlatform, copywriterIds } = await request.json().catch(() => ({}))
     if (typeof rawIdea !== 'string' && rawIdea !== undefined) {
       return NextResponse.json({ error: 'idea must be a string' }, { status: 400 })
     }
@@ -97,8 +98,11 @@ export async function POST(request: Request, { params }: Params) {
       where: { brandId }
     })
 
-    // Ensure placeholders exist for standard platforms (instagram, xiaohongshu, facebook) if they are not configured
-    const defaultPlatforms = ['instagram', 'xiaohongshu', 'facebook']
+    const selectedCopywriters = copywritersFromIds(copywriterIds)
+    const defaultPlatforms = (selectedCopywriters.length > 0 ? selectedCopywriters : COPYWRITER_ROSTER)
+      .map((copywriter) => copywriter.platform)
+
+    // Ensure placeholders exist for selected copywriter platforms if they are not configured
     for (const platformId of defaultPlatforms) {
       const exists = accounts.some((a: any) => {
         const pId = a.platformId.toLowerCase()
@@ -148,6 +152,9 @@ export async function POST(request: Request, { params }: Params) {
       }
       const allowed = aliases[targetPlatform.toLowerCase()] ?? [targetPlatform.toLowerCase()]
       accounts = accounts.filter((a: any) => allowed.includes(a.platformId.toLowerCase()))
+    } else if (selectedCopywriters.length > 0) {
+      const allowed = selectedCopywriters.flatMap((copywriter) => platformAliases(copywriter.platform))
+      accounts = accounts.filter((a: any) => allowed.includes(a.platformId.toLowerCase()))
     }
 
     let brandToneText = ""
@@ -173,6 +180,9 @@ export async function POST(request: Request, { params }: Params) {
     const draftResults = await Promise.all(
       accounts.map(async (account: any) => {
         const platform = account.platformId.toLowerCase()
+        const copywriter = selectedCopywriters.find((item) =>
+          platformAliases(item.platform).includes(platform),
+        ) || COPYWRITER_ROSTER.find((item) => platformAliases(item.platform).includes(platform))
         const scheduledAtPromise = getRecommendedTime(brandId, platform)
 
         let caption = `【${platform}】美味速递！创意想法：${idea}`
@@ -191,6 +201,8 @@ export async function POST(request: Request, { params }: Params) {
             theme: idea,
             mediaUrls: mediaUrls || [],
             assetIds: assetIds || [],
+            copywriterId: copywriter?.id,
+            copywriterName: copywriter?.name,
             actorId: actor.id,
             actorType: actor.type,
             actorRole: actor.role,
@@ -279,7 +291,10 @@ Do not include markdown wrappers around the JSON, return the raw JSON object.
         return {
           platform: account.platformId,
           accountId: account.id,
-          displayName: account.displayName,
+          displayName: copywriter ? `${copywriter.name} · ${copywriter.handle}` : account.displayName,
+          copywriter,
+          copywriterId: copywriter?.id,
+          copywriterName: copywriter?.name,
           caption,
           captionLang: platform === 'xiaohongshu' ? 'zh' : 'en',
           mediaUrls: mediaUrls || [],

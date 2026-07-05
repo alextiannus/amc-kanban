@@ -18,6 +18,7 @@ import { BrandSettingsPanel } from './BrandSettingsPanel'
 import { BrandKnowledgePanel } from './BrandKnowledgePanel'
 import MMSubPageOverlay from './MMSubPageOverlay'
 import MMSideMenu from './MMSideMenu'
+import { COPYWRITER_ROSTER } from '@/lib/copywriters'
 
 const getMainAppUrl = (path: string) => {
   if (typeof window === 'undefined') return path
@@ -108,6 +109,9 @@ export default function MMDashboard() {
 
   // Fullscreen Draft Previews overlay states
   const [generatedDrafts, setGeneratedDrafts] = useState<any[] | null>(null)
+  const [selectedCopywriterIds, setSelectedCopywriterIds] = useState<string[]>(
+    COPYWRITER_ROSTER.map((copywriter) => copywriter.id),
+  )
   const [isSubmittingFinalDrafts, setIsSubmittingFinalDrafts] = useState(false)
   const [scheduleTime, setScheduleTime] = useState<string>('')
   const [showSchedulePicker, setShowSchedulePicker] = useState(false)
@@ -651,6 +655,10 @@ export default function MMDashboard() {
       showToast('请先选择上传素材图！', 'error')
       return
     }
+    if (selectedCopywriterIds.length === 0) {
+      showToast('请至少选择一位 Copywriter。', 'error')
+      return
+    }
 
     setGeneratingBulk(true)
     setCompanionState('thinking')
@@ -707,7 +715,8 @@ export default function MMDashboard() {
         body: JSON.stringify({
           assetIds: uploadedAssetIds,
           mediaUrls: uploadedAssetUrls,
-          idea
+          idea,
+          copywriterIds: selectedCopywriterIds,
         })
       })
 
@@ -1836,6 +1845,52 @@ export default function MMDashboard() {
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wide">选择 Copywriter</span>
+                    <span className="text-[10px] font-bold text-primary">{selectedCopywriterIds.length} 位已选</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-1.5 max-h-44 overflow-y-auto pr-0.5 scrollbar-thin">
+                    {COPYWRITER_ROSTER.map((copywriter) => {
+                      const selected = selectedCopywriterIds.includes(copywriter.id)
+                      return (
+                        <button
+                          key={copywriter.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCopywriterIds((prev) =>
+                              prev.includes(copywriter.id)
+                                ? prev.filter((id) => id !== copywriter.id)
+                                : [...prev, copywriter.id],
+                            )
+                          }}
+                          className={`w-full rounded-2xl border px-3 py-2 text-left flex items-center gap-2 transition-all cursor-pointer ${
+                            selected ? 'bg-white border-primary/40 ring-2 ring-primary/10' : 'bg-slate-50 border-slate-200 hover:bg-white'
+                          }`}
+                        >
+                          <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-[11px] font-black shrink-0">
+                            {copywriter.name.slice(0, 1)}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-black text-slate-800 truncate">{copywriter.name}</span>
+                              <span className="text-[9px] font-bold text-slate-400 truncate">{copywriter.handle}</span>
+                            </div>
+                            <p className="text-[9px] text-slate-500 font-semibold truncate">
+                              {copywriter.specialty} · {copywriter.language}
+                            </p>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                            selected ? 'bg-primary border-primary' : 'bg-white border-slate-300'
+                          }`}>
+                            {selected && <Check className="w-2.5 h-2.5 text-white" />}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 {/* Control Action Buttons */}
                 <div className="flex gap-2.5">
                   <button
@@ -1850,7 +1905,7 @@ export default function MMDashboard() {
                   </button>
                   <button
                     onClick={() => handleBulkSubmit()}
-                    disabled={generatingBulk}
+                    disabled={generatingBulk || selectedCopywriterIds.length === 0}
                     className="flex-1 bg-primary hover:bg-indigo-tint text-white font-extrabold py-2.5 rounded-2xl text-xs active:scale-95 transition-all flex items-center justify-center gap-1 shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50"
                   >
                     {generatingBulk ? (
@@ -1861,7 +1916,7 @@ export default function MMDashboard() {
                     ) : (
                       <>
                         <Sparkles className="w-3.5 h-3.5" />
-                        开始创作
+                        让 Copywriter 创作
                       </>
                     )}
                   </button>

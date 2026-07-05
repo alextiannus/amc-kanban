@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/compliance'
+import { actorFromContext, writeAuditLog } from '@/lib/audit'
+import { eventEmitter } from '@/lib/events'
 
 const DRAFT_SELECT = {
   id: true,
@@ -93,7 +95,13 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const existing = await prisma.contentDraft.findFirst({
     where: { id: draftId, brandId },
-    select: { id: true, status: true, platformPostId: true, publishedAt: true }
+    select: {
+      id: true,
+      status: true,
+      platformPostId: true,
+      publishedAt: true,
+      scheduledAt: true,   // needed to detect time changes
+    },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -155,18 +163,34 @@ export async function PATCH(request: Request, { params }: Params) {
   const nextStatus = typeof body.status === 'string' ? body.status : undefined
 
   let platformPostIdUpdate: string | null | undefined = undefined
-  if (existing.platformPostId && !existing.publishedAt && nextStatus && ['draft', 'pending_review', 'rejected'].includes(nextStatus)) {
+  const isScheduledOnPostfast = !!existing.platformPostId && !existing.publishedAt
+
+  // Detect scheduledAt change for a post that is already queued on PostFast
+  const incomingScheduledAt = typeof body.scheduledAt === 'string' && body.scheduledAt
+    ? new Date(body.scheduledAt)
+    : undefined
+  const scheduledAtChanged = incomingScheduledAt !== undefined &&
+    isScheduledOnPostfast &&
+    (!existing.scheduledAt || Math.abs(incomingScheduledAt.getTime() - existing.scheduledAt.getTime()) > 60_000)
+
+  if (isScheduledOnPostfast && (nextStatus && ['draft', 'pending_review', 'rejected'].includes(nextStatus) || scheduledAtChanged)) {
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
       select: { postfastApiKey: true }
     })
     if (brand?.postfastApiKey) {
       const { postfastDeletePost } = await import('@/lib/integrations/postfast')
-      const cancelResult = await postfastDeletePost(brand.postfastApiKey, existing.platformPostId)
+      const cancelResult = await postfastDeletePost(brand.postfastApiKey, existing.platformPostId!)
       if (cancelResult.success) {
         platformPostIdUpdate = null
       } else {
-        console.warn(`[PATCH Draft] Failed to cancel scheduled post on PostFast: ${cancelResult.error}`)
+        const isGone = (cancelResult.error || '').toLowerCase().includes('not found') ||
+          (cancelResult.error || '').includes('404')
+        if (isGone) {
+          platformPostIdUpdate = null // already gone from PostFast — safe to clear
+        } else {
+          console.warn(`[PATCH Draft] Failed to cancel scheduled post on PostFast: ${cancelResult.error}`)
+        }
       }
     }
   }
@@ -253,6 +277,32 @@ export async function PATCH(request: Request, { params }: Params) {
   void persistDraftSnapshotToObs({ brandId, draftId: draft.id, data: draft }).catch((error) => {
     console.error('[PATCH /api/brands/:id/drafts/:draftId] OBS draft snapshot failed:', error)
   })
+
+  // ── Re-submit to PostFast if scheduledAt changed on an already-queued post ──
+  // PostFast has no reschedule API. Strategy: delete (done above) → re-publish with new time.
+  if (scheduledAtChanged && platformPostIdUpdate === null) {
+    try {
+      const { submitDraftForDelivery } = await import('@/lib/draftSubmission')
+      const resubmitResult = await submitDraftForDelivery({
+        brandId,
+        draftId,
+        actorId: actor.id,
+        forcePublish: true,
+        note: `已更新排期时间至 ${incomingScheduledAt!.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`,
+      })
+      if (resubmitResult.ok) {
+        console.log(`[PATCH Draft] Re-submitted to PostFast with new scheduledAt ${incomingScheduledAt?.toISOString()}`)
+        return NextResponse.json({ ok: true, draft: resubmitResult.draft, rescheduled: true })
+      } else {
+        console.warn(`[PATCH Draft] Re-submit to PostFast failed after reschedule: ${resubmitResult.error}`)
+        // Return the DB-updated draft even if PostFast re-submission failed
+        return NextResponse.json({ ok: true, draft, rescheduled: false, resubmitError: resubmitResult.error })
+      }
+    } catch (err: any) {
+      console.error('[PATCH Draft] Re-submit to PostFast threw:', err)
+      return NextResponse.json({ ok: true, draft, rescheduled: false, resubmitError: err?.message })
+    }
+  }
 
   return NextResponse.json({ ok: true, draft })
 }

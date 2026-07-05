@@ -26,6 +26,7 @@ function testContentGenerateApi() {
   assertIncludes(route, 'const actor = await getActor(request)', 'content API actor resolution')
   assertIncludes(route, 'canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)', 'content API brand ACL')
   assertIncludes(route, 'generateContentWithFallback({', 'content API service call')
+  assertIncludes(route, 'copywriterId: optionalString(body.copywriterId)', 'content API accepts selected copywriter id')
   assertIncludes(route, 'fallbackToLegacy: body.fallbackToLegacy !== false', 'content API fallback flag')
   assertIncludes(route, 'Unsupported industryVertical', 'content API vertical validation')
   assertIncludes(route, "NextResponse.json({ error: 'Unauthorized' }, { status: 401 })", 'content API unauthorized response')
@@ -56,6 +57,7 @@ function testContentGenerationService() {
   assertIncludes(remoteClient, 'AMC_CONTENT_SERVICE_URL', 'remote client service url env')
   assertIncludes(remoteClient, 'AMC_CONTENT_REMOTE_ENABLED', 'remote client feature flag')
   assertIncludes(remoteClient, '/v1/content/generate', 'remote client generate endpoint')
+  assertIncludes(remoteClient, 'copywriterId: input.copywriterId', 'remote client forwards selected copywriter id')
   assertIncludes(remoteClient, "contentEngine: 'amc-content-remote'", 'remote client engine marker')
   assertIncludes(remoteClient, "headers['x-amc-actor-id']", 'remote client forwards actor id')
 
@@ -82,6 +84,9 @@ function testLegacyEntrypointsUseFacade() {
 
   assertIncludes(bulkRoute, "import { generateContentWithFallback } from '@/lib/amc-content/contentGenerationService'", 'bulk route content facade import')
   assertIncludes(bulkRoute, 'const cwResult = await generateContentWithFallback({', 'bulk route content facade call')
+  assertIncludes(bulkRoute, 'copywriterIds', 'bulk route accepts selected copywriter ids')
+  assertIncludes(bulkRoute, 'copywritersFromIds(copywriterIds)', 'bulk route resolves selected copywriter roster')
+  assertIncludes(bulkRoute, 'copywriterId: copywriter?.id', 'bulk route forwards selected copywriter id')
   assertIncludes(bulkRoute, 'fallbackToLegacy: true', 'bulk route fallback flag')
   assertIncludes(bulkRoute, 'contentEngine = cwResult.contentEngine', 'bulk route engine propagation')
   assertIncludes(bulkRoute, '[via contentService/${contentEngine}]', 'bulk route generation log marker')

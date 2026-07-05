@@ -20,6 +20,8 @@ export type ContentGenerationRequest = {
   mustAvoid?: string[]
   mediaUrls?: string[]
   assetIds?: string[]
+  copywriterId?: string
+  copywriterName?: string
   draftId?: string | null
   taskId?: string | null
   fallbackToLegacy?: boolean

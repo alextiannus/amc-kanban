@@ -48,6 +48,8 @@ export async function tryGenerateWithRemoteContentService(
       },
       mediaUrls: input.mediaUrls,
       assetIds: input.assetIds,
+      copywriterId: input.copywriterId,
+      copywriterName: input.copywriterName,
       draftId: input.draftId,
       taskId: input.taskId,
     }),
