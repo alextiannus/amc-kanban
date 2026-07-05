@@ -96,6 +96,8 @@ export default function PostPreviewModal({
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false)
   const [customTime, setCustomTime] = useState('')
 
+  if (!isOpen) return null
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950" onClick={onClose}>
       <div
