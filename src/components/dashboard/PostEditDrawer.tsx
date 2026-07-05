@@ -1180,122 +1180,121 @@ Return the output strictly in a valid JSON array format, containing:
                 </>
               )}
 
-              {/* Copywriters and Scheduled At */}
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 min-h-[44px]">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2.5">Copywriter <span className="text-red-500">*</span></p>
-                  {/* Avatar row — one circle per platform */}
-                  <div className="flex items-end gap-3 flex-wrap">
-                    {COPYWRITER_ROSTER.map((copywriter) => {
-                      const configuredAccount = accounts.find(a =>
-                        platformAliases(copywriter.platform).includes((a.platformId || '').toLowerCase())
-                      )
-                      const effectiveId = draftAccountIdForCopywriter(copywriter, accounts)
-                      const isConfigured = !!configuredAccount
-                      const isSelected = selectedAccountIds.includes(effectiveId)
-                      const title = isConfigured
-                        ? (configuredAccount?.displayName || configuredAccount?.handle || copywriter.handle)
-                        : `${copywriter.handle}（未配置发布账号，仍可先创作内容）`
+              {/* Copywriter — full width row */}
+              <div className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-3">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-3">Copywriter <span className="text-red-500">*</span></p>
+                {/* Avatar row — one circle per platform, no wrap */}
+                <div className="flex items-end gap-4">
+                  {COPYWRITER_ROSTER.map((copywriter) => {
+                    const configuredAccount = accounts.find(a =>
+                      platformAliases(copywriter.platform).includes((a.platformId || '').toLowerCase())
+                    )
+                    const effectiveId = draftAccountIdForCopywriter(copywriter, accounts)
+                    const isConfigured = !!configuredAccount
+                    const isSelected = selectedAccountIds.includes(effectiveId)
+                    const title = isConfigured
+                      ? (configuredAccount?.displayName || configuredAccount?.handle || copywriter.handle)
+                      : `${copywriter.handle}（未配置发布账号，仍可先创作内容）`
 
-                      // Platform logo SVGs
-                      const platformLogo: Record<string, React.ReactNode> = {
-                        instagram: (
-                          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-                            <defs>
-                              <linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="#f09433"/>
-                                <stop offset="25%" stopColor="#e6683c"/>
-                                <stop offset="50%" stopColor="#dc2743"/>
-                                <stop offset="75%" stopColor="#cc2366"/>
-                                <stop offset="100%" stopColor="#bc1888"/>
-                              </linearGradient>
-                            </defs>
-                            <rect width="24" height="24" rx="6" fill="url(#ig-grad)"/>
-                            <circle cx="12" cy="12" r="4.2" stroke="white" strokeWidth="1.8" fill="none"/>
-                            <circle cx="17.2" cy="6.8" r="1.1" fill="white"/>
-                          </svg>
-                        ),
-                        tiktok: (
-                          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-                            <rect width="24" height="24" rx="6" fill="#010101"/>
-                            <path d="M17 8.5a3.5 3.5 0 01-3.5-3.5V4.5h-2V14a1.5 1.5 0 11-1.5-1.5v-2.1A3.6 3.6 0 006.5 14a3.5 3.5 0 107 0V9.1A6.5 6.5 0 0017 9.5V8.5z" fill="white"/>
-                            <path d="M17 7.5a3.5 3.5 0 01-3.5-3.5" stroke="#69C9D0" strokeWidth="1.5" fill="none"/>
-                          </svg>
-                        ),
-                        facebook: (
-                          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-                            <rect width="24" height="24" rx="6" fill="#1877F2"/>
-                            <path d="M13.5 8.5h2V6h-2c-1.65 0-3 1.35-3 3v1.5H9V13h1.5v7h2.5v-7H15l.5-2.5h-2.5V9c0-.28.22-.5.5-.5z" fill="white"/>
-                          </svg>
-                        ),
-                        google_business: (
-                          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-                            <rect width="24" height="24" rx="6" fill="white" stroke="#e2e8f0" strokeWidth="0.5"/>
-                            <path d="M12 5.5c1.76 0 3.32.66 4.5 1.74L18.8 5c-1.78-1.64-4.16-2.64-6.8-2.64C7.84 2.36 4.32 4.96 3 8.56l2.56 2A7.5 7.5 0 0112 5.5z" fill="#EA4335"/>
-                            <path d="M21.5 12.5c0-.84-.08-1.64-.22-2.42H12v4.5h5.36a4.6 4.6 0 01-2 3l3.1 2.4c1.82-1.68 2.84-4.14 2.84-7.48z" fill="#4285F4"/>
-                            <path d="M5.56 14.56A7.5 7.5 0 0112 19.5c2.14 0 4.06-.78 5.46-2.02l-3.1-2.4a4.5 4.5 0 01-6.36-1.44l-2.44 1.92z" fill="#34A853"/>
-                            <path d="M3 8.56l2.56 2A7.46 7.46 0 014.5 12c0 .54.06 1.06.16 1.56L2.1 15.48A10.04 10.04 0 012 12c0-1.22.18-2.38.5-3.44l.5 0z" fill="#FBBC04"/>
-                          </svg>
-                        ),
-                        xiaohongshu: (
-                          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-                            <rect width="24" height="24" rx="6" fill="#FF2442"/>
-                            <text x="12" y="16" textAnchor="middle" fontSize="11" fontWeight="900" fill="white" fontFamily="sans-serif">小</text>
-                          </svg>
-                        ),
-                      }
+                    // Platform logo SVGs — larger, filling the circle
+                    const platformLogo: Record<string, React.ReactNode> = {
+                      instagram: (
+                        <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
+                          <defs>
+                            <linearGradient id="ig-g" x1="0%" y1="100%" x2="100%" y2="0%">
+                              <stop offset="0%" stopColor="#f09433"/>
+                              <stop offset="25%" stopColor="#e6683c"/>
+                              <stop offset="50%" stopColor="#dc2743"/>
+                              <stop offset="75%" stopColor="#cc2366"/>
+                              <stop offset="100%" stopColor="#bc1888"/>
+                            </linearGradient>
+                          </defs>
+                          <rect width="32" height="32" rx="9" fill="url(#ig-g)"/>
+                          <circle cx="16" cy="16" r="5.5" stroke="white" strokeWidth="2.2" fill="none"/>
+                          <circle cx="22.5" cy="9.5" r="1.5" fill="white"/>
+                        </svg>
+                      ),
+                      tiktok: (
+                        <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
+                          <rect width="32" height="32" rx="9" fill="#010101"/>
+                          <path d="M22 11.2a4.8 4.8 0 01-4.8-4.8v-.4h-2.8V18a2 2 0 11-2-2v-2.8A4.8 4.8 0 009.6 18a4.8 4.8 0 109.6 0V12.6A8.6 8.6 0 0022 13V11.2z" fill="white"/>
+                          <path d="M22 10a4.8 4.8 0 01-4.8-4.8" stroke="#69C9D0" strokeWidth="2" strokeLinecap="round" fill="none"/>
+                        </svg>
+                      ),
+                      facebook: (
+                        <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
+                          <rect width="32" height="32" rx="9" fill="#1877F2"/>
+                          <path d="M18 11.5h2.5V8H18c-2.2 0-4 1.8-4 4v2H12V17h2v10h3V17h2.5l.5-3H17v-2c0-.28.22-.5.5-.5l.5 0z" fill="white"/>
+                        </svg>
+                      ),
+                      google_business: (
+                        <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
+                          <rect width="32" height="32" rx="9" fill="white" stroke="#e2e8f0" strokeWidth="0.8"/>
+                          <path d="M16 7c2.35 0 4.43.88 6 2.32L24.4 7C22.24 5.1 19.27 4 16 4 10.8 4 6.4 7.12 4.5 11.5l3.4 2.66A8 8 0 0116 7z" fill="#EA4335"/>
+                          <path d="M28 16.5c0-1.12-.1-2.2-.3-3.22H16v6h6.72a5.76 5.76 0 01-2.5 3.76l4.12 3.2C26.4 24.12 28 20.6 28 16.5z" fill="#4285F4"/>
+                          <path d="M7.9 19.16A8 8 0 0116 25c2.86 0 5.42-1.04 7.34-2.76l-4.12-3.2a5 5 0 01-7.44-1.84l-3.88 2.96z" fill="#34A853"/>
+                          <path d="M4.5 11.5l3.4 2.66A8 8 0 006 16c0 .72.08 1.42.2 2.1L2.6 21a13.5 13.5 0 01-.6-5A13.5 13.5 0 014.5 11.5z" fill="#FBBC04"/>
+                        </svg>
+                      ),
+                      xiaohongshu: (
+                        <svg viewBox="0 0 32 32" className="w-8 h-8" fill="none">
+                          <rect width="32" height="32" rx="9" fill="#FF2442"/>
+                          <text x="16" y="21" textAnchor="middle" fontSize="15" fontWeight="900" fill="white" fontFamily="sans-serif">小</text>
+                        </svg>
+                      ),
+                    }
 
-                      return (
-                        <button
-                          key={copywriter.id}
-                          type="button"
-                          disabled={isPublished}
-                          title={title}
-                          onClick={() => {
-                            setSelectedAccountIds(prev =>
-                              prev.includes(effectiveId)
-                                ? prev.filter(id => id !== effectiveId)
-                                : [...prev, effectiveId]
-                            )
-                          }}
-                          className={`relative flex flex-col items-center gap-1 group disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none`}
-                        >
-                          {/* Avatar circle */}
-                          <div className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-150 ${
-                            isSelected
-                              ? 'ring-2 ring-offset-2 ring-indigo-500 shadow-md shadow-indigo-200 dark:shadow-indigo-900/30 scale-110'
-                              : 'ring-1 ring-slate-200 dark:ring-slate-700 hover:ring-indigo-300 hover:scale-105'
-                          } bg-white dark:bg-slate-800 overflow-hidden`}>
-                            {platformLogo[copywriter.platform] ?? (
-                              <span className="text-xs font-black text-slate-500">{copywriter.name[0]}</span>
-                            )}
-                            {/* Unconfigured amber dot badge */}
-                            {!isConfigured && (
-                              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white dark:border-slate-950" title="未配置账号" />
-                            )}
-                          </div>
-                          {/* Name label */}
-                          <span className={`text-[10px] font-bold leading-none transition-colors ${
-                            isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300'
-                          }`}>
-                            {copywriter.name}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
+                    return (
+                      <button
+                        key={copywriter.id}
+                        type="button"
+                        disabled={isPublished}
+                        title={title}
+                        onClick={() => {
+                          setSelectedAccountIds(prev =>
+                            prev.includes(effectiveId)
+                              ? prev.filter(id => id !== effectiveId)
+                              : [...prev, effectiveId]
+                          )
+                        }}
+                        className="relative flex flex-col items-center gap-1.5 group disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none"
+                      >
+                        {/* Avatar circle */}
+                        <div className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-150 ${
+                          isSelected
+                            ? 'ring-[3px] ring-offset-2 ring-indigo-500 shadow-lg shadow-indigo-200 dark:shadow-indigo-900/40 scale-105'
+                            : 'ring-1 ring-slate-200 dark:ring-slate-700 hover:ring-2 hover:ring-indigo-300 hover:scale-105'
+                        } bg-white dark:bg-slate-800 overflow-hidden`}>
+                          {platformLogo[copywriter.platform] ?? (
+                            <span className="text-base font-black text-slate-500">{copywriter.name[0]}</span>
+                          )}
+                          {/* Unconfigured amber dot badge */}
+                          {!isConfigured && (
+                            <span className="absolute top-0 right-0 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-white dark:border-slate-950" title="未配置账号" />
+                          )}
+                        </div>
+                        {/* Name label */}
+                        <span className={`text-[11px] font-bold leading-none transition-colors ${
+                          isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-300'
+                        }`}>
+                          {copywriter.name}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
+              </div>
 
-                <div className="flex flex-col justify-end space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">指定排期时间</label>
-                  <input
-                    type="datetime-local"
-                    value={scheduledAt}
-                    disabled={isPublished}
-                    onChange={(event) => setScheduledAt(event.target.value)}
-                    className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-850 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-955 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-550 disabled:cursor-not-allowed"
-                  />
-                </div>
+              {/* Scheduled At — full width row below */}
+              <div className="flex flex-col space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">指定排期时间</label>
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  disabled={isPublished}
+                  onChange={(event) => setScheduledAt(event.target.value)}
+                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-850 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-955 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-550 disabled:cursor-not-allowed"
+                />
               </div>
 
               {/* Collaboration Note */}
