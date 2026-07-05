@@ -595,6 +595,7 @@ function PlatformPreviewCard({
       </div>
     )
   }
+  return (
     <div
       onClick={() => {
         if (!isGenerating) {
