@@ -99,7 +99,6 @@ export default function PostPreviewModal({
   if (!isOpen) return null
 
   return (
-    {/* Backdrop — semi-transparent so creation page is visible behind */}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm" onClick={onClose}>
       {/* Floating panel — contained, not full-screen */}
       <div
@@ -162,7 +161,6 @@ export default function PostPreviewModal({
               const platformLabel = platform === 'ig' ? 'Instagram' : platform === 'xhs' ? '小红书' : platform === 'fb' ? 'Facebook' : platform === 'tiktok' ? 'TikTok' : 'Google Business'
 
               return (
-                {/* self-start keeps each card aligned to the flex-start baseline */}
                 <div key={cwId} className="flex-shrink-0 flex flex-col self-start" style={{ width: 300 }}>
                   {/* Unified top bar — platform + copywriter name on left, cancel on right */}
                   <div className="flex items-center justify-between px-3 h-9 bg-slate-800/90 rounded-t-xl border-b border-slate-700/60 shrink-0">
