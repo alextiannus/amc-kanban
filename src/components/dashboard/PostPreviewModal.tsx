@@ -136,7 +136,7 @@ export default function PostPreviewModal({
           {selectedAccountIds.length === 0 ? (
             <div className="py-20 text-center text-slate-400 dark:text-slate-555">
               <Eye className="w-10 h-10 mx-auto mb-3 opacity-20" />
-              <p className="text-xs font-extrabold">请选择发布账号以查看预览</p>
+              <p className="text-xs font-extrabold">请选择 Copywriter 以查看预览</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-10">

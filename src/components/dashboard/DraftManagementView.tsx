@@ -43,6 +43,7 @@ import {
 import PostPreviewModal from './PostPreviewModal'
 import { callGeminiDirect } from '@/lib/gemini-direct'
 import PostEditDrawer from './PostEditDrawer'
+import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
 
 function isVideoUrl(url: string): boolean {
   if (!url) return false
@@ -173,6 +174,10 @@ function platformBadgeClass(platformId?: string | null) {
   if (normalized.includes('google')) return 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/60'
   if (normalized.includes('tiktok')) return 'bg-slate-900 text-white border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-200'
   return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+}
+
+function defaultCopywriterAccountIds(accounts: SocialAccountOption[]): string[] {
+  return COPYWRITER_ROSTER.map((copywriter) => draftAccountIdForCopywriter(copywriter, accounts))
 }
 
 function accountInitial(draft: DraftItem) {
@@ -682,6 +687,19 @@ Never include any markdown backticks, conversational preamble, or explanation ou
         profileUrl: null
       } as any)
     }
+
+    COPYWRITER_ROSTER.forEach((copywriter) => {
+      const id = draftAccountIdForCopywriter(copywriter, accounts)
+      if (list.some((account) => account.id === id)) return
+      list.push({
+        id,
+        platformId: copywriter.platform,
+        handle: 'unconfigured',
+        displayName: `${copywriter.handle} (未配置)`,
+        autoPilot: false,
+        profileUrl: null,
+      } as any)
+    })
     
     return list
   }, [accounts, selectedDraft])
@@ -764,7 +782,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
       setCaption('')
       setHashtags('')
       setAccountId('')
-      setSelectedAccountIds(accounts.map(a => a.id))
+      setSelectedAccountIds(defaultCopywriterAccountIds(accounts))
       setScheduledAt('')
       setAgentNote('')
       setMediaUrlsInput('')
@@ -878,7 +896,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     setCaption('')
     setHashtags('')
     setAccountId('')
-    setSelectedAccountIds(accounts.map(a => a.id))
+    setSelectedAccountIds(defaultCopywriterAccountIds(accounts))
     setScheduledAt('')
     setAgentNote('')
     setMediaUrlsInput('')
@@ -901,7 +919,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     }
     const activeAccountIds = accountIdsOverride || selectedAccountIds
     if (activeAccountIds.length === 0) {
-      setError('请选择发布平台账号')
+      setError('请至少选择一位 Copywriter')
       return null
     }
     setSaving(true)

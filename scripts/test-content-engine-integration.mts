@@ -144,12 +144,39 @@ function testContentLabStandaloneEntry() {
   assertIncludes(internalAdmin, 'CONTENT_SERVICE_INTERNAL_TOKEN', 'internal admin bridge is service-token protected')
 }
 
+function testCopywriterFirstCreativeUi() {
+  const postEditDrawer = read('src/components/dashboard/PostEditDrawer.tsx')
+  const dashboardAssets = read('src/components/dashboard/DashboardAssets.tsx')
+  const draftManagement = read('src/components/dashboard/DraftManagementView.tsx')
+  const dashboardCalendar = read('src/components/dashboard/DashboardCalendar.tsx')
+  const postPreviewModal = read('src/components/dashboard/PostPreviewModal.tsx')
+
+  assertIncludes(postEditDrawer, 'COPYWRITER_ROSTER', 'post editor exposes copywriter roster selection')
+  assertIncludes(postEditDrawer, 'draftAccountIdForCopywriter(copywriter, accounts)', 'post editor maps copywriters to draft targets')
+  assertIncludes(postEditDrawer, '可先创作', 'post editor allows creation before publishing account setup')
+  assertNotIncludes(postEditDrawer, 'PLATFORM_SLOTS', 'post editor no longer uses platform slots as the creative selector')
+  assertNotIncludes(postEditDrawer, '创作平台', 'post editor is not platform-slot first')
+  assertNotIncludes(postEditDrawer, '请选择发布平台账号', 'post editor does not block creation on publishing accounts')
+
+  assertIncludes(dashboardAssets, 'COPYWRITER_ROSTER', 'asset schedule modal exposes copywriter roster')
+  assertIncludes(dashboardAssets, 'scheduleSelectedCopywriterIds', 'asset schedule modal stores selected copywriters')
+  assertIncludes(dashboardAssets, 'draftAccountIdForCopywriter(copywriter, brandAccounts)', 'asset schedule modal maps copywriters to draft targets')
+  assertNotIncludes(dashboardAssets, '发布账号 (多选)', 'asset schedule modal is not account-first')
+  assertNotIncludes(dashboardAssets, '请选择发布账号', 'asset schedule modal does not block creation on publishing accounts')
+
+  assertIncludes(draftManagement, 'defaultCopywriterAccountIds(accounts)', 'draft management defaults new drafts to copywriter targets')
+  assertNotIncludes(draftManagement, 'accounts.map(a => a.id)', 'draft management no longer defaults creative targets from publishing accounts')
+  assertNotIncludes(dashboardCalendar, '请选择发布平台账号', 'calendar legacy creative path uses copywriter validation copy')
+  assertIncludes(postPreviewModal, '请选择 Copywriter 以查看预览', 'preview modal empty state names copywriters')
+}
+
 function main() {
   testContentGenerateApi()
   testContentGenerationService()
   testLegacyEntrypointsUseFacade()
   testPlatformCopywriterRegistry()
   testContentLabStandaloneEntry()
+  testCopywriterFirstCreativeUi()
   console.log('SUCCESS: content engine integration guards passed')
 }
 

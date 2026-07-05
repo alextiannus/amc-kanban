@@ -64,3 +64,12 @@ export function platformAliases(platform: string): string[] {
   if (normalized === 'google_business') return ['google_business', 'google', 'google_maps', 'google_map']
   return [normalized]
 }
+
+export function draftAccountIdForCopywriter(
+  copywriter: CopywriterPersona,
+  accounts: Array<{ id?: string; platformId?: string | null }>,
+): string {
+  const aliases = platformAliases(copywriter.platform)
+  const account = accounts.find((item) => aliases.includes((item.platformId || '').toLowerCase()))
+  return account?.id || `unconfigured_${copywriter.platform}`
+}

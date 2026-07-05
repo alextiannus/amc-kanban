@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import PostPreviewModal from './PostPreviewModal'
 import { callGeminiDirect } from '@/lib/gemini-direct'
+import { COPYWRITER_ROSTER, draftAccountIdForCopywriter, platformAliases } from '@/lib/copywriters'
 
 function isVideoUrl(url: string): boolean {
   if (!url) return false
@@ -102,25 +103,11 @@ const PLATFORM_LABELS: Record<string, string> = {
   google_business: 'Google Business',
 }
 
-// Fixed platform slots always shown in the account list
-const PLATFORM_SLOTS: Array<{ key: string; icon: string; label: string; ids: string[] }> = [
-  { key: 'tiktok',    icon: '🎵', label: 'TikTok',      ids: ['tiktok'] },
-  { key: 'instagram', icon: '📸', label: 'Instagram',   ids: ['instagram', 'ig'] },
-  { key: 'facebook',  icon: '👥', label: 'Facebook',    ids: ['facebook', 'fb'] },
-  { key: 'google',    icon: '📍', label: 'Google Maps', ids: ['google_business', 'google', 'google_maps'] },
-  { key: 'xhs',       icon: '📕', label: '小红书',       ids: ['red', 'xiaohongshu', 'xhs', 'rednote'] },
-]
-
 /** Returns the effective default selectedAccountIds:
- *  - all configured accounts
- *  - plus 'unconfigured_xhs' if no XHS account is configured (XHS always included by default) */
+ *  - one creative target per copywriter
+ *  - configured platform account when available, otherwise a virtual draft target */
 function buildDefaultAccountIds(accounts: SocialAccountOption[]): string[] {
-  const ids = accounts.map(a => a.id)
-  const hasXhs = accounts.some(a =>
-    ['red', 'xiaohongshu', 'xhs', 'rednote'].includes((a.platformId || '').toLowerCase())
-  )
-  if (!hasXhs) ids.push('unconfigured_xhs')
-  return ids
+  return COPYWRITER_ROSTER.map((copywriter) => draftAccountIdForCopywriter(copywriter, accounts))
 }
 
 function normalizePlatformLabel(plat?: string): string {
@@ -492,7 +479,7 @@ export default function PostEditDrawer({
     }
     const activeAccountIds = accountIdsOverride || selectedAccountIds
     if (activeAccountIds.length === 0) {
-      setError('请选择发布平台账号')
+      setError('请至少选择一位 Copywriter')
       return null
     }
     setSaving(true)
@@ -1193,26 +1180,24 @@ Return the output strictly in a valid JSON array format, containing:
                 </>
               )}
 
-              {/* Social Channels and Scheduled At */}
+              {/* Copywriters and Scheduled At */}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 min-h-[44px]">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">创作平台 <span className="text-red-500">*</span></p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">Copywriter <span className="text-red-500">*</span></p>
                   <div className="flex flex-wrap gap-1.5">
-                    {PLATFORM_SLOTS.map(slot => {
-                      // Find the configured account for this platform slot
+                    {COPYWRITER_ROSTER.map((copywriter) => {
                       const configuredAccount = accounts.find(a =>
-                        slot.ids.some(id => id === (a.platformId || '').toLowerCase())
+                        platformAliases(copywriter.platform).includes((a.platformId || '').toLowerCase())
                       )
-                      // Always show all slots — unconfigured get a synthetic ID
-                      const effectiveId = configuredAccount?.id ?? `unconfigured_${slot.key}`
+                      const effectiveId = draftAccountIdForCopywriter(copywriter, accounts)
                       const isConfigured = !!configuredAccount
                       const isSelected = selectedAccountIds.includes(effectiveId)
                       return (
                         <button
-                          key={slot.key}
+                          key={copywriter.id}
                           type="button"
                           disabled={isPublished}
-                          title={isConfigured ? (configuredAccount?.displayName || configuredAccount?.handle || slot.label) : `${slot.label}（未配置，仍可生成内容草稿）`}
+                          title={isConfigured ? (configuredAccount?.displayName || configuredAccount?.handle || copywriter.handle) : `${copywriter.handle}（未配置发布账号，仍可先创作内容）`}
                           onClick={() => {
                             setSelectedAccountIds(prev =>
                               prev.includes(effectiveId)
@@ -1226,10 +1211,10 @@ Return the output strictly in a valid JSON array format, containing:
                               : 'bg-white border-slate-200 text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50'
                           }`}
                         >
-                          <span>{slot.icon}</span>
-                          <span>{isConfigured ? (configuredAccount?.displayName || configuredAccount?.handle || slot.label) : slot.label}</span>
+                          <span>{copywriter.name}</span>
+                          <span className="text-[10px] opacity-75">{copywriter.handle}</span>
                           {!isConfigured && (
-                            <span className="text-[9px] font-semibold text-amber-500 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-1 py-0.5 rounded ml-0.5">未配置</span>
+                            <span className="text-[9px] font-semibold text-amber-500 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-1 py-0.5 rounded ml-0.5">可先创作</span>
                           )}
                         </button>
                       )
@@ -1820,20 +1805,18 @@ Return the output strictly in a valid JSON array format, containing:
         selectedAccountIds={selectedAccountIds}
         accountOptions={[
             ...accounts,
-            // Add stub entries for any selected virtual IDs that have no real account
-            ...PLATFORM_SLOTS
-              .filter(slot => {
-                const effectiveId = accounts.find(a =>
-                  slot.ids.includes((a.platformId || '').toLowerCase())
-                )?.id ?? (slot.key === 'xhs' ? 'unconfigured_red' : null)
-                return effectiveId && selectedAccountIds.includes(effectiveId) && !accounts.find(a =>
-                  slot.ids.includes((a.platformId || '').toLowerCase())
+            // Add stub entries for selected copywriters whose publishing account is not configured yet.
+            ...COPYWRITER_ROSTER
+              .filter(copywriter => {
+                const effectiveId = draftAccountIdForCopywriter(copywriter, accounts)
+                return selectedAccountIds.includes(effectiveId) && !accounts.find(a =>
+                  platformAliases(copywriter.platform).includes((a.platformId || '').toLowerCase())
                 )
               })
-              .map(slot => ({
-                id: slot.key === 'xhs' ? 'unconfigured_red' : `unconfigured_${slot.key}`,
-                platformId: slot.ids[0],
-                displayName: `${slot.label}（未配置）`,
+              .map(copywriter => ({
+                id: draftAccountIdForCopywriter(copywriter, accounts),
+                platformId: copywriter.platform,
+                displayName: `${copywriter.handle}（未配置）`,
                 handle: '',
               }))
           ]}

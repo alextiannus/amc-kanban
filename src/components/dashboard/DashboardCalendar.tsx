@@ -3,6 +3,7 @@ import React, { useEffect, useState, useMemo, useRef } from 'react'
 import PostPreviewModal from './PostPreviewModal'
 import PostEditDrawer from './PostEditDrawer'
 import { callGeminiDirect } from '@/lib/gemini-direct'
+import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
 import {
   Heart,
   MessageCircle,
@@ -489,6 +490,18 @@ ${contentIdea || 'No details provided.'}`
         profileUrl: null
       } as any)
     }
+    COPYWRITER_ROSTER.forEach((copywriter) => {
+      const id = draftAccountIdForCopywriter(copywriter, accounts)
+      if (list.some((account) => account.id === id)) return
+      list.push({
+        id,
+        platformId: copywriter.platform,
+        handle: 'unconfigured',
+        displayName: `${copywriter.handle} (未配置)`,
+        autoPilot: false,
+        profileUrl: null,
+      } as any)
+    })
     return list
   }, [accounts, createdDrafts])
 
@@ -913,7 +926,7 @@ ${contentIdea || 'No details provided.'}`
     }
     const activeAccountIds = accountIdsOverride || selectedAccountIds
     if (activeAccountIds.length === 0) {
-      alert('请选择发布平台账号')
+      alert('请至少选择一位 Copywriter')
       return null
     }
     setSaving(true)

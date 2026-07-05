@@ -39,6 +39,7 @@ import {
   Store
 , Tag, FolderOpen
 } from 'lucide-react'
+import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
 
 // Category definitions
 const CATEGORY_META = [
@@ -170,7 +171,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
   const [scheduleTargetIds, setScheduleTargetIds] = useState<string[]>([])
   const [scheduleCaption, setScheduleCaption] = useState('')
   const [scheduleHashtags, setScheduleHashtags] = useState('')
-  const [scheduleSelectedAccountIds, setScheduleSelectedAccountIds] = useState<string[]>([])
+  const [scheduleSelectedCopywriterIds, setScheduleSelectedCopywriterIds] = useState<string[]>(
+    COPYWRITER_ROSTER.map((copywriter) => copywriter.id),
+  )
   const [scheduleScheduledAt, setScheduleScheduledAt] = useState('')
   const [scheduleAgentNote, setScheduleAgentNote] = useState('')
   const [brandAccounts, setBrandAccounts] = useState<any[]>([])
@@ -184,9 +187,11 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
   }, [assets])
 
   const activeAccount = useMemo(() => {
-    const accId = scheduleSelectedAccountIds[0]
+    const selectedCopywriter = COPYWRITER_ROSTER.find((copywriter) => scheduleSelectedCopywriterIds.includes(copywriter.id))
+    if (!selectedCopywriter) return null
+    const accId = draftAccountIdForCopywriter(selectedCopywriter, brandAccounts)
     return brandAccounts.find(a => a.id === accId) || null
-  }, [brandAccounts, scheduleSelectedAccountIds])
+  }, [brandAccounts, scheduleSelectedCopywriterIds])
 
   const attachedMedia = useMemo(() => {
     return scheduleTargetIds
@@ -467,9 +472,6 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
         const json = await res.json()
         const data = json.accounts || []
         setBrandAccounts(data)
-        if (data && data.length > 0) {
-          setScheduleSelectedAccountIds([data[0].id])
-        }
       }
     } catch (err) {
       console.error('Failed to load brand accounts:', err)
@@ -482,8 +484,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
       alert('草稿正文不能为空')
       return
     }
-    if (scheduleSelectedAccountIds.length === 0) {
-      alert('请选择发布账号（确定发布平台）')
+    if (scheduleSelectedCopywriterIds.length === 0) {
+      alert('请至少选择一位 Copywriter')
       return
     }
 
@@ -519,8 +521,13 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
           .filter((t) => t.length > 0)
       }
 
+      const selectedCopywriters = COPYWRITER_ROSTER.filter((copywriter) =>
+        scheduleSelectedCopywriterIds.includes(copywriter.id),
+      )
+
       await Promise.all(
-        scheduleSelectedAccountIds.map(async (accId) => {
+        selectedCopywriters.map(async (copywriter) => {
+          const accId = draftAccountIdForCopywriter(copywriter, brandAccounts)
           const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -533,6 +540,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
               scheduledAt: scheduleScheduledAt ? new Date(scheduleScheduledAt).toISOString() : null,
               status: 'draft',
               agentNote: scheduleAgentNote.trim() || null,
+              creativeHooks: `Copywriter: ${copywriter.name} · ${copywriter.handle}`,
               agentId: null,
               createTask: true,
             }),
@@ -1463,37 +1471,36 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
               />
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 p-2.5 min-h-[44px]">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">发布账号 (多选) <span className="text-red-500">*</span></p>
-                  {brandAccounts.length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">未绑定任何账号</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {brandAccounts.map((account) => {
-                        const isSelected = scheduleSelectedAccountIds.includes(account.id)
-                        return (
-                          <button
-                            key={account.id}
-                            type="button"
-                            onClick={() => {
-                              setScheduleSelectedAccountIds(prev =>
-                                prev.includes(account.id)
-                                  ? prev.filter(id => id !== account.id)
-                                  : [...prev, account.id]
-                              )
-                            }}
-                            className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all flex items-center gap-1.5 ${
-                              isSelected
-                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900 dark:text-indigo-300'
-                                : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50'
-                            }`}
-                          >
-                            <span>{account.platformId.toLowerCase() === 'instagram' ? '📸' : account.platformId.toLowerCase() === 'facebook' ? '👥' : account.platformId.toLowerCase() === 'red' ? '📕' : account.platformId.toLowerCase() === 'tiktok' ? '🎵' : '🔗'}</span>
-                            <span>{account.displayName || account.name || account.handle}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">Copywriter (多选) <span className="text-red-500">*</span></p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {COPYWRITER_ROSTER.map((copywriter) => {
+                      const isSelected = scheduleSelectedCopywriterIds.includes(copywriter.id)
+                      const accountId = draftAccountIdForCopywriter(copywriter, brandAccounts)
+                      const isConfigured = !accountId.startsWith('unconfigured_')
+                      return (
+                        <button
+                          key={copywriter.id}
+                          type="button"
+                          onClick={() => {
+                            setScheduleSelectedCopywriterIds(prev =>
+                              prev.includes(copywriter.id)
+                                ? prev.filter(id => id !== copywriter.id)
+                                : [...prev, copywriter.id]
+                            )
+                          }}
+                          className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-900 dark:text-indigo-300'
+                              : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span>{copywriter.name}</span>
+                          <span>{copywriter.handle}</span>
+                          {!isConfigured && <span className="text-[9px] text-amber-500">可先创作</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
                 <div className="flex flex-col justify-end">
                   <input
@@ -1567,10 +1574,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
               <button
                 type="button"
                 onClick={() => {
-                  const firstSelectedAccountId = scheduleSelectedAccountIds[0]
-                  const account = brandAccounts.find((a) => a.id === firstSelectedAccountId)
-                  if (account) {
-                    setPreviewPlatform(account.platformId.toLowerCase())
+                  const firstCopywriter = COPYWRITER_ROSTER.find((copywriter) => scheduleSelectedCopywriterIds.includes(copywriter.id))
+                  if (firstCopywriter) {
+                    setPreviewPlatform(firstCopywriter.platform)
                   } else {
                     setPreviewPlatform('instagram')
                   }
@@ -1589,7 +1595,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
                 取消
               </button>
               <button
-                disabled={creatingTask || !scheduleCaption.trim() || scheduleSelectedAccountIds.length === 0}
+                disabled={creatingTask || !scheduleCaption.trim() || scheduleSelectedCopywriterIds.length === 0}
                 onClick={handleConfirmScheduleAndTask}
                 className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600 disabled:opacity-50"
               >
