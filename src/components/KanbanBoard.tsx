@@ -161,6 +161,8 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       const res = await fetch('/api/auth/me')
       if (res.ok) {
         setUser(await res.json())
+      } else if (res.status === 401) {
+        router.push('/')
       }
     } catch (e) {
       console.error('[KanbanBoard] fetchUser error', e)
@@ -172,6 +174,10 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     try {
       const res = await fetch('/api/subscription')
       if (!res.ok) {
+        if (res.status === 401) {
+          router.push('/')
+          return
+        }
         // On API error, don't permanently block — reset to null so user can retry
         setSubscriptionActive(null)
         return

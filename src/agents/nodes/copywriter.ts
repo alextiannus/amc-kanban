@@ -468,25 +468,26 @@ Please output ONLY a valid JSON object.`;
   if (!geminiUsed) {
     console.log("Falling back to rule-based copywriter templates.");
     const brandName = brand.name;
-    const themeText = userPrompt ? userPrompt : "高品质服务与体验";
-    const hooksText = creativeHooks ? ` (${creativeHooks})` : "";
-
-    // Platform-specific fallback generation
-    const addressStr = brand.address ? `\n\n📍 店铺地址：${brand.address}` : "";
-    let contactStr = "";
-    if (brand.address) contactStr += `\n📍 Address: ${brand.address}`;
-    if (brand.phone) contactStr += `\n📞 Phone: ${brand.phone}`;
-    if (brand.website) contactStr += `\n🌐 Website: ${brand.website}`;
+    const themeText = platformLower === "xiaohongshu" || platformLower === "red" || platformLower === "xhs"
+      ? fallbackChineseTheme(userPrompt, creativeHooks)
+      : fallbackEnglishTheme(userPrompt, creativeHooks);
+    const englishAngle = fallbackEnglishTheme(creativeHooks, undefined);
 
     if (platformLower === "xiaohongshu" || platformLower === "red" || platformLower === "xhs") {
-      aiCaption = `🔥 我不允许还有人不知道这家宝藏店铺！\n\n📍 ${brandName} 带来全新企划：${themeText}！${hooksText}\n\n✨ 无论是高颜值环境还是精益求精的出品，都直接封神！！家人们闭眼冲就对了！${addressStr}\n\n📌 记得点赞收藏，防止找不到哦～`;
-      aiHashtags = ["新加坡打卡", "宝藏店铺", brandName.replace(/\s+/g, "").toLowerCase(), "本地生活"];
+      aiCaption = `📍${brandName} 最新本地生活更新\n\n这次重点是：${themeText}。\n\n适合正在附近找新选择、想提前了解亮点和到店信息的人。${brand.address ? `\n\n📍地址：${brand.address}` : ""}${brand.website ? `\n🌐 详情：${brand.website}` : ""}\n\n可以先收藏，需要时再打开看。`;
+      aiHashtags = ["新加坡生活", "本地探店", brandName.replace(/\s+/g, "").toLowerCase(), "同城推荐"];
     } else if (platformLower === "google_business" || platformLower === "google" || platformLower === "google_maps") {
-      aiCaption = `Update from ${brandName}:\n\nWe are pleased to introduce our latest project: "${themeText}".${creativeHooks ? ` Focus: ${creativeHooks}.` : ""}\n\nExperience premium quality and dedicated local service at our location.${contactStr}\n\nVisit our website or contact us to book your reservation.`;
-      aiHashtags = [brandName.replace(/\s+/g, "").toLowerCase(), "localbusiness", "singapore"];
+      aiCaption = `${brandName} local update\n\n${themeText}. ${englishAngle !== "a fresh local update" ? `Focus: ${englishAngle}. ` : ""}${brand.address ? `Visit us at ${brand.address}. ` : ""}${brand.location && !brand.address ? `Find us in ${brand.location}. ` : ""}${brand.website ? `Learn more on our website. ` : ""}Use the Google Business contact options to book, enquire, or get directions.`;
+      aiHashtags = [];
+    } else if (platformLower === "tiktok" || platformLower === "tt") {
+      aiCaption = `${themeText} at ${brandName}.\n\nA quick local update worth checking before your next visit.${brand.location ? ` Near ${brand.location}.` : ""}`;
+      aiHashtags = ["Singapore", "LocalFinds", "SGTikTok", brandName.replace(/\s+/g, "").toLowerCase()].slice(0, 5);
+    } else if (platformLower === "facebook" || platformLower === "fb") {
+      aiCaption = `Local update from ${brandName}\n\n${themeText}. ${brand.address || brand.location ? `If you are nearby, visit us${brand.address ? ` at ${brand.address}` : ` in ${brand.location}`}. ` : ""}${brand.website ? `Check our website for details, availability, or reservations. ` : ""}Tell us what you would like to try next.`;
+      aiHashtags = ["Singapore", "LocalBusiness", brandName.replace(/\s+/g, "").toLowerCase()].slice(0, 3);
     } else {
       // Default to Instagram / Facebook / TikTok (English)
-      aiCaption = `Chope your seats! Something exciting is cooking at ${brandName}: ${themeText}.\n\nSpecial angles: ${creativeHooks || 'Premium experience'}.\n\nTag a friend who needs to try this!${contactStr}`;
+      aiCaption = `${themeText} at ${brandName}.\n\nA fresh local update with a clear reason to visit, save, or share.${brand.address || brand.location ? `\n\nFind us ${brand.address ? `at ${brand.address}` : `in ${brand.location}`}.` : ""}${brand.website ? `\n\nDetails: ${brand.website}` : ""}`;
       
       const strategyLower = (marketingStrategy || "").toLowerCase();
       let detectedIndustry = "general";
@@ -509,10 +510,8 @@ Please output ONLY a valid JSON object.`;
       }
     }
 
-    // Add error message prefix to alert user about insufficient tokens / invalid key / etc.
-    const rawError = bodyError || hookError || "Gemini 接口调用失败，已自动降级为本地规则引擎进行创作。请检查 API Key 配置与额度是否充足。";
-    const errorPrefix = `【⚠️ AI 智能写作未成功：${rawError}】\n\n`;
-    aiCaption = errorPrefix + aiCaption;
+    aiCaption = stripDisallowedFallbackText(platformLower, aiCaption);
+    aiHashtags = normalizeFallbackHashtags(platformLower, aiHashtags);
   }
 
   console.log("Copywriter final caption preview:", aiCaption.split("\n")[0]);
@@ -522,4 +521,67 @@ Please output ONLY a valid JSON object.`;
     hashtags: aiHashtags,
     aiFailed: !geminiUsed
   };
+}
+
+function fallbackEnglishTheme(primary?: string, secondary?: string): string {
+  const text = [primary, secondary].filter(Boolean).join(" ").trim();
+  const price = text.match(/[$＄]\s?\d+(?:[.,]\d+)?/)?.[0];
+  const hasOffer = /promo|offer|deal|discount|limited|优惠|活动|仅需|只要|特价|折扣/i.test(text);
+  const hasFood = /food|menu|dish|restaurant|cafe|dining|餐|菜|烤|鱼|美食|味/i.test(text);
+  const hasClass = /class|course|trial|pilates|yoga|fitness|课|课程|体验/i.test(text);
+
+  if (hasFood && price) return `A limited-time dining update from ${price}`;
+  if (hasFood && hasOffer) return "A limited-time dining update";
+  if (hasFood) return "A new food and dining update";
+  if (hasClass && price) return `A limited-time class update from ${price}`;
+  if (hasClass) return "A new class and booking update";
+  if (hasOffer && price) return `A limited-time local offer from ${price}`;
+  if (hasOffer) return "A limited-time local offer";
+
+  const englishOnly = text
+    .replace(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return englishOnly.length >= 8 ? englishOnly.slice(0, 120) : "a fresh local update";
+}
+
+function fallbackChineseTheme(primary?: string, secondary?: string): string {
+  const text = [primary, secondary].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  return text || "新的本地服务与体验";
+}
+
+function stripDisallowedFallbackText(platformLower: string, caption: string): string {
+  let cleaned = caption
+    .replace(/【⚠️[\s\S]*?】\s*/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (platformLower !== "xiaohongshu" && platformLower !== "red" && platformLower !== "xhs") {
+    cleaned = cleaned.replace(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+/gu, "").replace(/[ \t]{2,}/g, " ");
+  }
+  if (platformLower === "google_business" || platformLower === "google" || platformLower === "google_maps") {
+    cleaned = cleaned.replace(/(?:\+?\d[\d\s().-]{6,}\d)/g, "the Google Business call button");
+  }
+  return cleaned.trim();
+}
+
+function normalizeFallbackHashtags(platformLower: string, hashtags: string[]): string[] {
+  if (platformLower === "google_business" || platformLower === "google" || platformLower === "google_maps") {
+    return [];
+  }
+  const max = platformLower === "facebook" || platformLower === "fb" ? 3 : 5;
+  const seen = new Set<string>();
+  return hashtags
+    .map((tag) => String(tag).replace(/^#+/, "").replace(/\s+/g, "").trim())
+    .filter(Boolean)
+    .filter((tag) => {
+      if (platformLower !== "xiaohongshu" && platformLower !== "red" && platformLower !== "xhs" && /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(tag)) {
+        return false;
+      }
+      const key = tag.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, max);
 }

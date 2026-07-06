@@ -18,9 +18,14 @@ export function createAmcContentModelRouter(): ModelRouter {
         const maxTokens = input.maxTokens ?? candidate.maxTokensByTask[input.task] ?? 1200
         const result = await callLLMWithContentModelProfile(candidate, input.prompt, maxTokens)
         if (result.text) {
-          return {
-            data: parseJsonResponse<T>(result.text),
-            modelId: `${candidate.id}:${result.modelName || result.provider}`,
+          try {
+            return {
+              data: parseJsonResponse<T>(result.text),
+              modelId: `${candidate.id}:${result.modelName || result.provider}`,
+            }
+          } catch (error: any) {
+            errors.push(`${candidate.id}: ${error?.message || 'invalid JSON response'}`)
+            continue
           }
         }
         errors.push(`${candidate.id}: ${result.error || 'empty response'}`)
@@ -36,7 +41,7 @@ export function createAmcContentModelRouter(): ModelRouter {
       }
 
       return {
-        data: parseJsonResponse<T>(result.text),
+        data: await parseOrRepairJsonResponse<T>(result.text, input, errors),
         modelId: `legacy-copywriting:${result.modelName || result.provider}`,
       }
     },
@@ -61,6 +66,53 @@ function resolveProfileChain(profile: ResolvedContentModelProfile): ResolvedCont
     }
   }
   return chain
+}
+
+async function parseOrRepairJsonResponse<T>(
+  text: string,
+  input: ModelRequest,
+  errors: string[],
+): Promise<T> {
+  try {
+    return parseJsonResponse<T>(text)
+  } catch (error: any) {
+    errors.push(`legacy-copywriting: ${error?.message || 'invalid JSON response'}`)
+    const repair = await callLLM(
+      'copywriting',
+      [
+        'Convert the following model output into strict JSON only.',
+        `Expected schema: ${jsonSchemaHint(input.task)}`,
+        'Do not add markdown fences, comments, explanations, or extra keys.',
+        'If a field is missing, infer the safest empty value that preserves publishable meaning.',
+        '',
+        'MODEL OUTPUT:',
+        text.slice(0, 6000),
+      ].join('\n'),
+      Math.min(input.maxTokens ?? 1200, 900),
+    )
+    if (!repair.text) {
+      throw new Error([
+        `Unable to parse JSON response: ${text.slice(0, 240)}`,
+        ...errors,
+        repair.error || 'JSON repair returned empty response',
+      ].join('; '))
+    }
+    try {
+      return parseJsonResponse<T>(repair.text)
+    } catch (repairError: any) {
+      throw new Error([
+        repairError?.message || `Unable to parse JSON repair response: ${repair.text.slice(0, 240)}`,
+        ...errors,
+      ].join('; '))
+    }
+  }
+}
+
+function jsonSchemaHint(task: ModelRequest['task']): string {
+  if (task === 'hook_generation') {
+    return '{ "hooks": [{ "text": string, "category": string, "score": number, "reason": string }] }'
+  }
+  return '{ "caption": string, "hashtags": string[] }'
 }
 
 function parseJsonResponse<T>(text: string): T {
