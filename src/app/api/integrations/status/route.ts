@@ -116,6 +116,43 @@ export async function GET(request: Request) {
         message: ok ? '浏览器插件已连接' : '未连接插件（请确保看板页面处于开启状态且安装了插件）',
       }
     })(),
+
+    // Meta: check if brand has any connected Facebook or Instagram accounts with tokens
+    (async () => {
+      const metaAccounts = await prisma.socialAccount.findMany({
+        where: {
+          brandId,
+          platformId: { in: ['facebook', 'instagram'] },
+          accessToken: { not: null },
+        },
+        select: {
+          platformId: true,
+          displayName: true,
+          handle: true,
+        },
+      })
+
+      const ok = metaAccounts.length > 0
+      let message = '未连接 Meta 账号'
+      if (ok) {
+        const pages = metaAccounts.filter((a: any) => a.platformId === 'facebook')
+        const igs = metaAccounts.filter((a: any) => a.platformId === 'instagram')
+        const details: string[] = []
+        if (pages.length > 0) {
+          details.push(`Facebook Page: ${pages.map((p: any) => p.displayName || p.handle).join(', ')}`)
+        }
+        if (igs.length > 0) {
+          details.push(`Instagram: ${igs.map((i: any) => i.displayName || i.handle).join(', ')}`)
+        }
+        message = `已连接 Meta (${details.join(' | ')})`
+      }
+
+      return {
+        name: 'meta',
+        ok,
+        message,
+      }
+    })(),
   ])
 
   const statuses = results.map(r => r.status === 'fulfilled' ? r.value : { name: 'unknown', ok: false, message: 'Error' })

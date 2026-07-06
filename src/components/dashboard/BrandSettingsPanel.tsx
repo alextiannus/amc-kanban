@@ -112,6 +112,7 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [status, setStatus] = useState<Record<string, boolean>>({})
+  const [statusMessages, setStatusMessages] = useState<Record<string, string>>({})
   const [postfastSync, setPostfastSync] = useState<{ synced: number; accounts: string[] } | null>(null)
   const [preferOAuth, setPreferOAuth] = useState(true)
 
@@ -132,6 +133,7 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
           google: asBool(initialSettings.googleConfigured),
           lark: asBool(initialSettings.larkConfigured),
           extension: false,
+          meta: asBool(initialSettings.metaConfigured),
         })
       } else {
         setForm({})
@@ -144,13 +146,18 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
     if (res.ok) {
       const data = await res.json()
       const s: Record<string, boolean> = {}
+      const msgs: Record<string, string> = {}
       const statuses = Array.isArray(data?.statuses) ? data.statuses : []
-      statuses.forEach((st: { name?: string; ok?: boolean }) => {
+      statuses.forEach((st: { name?: string; ok?: boolean; message?: string }) => {
         if (typeof st.name === 'string') {
           s[st.name] = !!st.ok
+          if (st.message) {
+            msgs[st.name] = st.message
+          }
         }
       })
       setStatus(s)
+      setStatusMessages(msgs)
     }
   }, [brandId])
 
@@ -183,6 +190,31 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
       alert('网络连接错误')
     } finally {
       setDisconnecting(false)
+    }
+  }
+
+  const [disconnectingMeta, setDisconnectingMeta] = useState(false)
+  const handleMetaDisconnect = async () => {
+    if (!confirm('确定要断开 Meta (Facebook / Instagram) 账号的连接吗？这会清除已保存的授权令牌。')) return
+    setDisconnectingMeta(true)
+    try {
+      const res = await fetch('/api/integrations/meta/oauth/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId }),
+      })
+      if (res.ok) {
+        alert('已成功断开 Meta 账号连接')
+        onClose()
+        window.location.reload()
+      } else {
+        alert('断开连接失败，请重试')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('网络连接错误')
+    } finally {
+      setDisconnectingMeta(false)
     }
   }
 
@@ -364,6 +396,39 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
             {LARK_FIELDS.filter(f => f.key !== 'larkDriveFolderId').map(f => <Field key={f.key} f={f} />)}
           </Section>
           */}
+
+          <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+          <Section label="Meta (Facebook / Instagram)" badge={<StatusBadge ok={status.meta} />}>
+            {status.meta ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3">
+                  <div className="text-[11px] text-emerald-800 dark:text-emerald-300 leading-normal flex-1 pr-2">
+                    {statusMessages.meta || '已连接 Meta 账号'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleMetaDisconnect}
+                    disabled={disconnectingMeta}
+                    className="px-2.5 py-1 text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30 rounded-lg hover:bg-rose-100 transition active:scale-95 disabled:opacity-60 flex-shrink-0"
+                  >
+                    {disconnectingMeta ? '断开中...' : '断开连接'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = `/api/integrations/meta/oauth?brandId=${brandId}`
+                }}
+                className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm shadow-indigo-500/20 hover:scale-[1.01] active:scale-[0.99]"
+              >
+                <span>⚡</span>
+                连接 Meta 账号 (Facebook / Instagram)
+              </button>
+            )}
+          </Section>
 
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
