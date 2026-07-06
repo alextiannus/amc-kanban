@@ -49,6 +49,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [agreed, setAgreed] = useState(false)
 
   // Forgot-password modal state
   const [showForgotModal, setShowForgotModal] = useState(false)
@@ -208,6 +209,7 @@ export default function Login() {
     setPhone('')
     setShowPassword(false)
     setShowConfirmPassword(false)
+    setAgreed(false)
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -238,6 +240,10 @@ export default function Login() {
     e.preventDefault()
     if (password !== confirmPassword) {
       setError('Passwords do not match')
+      return
+    }
+    if (!agreed) {
+      setError('You must agree to the Terms of Service and Privacy Policy.')
       return
     }
     setLoading(true)
@@ -579,6 +585,23 @@ export default function Login() {
                 </div>
               )}
 
+              {/* Privacy Policy & Terms Consent (Register only) */}
+              {isRegister && (
+                <div className="flex items-start gap-3 mt-4 ml-1">
+                  <input
+                    id="agree-terms"
+                    type="checkbox"
+                    required
+                    checked={agreed}
+                    onChange={(e) => setAgreed(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded text-purple-600 focus:ring-purple-500 border-slate-300 focus:outline-none cursor-pointer"
+                  />
+                  <label htmlFor="agree-terms" className="text-[11px] text-slate-500 leading-normal font-hanken select-none">
+                    I agree to the <a href="/terms" target="_blank" className="text-purple-600 hover:underline font-semibold">Terms of Service</a> and <a href="/privacy" target="_blank" className="text-purple-600 hover:underline font-semibold">Privacy Policy</a> (compliant with Singapore PDPA). <br /> 我同意并接受<a href="/terms" target="_blank" className="text-purple-600 hover:underline font-semibold">服务条款</a>与<a href="/privacy" target="_blank" className="text-purple-600 hover:underline font-semibold">隐私政策</a>（符合新加坡 PDPA 规范）。
+                  </label>
+                </div>
+              )}
+
               {/* Error Banner */}
               {error && (
                 <div className="text-rose-600 bg-rose-50 border border-rose-100/80 rounded-xl py-3 px-4 text-xs font-semibold font-hanken text-center shadow-sm flex items-center justify-center gap-1.5 animate-pulse">
@@ -604,10 +627,15 @@ export default function Login() {
               </button>
             </form>
 
-            <div className="mt-8 text-center">
+            <div className="mt-8 text-center space-y-4">
               <p className="font-jetbrains text-[10px] text-slate-400 uppercase tracking-wider">
                 powered by <span className="text-slate-700">Immedi.ai</span>
               </p>
+              <div className="flex justify-center gap-4 font-jetbrains text-[10px] text-slate-400">
+                <a href="/terms" target="_blank" className="hover:text-slate-600 hover:underline">Terms of Service / 服务条款</a>
+                <span>•</span>
+                <a href="/privacy" target="_blank" className="hover:text-slate-600 hover:underline">Privacy Policy / 隐私政策</a>
+              </div>
             </div>
           </div>
         </section>

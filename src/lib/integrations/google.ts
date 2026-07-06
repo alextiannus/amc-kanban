@@ -131,16 +131,54 @@ export async function getPlaceRating(placeId: string, apiKey: string) {
  * Exchange a Google Refresh Token for a fresh Access Token.
  * If in mock mode, returns a mock access token immediately.
  */
-export async function getGoogleAccessToken(refreshToken: string): Promise<string> {
+export async function getGoogleAccessToken(
+  refreshToken: string,
+  credentials?: { clientId?: string | null; clientSecret?: string | null }
+): Promise<string> {
   if (refreshToken.startsWith('mock_')) {
     return 'mock_access_token_' + Date.now();
   }
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  let clientId = credentials?.clientId || null;
+  let clientSecret = credentials?.clientSecret || null;
+
+  // 1. If credentials are not provided, attempt to lookup brand-specific credentials using the refreshToken
+  if (!clientId || !clientSecret) {
+    try {
+      const { prisma } = await import('../prisma')
+      const brand = await prisma.brand.findFirst({
+        where: { googleRefreshToken: refreshToken },
+        select: { googleClientId: true, googleClientSecret: true }
+      })
+      if (brand?.googleClientId && brand?.googleClientSecret) {
+        clientId = brand.googleClientId
+        clientSecret = brand.googleClientSecret
+      }
+    } catch (e) {
+      console.warn('Failed to lookup brand credentials by refreshToken:', e)
+    }
+  }
+
+  // 2. If still not found, try loading from SystemConfig table (Admin config)
+  if (!clientId || !clientSecret) {
+    try {
+      const { getDirectGoogleConfig } = await import('../systemConfig')
+      const systemConfig = await getDirectGoogleConfig()
+      if (systemConfig) {
+        clientId = systemConfig.clientId
+        clientSecret = systemConfig.clientSecret
+      }
+    } catch (e) {
+      console.warn('Failed to load Google credentials from SystemConfig:', e)
+    }
+  }
+
+  // 3. Fallback to process.env
+  clientId = clientId || process.env.GOOGLE_CLIENT_ID || null;
+  clientSecret = clientSecret || process.env.GOOGLE_CLIENT_SECRET || null;
 
   if (!clientId || !clientSecret) {
-    throw new Error('GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not configured in system environment.');
+    throw new Error('Google OAuth Client ID or Client Secret is not configured (neither in brand settings, system config DB, nor environment variables).');
   }
 
   const response = await fetch('https://oauth2.googleapis.com/token', {
