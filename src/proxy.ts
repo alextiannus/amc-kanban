@@ -24,6 +24,8 @@ export default async function proxy(request: NextRequest) {
 
   // ── Main app (immedi.ai) ──────────────────────────────────────────────────
   const isPublicPage = 
+    pathname === '/terms' ||
+    pathname === '/privacy' ||
     pathname === '/game' || 
     pathname.startsWith('/game/') ||
     pathname.startsWith('/presentation/') ||
