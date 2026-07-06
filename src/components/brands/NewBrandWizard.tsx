@@ -473,7 +473,7 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
           const res = await fetch('/api/promo/validate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code })
+            body: JSON.stringify({ code, planId: state.planId })
           })
           const data = await res.json()
           if (res.ok && data.valid) {
@@ -508,7 +508,7 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [state.promoCode]);
+  }, [state.promoCode, state.planId]);
 
   function onChange(k: keyof WizardState, v: string) {
     setState(prev => ({ ...prev, [k]: v }))

@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { code } = await request.json() as { code?: string }
+    const { code, planId } = await request.json() as { code?: string; planId?: string }
     if (!code || typeof code !== 'string') {
       return NextResponse.json({ valid: false, error: '请输入有效的验证码' })
     }
@@ -54,6 +54,17 @@ export async function POST(request: Request) {
     if (userReferrer) {
       if (userReferrer.id === session.user.id) {
         return NextResponse.json({ valid: false, error: '不能使用自己的邀请码' })
+      }
+
+      if (userReferrer.email === 'alextiannus@gmail.com' && planId === 'starter') {
+        return NextResponse.json({
+          valid: true,
+          codeType: 'USER_INVITE',
+          discountType: 'FIXED_AMOUNT',
+          discountValue: 200,
+          description: `来自用户 ${userReferrer.nickname || userReferrer.email} 的邀请特惠 (Starter套餐特惠价 $400/月)`,
+          referrerId: userReferrer.id
+        })
       }
 
       // Default referral discount: 10% off

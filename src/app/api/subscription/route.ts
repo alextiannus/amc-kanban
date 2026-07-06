@@ -491,7 +491,12 @@ export async function POST(request: Request) {
       if (userReferrer && userReferrer.id !== session.user.id) {
         finalReferredById = userReferrer.id
         promoCodeType = 'USER_INVITE'
-        promoDiscountAmount = summary.totalDueUsd * 0.10
+        if (userReferrer.email === 'alextiannus@gmail.com' && planId === 'starter') {
+          // Special discount for alextiannus@gmail.com: Starter plan @ $400/month (discount = $200/month)
+          promoDiscountAmount = 200 * durationMonths
+        } else {
+          promoDiscountAmount = summary.totalDueUsd * 0.10
+        }
       }
     }
   }
