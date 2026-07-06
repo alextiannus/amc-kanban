@@ -1,131 +1,176 @@
-'use client'
-
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { ArrowLeft, FileText, Sparkles } from 'lucide-react'
+
+const SERVICE_EMAIL = 'service@deliverychinatown.com'
 
 export default function TermsOfService() {
   return (
-    <div className="min-h-screen w-full bg-[#F8FAFC] text-slate-800 p-6 md:p-12 relative flex justify-center">
-      {/* Background aurora glows */}
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-400/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[500px] h-[500px] bg-purple-400/10 rounded-full blur-[120px]" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-4xl bg-white/80 border border-slate-200/80 rounded-3xl p-8 md:p-12 shadow-xl backdrop-blur-md">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-200/60 pb-8 mb-8">
+    <main className="min-h-screen w-full bg-slate-50 px-4 py-6 text-slate-800 md:px-8 md:py-10">
+      <article className="mx-auto w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-10">
+        <header className="mb-8 flex flex-col gap-5 border-b border-slate-200 pb-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center shadow-sm">
-              <FileText className="h-6 w-6 text-indigo-600" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-amber-200 bg-amber-50">
+              <FileText className="h-5 w-5 text-amber-700" />
             </div>
             <div>
-              <h1 className="font-manrope font-bold text-2xl md:text-3xl text-slate-900">Terms of Service / 服务条款</h1>
-              <p className="font-hanken text-xs text-slate-500 mt-1">Last Updated: July 6, 2026 | Governing Law: Singapore</p>
+              <h1 className="text-2xl font-bold text-slate-950 md:text-3xl">Service Terms / 服务条款</h1>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Last updated: 6 July 2026 | 最后更新：2026 年 7 月 6 日
+              </p>
             </div>
           </div>
           <Link
             href="/"
-            className="self-start md:self-auto flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-semibold text-sm transition-colors"
+            className="inline-flex w-fit items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to Login / 返回登录
+            Back / 返回
           </Link>
+        </header>
+
+        <div className="space-y-8 text-sm leading-7 text-slate-600">
+          <section className="space-y-4">
+            <p>
+              These Service Terms apply to the use of AI Marketing Crew services and the AMC client portal at
+              amc-mm.immedi.ai. By registering, requesting work or using the portal, you agree to these terms.
+            </p>
+
+            <TermsSection title="1. Services">
+              AI Marketing Crew provides social media marketing management for local businesses, including content
+              planning, copywriting, posting support, channel updates, review-response drafting, reporting and related
+              coordination.
+            </TermsSection>
+
+            <TermsSection title="2. Client Responsibilities">
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Provide accurate brand, product, outlet, menu, promotion, pricing and contact information.</li>
+                <li>Confirm that you have the right to provide photos, videos, logos, trademarks, customer reviews and other materials.</li>
+                <li>You remain responsible for final business decisions, approvals, promotions, offers and public statements.</li>
+              </ul>
+            </TermsSection>
+
+            <TermsSection title="3. Platform Access">
+              The portal may be used to submit brand information, upload materials, review content, send requests and
+              follow service progress. You are responsible for keeping your account and login details secure.
+            </TermsSection>
+
+            <TermsSection title="4. Third-Party Platforms">
+              Google Maps, Instagram, Facebook, TikTok and other channels are third-party platforms. Publishing,
+              reach, access, review visibility and analytics may depend on their rules, APIs, moderation decisions and
+              account permissions.
+            </TermsSection>
+
+            <TermsSection title="5. Fees and Scope">
+              Fees, deliverables, monthly posting volume, covered channels and add-ons are confirmed in the relevant
+              proposal, order, invoice or written agreement. Ad spend, influencer fees, platform charges, photo/video
+              shoots and external production costs are excluded unless expressly agreed.
+            </TermsSection>
+
+            <TermsSection title="6. Intellectual Property">
+              You retain ownership of materials you provide. Subject to payment of applicable fees, you may use final
+              approved content prepared for your brand. We retain ownership of our templates, methods, workflows and
+              non-confidential know-how.
+            </TermsSection>
+
+            <TermsSection title="7. Acceptable Use">
+              You must not request unlawful, misleading, infringing, discriminatory, harmful or platform-prohibited
+              content. We may decline, pause or remove work that creates legal, safety, platform or reputational risk.
+            </TermsSection>
+
+            <TermsSection title="8. Disclaimers">
+              We do not guarantee follower growth, engagement, sales, search ranking, platform approval, account
+              recovery or uninterrupted third-party platform access.
+            </TermsSection>
+
+            <TermsSection title="9. Suspension and Termination">
+              Either party may end services according to the applicable package or written arrangement. We may suspend
+              services for non-payment, misuse, security concerns or breach of these terms.
+            </TermsSection>
+
+            <TermsSection title="10. Governing Law">
+              These terms are governed by Singapore law. Please first raise disputes or service concerns with us at{' '}
+              <a className="font-semibold text-amber-700 hover:text-amber-800" href={`mailto:${SERVICE_EMAIL}`}>
+                {SERVICE_EMAIL}
+              </a>
+              .
+            </TermsSection>
+          </section>
+
+          <hr className="border-slate-200" />
+
+          <section className="space-y-4">
+            <p>
+              本服务条款适用于 AI Marketing Crew 服务以及 amc-mm.immedi.ai 的 AMC 客户门户。注册、提出服务请求或使用门户，即表示您同意本条款。
+            </p>
+
+            <TermsSection title="一、服务内容">
+              AI Marketing Crew 为本地商家提供社交媒体营销管理服务，包括内容规划、文案撰写、发布支持、渠道更新、评价回复草稿、报告以及相关协调工作。
+            </TermsSection>
+
+            <TermsSection title="二、客户责任">
+              <ul className="list-disc space-y-1 pl-5">
+                <li>提供准确的品牌、产品、门店、菜单、促销、价格和联系方式。</li>
+                <li>确认您有权提供照片、视频、logo、商标、客户评价及其他素材。</li>
+                <li>您仍需对最终商业决定、审批、促销、优惠和公开表述负责。</li>
+              </ul>
+            </TermsSection>
+
+            <TermsSection title="三、平台访问">
+              客户门户可用于提交品牌信息、上传素材、查看内容、发送请求和跟进服务进度。您应妥善保管账号及登录信息。
+            </TermsSection>
+
+            <TermsSection title="四、第三方平台">
+              Google Maps、Instagram、Facebook、TikTok 及其他渠道属于第三方平台。发布、触达、访问权限、评价可见性和数据分析可能受其规则、API、审核决定和账号权限影响。
+            </TermsSection>
+
+            <TermsSection title="五、费用与范围">
+              费用、交付内容、每月发布量、覆盖渠道和附加服务以相关报价、订单、发票或书面协议为准。广告费、达人费用、平台收费、拍摄及外部制作费用不包含在内，除非另有明确约定。
+            </TermsSection>
+
+            <TermsSection title="六、知识产权">
+              您保留所提供素材的所有权。在支付适用费用后，您可使用为您的品牌制作并最终确认的内容。我们保留模板、方法、工作流程和非保密经验的所有权。
+            </TermsSection>
+
+            <TermsSection title="七、可接受使用">
+              您不得要求制作违法、误导、侵权、歧视、有害或违反平台规则的内容。若相关工作产生法律、安全、平台或声誉风险，我们可拒绝、暂停或移除。
+            </TermsSection>
+
+            <TermsSection title="八、免责声明">
+              我们不保证粉丝增长、互动、销售、搜索排名、平台审批、账号恢复或第三方平台访问持续不中断。
+            </TermsSection>
+
+            <TermsSection title="九、暂停与终止">
+              双方可按适用套餐或书面安排终止服务。如发生未付款、误用、安全问题或违反本条款，我们可暂停服务。
+            </TermsSection>
+
+            <TermsSection title="十、适用法律">
+              本条款受新加坡法律管辖。争议或服务问题请先通过{' '}
+              <a className="font-semibold text-amber-700 hover:text-amber-800" href={`mailto:${SERVICE_EMAIL}`}>
+                {SERVICE_EMAIL}
+              </a>{' '}
+              联系我们。
+            </TermsSection>
+          </section>
         </div>
 
-        <div className="prose prose-slate max-w-none space-y-8 font-hanken text-sm leading-relaxed text-slate-600">
-          {/* English Version */}
-          <section className="space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 border-l-4 border-indigo-500 pl-3">1. Acceptance of Terms</h2>
-            <p>
-              By creating an account, registering, or accessing the AI Marketing Crew (AMC) platform operated by Immedi.ai, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not register for or use the services.
-            </p>
-          </section>
+        <footer className="mt-10 flex items-center justify-between border-t border-slate-200 pt-5 text-xs text-slate-500">
+          <span>© 2026 Immedi.ai</span>
+          <span className="inline-flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-amber-600" />
+            AI Marketing Crew
+          </span>
+        </footer>
+      </article>
+    </main>
+  )
+}
 
-          <section className="space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 border-l-4 border-indigo-500 pl-3">2. Description of Services</h2>
-            <p>
-              AMC is an AI-powered autonomous operations and marketing platform. Our services include provisioning autonomous AI Agents ("AI Staff") that generate copy, schedule social media posts, retrieve client reviews, and post replies on authorized channels on behalf of the user.
-            </p>
-          </section>
-
-          <section className="space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 border-l-4 border-indigo-500 pl-3">3. Autonomous Publishing and User Responsibility</h2>
-            <p>
-              You acknowledge and agree that:
-            </p>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>By connecting third-party platforms (e.g. Google Business Profile, Instagram, etc.), you authorize our AI Agents to publish content and execute replies on your behalf.</li>
-              <li>You are solely responsible for ensuring you have the legal right to bind the respective merchant accounts.</li>
-              <li>While you may enable "Autopilot" mode, you maintain ultimate ownership of the content generated. You are advised to review drafts and verify compliance with local advertising laws and guidelines.</li>
-            </ul>
-          </section>
-
-          <section className="space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 border-l-4 border-indigo-500 pl-3">4. Limitation of Liability</h2>
-            <p>
-              Immedi.ai and the AMC platform make no warranties regarding the absolute accuracy, engagement, or SEO outcomes of the AI-generated copy. We are not liable for any temporary or permanent bans, suspensions, or penalties imposed on your merchant accounts by third-party social media platforms, or for any brand damage resulting from automated review replies.
-            </p>
-          </section>
-
-          <section className="space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 border-l-4 border-indigo-500 pl-3">5. Governing Law</h2>
-            <p>
-              These Terms of Service shall be governed by and construed in accordance with the laws of Singapore. Any disputes arising out of or in connection with these terms shall be subject to the exclusive jurisdiction of the courts of Singapore.
-            </p>
-          </section>
-
-          <hr className="border-slate-200/60 my-10" />
-
-          {/* Chinese Version */}
-          <section className="space-y-4 lang-zh">
-            <h2 className="text-lg font-bold text-slate-900 border-l-4 border-indigo-500 pl-3">一、 条款接受</h2>
-            <p>
-              通过在 Immedi.ai 运营的 AI Marketing Crew (AMC) 平台注册、登录或使用服务，即表示您同意接受本服务条款的约束。如果您不同意本条款，请勿注册或使用本服务。
-            </p>
-          </section>
-
-          <section className="space-y-4 lang-zh">
-            <h2 className="text-lg font-bold text-slate-900 border-l-4 border-indigo-500 pl-3">二、 服务描述</h2>
-            <p>
-              AMC 是一个基于人工智能驱动的营销自动运营平台。我们的服务包括提供自治 AI 员工（AI Staff），代为撰写文案、排期发布社交媒体内容、拉取客户评价并代表用户在已授权的社交和门店平台上发布回复。
-            </p>
-          </section>
-
-          <section className="space-y-4 lang-zh">
-            <h2 className="text-lg font-bold text-slate-900 border-l-4 border-indigo-500 pl-3">三、 自主发布与用户责任</h2>
-            <p>
-              您知悉并同意以下事项：
-            </p>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>通过绑定第三方平台（如 Google 商家页面、Instagram 等），即表示您授权我们的 AI 代理代表您发布内容并执行回复。</li>
-              <li>您对确保自己拥有绑定对应商户账号的合法权利承担全部责任。</li>
-              <li>尽管您可以启用“自动驾驶 (Autopilot)”模式，但您对生成的内容拥有最终的所有权和控制权。建议您定期审查草稿，并确保发布的内容符合当地的广告法律法规。</li>
-            </ul>
-          </section>
-
-          <section className="space-y-4 lang-zh">
-            <h2 className="text-lg font-bold text-slate-900 border-l-4 border-indigo-500 pl-3">四、 免责与责任限制</h2>
-            <p>
-              Immedi.ai 和 AMC 平台对 AI 生成内容的绝对准确性、互动量或搜索排名结果不做任何保证。对于因第三方平台对您的商户账号实施的任何暂停、封禁、降权或处罚，或因自动回复评论引起的任何品牌公关争议，我们不承担任何赔偿责任。
-            </p>
-          </section>
-
-          <section className="space-y-4 lang-zh">
-            <h2 className="text-lg font-bold text-slate-900 border-l-4 border-indigo-500 pl-3">五、 准据法与管辖权</h2>
-            <p>
-              本服务条款应受新加坡法律管辖并按其解释。因本条款引起或与之相关的任何争议，应提交新加坡法院专属管辖。
-            </p>
-          </section>
-        </div>
-
-        <div className="mt-12 pt-6 border-t border-slate-200/60 flex items-center justify-between font-jetbrains text-xs text-slate-400">
-          <span>© 2026 Immedi.ai. All rights reserved.</span>
-          <div className="flex gap-2 items-center">
-            <Sparkles className="h-3 w-3 text-indigo-500" />
-            <span>AI Staff Portal</span>
-          </div>
-        </div>
-      </div>
-    </div>
+function TermsSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-2">
+      <h2 className="border-l-4 border-amber-500 pl-3 text-base font-bold text-slate-950">{title}</h2>
+      <div>{children}</div>
+    </section>
   )
 }
