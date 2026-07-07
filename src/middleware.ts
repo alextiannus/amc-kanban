@@ -30,7 +30,18 @@ export default async function proxy(request: NextRequest) {
     pathname.startsWith('/game/') ||
     pathname.startsWith('/presentation/') ||
     pathname.startsWith('/reset-password/') || // token-based reset (no session needed)
-    pathname.startsWith('/invite/')             // invitation acceptance
+    pathname.startsWith('/invite/') ||             // invitation acceptance
+    // Static assets & PWA files (do not redirect to login page)
+    pathname === '/manifest.json' ||
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/favicon.ico' ||
+    pathname === '/sw.js' ||
+    pathname.startsWith('/workbox-') ||
+    pathname.startsWith('/icons/') ||
+    pathname.startsWith('/images/') ||
+    pathname.startsWith('/logos/') ||
+    pathname.startsWith('/uploads/') ||
+    pathname.startsWith('/snapshots/')
   const isApiRoute = pathname.startsWith('/api')
 
   // Bypass API and public routes
