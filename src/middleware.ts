@@ -24,6 +24,7 @@ export default async function proxy(request: NextRequest) {
 
   // ── Main app (immedi.ai) ──────────────────────────────────────────────────
   const isPublicPage = 
+    pathname === '/tiktokWdXr977VBxysOGiXvrulDAH3ZeoG1iAD.txt' ||
     pathname === '/terms' ||
     pathname === '/privacy' ||
     pathname === '/game' || 
