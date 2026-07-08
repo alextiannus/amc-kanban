@@ -836,6 +836,11 @@ function AdminPageInner() {
           background: rgb(239 246 255);
           color: rgb(37 99 235);
         }
+        .admin-badge-green {
+          border-color: rgb(187 247 208);
+          background: rgb(240 253 244);
+          color: rgb(22 101 52);
+        }
         .admin-badge-amber {
           border-color: rgb(253 230 138);
           background: rgb(254 243 199);
