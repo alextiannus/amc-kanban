@@ -55,7 +55,7 @@ export default function BrandProfileView({
   // Early return if no brand or brand.id is provided, placed at the top to satisfy TypeScript compiler
   if (!brand || !brand.id) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-950 text-center">
+      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-955 text-center">
         <div className="max-w-sm">
           <Store className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-4" />
           <p className="text-sm font-bold text-slate-600 dark:text-slate-400">暂无选定品牌</p>
@@ -71,6 +71,12 @@ export default function BrandProfileView({
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
+
+  // Presentation Player States
+  const [activeStoryIndex, setActiveStoryIndex] = useState(0)
+  const [activeGrowthIndex, setActiveGrowthIndex] = useState(0)
+  const [showStoryEditor, setShowStoryEditor] = useState(false)
+  const [showDetailedReport, setShowDetailedReport] = useState(false)
 
   // Local Brand States (fetched on mount/change)
   const [brandTone, setBrandTone] = useState('')
@@ -111,41 +117,6 @@ export default function BrandProfileView({
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileMarkdown, setProfileMarkdown] = useState('')
   const [profileViewMode, setProfileViewMode] = useState<'edit' | 'preview'>('preview')
-
-  // Horizontal scroll references & states
-  const storyScrollRef = useRef<HTMLDivElement>(null)
-  const [canStoryLeft, setCanStoryLeft] = useState(false)
-  const [canStoryRight, setCanStoryRight] = useState(true)
-
-  const growthScrollRef = useRef<HTMLDivElement>(null)
-  const [canGrowthLeft, setCanGrowthLeft] = useState(false)
-  const [canGrowthRight, setCanGrowthRight] = useState(true)
-
-  const checkStoryScroll = () => {
-    const el = storyScrollRef.current
-    if (!el) return
-    setCanStoryLeft(el.scrollLeft > 5)
-    setCanStoryRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 5)
-  }
-
-  const scrollStory = (dir: 'left' | 'right') => {
-    const el = storyScrollRef.current
-    if (!el) return
-    el.scrollBy({ left: dir === 'left' ? -300 : 300, behavior: 'smooth' })
-  }
-
-  const checkGrowthScroll = () => {
-    const el = growthScrollRef.current
-    if (!el) return
-    setCanGrowthLeft(el.scrollLeft > 5)
-    setCanGrowthRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 5)
-  }
-
-  const scrollGrowth = (dir: 'left' | 'right') => {
-    const el = growthScrollRef.current
-    if (!el) return
-    el.scrollBy({ left: dir === 'left' ? -320 : 320, behavior: 'smooth' })
-  }
 
   const loadProfile = async () => {
     setProfileLoading(true)
@@ -204,14 +175,6 @@ export default function BrandProfileView({
     void loadProfile()
     void loadAllConfig()
   }, [brandId])
-
-  // Recalculate story scroll states when view changes or loads
-  useEffect(() => {
-    setTimeout(() => {
-      checkStoryScroll()
-      checkGrowthScroll()
-    }, 400)
-  }, [profileMarkdown, activeTab])
 
   const handleSaveProfile = async (nextMarkdown?: string) => {
     const markdown = (nextMarkdown ?? profileMarkdown).trim()
@@ -409,7 +372,7 @@ export default function BrandProfileView({
       emoji: '🏮',
       label: '品牌故事 & 使命',
       headline: draftName,
-      body: draftDesc || '暂无品牌介绍。请在下方编辑框中完善品牌故事、价值主张与核心定位。',
+      body: draftDesc || '暂无品牌介绍。请点击下方“展开编辑品牌故事设定”补充品牌核心定位。',
       gradient: 'from-orange-500 via-red-500 to-rose-600',
       glowColor: 'rgba(234,88,12,0.25)',
       icon: Sparkles
@@ -418,8 +381,8 @@ export default function BrandProfileView({
       id: 'tone',
       emoji: '✨',
       label: 'AI 品牌声调',
-      headline: '写作调性与人格',
-      body: brandTone || '暂无特定的语气调性。请在下方编辑区补充风格，以保持 AI 创作调性统一。',
+      headline: '品牌个性与表达语气',
+      body: brandTone || '暂无语气风格设定。请点击下方“展开编辑品牌故事设定”完善语气声调设定。',
       gradient: 'from-emerald-500 via-teal-500 to-cyan-600',
       glowColor: 'rgba(16,185,129,0.25)',
       icon: Star
@@ -427,11 +390,11 @@ export default function BrandProfileView({
     {
       id: 'slang',
       emoji: '🎯',
-      label: '本地俚语库',
-      headline: `已录入 ${Object.keys(slangDict).length} 个本地化词条`,
+      label: '本地俚语词典',
+      headline: `已录入 ${Object.keys(slangDict).length} 个本地词条`,
       body: Object.keys(slangDict).length > 0 
-        ? `核心表达：${Object.keys(slangDict).slice(0, 10).join(' · ')}`
-        : '尚未配置本地俚语词汇。配置俚语词典可以帮助 AI 撰写极具本土亲和力的内容。',
+        ? `核心口语表达：${Object.keys(slangDict).slice(0, 10).join(' · ')}`
+        : '尚未配置俚语词条。添加俚语可帮助 AI Copywriter 自动生成极富本地烟火气的宣传内容。',
       gradient: 'from-purple-500 via-indigo-500 to-violet-600',
       glowColor: 'rgba(139,92,246,0.25)',
       icon: Users
@@ -439,11 +402,11 @@ export default function BrandProfileView({
     {
       id: 'location',
       emoji: '📍',
-      label: '门店主理区域',
-      headline: draftLocation || '未配置主理区域',
+      label: '地理位置定位',
+      headline: draftLocation || '尚未配置主理区域',
       body: draftLocation 
-        ? `该品牌的主理城市和交付区域已被定位在：${draftLocation}。`
-        : '请在下方配置您的主要店址和地区，以提供内容生成所需的地理坐标。',
+        ? `品牌主要运营与内容生成的地理语境已被定位在：${draftLocation}`
+        : '暂无区域定位。完善主理区域可让 AI 更好地了解受众特征与地段优势。',
       gradient: 'from-cyan-500 via-sky-500 to-blue-600',
       glowColor: 'rgba(14,165,233,0.25)',
       icon: MapPin
@@ -499,7 +462,7 @@ export default function BrandProfileView({
     const lines = content.split('\n').map(l => l.trim()).filter(Boolean)
     if (lines.some(l => l.startsWith('-') || l.startsWith('*') || l.match(/^\d+\./))) {
       return (
-        <ul className="list-disc list-inside space-y-1 mt-1.5 text-[11px] text-white/80 font-medium leading-relaxed">
+        <ul className="list-disc list-inside space-y-2 mt-3 text-xs md:text-[13px] text-white/90 font-medium leading-relaxed">
           {lines.map((line, idx) => {
             const cleanLine = line.replace(/^[-*\d+.\s]+/, '')
             return <li key={idx} className="line-clamp-2">{cleanLine}</li>
@@ -508,7 +471,7 @@ export default function BrandProfileView({
       )
     }
     return (
-      <p className="text-[11px] text-white/80 font-medium leading-relaxed line-clamp-5 mt-1.5">
+      <p className="text-xs md:text-[13px] text-white/90 font-medium leading-relaxed line-clamp-6 mt-3">
         {content}
       </p>
     )
@@ -684,196 +647,245 @@ export default function BrandProfileView({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.15 }}
-              className="p-4 space-y-5 pb-10"
+              className="p-4 space-y-6 pb-12"
             >
-              {/* ─ Presentation-Style Slide Deck (Brand Story) ─ */}
-              <div className="space-y-2">
+              {/* ── IMMERSIVE KEYNOTE SLIDES PLAYER ── */}
+              <div className="space-y-4 max-w-2xl mx-auto w-full">
                 <div className="flex items-center justify-between px-1">
                   <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                     <Sparkles size={12} className="text-amber-500 animate-pulse" />
-                    品牌故事与使命概览 (Slide Deck)
+                    品牌故事播放器 (Keynote Deck)
                   </h4>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => scrollStory('left')}
-                      disabled={!canStoryLeft}
-                      className="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-                    >
-                      <ChevronLeft size={12} className="text-slate-500 dark:text-slate-400" />
-                    </button>
-                    <button
-                      onClick={() => scrollStory('right')}
-                      disabled={!canStoryRight}
-                      className="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-                    >
-                      <ChevronRight size={12} className="text-slate-500 dark:text-slate-400" />
-                    </button>
-                  </div>
+                  <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-455">
+                    Slide {activeStoryIndex + 1} of {storySlides.length}
+                  </span>
                 </div>
 
+                {/* Main Visual Slide Card */}
                 <div
-                  ref={storyScrollRef}
-                  onScroll={checkStoryScroll}
-                  className="flex gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x snap-mandatory scroll-smooth"
+                  className="w-full h-[280px] md:h-[320px] rounded-3xl overflow-hidden relative select-none border border-white/10 dark:border-slate-800/80 shadow-2xl transition-all duration-300 bg-gradient-to-br"
+                  style={{
+                    backgroundImage: `linear-gradient(135deg, var(--tw-gradient-stops))`,
+                    boxShadow: `0 24px 60px -12px ${storySlides[activeStoryIndex].glowColor}`
+                  }}
                 >
-                  {storySlides.map(slide => (
-                    <div
-                      key={slide.id}
-                      className="snap-start flex-shrink-0 w-[280px] lg:w-[320px] h-[190px] rounded-3xl overflow-hidden relative cursor-default select-none transition-all duration-300 hover:scale-[1.02] shadow-lg border border-white/10 dark:border-slate-800/80"
-                      style={{ boxShadow: `0 16px 40px -8px ${slide.glowColor}` }}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={activeStoryIndex}
+                      initial={{ opacity: 0, x: 40 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -40 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute inset-0 p-6 md:p-8 flex flex-col justify-between text-white"
                     >
-                      {/* Gradient Backdrop */}
-                      <div className={`absolute inset-0 bg-gradient-to-br ${slide.gradient}`} />
-                      {/* Noise filter overlay */}
-                      <div className="absolute inset-0 opacity-[0.05]"
-                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2053/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
+                      {/* Gradient background colors injected via key */}
+                      <div className={`absolute inset-0 bg-gradient-to-br ${storySlides[activeStoryIndex].gradient} -z-10`} />
+                      <div className="absolute inset-0 opacity-[0.05] -z-10"
+                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
                       />
-                      {/* Ambient glow light */}
-                      <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full blur-xl" />
+                      <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-3xl -z-10" />
 
-                      <div className="relative h-full flex flex-col justify-between p-5 text-white">
-                        <div>
-                          <div className="flex items-center justify-between mb-2.5">
-                            <span className="text-3xl leading-none">{slide.emoji}</span>
-                            <div className="flex items-center gap-1 bg-white/15 backdrop-blur-sm px-2.5 py-0.5 rounded-full text-[9px] font-bold text-white/90">
-                              <slide.icon size={10} />
-                              {slide.label}
-                            </div>
+                      {/* Header info */}
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <span className="text-4xl md:text-5xl leading-none">{storySlides[activeStoryIndex].emoji}</span>
+                          <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-white">
+                            {React.createElement(storySlides[activeStoryIndex].icon, { size: 12 })}
+                            {storySlides[activeStoryIndex].label}
                           </div>
-                          <h3 className="text-sm font-black tracking-wide leading-snug line-clamp-2">
-                            {slide.headline}
-                          </h3>
                         </div>
-                        <p className="text-[11px] text-white/85 leading-relaxed line-clamp-3">
-                          {slide.body}
-                        </p>
+                        <h2 className="text-lg md:text-xl font-black tracking-wide leading-snug line-clamp-2 drop-shadow-sm border-b border-white/15 pb-2">
+                          {storySlides[activeStoryIndex].headline}
+                        </h2>
                       </div>
-                    </div>
-                  ))}
+
+                      {/* Body paragraph */}
+                      <p className="text-xs md:text-[13px] text-white/90 font-medium leading-relaxed line-clamp-4 mt-2 drop-shadow-sm">
+                        {storySlides[activeStoryIndex].body}
+                      </p>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+
+                {/* Slides Navigation Controls */}
+                <div className="flex items-center justify-between px-2">
+                  <button
+                    onClick={() => setActiveStoryIndex(prev => Math.max(0, prev - 1))}
+                    disabled={activeStoryIndex === 0}
+                    className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
+                  >
+                    <ChevronLeft size={16} className="text-slate-650 dark:text-slate-300" />
+                  </button>
+
+                  {/* Dot Progress Indicators */}
+                  <div className="flex gap-2">
+                    {storySlides.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setActiveStoryIndex(idx)}
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          activeStoryIndex === idx
+                            ? 'w-6 bg-slate-800 dark:bg-white'
+                            : 'w-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600'
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setActiveStoryIndex(prev => Math.min(storySlides.length - 1, prev + 1))}
+                    disabled={activeStoryIndex === storySlides.length - 1}
+                    className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
+                  >
+                    <ChevronRight size={16} className="text-slate-650 dark:text-slate-300" />
+                  </button>
                 </div>
               </div>
 
-              {/* Brand Info Form Card */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
-                <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-3">编辑品牌故事</h3>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">品牌名称</label>
-                  <input
-                    value={draftName}
-                    onChange={e => setDraftName(e.target.value)}
-                    className="w-full text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    placeholder="品牌名称"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">品牌简介 (Description)</label>
-                  <textarea
-                    value={draftDesc}
-                    onChange={e => setDraftDesc(e.target.value)}
-                    className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
-                    placeholder="简短描述该品牌的故事与主营业务..."
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">主理区域 (Location)</label>
-                  <input
-                    value={draftLocation}
-                    onChange={e => setDraftLocation(e.target.value)}
-                    className="w-full text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    placeholder="例如: Yishun, Singapore"
-                  />
-                </div>
+              {/* Toggle Editor Panel Trigger */}
+              <div className="max-w-2xl mx-auto w-full pt-2">
                 <button
-                  onClick={handleSaveBrandInfo}
-                  disabled={saving}
-                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white cursor-pointer active:scale-95 transition-all"
+                  onClick={() => setShowStoryEditor(!showStoryEditor)}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 text-xs font-black text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-[0.98] cursor-pointer"
                 >
-                  {saving ? <div className="w-3.5 h-3.5 border-2 border-white dark:border-slate-900 border-t-transparent rounded-full animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                  保存品牌基本信息
+                  {showStoryEditor ? '✨ 收起品牌故事配置表单' : '✏️ 展开编辑品牌故事设定 (包含调性与俚语)'}
                 </button>
               </div>
 
-              {/* Tone Configuration Card */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                  <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">编辑 AI 品牌声调 (Tone of Voice)</h3>
-                  <button
-                    onClick={handleSaveVoice}
-                    disabled={saving}
-                    className="flex items-center gap-1 text-[11px] font-bold text-amber-500 hover:text-amber-600 cursor-pointer active:scale-95 transition-transform"
+              {/* Expandable Editor Fields */}
+              <AnimatePresence>
+                {showStoryEditor && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden space-y-4 max-w-2xl mx-auto w-full"
                   >
-                    <Save className="w-3.5 h-3.5" />
-                    保存声调设定
-                  </button>
-                </div>
+                    {/* Brand Info Form Card */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                      <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-3">编辑基础信息</h3>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">品牌名称</label>
+                        <input
+                          value={draftName}
+                          onChange={e => setDraftName(e.target.value)}
+                          className="w-full text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                          placeholder="品牌名称"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">品牌简介 (Description)</label>
+                        <textarea
+                          value={draftDesc}
+                          onChange={e => setDraftDesc(e.target.value)}
+                          className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                          placeholder="简短描述该品牌的故事与主营业务..."
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">主理区域 (Location)</label>
+                        <input
+                          value={draftLocation}
+                          onChange={e => setDraftLocation(e.target.value)}
+                          className="w-full text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                          placeholder="例如: Yishun, Singapore"
+                        />
+                      </div>
+                      <button
+                        onClick={handleSaveBrandInfo}
+                        disabled={saving}
+                        className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white cursor-pointer active:scale-95 transition-all"
+                      >
+                        {saving ? <div className="w-3.5 h-3.5 border-2 border-white dark:border-slate-900 border-t-transparent rounded-full animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        保存品牌基本信息
+                      </button>
+                    </div>
 
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">语气设定描写 (Tone Description)</label>
-                  <textarea
-                    value={brandTone}
-                    onChange={(e) => setBrandTone(e.target.value)}
-                    placeholder="例如：专业但亲切的咖啡烘焙工坊语气，多使用第一人称‘我们’，注重传达品质与匠心..."
-                    className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
-                  />
-                </div>
-
-                {/* Local Slang Dict */}
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">本地俚语词典 (Slang Dict)</label>
-                    <span className="text-[9px] text-slate-400">供 AI 写手合理插入本地化口语表达</span>
-                  </div>
-
-                  {Object.keys(slangDict).length > 0 && (
-                    <div className="grid grid-cols-2 gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800">
-                      {Object.entries(slangDict).map(([term, meaning]) => (
-                        <div
-                          key={term}
-                          className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm"
+                    {/* Tone Configuration Card */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                        <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">编辑 AI 品牌声调 (Tone of Voice)</h3>
+                        <button
+                          onClick={handleSaveVoice}
+                          disabled={saving}
+                          className="flex items-center gap-1 text-[11px] font-bold text-amber-500 hover:text-amber-600 cursor-pointer active:scale-95 transition-transform"
                         >
-                          <div className="min-w-0 pr-1.5">
-                            <span className="text-[11px] font-bold text-slate-800 dark:text-white block truncate">"{term}"</span>
-                            <span className="text-[9px] text-slate-400 block truncate">{meaning}</span>
+                          <Save className="w-3.5 h-3.5" />
+                          保存声调设定
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">语气设定描写 (Tone Description)</label>
+                        <textarea
+                          value={brandTone}
+                          onChange={(e) => setBrandTone(e.target.value)}
+                          placeholder="例如：专业但亲切的咖啡烘焙工坊语气，多使用第一人称‘我们’，注重传达品质与匠心..."
+                          className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                        />
+                      </div>
+
+                      {/* Local Slang Dict */}
+                      <div className="space-y-3 pt-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">本地俚语词典 (Slang Dict)</label>
+                          <span className="text-[9px] text-slate-400">供 AI 写手合理插入本地化口语表达</span>
+                        </div>
+
+                        {Object.keys(slangDict).length > 0 && (
+                          <div className="grid grid-cols-2 gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800">
+                            {Object.entries(slangDict).map(([term, meaning]) => (
+                              <div
+                                key={term}
+                                className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm"
+                              >
+                                <div className="min-w-0 pr-1.5">
+                                  <span className="text-[11px] font-bold text-slate-800 dark:text-white block truncate">"{term}"</span>
+                                  <span className="text-[9px] text-slate-400 block truncate">{meaning}</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = { ...slangDict }
+                                    delete next[term]
+                                    setSlangDict(next)
+                                  }}
+                                  className="p-1 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/30 transition-colors"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            ))}
                           </div>
+                        )}
+
+                        <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-850 p-2 rounded-xl border border-dashed border-slate-250 dark:border-slate-700">
+                          <input
+                            value={newTerm}
+                            onChange={(e) => setNewTerm(e.target.value)}
+                            placeholder="词语 (如: Lah)"
+                            className="w-1/3 text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          />
+                          <input
+                            value={newMeaning}
+                            onChange={(e) => setNewMeaning(e.target.value)}
+                            placeholder="解释 (如: 强调语气词)"
+                            className="flex-1 text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          />
                           <button
                             type="button"
-                            onClick={() => {
-                              const next = { ...slangDict }
-                              delete next[term]
-                              setSlangDict(next)
-                            }}
-                            className="p-1 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/30 transition-colors"
+                            onClick={handleAddSlang}
+                            className="p-1.5 rounded-lg bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white active:scale-95 transition-all"
                           >
-                            <Trash2 size={12} />
+                            <Plus size={13} />
                           </button>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  )}
-
-                  <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-855 p-2 rounded-xl border border-dashed border-slate-250 dark:border-slate-700">
-                    <input
-                      value={newTerm}
-                      onChange={(e) => setNewTerm(e.target.value)}
-                      placeholder="词语 (如: Lah)"
-                      className="w-1/3 text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                    />
-                    <input
-                      value={newMeaning}
-                      onChange={(e) => setNewMeaning(e.target.value)}
-                      placeholder="解释 (如: 强调语气词)"
-                      className="flex-1 text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddSlang}
-                      className="p-1.5 rounded-lg bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white active:scale-95 transition-all"
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </div>
-                </div>
-              </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
 
@@ -884,13 +896,13 @@ export default function BrandProfileView({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.15 }}
-              className="p-4 space-y-5 pb-10"
+              className="p-4 space-y-6 pb-12"
             >
               {/* AMC Growth Sync Controller */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3 max-w-2xl mx-auto w-full">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-black text-slate-850 dark:text-white">🚀 战略诊断与增长计划</h3>
+                    <h3 className="text-sm font-black text-slate-855 dark:text-white">🚀 战略诊断与增长计划</h3>
                     <p className="text-[10px] text-slate-400 mt-0.5">同步并以 Presentation 幻灯片大屏样式查看最新的定位诊断与执行规划</p>
                   </div>
                   <button
@@ -904,113 +916,158 @@ export default function BrandProfileView({
                 </div>
               </div>
 
-              {/* ─ Presentation-Style Slide Deck (Growth Plan) ─ */}
-              {presentationSlides.length > 0 && (
-                <div className="space-y-2">
+              {/* ── IMMERSIVE KEYNOTE SLIDES PLAYER (Growth slides) ── */}
+              {presentationSlides.length > 0 ? (
+                <div className="space-y-4 max-w-2xl mx-auto w-full">
                   <div className="flex items-center justify-between px-1">
                     <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                       <Sparkles size={12} className="text-indigo-500 animate-pulse" />
-                      AMC Growth 战略汇报幻灯片 ({presentationSlides.length} Slides)
+                      AMC Growth 诊断与规划幻灯片
                     </h4>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => scrollGrowth('left')}
-                        disabled={!canGrowthLeft}
-                        className="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-                      >
-                        <ChevronLeft size={12} className="text-slate-500 dark:text-slate-400" />
-                      </button>
-                      <button
-                        onClick={() => scrollGrowth('right')}
-                        disabled={!canGrowthRight}
-                        className="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
-                      >
-                        <ChevronRight size={12} className="text-slate-500 dark:text-slate-400" />
-                      </button>
-                    </div>
+                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-455">
+                      Slide {activeGrowthIndex + 1} of {presentationSlides.length}
+                    </span>
                   </div>
 
+                  {/* Main Visual Slide Card */}
                   <div
-                    ref={growthScrollRef}
-                    onScroll={checkGrowthScroll}
-                    className="flex gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x snap-mandatory scroll-smooth"
+                    className="w-full h-[280px] md:h-[320px] rounded-3xl overflow-hidden relative select-none border border-white/10 dark:border-slate-800/80 shadow-2xl transition-all duration-300 bg-gradient-to-br"
+                    style={{
+                      backgroundImage: `linear-gradient(135deg, var(--tw-gradient-stops))`,
+                      boxShadow: `0 24px 60px -12px ${getGrowthSlideGlow(activeGrowthIndex)}`
+                    }}
                   >
-                    {presentationSlides.map((slide, idx) => {
-                      const gradient = getGrowthSlideGradient(idx)
-                      const glowColor = getGrowthSlideGlow(idx)
-                      const emoji = getGrowthSlideEmoji(slide.title)
-                      return (
-                        <div
-                          key={idx}
-                          className="snap-start flex-shrink-0 w-[290px] lg:w-[330px] h-[195px] rounded-3xl overflow-hidden relative cursor-default select-none transition-all duration-300 hover:scale-[1.02] shadow-lg border border-white/10 dark:border-slate-800/80"
-                          style={{ boxShadow: `0 16px 40px -8px ${glowColor}` }}
-                        >
-                          {/* Gradient Backdrop */}
-                          <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} />
-                          {/* Noise Filter */}
-                          <div className="absolute inset-0 opacity-[0.05]"
-                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                          />
-                          {/* Light spotlight reflection */}
-                          <div className="absolute -top-8 -right-8 w-36 h-36 bg-white/10 rounded-full blur-2xl" />
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={activeGrowthIndex}
+                        initial={{ opacity: 0, x: 40 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -40 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute inset-0 p-6 md:p-8 flex flex-col justify-between text-white"
+                      >
+                        {/* Slide specific backdrop gradient */}
+                        <div className={`absolute inset-0 bg-gradient-to-br ${getGrowthSlideGradient(activeGrowthIndex)} -z-10`} />
+                        <div className="absolute inset-0 opacity-[0.05] -z-10"
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
+                        />
+                        <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-xl -z-10" />
 
-                          <div className="relative h-full flex flex-col justify-between p-5 text-white">
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-3xl leading-none">{emoji}</span>
-                                <span className="bg-white/15 backdrop-blur-sm px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider text-white/90">
-                                  Slide {idx + 1}
-                                </span>
-                              </div>
-                              <h3 className="text-xs font-black tracking-wide leading-snug line-clamp-1 border-b border-white/15 pb-1">
-                                {slide.title}
-                              </h3>
-                            </div>
-                            <div className="flex-1 overflow-y-auto min-h-0 pr-1 mt-1">
-                              {formatSlideContent(slide.content)}
-                            </div>
+                        {/* Slide Title */}
+                        <div>
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-4xl md:text-5xl leading-none">
+                              {getGrowthSlideEmoji(presentationSlides[activeGrowthIndex].title)}
+                            </span>
+                            <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-white">
+                              Slide {activeGrowthIndex + 1}
+                            </span>
                           </div>
+                          <h3 className="text-base md:text-lg font-black tracking-wide leading-snug line-clamp-1 border-b border-white/15 pb-2 drop-shadow-sm">
+                            {presentationSlides[activeGrowthIndex].title}
+                          </h3>
                         </div>
-                      )
-                    })}
+
+                        {/* Slide content area */}
+                        <div className="flex-1 overflow-y-auto min-h-0 pr-1 mt-2.5 scrollbar-thin scrollbar-thumb-white/20">
+                          {formatSlideContent(presentationSlides[activeGrowthIndex].content)}
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Slides Navigation Controls */}
+                  <div className="flex items-center justify-between px-2">
+                    <button
+                      onClick={() => setActiveGrowthIndex(prev => Math.max(0, prev - 1))}
+                      disabled={activeGrowthIndex === 0}
+                      className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <ChevronLeft size={16} className="text-slate-650 dark:text-slate-300" />
+                    </button>
+
+                    {/* Dot Progress Indicators */}
+                    <div className="flex gap-1.5 overflow-x-auto max-w-[200px] scrollbar-none py-1">
+                      {presentationSlides.map((_, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setActiveGrowthIndex(idx)}
+                          className={`h-2 rounded-full flex-shrink-0 transition-all duration-300 ${
+                            activeGrowthIndex === idx
+                              ? 'w-5 bg-slate-800 dark:bg-white'
+                              : 'w-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600'
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => setActiveGrowthIndex(prev => Math.min(presentationSlides.length - 1, prev + 1))}
+                      disabled={activeGrowthIndex === presentationSlides.length - 1}
+                      className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <ChevronRight size={16} className="text-slate-655 dark:text-slate-300" />
+                    </button>
                   </div>
                 </div>
-              )}
-
-              {/* Detailed Markdown Content */}
-              {growthContext ? (
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                  <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">
-                    📋 品牌核心战略诊断与定位 (Detailed Diagnosis)
-                  </h3>
-                  <div className="prose prose-slate dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthContext}</ReactMarkdown>
-                  </div>
-                </div>
-              ) : null}
-
-              {growthPlan ? (
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                  <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">
-                    🚀 智能增长执行路径与大纲 (Detailed Growth Plan)
-                  </h3>
-                  <div className="prose prose-slate dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthPlan}</ReactMarkdown>
-                  </div>
-                </div>
-              ) : null}
-
-              {!growthContext && !growthPlan && (
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 shadow-sm text-center">
+              ) : (
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 shadow-sm text-center max-w-2xl mx-auto w-full">
                   <div className="max-w-xs mx-auto space-y-2">
                     <FileText className="w-8 h-8 text-slate-300 mx-auto" />
-                    <p className="text-xs font-bold text-slate-500">暂无增长计划与幻灯片</p>
+                    <p className="text-xs font-bold text-slate-500">暂无分析数据与幻灯片</p>
                     <p className="text-[10px] text-slate-400">
-                      点击右上角“一键同步最新 analysis”按钮，从 AMC Growth 智能系统拉取该品牌的专属战略诊断、行动大纲和 PPT 汇报页。
+                      点击右上角“一键同步最新分析”按钮，从 AMC Growth 智能系统拉取该品牌的专属战略诊断、行动大纲和 PPT 汇报页。
                     </p>
                   </div>
                 </div>
               )}
+
+              {/* Toggle Detailed Prose Report Trigger */}
+              {(growthContext || growthPlan) && (
+                <div className="max-w-2xl mx-auto w-full pt-2">
+                  <button
+                    onClick={() => setShowDetailedReport(!showDetailedReport)}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 text-xs font-black text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-[0.98] cursor-pointer"
+                  >
+                    {showDetailedReport ? '📊 收起战略诊断报告原文' : '📄 展开查看战略诊断与执行规划全文'}
+                  </button>
+                </div>
+              )}
+
+              {/* Expandable Diagnostic Prose */}
+              <AnimatePresence>
+                {showDetailedReport && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden space-y-4 max-w-2xl mx-auto w-full"
+                  >
+                    {growthContext ? (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+                        <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">
+                          📋 品牌核心战略诊断与定位 (Detailed Diagnosis)
+                        </h3>
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthContext}</ReactMarkdown>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {growthPlan ? (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+                        <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">
+                          🚀 智能增长执行路径与大纲 (Detailed Growth Plan)
+                        </h3>
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthPlan}</ReactMarkdown>
+                        </div>
+                      </div>
+                    ) : null}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
         </AnimatePresence>
@@ -1245,7 +1302,7 @@ export default function BrandProfileView({
                       className={`text-[10px] font-bold px-3 py-1 rounded-md transition-all ${
                         profileViewMode === 'edit'
                           ? 'bg-white dark:bg-slate-950 text-slate-800 dark:text-white shadow-sm'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                          : 'text-slate-505 hover:text-slate-800 dark:hover:text-white'
                       }`}
                     >
                       编辑内容
