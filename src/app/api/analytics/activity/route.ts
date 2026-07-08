@@ -98,11 +98,11 @@ export async function GET(request: Request) {
       const agents = await prisma.user.findMany({ where: { type: 'AI_AGENT' }, select: { id: true } })
       permittedAgentIds = agents.map((a: any) => a.id)
     } else {
-      const permissions = await prisma.agentPermission.findMany({
-        where: { humanId: session!.user.id },
-        select: { agentId: true }
+      const agents = await prisma.user.findMany({
+        where: { ownerId: session!.user.id, type: 'AI_AGENT' },
+        select: { id: true }
       })
-      permittedAgentIds = permissions.map((p: any) => p.agentId)
+      permittedAgentIds = agents.map((a: any) => a.id)
     }
 
     if (filterAgentId) {

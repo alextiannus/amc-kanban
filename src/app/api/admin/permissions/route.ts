@@ -34,15 +34,15 @@ export async function POST(request: Request) {
         }
       }
 
-      const [result] = await prisma.$transaction([
-        prisma.agentPermission.deleteMany({ where: { agentId } }),
-        ...(uniqueHumanIds.length > 0 ? [
-          prisma.agentPermission.createMany({
-            data: uniqueHumanIds.map((id) => ({ humanId: id, agentId })),
-            skipDuplicates: true,
-          }),
+      const targetOwnerId = uniqueHumanIds[0] || null
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: agentId },
+          data: { ownerId: targetOwnerId },
+        }),
+        ...(targetOwnerId ? [
           prisma.userBusinessRole.createMany({
-            data: uniqueHumanIds.map((id) => ({ userId: id, role: 'AMC_PRINCIPAL' })),
+            data: [{ userId: targetOwnerId, role: 'AMC_PRINCIPAL' }],
             skipDuplicates: true,
           }),
         ] : []),
@@ -57,8 +57,8 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         mode: 'agent_to_principals',
-        removed: result.count,
-        principals: uniqueHumanIds.length,
+        removed: 1,
+        principals: targetOwnerId ? 1 : 0,
         affectedBrands: affectedBrands.map((link: any) => link.brand),
       })
     }
@@ -92,11 +92,14 @@ export async function POST(request: Request) {
     }
 
     await prisma.$transaction([
-      prisma.agentPermission.deleteMany({ where: { humanId } }),
+      prisma.user.updateMany({
+        where: { ownerId: humanId },
+        data: { ownerId: null },
+      }),
       ...(uniqueAgentIds.length > 0 ? [
-        prisma.agentPermission.createMany({
-          data: uniqueAgentIds.map(agentId => ({ humanId, agentId })),
-          skipDuplicates: true,
+        prisma.user.updateMany({
+          where: { id: { in: uniqueAgentIds } },
+          data: { ownerId: humanId },
         }),
         prisma.userBusinessRole.upsert({
           where: { userId_role: { userId: humanId, role: 'AMC_PRINCIPAL' } },

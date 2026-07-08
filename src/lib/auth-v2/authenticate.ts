@@ -34,6 +34,14 @@ async function principalFromSessionToken(token: string): Promise<AuthPrincipal |
       status: true,
       authVersion: true,
       businessRoles: { select: { role: true } },
+      ownerId: true,
+      owner: {
+        select: {
+          id: true,
+          role: true,
+          businessRoles: { select: { role: true } },
+        },
+      },
     },
   })
   if (!user || user.status !== 'ACTIVE') return null

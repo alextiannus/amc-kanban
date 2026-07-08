@@ -112,7 +112,7 @@ export default function AiAgentsPanel({
   const handleOpenPrincipalsModal = () => {
     if (!selectedAgent) return
     setSelectedAgentForPrincipals(selectedAgent)
-    setSelectedAgentHumanIds(selectedAgent.assignedToHumans.map(link => link.human.id))
+    setSelectedAgentHumanIds(selectedAgent.ownerId ? [selectedAgent.ownerId] : (selectedAgent.owner?.id ? [selectedAgent.owner.id] : []))
   }
 
   const handleSavePrincipalsLocal = async () => {
@@ -271,8 +271,8 @@ export default function AiAgentsPanel({
 
                       {/* Supervisors */}
                       <td className="px-4 py-3.5 font-bold text-slate-700 dark:text-slate-350">
-                        {agent.assignedToHumans.length 
-                          ? agent.assignedToHumans.map(link => link.human.nickname || link.human.email).join('、') 
+                        {agent.owner 
+                          ? (agent.owner.nickname || agent.owner.email) 
                           : '未指定主理人'
                         }
                       </td>
@@ -411,11 +411,28 @@ export default function AiAgentsPanel({
             </div>
 
             <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-thin">
+              <label 
+                className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-xs font-bold cursor-pointer transition-all bg-white dark:bg-slate-905 ${
+                  selectedAgentHumanIds.length === 0
+                    ? 'border-indigo-500 ring-1 ring-indigo-500/20 text-indigo-750 dark:text-indigo-300 font-extrabold' 
+                    : 'border-slate-150 dark:border-slate-800 text-slate-650 dark:text-slate-405 hover:bg-slate-50/30'
+                }`}
+              >
+                <input 
+                  type="radio"
+                  name="agent-owner"
+                  checked={selectedAgentHumanIds.length === 0}
+                  onChange={() => setSelectedAgentHumanIds([])}
+                  className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                />
+                <span>-- 未指定主理人 (无业主) --</span>
+              </label>
+
               {humans.length === 0 ? (
                 <p className="text-xs text-slate-450 py-4 text-center">暂无人类主理人账号</p>
               ) : (
                 humans.map(human => {
-                  const isChecked = selectedAgentHumanIds.includes(human.id)
+                  const isChecked = selectedAgentHumanIds[0] === human.id
                   return (
                     <label 
                       key={human.id}
@@ -426,14 +443,10 @@ export default function AiAgentsPanel({
                       }`}
                     >
                       <input 
-                        type="checkbox"
+                        type="radio"
+                        name="agent-owner"
                         checked={isChecked}
-                        onChange={() => {
-                          const nextIds = isChecked
-                            ? selectedAgentHumanIds.filter(id => id !== human.id)
-                            : [...selectedAgentHumanIds, human.id]
-                          setSelectedAgentHumanIds(nextIds)
-                        }}
+                        onChange={() => setSelectedAgentHumanIds([human.id])}
                         className="rounded border-slate-350 text-indigo-650 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
                       />
                       <span>{human.nickname || human.email}</span>

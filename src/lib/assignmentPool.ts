@@ -110,12 +110,12 @@ async function getReferenceScopedAgentIds(referenceCode: string | null | undefin
   })
   if (!human) return null
 
-  const permissions = await prisma.agentPermission.findMany({
-    where: { humanId: human.id },
-    select: { agentId: true },
+  const agents = await prisma.user.findMany({
+    where: { ownerId: human.id, type: 'AI_AGENT' },
+    select: { id: true },
   })
 
-  const agentIds = permissions.map((p: any) => p.agentId)
+  const agentIds = agents.map((a: any) => a.id)
   return agentIds.length ? agentIds : null
 }
 
@@ -362,18 +362,9 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
           throw new AssignmentError('INVALID_SUBJECT_ID', 'user_register subject must be a HUMAN user id', 400)
         }
 
-        await tx.agentPermission.upsert({
-          where: {
-            humanId_agentId: {
-              humanId: subjectId,
-              agentId: selected.agentId,
-            },
-          },
-          create: {
-            humanId: subjectId,
-            agentId: selected.agentId,
-          },
-          update: {},
+        await tx.user.update({
+          where: { id: selected.agentId },
+          data: { ownerId: subjectId },
         })
       } else {
         const brand = await tx.brand.findUnique({ where: { id: subjectId }, select: { id: true, status: true } })

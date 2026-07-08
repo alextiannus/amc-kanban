@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const [ownerLinksCount, legacyOwnerCount, principalPermissionCount, explicitRoles] = await Promise.all([
     prisma.brandOwner.count({ where: { userId } }),
     prisma.brand.count({ where: { ownerId: userId } }),
-    prisma.agentPermission.count({ where: { humanId: userId } }),
+    prisma.user.count({ where: { ownerId: userId, type: 'AI_AGENT' } }),
     prisma.userBusinessRole.findMany({ where: { userId }, select: { role: true } }),
   ])
 
@@ -46,11 +46,11 @@ export async function GET(request: Request) {
     })
     visibleBrandIds = allBrands.map((b: any) => b.id)
   } else {
-    const permissions = await prisma.agentPermission.findMany({
-      where: { humanId: userId },
-      select: { agentId: true },
+    const agents = await prisma.user.findMany({
+      where: { ownerId: userId, type: 'AI_AGENT' },
+      select: { id: true },
     })
-    const delegatedAgentIds = permissions.map((p: any) => p.agentId)
+    const delegatedAgentIds = agents.map((a: any) => a.id)
     scopedAgentIds = delegatedAgentIds
     const delegatedBrandLinks = delegatedAgentIds.length
       ? await prisma.brandAgent.findMany({

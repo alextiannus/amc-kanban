@@ -14,6 +14,7 @@ export type AuthPrincipal = {
   authVersion: number
   credentialId?: string
   source: AuthSource
+  linkedHumanUserId?: string
 }
 
 export type PrincipalUserRecord = {
@@ -24,6 +25,12 @@ export type PrincipalUserRecord = {
   status: string
   authVersion: number
   businessRoles: Array<{ role: string }>
+  ownerId?: string | null
+  owner?: {
+    id: string
+    role: string
+    businessRoles: Array<{ role: string }>
+  } | null
 }
 
 export function normalizeActorType(type: string | null | undefined): ActorType {
@@ -52,13 +59,20 @@ export function principalFromUser(
   source: AuthSource,
   credentialId?: string,
 ): AuthPrincipal {
+  const roles = [...user.businessRoles]
+  if (user.owner?.businessRoles) {
+    roles.push(...user.owner.businessRoles)
+  }
+  const legacyRole = user.role === 'ADMIN' || user.owner?.role === 'ADMIN' ? 'ADMIN' : user.role
+
   return {
     userId: user.id,
     email: user.email,
     actorType: normalizeActorType(user.type),
-    globalRoles: normalizeGlobalRoles(user.businessRoles, user.role),
+    globalRoles: normalizeGlobalRoles(roles, legacyRole),
     authVersion: user.authVersion,
     credentialId,
     source,
+    linkedHumanUserId: user.ownerId || user.owner?.id || undefined,
   }
 }

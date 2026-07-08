@@ -49,8 +49,9 @@ export async function GET() {
             },
           }
         },
-        assignedToHumans: {
-          include: { human: { select: { id: true, email: true, nickname: true } } }
+        ownerId: true,
+        owner: {
+          select: { id: true, email: true, nickname: true }
         },
         brandMemberships: {
           where: { active: true },

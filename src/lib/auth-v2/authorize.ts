@@ -17,7 +17,7 @@ export async function canAccessBrand(
 
   const user = await prisma.user.findFirst({
     where: {
-      id: principal.userId,
+      id: { in: [principal.userId, principal.linkedHumanUserId || ''] },
       status: 'ACTIVE',
       OR: [
         {

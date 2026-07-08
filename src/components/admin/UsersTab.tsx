@@ -38,6 +38,8 @@ export interface UserRecord {
   assignedToHumans: Array<{
     human: { id: string; nickname: string | null; email: string }
   }>
+  ownerId?: string | null
+  owner?: { id: string; email: string; nickname: string | null } | null
   brandMemberships?: Array<{
     brand: { id: string; name: string; status: string }
   }>

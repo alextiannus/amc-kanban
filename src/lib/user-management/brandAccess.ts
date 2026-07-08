@@ -33,9 +33,20 @@ export async function canUserAccessBrand(
   action: string = 'READ',
 ): Promise<boolean> {
   const allowedRoles = action === 'READ' ? READ_ROLES : WRITE_ROLES
+
+  const userRecord = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { type: true, ownerId: true }
+  })
+
+  const queryUserIds = [userId]
+  if (userRecord?.type === 'AI_AGENT' && userRecord.ownerId) {
+    queryUserIds.push(userRecord.ownerId)
+  }
+
   const user = await prisma.user.findFirst({
     where: {
-      id: userId,
+      id: { in: queryUserIds },
       status: 'ACTIVE',
       OR: [
         { businessRoles: { some: { role: 'ADMIN' } } },

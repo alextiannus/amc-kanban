@@ -4,6 +4,14 @@ This document lists all the MCP tools registered in `src/lib/partner/mcp/server.
 
 ---
 
+## Authentication & Authorization Model (Auth V2)
+
+All MCP tools execute within the context of an authenticated `AuthPrincipal`.
+- **Direct Authorization**: The AI Agent is authenticated using its own `UserApiKey`.
+- **Linked Human User Delegation (Delegated Action)**: When the AI Agent is configured as an avatar linked to a human user (via `User.ownerId`), the authorization system dynamically delegates permissions. The agent inherits the capabilities, global roles, and brand crew memberships (`CrewMember` / Organization inheritance) of its linked human owner.
+
+---
+
 ## 1. Brand Profile & Configurations
 
 ### `get_brand_config`
