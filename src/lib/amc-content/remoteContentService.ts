@@ -13,13 +13,20 @@ type RemoteContentResult = {
 export async function tryGenerateWithRemoteContentService(
   input: ContentGenerationRequest,
 ): Promise<ContentGenerationResult | null> {
+  const isLocal = process.env.NODE_ENV !== 'production'
+    || process.env.APP_BASE_URL?.includes('localhost')
+    || process.env.JWT_SECRET?.includes('local')
+    || process.env.JWT_SECRET?.includes('change-in-production')
+
   const baseUrl = process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/+$/, '')
+    || (isLocal ? 'http://localhost:4010' : undefined)
   if (!baseUrl || process.env.AMC_CONTENT_REMOTE_ENABLED === 'false') return null
 
   const headers: Record<string, string> = {
     'content-type': 'application/json',
   }
   const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()
+    || (isLocal ? 'local-service-token' : undefined)
   if (token) headers.authorization = `Bearer ${token}`
   if (input.actorId) headers['x-amc-actor-id'] = input.actorId
   if (input.actorType) headers['x-amc-actor-type'] = input.actorType

@@ -15,9 +15,16 @@ export default async function ContentLabEntryPage() {
   if (!session?.user?.id) redirect('/')
   if (session.user.role !== 'ADMIN') redirect('/admin')
 
+  const isLocal = process.env.NODE_ENV !== 'production'
+    || process.env.APP_BASE_URL?.includes('localhost')
+    || process.env.JWT_SECRET?.includes('local')
+    || process.env.JWT_SECRET?.includes('change-in-production')
+
   const contentUrl = process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/+$/, '')
+    || (isLocal ? 'http://localhost:4010' : undefined)
   const secret = process.env.AMC_CONTENT_LAB_TOKEN_SECRET?.trim()
     || process.env.CONTENT_SERVICE_INTERNAL_TOKEN?.trim()
+    || (isLocal ? 'local-internal-token' : undefined)
 
   if (contentUrl && secret) {
     const token = signLabToken({

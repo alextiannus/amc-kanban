@@ -6,7 +6,13 @@ const VALID_TAGS = ['include', 'exclude', 'needs_rewrite'] as const
 export const maxDuration = 30
 
 export async function POST(request: Request) {
+  const isLocal = process.env.NODE_ENV !== 'production'
+    || process.env.APP_BASE_URL?.includes('localhost')
+    || process.env.JWT_SECRET?.includes('local')
+    || process.env.JWT_SECRET?.includes('change-in-production')
+
   const expectedToken = process.env.CONTENT_SERVICE_INTERNAL_TOKEN?.trim()
+    || (isLocal ? 'local-internal-token' : undefined)
   const suppliedToken = request.headers.get('x-content-service-token')?.trim()
   if (!expectedToken || suppliedToken !== expectedToken) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
