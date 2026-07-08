@@ -33,7 +33,8 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
     }
 
-    const growthBaseUrl = process.env.AMC_GROWTH_API_URL || 'http://localhost:4188'
+    const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
+    const growthBaseUrl = process.env.AMC_GROWTH_API_URL || (isProd ? 'https://amc-growth.onrender.com' : 'http://localhost:4188')
     const token = process.env.AMC_KNOWLEDGE_TOKEN || ''
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) {
