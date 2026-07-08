@@ -5,7 +5,8 @@ import {
   X, ChevronLeft, Sparkles, MapPin, Zap, Save,
   Settings, BookOpen, ExternalLink, Package, Loader2,
   RefreshCw, FileText, CheckCircle2, Store, Utensils,
-  Camera, Edit3, Check, Plus, Trash2, ArrowRight
+  Camera, Edit3, Check, Plus, Trash2, ArrowRight,
+  Star, Users, ChevronRight
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -51,6 +52,21 @@ export default function BrandProfileView({
   brand,
   onClose,
 }: Props) {
+  // Early return if no brand or brand.id is provided, placed at the top to satisfy TypeScript compiler
+  if (!brand || !brand.id) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-950 text-center">
+        <div className="max-w-sm">
+          <Store className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-4" />
+          <p className="text-sm font-bold text-slate-600 dark:text-slate-400">暂无选定品牌</p>
+          <p className="text-xs text-slate-400 dark:text-slate-505 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
+        </div>
+      </div>
+    )
+  }
+
+  const brandId = brand.id
+
   const [activeTab, setActiveTab] = useState<Tab>('story')
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -69,13 +85,13 @@ export default function BrandProfileView({
 
   // Inline brand info editing
   const [editingName, setEditingName] = useState(false)
-  const [draftName, setDraftName] = useState(brand?.name || '')
-  const [draftDesc, setDraftDesc] = useState(brand?.description || '')
-  const [draftLocation, setDraftLocation] = useState(brand?.location || '')
+  const [draftName, setDraftName] = useState(brand.name || '')
+  const [draftDesc, setDraftDesc] = useState(brand.description || '')
+  const [draftLocation, setDraftLocation] = useState(brand.location || '')
 
   // Logo upload
   const logoInputRef = useRef<HTMLInputElement>(null)
-  const [logoPreview, setLogoPreview] = useState<string | null>(brand?.logoUrl || null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(brand.logoUrl || null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
 
   // Slang form
@@ -96,10 +112,42 @@ export default function BrandProfileView({
   const [profileMarkdown, setProfileMarkdown] = useState('')
   const [profileViewMode, setProfileViewMode] = useState<'edit' | 'preview'>('preview')
 
-  const brandId = brand?.id
+  // Horizontal scroll references & states
+  const storyScrollRef = useRef<HTMLDivElement>(null)
+  const [canStoryLeft, setCanStoryLeft] = useState(false)
+  const [canStoryRight, setCanStoryRight] = useState(true)
+
+  const growthScrollRef = useRef<HTMLDivElement>(null)
+  const [canGrowthLeft, setCanGrowthLeft] = useState(false)
+  const [canGrowthRight, setCanGrowthRight] = useState(true)
+
+  const checkStoryScroll = () => {
+    const el = storyScrollRef.current
+    if (!el) return
+    setCanStoryLeft(el.scrollLeft > 5)
+    setCanStoryRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 5)
+  }
+
+  const scrollStory = (dir: 'left' | 'right') => {
+    const el = storyScrollRef.current
+    if (!el) return
+    el.scrollBy({ left: dir === 'left' ? -300 : 300, behavior: 'smooth' })
+  }
+
+  const checkGrowthScroll = () => {
+    const el = growthScrollRef.current
+    if (!el) return
+    setCanGrowthLeft(el.scrollLeft > 5)
+    setCanGrowthRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 5)
+  }
+
+  const scrollGrowth = (dir: 'left' | 'right') => {
+    const el = growthScrollRef.current
+    if (!el) return
+    el.scrollBy({ left: dir === 'left' ? -320 : 320, behavior: 'smooth' })
+  }
 
   const loadProfile = async () => {
-    if (!brandId) return
     setProfileLoading(true)
     try {
       const res = await fetch(`/api/brands/${brandId}/profile`)
@@ -115,7 +163,6 @@ export default function BrandProfileView({
   }
 
   const loadAllConfig = async () => {
-    if (!brandId) return
     try {
       // 1. Fetch brand metadata for details (description, location, address, etc.)
       const resBrand = await fetch(`/api/brands/${brandId}`)
@@ -154,14 +201,19 @@ export default function BrandProfileView({
   }
 
   useEffect(() => {
-    if (brandId) {
-      void loadProfile()
-      void loadAllConfig()
-    }
+    void loadProfile()
+    void loadAllConfig()
   }, [brandId])
 
+  // Recalculate story scroll states when view changes or loads
+  useEffect(() => {
+    setTimeout(() => {
+      checkStoryScroll()
+      checkGrowthScroll()
+    }, 400)
+  }, [profileMarkdown, activeTab])
+
   const handleSaveProfile = async (nextMarkdown?: string) => {
-    if (!brandId) return
     const markdown = (nextMarkdown ?? profileMarkdown).trim()
     if (!markdown) return
 
@@ -191,7 +243,6 @@ export default function BrandProfileView({
   }
 
   const handleRefreshProfile = async () => {
-    if (!brandId) return
     setProfileLoading(true)
     try {
       const res = await fetch(`/api/brands/${brandId}/profile?refresh=1`)
@@ -232,10 +283,24 @@ export default function BrandProfileView({
     '<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:END -->'
   )
 
+  const presentationSlidesRaw = extractBlock(
+    profileMarkdown,
+    '<!-- AMC:BRAND_PROFILE:PRESENTATION_SLIDES:START -->',
+    '<!-- AMC:BRAND_PROFILE:PRESENTATION_SLIDES:END -->'
+  )
+
+  let presentationSlides: Array<{ title: string; content: string }> = []
+  if (presentationSlidesRaw) {
+    try {
+      presentationSlides = JSON.parse(presentationSlidesRaw)
+    } catch (e) {
+      console.error('Failed to parse synced presentation slides:', e)
+    }
+  }
+
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleSyncGrowth = async () => {
-    if (!brandId) return
     setSyncing(true)
     setSyncStatus('正在同步...')
     try {
@@ -247,10 +312,11 @@ export default function BrandProfileView({
         setSyncStatus('同步成功')
         showToast(`品牌分析同步成功 (${data.merchantName || data.merchantId})`, 'success')
         void loadProfile() // Refresh local copy of profile markdown
+        void loadAllConfig()
         setTimeout(() => setSyncStatus(null), 3000)
       } else {
         setSyncStatus('同步失败')
-        showToast(data.error || '同步失败，未找到匹配的 Growth 商家分析', 'error')
+        showToast(data.error || '同步失败，未找到匹配 hometown 的 Growth 商家分析', 'error')
         setTimeout(() => setSyncStatus(null), 5000)
       }
     } catch (e) {
@@ -264,7 +330,6 @@ export default function BrandProfileView({
   }
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!brandId) return
     const file = e.target.files?.[0]
     if (!file) return
     const previewUrl = URL.createObjectURL(file)
@@ -287,7 +352,6 @@ export default function BrandProfileView({
   }
 
   const handleSaveBrandInfo = async () => {
-    if (!brandId) return
     setSaving(true)
     try {
       const res = await fetch(`/api/brands/${brandId}`, {
@@ -309,7 +373,6 @@ export default function BrandProfileView({
   }
 
   const handleSaveVoice = async () => {
-    if (!brandId) return
     setSaving(true)
     try {
       const res = await fetch(`/api/brands/${brandId}/knowledge`, {
@@ -338,28 +401,125 @@ export default function BrandProfileView({
     setNewMeaning('')
   }
 
-  // ── Tabs config ─────────────────────────────────────────────────────────────
+  // ── Presentation Styles Builder ──────────────────────────────────────────────
+
+  const storySlides = [
+    {
+      id: 'mission',
+      emoji: '🏮',
+      label: '品牌故事 & 使命',
+      headline: draftName,
+      body: draftDesc || '暂无品牌介绍。请在下方编辑框中完善品牌故事、价值主张与核心定位。',
+      gradient: 'from-orange-500 via-red-500 to-rose-600',
+      glowColor: 'rgba(234,88,12,0.25)',
+      icon: Sparkles
+    },
+    {
+      id: 'tone',
+      emoji: '✨',
+      label: 'AI 品牌声调',
+      headline: '写作调性与人格',
+      body: brandTone || '暂无特定的语气调性。请在下方编辑区补充风格，以保持 AI 创作调性统一。',
+      gradient: 'from-emerald-500 via-teal-500 to-cyan-600',
+      glowColor: 'rgba(16,185,129,0.25)',
+      icon: Star
+    },
+    {
+      id: 'slang',
+      emoji: '🎯',
+      label: '本地俚语库',
+      headline: `已录入 ${Object.keys(slangDict).length} 个本地化词条`,
+      body: Object.keys(slangDict).length > 0 
+        ? `核心表达：${Object.keys(slangDict).slice(0, 10).join(' · ')}`
+        : '尚未配置本地俚语词汇。配置俚语词典可以帮助 AI 撰写极具本土亲和力的内容。',
+      gradient: 'from-purple-500 via-indigo-500 to-violet-600',
+      glowColor: 'rgba(139,92,246,0.25)',
+      icon: Users
+    },
+    {
+      id: 'location',
+      emoji: '📍',
+      label: '门店主理区域',
+      headline: draftLocation || '未配置主理区域',
+      body: draftLocation 
+        ? `该品牌的主理城市和交付区域已被定位在：${draftLocation}。`
+        : '请在下方配置您的主要店址和地区，以提供内容生成所需的地理坐标。',
+      gradient: 'from-cyan-500 via-sky-500 to-blue-600',
+      glowColor: 'rgba(14,165,233,0.25)',
+      icon: MapPin
+    }
+  ]
+
+  const getGrowthSlideGradient = (index: number) => {
+    const gradients = [
+      'from-indigo-500 via-purple-500 to-indigo-600',
+      'from-rose-500 via-red-500 to-rose-600',
+      'from-amber-500 via-orange-500 to-amber-600',
+      'from-emerald-500 via-teal-500 to-emerald-600',
+      'from-teal-500 via-cyan-500 to-teal-600',
+      'from-cyan-500 via-blue-500 to-cyan-600',
+      'from-pink-500 via-rose-500 to-pink-600',
+      'from-purple-500 via-violet-500 to-purple-600',
+      'from-violet-500 via-fuchsia-500 to-violet-600',
+      'from-slate-600 via-slate-700 to-slate-800',
+    ]
+    return gradients[index % gradients.length]
+  }
+
+  const getGrowthSlideGlow = (index: number) => {
+    const glows = [
+      'rgba(99,102,241,0.25)',
+      'rgba(239,68,68,0.25)',
+      'rgba(245,158,11,0.25)',
+      'rgba(16,185,129,0.25)',
+      'rgba(20,184,166,0.25)',
+      'rgba(6,182,212,0.25)',
+      'rgba(236,72,153,0.25)',
+      'rgba(139,92,246,0.25)',
+      'rgba(168,85,247,0.25)',
+      'rgba(75,85,99,0.25)',
+    ]
+    return glows[index % glows.length]
+  }
+
+  const getGrowthSlideEmoji = (title: string) => {
+    if (title.includes('当前') || title.includes('判断')) return '🔍'
+    if (title.includes('问题') || title.includes('痛点')) return '⚠️'
+    if (title.includes('机会') || title.includes('优势')) return '💡'
+    if (title.includes('30天') || title.includes('验证')) return '📅'
+    if (title.includes('90天') || title.includes('增长')) return '📈'
+    if (title.includes('180天') || title.includes('品牌')) return '🏆'
+    if (title.includes('指标') || title.includes('成功')) return '📊'
+    if (title.includes('内容') || title.includes('方向')) return '✍️'
+    if (title.includes('下一步') || title.includes('行动')) return '🏁'
+    return '🚀'
+  }
+
+  const formatSlideContent = (content: string) => {
+    const lines = content.split('\n').map(l => l.trim()).filter(Boolean)
+    if (lines.some(l => l.startsWith('-') || l.startsWith('*') || l.match(/^\d+\./))) {
+      return (
+        <ul className="list-disc list-inside space-y-1 mt-1.5 text-[11px] text-white/80 font-medium leading-relaxed">
+          {lines.map((line, idx) => {
+            const cleanLine = line.replace(/^[-*\d+.\s]+/, '')
+            return <li key={idx} className="line-clamp-2">{cleanLine}</li>
+          })}
+        </ul>
+      )
+    }
+    return (
+      <p className="text-[11px] text-white/80 font-medium leading-relaxed line-clamp-5 mt-1.5">
+        {content}
+      </p>
+    )
+  }
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'story', label: '品牌故事', icon: <Sparkles className="w-3.5 h-3.5" /> },
     { id: 'growth', label: '分析与增长计划', icon: <RefreshCw className="w-3.5 h-3.5" /> },
   ]
 
-  // ── Render ───────────────────────────────────────────────────────────────────
-
-  if (!brand || !brand.id) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-955 text-center">
-        <div className="max-w-sm">
-          <Store className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-4" />
-          <p className="text-sm font-bold text-slate-600 dark:text-slate-400">暂无选定品牌</p>
-          <p className="text-xs text-slate-400 dark:text-slate-505 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
-        </div>
-      </div>
-    )
-  }
-
-  const subscriptionHref = `/profile/principal/brands/${brand.id}/billing`
+  const subscriptionHref = `/profile/principal/brands/${brandId}/billing`
 
   return (
     <motion.div
@@ -476,7 +636,7 @@ export default function BrandProfileView({
       </div>
 
       {/* ── Tab Navigation ───────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 px-4 flex items-center justify-between">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 px-4 flex items-center justify-between shadow-sm">
         <div className="flex overflow-x-auto scrollbar-none">
           {tabs.map(tab => (
             <button
@@ -485,7 +645,7 @@ export default function BrandProfileView({
               className={`flex items-center gap-1.5 px-4 py-3.5 text-xs font-bold whitespace-nowrap border-b-2 transition-all cursor-pointer ${
                 activeTab === tab.id
                   ? 'border-amber-500 text-amber-600 dark:text-amber-400'
-                  : 'border-transparent text-slate-400 dark:text-slate-505 hover:text-slate-600 dark:hover:text-slate-300'
+                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
               }`}
             >
               {tab.icon}
@@ -498,7 +658,7 @@ export default function BrandProfileView({
             onClick={() => setShowConfigModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 border border-slate-200/50 dark:border-slate-700/50 transition-all cursor-pointer active:scale-95"
           >
-            <Settings className="w-3.5 h-3.5 text-slate-455" />
+            <Settings className="w-3.5 h-3.5 text-slate-450" />
             品牌配置
           </button>
           <button
@@ -524,11 +684,78 @@ export default function BrandProfileView({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.15 }}
-              className="p-4 space-y-4 pb-10"
+              className="p-4 space-y-5 pb-10"
             >
-              {/* Brand Info Card */}
+              {/* ─ Presentation-Style Slide Deck (Brand Story) ─ */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <Sparkles size={12} className="text-amber-500 animate-pulse" />
+                    品牌故事与使命概览 (Slide Deck)
+                  </h4>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => scrollStory('left')}
+                      disabled={!canStoryLeft}
+                      className="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                    >
+                      <ChevronLeft size={12} className="text-slate-500 dark:text-slate-400" />
+                    </button>
+                    <button
+                      onClick={() => scrollStory('right')}
+                      disabled={!canStoryRight}
+                      className="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                    >
+                      <ChevronRight size={12} className="text-slate-500 dark:text-slate-400" />
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  ref={storyScrollRef}
+                  onScroll={checkStoryScroll}
+                  className="flex gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x snap-mandatory scroll-smooth"
+                >
+                  {storySlides.map(slide => (
+                    <div
+                      key={slide.id}
+                      className="snap-start flex-shrink-0 w-[280px] lg:w-[320px] h-[190px] rounded-3xl overflow-hidden relative cursor-default select-none transition-all duration-300 hover:scale-[1.02] shadow-lg border border-white/10 dark:border-slate-800/80"
+                      style={{ boxShadow: `0 16px 40px -8px ${slide.glowColor}` }}
+                    >
+                      {/* Gradient Backdrop */}
+                      <div className={`absolute inset-0 bg-gradient-to-br ${slide.gradient}`} />
+                      {/* Noise filter overlay */}
+                      <div className="absolute inset-0 opacity-[0.05]"
+                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2053/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
+                      />
+                      {/* Ambient glow light */}
+                      <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/10 rounded-full blur-xl" />
+
+                      <div className="relative h-full flex flex-col justify-between p-5 text-white">
+                        <div>
+                          <div className="flex items-center justify-between mb-2.5">
+                            <span className="text-3xl leading-none">{slide.emoji}</span>
+                            <div className="flex items-center gap-1 bg-white/15 backdrop-blur-sm px-2.5 py-0.5 rounded-full text-[9px] font-bold text-white/90">
+                              <slide.icon size={10} />
+                              {slide.label}
+                            </div>
+                          </div>
+                          <h3 className="text-sm font-black tracking-wide leading-snug line-clamp-2">
+                            {slide.headline}
+                          </h3>
+                        </div>
+                        <p className="text-[11px] text-white/85 leading-relaxed line-clamp-3">
+                          {slide.body}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Brand Info Form Card */}
               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
-                <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-3">品牌基本信息</h3>
+                <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-3">编辑品牌故事</h3>
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">品牌名称</label>
                   <input
@@ -569,14 +796,14 @@ export default function BrandProfileView({
               {/* Tone Configuration Card */}
               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                  <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">品牌语气与声调 (Tone of Voice)</h3>
+                  <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">编辑 AI 品牌声调 (Tone of Voice)</h3>
                   <button
                     onClick={handleSaveVoice}
                     disabled={saving}
                     className="flex items-center gap-1 text-[11px] font-bold text-amber-500 hover:text-amber-600 cursor-pointer active:scale-95 transition-transform"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    保存声调
+                    保存声调设定
                   </button>
                 </div>
 
@@ -605,7 +832,7 @@ export default function BrandProfileView({
                           className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm"
                         >
                           <div className="min-w-0 pr-1.5">
-                            <span className="text-[11px] font-bold text-slate-800 dark:text-white block truncate">{term}</span>
+                            <span className="text-[11px] font-bold text-slate-800 dark:text-white block truncate">"{term}"</span>
                             <span className="text-[9px] text-slate-400 block truncate">{meaning}</span>
                           </div>
                           <button
@@ -624,7 +851,7 @@ export default function BrandProfileView({
                     </div>
                   )}
 
-                  <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-850 p-2 rounded-xl border border-dashed border-slate-250 dark:border-slate-700">
+                  <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-855 p-2 rounded-xl border border-dashed border-slate-250 dark:border-slate-700">
                     <input
                       value={newTerm}
                       onChange={(e) => setNewTerm(e.target.value)}
@@ -657,29 +884,105 @@ export default function BrandProfileView({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.15 }}
-              className="p-4 space-y-4 pb-10"
+              className="p-4 space-y-5 pb-10"
             >
               {/* AMC Growth Sync Controller */}
               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-black text-slate-850 dark:text-white">🚀 战略诊断与增长计划同步</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">从 amc-growth 系统一键拉取并同步最新的商家诊断、商业计划与执行大纲</p>
+                    <h3 className="text-sm font-black text-slate-850 dark:text-white">🚀 战略诊断与增长计划</h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">同步并以 Presentation 幻灯片大屏样式查看最新的定位诊断与执行规划</p>
                   </div>
                   <button
                     onClick={handleSyncGrowth}
                     disabled={syncing}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white disabled:opacity-60 active:scale-95 transition-all cursor-pointer shadow-md"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white disabled:opacity-60 active:scale-95 transition-all cursor-pointer shadow-md"
                   >
                     {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                    {syncStatus || '同步最新分析'}
+                    {syncStatus || '一键同步最新分析'}
                   </button>
                 </div>
               </div>
 
+              {/* ─ Presentation-Style Slide Deck (Growth Plan) ─ */}
+              {presentationSlides.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <Sparkles size={12} className="text-indigo-500 animate-pulse" />
+                      AMC Growth 战略汇报幻灯片 ({presentationSlides.length} Slides)
+                    </h4>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => scrollGrowth('left')}
+                        disabled={!canGrowthLeft}
+                        className="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                      >
+                        <ChevronLeft size={12} className="text-slate-500 dark:text-slate-400" />
+                      </button>
+                      <button
+                        onClick={() => scrollGrowth('right')}
+                        disabled={!canGrowthRight}
+                        className="w-6 h-6 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                      >
+                        <ChevronRight size={12} className="text-slate-500 dark:text-slate-400" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    ref={growthScrollRef}
+                    onScroll={checkGrowthScroll}
+                    className="flex gap-4 overflow-x-auto pb-3 pt-1 scrollbar-none snap-x snap-mandatory scroll-smooth"
+                  >
+                    {presentationSlides.map((slide, idx) => {
+                      const gradient = getGrowthSlideGradient(idx)
+                      const glowColor = getGrowthSlideGlow(idx)
+                      const emoji = getGrowthSlideEmoji(slide.title)
+                      return (
+                        <div
+                          key={idx}
+                          className="snap-start flex-shrink-0 w-[290px] lg:w-[330px] h-[195px] rounded-3xl overflow-hidden relative cursor-default select-none transition-all duration-300 hover:scale-[1.02] shadow-lg border border-white/10 dark:border-slate-800/80"
+                          style={{ boxShadow: `0 16px 40px -8px ${glowColor}` }}
+                        >
+                          {/* Gradient Backdrop */}
+                          <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} />
+                          {/* Noise Filter */}
+                          <div className="absolute inset-0 opacity-[0.05]"
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
+                          />
+                          {/* Light spotlight reflection */}
+                          <div className="absolute -top-8 -right-8 w-36 h-36 bg-white/10 rounded-full blur-2xl" />
+
+                          <div className="relative h-full flex flex-col justify-between p-5 text-white">
+                            <div>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-3xl leading-none">{emoji}</span>
+                                <span className="bg-white/15 backdrop-blur-sm px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider text-white/90">
+                                  Slide {idx + 1}
+                                </span>
+                              </div>
+                              <h3 className="text-xs font-black tracking-wide leading-snug line-clamp-1 border-b border-white/15 pb-1">
+                                {slide.title}
+                              </h3>
+                            </div>
+                            <div className="flex-1 overflow-y-auto min-h-0 pr-1 mt-1">
+                              {formatSlideContent(slide.content)}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Detailed Markdown Content */}
               {growthContext ? (
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
-                  <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">品牌核心战略诊断与定位</h3>
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+                  <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">
+                    📋 品牌核心战略诊断与定位 (Detailed Diagnosis)
+                  </h3>
                   <div className="prose prose-slate dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthContext}</ReactMarkdown>
                   </div>
@@ -687,8 +990,10 @@ export default function BrandProfileView({
               ) : null}
 
               {growthPlan ? (
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
-                  <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">智能增长执行路径与大纲</h3>
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+                  <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">
+                    🚀 智能增长执行路径与大纲 (Detailed Growth Plan)
+                  </h3>
                   <div className="prose prose-slate dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthPlan}</ReactMarkdown>
                   </div>
@@ -699,9 +1004,9 @@ export default function BrandProfileView({
                 <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 shadow-sm text-center">
                   <div className="max-w-xs mx-auto space-y-2">
                     <FileText className="w-8 h-8 text-slate-300 mx-auto" />
-                    <p className="text-xs font-bold text-slate-500">暂无增长计划快照</p>
+                    <p className="text-xs font-bold text-slate-500">暂无增长计划与幻灯片</p>
                     <p className="text-[10px] text-slate-400">
-                      点击“同步最新分析”按钮，从 AMC Growth 获取此品牌的最新战略诊断与执行大纲。
+                      点击右上角“一键同步最新 analysis”按钮，从 AMC Growth 智能系统拉取该品牌的专属战略诊断、行动大纲和 PPT 汇报页。
                     </p>
                   </div>
                 </div>
@@ -845,11 +1150,11 @@ export default function BrandProfileView({
                   <div className="p-3">
                     <button
                       onClick={() => setShowSettings(true)}
-                      className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-350 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95"
+                      className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-355 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95"
                     >
                       <Settings className="w-3.5 h-3.5" />
                       配置门店详细信息
-                      <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-450" />
+                      <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-455" />
                     </button>
                   </div>
                 </div>
@@ -916,16 +1221,16 @@ export default function BrandProfileView({
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="relative w-full max-w-2xl bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col h-full z-10 border-l border-slate-200 dark:border-slate-800"
+              className="relative w-full max-w-2xl bg-slate-50 dark:bg-slate-955 shadow-2xl flex flex-col h-full z-10 border-l border-slate-200 dark:border-slate-800"
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <div>
                   <h3 className="text-sm font-black text-slate-800 dark:text-white">📚 品牌推广核心预读上下文</h3>
-                  <p className="text-[10px] text-slate-400 mt-0.5">此 Profile Markdown 是供 AI Copywriter 创作时预读的，仅保留有价值 of 品牌设定与语境</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">此 Profile Markdown 是供 AI Copywriter 创作时预读的，仅保留有价值的品牌设定与语境</p>
                 </div>
                 <button
                   onClick={() => setShowContextModal(false)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition-colors"
                 >
                   <X size={18} />
                 </button>
@@ -979,10 +1284,10 @@ export default function BrandProfileView({
                       value={profileMarkdown}
                       onChange={(e) => setProfileMarkdown(e.target.value)}
                       placeholder="# 品牌名称..."
-                      className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs font-mono bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-750 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
+                      className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs font-mono bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-700 text-slate-750 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
                     />
                   ) : (
-                    <div className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 overflow-y-auto prose prose-slate dark:prose-invert max-w-none leading-relaxed">
+                    <div className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 overflow-y-auto prose prose-slate dark:prose-invert max-w-none leading-relaxed">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {profileMarkdown || '（暂无内容）'}
                       </ReactMarkdown>
@@ -1020,9 +1325,9 @@ export default function BrandProfileView({
         </div>
       )}
 
-      {showSettings && brand?.id && (
+      {showSettings && (
         <BrandSettingsPanel
-          brandId={brand.id}
+          brandId={brandId}
           open={showSettings}
           onClose={() => {
             setShowSettings(false)

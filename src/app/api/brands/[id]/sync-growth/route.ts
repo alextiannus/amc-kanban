@@ -63,10 +63,11 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: `No matching merchant found in AMC-growth for brand: "${brand.name}"` }, { status: 404 })
     }
 
-    // 3. Fetch growth plan and profile for this merchant
-    const [profileRes, planRes] = await Promise.all([
+    // 3. Fetch growth plan, profile, and presentation for this merchant
+    const [profileRes, planRes, presentationRes] = await Promise.all([
       fetch(`${growthBaseUrl}/v1/merchants/${merchant.merchant_id}/profile`, { headers }),
-      fetch(`${growthBaseUrl}/v1/merchants/${merchant.merchant_id}/growth-plan`, { headers })
+      fetch(`${growthBaseUrl}/v1/merchants/${merchant.merchant_id}/growth-plan`, { headers }),
+      fetch(`${growthBaseUrl}/v1/merchants/${merchant.merchant_id}/presentation`, { headers })
     ])
 
     if (!planRes.ok) {
@@ -75,8 +76,7 @@ export async function POST(request: Request, { params }: Params) {
 
     const growthProfile = profileRes.ok ? await profileRes.json().catch(() => null) : null
     const plan = await planRes.json()
-
-
+    const presentation = presentationRes.ok ? await presentationRes.json().catch(() => null) : null
 
     // 4. Format synced blocks
     const dateStr = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Singapore' })
@@ -134,20 +134,105 @@ ${growthProfile.service_scope || '暂无服务范围说明'}
 <!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:END -->`
     }
 
+    let presentationBlock = ''
+    if (presentation && presentation.slides) {
+      presentationBlock = `<!-- AMC:BRAND_PROFILE:PRESENTATION_SLIDES:START -->
+${JSON.stringify(presentation.slides, null, 2)}
+<!-- AMC:BRAND_PROFILE:PRESENTATION_SLIDES:END -->`
+    }
+
     // 5. Read existing brand profile markdown
     const profile = await readBrandProfileMarkdown(id, { ensureExists: true })
     if (!profile) {
       return NextResponse.json({ error: 'Brand profile not found' }, { status: 404 })
     }
 
-    let markdown = profile.markdown
+    let updatedMarkdown = profile.markdown
 
-    // 6. Use LLM to intelligently merge Growth plan and Context into MANUAL section & extract DB fields
+    // Synchronously execute fast simple merge to avoid browser timeout
+    // 1. Merge GROWTH_CONTEXT block
+    if (growthContextBlock) {
+      const contextStartTag = '<!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:START -->'
+      const contextEndTag = '<!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:END -->'
+      const contextStartIdx = updatedMarkdown.indexOf(contextStartTag)
+      const contextEndIdx = updatedMarkdown.indexOf(contextEndTag)
+
+      if (contextStartIdx !== -1 && contextEndIdx !== -1 && contextEndIdx > contextStartIdx) {
+        updatedMarkdown = `${updatedMarkdown.slice(0, contextStartIdx)}${growthContextBlock}${updatedMarkdown.slice(contextEndIdx + contextEndTag.length)}`
+      } else {
+        const manualEndTag = '<!-- AMC:BRAND_PROFILE:MANUAL:END -->'
+        const manualEndIdx = updatedMarkdown.indexOf(manualEndTag)
+        if (manualEndIdx !== -1) {
+          updatedMarkdown = `${updatedMarkdown.slice(0, manualEndIdx)}\n${growthContextBlock}\n${updatedMarkdown.slice(manualEndIdx)}`
+        } else {
+          updatedMarkdown = `${updatedMarkdown.trim()}\n\n${growthContextBlock}\n`
+        }
+      }
+    }
+
+    // 2. Merge GROWTH_PLAN block
+    if (growthPlanBlock) {
+      const planStartTag = '<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:START -->'
+      const planEndTag = '<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:END -->'
+      const planStartIdx = updatedMarkdown.indexOf(planStartTag)
+      const planEndIdx = updatedMarkdown.indexOf(planEndTag)
+
+      if (planStartIdx !== -1 && planEndIdx !== -1 && planEndIdx > planStartIdx) {
+        updatedMarkdown = `${updatedMarkdown.slice(0, planStartIdx)}${growthPlanBlock}${updatedMarkdown.slice(planEndIdx + planEndTag.length)}`
+      } else {
+        const manualEndTag = '<!-- AMC:BRAND_PROFILE:MANUAL:END -->'
+        const manualEndIdx = updatedMarkdown.indexOf(manualEndTag)
+        if (manualEndIdx !== -1) {
+          updatedMarkdown = `${updatedMarkdown.slice(0, manualEndIdx)}\n${growthPlanBlock}\n${updatedMarkdown.slice(manualEndIdx)}`
+        } else {
+          updatedMarkdown = `${updatedMarkdown.trim()}\n\n${growthPlanBlock}\n`
+        }
+      }
+    }
+
+    // 3. Merge PRESENTATION_SLIDES block
+    if (presentationBlock) {
+      const presStartTag = '<!-- AMC:BRAND_PROFILE:PRESENTATION_SLIDES:START -->'
+      const presEndTag = '<!-- AMC:BRAND_PROFILE:PRESENTATION_SLIDES:END -->'
+      const presStartIdx = updatedMarkdown.indexOf(presStartTag)
+      const presEndIdx = updatedMarkdown.indexOf(presEndTag)
+
+      if (presStartIdx !== -1 && presEndIdx !== -1 && presEndIdx > presStartIdx) {
+        updatedMarkdown = `${updatedMarkdown.slice(0, presStartIdx)}${presentationBlock}${updatedMarkdown.slice(presEndIdx + presEndTag.length)}`
+      } else {
+        const manualEndTag = '<!-- AMC:BRAND_PROFILE:MANUAL:END -->'
+        const manualEndIdx = updatedMarkdown.indexOf(manualEndTag)
+        if (manualEndIdx !== -1) {
+          updatedMarkdown = `${updatedMarkdown.slice(0, manualEndIdx)}\n${presentationBlock}\n${updatedMarkdown.slice(manualEndIdx)}`
+        } else {
+          updatedMarkdown = `${updatedMarkdown.trim()}\n\n${presentationBlock}\n`
+        }
+      }
+    }
+
+    // Write back updated markdown file immediately
+    await writeBrandProfileMarkdown(id, updatedMarkdown)
+
+    // Update database fields with direct synced values
+    const finalDesc = plan.summary
+    const finalLocation = growthProfile?.area ? growthProfile.area : null
+    
+    await prisma.brand.update({
+      where: { id: brand.id },
+      data: {
+        ...(finalDesc && { description: finalDesc }),
+        ...(finalLocation && { location: finalLocation }),
+        ...(growthProfile?.phone && { phone: growthProfile.phone }),
+        ...(growthProfile?.website && { website: growthProfile.website })
+      }
+    })
+
+    // 6. Trigger LLM smart merge in the background (asynchronously) to populate manual Section 10 fields
     const llmPrompt = `You are a professional brand strategy assistant. Your task is to sync and merge the brand intelligence plan and context from AMC Growth into the brand's profile markdown, and extract key fields to update the brand context database.
 
 Existing Brand Profile Markdown:
 """
-${markdown}
+${updatedMarkdown}
 """
 
 AMC Growth Plan (Plan JSON):
@@ -183,86 +268,38 @@ Format:
   }
 }`
 
-    let updatedMarkdown = markdown
-    let dbFields: any = {}
-
-    try {
-      const llmRes = await callLLM('copywriting', llmPrompt, 3000)
-      if (llmRes.text) {
-        let cleanedText = llmRes.text.trim()
-        if (cleanedText.startsWith('```')) {
-          cleanedText = cleanedText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
-        }
-        const parsed = JSON.parse(cleanedText)
-        if (parsed.updatedMarkdown) {
-          updatedMarkdown = parsed.updatedMarkdown
-        }
-        if (parsed.dbFields) {
-          dbFields = parsed.dbFields
-        }
-      }
-    } catch (llmErr) {
-      console.warn('[sync-growth] LLM merge failed, falling back to simple merge:', llmErr)
-    }
-
-    // Fallback: If LLM failed to update markdown or we are using fallback, do the simple merge/append
-    if (updatedMarkdown === markdown) {
-      // 1. Merge GROWTH_CONTEXT block
-      if (growthContextBlock) {
-        const contextStartTag = '<!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:START -->'
-        const contextEndTag = '<!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:END -->'
-        const contextStartIdx = markdown.indexOf(contextStartTag)
-        const contextEndIdx = markdown.indexOf(contextEndTag)
-
-        if (contextStartIdx !== -1 && contextEndIdx !== -1 && contextEndIdx > contextStartIdx) {
-          updatedMarkdown = `${markdown.slice(0, contextStartIdx)}${growthContextBlock}${markdown.slice(contextEndIdx + contextEndTag.length)}`
-        } else {
-          const manualEndTag = '<!-- AMC:BRAND_PROFILE:MANUAL:END -->'
-          const manualEndIdx = markdown.indexOf(manualEndTag)
-          if (manualEndIdx !== -1) {
-            updatedMarkdown = `${markdown.slice(0, manualEndIdx)}\n${growthContextBlock}\n${markdown.slice(manualEndIdx)}`
-          } else {
-            updatedMarkdown = `${markdown.trim()}\n\n${growthContextBlock}\n`
+    const runLlmMergeInBackground = async () => {
+      try {
+        const llmRes = await callLLM('copywriting', llmPrompt, 3000)
+        if (llmRes.text) {
+          let cleanedText = llmRes.text.trim()
+          if (cleanedText.startsWith('```')) {
+            cleanedText = cleanedText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
           }
+          const parsed = JSON.parse(cleanedText)
+          if (parsed.updatedMarkdown) {
+            await writeBrandProfileMarkdown(id, parsed.updatedMarkdown)
+          }
+          if (parsed.dbFields) {
+            await prisma.brand.update({
+              where: { id: brand.id },
+              data: {
+                ...(parsed.dbFields.description && { description: parsed.dbFields.description }),
+                ...(parsed.dbFields.location && { location: parsed.dbFields.location }),
+                ...(parsed.dbFields.phone && { phone: parsed.dbFields.phone }),
+                ...(parsed.dbFields.website && { website: parsed.dbFields.website })
+              }
+            })
+          }
+          console.log(`[sync-growth] Background LLM merge completed successfully for brand: ${id}`)
         }
-      }
-
-      // 2. Merge GROWTH_PLAN block
-      const planStartTag = '<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:START -->'
-      const planEndTag = '<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:END -->'
-      const planStartIdx = updatedMarkdown.indexOf(planStartTag)
-      const planEndIdx = updatedMarkdown.indexOf(planEndTag)
-
-      if (planStartIdx !== -1 && planEndIdx !== -1 && planEndIdx > planStartIdx) {
-        updatedMarkdown = `${updatedMarkdown.slice(0, planStartIdx)}${growthPlanBlock}${updatedMarkdown.slice(planEndIdx + planEndTag.length)}`
-      } else {
-        const manualEndTag = '<!-- AMC:BRAND_PROFILE:MANUAL:END -->'
-        const manualEndIdx = updatedMarkdown.indexOf(manualEndTag)
-        if (manualEndIdx !== -1) {
-          updatedMarkdown = `${updatedMarkdown.slice(0, manualEndIdx)}\n${growthPlanBlock}\n${updatedMarkdown.slice(manualEndIdx)}`
-        } else {
-          updatedMarkdown = `${updatedMarkdown.trim()}\n\n${growthPlanBlock}\n`
-        }
+      } catch (llmErr) {
+        console.error('[sync-growth] Background LLM merge failed:', llmErr)
       }
     }
 
-    // Write back updated markdown
-    await writeBrandProfileMarkdown(id, updatedMarkdown)
-
-    // Update database fields
-    // Also use plan.summary as default description fallback if dbFields didn't return one
-    const finalDesc = dbFields.description || plan.summary
-    const finalLocation = dbFields.location || (growthProfile?.area ? growthProfile.area : null)
-    
-    await prisma.brand.update({
-      where: { id: brand.id },
-      data: {
-        ...(finalDesc && { description: finalDesc }),
-        ...(finalLocation && { location: finalLocation }),
-        ...(dbFields.phone && { phone: dbFields.phone }),
-        ...(dbFields.website && { website: dbFields.website })
-      }
-    })
+    // Fire and forget
+    runLlmMergeInBackground().catch(e => console.error('[sync-growth] Background task error:', e))
 
     return NextResponse.json({
       ok: true,
