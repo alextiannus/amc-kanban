@@ -109,10 +109,13 @@ export async function syncBrand(brand: {
   if (!brand.postfastApiKey) throw new Error('No PostFast API key')
 
   // 1. Sync accounts
-  let syncedAccounts: any[] = []
   const pfResult = await postfastFetchAccounts(brand.postfastApiKey)
-  if (pfResult.success) {
-    for (const acc of pfResult.accounts) {
+  if (!pfResult.success) {
+    throw new Error(pfResult.error || 'Failed to fetch accounts from PostFast')
+  }
+
+  let syncedAccounts: any[] = []
+  for (const acc of pfResult.accounts) {
       if (!acc.platformId || !acc.handle) continue
 
       if (acc.platformId === 'google') {
@@ -167,7 +170,6 @@ export async function syncBrand(brand: {
       where: { brandId: brand.id },
       select: { id: true, platformId: true, handle: true, displayName: true, followerCount: true, followerDelta: true, ratingScore: true, snapshotAt: true, profileUrl: true },
     })
-  }
 
   // 2. Build 7-day operations report
   let operationsReport: any = null

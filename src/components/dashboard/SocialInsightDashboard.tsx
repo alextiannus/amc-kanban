@@ -31,6 +31,9 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: '#1DA1F2',
   x: '#000000',
   linkedin: '#0A66C2',
+  threads: '#000000',
+  bluesky: '#1185F0',
+  telegram: '#26A5E4',
   unknown: '#6366f1',
 }
 

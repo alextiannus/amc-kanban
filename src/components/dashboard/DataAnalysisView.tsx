@@ -60,6 +60,9 @@ const PLATFORM_ICONS: Record<string, string> = {
   facebook: '👥',
   google: '🌐',
   youtube: '🎥',
+  threads: '🧵',
+  bluesky: '🦋',
+  telegram: '✈️',
 }
 
 const PLATFORM_BADGES: Record<string, { label: string; icon: string; className: string }> = {
@@ -92,6 +95,21 @@ const PLATFORM_BADGES: Record<string, { label: string; icon: string; className: 
     label: 'YOUTUBE', 
     icon: '🎥', 
     className: 'bg-red-600 text-white border-none' 
+  },
+  threads: { 
+    label: 'THREADS', 
+    icon: '🧵', 
+    className: 'bg-black text-white border border-slate-800' 
+  },
+  bluesky: { 
+    label: 'BLUESKY', 
+    icon: '🦋', 
+    className: 'bg-sky-500 text-white border-none' 
+  },
+  telegram: { 
+    label: 'TELEGRAM', 
+    icon: '✈️', 
+    className: 'bg-sky-400 text-white border-none' 
   },
 }
 
