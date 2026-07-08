@@ -76,7 +76,9 @@ export async function POST(request: Request, { params }: Params) {
     const growthProfile = profileRes.ok ? await profileRes.json().catch(() => null) : null
     const plan = await planRes.json()
 
-    // 4. Format synced block
+
+
+    // 4. Format synced blocks
     const dateStr = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Singapore' })
     const phasesMarkdown = (plan.phases || []).map((phase: any) => `
 #### ${phase.name}
@@ -104,6 +106,34 @@ ${plan.content_needs || '暂无核心内容需求'}
 ${nextActionsMarkdown}
 <!-- AMC:BRAND_PROFILE:GROWTH_PLAN:END -->`
 
+    let growthContextBlock = ''
+    if (growthProfile) {
+      growthContextBlock = `<!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:START -->
+## 8. AMC Growth 品牌故事与上下文 (同步于 ${dateStr})
+
+### 8.1 基础信息
+${growthProfile.basic_info || '暂无基础信息'}
+
+### 8.2 老板目标
+${growthProfile.targets || '暂无老板目标'}
+
+### 8.3 当前痛点
+${growthProfile.pain_points || '暂无当前痛点'}
+
+### 8.4 核心产品假设
+${growthProfile.product_assumptions || '暂无核心产品假设'}
+
+### 8.5 主要客群假设
+${growthProfile.audience_assumptions || '暂无主要客群假设'}
+
+### 8.6 核心战略诊断
+${growthProfile.diagnosis || '暂无核心战略诊断'}
+
+### 8.7 服务范围说明
+${growthProfile.service_scope || '暂无服务范围说明'}
+<!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:END -->`
+    }
+
     // 5. Read existing brand profile markdown
     const profile = await readBrandProfileMarkdown(id, { ensureExists: true })
     if (!profile) {
@@ -112,8 +142,8 @@ ${nextActionsMarkdown}
 
     let markdown = profile.markdown
 
-    // 6. Use LLM to intelligently merge Growth plan into MANUAL section & extract DB fields
-    const llmPrompt = `You are a professional brand strategy assistant. Your task is to sync and merge the brand intelligence plan from AMC Growth into the brand's profile markdown, and extract key fields to update the brand context database.
+    // 6. Use LLM to intelligently merge Growth plan and Context into MANUAL section & extract DB fields
+    const llmPrompt = `You are a professional brand strategy assistant. Your task is to sync and merge the brand intelligence plan and context from AMC Growth into the brand's profile markdown, and extract key fields to update the brand context database.
 
 Existing Brand Profile Markdown:
 """
@@ -131,24 +161,11 @@ ${JSON.stringify(growthProfile, null, 2)}
 """
 
 Instructions:
-1. Maintain the exact markdown structure, especially all HTML comments markers (e.g. <!-- AMC:BRAND_PROFILE:MANUAL:START -->, <!-- AMC:BRAND_PROFILE:MANUAL:END -->, etc.). Do not alter or lose these tags.
-2. Intelligently populate the fields in Section 10 ("## 10. 人工补充"). Extract relevant info from the Growth Plan/Profile (e.g., summary, diagnosis, next actions, category) and write it after the colon of each field.
-   Fields to populate:
-   - 使命 Mission:
-   - 愿景 Vision:
-   - 价值主张 Value Proposition:
-   - 品牌人格 Personification:
-   - 品牌色与辅助色:
-   - 字体策略:
-   - 图片/视频审美方向:
-   - 禁止事项（违禁词、禁用视觉风格）:
-   - 内容支柱（Content Pillars）:
-   - 语气 Tone of Voice:
-   - 目标客群细分与沟通方式:
-   - 选题清单与热点策略:
-   If a field already has user-input text that is meaningful, preserve it.
-3. Keep the growth plan block "## 11. AMC Growth 智能规划" updated or append it.
-4. Extract database fields:
+1. Maintain the exact markdown structure, especially all HTML comments markers (e.g. <!-- AMC:BRAND_PROFILE:MANUAL:START -->, <!-- AMC:BRAND_PROFILE:MANUAL:END -->, <!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:START -->, <!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:END -->, <!-- AMC:BRAND_PROFILE:GROWTH_PLAN:START -->, <!-- AMC:BRAND_PROFILE:GROWTH_PLAN:END -->). Do not alter or lose these tags.
+2. Update the brand context block "## 8. AMC Growth 品牌故事与上下文" enclosed in "<!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:START -->" and "<!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:END -->" markers. Use the parsed sections from the AMC Growth Merchant Profile JSON.
+3. Update the growth plan block "## 11. AMC Growth 智能规划" enclosed in "<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:START -->" and "<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:END -->" markers.
+4. Intelligently populate the fields in Section 10 ("## 10. 人工补充"). Extract relevant info from the Growth Plan/Profile (e.g., summary, diagnosis, next actions, category) and write it after the colon of each field if it's currently empty. If a field already has user-input text that is meaningful, preserve it.
+5. Extract database fields:
    - description: A concise description or story of the brand (under 200 characters, summarizing the plan's summary, beginning with a tagline).
    - location: The location/area (e.g. "Yishun, Singapore").
    - phone: Contact phone number (if found in the profiles).
@@ -185,25 +202,46 @@ Format:
         }
       }
     } catch (llmErr) {
-      console.warn('[sync-growth] LLM merge failed, falling back to simple append:', llmErr)
+      console.warn('[sync-growth] LLM merge failed, falling back to simple merge:', llmErr)
     }
 
-    // If LLM failed to update markdown or we are using fallback, do the simple append for growth plan block
+    // Fallback: If LLM failed to update markdown or we are using fallback, do the simple merge/append
     if (updatedMarkdown === markdown) {
-      const startTag = '<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:START -->'
-      const endTag = '<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:END -->'
-      const startIdx = markdown.indexOf(startTag)
-      const endIdx = markdown.indexOf(endTag)
+      // 1. Merge GROWTH_CONTEXT block
+      if (growthContextBlock) {
+        const contextStartTag = '<!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:START -->'
+        const contextEndTag = '<!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:END -->'
+        const contextStartIdx = markdown.indexOf(contextStartTag)
+        const contextEndIdx = markdown.indexOf(contextEndTag)
 
-      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-        updatedMarkdown = `${markdown.slice(0, startIdx)}${growthPlanBlock}${markdown.slice(endIdx + endTag.length)}`
+        if (contextStartIdx !== -1 && contextEndIdx !== -1 && contextEndIdx > contextStartIdx) {
+          updatedMarkdown = `${markdown.slice(0, contextStartIdx)}${growthContextBlock}${markdown.slice(contextEndIdx + contextEndTag.length)}`
+        } else {
+          const manualEndTag = '<!-- AMC:BRAND_PROFILE:MANUAL:END -->'
+          const manualEndIdx = markdown.indexOf(manualEndTag)
+          if (manualEndIdx !== -1) {
+            updatedMarkdown = `${markdown.slice(0, manualEndIdx)}\n${growthContextBlock}\n${markdown.slice(manualEndIdx)}`
+          } else {
+            updatedMarkdown = `${markdown.trim()}\n\n${growthContextBlock}\n`
+          }
+        }
+      }
+
+      // 2. Merge GROWTH_PLAN block
+      const planStartTag = '<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:START -->'
+      const planEndTag = '<!-- AMC:BRAND_PROFILE:GROWTH_PLAN:END -->'
+      const planStartIdx = updatedMarkdown.indexOf(planStartTag)
+      const planEndIdx = updatedMarkdown.indexOf(planEndTag)
+
+      if (planStartIdx !== -1 && planEndIdx !== -1 && planEndIdx > planStartIdx) {
+        updatedMarkdown = `${updatedMarkdown.slice(0, planStartIdx)}${growthPlanBlock}${updatedMarkdown.slice(planEndIdx + planEndTag.length)}`
       } else {
         const manualEndTag = '<!-- AMC:BRAND_PROFILE:MANUAL:END -->'
-        const manualEndIdx = markdown.indexOf(manualEndTag)
+        const manualEndIdx = updatedMarkdown.indexOf(manualEndTag)
         if (manualEndIdx !== -1) {
-          updatedMarkdown = `${markdown.slice(0, manualEndIdx)}\n${growthPlanBlock}\n${markdown.slice(manualEndIdx)}`
+          updatedMarkdown = `${updatedMarkdown.slice(0, manualEndIdx)}\n${growthPlanBlock}\n${updatedMarkdown.slice(manualEndIdx)}`
         } else {
-          updatedMarkdown = `${markdown.trim()}\n\n${growthPlanBlock}\n`
+          updatedMarkdown = `${updatedMarkdown.trim()}\n\n${growthPlanBlock}\n`
         }
       }
     }
