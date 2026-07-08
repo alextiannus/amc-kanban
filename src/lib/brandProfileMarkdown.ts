@@ -186,20 +186,6 @@ function buildPlatformSummary(snapshot: BrandSnapshot) {
 }
 
 function buildAutoSection(snapshot: BrandSnapshot, generatedAt: string) {
-  const stores = buildStores(snapshot)
-  const platforms = buildPlatformSummary(snapshot)
-  const integration = {
-    postfastConfigured: !!snapshot.postfastApiKey,
-    googleConfigured: !!snapshot.googleApiKey && !!snapshot.googlePlaceId,
-    larkConfigured: !!snapshot.larkAppId && !!snapshot.larkAppSecret,
-    larkDriveConfigured: !!snapshot.larkDriveFolderId,
-    larkNotifyConfigured: !!snapshot.larkBotWebhook || !!snapshot.larkOwnerId,
-  }
-
-  const storeRows = stores
-    .map((s) => `| ${s.storeId} | ${s.name} | ${s.isPrimary ? 'Y' : 'N'} | ${s.timezone} | ${s.address || '-'} |`)
-    .join('\n')
-
   return `${AUTO_START}
 ## 1. 品牌基础信息（系统快照）
 - brandId: ${snapshot.id}
@@ -220,26 +206,7 @@ ${snapshot.description || '（暂无，请在人工补充区完善品牌故事�
 - 内容调性与禁用项: 请在人工补充区的“设计与视觉规范”维护
 - 内容支柱与选题策略: 请在人工补充区的“内容策略”维护
 
-## 4. 多门店结构（可扩展）
-| storeId | name | primary | timezone | address |
-| --- | --- | --- | --- | --- |
-${storeRows}
-
-\`\`\`json
-${JSON.stringify({ stores }, null, 2)}
-\`\`\`
-
-## 5. 自媒体平台配置（聚合账号快照）
-\`\`\`json
-${JSON.stringify({ platforms }, null, 2)}
-\`\`\`
-
-## 6. 平台与集成状态（仅状态，不含密钥）
-\`\`\`json
-${JSON.stringify({ integration }, null, 2)}
-\`\`\`
-
-## 7. 扩展设计约定
+## 4. 扩展设计约定
 - 本文件为“系统自动区块 + 人工补充区块”双区模型。
 - 系统刷新仅覆盖自动区块，人工补充区保持不变。
 - 推荐将新结构放入 JSON 的 ext 命名空间，避免破坏兼容性。

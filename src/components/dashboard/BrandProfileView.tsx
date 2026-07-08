@@ -2,10 +2,10 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import {
-  X, ChevronLeft, Sparkles, MapPin, Zap, ZapOff, Save,
-  Settings, BookOpen, CreditCard, Utensils, Edit3, Check,
-  Plus, Trash2, ExternalLink, Upload, Camera, ArrowRight,
-  ShieldCheck, Package, Loader2, RefreshCw, FileText, CheckCircle2, Store
+  X, ChevronLeft, Sparkles, MapPin, Zap, Save,
+  Settings, BookOpen, ExternalLink, Package, Loader2,
+  RefreshCw, FileText, CheckCircle2, Store, Utensils,
+  Camera, Edit3, Check, Plus, Trash2, ArrowRight
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -47,8 +47,6 @@ function PlanBadge({ plan }: { plan: string }) {
   )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-
 export default function BrandProfileView({
   brand,
   onClose,
@@ -65,6 +63,9 @@ export default function BrandProfileView({
   const [addons, setAddons] = useState({ veo3: false, dubco: false })
   const [showSettings, setShowSettings] = useState(false)
   const [brandSettings, setBrandSettings] = useState<Record<string, unknown> | null>(null)
+
+  const [showConfigModal, setShowConfigModal] = useState(false)
+  const [showContextModal, setShowContextModal] = useState(false)
 
   // Inline brand info editing
   const [editingName, setEditingName] = useState(false)
@@ -342,8 +343,6 @@ export default function BrandProfileView({
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'story', label: '品牌故事', icon: <Sparkles className="w-3.5 h-3.5" /> },
     { id: 'growth', label: '分析与增长计划', icon: <RefreshCw className="w-3.5 h-3.5" /> },
-    { id: 'config', label: '配置信息', icon: <Settings className="w-3.5 h-3.5" /> },
-    { id: 'context', label: '品牌上下文', icon: <BookOpen className="w-3.5 h-3.5" /> },
   ]
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -354,7 +353,7 @@ export default function BrandProfileView({
         <div className="max-w-sm">
           <Store className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-4" />
           <p className="text-sm font-bold text-slate-600 dark:text-slate-400">暂无选定品牌</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
+          <p className="text-xs text-slate-400 dark:text-slate-505 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
         </div>
       </div>
     )
@@ -368,7 +367,7 @@ export default function BrandProfileView({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 15 }}
       transition={{ duration: 0.2 }}
-      className="flex-1 flex flex-col min-h-0 bg-[#f7f9fb] dark:bg-slate-950 overflow-y-auto relative h-full"
+      className="flex-1 flex flex-col min-h-0 bg-[#f7f9fb] dark:bg-slate-955 overflow-y-auto relative h-full"
     >
       {/* ── Hero Header ───────────────────────────────────────────────────── */}
       <div className="relative bg-gradient-to-br from-amber-400 via-orange-400 to-amber-500 dark:from-amber-600 dark:via-orange-600 dark:to-amber-700 pt-12 pb-6 px-5 flex-shrink-0">
@@ -477,7 +476,7 @@ export default function BrandProfileView({
       </div>
 
       {/* ── Tab Navigation ───────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 px-4">
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 px-4 flex items-center justify-between">
         <div className="flex overflow-x-auto scrollbar-none">
           {tabs.map(tab => (
             <button
@@ -486,13 +485,32 @@ export default function BrandProfileView({
               className={`flex items-center gap-1.5 px-4 py-3.5 text-xs font-bold whitespace-nowrap border-b-2 transition-all cursor-pointer ${
                 activeTab === tab.id
                   ? 'border-amber-500 text-amber-600 dark:text-amber-400'
-                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                  : 'border-transparent text-slate-400 dark:text-slate-505 hover:text-slate-600 dark:hover:text-slate-300'
               }`}
             >
               {tab.icon}
               {tab.label}
             </button>
           ))}
+        </div>
+        <div className="flex items-center gap-2 pr-1 flex-shrink-0 py-2">
+          <button
+            onClick={() => setShowConfigModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 border border-slate-200/50 dark:border-slate-700/50 transition-all cursor-pointer active:scale-95"
+          >
+            <Settings className="w-3.5 h-3.5 text-slate-455" />
+            品牌配置
+          </button>
+          <button
+            onClick={() => {
+              setShowContextModal(true)
+              void loadProfile()
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all cursor-pointer active:scale-95"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            品牌上下文
+          </button>
         </div>
       </div>
 
@@ -521,108 +539,113 @@ export default function BrandProfileView({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">品牌简介</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">品牌简介 (Description)</label>
                   <textarea
                     value={draftDesc}
                     onChange={e => setDraftDesc(e.target.value)}
-                    rows={3}
-                    className="w-full text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
-                    placeholder="描述您的品牌故事、特色与价值主张…"
+                    className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                    placeholder="简短描述该品牌的故事与主营业务..."
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">门店位置</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">主理区域 (Location)</label>
                   <input
                     value={draftLocation}
                     onChange={e => setDraftLocation(e.target.value)}
-                    className="w-full text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                    placeholder="例如: Singapore, Clarke Quay"
+                    className="w-full text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    placeholder="例如: Yishun, Singapore"
                   />
                 </div>
                 <button
                   onClick={handleSaveBrandInfo}
                   disabled={saving}
-                  className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-amber-500/20 cursor-pointer disabled:opacity-60"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white cursor-pointer active:scale-95 transition-all"
                 >
-                  {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
-                  保存品牌信息
+                  {saving ? <div className="w-3.5 h-3.5 border-2 border-white dark:border-slate-900 border-t-transparent rounded-full animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  保存品牌基本信息
                 </button>
               </div>
 
-              {/* Brand Voice Card */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
-                <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-3">AI 品牌语气</h3>
+              {/* Tone Configuration Card */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                  <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">品牌语气与声调 (Tone of Voice)</h3>
+                  <button
+                    onClick={handleSaveVoice}
+                    disabled={saving}
+                    className="flex items-center gap-1 text-[11px] font-bold text-amber-500 hover:text-amber-600 cursor-pointer active:scale-95 transition-transform"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    保存声调
+                  </button>
+                </div>
+
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">语气风格描述</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">语气设定描写 (Tone Description)</label>
                   <textarea
                     value={brandTone}
-                    onChange={e => setBrandTone(e.target.value)}
-                    rows={3}
-                    className="w-full text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
-                    placeholder="例如: 轻松幽默、带有新加坡本地风格，善用 Singlish 俚语，对食客亲切友好…"
+                    onChange={(e) => setBrandTone(e.target.value)}
+                    placeholder="例如：专业但亲切的咖啡烘焙工坊语气，多使用第一人称‘我们’，注重传达品质与匠心..."
+                    className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
                   />
                 </div>
 
-                {/* Slang Dictionary */}
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-2">本地俚语词典</label>
-                  {Object.keys(slangDict).length > 0 ? (
-                    <div className="bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700 mb-2">
-                      {Object.entries(slangDict).map(([term, def]) => (
-                        <div key={term} className="flex items-center justify-between px-3 py-2 text-xs">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-bold text-slate-700 dark:text-slate-200 shrink-0">"{term}"</span>
-                            <span className="text-slate-400">→</span>
-                            <span className="text-slate-600 dark:text-slate-400 truncate">{def}</span>
+                {/* Local Slang Dict */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">本地俚语词典 (Slang Dict)</label>
+                    <span className="text-[9px] text-slate-400">供 AI 写手合理插入本地化口语表达</span>
+                  </div>
+
+                  {Object.keys(slangDict).length > 0 && (
+                    <div className="grid grid-cols-2 gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800">
+                      {Object.entries(slangDict).map(([term, meaning]) => (
+                        <div
+                          key={term}
+                          className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm"
+                        >
+                          <div className="min-w-0 pr-1.5">
+                            <span className="text-[11px] font-bold text-slate-800 dark:text-white block truncate">{term}</span>
+                            <span className="text-[9px] text-slate-400 block truncate">{meaning}</span>
                           </div>
                           <button
+                            type="button"
                             onClick={() => {
                               const next = { ...slangDict }
                               delete next[term]
                               setSlangDict(next)
                             }}
-                            className="ml-2 text-slate-300 hover:text-rose-500 transition-colors cursor-pointer flex-shrink-0"
+                            className="p-1 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/30 transition-colors"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 size={12} />
                           </button>
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-[11px] text-slate-400 italic mb-2">尚未添加俚语词条</p>
                   )}
-                  {/* Add slang */}
-                  <div className="flex gap-2">
+
+                  <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-850 p-2 rounded-xl border border-dashed border-slate-250 dark:border-slate-700">
                     <input
                       value={newTerm}
-                      onChange={e => setNewTerm(e.target.value)}
-                      placeholder="俚语（如 Bojio）"
-                      className="flex-1 text-[11px] px-2.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      onChange={(e) => setNewTerm(e.target.value)}
+                      placeholder="词语 (如: Lah)"
+                      className="w-1/3 text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
                     <input
                       value={newMeaning}
-                      onChange={e => setNewMeaning(e.target.value)}
-                      placeholder="含义（如：不邀请）"
-                      onKeyDown={e => e.key === 'Enter' && handleAddSlang()}
-                      className="flex-1 text-[11px] px-2.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      onChange={(e) => setNewMeaning(e.target.value)}
+                      placeholder="解释 (如: 强调语气词)"
+                      className="flex-1 text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
                     <button
+                      type="button"
                       onClick={handleAddSlang}
-                      className="px-2.5 bg-amber-500 text-white rounded-lg flex items-center justify-center cursor-pointer hover:bg-amber-600 transition-colors"
+                      className="p-1.5 rounded-lg bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white active:scale-95 transition-all"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Plus size={13} />
                     </button>
                   </div>
                 </div>
-
-                <button
-                  onClick={handleSaveVoice}
-                  disabled={saving}
-                  className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs py-2.5 rounded-xl active:scale-95 transition-all shadow-sm shadow-amber-500/20 cursor-pointer disabled:opacity-60"
-                >
-                  {saving ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
-                  保存语气设定
-                </button>
               </div>
             </motion.div>
           )}
@@ -636,274 +659,342 @@ export default function BrandProfileView({
               transition={{ duration: 0.15 }}
               className="p-4 space-y-4 pb-10"
             >
+              {/* AMC Growth Sync Controller */}
               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">📈 AMC Growth 智能同步</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">从 amc-growth 同步品牌最新痛点分析与战略规划</p>
+                    <h3 className="text-sm font-black text-slate-850 dark:text-white">🚀 战略诊断与增长计划同步</h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">从 amc-growth 系统一键拉取并同步最新的商家诊断、商业计划与执行大纲</p>
                   </div>
                   <button
                     onClick={handleSyncGrowth}
                     disabled={syncing}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 transition-all cursor-pointer active:scale-95 shadow-sm shadow-indigo-500/20"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-extrabold bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white disabled:opacity-60 active:scale-95 transition-all cursor-pointer shadow-md"
                   >
-                    {syncing ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    )}
+                    {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                     {syncStatus || '同步最新分析'}
                   </button>
                 </div>
               </div>
 
-              {profileLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-2">
-                  <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
-                  <p className="text-xs text-slate-400">正在加载增长计划与品牌分析...</p>
+              {growthContext ? (
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                  <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">品牌核心战略诊断与定位</h3>
+                  <div className="prose prose-slate dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthContext}</ReactMarkdown>
+                  </div>
                 </div>
-              ) : growthContext || growthPlan ? (
-                <div className="space-y-4">
-                  {growthContext && (
-                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                      <h4 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">
-                        📋 品牌分析与客群假设 (Strategic Context)
-                      </h4>
-                      <div className="text-xs text-slate-750 dark:text-slate-300 prose prose-slate dark:prose-invert max-w-none leading-relaxed">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthContext}</ReactMarkdown>
-                      </div>
-                    </div>
-                  )}
+              ) : null}
 
-                  {growthPlan && (
-                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                      <h4 className="text-xs font-black text-emerald-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">
-                        🚀 品牌增长与执行方案 (Growth Plan)
-                      </h4>
-                      <div className="text-xs text-slate-755 dark:text-slate-300 prose prose-slate dark:prose-invert max-w-none leading-relaxed">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthPlan}</ReactMarkdown>
-                      </div>
-                    </div>
-                  )}
+              {growthPlan ? (
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                  <h3 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">智能增长执行路径与大纲</h3>
+                  <div className="prose prose-slate dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthPlan}</ReactMarkdown>
+                  </div>
                 </div>
-              ) : (
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 shadow-sm flex flex-col items-center justify-center text-center space-y-3">
-                  <RefreshCw className="w-10 h-10 text-slate-300 animate-pulse" />
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300">尚未同步增长计划</p>
-                    <p className="text-[10px] text-slate-400 max-w-xs">
-                      点击右上角“同步最新分析”按钮，从 AMC Growth 获取此品牌的最新战略诊断与执行大纲。
+              ) : null}
+
+              {!growthContext && !growthPlan && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 shadow-sm text-center">
+                  <div className="max-w-xs mx-auto space-y-2">
+                    <FileText className="w-8 h-8 text-slate-300 mx-auto" />
+                    <p className="text-xs font-bold text-slate-500">暂无增长计划快照</p>
+                    <p className="text-[10px] text-slate-400">
+                      点击“同步最新分析”按钮，从 AMC Growth 获取此品牌的最新战略诊断与执行大纲。
                     </p>
                   </div>
                 </div>
               )}
             </motion.div>
           )}
+        </AnimatePresence>
+      </div>
 
-          {activeTab === 'config' && (
+      {/* ── Brand Config Drawer/Modal ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showConfigModal && (
+          <div className="fixed inset-0 z-50 flex justify-end">
             <motion.div
-              key="config"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              transition={{ duration: 0.15 }}
-              className="p-4 space-y-4 pb-10"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowConfigModal(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-full max-w-lg bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col h-full z-10 border-l border-slate-200 dark:border-slate-800"
             >
-              {/* 1. Social Accounts Platform Cards */}
-              <div className="space-y-3">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">社交平台与集成配置</h3>
-                {[
-                  {
-                    name: 'PostFast',
-                    desc: '自动发布至 Instagram、Facebook 等主流平台',
-                    color: 'from-indigo-500 to-purple-600',
-                    icon: (
-                      <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
-                        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
-                      </svg>
-                    ),
-                  },
-                  {
-                    name: 'Google Business',
-                    desc: '管理 Google Maps 商家主页、评论与 OAuth 凭证',
-                    color: 'from-red-500 to-orange-500',
-                    icon: (
-                      <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
-                        <path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972a6.033 6.033 0 1 1 0-12.064c1.498 0 2.866.549 3.921 1.453l2.814-2.814A9.969 9.969 0 0 0 12.545 2C7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748z" />
-                      </svg>
-                    ),
-                  },
-                ].map(platform => (
-                  <div
-                    key={platform.name}
-                    className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm"
-                  >
-                    <div className={`bg-gradient-to-r ${platform.color} p-3.5 flex items-center gap-3`}>
-                      <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                        {platform.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-xs font-bold text-white">{platform.name}</h4>
-                        <p className="text-[10px] text-white/75 mt-0.5">{platform.desc}</p>
-                      </div>
-                    </div>
-                    <div className="p-3">
-                      <button
-                        onClick={() => setShowSettings(true)}
-                        className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2 rounded-xl transition-all cursor-pointer active:scale-95"
-                      >
-                        <Settings className="w-3.5 h-3.5" />
-                        配置 {platform.name}
-                        <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-400" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800 dark:text-white">⚙️ 品牌平台与集成配置</h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">管理社交平台授权、第三方 API 凭证与多门店设置</p>
+                </div>
+                <button
+                  onClick={() => setShowConfigModal(false)}
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition-colors"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              {/* 2. Store Configuration */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-                <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-3.5 flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <MapPin className="w-4 h-4 text-white" />
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-10">
+                {/* Connected Accounts Snapshot */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                  <div className="flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold text-slate-805 dark:text-white">📊 已绑定账号资产快照</span>
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white">门店与多地址配置</h4>
-                    <p className="text-[10px] text-white/75 mt-0.5">管理多门店地址、营业时间与 Google 映射配置</p>
-                  </div>
+                  {brandSettings?.accounts && (brandSettings.accounts as any[]).length > 0 ? (
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                      {(brandSettings.accounts as any[]).map((acc) => (
+                        <div key={acc.id} className="py-2.5 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-[10px] tracking-wide bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300">
+                              {acc.platformId.toUpperCase()}
+                            </span>
+                            <span className="font-semibold text-slate-800 dark:text-slate-200">{acc.displayName || acc.handle}</span>
+                            <span className="text-slate-400 text-[10px]">@{acc.handle}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-550 dark:text-slate-400 font-bold">
+                            {acc.followerCount !== null ? (
+                              <span>{acc.followerCount.toLocaleString()} 粉丝</span>
+                            ) : (
+                              <span className="text-slate-350 dark:text-slate-600">暂无数据</span>
+                            )}
+                            {acc.autoPilot && (
+                              <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-[9px] font-black px-1.5 py-0.2 rounded-full">
+                                托管中
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">暂无绑定的社交媒体账号，请在下方点击配置按钮进入平台绑定。</p>
+                  )}
                 </div>
-                <div className="p-3">
-                  <button
-                    onClick={() => setShowSettings(true)}
-                    className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-350 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95"
-                  >
-                    <Settings className="w-3.5 h-3.5" />
-                    配置门店详细信息
-                    <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-400" />
-                  </button>
-                </div>
-              </div>
 
-              {/* 3. Subscription & Add-ons */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                  <div>
-                    <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">订阅套餐 & 增值计划</h4>
-                    <p className="text-[10px] text-slate-400 mt-0.5">AI Marketing Crew 订阅方案与增值应用状态</p>
-                  </div>
-                  <PlanBadge plan={subscriptionPlan} />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
+                {/* Social Platform Integration Cards */}
+                <div className="space-y-3">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">集成第三方平台</h3>
                   {[
-                    { key: 'veo3', label: 'Veo3 视频生成', active: addons.veo3 },
-                    { key: 'dubco', label: 'Dub.co 多语言配音', active: addons.dubco },
-                  ].map(addon => (
+                    {
+                      name: 'PostFast',
+                      desc: '自动发布至 Instagram、Facebook 等主流平台',
+                      color: 'from-indigo-500 to-purple-600',
+                      icon: (
+                        <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
+                          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204 0.013-3.583 0.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                        </svg>
+                      ),
+                    },
+                    {
+                      name: 'Google Business',
+                      desc: '管理 Google Maps 商家主页、评论与 OAuth 凭证',
+                      color: 'from-red-500 to-orange-500',
+                      icon: (
+                        <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
+                          <path d="M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972a6.033 6.033 0 1 1 0-12.064c1.498 0 2.866.549 3.921 1.453l2.814-2.814A9.969 9.969 0 0 0 12.545 2C7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748z" />
+                        </svg>
+                      ),
+                    },
+                  ].map(platform => (
                     <div
-                      key={addon.key}
-                      className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 flex items-center justify-between"
+                      key={platform.name}
+                      className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm"
                     >
-                      <div className="flex items-center gap-1.5">
-                        <Package className={`w-3.5 h-3.5 ${addon.active ? 'text-amber-500' : 'text-slate-400'}`} />
-                        <span className="text-[10px] font-bold text-slate-705 dark:text-slate-300">{addon.label}</span>
+                      <div className={`bg-gradient-to-r ${platform.color} p-3.5 flex items-center gap-3`}>
+                        <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                          {platform.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-xs font-bold text-white">{platform.name}</h4>
+                          <p className="text-[10px] text-white/75 mt-0.5">{platform.desc}</p>
+                        </div>
                       </div>
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${addon.active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}>
-                        {addon.active ? '开通' : '未开'}
-                      </span>
+                      <div className="p-3">
+                        <button
+                          onClick={() => setShowSettings(true)}
+                          className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-350 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2 rounded-xl transition-all cursor-pointer active:scale-95"
+                        >
+                          <Settings className="w-3.5 h-3.5" />
+                          配置 {platform.name}
+                          <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-450" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
 
-                <a
-                  href={subscriptionHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-md shadow-indigo-500/10 cursor-pointer group text-xs text-white font-bold"
-                >
-                  <span>管理订阅方案与升级服务</span>
-                  <ExternalLink className="w-3.5 h-3.5 text-white" />
-                </a>
-              </div>
-            </motion.div>
-          )}
-
-          {activeTab === 'context' && (
-            <motion.div
-              key="context"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              transition={{ duration: 0.15 }}
-              className="p-4 space-y-4 pb-10"
-            >
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-black text-slate-850 dark:text-slate-100">📚 品牌知识库 & 上下文编辑器</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">直接在此修改或查看 AI 创作内容时预读的完整品牌 Profile Markdown</p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800 p-0.5">
-                      <button
-                        type="button"
-                        onClick={() => setProfileViewMode('edit')}
-                        className={`text-[10px] font-bold px-2.5 py-1 rounded-md transition-all ${
-                          profileViewMode === 'edit'
-                            ? 'bg-white dark:bg-slate-950 text-slate-800 dark:text-white shadow-sm'
-                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                        }`}
-                      >
-                        编辑
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProfileViewMode('preview')}
-                        className={`text-[10px] font-bold px-2.5 py-1 rounded-md transition-all ${
-                          profileViewMode === 'preview'
-                            ? 'bg-white dark:bg-slate-955 text-slate-800 dark:text-white shadow-sm'
-                            : 'text-slate-505 hover:text-slate-800 dark:hover:text-white'
-                        }`}
-                      >
-                        预览
-                      </button>
+                {/* Store Configuration */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-3.5 flex items-center gap-3">
+                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <MapPin className="w-4 h-4 text-white" />
                     </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white">门店与多地址配置</h4>
+                      <p className="text-[10px] text-white/75 mt-0.5">管理多门店地址、营业时间与 Google 映射配置</p>
+                    </div>
+                  </div>
+                  <div className="p-3">
                     <button
-                      type="button"
-                      onClick={handleRefreshProfile}
-                      disabled={profileLoading || profileSaving}
-                      className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 flex items-center gap-1 cursor-pointer"
+                      onClick={() => setShowSettings(true)}
+                      className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-350 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95"
                     >
-                      {profileLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                      刷新自动区
+                      <Settings className="w-3.5 h-3.5" />
+                      配置门店详细信息
+                      <ArrowRight className="w-3.5 h-3.5 ml-auto text-slate-450" />
                     </button>
                   </div>
                 </div>
 
-                {profileLoading ? (
-                  <div className="flex flex-col items-center justify-center py-20 gap-2">
-                    <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
-                    <p className="text-xs text-slate-400">正在载入品牌上下文 Markdown...</p>
+                {/* Subscription & Add-ons */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">订阅套餐 & 增值计划</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">AI Marketing Crew 订阅方案与增值应用状态</p>
+                    </div>
+                    <PlanBadge plan={subscriptionPlan} />
                   </div>
-                ) : profileViewMode === 'edit' ? (
-                  <textarea
-                    value={profileMarkdown}
-                    onChange={(e) => setProfileMarkdown(e.target.value)}
-                    placeholder="加载后可编辑品牌 Profile Markdown..."
-                    className="w-full min-h-[380px] px-3 py-2.5 rounded-xl text-xs font-mono bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-750 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                  />
-                ) : (
-                  <div className="w-full min-h-[380px] px-4 py-3 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-705 dark:text-slate-205 overflow-auto prose prose-slate dark:prose-invert max-w-none leading-relaxed">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {profileMarkdown || '（暂无内容）'}
-                    </ReactMarkdown>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: 'veo3', label: 'Veo3 视频生成', active: addons.veo3 },
+                      { key: 'dubco', label: 'Dub.co 多语言配音', active: addons.dubco },
+                    ].map(addon => (
+                      <div
+                        key={addon.key}
+                        className="p-2.5 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-100 dark:border-slate-700 flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Package className={`w-3.5 h-3.5 ${addon.active ? 'text-amber-500' : 'text-slate-400'}`} />
+                          <span className="text-[10px] font-bold text-slate-700 dark:text-slate-355">{addon.label}</span>
+                        </div>
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${addon.active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}>
+                          {addon.active ? '开通' : '未开'}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                )}
+
+                  <a
+                    href={subscriptionHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-md shadow-indigo-500/10 cursor-pointer group text-xs text-white font-bold"
+                  >
+                    <span>管理订阅方案与升级服务</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-white" />
+                  </a>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Brand Context Drawer/Modal ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showContextModal && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowContextModal(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-full max-w-2xl bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col h-full z-10 border-l border-slate-200 dark:border-slate-800"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800 dark:text-white">📚 品牌推广核心预读上下文</h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">此 Profile Markdown 是供 AI Copywriter 创作时预读的，仅保留有价值 of 品牌设定与语境</p>
+                </div>
+                <button
+                  onClick={() => setShowContextModal(false)}
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col space-y-3 min-h-0 bg-white dark:bg-slate-900">
+                <div className="flex items-center justify-between flex-shrink-0">
+                  <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-850 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setProfileViewMode('edit')}
+                      className={`text-[10px] font-bold px-3 py-1 rounded-md transition-all ${
+                        profileViewMode === 'edit'
+                          ? 'bg-white dark:bg-slate-950 text-slate-800 dark:text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                      }`}
+                    >
+                      编辑内容
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProfileViewMode('preview')}
+                      className={`text-[10px] font-bold px-3 py-1 rounded-md transition-all ${
+                        profileViewMode === 'preview'
+                          ? 'bg-white dark:bg-slate-955 text-slate-800 dark:text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+                      }`}
+                    >
+                      格式预览
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRefreshProfile}
+                    disabled={profileLoading || profileSaving}
+                    className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 flex items-center gap-1 cursor-pointer"
+                  >
+                    {profileLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                    刷新系统快照
+                  </button>
+                </div>
+
+                <div className="flex-1 min-h-0 flex flex-col">
+                  {profileLoading ? (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-2 py-20">
+                      <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                      <p className="text-xs text-slate-400">正在载入品牌上下文 Markdown...</p>
+                    </div>
+                  ) : profileViewMode === 'edit' ? (
+                    <textarea
+                      value={profileMarkdown}
+                      onChange={(e) => setProfileMarkdown(e.target.value)}
+                      placeholder="# 品牌名称..."
+                      className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs font-mono bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-750 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
+                    />
+                  ) : (
+                    <div className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 overflow-y-auto prose prose-slate dark:prose-invert max-w-none leading-relaxed">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {profileMarkdown || '（暂无内容）'}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+                </div>
 
                 <button
                   type="button"
                   onClick={() => handleSaveProfile()}
                   disabled={profileSaving || profileLoading || !profileMarkdown.trim()}
-                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white cursor-pointer active:scale-95 transition-all"
+                  className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white cursor-pointer active:scale-95 transition-all flex-shrink-0"
                 >
                   {profileSaving ? (
                     <><Loader2 size={13} className="animate-spin" /> 保存中…</>
@@ -915,9 +1006,9 @@ export default function BrandProfileView({
                 </button>
               </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {toast && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg border text-xs font-bold text-white transition-all animate-in fade-in slide-in-from-top-4 duration-350 ${
