@@ -5,7 +5,7 @@ import {
   X, ChevronLeft, Sparkles, MapPin, Zap, ZapOff, Save,
   Settings, BookOpen, CreditCard, Utensils, Edit3, Check,
   Plus, Trash2, ExternalLink, Upload, Camera, ArrowRight,
-  ShieldCheck, Package, Loader2, RefreshCw, FileText, CheckCircle2
+  ShieldCheck, Package, Loader2, RefreshCw, FileText, CheckCircle2, Store
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -13,28 +13,20 @@ import remarkGfm from 'remark-gfm'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+import { BrandSettingsPanel } from './BrandSettingsPanel'
+
 interface Brand {
   id: string
   name: string
   description?: string | null
   location?: string | null
-  autoPilot: boolean
+  autoPilot?: boolean
   logoUrl?: string | null
 }
 
 interface Props {
-  brand: Brand
-  brandTone: string
-  setBrandTone: (v: string) => void
-  slangDict: Record<string, string>
-  setSlangDict: (v: Record<string, string>) => void
-  subscriptionPlan: string
-  addons: { veo3: boolean; dubco: boolean }
-  onClose: () => void
-  showToast: (msg: string, type?: 'success' | 'error' | 'info') => void
-  onOpenSettings: () => void    // opens BrandSettingsPanel modal
-  onOpenKnowledge: () => void   // opens BrandKnowledgePanel modal
-  subscriptionHref: string
+  brand?: Brand
+  onClose?: () => void
 }
 
 type Tab = 'story' | 'growth' | 'config' | 'context'
@@ -59,37 +51,42 @@ function PlanBadge({ plan }: { plan: string }) {
 
 export default function BrandProfileView({
   brand,
-  brandTone,
-  setBrandTone,
-  slangDict,
-  setSlangDict,
-  subscriptionPlan,
-  addons,
   onClose,
-  showToast,
-  onOpenSettings,
-  onOpenKnowledge,
-  subscriptionHref,
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('story')
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
 
+  // Local Brand States (fetched on mount/change)
+  const [brandTone, setBrandTone] = useState('')
+  const [slangDict, setSlangDict] = useState<Record<string, string>>({})
+  const [subscriptionPlan, setSubscriptionPlan] = useState('未激活订阅')
+  const [addons, setAddons] = useState({ veo3: false, dubco: false })
+  const [showSettings, setShowSettings] = useState(false)
+  const [brandSettings, setBrandSettings] = useState<Record<string, unknown> | null>(null)
+
   // Inline brand info editing
   const [editingName, setEditingName] = useState(false)
-  const [draftName, setDraftName] = useState(brand.name)
-  const [draftDesc, setDraftDesc] = useState(brand.description || '')
-  const [draftLocation, setDraftLocation] = useState(brand.location || '')
+  const [draftName, setDraftName] = useState(brand?.name || '')
+  const [draftDesc, setDraftDesc] = useState(brand?.description || '')
+  const [draftLocation, setDraftLocation] = useState(brand?.location || '')
 
   // Logo upload
   const logoInputRef = useRef<HTMLInputElement>(null)
-  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(brand?.logoUrl || null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
 
   // Slang form
   const [newTerm, setNewTerm] = useState('')
   const [newMeaning, setNewMeaning] = useState('')
+
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   // Profile Markdown (embedded editor & growth parsing)
   const [profileLoading, setProfileLoading] = useState(false)
@@ -98,10 +95,13 @@ export default function BrandProfileView({
   const [profileMarkdown, setProfileMarkdown] = useState('')
   const [profileViewMode, setProfileViewMode] = useState<'edit' | 'preview'>('preview')
 
+  const brandId = brand?.id
+
   const loadProfile = async () => {
+    if (!brandId) return
     setProfileLoading(true)
     try {
-      const res = await fetch(`/api/brands/${brand.id}/profile`)
+      const res = await fetch(`/api/brands/${brandId}/profile`)
       if (!res.ok) return
       const data = await res.json()
       const markdown = typeof data?.markdown === 'string' ? data.markdown : ''
@@ -113,19 +113,60 @@ export default function BrandProfileView({
     }
   }
 
-  useEffect(() => {
-    if (brand.id) {
-      void loadProfile()
+  const loadAllConfig = async () => {
+    if (!brandId) return
+    try {
+      // 1. Fetch brand metadata for details (description, location, address, etc.)
+      const resBrand = await fetch(`/api/brands/${brandId}`)
+      if (resBrand.ok) {
+        const dataBrand = await resBrand.json()
+        setDraftName(dataBrand.name || '')
+        setDraftDesc(dataBrand.description || '')
+        setDraftLocation(dataBrand.location || '')
+        setBrandSettings(dataBrand)
+        if (dataBrand.logoUrl) {
+          setLogoPreview(dataBrand.logoUrl)
+        }
+      }
+
+      // 2. Fetch brand knowledge (tone & slang)
+      const resKnowledge = await fetch(`/api/brands/${brandId}/knowledge`)
+      if (resKnowledge.ok) {
+        const dataKnowledge = await resKnowledge.json()
+        setBrandTone(dataKnowledge.brandTone || '')
+        setSlangDict(dataKnowledge.slangDict || {})
+      }
+
+      // 3. Fetch subscription
+      const resSub = await fetch(`/api/brands/${brandId}/subscription`)
+      if (resSub.ok) {
+        const dataSub = await resSub.json()
+        setSubscriptionPlan(dataSub.plan_name === 'NONE' ? '未激活订阅' : dataSub.plan_name)
+        setAddons({
+          veo3: !!dataSub.selectedAddons?.veo3,
+          dubco: !!dataSub.selectedAddons?.dubco,
+        })
+      }
+    } catch (e) {
+      console.error('Failed to load brand configuration:', e)
     }
-  }, [brand.id])
+  }
+
+  useEffect(() => {
+    if (brandId) {
+      void loadProfile()
+      void loadAllConfig()
+    }
+  }, [brandId])
 
   const handleSaveProfile = async (nextMarkdown?: string) => {
+    if (!brandId) return
     const markdown = (nextMarkdown ?? profileMarkdown).trim()
     if (!markdown) return
 
     setProfileSaving(true)
     try {
-      const res = await fetch(`/api/brands/${brand.id}/profile`, {
+      const res = await fetch(`/api/brands/${brandId}/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markdown }),
@@ -149,9 +190,10 @@ export default function BrandProfileView({
   }
 
   const handleRefreshProfile = async () => {
+    if (!brandId) return
     setProfileLoading(true)
     try {
-      const res = await fetch(`/api/brands/${brand.id}/profile?refresh=1`)
+      const res = await fetch(`/api/brands/${brandId}/profile?refresh=1`)
       if (!res.ok) {
         showToast('刷新 Profile 失败，请稍后再试', 'error')
         return
@@ -192,10 +234,11 @@ export default function BrandProfileView({
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleSyncGrowth = async () => {
+    if (!brandId) return
     setSyncing(true)
     setSyncStatus('正在同步...')
     try {
-      const res = await fetch(`/api/brands/${brand.id}/sync-growth`, {
+      const res = await fetch(`/api/brands/${brandId}/sync-growth`, {
         method: 'POST',
       })
       const data = await res.json()
@@ -220,6 +263,7 @@ export default function BrandProfileView({
   }
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!brandId) return
     const file = e.target.files?.[0]
     if (!file) return
     const previewUrl = URL.createObjectURL(file)
@@ -228,7 +272,7 @@ export default function BrandProfileView({
     try {
       const form = new FormData()
       form.append('file', file)
-      const res = await fetch(`/api/brands/${brand.id}/logo`, { method: 'POST', body: form })
+      const res = await fetch(`/api/brands/${brandId}/logo`, { method: 'POST', body: form })
       if (res.ok) {
         showToast('品牌 Logo 已更新', 'success')
       } else {
@@ -242,9 +286,10 @@ export default function BrandProfileView({
   }
 
   const handleSaveBrandInfo = async () => {
+    if (!brandId) return
     setSaving(true)
     try {
-      const res = await fetch(`/api/brands/${brand.id}`, {
+      const res = await fetch(`/api/brands/${brandId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: draftName, description: draftDesc, location: draftLocation }),
@@ -263,10 +308,10 @@ export default function BrandProfileView({
   }
 
   const handleSaveVoice = async () => {
-    if (!brand.id) return
+    if (!brandId) return
     setSaving(true)
     try {
-      const res = await fetch(`/api/brands/${brand.id}/knowledge`, {
+      const res = await fetch(`/api/brands/${brandId}/knowledge`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brandTone, slangDict }),
@@ -303,24 +348,40 @@ export default function BrandProfileView({
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
+  if (!brand || !brand.id) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-955 text-center">
+        <div className="max-w-sm">
+          <Store className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-4" />
+          <p className="text-sm font-bold text-slate-600 dark:text-slate-400">暂无选定品牌</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
+        </div>
+      </div>
+    )
+  }
+
+  const subscriptionHref = `/profile/principal/brands/${brand.id}/billing`
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 30 }}
-      transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-      className="fixed inset-0 z-40 bg-[#f7f9fb] dark:bg-slate-950 flex flex-col overflow-hidden"
+      exit={{ opacity: 0, y: 15 }}
+      transition={{ duration: 0.2 }}
+      className="flex-1 flex flex-col min-h-0 bg-[#f7f9fb] dark:bg-slate-950 overflow-y-auto relative h-full"
     >
       {/* ── Hero Header ───────────────────────────────────────────────────── */}
       <div className="relative bg-gradient-to-br from-amber-400 via-orange-400 to-amber-500 dark:from-amber-600 dark:via-orange-600 dark:to-amber-700 pt-12 pb-6 px-5 flex-shrink-0">
         {/* Back button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 left-4 flex items-center gap-1.5 text-white/80 hover:text-white text-xs font-bold transition-colors cursor-pointer"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          返回
-        </button>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 left-4 flex items-center gap-1.5 text-white/80 hover:text-white text-xs font-bold transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            返回
+          </button>
+        )}
 
         {/* Logo + Info Row */}
         <div className="flex items-end gap-4 mt-2">
@@ -698,7 +759,7 @@ export default function BrandProfileView({
                     </div>
                     <div className="p-3">
                       <button
-                        onClick={onOpenSettings}
+                        onClick={() => setShowSettings(true)}
                         className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2 rounded-xl transition-all cursor-pointer active:scale-95"
                       >
                         <Settings className="w-3.5 h-3.5" />
@@ -723,7 +784,7 @@ export default function BrandProfileView({
                 </div>
                 <div className="p-3">
                   <button
-                    onClick={onOpenSettings}
+                    onClick={() => setShowSettings(true)}
                     className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-350 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95"
                   >
                     <Settings className="w-3.5 h-3.5" />
@@ -867,6 +928,28 @@ export default function BrandProfileView({
           )}
         </AnimatePresence>
       </div>
+
+      {toast && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg border text-xs font-bold text-white transition-all animate-in fade-in slide-in-from-top-4 duration-350 ${
+          toast.type === 'success' ? 'bg-emerald-500 border-emerald-400' :
+          toast.type === 'error' ? 'bg-rose-500 border-rose-400' :
+          'bg-slate-800 border-slate-700'
+        }`}>
+          {toast.message}
+        </div>
+      )}
+
+      {showSettings && brand?.id && (
+        <BrandSettingsPanel
+          brandId={brand.id}
+          open={showSettings}
+          onClose={() => {
+            setShowSettings(false)
+            void loadAllConfig()
+          }}
+          initialSettings={brandSettings ?? undefined}
+        />
+      )}
     </motion.div>
   )
 }

@@ -7,6 +7,7 @@ import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
 import MobileLayout from './dashboard/MobileLayout'
 import DashboardHome from './dashboard/DashboardHome'
+import BrandProfileView from './dashboard/BrandProfileView'
 import SocialInsightDashboard from './dashboard/SocialInsightDashboard'
 import DashboardCalendar from './dashboard/DashboardCalendar'
 import MainLayout from './layout/MainLayout'
@@ -421,7 +422,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
                 </div>
               </div>
             }>
-              <DashboardHome key={activeBrand?.id ?? 'no-brand'} brand={activeBrand ?? undefined} />
+              <BrandProfileView key={activeBrand?.id ?? 'no-brand'} brand={activeBrand ?? undefined} />
             </Suspense>
           </MobileLayout>
         </div>
