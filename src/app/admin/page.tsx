@@ -106,9 +106,14 @@ function AdminPageInner() {
     setLoading(true)
     try {
       const res = await fetch('/api/admin/users')
-      if (res.ok) setUsers(await res.json())
+      if (res.ok) {
+        setUsers(await res.json())
+      } else {
+        const text = await res.text()
+        console.error(`[fetchUsers] Failed with status ${res.status}: ${text}`)
+      }
     } catch (e) {
-      console.error(e)
+      console.error('[fetchUsers] Network error:', e)
     } finally {
       setLoading(false)
     }
@@ -118,24 +123,28 @@ function AdminPageInner() {
     setBrandsLoading(true)
     try {
       const res = await fetch('/api/admin/brands')
-      if (!res.ok) return
-      const data = await res.json() as BrandRecord[]
-      setBrands(data)
-      setBrandDrafts(Object.fromEntries(data.map((brand) => {
-        const subscription = brand.subscriptions[0]
-        return [brand.id, {
-          name: brand.name,
-          location: brand.location || '',
-          status: brand.status,
-          ownerUserId: brand.owners[0]?.userId || '',
-          planId: subscription?.planId || '',
-          subscriptionStatus: subscription?.status || '',
-          durationMonths: subscription?.durationMonths || 12,
-          agentIds: brand.brandAgents.map((link) => link.agentId),
-        }]
-      })))
+      if (res.ok) {
+        const data = await res.json() as BrandRecord[]
+        setBrands(data)
+        setBrandDrafts(Object.fromEntries(data.map((brand) => {
+          const subscription = brand.subscriptions[0]
+          return [brand.id, {
+            name: brand.name,
+            location: brand.location || '',
+            status: brand.status,
+            ownerUserId: brand.owners[0]?.userId || '',
+            planId: subscription?.planId || '',
+            subscriptionStatus: subscription?.status || '',
+            durationMonths: subscription?.durationMonths || 12,
+            agentIds: brand.brandAgents.map((link) => link.agentId),
+          }]
+        })))
+      } else {
+        const text = await res.text()
+        console.error(`[fetchBrands] Failed with status ${res.status}: ${text}`)
+      }
     } catch (e) {
-      console.error(e)
+      console.error('[fetchBrands] Network error:', e)
     } finally {
       setBrandsLoading(false)
     }

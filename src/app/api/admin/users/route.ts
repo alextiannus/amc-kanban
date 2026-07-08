@@ -95,7 +95,8 @@ export async function GET() {
       ...user,
       legacyOwnedBrands: legacyBrandsByOwner.get(user.id) || [],
     })))
-  } catch {
+  } catch (error) {
+    console.error('[GET /api/admin/users] Error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
