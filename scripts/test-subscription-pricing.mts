@@ -31,6 +31,14 @@ function run() {
   // deduped monthly addon only once: (600 + 220) * 3 = 2460
   assertEqual(deduped.totalDueUsd, 2460, 'duplicate add-ons are deduped')
 
+  const starterWithMultiStore = calculatePricing('starter', 3, ['multi_store'], { multi_store: 2 })
+  // (600 + 200 * 2) * 3 = 3000
+  assertEqual(starterWithMultiStore.totalDueUsd, 3000, 'multi-store add-on uses unified price')
+
+  const kolAddons = calculatePricing('starter', 3, ['kol_light', 'influencer_visit'])
+  // 600 * 3 + 599 + 1200 = 3599
+  assertEqual(kolAddons.totalDueUsd, 3599, 'KOL add-ons use unified prices')
+
   assertThrows(() => calculatePricing('starter', 2, []), 'invalid duration check')
   assertThrows(() => calculatePricing('bad-plan', 3, []), 'invalid plan check')
 

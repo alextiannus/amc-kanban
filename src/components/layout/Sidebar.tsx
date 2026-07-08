@@ -236,7 +236,21 @@ export default function Sidebar({
 
   const handleItemClick = (item: { view: BoardView; comingSoon?: boolean; href?: string }) => {
     if (item.comingSoon) return
-    if (item.href) { router.push(item.href); return }
+    if (item.href) {
+      let targetUrl = item.href
+      if (targetUrl.includes('amc-growth.immedi.ai')) {
+        const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        if (isLocal) {
+          targetUrl = 'http://localhost:4188/public/'
+        }
+      }
+      if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+        window.open(targetUrl, '_blank')
+      } else {
+        router.push(targetUrl)
+      }
+      return
+    }
     setCurrentView(item.view)
   }
 

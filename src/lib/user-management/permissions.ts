@@ -108,6 +108,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       items: [
         { id: 'managementOverview', view: 'managementOverview', label: '主理人总览', icon: 'Users' },
         { id: 'dataAnalysis',       view: 'dataAnalysis',       label: '账号快照',   icon: 'Camera' },
+        { id: 'amc-growth',         view: 'managementOverview', label: 'Growth 智能规划', icon: 'TrendingUp', href: 'https://amc-growth.immedi.ai/public/' },
       ],
     })
   }
