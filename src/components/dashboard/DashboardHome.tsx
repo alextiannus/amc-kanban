@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   Check, X, TrendingUp, TrendingDown, AlertCircle, Star,
   Zap, BarChart2, ChevronDown, Store, Bot, ExternalLink, Trash2,
+  RefreshCw, Loader2,
 } from 'lucide-react'
 import { BrandSettingsPanel } from './BrandSettingsPanel'
 import { BrandKnowledgePanel } from './BrandKnowledgePanel'
@@ -649,6 +650,38 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   const [showAddAccount, setShowAddAccount] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showKnowledge, setShowKnowledge] = useState(false)
+  const [syncingAccounts, setSyncingAccounts] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<string | null>(null)
+
+  const handleSyncAccounts = async () => {
+    if (!activeBrand?.id) return
+    setSyncingAccounts(true)
+    setSyncStatus('正在同步...')
+    try {
+      const res = await fetch(`/api/brands/${activeBrand.id}/sync-postfast`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSyncStatus('同步成功')
+        alert(`已成功同步 ${data.accountCount || 0} 个社交媒体账号和发布数据！`)
+        setTimeout(() => setSyncStatus(null), 3000)
+        // Refresh details
+        loadDetail(activeBrand.id)
+      } else {
+        setSyncStatus('同步失败')
+        alert(data.error || '同步账号失败')
+        setTimeout(() => setSyncStatus(null), 5000)
+      }
+    } catch (e) {
+      console.error(e)
+      setSyncStatus('同步失败')
+      alert('同步请求失败，请检查网络连接')
+      setTimeout(() => setSyncStatus(null), 5000)
+    } finally {
+      setSyncingAccounts(false)
+    }
+  }
 
   useEffect(() => {
     if (activeBrand?.id) {
@@ -837,12 +870,26 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
           <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <BarChart2 className="w-4 h-4" /> 账号资产配置
           </h3>
-          <button
-            onClick={() => setShowAddAccount(true)}
-            className="inline-flex items-center justify-center gap-1 rounded-xl bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-xs font-bold text-white transition-all cursor-pointer shadow-sm shadow-blue-500/10 active:scale-95"
-          >
-            <span>+</span> 绑定新账号
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSyncAccounts}
+              disabled={syncingAccounts}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 transition-all cursor-pointer border border-slate-200/60 dark:border-slate-750 disabled:opacity-50 active:scale-95"
+            >
+              {syncingAccounts ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-500" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+              )}
+              {syncStatus || '同步账号'}
+            </button>
+            <button
+              onClick={() => setShowAddAccount(true)}
+              className="inline-flex items-center justify-center gap-1 rounded-xl bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-xs font-bold text-white transition-all cursor-pointer shadow-sm shadow-blue-500/10 active:scale-95"
+            >
+              <span>+</span> 绑定新账号
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           {connectedAccounts.map(acc => (

@@ -6,7 +6,7 @@ import { syncBrandDraftStatuses } from '@/lib/syncDraftStatuses'
 // Allow up to 5 minutes for the full batch across all brands
 export const maxDuration = 300
 
-const GOOGLE_PLATFORM_ALIASES = [
+export const GOOGLE_PLATFORM_ALIASES = [
   'google', 'google_business_profile', 'googlebusinessprofile',
   'google_my_business', 'googlemybusiness', 'google_maps', 'googlemaps', 'gbp', 'gmb',
 ]
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
 
 // ── Internal sync logic for a single brand ─────────────────────────────────
 
-async function syncBrand(brand: {
+export async function syncBrand(brand: {
   id: string
   postfastApiKey: string | null
   googlePreferOAuth: boolean
