@@ -12,7 +12,11 @@ async function hasValidSession(request: NextRequest): Promise<boolean> {
       return false
     }
     const key = new TextEncoder().encode(secretKey)
-    await jwtVerify(session, key, { algorithms: ['HS256'] })
+    await jwtVerify(session, key, {
+      algorithms: ['HS256'],
+      issuer: 'amc-kanban',
+      audience: 'amc-users',
+    })
     return true
   } catch (e) {
     return false
