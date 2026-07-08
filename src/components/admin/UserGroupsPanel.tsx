@@ -11,16 +11,16 @@ interface UserGroupsPanelProps {
   loading: boolean
   actionLoading: Record<string, string>
   onRoleToggle: (user: UserRecord) => Promise<void>
-  onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL') => void
+  onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD') => void
 }
 
 interface GroupDef {
-  id: 'admins' | 'principals' | 'owners'
+  id: 'admins' | 'principals' | 'owners' | 'bd'
   name: string
   description: string
   roleType: 'system' | 'business'
   systemRole?: 'ADMIN'
-  businessRole?: 'AMC_PRINCIPAL' | 'BRAND_OWNER'
+  businessRole?: 'AMC_PRINCIPAL' | 'BRAND_OWNER' | 'BD'
 }
 
 const GROUPS: GroupDef[] = [
@@ -44,6 +44,13 @@ const GROUPS: GroupDef[] = [
     description: '商户的资产所有者。仅能查看其下辖的品牌故事、审批 AI 生成的推文/活动，以及接收异常提醒。',
     roleType: 'business',
     businessRole: 'BRAND_OWNER'
+  },
+  {
+    id: 'bd',
+    name: '商务拓展组 (Business Development - BD)',
+    description: '负责对接商户、协助商户入驻和跟进服务的商务发展角色。',
+    roleType: 'business',
+    businessRole: 'BD'
   }
 ]
 
@@ -54,7 +61,7 @@ export default function UserGroupsPanel({
   onRoleToggle,
   onToggleBusinessRole
 }: UserGroupsPanelProps) {
-  const [selectedGroupId, setSelectedGroupId] = useState<'admins' | 'principals' | 'owners'>('admins')
+  const [selectedGroupId, setSelectedGroupId] = useState<'admins' | 'principals' | 'owners' | 'bd'>('admins')
   const [addingUserId, setAddingUserId] = useState('')
 
   const activeGroup = GROUPS.find(g => g.id === selectedGroupId)!
