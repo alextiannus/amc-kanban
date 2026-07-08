@@ -179,8 +179,17 @@ const METRIC_OPTIONS: { key: MetricKey; label: string; icon: React.ReactNode; co
   { key: 'postCount', label: '发帖数', icon: <FileText className="w-3.5 h-3.5" />, color: '#06b6d4' },
 ]
 
+const PLATFORM_LABELS: Record<string, string> = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  xiaohongshu: '小红书',
+  facebook: 'Facebook',
+  youtube: 'YouTube',
+  google: 'Google',
+}
+
 function AreaChart({ series, activeMetric }: {
-  series: InsightSeriesPoint[]
+  series: any[]
   activeMetric: MetricKey
 }) {
   const [mounted, setMounted] = useState(false)
@@ -198,12 +207,27 @@ function AreaChart({ series, activeMetric }: {
 
   const metricColor = METRIC_OPTIONS.find(m => m.key === activeMetric)?.color ?? '#c084fc'
 
+  // Detect active platforms
+  const platformIds = Array.from(new Set(
+    series.flatMap(d => Object.keys(d))
+      .filter(k => k.includes('_') && k.endsWith(`_${activeMetric}`))
+      .map(k => k.slice(0, k.indexOf(`_${activeMetric}`)))
+  ))
+
   // Format data for Recharts
-  const chartData = series.map(d => ({
-    name: fmtDate(d.date),
-    value: d[activeMetric] ?? 0,
-    rawDate: d.date
-  }))
+  const chartData = series.map(d => {
+    const item: any = {
+      name: fmtDate(d.date),
+      value: d[activeMetric] ?? 0,
+      rawDate: d.date
+    }
+    for (const key of Object.keys(d)) {
+      if (key.endsWith(`_${activeMetric}`)) {
+        item[key] = d[key] ?? 0
+      }
+    }
+    return item
+  })
 
   const formatYAxis = (value: number) => {
     if (activeMetric === 'engRate') return `${value.toFixed(1)}%`
@@ -216,9 +240,25 @@ function AreaChart({ series, activeMetric }: {
       const val = data.value
       const formattedVal = activeMetric === 'engRate' ? `${val.toFixed(2)}%` : fmtNum(val)
       return (
-        <div className="bg-slate-950/90 dark:bg-slate-850/90 text-white text-[11px] font-bold px-3 py-2 rounded-xl shadow-xl border border-slate-700/30 backdrop-blur-sm">
-          <p className="text-slate-400 font-normal">{fmtDate(data.rawDate)}</p>
-          <span className="text-sm font-black text-white">{formattedVal}</span>
+        <div className="bg-slate-950/95 dark:bg-slate-900/95 text-white text-[11px] font-bold px-3 py-2.5 rounded-xl shadow-2xl border border-slate-800 min-w-[150px] space-y-1.5">
+          <p className="text-slate-400 font-normal border-b border-slate-800 pb-1 mb-1">{fmtDate(data.rawDate)}</p>
+          <div className="flex justify-between items-center text-white">
+            <span>整体 (Total):</span>
+            <span className="font-black ml-3">{formattedVal}</span>
+          </div>
+          {platformIds.map(platform => {
+            const pfVal = data[`${platform}_${activeMetric}`] ?? 0
+            if (pfVal === 0) return null
+            const label = PLATFORM_LABELS[platform] ?? platform
+            const color = PLATFORM_COLORS[platform] ?? '#fff'
+            const fmtPfVal = activeMetric === 'engRate' ? `${pfVal.toFixed(2)}%` : fmtNum(pfVal)
+            return (
+              <div key={platform} className="flex justify-between items-center" style={{ color }}>
+                <span>{label}:</span>
+                <span className="font-black ml-3">{fmtPfVal}</span>
+              </div>
+            )
+          })}
         </div>
       )
     }
@@ -226,43 +266,83 @@ function AreaChart({ series, activeMetric }: {
   }
 
   return (
-    <div className="w-full h-56 mt-2">
-      <ResponsiveContainer width="100%" height="100%">
-        <RechartsAreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-          <defs>
-            <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={metricColor} stopOpacity={0.3}/>
-              <stop offset="95%" stopColor={metricColor} stopOpacity={0.01}/>
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
-          <XAxis 
-            dataKey="name" 
-            tickLine={false} 
-            axisLine={false}
-            tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 'bold' }}
-            dy={8}
-          />
-          <YAxis 
-            tickFormatter={formatYAxis}
-            tickLine={false}
-            axisLine={false}
-            tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 'bold' }}
-            dx={-8}
-          />
-          <RechartsTooltip content={<CustomTooltip />} />
-          <Area 
-            type="monotone" 
-            dataKey="value" 
-            stroke={metricColor} 
-            strokeWidth={2.5} 
-            fillOpacity={1} 
-            fill="url(#colorMetric)" 
-            dot={{ stroke: metricColor, strokeWidth: 1.5, fill: '#fff', r: 3 }}
-            activeDot={{ stroke: metricColor, strokeWidth: 2, fill: '#fff', r: 5 }}
-          />
-        </RechartsAreaChart>
-      </ResponsiveContainer>
+    <div className="w-full flex flex-col mt-2">
+      <div className="w-full h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <RechartsAreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <defs>
+              <linearGradient id="colorMetric" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={metricColor} stopOpacity={0.15}/>
+                <stop offset="95%" stopColor={metricColor} stopOpacity={0.01}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-800" />
+            <XAxis 
+              dataKey="name" 
+              tickLine={false} 
+              axisLine={false}
+              tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 'bold' }}
+              dy={8}
+            />
+            <YAxis 
+              tickFormatter={formatYAxis}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: '#94a3b8', fontSize: 9, fontWeight: 'bold' }}
+              dx={-8}
+            />
+            <RechartsTooltip content={<CustomTooltip />} />
+            <Area 
+              type="monotone" 
+              dataKey="value" 
+              name="整体"
+              stroke={metricColor} 
+              strokeWidth={3} 
+              fillOpacity={1} 
+              fill="url(#colorMetric)" 
+              dot={{ stroke: metricColor, strokeWidth: 1.5, fill: '#fff', r: 3 }}
+              activeDot={{ stroke: metricColor, strokeWidth: 2, fill: '#fff', r: 5 }}
+            />
+            {platformIds.map((platform) => {
+              const color = PLATFORM_COLORS[platform] ?? '#6366f1'
+              const label = PLATFORM_LABELS[platform] ?? platform
+              const dataKey = `${platform}_${activeMetric}`
+              return (
+                <Line
+                  key={platform}
+                  type="monotone"
+                  dataKey={dataKey}
+                  name={label}
+                  stroke={color}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ stroke: color, strokeWidth: 2, fill: '#fff', r: 4 }}
+                />
+              )
+            })}
+          </RechartsAreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Platform Legend */}
+      {platformIds.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3 px-4">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: metricColor }} />
+            <span>整体 (Total)</span>
+          </div>
+          {platformIds.map(platform => {
+            const color = PLATFORM_COLORS[platform] ?? '#6366f1'
+            const label = PLATFORM_LABELS[platform] ?? platform
+            return (
+              <div key={platform} className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                <span>{label}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

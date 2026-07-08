@@ -592,35 +592,64 @@ export async function GET(req: Request, { params }: Params) {
   const avgEngRate      = totalImpressions > 0 ? Number(((totalEngagement / totalImpressions) * 100).toFixed(2)) : 0
 
   // ── Time-series (daily) ──────────────────────────────────────────────────
-  const dayMap = new Map<string, {
-    date: string; postCount: number; engagement: number
-    impressions: number; reach: number; likes: number; engRate: number
-  }>()
+  const platformIds = Array.from(new Set(posts.map(p => p.platform.toLowerCase())))
 
+  function createEmptyDay(dateStr: string) {
+    const item: any = { date: dateStr, postCount: 0, engagement: 0, impressions: 0, reach: 0, likes: 0, engRate: 0 }
+    for (const pf of platformIds) {
+      item[`${pf}_postCount`] = 0
+      item[`${pf}_engagement`] = 0
+      item[`${pf}_impressions`] = 0
+      item[`${pf}_reach`] = 0
+      item[`${pf}_likes`] = 0
+      item[`${pf}_engRate`] = 0
+    }
+    return item
+  }
+
+  const dayMap = new Map<string, any>()
   const endDay = new Date(to); endDay.setHours(23, 59, 59, 999)
 
   for (const p of posts) {
     const key = p.publishedAt.slice(0, 10)
+    const platform = p.platform.toLowerCase()
     const interactions = p.likes + p.comments + p.shares
     if (!dayMap.has(key)) {
-      dayMap.set(key, { date: key, postCount: 1, engagement: interactions, impressions: p.impressions, reach: p.reach, likes: p.likes, engRate: 0 })
-    } else {
-      const e = dayMap.get(key)!
-      e.postCount++; e.engagement += interactions; e.impressions += p.impressions; e.reach += p.reach; e.likes += p.likes
+      dayMap.set(key, createEmptyDay(key))
     }
+    const e = dayMap.get(key)!
+    e.postCount++
+    e.engagement += interactions
+    e.impressions += p.impressions
+    e.reach += p.reach
+    e.likes += p.likes
+
+    e[`${platform}_postCount`] = (e[`${platform}_postCount`] ?? 0) + 1
+    e[`${platform}_engagement`] = (e[`${platform}_engagement`] ?? 0) + interactions
+    e[`${platform}_impressions`] = (e[`${platform}_impressions`] ?? 0) + p.impressions
+    e[`${platform}_reach`] = (e[`${platform}_reach`] ?? 0) + p.reach
+    e[`${platform}_likes`] = (e[`${platform}_likes`] ?? 0) + p.likes
   }
 
   // Fill gaps
   const cursor = new Date(from); cursor.setHours(0, 0, 0, 0)
   while (cursor <= endDay) {
     const key = cursor.toISOString().slice(0, 10)
-    if (!dayMap.has(key)) dayMap.set(key, { date: key, postCount: 0, engagement: 0, impressions: 0, reach: 0, likes: 0, engRate: 0 })
+    if (!dayMap.has(key)) dayMap.set(key, createEmptyDay(key))
     cursor.setDate(cursor.getDate() + 1)
   }
 
   const timeSeries = Array.from(dayMap.values())
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map((d: any) => ({ ...d, engRate: d.impressions > 0 ? Number(((d.engagement / d.impressions) * 100).toFixed(2)) : 0 }))
+    .map((d: any) => {
+      d.engRate = d.impressions > 0 ? Number(((d.engagement / d.impressions) * 100).toFixed(2)) : 0
+      for (const pf of platformIds) {
+        const pfImpr = d[`${pf}_impressions`] ?? 0
+        const pfEng = d[`${pf}_engagement`] ?? 0
+        d[`${pf}_engRate`] = pfImpr > 0 ? Number(((pfEng / pfImpr) * 100).toFixed(2)) : 0
+      }
+      return d
+    })
 
   // ── In-period trend deltas ────────────────────────────────────────────────
   const kpiTrends = {
