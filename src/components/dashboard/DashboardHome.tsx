@@ -1011,7 +1011,13 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
         <BrandKnowledgePanel
           brandId={activeBrand.id}
           open={showKnowledge}
-          onClose={() => setShowKnowledge(false)}
+          onClose={() => {
+            setShowKnowledge(false)
+            if (activeBrand?.id) {
+              loadProfile(activeBrand.id)
+              loadDetail(activeBrand.id)
+            }
+          }}
           initialSettings={brandSettings ?? undefined}
         />
       )}

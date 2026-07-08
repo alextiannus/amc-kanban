@@ -159,6 +159,7 @@ export function BrandKnowledgePanel({ brandId, open, onClose, initialSettings }:
   const [profileViewMode, setProfileViewMode] = useState<'edit' | 'preview'>('edit')
   const [stores, setStores] = useState<StoreDraft[]>([])
   const [storesSaving, setStoresSaving] = useState(false)
+  const [syncingGrowth, setSyncingGrowth] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -233,6 +234,27 @@ export function BrandKnowledgePanel({ brandId, open, onClose, initialSettings }:
       alert('刷新 Profile 失败，请检查网络')
     } finally {
       setProfileLoading(false)
+    }
+  }
+
+  const handleSyncGrowth = async () => {
+    setSyncingGrowth(true)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/sync-growth`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || '从 AMC Growth 同步失败')
+        return
+      }
+      alert('已成功同步 AMC Growth 品牌故事与上下文！')
+      await handleRefreshProfile()
+    } catch (e) {
+      console.error(e)
+      alert('同步失败，请检查网络')
+    } finally {
+      setSyncingGrowth(false)
     }
   }
 
@@ -393,8 +415,16 @@ export function BrandKnowledgePanel({ brandId, open, onClose, initialSettings }:
                 </div>
                 <button
                   type="button"
+                  onClick={handleSyncGrowth}
+                  disabled={profileLoading || profileSaving || syncingGrowth}
+                  className="text-[11px] px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 disabled:opacity-60 text-indigo-600 dark:text-indigo-400 font-bold"
+                >
+                  {syncingGrowth ? '同步中...' : '同步 AMC Growth'}
+                </button>
+                <button
+                  type="button"
                   onClick={handleRefreshProfile}
-                  disabled={profileLoading || profileSaving}
+                  disabled={profileLoading || profileSaving || syncingGrowth}
                   className="text-[11px] px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
                 >
                   {profileLoading ? '刷新中...' : '刷新自动区'}
