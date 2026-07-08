@@ -8,7 +8,9 @@ export async function GET() {
   const token = (await cookies()).get(sessionCookieName)?.value
   const claims = token ? await verifySessionToken(token) : null
   if (!claims) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    res.cookies.delete(sessionCookieName)
+    return res
   }
 
   const user = await prisma.user.findUnique({
@@ -31,7 +33,9 @@ export async function GET() {
     user.status !== 'ACTIVE' ||
     (claims.authVersion > 0 && claims.authVersion !== user.authVersion)
   ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    res.cookies.delete(sessionCookieName)
+    return res
   }
 
   const userRoles = computeEffectiveUserRoles({
