@@ -28,6 +28,16 @@ interface Brand {
 interface Props {
   brand?: Brand
   onClose?: () => void
+  brandTone?: string
+  setBrandTone?: React.Dispatch<React.SetStateAction<string>>
+  slangDict?: Record<string, string>
+  setSlangDict?: React.Dispatch<React.SetStateAction<Record<string, string>>>
+  subscriptionPlan?: string
+  addons?: { veo3: boolean; dubco: boolean }
+  showToast?: (message: string, type?: 'success' | 'error' | 'info') => void
+  onOpenSettings?: () => void
+  onOpenKnowledge?: () => void
+  subscriptionHref?: string
 }
 
 type Tab = 'story' | 'growth' | 'config' | 'context'
@@ -51,6 +61,16 @@ function PlanBadge({ plan }: { plan: string }) {
 export default function BrandProfileView({
   brand,
   onClose,
+  brandTone,
+  setBrandTone,
+  slangDict,
+  setSlangDict,
+  subscriptionPlan,
+  addons,
+  showToast,
+  onOpenSettings,
+  onOpenKnowledge,
+  subscriptionHref,
 }: Props) {
   // Early return if no brand or brand.id is provided, placed at the top to satisfy TypeScript compiler
   if (!brand || !brand.id) {
@@ -78,16 +98,25 @@ export default function BrandProfileView({
   const [showStoryEditor, setShowStoryEditor] = useState(false)
   const [showDetailedReport, setShowDetailedReport] = useState(false)
 
-  // Local Brand States (fetched on mount/change)
-  const [brandTone, setBrandTone] = useState('')
-  const [slangDict, setSlangDict] = useState<Record<string, string>>({})
-  const [subscriptionPlan, setSubscriptionPlan] = useState('未激活订阅')
-  const [addons, setAddons] = useState({ veo3: false, dubco: false })
+  // Local Brand States (fetched on mount/change, used if props are not passed)
+  const [localBrandTone, setLocalBrandTone] = useState('')
+  const [localSlangDict, setLocalSlangDict] = useState<Record<string, string>>({})
+  const [localSubscriptionPlan, setLocalSubscriptionPlan] = useState('未激活订阅')
+  const [localAddons, setLocalAddons] = useState({ veo3: false, dubco: false })
   const [showSettings, setShowSettings] = useState(false)
   const [brandSettings, setBrandSettings] = useState<Record<string, unknown> | null>(null)
 
   const [showConfigModal, setShowConfigModal] = useState(false)
   const [showContextModal, setShowContextModal] = useState(false)
+
+  // Controlled vs Uncontrolled logic
+  const activeBrandTone = brandTone !== undefined ? brandTone : localBrandTone
+  const activeSlangDict = slangDict !== undefined ? slangDict : localSlangDict
+  const activeSubscriptionPlan = subscriptionPlan !== undefined ? subscriptionPlan : localSubscriptionPlan
+  const activeAddons = addons !== undefined ? addons : localAddons
+
+  const setBrandToneVal = setBrandTone || setLocalBrandTone
+  const setSlangDictVal = setSlangDict || setLocalSlangDict
 
   // Inline brand info editing
   const [editingName, setEditingName] = useState(false)
@@ -106,9 +135,13 @@ export default function BrandProfileView({
 
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
+  const showToastVal = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    if (showToast) {
+      showToast(message, type)
+    } else {
+      setToast({ message, type })
+      setTimeout(() => setToast(null), 3000)
+    }
   }
 
   // Profile Markdown (embedded editor & growth parsing)
@@ -152,16 +185,16 @@ export default function BrandProfileView({
       const resKnowledge = await fetch(`/api/brands/${brandId}/knowledge`)
       if (resKnowledge.ok) {
         const dataKnowledge = await resKnowledge.json()
-        setBrandTone(dataKnowledge.brandTone || '')
-        setSlangDict(dataKnowledge.slangDict || {})
+        setLocalBrandTone(dataKnowledge.brandTone || '')
+        setLocalSlangDict(dataKnowledge.slangDict || {})
       }
 
       // 3. Fetch subscription
       const resSub = await fetch(`/api/brands/${brandId}/subscription`)
       if (resSub.ok) {
         const dataSub = await resSub.json()
-        setSubscriptionPlan(dataSub.plan_name === 'NONE' ? '未激活订阅' : dataSub.plan_name)
-        setAddons({
+        setLocalSubscriptionPlan(dataSub.plan_name === 'NONE' ? '未激活订阅' : dataSub.plan_name)
+        setLocalAddons({
           veo3: !!dataSub.selectedAddons?.veo3,
           dubco: !!dataSub.selectedAddons?.dubco,
         })
@@ -188,18 +221,18 @@ export default function BrandProfileView({
         body: JSON.stringify({ markdown }),
       })
       if (!res.ok) {
-        showToast('保存品牌 Profile 失败，请重试', 'error')
+        showToastVal('保存品牌 Profile 失败，请重试', 'error')
         return
       }
       const data = await res.json()
       const serverMarkdown = typeof data?.markdown === 'string' ? data.markdown : markdown
       setProfileMarkdown(serverMarkdown)
       setProfileSaved(true)
-      showToast('品牌 Profile 已保存', 'success')
+      showToastVal('品牌 Profile 已保存', 'success')
       setTimeout(() => setProfileSaved(false), 2500)
     } catch (e) {
       console.error(e)
-      showToast('保存品牌 Profile 失败，请检查网络', 'error')
+      showToastVal('保存品牌 Profile 失败，请检查网络', 'error')
     } finally {
       setProfileSaving(false)
     }
@@ -210,16 +243,16 @@ export default function BrandProfileView({
     try {
       const res = await fetch(`/api/brands/${brandId}/profile?refresh=1`)
       if (!res.ok) {
-        showToast('刷新 Profile 失败，请稍后再试', 'error')
+        showToastVal('刷新 Profile 失败，请稍后再试', 'error')
         return
       }
       const data = await res.json()
       const markdown = typeof data?.markdown === 'string' ? data.markdown : ''
       setProfileMarkdown(markdown)
-      showToast('品牌自动部分刷新成功', 'success')
+      showToastVal('品牌自动部分刷新成功', 'success')
     } catch (e) {
       console.error(e)
-      showToast('刷新 Profile 失败，请检查网络', 'error')
+      showToastVal('刷新 Profile 失败，请检查网络', 'error')
     } finally {
       setProfileLoading(false)
     }
@@ -273,19 +306,19 @@ export default function BrandProfileView({
       const data = await res.json()
       if (res.ok) {
         setSyncStatus('同步成功')
-        showToast(`品牌分析同步成功 (${data.merchantName || data.merchantId})`, 'success')
+        showToastVal(`品牌分析同步成功 (${data.merchantName || data.merchantId})`, 'success')
         void loadProfile() // Refresh local copy of profile markdown
         void loadAllConfig()
         setTimeout(() => setSyncStatus(null), 3000)
       } else {
         setSyncStatus('同步失败')
-        showToast(data.error || '同步失败，未找到匹配 hometown 的 Growth 商家分析', 'error')
+        showToastVal(data.error || '同步失败，未找到匹配 hometown 的 Growth 商家分析', 'error')
         setTimeout(() => setSyncStatus(null), 5000)
       }
     } catch (e) {
       console.error(e)
       setSyncStatus('同步失败')
-      showToast('网络请求失败', 'error')
+      showToastVal('网络请求失败', 'error')
       setTimeout(() => setSyncStatus(null), 5000)
     } finally {
       setSyncing(false)
@@ -303,12 +336,12 @@ export default function BrandProfileView({
       form.append('file', file)
       const res = await fetch(`/api/brands/${brandId}/logo`, { method: 'POST', body: form })
       if (res.ok) {
-        showToast('品牌 Logo 已更新', 'success')
+        showToastVal('品牌 Logo 已更新', 'success')
       } else {
-        showToast('Logo 上传失败', 'error')
+        showToastVal('Logo 上传失败', 'error')
       }
     } catch {
-      showToast('Logo 上传失败', 'error')
+      showToastVal('Logo 上传失败', 'error')
     } finally {
       setUploadingLogo(false)
     }
@@ -323,13 +356,13 @@ export default function BrandProfileView({
         body: JSON.stringify({ name: draftName, description: draftDesc, location: draftLocation }),
       })
       if (res.ok) {
-        showToast('品牌信息已保存', 'success')
+        showToastVal('品牌信息已保存', 'success')
         setEditingName(false)
       } else {
-        showToast('保存失败，请重试', 'error')
+        showToastVal('保存失败，请重试', 'error')
       }
     } catch {
-      showToast('网络错误，保存失败', 'error')
+      showToastVal('网络错误，保存失败', 'error')
     } finally {
       setSaving(false)
     }
@@ -341,15 +374,15 @@ export default function BrandProfileView({
       const res = await fetch(`/api/brands/${brandId}/knowledge`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandTone, slangDict }),
+        body: JSON.stringify({ brandTone: activeBrandTone, slangDict: activeSlangDict }),
       })
       if (res.ok) {
-        showToast('品牌语气与术语已保存', 'success')
+        showToastVal('品牌语气与术语已保存', 'success')
       } else {
-        showToast('保存失败，请重试', 'error')
+        showToastVal('保存失败，请重试', 'error')
       }
     } catch {
-      showToast('网络错误，保存失败', 'error')
+      showToastVal('网络错误，保存失败', 'error')
     } finally {
       setSaving(false)
     }
@@ -359,9 +392,17 @@ export default function BrandProfileView({
     const term = newTerm.trim()
     const meaning = newMeaning.trim()
     if (!term || !meaning) return
-    setSlangDict({ ...slangDict, [term]: meaning })
+    setSlangDictVal({ ...activeSlangDict, [term]: meaning })
     setNewTerm('')
     setNewMeaning('')
+  }
+
+  const handleOpenSettings = () => {
+    if (onOpenSettings) {
+      onOpenSettings()
+    } else {
+      setShowSettings(true)
+    }
   }
 
   // ── Presentation Styles Builder ──────────────────────────────────────────────
@@ -382,7 +423,7 @@ export default function BrandProfileView({
       emoji: '✨',
       label: 'AI 品牌声调',
       headline: '品牌个性与表达语气',
-      body: brandTone || '暂无语气风格设定。请点击下方“展开编辑品牌故事设定”完善语气声调设定。',
+      body: activeBrandTone || '暂无语气风格设定。请点击下方“展开编辑品牌故事设定”完善语气声调设定。',
       gradient: 'from-emerald-500 via-teal-500 to-cyan-600',
       glowColor: 'rgba(16,185,129,0.25)',
       icon: Star
@@ -391,9 +432,9 @@ export default function BrandProfileView({
       id: 'slang',
       emoji: '🎯',
       label: '本地俚语词典',
-      headline: `已录入 ${Object.keys(slangDict).length} 个本地词条`,
-      body: Object.keys(slangDict).length > 0 
-        ? `核心口语表达：${Object.keys(slangDict).slice(0, 10).join(' · ')}`
+      headline: `已录入 ${Object.keys(activeSlangDict).length} 个本地词条`,
+      body: Object.keys(activeSlangDict).length > 0 
+        ? `核心口语表达：${Object.keys(activeSlangDict).slice(0, 10).join(' · ')}`
         : '尚未配置俚语词条。添加俚语可帮助 AI Copywriter 自动生成极富本地烟火气的宣传内容。',
       gradient: 'from-purple-500 via-indigo-500 to-violet-600',
       glowColor: 'rgba(139,92,246,0.25)',
@@ -477,12 +518,12 @@ export default function BrandProfileView({
     )
   }
 
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'story', label: '品牌故事', icon: <Sparkles className="w-3.5 h-3.5" /> },
-    { id: 'growth', label: '分析与增长计划', icon: <RefreshCw className="w-3.5 h-3.5" /> },
-  ]
+  const tabs = [
+    { id: 'story', label: '品牌故事', icon: null },
+    { id: 'growth', label: '分析与增长计划', icon: null },
+  ] as const
 
-  const subscriptionHref = `/profile/principal/brands/${brandId}/billing`
+  const activeSubscriptionHref = subscriptionHref || `/profile/principal/brands/${brandId}/billing`
 
   return (
     <motion.div
@@ -492,133 +533,111 @@ export default function BrandProfileView({
       transition={{ duration: 0.2 }}
       className="flex-1 flex flex-col min-h-0 bg-[#f7f9fb] dark:bg-slate-955 overflow-y-auto relative h-full"
     >
-      {/* ── Hero Header ───────────────────────────────────────────────────── */}
-      <div className="relative bg-gradient-to-br from-amber-400 via-orange-400 to-amber-500 dark:from-amber-600 dark:via-orange-600 dark:to-amber-700 pt-12 pb-6 px-5 flex-shrink-0">
-        {/* Back button */}
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="absolute top-4 left-4 flex items-center gap-1.5 text-white/80 hover:text-white text-xs font-bold transition-colors cursor-pointer"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            返回
-          </button>
-        )}
-
-        {/* Logo + Info Row */}
-        <div className="flex items-end gap-4 mt-2">
-          {/* Brand Logo (clickable to upload) */}
-          <div className="relative flex-shrink-0">
-            <div
-              className="w-20 h-20 rounded-2xl bg-white shadow-lg overflow-hidden flex items-center justify-center cursor-pointer group"
+      {/* ── Unified Top Navigation Navbar (Consolidated Header) ── */}
+      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-5 py-3.5 flex items-center justify-between shadow-sm flex-shrink-0">
+        <div className="flex items-center gap-3">
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:text-slate-400 transition-colors cursor-pointer"
+              title="返回"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          )}
+          
+          <div className="flex items-center gap-2">
+            {/* Logo in Navbar */}
+            <div 
+              className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200/50 dark:bg-slate-800 dark:border-slate-700 overflow-hidden flex items-center justify-center cursor-pointer group relative"
               onClick={() => logoInputRef.current?.click()}
-              title="点击更换 Logo"
+              title="点击上传 Logo"
             >
               {logoPreview || brand.logoUrl ? (
                 <img
                   src={logoPreview || brand.logoUrl!}
-                  alt={brand.name}
+                  alt={draftName}
                   className="w-full h-full object-contain"
                   onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.svg' }}
                 />
               ) : (
-                <Utensils className="w-8 h-8 text-amber-400" />
+                <Utensils className="w-4 h-4 text-slate-400" />
               )}
-              {/* Overlay */}
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-2xl">
-                {uploadingLogo ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Camera className="w-5 h-5 text-white" />
-                )}
-              </div>
             </div>
             <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
-          </div>
 
-          {/* Brand Name + Meta */}
-          <div className="flex-1 min-w-0 pb-1">
-            {editingName ? (
-              <div className="space-y-1.5">
-                <input
-                  value={draftName}
-                  onChange={e => setDraftName(e.target.value)}
-                  className="bg-white/20 text-white placeholder-white/60 text-base font-black rounded-xl px-3 py-1.5 w-full outline-none border border-white/30 focus:border-white"
-                  placeholder="品牌名称"
-                />
-                <div className="flex gap-1.5">
+            {/* Name & Badges */}
+            <div className="flex items-center gap-1.5">
+              {editingName ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    value={draftName}
+                    onChange={e => setDraftName(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-800 text-slate-850 dark:text-white text-xs font-black rounded-lg px-2 py-1 outline-none border border-slate-200 dark:border-slate-700 focus:border-amber-400"
+                    placeholder="品牌名称"
+                  />
                   <button
                     onClick={handleSaveBrandInfo}
                     disabled={saving}
-                    className="flex-1 flex items-center justify-center gap-1 bg-white text-amber-600 font-bold text-[11px] px-3 py-1.5 rounded-xl active:scale-95 transition-all cursor-pointer"
+                    className="p-1 bg-amber-500 text-white rounded-lg hover:bg-amber-650 cursor-pointer active:scale-95 transition-all"
                   >
-                    {saving ? <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                    保存
+                    <Check size={12} />
                   </button>
                   <button
                     onClick={() => setEditingName(false)}
-                    className="px-3 py-1.5 rounded-xl bg-white/20 text-white font-bold text-[11px] cursor-pointer"
+                    className="p-1 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 dark:bg-slate-750 dark:text-slate-350 cursor-pointer"
                   >
-                    取消
+                    <X size={12} />
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-black text-white truncate">{draftName}</h1>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-sm font-black text-slate-855 dark:text-white truncate max-w-[120px] md:max-w-[200px]">{draftName}</h1>
                   <button
                     onClick={() => setEditingName(true)}
-                    className="p-1 text-white/70 hover:text-white transition-colors cursor-pointer flex-shrink-0"
+                    className="p-0.5 text-slate-400 hover:text-slate-650 transition-colors cursor-pointer flex-shrink-0"
                   >
-                    <Edit3 className="w-3.5 h-3.5" />
+                    <Edit3 className="w-3 h-3" />
                   </button>
                 </div>
-                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  {draftLocation && (
-                    <span className="flex items-center gap-1 text-white/80 text-[11px] font-medium">
-                      <MapPin className="w-3 h-3" />{draftLocation}
-                    </span>
-                  )}
-                  <PlanBadge plan={subscriptionPlan} />
-                  {brand.autoPilot && (
-                    <span className="flex items-center gap-1 text-[10px] font-black bg-white/20 text-white px-2 py-0.5 rounded-full">
-                      <Zap className="w-2.5 h-2.5" />Auto-Pilot
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
+              )}
+
+              {draftLocation && (
+                <span className="hidden md:flex items-center gap-0.5 text-slate-400 text-[10px] font-bold">
+                  <MapPin className="w-2.5 h-2.5" />{draftLocation}
+                </span>
+              )}
+              <PlanBadge plan={activeSubscriptionPlan} />
+              {brand.autoPilot && (
+                <span className="flex items-center gap-0.5 text-[9px] font-black bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full">
+                  <Zap className="w-2.5 h-2.5 animate-pulse" />托管
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Description preview */}
-        {!editingName && draftDesc && (
-          <p className="text-white/75 text-[11px] mt-3 leading-relaxed line-clamp-2">{draftDesc}</p>
-        )}
-      </div>
-
-      {/* ── Tab Navigation ───────────────────────────────────────────────── */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 px-4 flex items-center justify-between shadow-sm">
-        <div className="flex overflow-x-auto scrollbar-none">
+        {/* Tab Navigation buttons */}
+        <div className="flex rounded-xl bg-slate-50 dark:bg-slate-855 p-0.5 border border-slate-200/50 dark:border-slate-800">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-4 py-3.5 text-xs font-bold whitespace-nowrap border-b-2 transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === tab.id
-                  ? 'border-amber-500 text-amber-600 dark:text-amber-400'
-                  : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                  ? 'bg-white dark:bg-slate-900 text-slate-850 dark:text-white shadow-sm'
+                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-300'
               }`}
             >
-              {tab.icon}
               {tab.label}
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 pr-1 flex-shrink-0 py-2">
+
+        {/* Header Action Buttons */}
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowConfigModal(true)}
+            onClick={handleOpenSettings}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 border border-slate-200/50 dark:border-slate-700/50 transition-all cursor-pointer active:scale-95"
           >
             <Settings className="w-3.5 h-3.5 text-slate-450" />
@@ -656,19 +675,26 @@ export default function BrandProfileView({
                     <Sparkles size={12} className="text-amber-500 animate-pulse" />
                     品牌故事播放器 (Keynote Deck)
                   </h4>
-                  <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-455">
+                  <span className="text-[10px] font-extrabold text-slate-550 dark:text-slate-455">
                     Slide {activeStoryIndex + 1} of {storySlides.length}
                   </span>
                 </div>
 
-                {/* Main Visual Slide Card */}
+                {/* Main Visual Slide Card (Backdrop color stacking fixed) */}
                 <div
-                  className="w-full h-[280px] md:h-[320px] rounded-3xl overflow-hidden relative select-none border border-white/10 dark:border-slate-800/80 shadow-2xl transition-all duration-300 bg-gradient-to-br"
+                  className="w-full h-[280px] md:h-[320px] rounded-3xl overflow-hidden relative select-none border border-slate-200/55 dark:border-slate-800/80 shadow-2xl transition-all duration-300"
                   style={{
-                    backgroundImage: `linear-gradient(135deg, var(--tw-gradient-stops))`,
                     boxShadow: `0 24px 60px -12px ${storySlides[activeStoryIndex].glowColor}`
                   }}
                 >
+                  {/* Backdrop Gradient Container (NO negative z-index) */}
+                  <div className={`absolute inset-0 bg-gradient-to-br ${storySlides[activeStoryIndex].gradient}`} />
+                  <div className="absolute inset-0 opacity-[0.05]"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
+                  />
+                  <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
+
+                  {/* Foreground Text Container (z-10 guarantees it stands on top of gradient and doesn't get covered by page layout stacking) */}
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={activeStoryIndex}
@@ -676,15 +702,8 @@ export default function BrandProfileView({
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -40 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute inset-0 p-6 md:p-8 flex flex-col justify-between text-white"
+                      className="absolute inset-0 p-6 md:p-8 flex flex-col justify-between text-white z-10"
                     >
-                      {/* Gradient background colors injected via key */}
-                      <div className={`absolute inset-0 bg-gradient-to-br ${storySlides[activeStoryIndex].gradient} -z-10`} />
-                      <div className="absolute inset-0 opacity-[0.05] -z-10"
-                        style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                      />
-                      <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-3xl -z-10" />
-
                       {/* Header info */}
                       <div>
                         <div className="flex items-center justify-between mb-4">
@@ -714,7 +733,7 @@ export default function BrandProfileView({
                     disabled={activeStoryIndex === 0}
                     className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
                   >
-                    <ChevronLeft size={16} className="text-slate-650 dark:text-slate-300" />
+                    <ChevronLeft size={16} className="text-slate-655 dark:text-slate-300" />
                   </button>
 
                   {/* Dot Progress Indicators */}
@@ -737,7 +756,7 @@ export default function BrandProfileView({
                     disabled={activeStoryIndex === storySlides.length - 1}
                     className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
                   >
-                    <ChevronRight size={16} className="text-slate-650 dark:text-slate-300" />
+                    <ChevronRight size={16} className="text-slate-655 dark:text-slate-300" />
                   </button>
                 </div>
               </div>
@@ -820,7 +839,7 @@ export default function BrandProfileView({
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">语气设定描写 (Tone Description)</label>
                         <textarea
                           value={brandTone}
-                          onChange={(e) => setBrandTone(e.target.value)}
+                          onChange={(e) => setBrandToneVal(e.target.value)}
                           placeholder="例如：专业但亲切的咖啡烘焙工坊语气，多使用第一人称‘我们’，注重传达品质与匠心..."
                           className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
                         />
@@ -833,23 +852,23 @@ export default function BrandProfileView({
                           <span className="text-[9px] text-slate-400">供 AI 写手合理插入本地化口语表达</span>
                         </div>
 
-                        {Object.keys(slangDict).length > 0 && (
+                        {Object.keys(activeSlangDict).length > 0 && (
                           <div className="grid grid-cols-2 gap-2 p-2 rounded-xl bg-slate-50 dark:bg-slate-850 border border-slate-100 dark:border-slate-800">
-                            {Object.entries(slangDict).map(([term, meaning]) => (
+                            {Object.entries(activeSlangDict).map(([term, meaning]) => (
                               <div
                                 key={term}
                                 className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm"
                               >
                                 <div className="min-w-0 pr-1.5">
-                                  <span className="text-[11px] font-bold text-slate-800 dark:text-white block truncate">"{term}"</span>
+                                  <span className="text-[11px] font-bold text-slate-805 dark:text-white block truncate">"{term}"</span>
                                   <span className="text-[9px] text-slate-400 block truncate">{meaning}</span>
                                 </div>
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const next = { ...slangDict }
+                                    const next = { ...activeSlangDict }
                                     delete next[term]
-                                    setSlangDict(next)
+                                    setSlangDictVal(next)
                                   }}
                                   className="p-1 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/30 transition-colors"
                                 >
@@ -929,14 +948,21 @@ export default function BrandProfileView({
                     </span>
                   </div>
 
-                  {/* Main Visual Slide Card */}
+                  {/* Main Visual Slide Card (Backdrop color stacking fixed) */}
                   <div
-                    className="w-full h-[280px] md:h-[320px] rounded-3xl overflow-hidden relative select-none border border-white/10 dark:border-slate-800/80 shadow-2xl transition-all duration-300 bg-gradient-to-br"
+                    className="w-full h-[280px] md:h-[320px] rounded-3xl overflow-hidden relative select-none border border-slate-200/55 dark:border-slate-800/80 shadow-2xl transition-all duration-300"
                     style={{
-                      backgroundImage: `linear-gradient(135deg, var(--tw-gradient-stops))`,
                       boxShadow: `0 24px 60px -12px ${getGrowthSlideGlow(activeGrowthIndex)}`
                     }}
                   >
+                    {/* Backdrop Gradient Container (NO negative z-index) */}
+                    <div className={`absolute inset-0 bg-gradient-to-br ${getGrowthSlideGradient(activeGrowthIndex)}`} />
+                    <div className="absolute inset-0 opacity-[0.05]"
+                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
+                    />
+                    <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-xl" />
+
+                    {/* Foreground Text Container (z-10 guarantees it stands on top of gradient and doesn't get covered by page layout stacking) */}
                     <AnimatePresence mode="wait">
                       <motion.div
                         key={activeGrowthIndex}
@@ -944,15 +970,8 @@ export default function BrandProfileView({
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -40 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute inset-0 p-6 md:p-8 flex flex-col justify-between text-white"
+                        className="absolute inset-0 p-6 md:p-8 flex flex-col justify-between text-white z-10"
                       >
-                        {/* Slide specific backdrop gradient */}
-                        <div className={`absolute inset-0 bg-gradient-to-br ${getGrowthSlideGradient(activeGrowthIndex)} -z-10`} />
-                        <div className="absolute inset-0 opacity-[0.05] -z-10"
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                        />
-                        <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-xl -z-10" />
-
                         {/* Slide Title */}
                         <div>
                           <div className="flex items-center justify-between mb-4">
@@ -983,7 +1002,7 @@ export default function BrandProfileView({
                       disabled={activeGrowthIndex === 0}
                       className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
                     >
-                      <ChevronLeft size={16} className="text-slate-650 dark:text-slate-300" />
+                      <ChevronLeft size={16} className="text-slate-655 dark:text-slate-300" />
                     </button>
 
                     {/* Dot Progress Indicators */}
@@ -1014,7 +1033,7 @@ export default function BrandProfileView({
                 <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 shadow-sm text-center max-w-2xl mx-auto w-full">
                   <div className="max-w-xs mx-auto space-y-2">
                     <FileText className="w-8 h-8 text-slate-300 mx-auto" />
-                    <p className="text-xs font-bold text-slate-500">暂无分析数据与幻灯片</p>
+                    <p className="text-xs font-bold text-slate-505">暂无分析数据与幻灯片</p>
                     <p className="text-[10px] text-slate-400">
                       点击右上角“一键同步最新分析”按钮，从 AMC Growth 智能系统拉取该品牌的专属战略诊断、行动大纲和 PPT 汇报页。
                     </p>
@@ -1089,7 +1108,7 @@ export default function BrandProfileView({
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="relative w-full max-w-lg bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col h-full z-10 border-l border-slate-200 dark:border-slate-800"
+              className="relative w-full max-w-lg bg-slate-50 dark:bg-slate-955 shadow-2xl flex flex-col h-full z-10 border-l border-slate-200 dark:border-slate-800"
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <div>
@@ -1098,7 +1117,7 @@ export default function BrandProfileView({
                 </div>
                 <button
                   onClick={() => setShowConfigModal(false)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition-colors"
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 dark:hover:text-slate-205 transition-colors"
                 >
                   <X size={18} />
                 </button>
@@ -1181,8 +1200,8 @@ export default function BrandProfileView({
                       </div>
                       <div className="p-3">
                         <button
-                          onClick={() => setShowSettings(true)}
-                          className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-350 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2 rounded-xl transition-all cursor-pointer active:scale-95"
+                          onClick={handleOpenSettings}
+                          className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-655 dark:text-slate-350 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2 rounded-xl transition-all cursor-pointer active:scale-95"
                         >
                           <Settings className="w-3.5 h-3.5" />
                           配置 {platform.name}
@@ -1206,8 +1225,8 @@ export default function BrandProfileView({
                   </div>
                   <div className="p-3">
                     <button
-                      onClick={() => setShowSettings(true)}
-                      className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-355 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95"
+                      onClick={handleOpenSettings}
+                      className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-655 dark:text-slate-355 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95"
                     >
                       <Settings className="w-3.5 h-3.5" />
                       配置门店详细信息
@@ -1223,13 +1242,13 @@ export default function BrandProfileView({
                       <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">订阅套餐 & 增值计划</h4>
                       <p className="text-[10px] text-slate-400 mt-0.5">AI Marketing Crew 订阅方案与增值应用状态</p>
                     </div>
-                    <PlanBadge plan={subscriptionPlan} />
+                    <PlanBadge plan={activeSubscriptionPlan} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { key: 'veo3', label: 'Veo3 视频生成', active: addons.veo3 },
-                      { key: 'dubco', label: 'Dub.co 多语言配音', active: addons.dubco },
+                      { key: 'veo3', label: 'Veo3 视频生成', active: activeAddons.veo3 },
+                      { key: 'dubco', label: 'Dub.co 多语言配音', active: activeAddons.dubco },
                     ].map(addon => (
                       <div
                         key={addon.key}
@@ -1247,7 +1266,7 @@ export default function BrandProfileView({
                   </div>
 
                   <a
-                    href={subscriptionHref}
+                    href={activeSubscriptionHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-between p-3 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-md shadow-indigo-500/10 cursor-pointer group text-xs text-white font-bold"
@@ -1282,7 +1301,7 @@ export default function BrandProfileView({
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <div>
-                  <h3 className="text-sm font-black text-slate-800 dark:text-white">📚 品牌推广核心预读上下文</h3>
+                  <h3 className="text-sm font-black text-slate-805 dark:text-white">📚 品牌推广核心预读上下文</h3>
                   <p className="text-[10px] text-slate-400 mt-0.5">此 Profile Markdown 是供 AI Copywriter 创作时预读的，仅保留有价值的品牌设定与语境</p>
                 </div>
                 <button
@@ -1301,8 +1320,8 @@ export default function BrandProfileView({
                       onClick={() => setProfileViewMode('edit')}
                       className={`text-[10px] font-bold px-3 py-1 rounded-md transition-all ${
                         profileViewMode === 'edit'
-                          ? 'bg-white dark:bg-slate-950 text-slate-800 dark:text-white shadow-sm'
-                          : 'text-slate-505 hover:text-slate-800 dark:hover:text-white'
+                          ? 'bg-white dark:bg-slate-905 text-slate-800 dark:text-white shadow-sm'
+                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                       }`}
                     >
                       编辑内容
