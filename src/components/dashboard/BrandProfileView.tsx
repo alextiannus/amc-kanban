@@ -733,16 +733,6 @@ export default function BrandProfileView({
                       </svg>
                     ),
                   },
-                  {
-                    name: 'Lark / 飞书',
-                    desc: '连接飞书机器人，接收运营通知与老板提醒',
-                    color: 'from-sky-500 to-blue-600',
-                    icon: (
-                      <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-                      </svg>
-                    ),
-                  },
                 ].map(platform => (
                   <div
                     key={platform.name}

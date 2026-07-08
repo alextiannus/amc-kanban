@@ -31,48 +31,7 @@ async function getActor(request: Request) {
 }
 
 async function downloadToBuffer(urlOrPath: string, brandId?: string): Promise<Buffer> {
-  // If it's a Lark proxy URL or direct Lark file token, resolve it using Feishu/Lark integration
-  if (urlOrPath.startsWith('/api/integrations/lark/file/') || (brandId && !urlOrPath.startsWith('http') && !urlOrPath.startsWith('/'))) {
-    const fileToken = urlOrPath.startsWith('/api/integrations/lark/file/')
-      ? urlOrPath.split('/').pop()?.split('?')[0] || ''
-      : urlOrPath
 
-    // Check if the asset has lark sourceType
-    const asset = await prisma.mediaAsset.findFirst({
-      where: {
-        brandId,
-        OR: [
-          { url: fileToken },
-          { url: { contains: fileToken } }
-        ]
-      },
-      include: { brand: true }
-    })
-
-    if (asset && asset.sourceType === 'lark') {
-      const { larkAppId, larkAppSecret } = asset.brand
-      if (!larkAppId || !larkAppSecret) {
-        throw new Error('Lark integration credentials not configured for brand')
-      }
-
-      const { getLarkTenantToken, LARK_BASE } = await import('@/lib/integrations/lark')
-      const token = await getLarkTenantToken(larkAppId, larkAppSecret)
-      if (!token) {
-        throw new Error('Failed to get Lark tenant token')
-      }
-
-      console.log(`[Asset Designer AI] Downloading asset from Lark API token: ${fileToken}`)
-      const downloadRes = await fetch(`${LARK_BASE}/drive/v1/medias/${fileToken}/download`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-
-      if (!downloadRes.ok) {
-        throw new Error(`Lark media download failed: HTTP ${downloadRes.status}`)
-      }
-
-      return Buffer.from(await downloadRes.arrayBuffer())
-    }
-  }
 
   // Mapped PostFast URL -> redirect to S3 URL
   if (urlOrPath.startsWith('/api/integrations/postfast/file/')) {

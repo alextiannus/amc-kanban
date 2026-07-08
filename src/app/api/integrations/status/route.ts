@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { getLarkTenantToken } from '@/lib/integrations/lark'
 import { getPlaceRating } from '@/lib/integrations/google'
 import { postfastTestConnection } from '@/lib/integrations/postfast'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
@@ -32,8 +31,6 @@ export async function GET(request: Request) {
       googleRefreshToken: true, googleAccountId: true,
       googleLocationId: true, googleLocationName: true,
       googlePreferOAuth: true,
-      larkAppId: true, larkAppSecret: true,
-      larkDriveFolderId: true, larkBotWebhook: true,
     },
   })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -92,20 +89,7 @@ export async function GET(request: Request) {
       }
     })(),
 
-    // Lark: try getting a token
-    (async () => {
-      if (!brand.larkAppId || !brand.larkAppSecret) {
-        return { name: 'lark', ok: false, message: '未配置 App ID 或 App Secret' }
-      }
-      const token = await getLarkTenantToken(brand.larkAppId, brand.larkAppSecret)
-      return {
-        name: 'lark',
-        ok: !!token,
-        message: token ? '连通正常' : '连接失败，请检查 App ID / Secret',
-        driveReady: !!brand.larkDriveFolderId,
-        notifyReady: !!brand.larkBotWebhook,
-      }
-    })(),
+
 
     // Extension: check if the extension bridge is active for this brand
     (async () => {

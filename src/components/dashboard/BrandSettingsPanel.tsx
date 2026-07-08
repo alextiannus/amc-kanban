@@ -25,13 +25,7 @@ const GOOGLE_FIELDS: IntegrationField[] = [
   { key: 'googleReviewUrl', label: 'Google 写评 URL', placeholder: 'https://search.google.com/local/writereview?placeid=...', type: 'url', helpText: '优先跳转链接；未配置时会按 Place ID 自动生成' },
 ]
 
-const LARK_FIELDS: IntegrationField[] = [
-  { key: 'larkAppId', label: 'Lark App ID', placeholder: 'cli_...', type: 'text' },
-  { key: 'larkAppSecret', label: 'Lark App Secret', placeholder: '••••••••', type: 'password' },
-  { key: 'larkParentFolderToken', label: '根目录文件夹 Token', placeholder: 'PbugfutjllCDM0dqMiIlN0orgZd', type: 'text', helpText: '品牌 Workspace 将自动创建于此文件夹下' },
-  { key: 'larkBotWebhook', label: 'Bot Webhook URL', placeholder: 'https://open.larksuite.com/...', type: 'url', helpText: '老板通知 Webhook（自定义机器人）' },
-  { key: 'larkOwnerId', label: '老板 Lark open_id', placeholder: 'ou_...', type: 'text', helpText: '接收私信通知的飞书账号 ID' },
-]
+
 
 interface Props {
   brandId: string
@@ -63,11 +57,6 @@ function buildInitialForm(initialSettings?: Record<string, unknown>): Record<str
       googleRedirectUri: '',
       googleBusinessUrl: '',
       googleReviewUrl: '',
-      larkAppId: '',
-      larkAppSecret: '',
-      larkParentFolderToken: '',
-      larkBotWebhook: '',
-      larkOwnerId: '',
     }
   }
 
@@ -80,11 +69,6 @@ function buildInitialForm(initialSettings?: Record<string, unknown>): Record<str
     googleRedirectUri: asText(initialSettings.googleRedirectUri),
     googleBusinessUrl: asText(initialSettings.googleBusinessUrl),
     googleReviewUrl: asText(initialSettings.googleReviewUrl),
-    larkAppId: asText(initialSettings.larkAppId),
-    larkAppSecret: asText(initialSettings.larkAppSecret),
-    larkParentFolderToken: asText(initialSettings.larkParentFolderToken),
-    larkBotWebhook: asText(initialSettings.larkBotWebhook),
-    larkOwnerId: asText(initialSettings.larkOwnerId),
   }
 }
 function StatusBadge({ ok }: { ok?: boolean }) {
@@ -117,8 +101,6 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
   const [preferOAuth, setPreferOAuth] = useState(true)
 
   const googleLocationName = asText(initialSettings?.googleLocationName)
-  const larkFolderUrl = asText(initialSettings?.larkFolderUrl)
-  const larkDriveFolderId = asText(initialSettings?.larkDriveFolderId)
   const googlePreferOAuth = asBool(initialSettings?.googlePreferOAuth, true)
 
   useEffect(() => {
@@ -131,7 +113,6 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
         setStatus({
           postfast: asBool(initialSettings.postfastConfigured),
           google: asBool(initialSettings.googleConfigured),
-          lark: asBool(initialSettings.larkConfigured),
           extension: false,
           meta: asBool(initialSettings.metaConfigured),
         })
@@ -243,7 +224,6 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
       setStatus({
         postfast: !!data.postfastConfigured,
         google: !!data.googleConfigured,
-        lark: !!data.larkConfigured,
         extension: false,
       })
       if (data.googlePreferOAuth !== undefined) {
@@ -374,30 +354,7 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
               </details>
             </div>
           </Section>
-          {/* Temporarily hidden Lark integrations */}
-          {/*
-          <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-          <Section label="飞书（素材存储 + 通知）" badge={<StatusBadge ok={status.lark} />}>
-            {larkFolderUrl && (
-              <a
-                href={larkFolderUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/50 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors"
-              >
-                <span>📁</span>
-                <span className="flex-1 truncate">品牌 Workspace 文件夹（自动创建）</span>
-                {larkDriveFolderId && (
-                  <span className="text-[10px] font-mono opacity-60 flex-shrink-0">{larkDriveFolderId.slice(0, 8)}…</span>
-                )}
-              </a>
-            )}
-            {LARK_FIELDS.filter(f => f.key !== 'larkDriveFolderId').map(f => <Field key={f.key} f={f} />)}
-          </Section>
-          */}
-
-          <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
           <Section label="Meta (Facebook / Instagram)" badge={<StatusBadge ok={status.meta} />}>
             {status.meta ? (

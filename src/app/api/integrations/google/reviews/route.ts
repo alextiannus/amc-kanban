@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { sendLarkWebhookNotification } from '@/lib/integrations/lark'
 import { eventEmitter } from '@/lib/events'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import {
@@ -228,7 +227,6 @@ export async function POST(request: Request) {
       googleRefreshToken: true, googleAccountId: true,
       googleLocationId: true, googlePreferOAuth: true,
       postfastApiKey: true,
-      larkBotWebhook: true,
     },
   })
 
@@ -389,20 +387,7 @@ export async function POST(request: Request) {
       })
       newAlerts.push(item.id)
 
-      // Send Lark notification if webhook configured
-      if (brand.larkBotWebhook) {
-        const larkMessage = hasRepliedText
-          ? `**${review.reviewer}** 给出了 **${review.rating}★** 的评价：\n\n"${review.comment.slice(0, 200)}"\n\n🤖 *AI 已自动回复该评价，并向客户发送了补偿转盘链接。*`
-          : `**${review.reviewer}** 给出了 **${review.rating}★** 的评价：\n\n"${review.comment.slice(0, 200)}"`
 
-        sendLarkWebhookNotification({
-          webhookUrl: brand.larkBotWebhook,
-          title: `⚠️ Google 差评预警 — ${brand.name}`,
-          content: larkMessage,
-          actionUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/dashboard`,
-          urgent: review.rating <= 2,
-        }).catch(console.error)
-      }
     }
   }
 

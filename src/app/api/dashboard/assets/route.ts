@@ -127,9 +127,6 @@ export async function GET(request: Request) {
       if (url.startsWith('http') || url.startsWith('/')) {
         return url
       }
-      if (asset.sourceType === 'lark') {
-        return `/api/integrations/lark/file/${url}`
-      }
       if (asset.sourceType === 'postfast') {
         return `/api/integrations/postfast/file/${asset.brandId}/${url}`
       }

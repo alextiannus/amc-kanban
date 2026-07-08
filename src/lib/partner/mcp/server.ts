@@ -124,11 +124,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
             postfastApiKey: true,
             googlePlaceId: true,
             googleApiKey: true,
-            larkAppId: true,
-            larkAppSecret: true,
-            larkParentFolderToken: true, larkDriveFolderId: true,
-            larkBotWebhook: true,
-            larkOwnerId: true,
             accounts: { select: { id: true, platformId: true, handle: true, displayName: true, autoPilot: true } },
           },
         })
@@ -137,9 +132,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         const {
           postfastApiKey,
           googleApiKey,
-          larkAppId,
-          larkAppSecret,
-          larkBotWebhook,
           ...publicBrand
         } = brand
 
@@ -147,8 +139,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           ...publicBrand,
           postfastConfigured: !!postfastApiKey,
           googleConfigured: !!publicBrand.googlePlaceId && !!googleApiKey,
-          larkConfigured: !!larkAppId && !!larkAppSecret,
-          larkNotifyConfigured: !!publicBrand.larkOwnerId || !!larkBotWebhook,
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(safeBrand, null, 2) }] }
@@ -277,12 +267,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       postfastApiKey: z.string().optional(),
       googlePlaceId: z.string().optional(),
       googleApiKey: z.string().optional(),
-      larkAppId: z.string().optional(),
-      larkAppSecret: z.string().optional(),
-      larkParentFolderToken: z.string().optional(),
-      larkDriveFolderId: z.string().optional(),
-      larkBotWebhook: z.string().optional(),
-      larkOwnerId: z.string().optional(),
     },
     async (input) => {
       const agent = await resolveAgent()
@@ -298,8 +282,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
 
       const WRITABLE = ['name', 'description', 'website', 'phone', 'address', 'location', 'timezone',
-        'postfastApiKey', 'googlePlaceId', 'googleApiKey', 'larkAppId', 'larkAppSecret',
-        'larkParentFolderToken', 'larkDriveFolderId', 'larkBotWebhook', 'larkOwnerId'] as const
+        'postfastApiKey', 'googlePlaceId', 'googleApiKey'] as const
       const updateData: Record<string, unknown> = {}
       if (input.name) updateData.name = input.name
       for (const key of WRITABLE) {
@@ -1150,20 +1133,16 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'Execute a unified marketing or customer care action for a brand (replies, posts, notifications).',
     {
       brandId: z.string().describe('Brand ID to execute this action for'),
-      actionType: z.enum(['reply_review', 'domestic_reply_review', 'lark_notify', 'publish_post'])
+      actionType: z.enum(['reply_review', 'domestic_reply_review', 'publish_post'])
         .describe('Type of action to execute'),
       platform: z.string().optional().describe('Platform name e.g., "google", "yelp", "dianping", "meituan"'),
       reviewId: z.string().optional().describe('Review ID (required for replies)'),
       replyText: z.string().optional().describe('Reply comment (required for replies)'),
-      title: z.string().optional().describe('Title of Lark message / post'),
-      content: z.string().optional().describe('Markdown text for Lark notification'),
-      actionUrl: z.string().optional().describe('Lark notification action button link'),
-      urgent: z.boolean().optional().describe('Make Lark notification styling urgent'),
       caption: z.string().optional().describe('Social post caption'),
       mediaUrls: z.array(z.string()).optional().describe('Social post media URLs'),
       hashtags: z.array(z.string()).optional().describe('Social post hashtags without #'),
     },
-    async ({ brandId, actionType, platform, reviewId, replyText, title, content, actionUrl, urgent, caption, mediaUrls, hashtags }) => {
+    async ({ brandId, actionType, platform, reviewId, replyText, caption, mediaUrls, hashtags }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
@@ -1178,10 +1157,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           googleAccountId: true,
           googleLocationId: true,
           googlePreferOAuth: true,
-          larkBotWebhook: true,
-          larkAppId: true,
-          larkAppSecret: true,
-          larkOwnerId: true,
         },
       })
       if (!brand) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
@@ -1294,29 +1269,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         }
       }
 
-      if (actionType === 'lark_notify') {
-        if (!title || !content) {
-          return { content: [{ type: 'text' as const, text: 'Error: title and content are required for lark_notify' }], isError: true }
-        }
-        if (!brand.larkBotWebhook && !brand.larkOwnerId) {
-          return { content: [{ type: 'text' as const, text: 'Error: Lark notifications not configured' }], isError: true }
-        }
-        const { sendLarkWebhookNotification, sendLarkDirectMessage } = await import('@/lib/integrations/lark')
-        let result: { success: boolean; error?: string }
-        if (brand.larkBotWebhook) {
-          result = await sendLarkWebhookNotification({ webhookUrl: brand.larkBotWebhook, title, content, actionUrl, urgent })
-        } else {
-          result = await sendLarkDirectMessage({
-            appId: brand.larkAppId!,
-            appSecret: brand.larkAppSecret!,
-            ownerId: brand.larkOwnerId!,
-            title, content, actionUrl, urgent,
-          })
-        }
-        if (!result.success) return { content: [{ type: 'text' as const, text: `Error (Lark): ${result.error}` }], isError: true }
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, channel: brand.larkBotWebhook ? 'webhook' : 'direct_message' }) }] }
-      }
-
       if (actionType === 'publish_post') {
         if (!platform || !caption) {
           return { content: [{ type: 'text' as const, text: 'Error: platform and caption are required for publish_post' }], isError: true }
@@ -1358,141 +1310,6 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       }
 
       return { content: [{ type: 'text' as const, text: 'Error: Unsupported action type' }], isError: true }
-    }
-  )
-
-  // ── lark_notify ─────────────────────────────────────────────────────────
-  server.tool(
-    'lark_notify',
-    'Send a notification to the brand owner via Lark/Feishu bot. Supports webhook (simple) and direct message modes.',
-    {
-      brandId: z.string().describe('Brand ID — Lark credentials are auto-loaded from brand config.'),
-      title: z.string().describe('Card header title'),
-      content: z.string().describe('Message body (Lark Markdown supported)'),
-      actionUrl: z.string().optional().describe('Optional deep-link button URL, e.g. link to Kanban task'),
-      urgent: z.boolean().optional().describe('Set true to render card in red (urgent alert)'),
-    },
-    async ({ brandId, title, content, actionUrl, urgent }) => {
-      const agent = await resolveAgent()
-      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-
-      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
-
-      const brand = await prisma.brand.findUnique({
-        where: { id: brandId },
-        select: { larkBotWebhook: true, larkAppId: true, larkAppSecret: true, larkOwnerId: true },
-      })
-
-      if (!brand?.larkBotWebhook && !brand?.larkOwnerId) {
-        return { content: [{ type: 'text' as const, text: 'Error: larkBotWebhook or larkOwnerId not configured. Run update_brand_config first.' }], isError: true }
-      }
-
-      const { sendLarkWebhookNotification, sendLarkDirectMessage } = await import('@/lib/integrations/lark')
-
-      let result: { success: boolean; error?: string }
-
-      if (brand.larkBotWebhook) {
-        result = await sendLarkWebhookNotification({ webhookUrl: brand.larkBotWebhook, title, content, actionUrl, urgent })
-      } else {
-        result = await sendLarkDirectMessage({
-          appId: brand.larkAppId!,
-          appSecret: brand.larkAppSecret!,
-          ownerId: brand.larkOwnerId!,
-          title, content, actionUrl, urgent,
-        })
-      }
-
-      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, channel: brand.larkBotWebhook ? 'webhook' : 'direct_message' }) }] }
-    }
-  )
-  server.tool(
-    'notify_owner',
-    '[Compatibility alias] Use lark_notify.',
-    {
-      brandId: z.string().describe('Brand ID — Lark credentials are auto-loaded from brand config.'),
-      title: z.string().describe('Card header title'),
-      content: z.string().describe('Message body (Lark Markdown supported)'),
-      actionUrl: z.string().optional().describe('Optional deep-link button URL, e.g. link to Kanban task'),
-      urgent: z.boolean().optional().describe('Set true to render card in red (urgent alert)'),
-    },
-    async ({ brandId, title, content, actionUrl, urgent }) => {
-      const agent = await resolveAgent()
-      if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
-
-      const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
-
-      const brand = await prisma.brand.findUnique({
-        where: { id: brandId },
-        select: { larkBotWebhook: true, larkAppId: true, larkAppSecret: true, larkOwnerId: true },
-      })
-
-      if (!brand?.larkBotWebhook && !brand?.larkOwnerId) {
-        return { content: [{ type: 'text' as const, text: 'Error: larkBotWebhook or larkOwnerId not configured. Run update_brand_config first.' }], isError: true }
-      }
-
-      const { sendLarkWebhookNotification, sendLarkDirectMessage } = await import('@/lib/integrations/lark')
-
-      let result: { success: boolean; error?: string }
-      if (brand.larkBotWebhook) {
-        result = await sendLarkWebhookNotification({ webhookUrl: brand.larkBotWebhook, title, content, actionUrl, urgent })
-      } else {
-        result = await sendLarkDirectMessage({
-          appId: brand.larkAppId!,
-          appSecret: brand.larkAppSecret!,
-          ownerId: brand.larkOwnerId!,
-          title,
-          content,
-          actionUrl,
-          urgent,
-        })
-      }
-
-      if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, channel: brand.larkBotWebhook ? 'webhook' : 'direct_message' }) }] }
-    }
-  )
-
-  // ── lark_upload_file ────────────────────────────────────────────────────
-  server.tool(
-    'lark_upload_file',
-    '[DEPRECATED] Upload a file to the brand\'s Lark Drive workspace. Do not use. Use board_upload_asset instead.',
-    {
-      brandId: z.string(),
-      filename: z.string().describe('File name including extension, e.g. "banner.jpg"'),
-      mimeType: z.string().describe('MIME type e.g. "image/jpeg", "application/pdf"'),
-      fileBase64: z.string().describe('Base64-encoded file content (without data: prefix)'),
-      folderId: z.string().optional().describe('Lark folder token to upload into. Defaults to brand workspace root.'),
-    },
-    async () => {
-      return {
-        content: [{
-          type: 'text' as const,
-          text: 'Error: Lark cloud docs storage is disabled. Please use board_upload_asset instead, which automatically uploads assets directly to Huawei OBS (OSS).',
-        }],
-        isError: true,
-      }
-    }
-  )
-
-  // ── lark_create_workspace ───────────────────────────────────────────────
-  server.tool(
-    'lark_create_workspace',
-    '[DEPRECATED] Create a brand workspace folder in Lark Drive. Do not use.',
-    {
-      brandId: z.string(),
-      parentFolderToken: z.string().optional().describe('Override parent folder.'),
-    },
-    async () => {
-      return {
-        content: [{
-          type: 'text' as const,
-          text: 'Error: Lark Drive workspace creation is disabled as we have migrated to Huawei OBS (OSS) for storage.',
-        }],
-        isError: true,
-      }
     }
   )
 

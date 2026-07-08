@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canOwnBrand } from '@/lib/brandAccess'
-import { LARK_APP_DOMAIN, DEFAULT_LARK_PARENT_FOLDER } from '@/lib/integrations/lark'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 
@@ -68,17 +67,7 @@ export async function GET(_req: Request, { params }: Params) {
     googlePreferOAuth: brand.googlePreferOAuth,
     googleConfigured: !!(brand.googleRefreshToken || (brand.googlePlaceId && brand.googleApiKey)),
 
-    // Lark — credentials + workspace folder info
-    larkAppId: brand.larkAppId,
-    larkAppSecret: maskKey(brand.larkAppSecret),
-    larkParentFolderToken: brand.larkParentFolderToken ?? DEFAULT_LARK_PARENT_FOLDER,
-    larkDriveFolderId: brand.larkDriveFolderId,
-    larkFolderUrl: brand.larkDriveFolderId ? `${LARK_APP_DOMAIN}/drive/folder/${brand.larkDriveFolderId}` : null,
-    larkBotWebhook: brand.larkBotWebhook,
-    larkOwnerId: brand.larkOwnerId,
-    larkConfigured: !!(brand.larkAppId && brand.larkAppSecret),
-    larkDriveConfigured: !!brand.larkDriveFolderId,
-    larkNotifyConfigured: !!(brand.larkBotWebhook || brand.larkOwnerId),
+
   })
 }
 
@@ -124,20 +113,11 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(body.googleBusinessUrl !== undefined && { googleBusinessUrl: opt(body.googleBusinessUrl) }),
       ...(body.googleReviewUrl !== undefined && { googleReviewUrl: opt(body.googleReviewUrl) }),
       ...(body.googlePreferOAuth !== undefined && { googlePreferOAuth: body.googlePreferOAuth }),
-      // Lark
-      ...(body.larkAppId !== undefined && { larkAppId: opt(body.larkAppId) }),
-      ...(body.larkAppSecret !== undefined && { larkAppSecret: opt(body.larkAppSecret) }),
-      ...(body.larkParentFolderToken !== undefined && { larkParentFolderToken: opt(body.larkParentFolderToken) }),
-      ...(body.larkBotWebhook !== undefined && { larkBotWebhook: opt(body.larkBotWebhook) }),
-      ...(body.larkOwnerId !== undefined && { larkOwnerId: opt(body.larkOwnerId) }),
+
     },
   })
 
-  // Auto-create brand workspace folder is disabled as Lark Drive is decommissioned
 
-  const larkFolderUrl = updated.larkDriveFolderId
-    ? `${LARK_APP_DOMAIN}/drive/folder/${updated.larkDriveFolderId}`
-    : null
 
   // Auto-sync PostFast accounts when API key is present
   // Trigger: a postfastApiKey was just set, or the brand already has one
@@ -317,13 +297,9 @@ export async function PATCH(request: Request, { params }: Params) {
 
   return NextResponse.json({
     ok: true,
-    larkFolderUrl,
     postfastConfigured: !!updated.postfastApiKey,
     postfastSync,
     googleConfigured: !!(updated.googleRefreshToken || (updated.googlePlaceId && updated.googleApiKey)),
     googlePreferOAuth: updated.googlePreferOAuth,
-    larkConfigured: !!(updated.larkAppId && updated.larkAppSecret),
-    larkDriveConfigured: !!updated.larkDriveFolderId,
-    larkNotifyConfigured: !!(updated.larkBotWebhook || updated.larkOwnerId),
   })
 }

@@ -3,7 +3,6 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { eventEmitter } from '@/lib/events'
 import { postfastPublish, postfastReplyReview } from '@/lib/integrations/postfast'
-import { sendLarkWebhookNotification } from '@/lib/integrations/lark'
 import { canWriteBrandProject } from '@/lib/brandAccess'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 
@@ -46,7 +45,6 @@ export async function PATCH(request: Request, { params }: Params) {
       googleRefreshToken: true,
       googleAccountId: true,
       googleLocationId: true,
-      larkBotWebhook: true,
     },
   })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -220,17 +218,7 @@ export async function PATCH(request: Request, { params }: Params) {
             : { status: 'pending', requiredInput: `自动发布失败：${result.error ?? 'unknown error'}。请协助排查原因。` }
         )
 
-        // Lark notify on completion
-        if (brand.larkBotWebhook) {
-          sendLarkWebhookNotification({
-            webhookUrl: brand.larkBotWebhook,
-            title: result.success ? `✅ 内容已发布 — ${brand.name}` : `❌ 发布失败 — ${brand.name}`,
-            content: result.success
-              ? `帖子已成功发布到 ${platformName}。`
-              : `发布失败：${result.error}`,
-            actionUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/dashboard`,
-          }).catch(console.error)
-        }
+
 
         eventEmitter.emit('board_update')
       })()
