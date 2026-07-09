@@ -6,7 +6,7 @@ import {
   Settings, BookOpen, ExternalLink, Package, Loader2,
   RefreshCw, FileText, CheckCircle2, Store, Utensils,
   Camera, Edit3, Check, Plus, Trash2, ArrowRight,
-  Star, Users, ChevronRight
+  Star, Users
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -79,7 +79,7 @@ export default function BrandProfileView({
         <div className="max-w-sm">
           <Store className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-4" />
           <p className="text-sm font-bold text-slate-600 dark:text-slate-400">暂无选定品牌</p>
-          <p className="text-xs text-slate-400 dark:text-slate-505 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
+          <p className="text-xs text-slate-400 dark:text-slate-555 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
         </div>
       </div>
     )
@@ -92,9 +92,7 @@ export default function BrandProfileView({
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
 
-  // Presentation Player States
-  const [activeStoryIndex, setActiveStoryIndex] = useState(0)
-  const [activeGrowthIndex, setActiveGrowthIndex] = useState(0)
+  // Presentation states
   const [showStoryEditor, setShowStoryEditor] = useState(false)
   const [showDetailedReport, setShowDetailedReport] = useState(false)
 
@@ -415,7 +413,7 @@ export default function BrandProfileView({
       headline: draftName,
       body: draftDesc || '暂无品牌介绍。请点击下方“展开编辑品牌故事设定”补充品牌核心定位。',
       gradient: 'from-orange-500 via-red-500 to-rose-600',
-      glowColor: 'rgba(234,88,12,0.25)',
+      glowColor: 'rgba(234,88,12,0.18)',
       icon: Sparkles
     },
     {
@@ -425,7 +423,7 @@ export default function BrandProfileView({
       headline: '品牌个性与表达语气',
       body: activeBrandTone || '暂无语气风格设定。请点击下方“展开编辑品牌故事设定”完善语气声调设定。',
       gradient: 'from-emerald-500 via-teal-500 to-cyan-600',
-      glowColor: 'rgba(16,185,129,0.25)',
+      glowColor: 'rgba(16,185,129,0.18)',
       icon: Star
     },
     {
@@ -437,7 +435,7 @@ export default function BrandProfileView({
         ? `核心口语表达：${Object.keys(activeSlangDict).slice(0, 10).join(' · ')}`
         : '尚未配置俚语词条。添加俚语可帮助 AI Copywriter 自动生成极富本地烟火气的宣传内容。',
       gradient: 'from-purple-500 via-indigo-500 to-violet-600',
-      glowColor: 'rgba(139,92,246,0.25)',
+      glowColor: 'rgba(139,92,246,0.18)',
       icon: Users
     },
     {
@@ -449,7 +447,7 @@ export default function BrandProfileView({
         ? `品牌主要运营与内容生成的地理语境已被定位在：${draftLocation}`
         : '暂无区域定位。完善主理区域可让 AI 更好地了解受众特征与地段优势。',
       gradient: 'from-cyan-500 via-sky-500 to-blue-600',
-      glowColor: 'rgba(14,165,233,0.25)',
+      glowColor: 'rgba(14,165,233,0.18)',
       icon: MapPin
     }
   ]
@@ -472,16 +470,16 @@ export default function BrandProfileView({
 
   const getGrowthSlideGlow = (index: number) => {
     const glows = [
-      'rgba(99,102,241,0.25)',
-      'rgba(239,68,68,0.25)',
-      'rgba(245,158,11,0.25)',
-      'rgba(16,185,129,0.25)',
-      'rgba(20,184,166,0.25)',
-      'rgba(6,182,212,0.25)',
-      'rgba(236,72,153,0.25)',
-      'rgba(139,92,246,0.25)',
-      'rgba(168,85,247,0.25)',
-      'rgba(75,85,99,0.25)',
+      'rgba(99,102,241,0.18)',
+      'rgba(239,68,68,0.18)',
+      'rgba(245,158,11,0.18)',
+      'rgba(16,185,129,0.18)',
+      'rgba(20,184,166,0.18)',
+      'rgba(6,182,212,0.18)',
+      'rgba(236,72,153,0.18)',
+      'rgba(139,92,246,0.18)',
+      'rgba(168,85,247,0.18)',
+      'rgba(75,85,99,0.18)',
     ]
     return glows[index % glows.length]
   }
@@ -503,7 +501,7 @@ export default function BrandProfileView({
     const lines = content.split('\n').map(l => l.trim()).filter(Boolean)
     if (lines.some(l => l.startsWith('-') || l.startsWith('*') || l.match(/^\d+\./))) {
       return (
-        <ul className="list-disc list-inside space-y-2 mt-3 text-xs md:text-[13px] text-white/90 font-medium leading-relaxed">
+        <ul className="list-disc list-inside space-y-2.5 mt-3 text-xs md:text-[13px] text-white/90 font-medium leading-relaxed">
           {lines.map((line, idx) => {
             const cleanLine = line.replace(/^[-*\d+.\s]+/, '')
             return <li key={idx} className="line-clamp-2">{cleanLine}</li>
@@ -573,13 +571,13 @@ export default function BrandProfileView({
                   <input
                     value={draftName}
                     onChange={e => setDraftName(e.target.value)}
-                    className="bg-slate-50 dark:bg-slate-800 text-slate-850 dark:text-white text-xs font-black rounded-lg px-2 py-1 outline-none border border-slate-200 dark:border-slate-700 focus:border-amber-400"
+                    className="bg-slate-50 dark:bg-slate-800 text-slate-855 dark:text-white text-xs font-black rounded-lg px-2 py-1 outline-none border border-slate-200 dark:border-slate-700 focus:border-amber-400"
                     placeholder="品牌名称"
                   />
                   <button
                     onClick={handleSaveBrandInfo}
                     disabled={saving}
-                    className="p-1 bg-amber-500 text-white rounded-lg hover:bg-amber-650 cursor-pointer active:scale-95 transition-all"
+                    className="p-1 bg-amber-500 text-white rounded-lg hover:bg-amber-655 cursor-pointer active:scale-95 transition-all"
                   >
                     <Check size={12} />
                   </button>
@@ -595,7 +593,7 @@ export default function BrandProfileView({
                   <h1 className="text-sm font-black text-slate-855 dark:text-white truncate max-w-[120px] md:max-w-[200px]">{draftName}</h1>
                   <button
                     onClick={() => setEditingName(true)}
-                    className="p-0.5 text-slate-400 hover:text-slate-650 transition-colors cursor-pointer flex-shrink-0"
+                    className="p-0.5 text-slate-400 hover:text-slate-655 transition-colors cursor-pointer flex-shrink-0"
                   >
                     <Edit3 className="w-3 h-3" />
                   </button>
@@ -666,103 +664,58 @@ export default function BrandProfileView({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.15 }}
-              className="p-4 space-y-6 pb-12"
+              className="p-5 space-y-6 pb-12 max-w-5xl mx-auto w-full"
             >
-              {/* ── IMMERSIVE KEYNOTE SLIDES PLAYER ── */}
-              <div className="space-y-4 max-w-2xl mx-auto w-full">
-                <div className="flex items-center justify-between px-1">
-                  <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                    <Sparkles size={12} className="text-amber-500 animate-pulse" />
-                    品牌故事播放器 (Keynote Deck)
-                  </h4>
-                  <span className="text-[10px] font-extrabold text-slate-550 dark:text-slate-455">
-                    Slide {activeStoryIndex + 1} of {storySlides.length}
-                  </span>
-                </div>
+              {/* Header Title */}
+              <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+                <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-amber-500 animate-pulse" />
+                  品牌故事设定大盘 (Brand Profile Grid)
+                </h4>
+              </div>
 
-                {/* Main Visual Slide Card (Backdrop color stacking fixed) */}
-                <div
-                  className="w-full h-[280px] md:h-[320px] rounded-3xl overflow-hidden relative select-none border border-slate-200/55 dark:border-slate-800/80 shadow-2xl transition-all duration-300"
-                  style={{
-                    boxShadow: `0 24px 60px -12px ${storySlides[activeStoryIndex].glowColor}`
-                  }}
-                >
-                  {/* Backdrop Gradient Container (NO negative z-index) */}
-                  <div className={`absolute inset-0 bg-gradient-to-br ${storySlides[activeStoryIndex].gradient}`} />
-                  <div className="absolute inset-0 opacity-[0.05]"
-                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                  />
-                  <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-3xl" />
+              {/* ── SINGLE PAGE GRID LAYOUT (Story) ── */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+                {storySlides.map((slide) => (
+                  <div
+                    key={slide.id}
+                    className="w-full min-h-[220px] rounded-2xl overflow-hidden relative select-none border border-slate-200/55 dark:border-slate-850 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
+                    style={{
+                      boxShadow: `0 12px 30px -10px ${slide.glowColor}`
+                    }}
+                  >
+                    {/* Backdrop Gradient Container */}
+                    <div className={`absolute inset-0 bg-gradient-to-br ${slide.gradient}`} />
+                    <div className="absolute inset-0 opacity-[0.05]"
+                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
+                    />
+                    <div className="absolute -top-12 -right-12 w-36 h-36 bg-white/10 rounded-full blur-2xl" />
 
-                  {/* Foreground Text Container (z-10 guarantees it stands on top of gradient and doesn't get covered by page layout stacking) */}
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={activeStoryIndex}
-                      initial={{ opacity: 0, x: 40 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -40 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute inset-0 p-6 md:p-8 flex flex-col justify-between text-white z-10"
-                    >
-                      {/* Header info */}
+                    {/* Foreground Text Content */}
+                    <div className="relative z-10 p-6 flex flex-col justify-between h-full text-white min-h-[220px]">
                       <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <span className="text-4xl md:text-5xl leading-none">{storySlides[activeStoryIndex].emoji}</span>
-                          <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-white">
-                            {React.createElement(storySlides[activeStoryIndex].icon, { size: 12 })}
-                            {storySlides[activeStoryIndex].label}
+                        <div className="flex items-center justify-between mb-3.5">
+                          <span className="text-3xl leading-none">{slide.emoji}</span>
+                          <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider text-white">
+                            {React.createElement(slide.icon, { size: 10 })}
+                            {slide.label}
                           </div>
                         </div>
-                        <h2 className="text-lg md:text-xl font-black tracking-wide leading-snug line-clamp-2 drop-shadow-sm border-b border-white/15 pb-2">
-                          {storySlides[activeStoryIndex].headline}
+                        <h2 className="text-sm font-extrabold tracking-wide leading-snug drop-shadow-sm border-b border-white/15 pb-2">
+                          {slide.headline}
                         </h2>
                       </div>
 
-                      {/* Body paragraph */}
-                      <p className="text-xs md:text-[13px] text-white/90 font-medium leading-relaxed line-clamp-4 mt-2 drop-shadow-sm">
-                        {storySlides[activeStoryIndex].body}
+                      <p className="text-xs text-white/90 font-medium leading-relaxed mt-3 drop-shadow-sm line-clamp-4">
+                        {slide.body}
                       </p>
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
-
-                {/* Slides Navigation Controls */}
-                <div className="flex items-center justify-between px-2">
-                  <button
-                    onClick={() => setActiveStoryIndex(prev => Math.max(0, prev - 1))}
-                    disabled={activeStoryIndex === 0}
-                    className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
-                  >
-                    <ChevronLeft size={16} className="text-slate-655 dark:text-slate-300" />
-                  </button>
-
-                  {/* Dot Progress Indicators */}
-                  <div className="flex gap-2">
-                    {storySlides.map((_, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setActiveStoryIndex(idx)}
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          activeStoryIndex === idx
-                            ? 'w-6 bg-slate-800 dark:bg-white'
-                            : 'w-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600'
-                        }`}
-                      />
-                    ))}
+                    </div>
                   </div>
-
-                  <button
-                    onClick={() => setActiveStoryIndex(prev => Math.min(storySlides.length - 1, prev + 1))}
-                    disabled={activeStoryIndex === storySlides.length - 1}
-                    className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
-                  >
-                    <ChevronRight size={16} className="text-slate-655 dark:text-slate-300" />
-                  </button>
-                </div>
+                ))}
               </div>
 
               {/* Toggle Editor Panel Trigger */}
-              <div className="max-w-2xl mx-auto w-full pt-2">
+              <div className="pt-2 w-full">
                 <button
                   onClick={() => setShowStoryEditor(!showStoryEditor)}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 text-xs font-black text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-[0.98] cursor-pointer"
@@ -779,7 +732,7 @@ export default function BrandProfileView({
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="overflow-hidden space-y-4 max-w-2xl mx-auto w-full"
+                    className="overflow-hidden space-y-4 w-full"
                   >
                     {/* Brand Info Form Card */}
                     <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
@@ -841,7 +794,7 @@ export default function BrandProfileView({
                           value={brandTone}
                           onChange={(e) => setBrandToneVal(e.target.value)}
                           placeholder="例如：专业但亲切的咖啡烘焙工坊语气，多使用第一人称‘我们’，注重传达品质与匠心..."
-                          className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                          className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200/70 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
                         />
                       </div>
 
@@ -915,14 +868,14 @@ export default function BrandProfileView({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.15 }}
-              className="p-4 space-y-6 pb-12"
+              className="p-5 space-y-6 pb-12 max-w-5xl mx-auto w-full"
             >
               {/* AMC Growth Sync Controller */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3 max-w-2xl mx-auto w-full">
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3 w-full">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-black text-slate-855 dark:text-white">🚀 战略诊断与增长计划</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">同步并以 Presentation 幻灯片大屏样式查看最新的定位诊断与执行规划</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">同步查看最新的定位诊断与执行规划，所有分析结果将展开呈现在单页上</p>
                   </div>
                   <button
                     onClick={handleSyncGrowth}
@@ -935,107 +888,63 @@ export default function BrandProfileView({
                 </div>
               </div>
 
-              {/* ── IMMERSIVE KEYNOTE SLIDES PLAYER (Growth slides) ── */}
+              {/* ── SINGLE PAGE GRID LAYOUT (Growth) ── */}
               {presentationSlides.length > 0 ? (
-                <div className="space-y-4 max-w-2xl mx-auto w-full">
-                  <div className="flex items-center justify-between px-1">
-                    <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                      <Sparkles size={12} className="text-indigo-500 animate-pulse" />
-                      AMC Growth 诊断与规划幻灯片
+                <div className="space-y-4 w-full">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-3">
+                    <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles size={14} className="text-indigo-500 animate-pulse" />
+                      增长诊断卡片大盘 (Growth Overview)
                     </h4>
-                    <span className="text-[10px] font-extrabold text-slate-500 dark:text-slate-455">
-                      Slide {activeGrowthIndex + 1} of {presentationSlides.length}
-                    </span>
                   </div>
 
-                  {/* Main Visual Slide Card (Backdrop color stacking fixed) */}
-                  <div
-                    className="w-full h-[280px] md:h-[320px] rounded-3xl overflow-hidden relative select-none border border-slate-200/55 dark:border-slate-800/80 shadow-2xl transition-all duration-300"
-                    style={{
-                      boxShadow: `0 24px 60px -12px ${getGrowthSlideGlow(activeGrowthIndex)}`
-                    }}
-                  >
-                    {/* Backdrop Gradient Container (NO negative z-index) */}
-                    <div className={`absolute inset-0 bg-gradient-to-br ${getGrowthSlideGradient(activeGrowthIndex)}`} />
-                    <div className="absolute inset-0 opacity-[0.05]"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                    />
-                    <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full blur-xl" />
-
-                    {/* Foreground Text Container (z-10 guarantees it stands on top of gradient and doesn't get covered by page layout stacking) */}
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={activeGrowthIndex}
-                        initial={{ opacity: 0, x: 40 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -40 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute inset-0 p-6 md:p-8 flex flex-col justify-between text-white z-10"
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+                    {presentationSlides.map((slide, idx) => (
+                      <div
+                        key={idx}
+                        className="w-full min-h-[220px] rounded-2xl overflow-hidden relative select-none border border-slate-200/55 dark:border-slate-850 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
+                        style={{
+                          boxShadow: `0 12px 30px -10px ${getGrowthSlideGlow(idx)}`
+                        }}
                       >
-                        {/* Slide Title */}
-                        <div>
-                          <div className="flex items-center justify-between mb-4">
-                            <span className="text-4xl md:text-5xl leading-none">
-                              {getGrowthSlideEmoji(presentationSlides[activeGrowthIndex].title)}
-                            </span>
-                            <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-white">
-                              Slide {activeGrowthIndex + 1}
-                            </span>
-                          </div>
-                          <h3 className="text-base md:text-lg font-black tracking-wide leading-snug line-clamp-1 border-b border-white/15 pb-2 drop-shadow-sm">
-                            {presentationSlides[activeGrowthIndex].title}
-                          </h3>
-                        </div>
-
-                        {/* Slide content area */}
-                        <div className="flex-1 overflow-y-auto min-h-0 pr-1 mt-2.5 scrollbar-thin scrollbar-thumb-white/20">
-                          {formatSlideContent(presentationSlides[activeGrowthIndex].content)}
-                        </div>
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-
-                  {/* Slides Navigation Controls */}
-                  <div className="flex items-center justify-between px-2">
-                    <button
-                      onClick={() => setActiveGrowthIndex(prev => Math.max(0, prev - 1))}
-                      disabled={activeGrowthIndex === 0}
-                      className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
-                    >
-                      <ChevronLeft size={16} className="text-slate-655 dark:text-slate-300" />
-                    </button>
-
-                    {/* Dot Progress Indicators */}
-                    <div className="flex gap-1.5 overflow-x-auto max-w-[200px] scrollbar-none py-1">
-                      {presentationSlides.map((_, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setActiveGrowthIndex(idx)}
-                          className={`h-2 rounded-full flex-shrink-0 transition-all duration-300 ${
-                            activeGrowthIndex === idx
-                              ? 'w-5 bg-slate-800 dark:bg-white'
-                              : 'w-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600'
-                          }`}
+                        {/* Backdrop Gradient Container */}
+                        <div className={`absolute inset-0 bg-gradient-to-br ${getGrowthSlideGradient(idx)}`} />
+                        <div className="absolute inset-0 opacity-[0.05]"
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
                         />
-                      ))}
-                    </div>
+                        <div className="absolute -top-12 -right-12 w-36 h-36 bg-white/10 rounded-full blur-2xl" />
 
-                    <button
-                      onClick={() => setActiveGrowthIndex(prev => Math.min(presentationSlides.length - 1, prev + 1))}
-                      disabled={activeGrowthIndex === presentationSlides.length - 1}
-                      className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center bg-white dark:bg-slate-900 disabled:opacity-20 disabled:cursor-not-allowed transition-all hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer shadow-sm active:scale-95"
-                    >
-                      <ChevronRight size={16} className="text-slate-655 dark:text-slate-300" />
-                    </button>
+                        {/* Foreground Content Container */}
+                        <div className="relative z-10 p-6 flex flex-col justify-between h-full text-white min-h-[220px]">
+                          <div>
+                            <div className="flex items-center justify-between mb-3.5">
+                              <span className="text-3xl leading-none">
+                                {getGrowthSlideEmoji(slide.title)}
+                              </span>
+                              <span className="bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider text-white">
+                                Section {idx + 1}
+                              </span>
+                            </div>
+                            <h3 className="text-sm font-extrabold tracking-wide border-b border-white/15 pb-2 drop-shadow-sm">
+                              {slide.title}
+                            </h3>
+                          </div>
+
+                          <div className="flex-1 overflow-y-auto min-h-0 pr-1 mt-3 scrollbar-thin scrollbar-thumb-white/20">
+                            {formatSlideContent(slide.content)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ) : (
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 shadow-sm text-center max-w-2xl mx-auto w-full">
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 shadow-sm text-center w-full">
                   <div className="max-w-xs mx-auto space-y-2">
                     <FileText className="w-8 h-8 text-slate-300 mx-auto" />
                     <p className="text-xs font-bold text-slate-505">暂无分析数据与幻灯片</p>
                     <p className="text-[10px] text-slate-400">
-                      点击右上角“一键同步最新分析”按钮，从 AMC Growth 智能系统拉取该品牌的专属战略诊断、行动大纲和 PPT 汇报页。
+                      点击“一键同步最新分析”按钮，从 AMC Growth 智能系统拉取该品牌的专属战略诊断、行动大纲和报告大盘。
                     </p>
                   </div>
                 </div>
@@ -1043,10 +952,10 @@ export default function BrandProfileView({
 
               {/* Toggle Detailed Prose Report Trigger */}
               {(growthContext || growthPlan) && (
-                <div className="max-w-2xl mx-auto w-full pt-2">
+                <div className="w-full pt-2">
                   <button
                     onClick={() => setShowDetailedReport(!showDetailedReport)}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 text-xs font-black text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-[0.98] cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 text-xs font-black text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-855 active:scale-[0.98] cursor-pointer"
                   >
                     {showDetailedReport ? '📊 收起战略诊断报告原文' : '📄 展开查看战略诊断与执行规划全文'}
                   </button>
@@ -1061,7 +970,7 @@ export default function BrandProfileView({
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.2 }}
-                    className="overflow-hidden space-y-4 max-w-2xl mx-auto w-full"
+                    className="overflow-hidden space-y-4 w-full"
                   >
                     {growthContext ? (
                       <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
@@ -1117,7 +1026,7 @@ export default function BrandProfileView({
                 </div>
                 <button
                   onClick={() => setShowConfigModal(false)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 dark:hover:text-slate-205 transition-colors"
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-655 dark:hover:text-slate-205 transition-colors"
                 >
                   <X size={18} />
                 </button>
@@ -1306,7 +1215,7 @@ export default function BrandProfileView({
                 </div>
                 <button
                   onClick={() => setShowContextModal(false)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-650 dark:hover:text-slate-200 transition-colors"
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-655 dark:hover:text-slate-200 transition-colors"
                 >
                   <X size={18} />
                 </button>
@@ -1360,7 +1269,7 @@ export default function BrandProfileView({
                       value={profileMarkdown}
                       onChange={(e) => setProfileMarkdown(e.target.value)}
                       placeholder="# 品牌名称..."
-                      className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs font-mono bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-700 text-slate-750 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
+                      className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs font-mono bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-700 text-slate-755 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
                     />
                   ) : (
                     <div className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 overflow-y-auto prose prose-slate dark:prose-invert max-w-none leading-relaxed">
