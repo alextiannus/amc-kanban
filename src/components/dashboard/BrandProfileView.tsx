@@ -776,7 +776,7 @@ export default function BrandProfileView({
                   <div>
                     <h2 className="text-xs font-black text-slate-855 dark:text-white flex items-center gap-1.5">
                       {draftName}
-                      <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wider uppercase">品牌官网</span>
+                      <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wider uppercase">品牌故事</span>
                     </h2>
                   </div>
                 </div>
