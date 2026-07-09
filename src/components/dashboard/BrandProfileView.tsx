@@ -316,6 +316,36 @@ export default function BrandProfileView({
   const totalFollowers = accounts.reduce((sum, acc) => sum + (acc.followerCount || 0), 0)
   const googleAccount = accounts.find(acc => ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(acc.platformId.toLowerCase()))
   const googleRating = googleAccount?.ratingScore || null
+  const hasRealData = totalFollowers > 0 || googleRating !== null
+
+  const cleanBrandStoryText = (text: string): string => {
+    if (!text) return ''
+    const sentences = text.split(/([。！？；.!?;\n])/)
+    const result: string[] = []
+    for (let i = 0; i < sentences.length; i++) {
+      const s = sentences[i]
+      if (!s) continue
+      const lower = s.toLowerCase()
+      const isSystemInfo =
+        lower.includes('订阅服务') ||
+        lower.includes('starter plan') ||
+        lower.includes('essential plan') ||
+        lower.includes('pro plan') ||
+        lower.includes('本文保留') ||
+        lower.includes('实际执行') ||
+        lower.includes('范围落地') ||
+        lower.includes('升级探讨') ||
+        lower.includes('代更新')
+      if (isSystemInfo) {
+        if (i + 1 < sentences.length && /^[。！？；.!?;\n]/.test(sentences[i + 1])) {
+          i++
+        }
+        continue
+      }
+      result.push(s)
+    }
+    return result.join('').trim().replace(/\n+/g, '\n').replace(/^\s+|\s+$/g, '')
+  }
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -689,7 +719,7 @@ export default function BrandProfileView({
                   <div className="flex-1">
                     <span className="text-[9px] font-black text-amber-450 uppercase tracking-widest block mb-1">Brand Vision & Story</span>
                     <p className="text-xs md:text-sm text-white/90 font-medium leading-relaxed max-w-3xl">
-                      {draftDesc || '暂无品牌故事介绍。请点击下方展开编辑，补充品牌使命与故事，供 AI 写文案使用。'}
+                      {cleanBrandStoryText(draftDesc) || '暂无品牌故事介绍。请点击下方展开编辑，补充品牌使命与故事，供 AI 写文案使用。'}
                     </p>
                   </div>
                   {showStoryEditor ? null : (
@@ -704,55 +734,57 @@ export default function BrandProfileView({
               </div>
 
               {/* ── 2. BRAND STATS SHOWCASE BAR (SaaS Homepage style) ── */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center flex-shrink-0">
-                    <Users className="w-5 h-5" />
+              {hasRealData && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center flex-shrink-0">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 block uppercase">社媒粉丝总量</span>
+                      <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                        {totalFollowers > 0 ? `${totalFollowers.toLocaleString()}+` : '暂无数据'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 block uppercase">社媒粉丝总量</span>
-                    <span className="text-sm font-extrabold text-slate-805 dark:text-white">
-                      {totalFollowers > 0 ? `${totalFollowers.toLocaleString()}+` : '暂无数据'}
-                    </span>
-                  </div>
-                </div>
 
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-955/40 text-amber-500 flex items-center justify-center flex-shrink-0">
-                    <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-955/40 text-amber-500 flex items-center justify-center flex-shrink-0">
+                      <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 block uppercase">谷歌主页评分</span>
+                      <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                        {googleRating !== null ? `⭐ ${googleRating.toFixed(1)} / 5.0` : '⭐⭐⭐⭐⭐'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 block uppercase">谷歌主页评分</span>
-                    <span className="text-sm font-extrabold text-slate-805 dark:text-white">
-                      {googleRating !== null ? `⭐ ${googleRating.toFixed(1)} / 5.0` : '⭐⭐⭐⭐⭐'}
-                    </span>
-                  </div>
-                </div>
 
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 flex items-center justify-center flex-shrink-0">
-                    <Store className="w-5 h-5" />
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 flex items-center justify-center flex-shrink-0">
+                      <Store className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 block uppercase">绑定运营门店</span>
+                      <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                        {draftLocation ? `📍 双门店联营` : `📍 单店主理`}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 block uppercase">绑定运营门店</span>
-                    <span className="text-sm font-extrabold text-slate-805 dark:text-white">
-                      {draftLocation ? `📍 双门店联营` : `📍 单店主理`}
-                    </span>
-                  </div>
-                </div>
 
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-955/40 text-rose-500 flex items-center justify-center flex-shrink-0">
-                    <Zap className="w-5 h-5 text-rose-500" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 block uppercase">托管驾驶级别</span>
-                    <span className="text-sm font-extrabold text-slate-805 dark:text-white">
-                      {brand.autoPilot ? '🤖 智能托管 (L4)' : '✍️ 辅助生成 (L1)'}
-                    </span>
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-955/40 text-rose-500 flex items-center justify-center flex-shrink-0">
+                      <Zap className="w-5 h-5 text-rose-500" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 block uppercase">托管驾驶级别</span>
+                      <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                        {brand.autoPilot ? '🤖 智能托管 (L4)' : '✍️ 辅助生成 (L1)'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* ── 3. SUBGRID A: BRAND IDENTITY & TARGETS ── */}
               <div className="space-y-4">
