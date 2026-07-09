@@ -91,6 +91,8 @@ export default function BrandProfileView({
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
+  const [syncingAccounts, setSyncingAccounts] = useState(false)
+  const [syncAccountsStatus, setSyncAccountsStatus] = useState<string | null>(null)
 
   // Layout presentation states
   const [showStoryEditor, setShowStoryEditor] = useState(false)
@@ -375,6 +377,34 @@ export default function BrandProfileView({
       setTimeout(() => setSyncStatus(null), 5000)
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handleSyncAccounts = async () => {
+    setSyncingAccounts(true)
+    setSyncAccountsStatus('正在同步...')
+    try {
+      const res = await fetch(`/api/brands/${brandId}/sync-postfast`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSyncAccountsStatus('同步成功')
+        showToastVal(`已成功同步 ${data.accountCount || 0} 个社交媒体账号和发布数据！`, 'success')
+        void loadAllConfig() // Refresh settings and accounts
+        setTimeout(() => setSyncAccountsStatus(null), 3000)
+      } else {
+        setSyncAccountsStatus('同步失败')
+        showToastVal(data.error || '同步账号失败', 'error')
+        setTimeout(() => setSyncAccountsStatus(null), 5000)
+      }
+    } catch (e) {
+      console.error(e)
+      setSyncAccountsStatus('同步失败')
+      showToastVal('同步请求失败，请检查网络连接', 'error')
+      setTimeout(() => setSyncAccountsStatus(null), 5000)
+    } finally {
+      setSyncingAccounts(false)
     }
   }
 
@@ -955,13 +985,23 @@ export default function BrandProfileView({
               </div>
 
               {/* ── 5. OFFICIAL SOCIAL MEDIA CHANNELS (Official Website style) ── */}
-              {accounts.length > 0 && (
-                <div className="space-y-4">
-                  <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pl-1 pr-1">
+                  <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
                     <span className="w-1.5 h-3.5 bg-rose-500 rounded-full" />
                     官方自媒体运营阵地 (Official Channels)
                   </h3>
+                  <button
+                    onClick={handleSyncAccounts}
+                    disabled={syncingAccounts}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white disabled:opacity-60 active:scale-95 transition-all cursor-pointer shadow-sm"
+                  >
+                    {syncingAccounts ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                    {syncAccountsStatus || '同步账号'}
+                  </button>
+                </div>
 
+                {accounts.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
                     {accounts.map((acc) => {
                       const platformColors: Record<string, string> = {
@@ -1007,8 +1047,12 @@ export default function BrandProfileView({
                       )
                     })}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-200 dark:border-slate-800 p-8 rounded-2xl shadow-sm text-center">
+                    <p className="text-xs text-slate-400 italic">暂无绑定的社交媒体账号，请点击右上角“同步账号”拉取已配置账号或进入配置。</p>
+                  </div>
+                )}
+              </div>
 
               {/* Toggle Editor Panel Trigger */}
               <div className="pt-4 w-full">

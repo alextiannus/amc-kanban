@@ -484,8 +484,8 @@ export default function PostEditDrawer({
       setCaption(activeCaption)
     }
     const trimmedCaption = activeCaption.trim()
-    if (!trimmedCaption) {
-      setError('草稿正文或内容创意不能为空')
+    if (!trimmedCaption && attachedMedia.length === 0) {
+      setError('草稿正文、内容创意或素材不能为空')
       return null
     }
     const activeAccountIds = accountIdsOverride || selectedAccountIds
@@ -1777,14 +1777,14 @@ Return the output strictly in a valid JSON array format, containing:
             <>
               <button
                 type="button"
-                disabled={saving || (!caption.trim() && !contentIdea.trim()) || selectedAccountIds.length === 0 || isAiGenerating}
+                disabled={saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || isAiGenerating}
                 onClick={handleAiCopywrite}
                 className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
                 ✨ AI 创作
               </button>
               <button
-                disabled={saving || (!caption.trim() && !contentIdea.trim()) || selectedAccountIds.length === 0}
+                disabled={saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0}
                 onClick={async () => {
                   const saved = await saveDraft('draft')
                   if (saved) {
