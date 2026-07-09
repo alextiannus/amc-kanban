@@ -1173,11 +1173,12 @@ export default function BrandProfileView({
                       </div>
                       <div>
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">品牌简介与故事使命 (Description)</label>
+                        <p className="text-[9px] text-slate-400 mb-1">是根据老板和企业的品牌定位，目标读者是企业消费者讲述的品牌故事。</p>
                         <textarea
                           value={draftDesc}
                           onChange={e => setDraftDesc(e.target.value)}
                           className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
-                          placeholder="简短描述该品牌的故事与主营业务..."
+                          placeholder="根据老板与企业定位，面向消费者讲述的品牌故事与使命..."
                         />
                       </div>
                       <div>
