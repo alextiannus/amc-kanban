@@ -774,7 +774,7 @@ export default function BrandProfileView({
                     )}
                   </div>
                   <div>
-                    <h2 className="text-xs font-black text-slate-855 dark:text-white flex items-center gap-1.5">
+                    <h2 className="text-xs font-black text-slate-800 dark:text-white flex items-center gap-1.5">
                       {draftName}
                       <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wider uppercase">品牌故事</span>
                     </h2>
@@ -798,7 +798,7 @@ export default function BrandProfileView({
                   {showStoryEditor ? null : (
                     <button
                       onClick={() => setShowStoryEditor(true)}
-                      className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-855 text-slate-500 dark:text-slate-400 hover:text-slate-800 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 transition-colors cursor-pointer"
                       title="编辑设定"
                     >
                       <Settings className="w-3.5 h-3.5" />
@@ -814,7 +814,7 @@ export default function BrandProfileView({
                 <div className="absolute bottom-0 left-0 w-[200px] h-[200px] bg-gradient-to-tr from-rose-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
 
                 <div className="relative z-10 max-w-2xl">
-                  <span className="text-[9px] font-black text-amber-450 uppercase tracking-widest bg-white/10 px-2.5 py-1 rounded-full backdrop-blur-md border border-white/10">Est. 2012 / 创始初心与使命</span>
+                  <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest bg-white/10 px-2.5 py-1 rounded-full backdrop-blur-md border border-white/10">Est. 2012 / 创始初心与使命</span>
                   <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white mt-4 drop-shadow-md">
                     {draftName}
                   </h2>
@@ -833,7 +833,7 @@ export default function BrandProfileView({
               {dishes.length > 0 && (
                 <div id="menu" className="space-y-4">
                   <div className="flex items-center justify-between px-1">
-                    <h3 className="text-xs font-black text-slate-805 dark:text-white uppercase tracking-widest flex items-center gap-2">
+                    <h3 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-widest flex items-center gap-2">
                       <Utensils className="w-4 h-4 text-amber-500" />
                       招牌菜推荐 (Specialities Menu)
                     </h3>
@@ -841,8 +841,8 @@ export default function BrandProfileView({
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
                     {dishes.map((dish, i) => (
-                      <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-5 rounded-2xl shadow-sm hover:border-amber-450/40 hover:shadow-lg transition-all duration-300 group hover:-translate-y-1">
-                        <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-955/40 text-amber-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-5 rounded-2xl shadow-sm hover:border-amber-500/40 hover:shadow-lg transition-all duration-300 group hover:-translate-y-1">
+                        <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                           <Sparkles className="w-5 h-5" />
                         </div>
                         <h4 className="text-xs font-black text-slate-800 dark:text-white mb-2">{dish.title}</h4>
@@ -856,7 +856,7 @@ export default function BrandProfileView({
               {/* ── MOCK BRAND OUTLETS LIST ── */}
               {stores.length > 0 && (
                 <div id="outlets" className="space-y-4">
-                  <h3 className="text-xs font-black text-slate-805 dark:text-white uppercase tracking-widest flex items-center gap-2 pl-1">
+                  <h3 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-widest flex items-center gap-2 pl-1">
                     <Store className="w-4 h-4 text-amber-500" />
                     分店与分局分布 (Our Outlets)
                   </h3>
@@ -884,7 +884,7 @@ export default function BrandProfileView({
               {/* ── MOCK BRAND DINING RESERVATION GUIDE ── */}
               {guides.length > 0 && (
                 <div id="guide" className="space-y-4">
-                  <h3 className="text-xs font-black text-slate-805 dark:text-white uppercase tracking-widest flex items-center gap-2 pl-1">
+                  <h3 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-widest flex items-center gap-2 pl-1">
                     <Compass className="w-4 h-4 text-amber-500" />
                     用餐攻略与预订须知 (Reservation Guide)
                   </h3>
@@ -895,7 +895,7 @@ export default function BrandProfileView({
                           <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-wider flex items-center gap-1.5">
                             <Star className="w-3.5 h-3.5 fill-current" /> {guide.title}
                           </h4>
-                          <p className="text-[11px] text-slate-600 dark:text-slate-405 leading-relaxed">{guide.content}</p>
+                          <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">{guide.content}</p>
                         </div>
                       ))}
                     </div>
