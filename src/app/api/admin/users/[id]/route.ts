@@ -27,7 +27,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const target = await prisma.user.findUnique({ where: { id } })
   if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-  if ('email' in body || 'nickname' in body || Array.isArray(body.businessRoles)) {
+  if ('email' in body || 'nickname' in body || 'role' in body || Array.isArray(body.businessRoles)) {
     const data: Prisma.UserUpdateInput = {}
 
     if ('email' in body) {
@@ -47,6 +47,21 @@ export async function PATCH(request: Request, { params }: Params) {
         return NextResponse.json({ error: 'nickname must be string or null' }, { status: 400 })
       }
       data.nickname = typeof body.nickname === 'string' && body.nickname.trim() ? body.nickname.trim() : null
+    }
+
+    if ('role' in body) {
+      if (!['ADMIN', 'USER'].includes(body.role)) {
+        return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
+      }
+
+      if (target.role === 'ADMIN' && body.role === 'USER') {
+        const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } })
+        if (adminCount <= 1) {
+          return NextResponse.json({ error: 'Cannot demote the last admin' }, { status: 400 })
+        }
+      }
+      data.role = body.role
+      data.authVersion = { increment: 1 }
     }
 
     const validBusinessRoles = ['BRAND_OWNER', 'AMC_PRINCIPAL', 'BD'] as const
@@ -79,6 +94,18 @@ export async function PATCH(request: Request, { params }: Params) {
           where: { id },
           data: { authVersion: { increment: 1 } },
         })
+      }
+
+      if ('role' in body) {
+        if (body.role === 'ADMIN') {
+          await tx.userBusinessRole.upsert({
+            where: { userId_role: { userId: id, role: 'ADMIN' } },
+            create: { userId: id, role: 'ADMIN' },
+            update: {},
+          })
+        } else {
+          await tx.userBusinessRole.deleteMany({ where: { userId: id, role: 'ADMIN' } })
+        }
       }
 
       return user
