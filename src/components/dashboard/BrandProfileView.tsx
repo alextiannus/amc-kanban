@@ -78,11 +78,11 @@ export default function BrandProfileView({
   // Early return if no brand or brand.id is provided, placed at the top to satisfy TypeScript compiler
   if (!brand || !brand.id) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-955 text-center">
+      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-950 text-center">
         <div className="max-w-sm">
           <Store className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-4" />
           <p className="text-sm font-bold text-slate-600 dark:text-slate-400">暂无选定品牌</p>
-          <p className="text-xs text-slate-400 dark:text-slate-505 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
         </div>
       </div>
     )
@@ -621,7 +621,7 @@ export default function BrandProfileView({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 15 }}
       transition={{ duration: 0.2 }}
-      className="flex-1 flex flex-col min-h-0 bg-[#f7f9fb] dark:bg-slate-955 overflow-y-auto relative h-full"
+      className="flex-1 flex flex-col min-h-0 bg-[#f7f9fb] dark:bg-slate-950 overflow-y-auto relative h-full"
     >
       {/* ── Unified Top Navigation Navbar (Consolidated Header) ── */}
       <div className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-5 py-3.5 flex items-center justify-between shadow-sm flex-shrink-0">
@@ -663,29 +663,29 @@ export default function BrandProfileView({
                   <input
                     value={draftName}
                     onChange={e => setDraftName(e.target.value)}
-                    className="bg-slate-50 dark:bg-slate-800 text-slate-855 dark:text-white text-xs font-black rounded-lg px-2 py-1 outline-none border border-slate-200 dark:border-slate-700 focus:border-amber-400"
+                    className="bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-white text-xs font-black rounded-lg px-2 py-1 outline-none border border-slate-200 dark:border-slate-700 focus:border-amber-400"
                     placeholder="品牌名称"
                   />
                   <button
                     onClick={handleSaveBrandInfo}
                     disabled={saving}
-                    className="p-1 bg-amber-500 text-white rounded-lg hover:bg-amber-655 cursor-pointer active:scale-95 transition-all"
+                    className="p-1 bg-amber-500 text-white rounded-lg hover:bg-amber-600 cursor-pointer active:scale-95 transition-all"
                   >
                     <Check size={12} />
                   </button>
                   <button
                     onClick={() => setEditingName(false)}
-                    className="p-1 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 dark:bg-slate-750 dark:text-slate-350 cursor-pointer"
+                    className="p-1 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 cursor-pointer"
                   >
                     <X size={12} />
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5">
-                  <h1 className="text-sm font-black text-slate-855 dark:text-white truncate max-w-[120px] md:max-w-[200px]">{draftName}</h1>
+                  <h1 className="text-sm font-black text-slate-800 dark:text-white truncate max-w-[120px] md:max-w-[200px]">{draftName}</h1>
                   <button
                     onClick={() => setEditingName(true)}
-                    className="p-0.5 text-slate-400 hover:text-slate-655 transition-colors cursor-pointer flex-shrink-0"
+                    className="p-0.5 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer flex-shrink-0"
                   >
                     <Edit3 className="w-3 h-3" />
                   </button>
@@ -708,15 +708,15 @@ export default function BrandProfileView({
         </div>
 
         {/* Tab Navigation buttons */}
-        <div className="flex rounded-xl bg-slate-50 dark:bg-slate-855 p-0.5 border border-slate-200/50 dark:border-slate-800">
+        <div className="flex rounded-xl bg-slate-50 dark:bg-slate-800 p-0.5 border border-slate-200/50 dark:border-slate-800">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-white dark:bg-slate-900 text-slate-855 dark:text-white shadow-sm'
-                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-300'
+                  ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-sm'
+                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
               }`}
             >
               {tab.label}
@@ -912,7 +912,7 @@ export default function BrandProfileView({
                     </div>
                     <div>
                       <span className="text-[10px] font-bold text-slate-400 block uppercase">社媒粉丝总量</span>
-                      <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                      <span className="text-sm font-extrabold text-slate-800 dark:text-white">
                         {totalFollowers > 0 ? `${totalFollowers.toLocaleString()}+` : '暂无数据'}
                       </span>
                     </div>
@@ -924,7 +924,7 @@ export default function BrandProfileView({
                     </div>
                     <div>
                       <span className="text-[10px] font-bold text-slate-400 block uppercase">谷歌主页评分</span>
-                      <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                      <span className="text-sm font-extrabold text-slate-800 dark:text-white">
                         {googleRating !== null ? `⭐ ${googleRating.toFixed(1)} / 5.0` : '⭐⭐⭐⭐⭐'}
                       </span>
                     </div>
@@ -936,7 +936,7 @@ export default function BrandProfileView({
                     </div>
                     <div>
                       <span className="text-[10px] font-bold text-slate-400 block uppercase">绑定运营门店</span>
-                      <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                      <span className="text-sm font-extrabold text-slate-800 dark:text-white">
                         {draftLocation ? `📍 双门店联营` : `📍 单店主理`}
                       </span>
                     </div>
@@ -948,7 +948,7 @@ export default function BrandProfileView({
                     </div>
                     <div>
                       <span className="text-[10px] font-bold text-slate-400 block uppercase">托管驾驶级别</span>
-                      <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                      <span className="text-sm font-extrabold text-slate-800 dark:text-white">
                         {brand.autoPilot ? '🤖 智能托管 (L4)' : '✍️ 辅助生成 (L1)'}
                       </span>
                     </div>
@@ -968,10 +968,10 @@ export default function BrandProfileView({
                     {/* Brand Story Description Card (Full Width Span) */}
                     {parsedBrandStoryText && (
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3 md:col-span-2">
-                        <h4 className="text-xs font-black text-slate-805 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
                           <BookOpen className="w-4 h-4 text-amber-500" /> 品牌故事 (Brand Story)
                         </h4>
-                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-650 dark:text-slate-350">
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedBrandStoryText}</ReactMarkdown>
                         </div>
                       </div>
@@ -980,10 +980,10 @@ export default function BrandProfileView({
                     {/* Brand Positioning Card */}
                     {parsedBrandPositioning && (
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
-                        <h4 className="text-xs font-black text-slate-805 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
                           <Bookmark className="w-4 h-4 text-amber-500" /> 品牌定位 (Brand Positioning)
                         </h4>
-                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-650 dark:text-slate-350">
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedBrandPositioning}</ReactMarkdown>
                         </div>
                       </div>
@@ -992,10 +992,10 @@ export default function BrandProfileView({
                     {/* Dining Guide Card */}
                     {parsedDiningGuide && (
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
-                        <h4 className="text-xs font-black text-slate-805 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
                           <Compass className="w-4 h-4 text-amber-500" /> 用餐攻略 (Dining Guide)
                         </h4>
-                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-650 dark:text-slate-350">
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedDiningGuide}</ReactMarkdown>
                         </div>
                       </div>
@@ -1004,10 +1004,10 @@ export default function BrandProfileView({
                     {/* Signature Dishes Card */}
                     {parsedSignatureDishes && (
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
-                        <h4 className="text-xs font-black text-slate-805 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
                           <Utensils className="w-4 h-4 text-amber-500" /> 招牌菜 (Signature Dishes)
                         </h4>
-                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-650 dark:text-slate-350">
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedSignatureDishes}</ReactMarkdown>
                         </div>
                       </div>
@@ -1016,10 +1016,10 @@ export default function BrandProfileView({
                     {/* Stores Info Card */}
                     {parsedStoresInfo && (
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
-                        <h4 className="text-xs font-black text-slate-805 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
                           <Store className="w-4 h-4 text-amber-500" /> 门店信息 (Stores Info)
                         </h4>
-                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-650 dark:text-slate-350">
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-600 dark:text-slate-300">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedStoresInfo}</ReactMarkdown>
                         </div>
                       </div>
@@ -1061,7 +1061,7 @@ export default function BrandProfileView({
                   </div>
 
                   {/* Card 2: Target Audience */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-855 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
+                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-800 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
                     style={{ boxShadow: '0 10px 25px -8px rgba(99,102,241,0.15)' }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 via-blue-500 to-indigo-650" />
@@ -1143,7 +1143,7 @@ export default function BrandProfileView({
                   </div>
 
                   {/* Card 5: Local Slangs */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-855 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
+                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-800 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
                     style={{ boxShadow: '0 10px 25px -8px rgba(139,92,246,0.15)' }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-purple-500 via-indigo-500 to-violet-600" />
@@ -1169,7 +1169,7 @@ export default function BrandProfileView({
                   </div>
 
                   {/* Card 6: Geographic Location */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-855 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
+                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-800 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
                     style={{ boxShadow: '0 10px 25px -8px rgba(75,85,99,0.15)' }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-slate-500 via-slate-600 to-slate-700" />
@@ -1366,7 +1366,7 @@ export default function BrandProfileView({
                                 className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm"
                               >
                                 <div className="min-w-0 pr-1.5">
-                                  <span className="text-[11px] font-bold text-slate-805 dark:text-white block truncate">"{term}"</span>
+                                  <span className="text-[11px] font-bold text-slate-800 dark:text-white block truncate">"{term}"</span>
                                   <span className="text-[9px] text-slate-400 block truncate">{meaning}</span>
                                 </div>
                                 <button
@@ -1427,7 +1427,7 @@ export default function BrandProfileView({
               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3 w-full">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm font-black text-slate-855 dark:text-white">🚀 战略诊断与增长计划</h3>
+                    <h3 className="text-sm font-black text-slate-800 dark:text-white">🚀 战略诊断与增长计划</h3>
                     <p className="text-[10px] text-slate-400 mt-0.5">垂直滚动贴合展示。每一个 Slide 垂直排列，使用滚轮或 Page Down 即可顺滑翻页</p>
                   </div>
                   <button
@@ -1519,7 +1519,7 @@ export default function BrandProfileView({
                 <div className="w-full pt-2">
                   <button
                     onClick={() => setShowDetailedReport(!showDetailedReport)}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 text-xs font-black text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-855 active:scale-[0.98] cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 text-xs font-black text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.98] cursor-pointer"
                   >
                     {showDetailedReport ? '📊 收起战略诊断报告原文' : '📄 展开查看战略诊断与执行规划全文'}
                   </button>
@@ -1581,7 +1581,7 @@ export default function BrandProfileView({
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="relative w-full max-w-lg bg-slate-50 dark:bg-slate-955 shadow-2xl flex flex-col h-full z-10 border-l border-slate-200 dark:border-slate-800"
+              className="relative w-full max-w-lg bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col h-full z-10 border-l border-slate-200 dark:border-slate-800"
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <div>
@@ -1590,7 +1590,7 @@ export default function BrandProfileView({
                 </div>
                 <button
                   onClick={() => setShowConfigModal(false)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-655 dark:hover:text-slate-205 transition-colors"
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                 >
                   <X size={18} />
                 </button>
@@ -1600,7 +1600,7 @@ export default function BrandProfileView({
                 {/* Connected Accounts Snapshot */}
                 <div className="bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
                   <div className="flex items-center gap-1.5 pb-2 border-b border-slate-100 dark:border-slate-800">
-                    <span className="text-xs font-bold text-slate-805 dark:text-white">📊 已绑定账号资产快照</span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-white">📊 已绑定账号资产快照</span>
                   </div>
                   {brandSettings?.accounts && (brandSettings.accounts as any[]).length > 0 ? (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
@@ -1674,7 +1674,7 @@ export default function BrandProfileView({
                       <div className="p-3">
                         <button
                           onClick={handleOpenSettings}
-                          className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-655 dark:text-slate-350 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2 rounded-xl transition-all cursor-pointer active:scale-95"
+                          className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/50 dark:border-slate-700/50 py-2 rounded-xl transition-all cursor-pointer active:scale-95"
                         >
                           <Settings className="w-3.5 h-3.5" />
                           配置 {platform.name}
@@ -1699,7 +1699,7 @@ export default function BrandProfileView({
                   <div className="p-3">
                     <button
                       onClick={handleOpenSettings}
-                      className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-655 dark:text-slate-355 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95"
+                      className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/50 dark:border-slate-700/50 py-2.5 rounded-xl transition-all cursor-pointer active:scale-95"
                     >
                       <Settings className="w-3.5 h-3.5" />
                       配置门店详细信息
@@ -1725,11 +1725,11 @@ export default function BrandProfileView({
                     ].map(addon => (
                       <div
                         key={addon.key}
-                        className="p-2.5 bg-slate-50 dark:bg-slate-855 rounded-xl border border-slate-100 dark:border-slate-700 flex items-center justify-between"
+                        className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 flex items-center justify-between"
                       >
                         <div className="flex items-center gap-1.5">
                           <Package className={`w-3.5 h-3.5 ${addon.active ? 'text-amber-500' : 'text-slate-400'}`} />
-                          <span className="text-[10px] font-bold text-slate-700 dark:text-slate-355">{addon.label}</span>
+                          <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300">{addon.label}</span>
                         </div>
                         <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${addon.active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 dark:bg-slate-700'}`}>
                           {addon.active ? '开通' : '未开'}
@@ -1770,16 +1770,16 @@ export default function BrandProfileView({
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="relative w-full max-w-2xl bg-slate-50 dark:bg-slate-955 shadow-2xl flex flex-col h-full z-10 border-l border-slate-200 dark:border-slate-800"
+              className="relative w-full max-w-2xl bg-slate-50 dark:bg-slate-900 shadow-2xl flex flex-col h-full z-10 border-l border-slate-200 dark:border-slate-800"
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <div>
-                  <h3 className="text-sm font-black text-slate-805 dark:text-white">📚 品牌推广核心预读上下文</h3>
+                  <h3 className="text-sm font-black text-slate-800 dark:text-white">📚 品牌推广核心预读上下文</h3>
                   <p className="text-[10px] text-slate-400 mt-0.5">此 Profile Markdown 是供 AI Copywriter 创作时预读的，仅保留有价值的品牌设定与语境</p>
                 </div>
                 <button
                   onClick={() => setShowContextModal(false)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-655 dark:hover:text-slate-200 transition-colors"
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                 >
                   <X size={18} />
                 </button>
@@ -1787,13 +1787,13 @@ export default function BrandProfileView({
 
               <div className="flex-1 overflow-y-auto p-4 flex flex-col space-y-3 min-h-0 bg-white dark:bg-slate-900">
                 <div className="flex items-center justify-between flex-shrink-0">
-                  <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-855 p-0.5">
+                  <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800 p-0.5">
                     <button
                       type="button"
                       onClick={() => setProfileViewMode('edit')}
                       className={`text-[10px] font-bold px-3 py-1 rounded-md transition-all ${
                         profileViewMode === 'edit'
-                          ? 'bg-white dark:bg-slate-905 text-slate-800 dark:text-white shadow-sm'
+                          ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-sm'
                           : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                       }`}
                     >
@@ -1804,7 +1804,7 @@ export default function BrandProfileView({
                       onClick={() => setProfileViewMode('preview')}
                       className={`text-[10px] font-bold px-3 py-1 rounded-md transition-all ${
                         profileViewMode === 'preview'
-                          ? 'bg-white dark:bg-slate-955 text-slate-800 dark:text-white shadow-sm'
+                          ? 'bg-white dark:bg-slate-950 text-slate-800 dark:text-white shadow-sm'
                           : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
                       }`}
                     >
