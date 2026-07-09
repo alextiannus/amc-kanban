@@ -95,7 +95,6 @@ export default function BrandProfileView({
   // Layout presentation states
   const [showStoryEditor, setShowStoryEditor] = useState(false)
   const [showDetailedReport, setShowDetailedReport] = useState(false)
-  const [activeGrowthIndex, setActiveGrowthIndex] = useState(0)
 
   // Local Brand States (fetched on mount/change, used if props are not passed)
   const [localBrandTone, setLocalBrandTone] = useState('')
@@ -312,6 +311,12 @@ export default function BrandProfileView({
   const parsedProductAssumptions = extractSubBlock(growthContext, '### 8.4 核心产品假设')
   const parsedAudienceAssumptions = extractSubBlock(growthContext, '### 8.5 主要客群假设')
 
+  // Parse platform stats safely
+  const accounts = (brandSettings?.accounts as any[]) || []
+  const totalFollowers = accounts.reduce((sum, acc) => sum + (acc.followerCount || 0), 0)
+  const googleAccount = accounts.find(acc => ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(acc.platformId.toLowerCase()))
+  const googleRating = googleAccount?.ratingScore || null
+
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleSyncGrowth = async () => {
@@ -427,32 +432,32 @@ export default function BrandProfileView({
 
   const getGrowthSlideGradient = (index: number) => {
     const gradients = [
-      'from-indigo-500 via-purple-500 to-indigo-600',
-      'from-rose-500 via-red-500 to-rose-600',
-      'from-amber-500 via-orange-500 to-amber-600',
-      'from-emerald-500 via-teal-500 to-emerald-600',
-      'from-teal-500 via-cyan-500 to-teal-600',
-      'from-cyan-500 via-blue-500 to-cyan-600',
-      'from-pink-500 via-rose-500 to-pink-600',
-      'from-purple-500 via-violet-500 to-purple-600',
-      'from-violet-500 via-fuchsia-500 to-violet-600',
-      'from-slate-600 via-slate-700 to-slate-800',
+      'from-indigo-650 via-purple-600 to-indigo-800',
+      'from-rose-600 via-red-500 to-rose-700',
+      'from-amber-600 via-orange-500 to-amber-700',
+      'from-emerald-600 via-teal-500 to-emerald-700',
+      'from-teal-600 via-cyan-500 to-teal-700',
+      'from-cyan-600 via-blue-500 to-cyan-700',
+      'from-pink-600 via-rose-500 to-pink-700',
+      'from-purple-600 via-violet-500 to-purple-700',
+      'from-violet-600 via-fuchsia-500 to-violet-700',
+      'from-slate-700 via-slate-800 to-slate-900',
     ]
     return gradients[index % gradients.length]
   }
 
   const getGrowthSlideGlow = (index: number) => {
     const glows = [
-      'rgba(99,102,241,0.25)',
-      'rgba(239,68,68,0.25)',
-      'rgba(245,158,11,0.25)',
-      'rgba(16,185,129,0.25)',
-      'rgba(20,184,166,0.25)',
-      'rgba(6,182,212,0.25)',
-      'rgba(236,72,153,0.25)',
-      'rgba(139,92,246,0.25)',
-      'rgba(168,85,247,0.25)',
-      'rgba(75,85,99,0.25)',
+      'rgba(99,102,241,0.22)',
+      'rgba(239,68,68,0.22)',
+      'rgba(245,158,11,0.22)',
+      'rgba(16,185,129,0.22)',
+      'rgba(20,184,166,0.22)',
+      'rgba(6,182,212,0.22)',
+      'rgba(236,72,153,0.22)',
+      'rgba(139,92,246,0.22)',
+      'rgba(168,85,247,0.22)',
+      'rgba(75,85,99,0.22)',
     ]
     return glows[index % glows.length]
   }
@@ -474,16 +479,16 @@ export default function BrandProfileView({
     const lines = content.split('\n').map(l => l.trim()).filter(Boolean)
     if (lines.some(l => l.startsWith('-') || l.startsWith('*') || l.match(/^\d+\./))) {
       return (
-        <ul className="list-disc list-inside space-y-2.5 mt-3 text-xs md:text-[13px] text-white/90 font-medium leading-relaxed">
+        <ul className="list-disc list-inside space-y-3.5 mt-3.5 text-xs md:text-sm text-white/95 font-medium leading-relaxed">
           {lines.map((line, idx) => {
             const cleanLine = line.replace(/^[-*\d+.\s]+/, '')
-            return <li key={idx} className="line-clamp-2">{cleanLine}</li>
+            return <li key={idx} className="drop-shadow-sm">{cleanLine}</li>
           })}
         </ul>
       )
     }
     return (
-      <p className="text-xs md:text-[13px] text-white/90 font-medium leading-relaxed line-clamp-6 mt-3">
+      <p className="text-xs md:text-sm text-white/95 font-medium leading-relaxed drop-shadow-sm mt-3.5">
         {content}
       </p>
     )
@@ -510,7 +515,7 @@ export default function BrandProfileView({
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl hover:bg-slate-55 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:text-slate-400 transition-colors cursor-pointer"
+              className="p-1.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-800 dark:text-slate-400 transition-colors cursor-pointer"
               title="返回"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -596,7 +601,7 @@ export default function BrandProfileView({
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-white dark:bg-slate-900 text-slate-850 dark:text-white shadow-sm'
+                  ? 'bg-white dark:bg-slate-900 text-slate-855 dark:text-white shadow-sm'
                   : 'text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-300'
               }`}
             >
@@ -637,71 +642,123 @@ export default function BrandProfileView({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.15 }}
-              className="p-5 space-y-8 pb-16 max-w-5xl mx-auto w-full"
+              className="p-6 space-y-8 pb-16 max-w-5xl mx-auto w-full"
             >
-              {/* ── 1. HERO BANNER (Brand Homepage Card style) ── */}
-              <div className="w-full rounded-3xl overflow-hidden relative border border-slate-200/55 dark:border-slate-850 shadow-xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-600 p-6 md:p-8 text-white">
-                <div className="absolute inset-0 opacity-[0.05]"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                />
-                <div className="absolute -top-12 -right-12 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+              {/* ── 1. PREMIUM HERO BANNER (Official Landing Style) ── */}
+              <div className="w-full rounded-3xl overflow-hidden relative border border-slate-200/40 dark:border-slate-800 shadow-xl bg-slate-900 text-white min-h-[280px] p-8 md:p-10 flex flex-col justify-between">
+                {/* Visual Background spotlight & Gridlines to look like premium landing page */}
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+                <div className="absolute top-0 right-0 w-[400px] h-[300px] bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-[200px] h-[200px] bg-gradient-to-tr from-rose-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
 
-                <div className="relative z-10 flex flex-col md:flex-row gap-6 items-start justify-between h-full">
-                  {/* Brand Profile Header */}
-                  <div className="flex flex-col gap-3.5 max-w-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 overflow-hidden flex items-center justify-center shadow-lg">
-                        {logoPreview || brand.logoUrl ? (
-                          <img
-                            src={logoPreview || brand.logoUrl!}
-                            alt={draftName}
-                            className="w-full h-full object-contain"
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.svg' }}
-                          />
-                        ) : (
-                          <Utensils className="w-8 h-8 text-white" />
-                        )}
-                      </div>
-                      <div>
-                        <h2 className="text-xl font-black tracking-wide drop-shadow-md">{draftName}</h2>
-                        {draftLocation && (
-                          <span className="flex items-center gap-0.5 text-white/80 text-[10px] font-extrabold mt-1">
-                            <MapPin className="w-3 h-3 text-white/90" />{draftLocation}
-                          </span>
-                        )}
-                      </div>
+                {/* Hero Metadata Info */}
+                <div className="relative z-10 flex flex-col gap-1 max-w-lg mb-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 overflow-hidden flex items-center justify-center shadow-lg flex-shrink-0">
+                      {logoPreview || brand.logoUrl ? (
+                        <img
+                          src={logoPreview || brand.logoUrl!}
+                          alt={draftName}
+                          className="w-full h-full object-contain"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.svg' }}
+                        />
+                      ) : (
+                        <Utensils className="w-6 h-6 text-white/90" />
+                      )}
                     </div>
-
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      <span className="bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider text-white">
-                        {activeSubscriptionPlan}
-                      </span>
-                      {brand.autoPilot && (
-                        <span className="bg-amber-400/90 text-slate-900 text-[9px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-0.5">
-                          <Zap className="w-2.5 h-2.5 fill-slate-900" />托管中
+                    <div>
+                      <h2 className="text-lg font-black tracking-wide flex items-center gap-1.5 drop-shadow-md">
+                        {draftName}
+                        <span className="text-[10px] text-white/60 font-medium">官方品牌主页</span>
+                      </h2>
+                      {draftLocation && (
+                        <span className="flex items-center gap-0.5 text-white/80 text-[10px] font-bold">
+                          <MapPin className="w-3 h-3 text-amber-400" />{draftLocation}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Brand Story Prose */}
-                  <div className="flex-1 md:max-w-xl bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/10 shadow-inner">
-                    <div className="flex items-center gap-1.5 text-white/90 text-[10px] font-black uppercase tracking-widest border-b border-white/15 pb-2 mb-2">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      品牌使命与故事介绍
-                    </div>
-                    <p className="text-xs text-white/90 font-medium leading-relaxed min-h-[70px]">
-                      {draftDesc || '暂无品牌故事介绍。请点击下方“展开编辑品牌故事设定”补充故事和使命，供 AI 自动生成的文案参考。'}
+                  <p className="text-[20px] md:text-[24px] font-black leading-tight tracking-wide drop-shadow-md bg-gradient-to-r from-amber-300 via-orange-200 to-white bg-clip-text text-transparent mt-2">
+                    “传承经典美味，主理本地生活印记”
+                  </p>
+                </div>
+
+                {/* Main Story Description block */}
+                <div className="relative z-10 w-full bg-white/5 backdrop-blur-md rounded-2xl p-5 border border-white/10 shadow-inner flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="flex-1">
+                    <span className="text-[9px] font-black text-amber-450 uppercase tracking-widest block mb-1">Brand Vision & Story</span>
+                    <p className="text-xs md:text-sm text-white/90 font-medium leading-relaxed max-w-3xl">
+                      {draftDesc || '暂无品牌故事介绍。请点击下方展开编辑，补充品牌使命与故事，供 AI 写文案使用。'}
                     </p>
+                  </div>
+                  {showStoryEditor ? null : (
+                    <button
+                      onClick={() => setShowStoryEditor(true)}
+                      className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-black text-white flex-shrink-0 transition-all cursor-pointer active:scale-95"
+                    >
+                      编辑设定
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* ── 2. BRAND STATS SHOWCASE BAR (SaaS Homepage style) ── */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center flex-shrink-0">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block uppercase">社媒粉丝总量</span>
+                    <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                      {totalFollowers > 0 ? `${totalFollowers.toLocaleString()}+` : '暂无数据'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-955/40 text-amber-500 flex items-center justify-center flex-shrink-0">
+                    <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block uppercase">谷歌主页评分</span>
+                    <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                      {googleRating !== null ? `⭐ ${googleRating.toFixed(1)} / 5.0` : '⭐⭐⭐⭐⭐'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 flex items-center justify-center flex-shrink-0">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block uppercase">绑定运营门店</span>
+                    <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                      {draftLocation ? `📍 双门店联营` : `📍 单店主理`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-955/40 text-rose-500 flex items-center justify-center flex-shrink-0">
+                    <Zap className="w-5 h-5 text-rose-500" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 block uppercase">托管驾驶级别</span>
+                    <span className="text-sm font-extrabold text-slate-805 dark:text-white">
+                      {brand.autoPilot ? '🤖 智能托管 (L4)' : '✍️ 辅助生成 (L1)'}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* ── 2. SUBGRID A: BRAND IDENTITY & TARGETS (品牌身份与客群) ── */}
+              {/* ── 3. SUBGRID A: BRAND IDENTITY & TARGETS ── */}
               <div className="space-y-4">
                 <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2 pl-1">
                   <span className="w-1.5 h-3.5 bg-amber-500 rounded-full" />
-                  品牌声调与目标客群设定
+                  品牌声调与客群画像 (Core Positioning)
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
@@ -729,8 +786,8 @@ export default function BrandProfileView({
                     </div>
                   </div>
 
-                  {/* Card 2: Target Audience Assumptions */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-850 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
+                  {/* Card 2: Target Audience */}
+                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-855 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
                     style={{ boxShadow: '0 10px 25px -8px rgba(99,102,241,0.15)' }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 via-blue-500 to-indigo-650" />
@@ -753,7 +810,7 @@ export default function BrandProfileView({
                     </div>
                   </div>
 
-                  {/* Card 3: Owner Targets */}
+                  {/* Card 3: Founder Vision */}
                   <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-850 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
                     style={{ boxShadow: '0 10px 25px -8px rgba(245,158,11,0.15)' }}
                   >
@@ -779,15 +836,15 @@ export default function BrandProfileView({
                 </div>
               </div>
 
-              {/* ── 3. SUBGRID B: COMPETITIVE EDGE & VOCABULARY (竞争优势与方言) ── */}
-              <div className="space-y-4 pt-2">
+              {/* ── 4. SUBGRID B: COMPETITIVE EDGE & VOCABULARY ── */}
+              <div className="space-y-4">
                 <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2 pl-1">
                   <span className="w-1.5 h-3.5 bg-indigo-500 rounded-full" />
-                  核心竞争力与本地化词库
+                  竞争优势与特征库 (Brand Identity)
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                  {/* Card 4: Product Assumptions / Core Edges */}
+                  {/* Card 4: Product Advantages */}
                   <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-850 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
                     style={{ boxShadow: '0 10px 25px -8px rgba(244,63,94,0.15)' }}
                   >
@@ -801,7 +858,7 @@ export default function BrandProfileView({
                       <div>
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-2xl leading-none">💎</span>
-                          <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider text-white">优势与核心卖点</span>
+                          <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider text-white">优势核心卖点</span>
                         </div>
                         <h4 className="text-xs font-black tracking-wide border-b border-white/15 pb-1">品牌特色核心产品假设</h4>
                       </div>
@@ -811,8 +868,8 @@ export default function BrandProfileView({
                     </div>
                   </div>
 
-                  {/* Card 5: Local Slang Dict */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-850 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
+                  {/* Card 5: Local Slangs */}
+                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-855 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
                     style={{ boxShadow: '0 10px 25px -8px rgba(139,92,246,0.15)' }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-purple-500 via-indigo-500 to-violet-600" />
@@ -831,7 +888,7 @@ export default function BrandProfileView({
                       </div>
                       <p className="text-[11px] text-white/90 font-medium leading-relaxed mt-2 line-clamp-5">
                         {Object.keys(activeSlangDict).length > 0 
-                          ? `常用俚语词条：${Object.keys(activeSlangDict).slice(0, 10).join(' · ')}。点击下方“展开编辑品牌故事设定”表单添加更多俚语。`
+                          ? `常用俚语词条：${Object.keys(activeSlangDict).slice(0, 10).join(' · ')}。点击下方“展开编辑”表单可以继续新增专属短语。`
                           : '尚未配置俚语词条。添加俚语可帮助 AI Copywriter 自动生成极富本地烟火气的宣传内容。'}
                       </p>
                     </div>
@@ -841,7 +898,7 @@ export default function BrandProfileView({
                   <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-855 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
                     style={{ boxShadow: '0 10px 25px -8px rgba(75,85,99,0.15)' }}
                   >
-                    <div className="absolute inset-0 bg-gradient-to-br from-slate-500 via-slate-655 to-slate-700" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-slate-500 via-slate-600 to-slate-700" />
                     <div className="absolute inset-0 opacity-[0.05]"
                       style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
                     />
@@ -865,13 +922,69 @@ export default function BrandProfileView({
                 </div>
               </div>
 
+              {/* ── 5. OFFICIAL SOCIAL MEDIA CHANNELS (Official Website style) ── */}
+              {accounts.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                    <span className="w-1.5 h-3.5 bg-rose-500 rounded-full" />
+                    官方自媒体运营阵地 (Official Channels)
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+                    {accounts.map((acc) => {
+                      const platformColors: Record<string, string> = {
+                        instagram: 'from-pink-500 to-rose-500',
+                        facebook: 'from-blue-600 to-indigo-700',
+                        tiktok: 'from-slate-800 to-black dark:from-slate-900 dark:to-black',
+                        google: 'from-red-500 to-amber-500',
+                        google_maps: 'from-emerald-500 to-teal-600',
+                        gbp: 'from-red-500 to-amber-500',
+                        gmb: 'from-red-500 to-amber-500',
+                      }
+                      const color = platformColors[acc.platformId.toLowerCase()] || 'from-slate-600 to-slate-805'
+
+                      return (
+                        <a
+                          key={acc.id}
+                          href={acc.profileUrl || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-4 rounded-2xl shadow-sm flex items-center justify-between hover:border-slate-350 dark:hover:border-slate-700 transition-all hover:scale-[1.01] group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${color} text-white flex items-center justify-center font-black text-[9px] uppercase tracking-wider`}>
+                              {acc.platformId.slice(0, 3)}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-xs font-extrabold text-slate-800 dark:text-white block truncate group-hover:text-amber-500 transition-colors">
+                                {acc.displayName || acc.handle}
+                              </span>
+                              <span className="text-[10px] text-slate-400 block truncate">@{acc.handle}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {acc.followerCount !== null && (
+                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                {acc.followerCount.toLocaleString()} 粉丝
+                              </span>
+                            )}
+                            <ExternalLink className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                          </div>
+                        </a>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Toggle Editor Panel Trigger */}
               <div className="pt-4 w-full">
                 <button
                   onClick={() => setShowStoryEditor(!showStoryEditor)}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 text-xs font-black text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-850 active:scale-[0.98] cursor-pointer"
                 >
-                  {showStoryEditor ? '✨ 收起品牌主页编辑表单' : '✏️ 展开编辑品牌主页设定 (名称、简介、俚语及声调)'}
+                  {showStoryEditor ? '✨ 收起品牌故事配置表单' : '✏️ 展开编辑品牌故事设定 (名称、简介、俚语及声调)'}
                 </button>
               </div>
 
@@ -1026,7 +1139,7 @@ export default function BrandProfileView({
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-black text-slate-855 dark:text-white">🚀 战略诊断与增长计划</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">从 AMC Growth 智能系统同步并以全屏宽度的 Keynote 播放器展示执行规划</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">垂直滚动贴合展示。每一个 Slide 垂直排列，使用滚轮或 Page Down 即可顺滑翻页</p>
                   </div>
                   <button
                     onClick={handleSyncGrowth}
@@ -1039,99 +1152,64 @@ export default function BrandProfileView({
                 </div>
               </div>
 
-              {/* ── FULL-PAGE WIDTH KEYNOTE SLIDESHO PLAYER (Growth Plan) ── */}
+              {/* ── VERTICAL SCROLL-SNAP KEYNOTE PLAYER ── */}
               {presentationSlides.length > 0 ? (
                 <div className="space-y-4 w-full">
-                  <div className="flex items-center justify-between px-1">
-                    <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                  <div className="flex items-center justify-between px-1 text-[10px] text-slate-450 dark:text-slate-500 font-extrabold uppercase tracking-wider">
+                    <span className="flex items-center gap-1.5">
                       <Sparkles size={12} className="text-indigo-500 animate-pulse" />
-                      AMC Growth 诊断规划 (全屏宽演示播放)
-                    </h4>
-                    <span className="text-[10px] font-extrabold text-slate-550 dark:text-slate-455">
-                      Slide {activeGrowthIndex + 1} of {presentationSlides.length}
+                      垂直滚动幻灯片大屏 (每一个 Page Down 为一页)
                     </span>
+                    <span>共 {presentationSlides.length} 页</span>
                   </div>
 
-                  {/* Massive Full Page Width Card */}
-                  <div
-                    className="w-full min-h-[380px] md:min-h-[420px] rounded-3xl overflow-hidden relative select-none border border-slate-200/55 dark:border-slate-850 shadow-2xl flex flex-col justify-between transition-all duration-300"
-                    style={{
-                      boxShadow: `0 24px 60px -12px ${getGrowthSlideGlow(activeGrowthIndex)}`
-                    }}
-                  >
-                    {/* Backdrop Gradient Container */}
-                    <div className={`absolute inset-0 bg-gradient-to-br ${getGrowthSlideGradient(activeGrowthIndex)}`} />
-                    <div className="absolute inset-0 opacity-[0.05]"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                    />
-                    <div className="absolute -top-12 -right-12 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
-
-                    {/* Left/Right Slide Switch Arrows inside the card */}
-                    <div className="absolute inset-y-0 left-3 flex items-center z-20">
-                      <button
-                        onClick={() => setActiveGrowthIndex(prev => Math.max(0, prev - 1))}
-                        disabled={activeGrowthIndex === 0}
-                        className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center disabled:opacity-10 transition-all cursor-pointer hover:scale-105 active:scale-95"
-                      >
-                        <ChevronLeft size={20} className="text-white" />
-                      </button>
-                    </div>
-
-                    <div className="absolute inset-y-0 right-3 flex items-center z-20">
-                      <button
-                        onClick={() => setActiveGrowthIndex(prev => Math.min(presentationSlides.length - 1, prev + 1))}
-                        disabled={activeGrowthIndex === presentationSlides.length - 1}
-                        className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center disabled:opacity-10 transition-all cursor-pointer hover:scale-105 active:scale-95"
-                      >
-                        <ChevronRight size={20} className="text-white" />
-                      </button>
-                    </div>
-
-                    {/* Foreground Text Content */}
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={activeGrowthIndex}
-                        initial={{ opacity: 0, x: 45 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -45 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute inset-0 p-8 md:p-12 flex flex-col justify-between text-white z-10"
-                      >
-                        {/* Slide Title section */}
-                        <div>
-                          <div className="flex items-center justify-between mb-5">
-                            <span className="text-5xl leading-none">
-                              {getGrowthSlideEmoji(presentationSlides[activeGrowthIndex].title)}
-                            </span>
-                            <span className="bg-white/20 backdrop-blur-md px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-white">
-                              Slide {activeGrowthIndex + 1} / {presentationSlides.length}
-                            </span>
-                          </div>
-                          <h3 className="text-xl md:text-2xl font-black tracking-wide leading-snug drop-shadow-md border-b border-white/15 pb-3">
-                            {presentationSlides[activeGrowthIndex].title}
-                          </h3>
-                        </div>
-
-                        {/* Content text */}
-                        <div className="flex-1 overflow-y-auto min-h-0 pr-1 mt-4 scrollbar-thin scrollbar-thumb-white/20 max-w-3xl">
-                          {formatSlideContent(presentationSlides[activeGrowthIndex].content)}
-                        </div>
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-
-                  {/* Dot Progress Indicators underneath the slide player */}
-                  <div className="flex justify-center gap-2 py-1">
-                    {presentationSlides.map((_, idx) => (
-                      <button
+                  {/* Scroll-Snap Container (Hidden scrollbars, mandatory snap alignments) */}
+                  <div className="w-full h-[450px] md:h-[520px] overflow-y-auto scroll-smooth snap-y snap-mandatory scrollbar-none rounded-3xl border border-slate-200/50 dark:border-slate-800 shadow-xl bg-slate-900">
+                    {presentationSlides.map((slide, idx) => (
+                      <div
                         key={idx}
-                        onClick={() => setActiveGrowthIndex(idx)}
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          activeGrowthIndex === idx
-                            ? 'w-6 bg-slate-805 dark:bg-white'
-                            : 'w-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-655'
-                        }`}
-                      />
+                        className="w-full h-full flex-shrink-0 snap-start snap-always relative overflow-hidden flex flex-col justify-between transition-all duration-300"
+                      >
+                        {/* Backdrop Gradient for each card */}
+                        <div className={`absolute inset-0 bg-gradient-to-br ${getGrowthSlideGradient(idx)}`} />
+                        <div className="absolute inset-0 opacity-[0.05]"
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
+                        />
+                        <div className="absolute -top-12 -right-12 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+
+                        {/* Slide Content layout */}
+                        <div className="relative z-10 p-8 md:p-12 flex flex-col justify-between h-full text-white w-full">
+                          {/* Slide Title */}
+                          <div>
+                            <div className="flex items-center justify-between mb-4">
+                              <span className="text-4xl md:text-5xl leading-none">
+                                {getGrowthSlideEmoji(slide.title)}
+                              </span>
+                              <span className="bg-white/20 backdrop-blur-md px-3.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider text-white">
+                                Page {idx + 1} / {presentationSlides.length}
+                              </span>
+                            </div>
+                            <h3 className="text-lg md:text-xl font-black tracking-wide leading-snug drop-shadow-md border-b border-white/15 pb-2.5 max-w-4xl">
+                              {slide.title}
+                            </h3>
+                          </div>
+
+                          {/* Body markdown */}
+                          <div className="flex-1 overflow-y-auto min-h-0 pr-1 mt-4 scrollbar-thin scrollbar-thumb-white/20 max-w-4xl">
+                            {formatSlideContent(slide.content)}
+                          </div>
+
+                          {/* Footer help indicator inside each page down slide */}
+                          <div className="mt-3 flex items-center justify-between text-[9px] text-white/50 font-bold border-t border-white/10 pt-2 flex-shrink-0">
+                            <span>AMC GROWTH 智能诊断分析报告</span>
+                            {idx < presentationSlides.length - 1 ? (
+                              <span className="flex items-center gap-1">往下滑动切换至下一页 ↓</span>
+                            ) : (
+                              <span>演示完毕 🏁</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1139,7 +1217,7 @@ export default function BrandProfileView({
                 <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 shadow-sm text-center w-full">
                   <div className="max-w-xs mx-auto space-y-2">
                     <FileText className="w-8 h-8 text-slate-300 mx-auto" />
-                    <p className="text-xs font-bold text-slate-505">暂无分析数据与幻灯片</p>
+                    <p className="text-xs font-bold text-slate-555">暂无分析数据与幻灯片</p>
                     <p className="text-[10px] text-slate-400">
                       点击“一键同步最新分析”按钮，从 AMC Growth 智能系统拉取该品牌的专属战略诊断、行动大纲和报告大盘。
                     </p>
@@ -1307,7 +1385,7 @@ export default function BrandProfileView({
                       <div className="p-3">
                         <button
                           onClick={handleOpenSettings}
-                          className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-655 dark:text-slate-355 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2 rounded-xl transition-all cursor-pointer active:scale-95"
+                          className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-655 dark:text-slate-350 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200/50 dark:border-slate-700/50 py-2 rounded-xl transition-all cursor-pointer active:scale-95"
                         >
                           <Settings className="w-3.5 h-3.5" />
                           配置 {platform.name}
@@ -1358,7 +1436,7 @@ export default function BrandProfileView({
                     ].map(addon => (
                       <div
                         key={addon.key}
-                        className="p-2.5 bg-slate-50 dark:bg-slate-850 rounded-xl border border-slate-100 dark:border-slate-700 flex items-center justify-between"
+                        className="p-2.5 bg-slate-50 dark:bg-slate-855 rounded-xl border border-slate-100 dark:border-slate-700 flex items-center justify-between"
                       >
                         <div className="flex items-center gap-1.5">
                           <Package className={`w-3.5 h-3.5 ${addon.active ? 'text-amber-500' : 'text-slate-400'}`} />
@@ -1420,7 +1498,7 @@ export default function BrandProfileView({
 
               <div className="flex-1 overflow-y-auto p-4 flex flex-col space-y-3 min-h-0 bg-white dark:bg-slate-900">
                 <div className="flex items-center justify-between flex-shrink-0">
-                  <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-850 p-0.5">
+                  <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-855 p-0.5">
                     <button
                       type="button"
                       onClick={() => setProfileViewMode('edit')}
