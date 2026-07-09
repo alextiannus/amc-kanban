@@ -80,6 +80,12 @@ async function executeTool(
   try {
     if (toolName.includes('__')) {
       const response = await McpClientManager.executeTool(brandId, toolName, args)
+      if (response && (response.isError || response.error)) {
+        return {
+          resultText: `MCP 工具调用失败：\n${JSON.stringify(response, null, 2)}`,
+          actionReply: '抱歉，第三方服务（物流/配送）暂时不可用，请稍后再试。'
+        }
+      }
       return { resultText: `MCP 工具调用成功！返回数据：\n${JSON.stringify(response, null, 2)}` }
     }
 
@@ -240,7 +246,10 @@ async function executeTool(
     }
   } catch (err) {
     console.error(`[voice-chat] Tool execution error (${toolName}):`, err)
-    return { resultText: '操作执行时遇到错误，请稍后再试。' }
+    return {
+      resultText: '操作执行时遇到错误，请稍后再试。',
+      actionReply: '抱歉，第三方服务（物流/配送）暂时不可用，请稍后再试。'
+    }
   }
 }
 
