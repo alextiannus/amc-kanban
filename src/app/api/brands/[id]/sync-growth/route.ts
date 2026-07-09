@@ -63,11 +63,12 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: `No matching merchant found in AMC-growth for brand: "${brand.name}"` }, { status: 404 })
     }
 
-    // 3. Fetch growth plan, profile, and presentation for this merchant
-    const [profileRes, planRes, presentationRes] = await Promise.all([
+    // 3. Fetch growth plan, profile, presentation, and brand story for this merchant
+    const [profileRes, planRes, presentationRes, brandStoryRes] = await Promise.all([
       fetch(`${growthBaseUrl}/v1/merchants/${merchant.merchant_id}/profile`, { headers }),
       fetch(`${growthBaseUrl}/v1/merchants/${merchant.merchant_id}/growth-plan`, { headers }),
-      fetch(`${growthBaseUrl}/v1/merchants/${merchant.merchant_id}/presentation`, { headers })
+      fetch(`${growthBaseUrl}/v1/merchants/${merchant.merchant_id}/presentation`, { headers }),
+      fetch(`${growthBaseUrl}/v1/merchants/${merchant.merchant_id}/brand-story`, { headers })
     ])
 
     if (!planRes.ok) {
@@ -77,6 +78,7 @@ export async function POST(request: Request, { params }: Params) {
     const growthProfile = profileRes.ok ? await profileRes.json().catch(() => null) : null
     const plan = await planRes.json()
     const presentation = presentationRes.ok ? await presentationRes.json().catch(() => null) : null
+    const brandStory = brandStoryRes.ok ? await brandStoryRes.json().catch(() => null) : null
 
     // 4. Format synced blocks
     const dateStr = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Singapore' })
@@ -134,6 +136,28 @@ ${growthProfile.service_scope || '暂无服务范围说明'}
 <!-- AMC:BRAND_PROFILE:GROWTH_CONTEXT:END -->`
     }
 
+    let brandStoryBlock = ''
+    if (brandStory) {
+      brandStoryBlock = `<!-- AMC:BRAND_PROFILE:BRAND_STORY:START -->
+## 12. 品牌故事讲述 (同步于 ${dateStr})
+
+### 12.1 品牌故事
+${brandStory.story || '暂无品牌故事'}
+
+### 12.2 门店信息
+${brandStory.stores_info || '暂无门店信息'}
+
+### 12.3 品牌定位
+${brandStory.positioning || '暂无品牌定位'}
+
+### 12.4 招牌菜
+${brandStory.signature_dishes || '暂无招牌菜'}
+
+### 12.5 用餐攻略
+${brandStory.dining_guide || '暂无用餐攻略'}
+<!-- AMC:BRAND_PROFILE:BRAND_STORY:END -->`
+    }
+
     let presentationBlock = ''
     if (presentation && presentation.slides) {
       presentationBlock = `<!-- AMC:BRAND_PROFILE:PRESENTATION_SLIDES:START -->
@@ -148,6 +172,26 @@ ${JSON.stringify(presentation.slides, null, 2)}
     }
 
     let updatedMarkdown = profile.markdown
+
+    // Merge BRAND_STORY block
+    if (brandStoryBlock) {
+      const storyStartTag = '<!-- AMC:BRAND_PROFILE:BRAND_STORY:START -->'
+      const storyEndTag = '<!-- AMC:BRAND_PROFILE:BRAND_STORY:END -->'
+      const storyStartIdx = updatedMarkdown.indexOf(storyStartTag)
+      const storyEndIdx = updatedMarkdown.indexOf(storyEndTag)
+
+      if (storyStartIdx !== -1 && storyEndIdx !== -1 && storyEndIdx > storyStartIdx) {
+        updatedMarkdown = `${updatedMarkdown.slice(0, storyStartIdx)}${brandStoryBlock}${updatedMarkdown.slice(storyEndIdx + storyEndTag.length)}`
+      } else {
+        const manualEndTag = '<!-- AMC:BRAND_PROFILE:MANUAL:END -->'
+        const manualEndIdx = updatedMarkdown.indexOf(manualEndTag)
+        if (manualEndIdx !== -1) {
+          updatedMarkdown = `${updatedMarkdown.slice(0, manualEndIdx)}\n${brandStoryBlock}\n${updatedMarkdown.slice(manualEndIdx)}`
+        } else {
+          updatedMarkdown = `${updatedMarkdown.trim()}\n\n${brandStoryBlock}\n`
+        }
+      }
+    }
 
     // Synchronously execute fast simple merge to avoid browser timeout
     // 1. Merge GROWTH_CONTEXT block

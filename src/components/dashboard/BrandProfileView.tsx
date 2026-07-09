@@ -6,7 +6,8 @@ import {
   Settings, BookOpen, ExternalLink, Package, Loader2,
   RefreshCw, FileText, CheckCircle2, Store, Utensils,
   Camera, Edit3, Check, Plus, Trash2, ArrowRight,
-  Star, Users, ChevronRight, Goal, Target, HelpCircle, Trophy
+  Star, Users, ChevronRight, Goal, Target, HelpCircle, Trophy,
+  Bookmark, Compass
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
@@ -313,6 +314,18 @@ export default function BrandProfileView({
   const parsedProductAssumptions = extractSubBlock(growthContext, '### 8.4 核心产品假设')
   const parsedAudienceAssumptions = extractSubBlock(growthContext, '### 8.5 主要客群假设')
 
+  // Parse brand story sections from synced AMC-Growth markdown
+  const brandStoryRaw = extractBlock(
+    profileMarkdown,
+    '<!-- AMC:BRAND_PROFILE:BRAND_STORY:START -->',
+    '<!-- AMC:BRAND_PROFILE:BRAND_STORY:END -->'
+  )
+  const parsedBrandStoryText = extractSubBlock(brandStoryRaw, '### 12.1 品牌故事')
+  const parsedStoresInfo = extractSubBlock(brandStoryRaw, '### 12.2 门店信息')
+  const parsedBrandPositioning = extractSubBlock(brandStoryRaw, '### 12.3 品牌定位')
+  const parsedSignatureDishes = extractSubBlock(brandStoryRaw, '### 12.4 招牌菜')
+  const parsedDiningGuide = extractSubBlock(brandStoryRaw, '### 12.5 用餐攻略')
+
   // Parse platform stats safely
   const accounts = (brandSettings?.accounts as any[]) || []
   const totalFollowers = accounts.reduce((sum, acc) => sum + (acc.followerCount || 0), 0)
@@ -556,7 +569,7 @@ export default function BrandProfileView({
 
   const tabs = [
     { id: 'story', label: '品牌故事', icon: null },
-    { id: 'growth', label: '分析与增长计划', icon: null },
+    { id: 'context', label: '品牌上下文', icon: null },
   ] as const
 
   const activeSubscriptionHref = subscriptionHref || `/profile/principal/brands/${brandId}/billing`
@@ -749,7 +762,7 @@ export default function BrandProfileView({
                   <div className="flex-1">
                     <span className="text-[9px] font-black text-amber-450 uppercase tracking-widest block mb-1">Brand Vision & Story</span>
                     <p className="text-xs md:text-sm text-white/90 font-medium leading-relaxed max-w-3xl">
-                      {cleanBrandStoryText(draftDesc) || '暂无品牌故事介绍。请点击下方展开编辑，补充品牌使命与故事，供 AI 写文案使用。'}
+                      {parsedBrandStoryText || cleanBrandStoryText(draftDesc) || '暂无品牌故事介绍。请点击下方展开编辑，补充品牌使命与故事，供 AI 写文案使用。'}
                     </p>
                   </div>
                   {showStoryEditor ? null : (
@@ -812,6 +825,78 @@ export default function BrandProfileView({
                         {brand.autoPilot ? '🤖 智能托管 (L4)' : '✍️ 辅助生成 (L1)'}
                       </span>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Synced Brand Story Details ── */}
+              {(parsedBrandStoryText || parsedBrandPositioning || parsedSignatureDishes || parsedStoresInfo || parsedDiningGuide) && (
+                <div className="space-y-4">
+                  <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2 pl-1">
+                    <span className="w-1.5 h-3.5 bg-amber-500 rounded-full" />
+                    品牌故事讲述 (Brand Story & Content)
+                  </h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+                    {/* Brand Story Description Card (Full Width Span) */}
+                    {parsedBrandStoryText && (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3 md:col-span-2">
+                        <h4 className="text-xs font-black text-slate-805 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                          <BookOpen className="w-4 h-4 text-amber-500" /> 品牌故事 (Brand Story)
+                        </h4>
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-650 dark:text-slate-350">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedBrandStoryText}</ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Brand Positioning Card */}
+                    {parsedBrandPositioning && (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
+                        <h4 className="text-xs font-black text-slate-805 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                          <Bookmark className="w-4 h-4 text-amber-500" /> 品牌定位 (Brand Positioning)
+                        </h4>
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-650 dark:text-slate-350">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedBrandPositioning}</ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Dining Guide Card */}
+                    {parsedDiningGuide && (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
+                        <h4 className="text-xs font-black text-slate-805 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                          <Compass className="w-4 h-4 text-amber-500" /> 用餐攻略 (Dining Guide)
+                        </h4>
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-650 dark:text-slate-350">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedDiningGuide}</ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Signature Dishes Card */}
+                    {parsedSignatureDishes && (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
+                        <h4 className="text-xs font-black text-slate-805 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                          <Utensils className="w-4 h-4 text-amber-500" /> 招牌菜 (Signature Dishes)
+                        </h4>
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-650 dark:text-slate-350">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedSignatureDishes}</ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Stores Info Card */}
+                    {parsedStoresInfo && (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
+                        <h4 className="text-xs font-black text-slate-805 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                          <Store className="w-4 h-4 text-amber-500" /> 门店信息 (Stores Info)
+                        </h4>
+                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs md:text-sm leading-relaxed text-slate-650 dark:text-slate-350">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedStoresInfo}</ReactMarkdown>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1201,9 +1286,9 @@ export default function BrandProfileView({
             </motion.div>
           )}
 
-          {activeTab === 'growth' && (
+          {activeTab === 'context' && (
             <motion.div
-              key="growth"
+              key="context"
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
@@ -1223,7 +1308,7 @@ export default function BrandProfileView({
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white disabled:opacity-60 active:scale-95 transition-all cursor-pointer shadow-md"
                   >
                     {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                    {syncStatus || '一键同步最新分析'}
+                    {syncStatus || '一键同步品牌故事与上下文'}
                   </button>
                 </div>
               </div>
