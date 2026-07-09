@@ -24,6 +24,8 @@ interface Brand {
   location?: string | null
   autoPilot?: boolean
   logoUrl?: string | null
+  phone?: string | null
+  website?: string | null
 }
 
 interface Props {
@@ -572,6 +574,45 @@ export default function BrandProfileView({
     { id: 'context', label: '品牌上下文', icon: null },
   ] as const
 
+  const parseBulletList = (text: string): string[] => {
+    if (!text) return []
+    return text
+      .split(/\n+/)
+      .map(line => line.trim())
+      .filter(line => line.startsWith('-') || line.startsWith('*'))
+      .map(line => line.replace(/^[-*]\s+/, '').trim())
+  }
+
+  const signatureDishesList = parseBulletList(parsedSignatureDishes)
+  const dishes = signatureDishesList.map(item => {
+    const cleanItem = item.replace(/\*\*/g, '')
+    const parts = cleanItem.split(/[：:]/)
+    return {
+      title: parts[0] || '',
+      desc: parts.slice(1).join('：') || ''
+    }
+  }).filter(d => d.title)
+
+  const storesList = parseBulletList(parsedStoresInfo)
+  const stores = storesList.map(item => {
+    const cleanItem = item.replace(/\*\*/g, '')
+    const parts = cleanItem.split(/[：:]/)
+    return {
+      name: parts[0] || '',
+      details: parts.slice(1).join('：') || ''
+    }
+  }).filter(s => s.name)
+
+  const diningGuideList = parseBulletList(parsedDiningGuide)
+  const guides = diningGuideList.map(item => {
+    const cleanItem = item.replace(/\*\*/g, '')
+    const parts = cleanItem.split(/[：:]/)
+    return {
+      title: parts[0] || '',
+      content: parts.slice(1).join('：') || ''
+    }
+  }).filter(g => g.title)
+
   const activeSubscriptionHref = subscriptionHref || `/profile/principal/brands/${brandId}/billing`
 
   return (
@@ -717,64 +758,150 @@ export default function BrandProfileView({
               transition={{ duration: 0.15 }}
               className="p-6 space-y-8 pb-16 max-w-5xl mx-auto w-full"
             >
-              {/* ── 1. PREMIUM HERO BANNER (Official Landing Style) ── */}
-              <div className="w-full rounded-3xl overflow-hidden relative border border-slate-200/40 dark:border-slate-800 shadow-xl bg-slate-900 text-white min-h-[280px] p-8 md:p-10 flex flex-col justify-between">
-                {/* Visual Background spotlight & Gridlines to look like premium landing page */}
-                <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-                <div className="absolute top-0 right-0 w-[400px] h-[300px] bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute bottom-0 left-0 w-[200px] h-[200px] bg-gradient-to-tr from-rose-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
-
-                {/* Hero Metadata Info */}
-                <div className="relative z-10 flex flex-col gap-1 max-w-lg mb-6">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-12 h-12 rounded-xl bg-white/10 border border-white/20 overflow-hidden flex items-center justify-center shadow-lg flex-shrink-0">
-                      {logoPreview || brand.logoUrl ? (
-                        <img
-                          src={logoPreview || brand.logoUrl!}
-                          alt={draftName}
-                          className="w-full h-full object-contain"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.svg' }}
-                        />
-                      ) : (
-                        <Utensils className="w-6 h-6 text-white/90" />
-                      )}
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-black tracking-wide flex items-center gap-1.5 drop-shadow-md">
-                        {draftName}
-                        <span className="text-[10px] text-white/60 font-medium">官方品牌主页</span>
-                      </h2>
-                      {draftLocation && (
-                        <span className="flex items-center gap-0.5 text-white/80 text-[10px] font-bold">
-                          <MapPin className="w-3 h-3 text-amber-400" />{draftLocation}
-                        </span>
-                      )}
-                    </div>
+              {/* ── MOCK BRAND WEBSITE NAVBAR ── */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl px-6 py-4 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center shadow-sm bg-slate-50 dark:bg-slate-800">
+                    {logoPreview || brand.logoUrl ? (
+                      <img
+                        src={logoPreview || brand.logoUrl!}
+                        alt={draftName}
+                        className="w-full h-full object-contain"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/logo.svg' }}
+                      />
+                    ) : (
+                      <Utensils className="w-4 h-4 text-amber-500" />
+                    )}
                   </div>
-
-                  <p className="text-[20px] md:text-[24px] font-black leading-tight tracking-wide drop-shadow-md bg-gradient-to-r from-amber-300 via-orange-200 to-white bg-clip-text text-transparent mt-2">
-                    “传承经典美味，主理本地生活印记”
-                  </p>
+                  <div>
+                    <h2 className="text-xs font-black text-slate-855 dark:text-white flex items-center gap-1.5">
+                      {draftName}
+                      <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded-full text-[8px] font-black tracking-wider uppercase">品牌官网</span>
+                    </h2>
+                  </div>
                 </div>
-
-                {/* Main Story Description block */}
-                <div className="relative z-10 w-full bg-white/5 backdrop-blur-md rounded-2xl p-5 border border-white/10 shadow-inner flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="flex-1">
-                    <span className="text-[9px] font-black text-amber-450 uppercase tracking-widest block mb-1">Brand Vision & Story</span>
-                    <p className="text-xs md:text-sm text-white/90 font-medium leading-relaxed max-w-3xl">
-                      {parsedBrandStoryText || cleanBrandStoryText(draftDesc) || '暂无品牌故事介绍。请点击下方展开编辑，补充品牌使命与故事，供 AI 写文案使用。'}
-                    </p>
-                  </div>
+                <div className="hidden md:flex items-center gap-6 text-[10px] font-black text-slate-500 dark:text-slate-400">
+                  <a href="#about" className="hover:text-amber-500 transition-colors">关于我们</a>
+                  {dishes.length > 0 && <a href="#menu" className="hover:text-amber-500 transition-colors">招牌菜</a>}
+                  {stores.length > 0 && <a href="#outlets" className="hover:text-amber-500 transition-colors">门店分部</a>}
+                  {guides.length > 0 && <a href="#guide" className="hover:text-amber-500 transition-colors">用餐攻略</a>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {brand.phone && (
+                    <a
+                      href={`tel:${brand.phone}`}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-[10px] font-extrabold flex items-center gap-1 hover:bg-black dark:hover:bg-slate-100 active:scale-95 transition-all shadow-sm"
+                    >
+                      📞 电话预约
+                    </a>
+                  )}
                   {showStoryEditor ? null : (
                     <button
                       onClick={() => setShowStoryEditor(true)}
-                      className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-black text-white flex-shrink-0 transition-all cursor-pointer active:scale-95"
+                      className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-855 text-slate-500 dark:text-slate-400 hover:text-slate-800 transition-colors cursor-pointer"
+                      title="编辑设定"
                     >
-                      编辑设定
+                      <Settings className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
               </div>
+
+              {/* ── MOCK BRAND HERO WELCOME BANNER ── */}
+              <div id="about" className="w-full rounded-3xl overflow-hidden relative border border-slate-200/40 dark:border-slate-800 shadow-xl bg-slate-900 text-white min-h-[300px] p-8 md:p-10 flex flex-col justify-between">
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+                <div className="absolute top-0 right-0 w-[400px] h-[300px] bg-gradient-to-br from-amber-500/20 via-orange-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-[200px] h-[200px] bg-gradient-to-tr from-rose-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
+
+                <div className="relative z-10 max-w-2xl">
+                  <span className="text-[9px] font-black text-amber-450 uppercase tracking-widest bg-white/10 px-2.5 py-1 rounded-full backdrop-blur-md border border-white/10">Est. 2012 / 创始初心与使命</span>
+                  <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white mt-4 drop-shadow-md">
+                    {draftName}
+                  </h2>
+                  <p className="text-xs md:text-sm text-white/95 font-medium leading-relaxed drop-shadow-sm mt-3.5 max-w-2xl">
+                    {parsedBrandStoryText || cleanBrandStoryText(draftDesc) || '暂无品牌故事。请一键同步最新分析以加载详情。'}
+                  </p>
+                </div>
+
+                <div className="relative z-10 w-full flex items-center justify-between border-t border-white/10 pt-5 mt-6 text-[10px] text-white/60 font-bold uppercase tracking-wider">
+                  <span>{draftLocation || '新加坡地区'}</span>
+                  <span>AI MARKETING CREW 官方托管</span>
+                </div>
+              </div>
+
+              {/* ── MOCK BRAND SPECIALITIES GRID ── */}
+              {dishes.length > 0 && (
+                <div id="menu" className="space-y-4">
+                  <div className="flex items-center justify-between px-1">
+                    <h3 className="text-xs font-black text-slate-805 dark:text-white uppercase tracking-widest flex items-center gap-2">
+                      <Utensils className="w-4 h-4 text-amber-500" />
+                      招牌菜推荐 (Specialities Menu)
+                    </h3>
+                    <span className="text-[9px] text-slate-400 font-extrabold">精选 {dishes.length} 类招牌风味</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+                    {dishes.map((dish, i) => (
+                      <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-5 rounded-2xl shadow-sm hover:border-amber-450/40 hover:shadow-lg transition-all duration-300 group hover:-translate-y-1">
+                        <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-955/40 text-amber-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                          <Sparkles className="w-5 h-5" />
+                        </div>
+                        <h4 className="text-xs font-black text-slate-800 dark:text-white mb-2">{dish.title}</h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-3">{dish.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── MOCK BRAND OUTLETS LIST ── */}
+              {stores.length > 0 && (
+                <div id="outlets" className="space-y-4">
+                  <h3 className="text-xs font-black text-slate-805 dark:text-white uppercase tracking-widest flex items-center gap-2 pl-1">
+                    <Store className="w-4 h-4 text-amber-500" />
+                    分店与分局分布 (Our Outlets)
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                    {stores.map((store, i) => (
+                      <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-5 rounded-2xl shadow-sm space-y-3 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 flex items-center justify-center">
+                              <MapPin className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black text-slate-800 dark:text-white">{store.name}</h4>
+                            </div>
+                          </div>
+                          <span className="text-[8px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full uppercase tracking-wider">正常营业</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">{store.details}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── MOCK BRAND DINING RESERVATION GUIDE ── */}
+              {guides.length > 0 && (
+                <div id="guide" className="space-y-4">
+                  <h3 className="text-xs font-black text-slate-805 dark:text-white uppercase tracking-widest flex items-center gap-2 pl-1">
+                    <Compass className="w-4 h-4 text-amber-500" />
+                    用餐攻略与预订须知 (Reservation Guide)
+                  </h3>
+                  <div className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-900/50 border border-slate-200/50 dark:border-slate-850 p-6 rounded-2xl shadow-sm space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {guides.map((guide, i) => (
+                        <div key={i} className="space-y-2 border-r last:border-0 border-slate-100 dark:border-slate-800 pr-4 last:pr-0">
+                          <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-wider flex items-center gap-1.5">
+                            <Star className="w-3.5 h-3.5 fill-current" /> {guide.title}
+                          </h4>
+                          <p className="text-[11px] text-slate-600 dark:text-slate-405 leading-relaxed">{guide.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* ── 2. BRAND STATS SHOWCASE BAR (SaaS Homepage style) ── */}
               {hasRealData && (
