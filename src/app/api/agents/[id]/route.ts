@@ -5,8 +5,6 @@ import { avatarSelect, withResolvedAvatar } from '@/lib/avatarUtils'
 import type { Prisma } from '@prisma/client'
 import crypto from 'crypto'
 
-const DISMISSED_AGENT_TYPE = 'DISMISSED_AGENT'
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -233,7 +231,8 @@ export async function DELETE(
       await tx.user.update({
         where: { id },
         data: {
-          type: DISMISSED_AGENT_TYPE,
+          type: 'HUMAN',
+          status: 'DISABLED',
           email: dismissedEmail,
           password: dismissedPassword,
           apiKey: null,
@@ -256,7 +255,8 @@ export async function DELETE(
             type: agent.type,
           },
           newValue: {
-            type: DISMISSED_AGENT_TYPE,
+            type: 'HUMAN',
+            status: 'DISABLED',
             dismissedAt: dismissedAt.toISOString(),
           },
           metadata: {

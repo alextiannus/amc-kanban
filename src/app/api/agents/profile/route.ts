@@ -80,23 +80,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { agentId, nickname, introduction, workflow, themeColor, avatar, insights } = body
-
-    if (!agentId) {
-      return NextResponse.json({ error: 'agentId is required to identify the agent' }, { status: 400 })
-    }
-
-    const email = `${agentId}@agent.amc.local`
-
-    // Check if the requested agentId is already taken by another agent
-    const existingAgent = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true }
-    })
-
-    if (existingAgent && existingAgent.id !== authenticatedAgent.id) {
-      return NextResponse.json({ error: 'Conflict: The requested agentId is already taken by another agent. Please choose a different agentId.' }, { status: 409 })
-    }
+    const { nickname, introduction, workflow, themeColor, avatar, insights } = body
 
     let finalAvatar = avatar
 
@@ -149,11 +133,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // Update the pre-provisioned agent with its new identity
     await prisma.user.update({
       where: { id: authenticatedAgent.id },
       data: {
-        email,
         nickname,
         introduction,
         workflow,
@@ -186,4 +168,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
-

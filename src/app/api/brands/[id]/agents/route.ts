@@ -59,8 +59,8 @@ export async function POST(request: Request, { params }: Params) {
   const { agentId, role = 'worker' } = body
   if (!agentId) return NextResponse.json({ error: 'agentId required' }, { status: 400 })
 
-  const agent = await prisma.user.findFirst({ where: { id: agentId, type: 'AI_AGENT' } })
-  if (!agent) return NextResponse.json({ error: 'Agent not found' }, { status: 404 })
+  const agent = await prisma.user.findFirst({ where: { id: agentId, status: 'ACTIVE' } })
+  if (!agent) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
   if (session.user.role !== 'ADMIN') {
     const permission = await prisma.agentPermission.findUnique({
