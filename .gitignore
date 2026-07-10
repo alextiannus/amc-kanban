@@ -60,3 +60,11 @@ docker/prod-dump.sql
 
 # Runtime snapshot files (served via API route, not committed)
 public/snapshots/
+
+# Untracked legacy files and workspace configs
+src/components/TrainingDataSection.tsx
+src/components/dashboard/MMDashboard.tsx
+src/components/dashboard/MMSideMenu.tsx
+src/components/dashboard/MMSubPageOverlay.tsx
+*.code-workspace
+.git_corrupt/
