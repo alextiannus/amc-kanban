@@ -15,11 +15,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     await requireCapability(principal, 'agent.manage')
-    if (principal.actorType !== 'HUMAN') {
-      return NextResponse.json({ error: 'Agent API Keys must be created under a human user' }, { status: 400 })
-    }
-
-    const plaintextApiKey = createApiKeyToken('amc_agent')
+    const plaintextApiKey = createApiKeyToken('amc_user')
 
     const key = await prisma.userApiKey.create({
       data: {
@@ -27,7 +23,7 @@ export async function POST() {
         token: plaintextApiKey,
         tokenHash: hashApiKeyToken(plaintextApiKey),
         prefix: apiKeyPrefix(plaintextApiKey),
-        name: 'AI Staff API Key',
+        name: 'Personal User API Key',
       },
       select: {
         id: true,
@@ -41,7 +37,7 @@ export async function POST() {
       apiKey: plaintextApiKey,
       key,
       userId: principal.userId,
-      message: 'Agent Key generated successfully under the current user. Please configure this in your OpenClaw MCP plugin.'
+      message: 'User API Key generated successfully under the current user. Please configure this in your MCP plugin.'
     })
   } catch (error: any) {
     if (error?.status === 403) {

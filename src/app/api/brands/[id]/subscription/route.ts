@@ -23,7 +23,7 @@ export async function GET(request: Request, { params }: Params) {
   const { id: brandId } = await params
 
   const userId = principal!.userId
-  const userType = principal!.actorType === 'AMC_AGENT' ? 'AI_AGENT' : 'HUMAN'
+  const userType = 'HUMAN'
   const userRole = principal!.globalRoles.includes('ADMIN') ? 'ADMIN' : 'USER'
 
   const ok = await canSessionAccessBrandProject(brandId, userId, userType, userRole)

@@ -16,7 +16,7 @@ function isValidHttpUrl(value: string): boolean {
 // Authenticate by Agent apiKey in Authorization header
 async function getAgent(request: Request) {
   const principal = await authenticateRequest(request)
-  return principal?.actorType === 'AMC_AGENT' ? principal : null
+  return principal
 }
 
 // POST /api/agent/action-items

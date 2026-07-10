@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'agentId is invalid' }, { status: 400 })
     }
 
-    let targetUserId = principal?.actorType === 'HUMAN' ? principal.userId : null
+    let targetUserId = principal?.userId || null
     if (!targetUserId) {
       const owner = await prisma.user.findFirst({
         where: ownerUserId
@@ -70,10 +70,10 @@ export async function POST(request: Request) {
     }
 
     if (!targetUserId) {
-      return NextResponse.json({ error: 'A human owner is required to create an Agent API Key' }, { status: 400 })
+      return NextResponse.json({ error: 'A human owner is required to create a User API Key' }, { status: 400 })
     }
 
-    const plaintextApiKey = createApiKeyToken('amc_agent')
+    const plaintextApiKey = createApiKeyToken('amc_user')
 
     const key = await prisma.userApiKey.create({
       data: {
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
         token: plaintextApiKey,
         tokenHash: hashApiKeyToken(plaintextApiKey),
         prefix: apiKeyPrefix(plaintextApiKey),
-        name: `AI Staff - ${nickname.trim()}`,
+        name: `User Key - ${nickname.trim()}`,
       },
       select: {
         id: true,
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: 'Agent API Key created successfully',
+      message: 'User API Key created successfully',
       agent: {
         id: key.id,
         agentId: normalizedAgentId,

@@ -36,6 +36,7 @@
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",
     "test:e2e-basic": "node --experimental-strip-types scripts/test-e2e-basic-flows.mts",
     "migrate:crew-auth": "node --experimental-strip-types scripts/migrate-crew-auth.mts",
+    "migrate:user-keys": "node --experimental-strip-types scripts/migrate-ai-agents-to-user-keys.mts",
     "postinstall": "node -e \"if(!process.env.RENDER && !process.env.CI) { require('child_process').execSync('npx prisma generate && npx prisma db push --accept-data-loss', {stdio:'inherit'}) }\""
   },
   "dependencies": {

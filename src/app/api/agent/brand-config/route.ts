@@ -38,7 +38,7 @@ function toPublicBrand<T extends BrandWithCredentials>(brand: T) {
 
 async function getAgent(request: Request) {
   const principal = await authenticateRequest(request)
-  return principal?.actorType === 'AMC_AGENT' ? principal : null
+  return principal
 }
 
 // GET /api/agent/brand-config?brandId=<id>

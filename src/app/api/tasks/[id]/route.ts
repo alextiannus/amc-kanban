@@ -212,11 +212,11 @@ export async function PATCH(
     if (assigneeId !== undefined && assigneeId !== null) {
       const assignee = await prisma.user.findUnique({
         where: { id: assigneeId },
-        select: { id: true, type: true }
+        select: { id: true, status: true }
       })
 
-      if (!assignee || assignee.type !== 'AI_AGENT') {
-        return NextResponse.json({ error: 'Invalid assigneeId: must be an AI_AGENT' }, { status: 400 })
+      if (!assignee || assignee.status !== 'ACTIVE') {
+        return NextResponse.json({ error: 'Invalid assigneeId: must be an active user' }, { status: 400 })
       }
     }
 
