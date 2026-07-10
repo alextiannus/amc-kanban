@@ -3,6 +3,13 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 const apply = process.argv.includes('--apply')
+const fallbackOwnerByNickname = new Map([
+  ['唐伯虎', { email: 'liwei@deliverychinatown.com', label: '唐伯虎 -> LiWei' }],
+  ['孙尚香 ✨', { email: 'zhangyi@12eat.ai', label: '孙尚香 -> Zhangyi' }],
+  ['孙尚香', { email: 'zhangyi@12eat.ai', label: '孙尚香 -> Zhangyi' }],
+  ['李白', { email: 'alextiannus@gmail.com', label: '李白 -> Alex' }],
+  ['小桥', { email: 'tianye@deliverychinatown.com', label: '小桥 -> 田野' }],
+])
 
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex')
@@ -118,7 +125,7 @@ async function migrateAgent(agent) {
 }
 
 async function main() {
-  const agents = await prisma.user.findMany({
+  const rawAgents = await prisma.user.findMany({
     where: { type: 'AI_AGENT' },
     select: {
       id: true,
@@ -133,6 +140,34 @@ async function main() {
     },
     orderBy: { createdAt: 'asc' },
   })
+  const agents = []
+  for (const agent of rawAgents) {
+    let mappedOwner = agent.owner
+    let mappedOwnerId = agent.ownerId
+    let fallbackOwnerLabel = null
+
+    if (!mappedOwnerId && agent.nickname) {
+      const fallback = fallbackOwnerByNickname.get(agent.nickname)
+      if (fallback) {
+        const owner = await prisma.user.findFirst({
+          where: { email: fallback.email, type: 'HUMAN', status: 'ACTIVE' },
+          select: { id: true, email: true, status: true },
+        })
+        if (owner) {
+          mappedOwner = owner
+          mappedOwnerId = owner.id
+          fallbackOwnerLabel = fallback.label
+        }
+      }
+    }
+
+    agents.push({
+      ...agent,
+      owner: mappedOwner,
+      ownerId: mappedOwnerId,
+      fallbackOwnerLabel,
+    })
+  }
 
   const blocked = agents.filter((agent) => !agent.ownerId || !agent.owner)
   const summary = agents.map((agent) => ({
@@ -142,6 +177,7 @@ async function main() {
     owner_id: agent.ownerId,
     owner_email: agent.owner?.email ?? null,
     owner_status: agent.owner?.status ?? null,
+    fallback_owner_mapping: agent.fallbackOwnerLabel,
     user_api_keys: agent.apiKeys.length,
     has_legacy_user_api_key: Boolean(agent.apiKey),
     crew_memberships: agent.crewMemberships.length,
