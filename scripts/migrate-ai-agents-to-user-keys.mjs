@@ -4,11 +4,11 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 const apply = process.argv.includes('--apply')
 
-function hashToken(token: string) {
+function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex')
 }
 
-async function moveBrandAgentLinks(agentId: string, ownerId: string) {
+async function moveBrandAgentLinks(agentId, ownerId) {
   const links = await prisma.brandAgent.findMany({ where: { agentId } })
   for (const link of links) {
     await prisma.brandAgent.upsert({
@@ -28,7 +28,7 @@ async function moveBrandAgentLinks(agentId: string, ownerId: string) {
   await prisma.brandAgent.deleteMany({ where: { agentId } })
 }
 
-async function moveCrewMemberships(agentId: string, ownerId: string) {
+async function moveCrewMemberships(agentId, ownerId) {
   const memberships = await prisma.crewMember.findMany({ where: { userId: agentId } })
   for (const membership of memberships) {
     await prisma.crewMember.upsert({
@@ -49,7 +49,7 @@ async function moveCrewMemberships(agentId: string, ownerId: string) {
   await prisma.crewMember.deleteMany({ where: { userId: agentId } })
 }
 
-async function moveAssignmentPool(agentId: string, ownerId: string) {
+async function moveAssignmentPool(agentId, ownerId) {
   const member = await prisma.assignmentPoolMember.findUnique({ where: { agentId } })
   if (!member) return
 
@@ -66,7 +66,7 @@ async function moveAssignmentPool(agentId: string, ownerId: string) {
   })
 }
 
-async function moveApiKeys(agent: { id: string; ownerId: string; apiKey: string | null; nickname: string | null }) {
+async function moveApiKeys(agent) {
   await prisma.userApiKey.updateMany({
     where: { userId: agent.id },
     data: { userId: agent.ownerId },
@@ -93,13 +93,7 @@ async function moveApiKeys(agent: { id: string; ownerId: string; apiKey: string 
   })
 }
 
-async function migrateAgent(agent: {
-  id: string
-  email: string
-  nickname: string | null
-  ownerId: string
-  apiKey: string | null
-}) {
+async function migrateAgent(agent) {
   await moveApiKeys(agent)
   await moveCrewMemberships(agent.id, agent.ownerId)
   await moveBrandAgentLinks(agent.id, agent.ownerId)
@@ -176,7 +170,7 @@ async function main() {
       id: agent.id,
       email: agent.email,
       nickname: agent.nickname,
-      ownerId: agent.ownerId!,
+      ownerId: agent.ownerId,
       apiKey: agent.apiKey,
     })
   }
