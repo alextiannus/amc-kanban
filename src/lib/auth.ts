@@ -60,7 +60,7 @@ export async function getSession(): Promise<Session | null> {
       id: principal.userId,
       email: principal.email,
       role: principal.globalRoles.includes('ADMIN') ? 'ADMIN' : 'USER',
-      type: principal.actorType === 'AMC_AGENT' ? 'AI_AGENT' : 'HUMAN',
+      type: 'HUMAN',
       userRoles: principal.globalRoles,
     },
   }
@@ -87,11 +87,11 @@ export function extractApiKey(request: Request): string | null {
 // Get agent by API key from database
 export async function getAgentFromApiKey(apiKey: string) {
   const principal = await authenticateApiKey(apiKey)
-  if (!principal || principal.actorType !== 'AMC_AGENT') return null
+  if (!principal) return null
   return {
     id: principal.userId,
     email: principal.email,
-    type: 'AI_AGENT',
+    type: 'HUMAN',
     role: principal.globalRoles.includes('ADMIN') ? 'ADMIN' : 'USER',
     userRoles: principal.globalRoles,
   }

@@ -34,7 +34,7 @@ export type PrincipalUserRecord = {
 }
 
 export function normalizeActorType(type: string | null | undefined): ActorType {
-  return type === 'AI_AGENT' ? 'AMC_AGENT' : 'HUMAN'
+  return 'HUMAN'
 }
 
 export function normalizeGlobalRoles(

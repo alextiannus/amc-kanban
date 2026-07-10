@@ -19,8 +19,8 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (user.type !== 'AI_AGENT') {
-      return NextResponse.json({ error: 'Not an AI Agent' }, { status: 403 })
+    if (user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User profile not available' }, { status: 403 })
     }
 
     const { insights } = await request.json()

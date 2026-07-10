@@ -39,6 +39,7 @@ function getSkillUpdateNotice(): string | null {
       lastCheckedTime = Date.now()
       return `[SYSTEM NOTICE] AMC operating instructions were updated:
 1. Use your own Agent API Key; never use Human Key + x-agent-id.
+1. Use your own Personal User API Key; never use x-agent-id.
 2. Operate only brands returned by get_brand_config (Capability + Crew scope).
 3. Work directly on drafts, assets, reviews, ActionItems and publishing resources.
 4. Request human input with post_action_item; do not create new WorkUnit/swimlane tasks.
@@ -55,7 +56,7 @@ export async function getAgentFromKey(apiKey: string) {
   const key = apiKey.replace(/^Bearer\s+/i, '').trim()
   if (!key) return null
   const principal = await authenticateApiKey(key)
-  if (!principal || principal.actorType !== 'AMC_AGENT') return null
+  if (!principal) return null
   return prisma.user.findUnique({ where: { id: principal.userId } })
 }
 
@@ -96,9 +97,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
   const resolveAgent = async () => {
     const principal = await resolvePrincipal()
-    if (!principal || principal.actorType !== 'AMC_AGENT') return null
+    if (!principal) return null
     const agent = await prisma.user.findUnique({ where: { id: principal.userId } })
-    if (!agent || agent.type !== 'AI_AGENT') return null
+    if (!agent || agent.status !== 'ACTIVE') return null
     return agent
   }
 

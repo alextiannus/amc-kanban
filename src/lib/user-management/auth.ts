@@ -23,7 +23,7 @@ function userFromPrincipal(principal: AuthPrincipal): DelegatedSessionUser {
     id: principal.userId,
     email: principal.email,
     role: principal.globalRoles.includes('ADMIN') ? 'ADMIN' : 'USER',
-    type: principal.actorType === 'AMC_AGENT' ? 'AI_AGENT' : 'HUMAN',
+    type: 'HUMAN',
     userRoles: principal.globalRoles,
   }
 }
@@ -47,7 +47,7 @@ export async function resolveSessionOrApiKey(request: Request): Promise<AuthCont
   if (!principal) return null
   return {
     user: userFromPrincipal(principal),
-    agentId: principal.actorType === 'AMC_AGENT' ? principal.userId : null,
+    agentId: null,
     principal,
   }
 }

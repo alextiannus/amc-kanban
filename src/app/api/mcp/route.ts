@@ -43,13 +43,6 @@ async function handleMcp(request: Request): Promise<Response> {
     )
   }
 
-  if (principal.actorType !== 'AMC_AGENT') {
-    return new Response(
-      JSON.stringify({ error: 'AMC Agent API key required' }),
-      { status: 403, headers: { 'Content-Type': 'application/json' } }
-    )
-  }
-
   // Intercept POST request for direct uploads
   if (request.method === 'POST') {
     const contentType = request.headers.get('content-type') || ''

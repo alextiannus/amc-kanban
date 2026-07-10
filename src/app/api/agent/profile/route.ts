@@ -23,8 +23,8 @@ export async function GET(request: Request) {
       where: { id: agentId }
     })
 
-    if (!agent || agent.type !== 'AI_AGENT') {
-      return NextResponse.json({ error: 'Not an AI Agent' }, { status: 403 })
+    if (!agent || agent.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User profile not available' }, { status: 403 })
     }
 
     return NextResponse.json({
@@ -70,8 +70,8 @@ export async function PATCH(request: Request) {
       where: { id: agentId }
     })
 
-    if (!agent || agent.type !== 'AI_AGENT') {
-      return NextResponse.json({ error: 'Not an AI Agent' }, { status: 403 })
+    if (!agent || agent.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User profile not available' }, { status: 403 })
     }
 
     const body = await request.json()

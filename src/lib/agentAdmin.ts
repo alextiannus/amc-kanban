@@ -31,17 +31,10 @@ export async function requireAdminAgent(request: Request): Promise<AdminAgentAut
     }
   }
 
-  if (principal.actorType !== 'AMC_AGENT') {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: 'Unauthorized: AI Agent API key required' }, { status: 401 }),
-    }
-  }
-
   if (!principal.globalRoles.includes('ADMIN')) {
     return {
       ok: false,
-      response: NextResponse.json({ error: 'Forbidden: admin-capable AI Agent required' }, { status: 403 }),
+      response: NextResponse.json({ error: 'Forbidden: admin-capable user key required' }, { status: 403 }),
     }
   }
 
