@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
 
-    const { email, password, nickname, country, phone, referenceCode } = body as Record<string, unknown>
+    const { email, password, nickname, country, phone, referenceCode, inviteCode } = body as Record<string, unknown>
 
     if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) {
       return NextResponse.json({ error: 'Valid email is required' }, { status: 400 })
@@ -42,6 +42,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Email already registered' }, { status: 409 })
     }
 
+    let referredById: string | null = null
+    const targetCode = (typeof inviteCode === 'string' && inviteCode.trim()) || (typeof referenceCode === 'string' && referenceCode.trim()) || null
+
+    if (targetCode) {
+      const referrerUser = await prisma.user.findUnique({
+        where: { inviteCode: targetCode },
+      })
+      if (referrerUser) {
+        referredById = referrerUser.id
+      } else {
+        const campaign = await prisma.campaignPromoCode.findFirst({
+          where: { code: targetCode.toUpperCase(), isActive: true },
+        })
+        if (campaign) {
+          referredById = campaign.ownerId
+        }
+      }
+    }
+
     const hashedPassword = await hashPassword(password)
     const user = await prisma.user.create({
       data: {
@@ -52,6 +71,7 @@ export async function POST(request: Request) {
         nickname: normalizedNickname,
         country: normalizedCountry,
         phone: normalizedPhone,
+        referredById,
         businessRoles: { create: { role: 'BRAND_OWNER' } },
       },
     })
