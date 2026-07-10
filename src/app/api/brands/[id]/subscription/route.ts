@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
+import { authenticateRequest } from '@/lib/auth-v2'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject, canOwnBrand } from '@/lib/brandAccess'
 import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
@@ -8,33 +9,22 @@ import { POST as humanPost } from '../../../subscription/route'
 type Params = { params: Promise<{ id: string }> }
 
 export async function GET(request: Request, { params }: Params) {
-  const session = await getSession()
   const apiKey = extractApiKey(request)
-  const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
+  const principal = await authenticateRequest(request)
 
-  if (!session?.user && !apiKey) {
+  if (!principal && !apiKey) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  if (apiKey && !authenticatedAgent) {
+  if (apiKey && !principal) {
     return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
   }
 
   const { id: brandId } = await params
 
-  let userId: string
-  let userType: string
-  let userRole: string
-
-  if (session?.user) {
-    userId = session.user.id
-    userType = session.user.type ?? 'HUMAN'
-    userRole = session.user.role
-  } else {
-    userId = authenticatedAgent!.id
-    userType = 'AI_AGENT'
-    userRole = 'USER'
-  }
+  const userId = principal!.userId
+  const userType = principal!.actorType === 'AMC_AGENT' ? 'AI_AGENT' : 'HUMAN'
+  const userRole = principal!.globalRoles.includes('ADMIN') ? 'ADMIN' : 'USER'
 
   const ok = await canSessionAccessBrandProject(brandId, userId, userType, userRole)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
