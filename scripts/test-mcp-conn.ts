@@ -24,9 +24,16 @@ async function main() {
     await client.connect(transport)
     console.log('Connected to MCP server successfully!')
     
-    console.log('Listing tools...')
-    const toolsRes = await client.listTools()
-    console.log('Tools:', JSON.stringify(toolsRes, null, 2))
+    console.log('Calling autocomplete_address tool...')
+    const t0 = Date.now()
+    const result = await client.callTool({
+      name: 'autocomplete_address',
+      arguments: {
+        input: '544585',
+        country: 'SG'
+      }
+    })
+    console.log(`Tool result (${Date.now() - t0}ms):`, JSON.stringify(result, null, 2))
     
     await transport.close()
   } catch (err) {

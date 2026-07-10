@@ -7,6 +7,14 @@ import { submitDraftForDelivery } from '@/lib/draftSubmission'
 import { postfastDeletePost } from '@/lib/integrations/postfast'
 import { McpClientManager } from '@/lib/mcp/clientManager'
 
+function safeEnqueue(controller: ReadableStreamDefaultController, data: Uint8Array) {
+  try {
+    controller.enqueue(data)
+  } catch (err) {
+    console.warn('[voice-chat] safeEnqueue skipped: controller is closed/inactive', err)
+  }
+}
+
 /**
  * Synthesise speech server-side via MiniMax TTS (LLMConfig[tts]) and return
  * the audio as a base64 string so the caller can play it directly without a
@@ -261,14 +269,14 @@ export async function POST(request: Request, { params }: Params) {
         const { id: brandId } = await params
         const actor = await getActor(request)
         if (!actor) {
-          controller.enqueue(encoder.encode(JSON.stringify({ error: 'Unauthorized' }) + '\n'))
+          safeEnqueue(controller, encoder.encode(JSON.stringify({ error: 'Unauthorized' }) + '\n'))
           controller.close()
           return
         }
 
         const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
         if (!ok) {
-          controller.enqueue(encoder.encode(JSON.stringify({ error: 'Not found' }) + '\n'))
+          safeEnqueue(controller, encoder.encode(JSON.stringify({ error: 'Not found' }) + '\n'))
           controller.close()
           return
         }
@@ -290,7 +298,7 @@ export async function POST(request: Request, { params }: Params) {
         }
 
         if (!message || typeof message !== 'string') {
-          controller.enqueue(encoder.encode(JSON.stringify({ error: 'message is required' }) + '\n'))
+          safeEnqueue(controller, encoder.encode(JSON.stringify({ error: 'message is required' }) + '\n'))
           controller.close()
           return
         }
@@ -307,7 +315,7 @@ export async function POST(request: Request, { params }: Params) {
         console.log(`[voice-chat] brand+MCP loaded in ${Date.now() - t0}ms`)
 
         if (!brand) {
-          controller.enqueue(encoder.encode(JSON.stringify({ error: 'Brand not found' }) + '\n'))
+          safeEnqueue(controller, encoder.encode(JSON.stringify({ error: 'Brand not found' }) + '\n'))
           controller.close()
           return
         }
@@ -362,7 +370,7 @@ export async function POST(request: Request, { params }: Params) {
         const wantsGenerate = generateKeywords.some((kw) => message.includes(kw))
 
         if (wantsGenerate) {
-          controller.enqueue(encoder.encode(JSON.stringify({
+          safeEnqueue(controller, encoder.encode(JSON.stringify({
             type: 'done',
             reply: '好的，老板！我马上为您批量生成内容并排期发布！',
             action: 'GENERATE_AND_PUBLISH'
@@ -376,7 +384,7 @@ export async function POST(request: Request, { params }: Params) {
         const wantsUpload = uploadKeywords.some((kw) => message.includes(kw))
 
         if (wantsUpload) {
-          controller.enqueue(encoder.encode(JSON.stringify({
+          safeEnqueue(controller, encoder.encode(JSON.stringify({
             type: 'done',
             reply: '好的，老板！已为您打开手机相册，请选择您要上传的图片或视频素材。',
             action: 'TRIGGER_UPLOAD'
@@ -392,7 +400,7 @@ export async function POST(request: Request, { params }: Params) {
         ]
 
         // Send initial progress update
-        controller.enqueue(encoder.encode(JSON.stringify({ type: 'status', message: '思考中...' }) + '\n'))
+        safeEnqueue(controller, encoder.encode(JSON.stringify({ type: 'status', message: '思考中...' }) + '\n'))
 
         // 对话历史只发最近 8 轮：减少 token 数，减少 Gemini TTFT
         const trimmedHistory = history.slice(-8)
@@ -423,7 +431,7 @@ export async function POST(request: Request, { params }: Params) {
             }
 
             console.log(`[streaming-status] sending status update: "${statusMsg}"`)
-            controller.enqueue(encoder.encode(JSON.stringify({ type: 'status', message: statusMsg }) + '\n'))
+            safeEnqueue(controller, encoder.encode(JSON.stringify({ type: 'status', message: statusMsg }) + '\n'))
 
             const { resultText, actionReply } = await executeTool(toolName, toolArgs, brandId)
             return { resultText, actionReply }
@@ -442,7 +450,7 @@ export async function POST(request: Request, { params }: Params) {
           console.log(`[voice-chat] TTS inline ${audiob64 ? 'ok' : 'skipped'} in ${Date.now() - tts0}ms`)
         }
 
-        controller.enqueue(encoder.encode(JSON.stringify({
+        safeEnqueue(controller, encoder.encode(JSON.stringify({
           type: 'done',
           reply: finalReply,
           action: result.action || 'NONE',
@@ -452,7 +460,7 @@ export async function POST(request: Request, { params }: Params) {
         controller.close()
       } catch (error: any) {
         console.error('[Voice Chat API Error]:', error)
-        controller.enqueue(encoder.encode(JSON.stringify({ error: error.message || 'Internal server error' }) + '\n'))
+        safeEnqueue(controller, encoder.encode(JSON.stringify({ error: error.message || 'Internal server error' }) + '\n'))
         controller.close()
       }
     }
