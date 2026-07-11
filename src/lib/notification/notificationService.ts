@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { postfastGenerateConnectLink } from '@/lib/integrations/postfast'
 
 export interface SetupNotification {
   id: string
@@ -8,6 +9,7 @@ export interface SetupNotification {
   title: string
   message: string
   status: string
+  connectUrl?: string | null
   createdAt: Date
   updatedAt: Date
 }
@@ -107,6 +109,32 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
     const hasPostfast = !!brand.postfastApiKey
 
     if (hasSubscription && hasPostfast) {
+      // Ensure PostFast public connect link is up to date (updated every 7 days)
+      let connectLink = brand.postfastConnectLink
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      if (
+        !connectLink || 
+        !brand.postfastConnectLinkUpdatedAt || 
+        brand.postfastConnectLinkUpdatedAt < sevenDaysAgo
+      ) {
+        try {
+          const pfLinkResult = await postfastGenerateConnectLink(brand.postfastApiKey!)
+          if (pfLinkResult.success && pfLinkResult.connectUrl) {
+            connectLink = pfLinkResult.connectUrl
+            await prisma.brand.update({
+              where: { id: brand.id },
+              data: {
+                postfastConnectLink: connectLink,
+                postfastConnectLinkUpdatedAt: new Date(),
+              }
+            })
+            console.log(`[Notification Service] Successfully updated PostFast connect link for brand ${brand.id}`)
+          }
+        } catch (pfLinkErr) {
+          console.error('[Notification Service] Failed to generate/save PostFast connect link:', pfLinkErr)
+        }
+      }
+
       // Check connections for: Google Maps, TikTok, Instagram
       const connectedPlatforms = new Set(
         brand.accounts.map((acc: any) => acc.platformId.toLowerCase())
@@ -173,10 +201,28 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
       userId,
       status: { not: 'DISMISSED' }
     },
+    include: {
+      brand: {
+        select: {
+          postfastConnectLink: true
+        }
+      }
+    },
     orderBy: {
       createdAt: 'desc'
     }
   })
 
-  return activeNotifications
+  return activeNotifications.map((n: any) => ({
+    id: n.id,
+    userId: n.userId,
+    brandId: n.brandId,
+    type: n.type,
+    title: n.title,
+    message: n.message,
+    status: n.status,
+    connectUrl: n.brand?.postfastConnectLink || null,
+    createdAt: n.createdAt,
+    updatedAt: n.updatedAt
+  }))
 }

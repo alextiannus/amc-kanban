@@ -288,6 +288,32 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
           {/* PostFast */}
           <Section label="PostFast（内容发布）" badge={<StatusBadge ok={status.postfast} />}>
             {POSTFAST_FIELDS.map(f => <Field key={f.key} f={f} />)}
+            {typeof initialSettings?.postfastConnectLink === 'string' && (
+              <div className="mt-2.5 p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/30 space-y-1.5">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">社媒连接分享链接</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={initialSettings.postfastConnectLink as string}
+                    className="flex-1 text-xs bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl px-3 py-1.5 font-medium text-slate-700 dark:text-slate-300 select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(initialSettings.postfastConnectLink as string)
+                      alert('已复制到剪贴板！')
+                    }}
+                    className="px-3 py-1.5 text-xs font-bold text-primary bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 rounded-xl transition-colors"
+                  >
+                    复制
+                  </button>
+                </div>
+                <p className="text-[9px] text-slate-400 font-medium leading-normal">
+                  此链接可分享给品牌管理员，用于直接在 PostFast 绑定/更新该品牌的 Facebook, Instagram, TikTok 账号连接。
+                </p>
+              </div>
+            )}
           </Section>
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
 

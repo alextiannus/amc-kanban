@@ -384,6 +384,8 @@ model Brand {
 
   postfastSnapshot     Json?     // cached PostFast accounts + 7-day operations report
   postfastSyncedAt     DateTime? // timestamp of last successful PostFast sync
+  postfastConnectLink          String?
+  postfastConnectLinkUpdatedAt DateTime?
 
   owners      BrandOwner[]
   tasks       WorkUnit[]

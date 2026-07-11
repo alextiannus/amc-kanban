@@ -52,6 +52,7 @@ export async function GET(_req: Request, { params }: Params) {
     // PostFast
     postfastApiKey: maskKey(brand.postfastApiKey),
     postfastConfigured: !!brand.postfastApiKey,
+    postfastConnectLink: brand.postfastConnectLink,
 
     // Google Business
     googlePlaceId: brand.googlePlaceId,
