@@ -145,10 +145,10 @@ export async function POST(request: Request, { params }: Params) {
     } else if (targetPlatform) {
       // targetPlatform mode: limit to one specific platform (e.g. xiaohongshu)
       const aliases: Record<string, string[]> = {
-        xiaohongshu: ['xiaohongshu', 'rednote', 'red', 'xhs'],
-        instagram: ['instagram'],
-        facebook: ['facebook'],
-        tiktok: ['tiktok'],
+        xiaohongshu: ['xiaohongshu', 'rednote', 'red', 'xhs', 'redbook'],
+        instagram: ['instagram', 'ins', 'ig'],
+        facebook: ['facebook', 'fb'],
+        tiktok: ['tiktok', 'tt'],
       }
       const allowed = aliases[targetPlatform.toLowerCase()] ?? [targetPlatform.toLowerCase()]
       accounts = accounts.filter((a: any) => allowed.includes(a.platformId.toLowerCase()))

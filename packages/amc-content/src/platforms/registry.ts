@@ -14,7 +14,9 @@ const commonAiToneBannedPhrases = [
 
 function provider(input: Omit<PlatformContentProvider, 'validateText'>): PlatformContentProvider {
   const base = input as PlatformContentProvider
-  base.validateText = createBasicPlatformValidator(base)
+  base.validateText = (args) => {
+    return createBasicPlatformValidator(base)(args)
+  }
   return base
 }
 

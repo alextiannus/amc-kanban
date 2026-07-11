@@ -69,8 +69,8 @@ export async function tryGenerateWithAmcContent(
 
 function normalizePlatform(platform?: string): PlatformType | null {
   const value = (platform || '').toLowerCase()
-  if (['xiaohongshu', 'red', 'xhs', 'rednote'].includes(value)) return 'xiaohongshu'
-  if (['instagram', 'ig'].includes(value)) return 'instagram'
+  if (['xiaohongshu', 'red', 'xhs', 'rednote', 'redbook'].includes(value)) return 'xiaohongshu'
+  if (['instagram', 'ig', 'ins'].includes(value)) return 'instagram'
   if (['facebook', 'fb'].includes(value)) return 'facebook'
   if (['google_business', 'google', 'google_maps', 'gbp', 'gmb'].includes(value)) return 'google_business'
   if (['tiktok', 'tt'].includes(value)) return 'tiktok'

@@ -60,8 +60,15 @@ export function copywritersFromIds(ids: unknown): CopywriterPersona[] {
 
 export function platformAliases(platform: string): string[] {
   const normalized = platform.toLowerCase()
-  if (normalized === 'xiaohongshu') return ['xiaohongshu', 'rednote', 'xhs', 'red']
-  if (normalized === 'google_business') return ['google_business', 'google', 'google_maps', 'google_map']
+  if (['xiaohongshu', 'rednote', 'xhs', 'red', 'redbook'].includes(normalized)) {
+    return ['xiaohongshu', 'rednote', 'xhs', 'red', 'redbook']
+  }
+  if (['instagram', 'ins', 'ig'].includes(normalized)) {
+    return ['instagram', 'ins', 'ig']
+  }
+  if (['google_business', 'google', 'google_maps', 'google_map', 'gbp', 'gmb'].includes(normalized)) {
+    return ['google_business', 'google', 'google_maps', 'google_map', 'gbp', 'gmb']
+  }
   return [normalized]
 }
 
