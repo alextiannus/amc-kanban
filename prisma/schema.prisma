@@ -71,6 +71,7 @@ model User {
   ownedCampaigns   CampaignPromoCode[] @relation("OwnedPromoCodes")
 
   passwordResetTokens PasswordResetToken[]
+  notifications       Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -404,6 +405,7 @@ model Brand {
   copywriterLogs    CopywriterLog[]
   mcpServerConfigs  McpServerConfig[]
   companionSkills   CompanionSkill[]
+  notifications     Notification[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1081,6 +1083,24 @@ model CompanionSkill {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  @@index([brandId])
+}
+
+// ── Notifications ──────────────────────────────────────────────────────────
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brandId     String?
+  brand       Brand?   @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  type        String   // "SETUP_BRAND" | "COMPLETE_CONFIG" | "INFO" | "WARNING"
+  title       String
+  message     String
+  status      String   @default("UNREAD") // "UNREAD" | "READ" | "DISMISSED"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
   @@index([brandId])
 }
 

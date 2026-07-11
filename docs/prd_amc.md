@@ -215,6 +215,29 @@
     *   用户点击待办卡片会触发对应行动：`sentiment_alert`（差评/警报）唤起 Companion Chat 的 AI 对话及分析响应；`content_draft` / `content_approval` 自动跳转至发布日历。
     *   每张卡片右侧提供“标记为已处理”的勾选按钮，点击后发送 `PATCH /api/brands/[id]/actions/[actionId]/approve` 请求在数据库中将其标记为已解决，并在本地列表中过滤移除。
 
+### 6.1 独立通知与引导模块 (Standalone Notifications & Onboarding Check)
+*   **架构目的**：为商户端 (`amc-mm`) 以及未来的管理后台提供一个独立、统一的后端通知引擎，主要用于用户级别的基础环境设置、订阅和核心功能引导提示，与针对具体品牌的运行时业务警报 (`ActionItem`) 进行区分。
+*   **数据库模型**：在 DB 中增加 `Notification` 表以支持通知的持久化与状态管理：
+    *   `userId` (关联 `User`): 通知归属的用户。
+    *   `brandId` (可选，关联 `Brand`): 与通知关联的具体品牌。
+    *   `type`: 通知的类型（如 `SETUP_BRAND`、`COMPLETE_CONFIG` 等）。
+    *   `title` 与 `message`: 展示标题与文本内容。
+    *   `status`: 状态 (`UNREAD` | `READ` | `DISMISSED`)。
+*   **动态环境检查与引导逻辑**：
+    1.  **首个品牌与订阅引导 (`SETUP_BRAND`)**：
+        *   *触发条件*：当用户登录且系统中未检测到该用户关联的任何品牌，或其名下没有任何处于活跃状态（`ACTIVE`）的订阅时。
+        *   *展示形式*：在通知列表中持续高亮，提示 “创建您的第一个品牌”。
+        *   *交互*：点击该通知，MM 移动端将自动唤起“新建品牌向导/注册流程”。
+        *   *生存周期*：用户完成第一个品牌创建并激活有效订阅前，该通知保持活跃，不可手动忽略；一旦条件达成，后端自动移除该通知。
+    2.  **账号集成配置引导 (`COMPLETE_CONFIG`)**：
+        *   *触发条件*：当用户已成功配置品牌且订阅处于活跃状态、并已绑定 PostFast，但检测到尚未配置 Google Maps (GBP OAuth 或 PlaceID)、TikTok 或 Instagram 这三个核心渠道中任意一个的连接时。
+        *   *展示形式*：提示 “完善您的账号配置”，并列出当前仍未绑定的具体平台。
+        *   *交互*：点击该通知后，提示用户前往桌面版管理端 (`amc-kanban`) 进行 OAuth 集成绑定。
+        *   *生存周期*：在此三个渠道完全绑定成功前，此通知在列表中保持存在，完成后由后端自动检测并移除。
+*   **系统级通知接口**：
+    *   `GET /api/notifications`：拉取当前用户的通知，并触发动态环境检查（自动比对现状，按需增删 DB 中的 setup 引导通知）。
+    *   `PATCH /api/notifications/[id]`：修改通知状态（支持标记为已读或删除归档）。
+
 ### 7. 品牌列表加载机制 (Brand Loading & Visibility Scope)
 *   **全量加载原则**：在 `amc-mm` 专属控制台首页，取消 `assignedOnly=true` 的强行过滤，以匹配品牌主/餐饮老板的视点。
 *   **业务逻辑**：品牌直接访问范围只由有效 `CrewMember` 决定；组织成员通过其 Organization Owner 的有效 `CrewMember` 自动继承品牌范围。`Brand.ownerId`、`BrandOwner`、`BrandAgent` 和 `AgentPermission` 不再参与运行时授权。

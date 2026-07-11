@@ -241,7 +241,7 @@ async function syncBrand(brand: {
           accountId:   googleAccount?.id ?? null,
           type:        'apify_review',
           priority:    r.rating <= 2 ? 'high' : 'normal',
-          title:       `Apify: ${r.rating}★ 评论 — ${r.reviewerName}`,
+          title:       `Google Business: ${r.rating}★ 评论 — ${r.reviewerName}`,
           description: r.text.slice(0, 500),
           status:      'pending',
           payload: {

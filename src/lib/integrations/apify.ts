@@ -229,7 +229,7 @@ export async function runActorAndWait<T = unknown>(
     runId = run.runId
     datasetId = run.datasetId
   } catch (e: unknown) {
-    return { items: [], runId: '', durationMs: Date.now() - t0, error: e instanceof Error ? e.message : 'Apify start failed' }
+    return { items: [], runId: '', durationMs: Date.now() - t0, error: e instanceof Error ? e.message : 'Platform sync task failed to start' }
   }
 
   // Poll for completion
@@ -242,14 +242,14 @@ export async function runActorAndWait<T = unknown>(
         return { items, runId, durationMs: Date.now() - t0 }
       }
       if (['FAILED', 'TIMED-OUT', 'ABORTED'].includes(status.status)) {
-        return { items: [], runId, durationMs: Date.now() - t0, error: `Run ${status.status}` }
+        return { items: [], runId, durationMs: Date.now() - t0, error: `Sync run ${status.status}` }
       }
     } catch {
       // transient poll error — keep trying
     }
   }
 
-  return { items: [], runId, durationMs: Date.now() - t0, error: 'Client-side timeout waiting for Apify run' }
+  return { items: [], runId, durationMs: Date.now() - t0, error: 'Client-side timeout waiting for platform sync run' }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

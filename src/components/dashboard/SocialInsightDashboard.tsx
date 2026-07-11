@@ -673,15 +673,15 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
         </div>
       )}
 
-      {/* Apify data badge */}
+      {/* Platform data badge */}
       {apifySync.hasSyncData && apifySync.syncedAt && (
         <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
-          Apify 数据已采集 · 最后同步: {new Date(apifySync.syncedAt).toLocaleString('zh-CN')} ·
-          {apifySync.googleReviewCount > 0 && ` ${apifySync.googleReviewCount} 条评论`}
-          {apifySync.instagramPostCount > 0 && ` · ${apifySync.instagramPostCount} IG 帖子`}
-          {apifySync.tiktokPostCount > 0 && ` · ${apifySync.tiktokPostCount} TT 帖子`}
-          {apifySync.xiaohongshuPostCount > 0 && ` · ${apifySync.xiaohongshuPostCount} RED 帖子`}
+          社媒与评论数据已采集 · 最后同步: {new Date(apifySync.syncedAt).toLocaleString('zh-CN')} ·
+          {apifySync.googleReviewCount > 0 && ` ${apifySync.googleReviewCount} 条 Google 商家评论`}
+          {apifySync.instagramPostCount > 0 && ` · ${apifySync.instagramPostCount} Instagram 帖子`}
+          {apifySync.tiktokPostCount > 0 && ` · ${apifySync.tiktokPostCount} TikTok 帖子`}
+          {apifySync.xiaohongshuPostCount > 0 && ` · ${apifySync.xiaohongshuPostCount} 小红书帖子`}
         </div>
       )}
 
