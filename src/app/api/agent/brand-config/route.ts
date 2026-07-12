@@ -145,7 +145,7 @@ export async function POST(request: Request) {
       data: {
         name: name.trim(),
         location: location?.trim() || null,
-        timezone: timezone || 'America/New_York',
+        timezone: timezone || 'Asia/Singapore',
         ...(address ? { address: address.trim() } : {}),
         ...(googlePlaceId ? { googlePlaceId } : {}),
       },

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         description: description?.trim() || null,
         location: location?.trim() || null,
-        timezone: timezone || 'America/New_York',
+        timezone: timezone || 'Asia/Singapore',
         address: address?.trim() || null,
         status: 'ACTIVE',
       },

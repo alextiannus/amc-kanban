@@ -85,7 +85,7 @@ export async function PATCH(request: Request, { params }: Params) {
       data: {
         ...(name !== undefined ? { name } : {}),
         ...(location !== undefined ? { location: location || null } : {}),
-        ...(timezone !== undefined ? { timezone: timezone || 'America/New_York' } : {}),
+        ...(timezone !== undefined ? { timezone: timezone || 'Asia/Singapore' } : {}),
         ...(status !== undefined ? { status } : {}),
         ...(typeof body.autoPilot === 'boolean' ? { autoPilot: body.autoPilot } : {}),
         ...(resolvedOwnerId ? { ownerId: resolvedOwnerId } : {}),

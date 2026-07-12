@@ -42,8 +42,14 @@ async function generateSessionToken(user: any): Promise<string> {
   const secretKey = process.env.JWT_SECRET
   if (!secretKey) throw new Error('JWT_SECRET environment variable is missing!')
   const key = new TextEncoder().encode(secretKey)
-  return await new SignJWT({ user })
+  return await new SignJWT({
+    type: user.type || 'HUMAN',
+    authVersion: 1,
+  })
     .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(user.id)
+    .setIssuer('amc-kanban')
+    .setAudience('amc-users')
     .setIssuedAt()
     .setExpirationTime('7d')
     .sign(key)
@@ -145,6 +151,13 @@ async function startMockPostFastServer(): Promise<void> {
         return
       }
 
+      // Mock Route: DELETE /social-posts/:id
+      if (url.includes('/social-posts/') && method === 'DELETE') {
+        res.writeHead(200)
+        res.end(JSON.stringify({ success: true }))
+        return
+      }
+
       // Mock Route: GET public image download (simulating external CDN)
       if ((url.endsWith('.jpg') || url.endsWith('.png')) && method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'image/jpeg' })
@@ -233,6 +246,34 @@ async function runTests() {
     where: { apiKey: AGENT_API_KEY }
   })
   if (agentUser) {
+    const crypto = await import('node:crypto')
+    const tokenHash = crypto.createHash('sha256').update(AGENT_API_KEY).digest('hex')
+    const prefix = AGENT_API_KEY.slice(0, 12)
+    await prisma.userApiKey.upsert({
+      where: { token: AGENT_API_KEY },
+      create: {
+        userId: agentUser.id,
+        token: AGENT_API_KEY,
+        tokenHash,
+        prefix,
+        name: 'Agent Test Key',
+      },
+      update: {
+        tokenHash,
+        prefix,
+      }
+    })
+
+    await prisma.user.update({
+      where: { id: agentUser.id },
+      data: { role: 'ADMIN' }
+    })
+    await prisma.userBusinessRole.upsert({
+      where: { userId_role: { userId: agentUser.id, role: 'ADMIN' } },
+      create: { userId: agentUser.id, role: 'ADMIN' },
+      update: {}
+    })
+
     await prisma.brandAgent.upsert({
       where: { brandId_agentId: { brandId: brand.id, agentId: agentUser.id } },
       create: { brandId: brand.id, agentId: agentUser.id, role: 'worker', active: true },

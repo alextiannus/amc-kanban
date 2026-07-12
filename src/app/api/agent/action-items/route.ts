@@ -86,10 +86,8 @@ export async function POST(request: Request) {
         captionLang: draftData.captionLang || 'en',
         mediaUrls: draftData.mediaUrls || [],
         hashtags: draftData.hashtags || [],
-        // scheduledAt intentionally set to null here — time must be determined by the
-        // scheduling/recommend API to avoid conflicts. Agents should call
-        // board_get_schedule_recommendation before board_submit_draft.
-        scheduledAt: null,
+        // scheduledAt is parsed from draftData.scheduledAt if provided
+        scheduledAt: draftData.scheduledAt ? new Date(draftData.scheduledAt) : null,
         status: 'pending_review',
         agentId: agent.userId,
         agentNote: draftData.agentNote || null,
@@ -125,6 +123,21 @@ export async function POST(request: Request) {
       resolvedAt: shouldAutoResolveImmediately ? new Date() : null,
       resolvedBy: shouldAutoResolveImmediately ? 'auto_pilot' : null,
     },
+  })
+
+  // Create linked WorkUnit (Kanban Task) for the ActionItem
+  const initialWorkUnitStatus = shouldAutoResolveImmediately ? 'done' : 'pending'
+  await prisma.workUnit.create({
+    data: {
+      title,
+      description,
+      status: initialWorkUnitStatus,
+      brandId,
+      assigneeId: agent.userId,
+      tags: [`action_item:${item.id}`, platformHint || 'social', 'copywriter'],
+      priority: priority || 'medium',
+      deadline: draftData?.scheduledAt ? new Date(draftData.scheduledAt) : null,
+    }
   })
 
   // If brand is in autoPilot and this is content approval with draft — attempt immediate publish
@@ -210,11 +223,17 @@ export async function POST(request: Request) {
           platformPostId = publish.postId ?? null
         }
 
+        const isScheduled = !!draft.scheduledAt && draft.scheduledAt > new Date()
         if (publish.success) {
           await Promise.all([
             prisma.contentDraft.update({
               where: { id: draft.id },
-              data: { status: 'published', publishedAt: new Date(), platformPostId, postUrl: publishedUrl },
+              data: {
+                status: isScheduled ? 'scheduled' : 'published',
+                publishedAt: isScheduled ? null : new Date(),
+                platformPostId,
+                postUrl: publishedUrl
+              },
             }),
             prisma.actionItem.update({
               where: { id: item.id },
@@ -224,6 +243,13 @@ export async function POST(request: Request) {
                 resolvedBy: 'auto_pilot',
               },
             }),
+            prisma.workUnit.updateMany({
+              where: { tags: { has: `action_item:${item.id}` } },
+              data: {
+                status: isScheduled ? 'in_progress' : 'done',
+                materials: publishedUrl ? `发布链接: ${publishedUrl}` : undefined
+              }
+            })
           ])
         } else {
           await Promise.all([
@@ -238,6 +264,13 @@ export async function POST(request: Request) {
                 resolvedNote: publishError,
               },
             }),
+            prisma.workUnit.updateMany({
+              where: { tags: { has: `action_item:${item.id}` } },
+              data: {
+                status: 'pending',
+                requiredInput: publishError,
+              }
+            })
           ])
         }
       }

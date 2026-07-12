@@ -344,7 +344,7 @@ model Brand {
   ownerId        String?
   name           String
   location       String?
-  timezone       String   @default("America/New_York")
+  timezone       String   @default("Asia/Singapore")
   autoPilot      Boolean  @default(true)
   status         String   @default("ACTIVE") // ACTIVE | PAUSED | ARCHIVED
 

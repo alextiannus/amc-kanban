@@ -26,12 +26,12 @@ interface BrandsTabProps {
   brandsLoading: boolean
   humans: UserRecord[]
   agents: UserRecord[]
-  brandDrafts: Record<string, { name: string; location: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; agentIds: string[] }>
+  brandDrafts: Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; agentIds: string[] }>
   actionLoading: Record<string, string>
   onUpdateBrandDraft: (brandId: string, patch: any) => void
   onSaveBrandDraft: (brand: BrandRecord) => Promise<void>
   onFetchBrands: () => Promise<void>
-  onCreateBrand: (params: { brandName: string; ownerEmail: string; planId: string; durationMonths: number; location?: string }) => Promise<{ ok: boolean; error?: string }>
+  onCreateBrand: (params: { brandName: string; ownerEmail: string; planId: string; durationMonths: number; location?: string; timezone?: string }) => Promise<{ ok: boolean; error?: string }>
 
   // Dispatch Pool props
   poolConfig: AssignmentPoolConfig | null
@@ -104,6 +104,7 @@ export default function BrandsTab({
     planId: 'essential',
     durationMonths: 12,
     location: '',
+    timezone: 'Asia/Singapore',
   })
 
   const handleCreateBrand = async () => {
@@ -119,11 +120,12 @@ export default function BrandsTab({
       planId: newBrand.planId,
       durationMonths: newBrand.durationMonths,
       location: newBrand.location.trim() || undefined,
+      timezone: newBrand.timezone,
     })
     setIsCreating(false)
     if (result.ok) {
       setShowCreateForm(false)
-      setNewBrand({ brandName: '', ownerEmail: '', planId: 'essential', durationMonths: 12, location: '' })
+      setNewBrand({ brandName: '', ownerEmail: '', planId: 'essential', durationMonths: 12, location: '', timezone: 'Asia/Singapore' })
     } else {
       setCreateError(result.error || '创建失败，请重试')
     }
@@ -409,10 +411,15 @@ export default function BrandsTab({
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <span className="inline-flex max-w-full items-center gap-1 text-slate-650 dark:text-slate-350 font-medium">
-                            <MapPin size={12} className="shrink-0 text-slate-400" />
-                            <span className="truncate">{brand.location || '未标注'}</span>
-                          </span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="inline-flex max-w-full items-center gap-1 text-slate-650 dark:text-slate-350 font-medium">
+                              <MapPin size={12} className="shrink-0 text-slate-400" />
+                              <span className="truncate">{brand.location || '未标注'}</span>
+                            </span>
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider pl-4">
+                              {brand.timezone}
+                            </span>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -515,6 +522,24 @@ export default function BrandsTab({
                       onChange={e => setNewBrand(p => ({ ...p, location: e.target.value }))}
                       className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
+                  </div>
+
+                  {/* Timezone */}
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+                      时区
+                    </label>
+                    <select
+                      value={newBrand.timezone}
+                      onChange={e => setNewBrand(p => ({ ...p, timezone: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="Asia/Singapore">新加坡/北京时间 (Asia/Singapore - UTC+8)</option>
+                      <option value="America/New_York">美东时间 (America/New_York - UTC-5/UTC-4)</option>
+                      <option value="America/Los_Angeles">美西时间 (America/Los_Angeles - UTC-8/UTC-7)</option>
+                      <option value="Europe/London">伦敦时间 (Europe/London - UTC+0/UTC+1)</option>
+                      <option value="Australia/Sydney">悉尼时间 (Australia/Sydney - UTC+10/UTC+11)</option>
+                    </select>
                   </div>
 
                   {/* Error */}
@@ -635,6 +660,20 @@ export default function BrandsTab({
                           onChange={e => onUpdateBrandDraft(editingBrand.id, { location: e.target.value })} 
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
                         />
+                      </label>
+                      <label className="space-y-1.5 block">
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">时区 (Timezone)</span>
+                        <select 
+                          value={draft.timezone} 
+                          onChange={e => onUpdateBrandDraft(editingBrand.id, { timezone: e.target.value })} 
+                          className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500" 
+                        >
+                          <option value="Asia/Singapore">新加坡/北京时间 (Asia/Singapore - UTC+8)</option>
+                          <option value="America/New_York">美东时间 (America/New_York - UTC-5/UTC-4)</option>
+                          <option value="America/Los_Angeles">美西时间 (America/Los_Angeles - UTC-8/UTC-7)</option>
+                          <option value="Europe/London">伦敦时间 (Europe/London - UTC+0/UTC+1)</option>
+                          <option value="Australia/Sydney">悉尼时间 (Australia/Sydney - UTC+10/UTC+11)</option>
+                        </select>
                       </label>
                     </div>
 

@@ -405,7 +405,7 @@ export async function POST(request: Request) {
   const pendingBrandLocation = String(body.pendingBrandLocation ?? '').trim()
   const pendingBrandAddress = String(body.pendingBrandAddress ?? '').trim()
   const pendingBrandOwnerEmail = String(body.pendingBrandOwnerEmail ?? '').trim().toLowerCase()
-  const pendingBrandTimezone = String(body.timezone ?? '').trim() || 'America/New_York'
+  const pendingBrandTimezone = String(body.timezone ?? '').trim() || 'Asia/Singapore'
   const pendingBrandDescription = String(body.pendingBrandDescription ?? '').trim()
 
   if (brandId && pendingBrandName) {

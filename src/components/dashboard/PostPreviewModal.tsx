@@ -68,6 +68,7 @@ interface PostPreviewModalProps {
   onSchedule: (customTime?: string) => void
   onRegenerate: () => void
   onCancelCopywriter: (cwId: string) => void
+  onRegenerateSingleCopywriter?: (cwId: string) => void
   previewOnly?: boolean
 }
 
@@ -90,6 +91,7 @@ export default function PostPreviewModal({
   onSchedule,
   onRegenerate,
   onCancelCopywriter,
+  onRegenerateSingleCopywriter,
   previewOnly = false
 }: PostPreviewModalProps) {
   const [editingCopywriterId, setEditingCopywriterId] = useState<string | null>(null)
@@ -161,40 +163,76 @@ export default function PostPreviewModal({
               const platformLabel = platform === 'ig' ? 'Instagram' : platform === 'xhs' ? '小红书' : platform === 'fb' ? 'Facebook' : platform === 'tiktok' ? 'TikTok' : 'Google Business'
 
               return (
-                <div key={cwId} className="flex-shrink-0 flex flex-col self-start" style={{ width: 270 }}>
-                  {/* Title row: plain floating label, NOT a box. Sits above the phone screenshot. */}
-                  <div className="flex items-center justify-between px-1 pb-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        platform === 'ig' ? 'bg-gradient-to-tr from-yellow-400 via-pink-400 to-purple-400'
-                        : platform === 'xhs' ? 'bg-red-400'
-                        : platform === 'fb' ? 'bg-blue-400'
-                        : platform === 'tiktok' ? 'bg-slate-300'
-                        : 'bg-amber-400'
-                      }`} />
-                      <span className="text-[10px] font-bold text-slate-300 truncate">{platformLabel}</span>
-                      <span className="text-[9px] text-slate-600">·</span>
-                      <span className="text-[9px] text-slate-500 truncate">{copywriter.name}</span>
-                      {isGenerating && (
-                        <span className="flex items-center gap-0.5 text-[8px] text-indigo-400 font-semibold">
-                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                          创作中
-                        </span>
-                      )}
+                <div key={cwId} className="flex-shrink-0 flex flex-col self-start rounded-xl border border-slate-800 bg-slate-900 overflow-hidden shadow-lg" style={{ width: 270 }}>
+                  {/* Card Header displaying the copywriter & platform info */}
+                  <div className="flex flex-col border-b border-slate-800 px-3 py-2.5 space-y-1.5 shrink-0 bg-slate-900">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {/* A tiny platform indicator */}
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${
+                          platform === 'ig' ? 'bg-gradient-to-tr from-yellow-400 via-pink-400 to-purple-400'
+                          : platform === 'xhs' ? 'bg-red-500'
+                          : platform === 'fb' ? 'bg-blue-650'
+                          : platform === 'tiktok' ? 'bg-white'
+                          : 'bg-amber-500'
+                        }`} />
+                        <span className="text-[10px] font-black text-slate-200">{platformLabel}</span>
+                      </div>
+                      
+                      {/* Close button to skip/cancel draft */}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onCancelCopywriter(cwId) }}
+                        className="w-5 h-5 rounded-full text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 flex items-center justify-center transition-all"
+                        title={`取消 ${copywriter.name} 的草稿`}
+                      >
+                        <X className="w-3 w-3" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onCancelCopywriter(cwId) }}
-                      className="shrink-0 w-5 h-5 rounded-full text-slate-600 hover:text-rose-400 hover:bg-rose-950/40 flex items-center justify-center transition-all ml-2"
-                      title={`取消 ${copywriter.name} 的草稿`}
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
+
+                    {/* Copywriter block with specialty & rewrite action */}
+                    <div className="flex items-center justify-between bg-slate-950/60 p-2 rounded-lg border border-slate-800/40">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {/* Copywriter avatar or initial */}
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-bold text-xs ${
+                          isGenerating ? 'bg-indigo-950 text-indigo-400 border border-indigo-500/30 animate-pulse' : 'bg-slate-800 text-slate-350'
+                        }`}>
+                          {copywriter.name[0]}
+                        </div>
+                        <div className="min-w-0 animate-in fade-in duration-200">
+                          <p className="text-[10px] font-black text-slate-200 truncate">{copywriter.name}</p>
+                          <p className="text-[8px] text-slate-500 truncate" title={copywriter.specialty}>{copywriter.specialty}</p>
+                        </div>
+                      </div>
+
+                      {/* Status / Actions */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {isGenerating ? (
+                          <span className="flex items-center gap-0.5 text-[8px] text-indigo-400 font-bold bg-indigo-950/60 border border-indigo-900/50 px-1.5 py-0.5 rounded-full">
+                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                            <span>创作中</span>
+                          </span>
+                        ) : (
+                          // Show a rewrite button!
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onRegenerateSingleCopywriter?.(cwId) }}
+                            disabled={saving || isAiGenerating}
+                            className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-950 hover:bg-indigo-900 border border-indigo-900/50 px-2 py-0.5 rounded-full flex items-center gap-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            title={`让 ${copywriter.name} 重新撰写文案`}
+                          >
+                            <RefreshCw className="w-2 h-2" />
+                            <span>重写</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  {/* Phone screenshot: no outer frame, content IS the phone screen */}
+
+                  {/* Phone screenshot: content IS the phone screenshot */}
                   <div
                     onClick={() => setEditingCopywriterId(cwId)}
-                    className="overflow-hidden rounded-xl cursor-pointer shadow-lg"
+                    className="overflow-hidden cursor-pointer"
                   >
                     <PlatformPreviewCard
                       account={displayAccount}

@@ -111,7 +111,7 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
         name,
         description: input.description?.trim() || null,
         location: input.location?.trim() || null,
-        timezone: input.timezone || 'America/New_York',
+        timezone: input.timezone || 'Asia/Singapore',
         address: input.address?.trim() || null,
         status: 'ACTIVE',
       },

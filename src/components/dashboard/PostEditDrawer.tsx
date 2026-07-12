@@ -668,6 +668,39 @@ export default function PostEditDrawer({
     }
   }
 
+  const handleSingleAiCopywrite = async (cwId: string) => {
+    const draftEntry = Object.entries(draftCopywriterMap).find(([, v]) => v === cwId)
+    if (!draftEntry) {
+      alert('未找到该 Copywriter 对应的草稿')
+      return
+    }
+    const draftId = draftEntry[0]
+
+    setDraftStatuses(prev => ({ ...prev, [cwId]: 'generating' }))
+    setDraftCaptions(prev => ({ ...prev, [cwId]: '【AI 正在创作中...】' }))
+    setDraftHashtags(prev => ({ ...prev, [cwId]: '' }))
+    setDraftWarnings(prev => {
+      const n = { ...prev }
+      delete n[cwId]
+      return n
+    })
+
+    setIsAiGenerating(true)
+
+    try {
+      const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error || '触发 AI 创作失败')
+      }
+    } catch (e: any) {
+      alert(e.message || 'AI 创作失败')
+      setDraftStatuses(prev => ({ ...prev, [cwId]: 'failed' }))
+    }
+  }
+
   const handleSaveDraftsFromModal = async () => {
     if (!createdDrafts) return
     setSaving(true)
@@ -1910,6 +1943,7 @@ Return the output strictly in a valid JSON array format, containing:
         onSaveDraft={handleSaveDraftsFromModal}
         onSchedule={handleScheduleFromModal}
         onRegenerate={handleAiCopywrite}
+        onRegenerateSingleCopywriter={handleSingleAiCopywrite}
         onCancelCopywriter={async (cwId) => {
           // Find the draft associated with this copywriter
           const draftEntry = Object.entries(draftCopywriterMap).find(([, v]) => v === cwId)

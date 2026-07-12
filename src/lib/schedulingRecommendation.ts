@@ -8,27 +8,122 @@ const PREFERRED_HOURS = [
 ] as const
 const MIN_GAP_DAYS = 2
 
-function nextPreferredSlot(earliest: Date): Date {
-  for (let dayOffset = 0; dayOffset <= 5; dayOffset++) {
-    const base = new Date(earliest)
-    base.setDate(base.getDate() + dayOffset)
-    for (const { hour, minute } of PREFERRED_HOURS) {
-      const candidate = new Date(base)
-      candidate.setHours(hour, minute, 0, 0)
-      if (candidate >= earliest) return candidate
-    }
+// Timezone conversion helpers using Intl.DateTimeFormat
+function getLocalDateParts(date: Date, timezone: string) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hourCycle: 'h23'
+  })
+  const parts = formatter.formatToParts(date)
+  const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]))
+  return {
+    year: Number(partMap.year),
+    month: Number(partMap.month),
+    day: Number(partMap.day)
   }
-  const fallback = new Date(earliest.getTime() + 60 * 60 * 1000)
-  fallback.setMinutes(fallback.getMinutes() < 30 ? 30 : 0)
-  if (fallback.getMinutes() === 0) fallback.setHours(fallback.getHours() + 1)
-  return fallback
 }
 
-function alternativeSlots(recommended: Date): string[] {
+function targetTimeToUTC(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timezone: string
+): Date {
+  const guessUTC = new Date(Date.UTC(year, month - 1, day, hour, minute, 0))
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', second: 'numeric',
+    hourCycle: 'h23'
+  })
+  
+  const parts = formatter.formatToParts(guessUTC)
+  const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]))
+  
+  const guessLocalInUTC = Date.UTC(
+    Number(partMap.year),
+    Number(partMap.month) - 1,
+    Number(partMap.day),
+    Number(partMap.hour),
+    Number(partMap.minute),
+    0
+  )
+  
+  const diff = guessLocalInUTC - guessUTC.getTime()
+  return new Date(guessUTC.getTime() - diff)
+}
+
+function nextPreferredSlot(earliest: Date, timezone: string): Date {
+  for (let dayOffset = 0; dayOffset <= 5; dayOffset++) {
+    const earliestParts = getLocalDateParts(earliest, timezone)
+    
+    // Construct the base date in UTC and format it to get the calendar day incremented by dayOffset
+    const baseDateInTargetTimezone = new Date(Date.UTC(
+      earliestParts.year,
+      earliestParts.month - 1,
+      earliestParts.day + dayOffset
+    ))
+    
+    // Now get the correct year, month, and day for this baseDateInTargetTimezone (it takes care of month/year overflows)
+    const baseDateParts = getLocalDateParts(baseDateInTargetTimezone, 'UTC')
+    
+    for (const { hour, minute } of PREFERRED_HOURS) {
+      const candidate = targetTimeToUTC(
+        baseDateParts.year,
+        baseDateParts.month,
+        baseDateParts.day,
+        hour,
+        minute,
+        timezone
+      )
+      if (candidate >= earliest) {
+        return candidate
+      }
+    }
+  }
+  
+  // Fallback (e.g. if we get past 5 days): add 1 hour to earliest in target timezone
+  // Align to next half-hour or top of hour
+  const earliestParts = getLocalDateParts(earliest, timezone)
+  
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: 'numeric', minute: 'numeric',
+    hourCycle: 'h23'
+  })
+  const parts = formatter.formatToParts(earliest)
+  const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]))
+  
+  let targetHour = Number(partMap.hour)
+  let targetMinute = Number(partMap.minute)
+  
+  // add 1 hour
+  targetHour += 1
+  if (targetMinute < 30) {
+    targetMinute = 30
+  } else {
+    targetMinute = 0
+    targetHour += 1
+  }
+  
+  return targetTimeToUTC(
+    earliestParts.year,
+    earliestParts.month,
+    earliestParts.day,
+    targetHour % 24,
+    targetMinute,
+    timezone
+  )
+}
+
+function alternativeSlots(recommended: Date, timezone: string): string[] {
   const alternatives: Date[] = []
   let cursor = recommended
   while (alternatives.length < 2) {
-    const next = nextPreferredSlot(new Date(cursor.getTime() + 60 * 1000))
+    const next = nextPreferredSlot(new Date(cursor.getTime() + 60 * 1000), timezone)
     alternatives.push(next)
     cursor = next
   }
@@ -49,6 +144,14 @@ export async function getSchedulingRecommendations(input: {
   urgency?: 'normal' | 'urgent'
 }) {
   const now = new Date()
+  
+  // Fetch brand timezone from database
+  const brand = await prisma.brand.findUnique({
+    where: { id: input.brandId },
+    select: { timezone: true }
+  })
+  const timezone = brand?.timezone || 'Asia/Singapore'
+  
   const platforms: Array<string | null> = input.platform ? [input.platform] : [null]
   const recommendations = await Promise.all(
     platforms.map(async (platform) => {
@@ -76,12 +179,12 @@ export async function getSchedulingRecommendations(input: {
                 ),
               )
             : now
-      const recommendedAt = nextPreferredSlot(earliest)
+      const recommendedAt = nextPreferredSlot(earliest, timezone)
       return {
         platform,
         recommendedAt: recommendedAt.toISOString(),
         reason: buildReason(lastTime, gapDays),
-        alternativeSlots: alternativeSlots(recommendedAt),
+        alternativeSlots: alternativeSlots(recommendedAt, timezone),
         lastPublishedAt: lastTime?.toISOString() ?? null,
         gapDays: gapDays !== null ? Math.round(gapDays * 10) / 10 : null,
       }

@@ -63,6 +63,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     },
   })
   if (!draft) return { ok: false as const, status: 404, error: 'Draft not found' }
+  const immediatePublish = !!(input.immediatePublish || input.note === '立即发布')
 
   // ── 快速校验（在抢锁之前，避免空跑）────────────────────────────────────────
   if (!draft.caption || !draft.caption.trim()) {
@@ -201,13 +202,18 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         // 取消失败（未知错误）— 阻断流程，防止重复帖子
         await prisma.contentDraft.update({
           where: { id: draft.id },
-          data: { status: 'failed', agentNote: `发布失败：无法取消旧排期 ${draft.platformPostId}，请稍后重试。${cancelResult.error || ''}` },
+          data: {
+            status: 'failed',
+            agentNote: immediatePublish
+              ? `立即发布失败：此帖文已排期发布且无法取消。`
+              : `发布失败：无法取消旧排期 ${draft.platformPostId}，请稍后重试。${cancelResult.error || ''}`
+          },
         })
         return {
           ok: false as const,
           status: 400,
-          error: input.immediatePublish
-            ? `PostFast 无法取消旧排期，请稍等几秒后重试立即发布。（${cancelResult.error || '未知错误'}）`
+          error: immediatePublish
+            ? `立即发布 failed due to the post is already scheduled and could not be deleted`
             : `无法取消旧排期，未创建新排期。（${cancelResult.error || '未知错误'}）`,
         }
       }
@@ -225,7 +231,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   const isRescheduleRequested = typeof input.note === 'string' &&
     (input.note.includes('重新智能排期') || input.note.includes('智能重新排期'))
 
-  if (input.immediatePublish) {
+  if (immediatePublish) {
     // PostFast API docs: status only accepts DRAFT or SCHEDULED.
     // scheduledAt is required when status=SCHEDULED (the default), and MUST be in the future.
     // For "immediate" publish, set scheduledAt 2 minutes ahead — PostFast picks it up within minutes.
@@ -255,7 +261,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   // (required by their API), the user explicitly chose immediate publish — the post will
   // be live within minutes. Write 'published' directly so the UI reflects reality.
   // For scheduled posts: only mark as 'scheduled' if the time is genuinely in the future.
-  const scheduled = !input.immediatePublish && isFuture(resolvedScheduledAt)
+  const scheduled = !immediatePublish && isFuture(resolvedScheduledAt)
 
   const mediaUrls = uniq([
     ...draft.mediaUrls,

@@ -173,10 +173,11 @@ export async function PATCH(request: Request, { params }: Params) {
     isScheduledOnPostfast &&
     (!existing.scheduledAt || Math.abs(incomingScheduledAt.getTime() - existing.scheduledAt.getTime()) > 60_000)
 
+  let brand: { postfastApiKey: string | null; timezone: string | null } | null = null
   if (isScheduledOnPostfast && (nextStatus && ['draft', 'pending_review', 'rejected'].includes(nextStatus) || scheduledAtChanged)) {
-    const brand = await prisma.brand.findUnique({
+    brand = await prisma.brand.findUnique({
       where: { id: brandId },
-      select: { postfastApiKey: true }
+      select: { postfastApiKey: true, timezone: true }
     })
     if (brand?.postfastApiKey) {
       const { postfastDeletePost } = await import('@/lib/integrations/postfast')
@@ -288,7 +289,7 @@ export async function PATCH(request: Request, { params }: Params) {
         draftId,
         actorId: actor.id,
         forcePublish: true,
-        note: `已更新排期时间至 ${incomingScheduledAt!.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`,
+        note: `已更新排期时间至 ${incomingScheduledAt!.toLocaleString('zh-CN', { timeZone: brand?.timezone || 'Asia/Singapore' })}`,
       })
       if (resubmitResult.ok) {
         console.log(`[PATCH Draft] Re-submitted to PostFast with new scheduledAt ${incomingScheduledAt?.toISOString()}`)

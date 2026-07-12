@@ -60,7 +60,7 @@ function AdminPageInner() {
   const [poolDrafts, setPoolDrafts] = useState<Record<string, { capacity: number; priority: number; industries: string; regions: string }>>({})
   
   // Brand draft states
-  const [brandDrafts, setBrandDrafts] = useState<Record<string, { name: string; location: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; agentIds: string[] }>>({})
+  const [brandDrafts, setBrandDrafts] = useState<Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; agentIds: string[] }>>({})
 
   // LLM Config state
   const [llmConfigs, setLlmConfigs] = useState<LLMConfigRecord[]>([])
@@ -131,6 +131,7 @@ function AdminPageInner() {
           return [brand.id, {
             name: brand.name,
             location: brand.location || '',
+            timezone: brand.timezone || 'Asia/Singapore',
             status: brand.status,
             ownerUserId: brand.owners[0]?.userId || '',
             planId: subscription?.planId || '',
@@ -423,6 +424,7 @@ function AdminPageInner() {
     planId: string
     durationMonths: number
     location?: string
+    timezone?: string
   }): Promise<{ ok: boolean; error?: string }> => {
     try {
       const res = await fetch('/api/mm/subscription', {
@@ -432,6 +434,7 @@ function AdminPageInner() {
           pendingBrandName: params.brandName,
           pendingBrandOwnerEmail: params.ownerEmail,
           pendingBrandLocation: params.location ?? '',
+          timezone: params.timezone ?? 'Asia/Singapore',
           planId: params.planId,
           durationMonths: params.durationMonths,
           paymentMode: 'BILLING',  // Direct activation, no Stripe — same as offline/admin activation
