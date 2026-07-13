@@ -74,6 +74,49 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     return { ok: false as const, status: 400, error: '请先为草稿选择发布账号（确定发布平台）。' }
   }
 
+  // 已经排期的post，一定要先确认之前的排期成功取消掉，否则不要安排新的发布避免重复
+  if (draft.platformPostId && !draft.publishedAt) {
+    if (!brand.postfastApiKey) {
+      return { ok: false as const, status: 400, error: '品牌尚未配置 PostFast API Key，无法取消排期。' }
+    }
+    const cancelResult = await postfastDeletePost(brand.postfastApiKey, draft.platformPostId)
+    if (!cancelResult.success) {
+      const isNotFound = cancelResult.error?.includes('404') ||
+        cancelResult.error?.toLowerCase().includes('not found') ||
+        cancelResult.error?.includes('does not exist')
+
+      if (isNotFound) {
+        console.warn(`[submitDraftForDelivery] Old post ${draft.platformPostId} not found in PostFast (already published or deleted), clearing and proceeding`)
+        await prisma.contentDraft.update({
+          where: { id: draft.id },
+          data: { platformPostId: null },
+        })
+        draft.platformPostId = null
+      } else {
+        // 取消失败（未知错误）— 阻断流程，防止重复帖子
+        await prisma.contentDraft.update({
+          where: { id: draft.id },
+          data: {
+            status: 'failed',
+            agentNote: `当前排期取消失败，无法重新排期。${cancelResult.error || ''}`
+          },
+        })
+        return {
+          ok: false as const,
+          status: 400,
+          error: `当前排期取消失败，无法重新排期。（${cancelResult.error || '未知错误'}）`,
+        }
+      }
+    } else {
+      // 成功取消，清除 platformPostId
+      await prisma.contentDraft.update({
+        where: { id: draft.id },
+        data: { platformPostId: null },
+      })
+      draft.platformPostId = null
+    }
+  }
+
   // ── 原子互斥锁：防止并发重复发布 ──────────────────────────────────────────
   // 用 updateMany + WHERE status != 'publishing' 代替 findFirst+check 的 TOCTOU 模式。
   // 只有成功把状态从「非 publishing」改成「publishing」的那一个请求才能继续，
@@ -182,43 +225,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     return { ok: false as const, status: 400, error: '品牌尚未配置 PostFast API Key。' }
   }
 
-  if (draft.platformPostId && !draft.publishedAt) {
-    const cancelResult = await postfastDeletePost(brand.postfastApiKey, draft.platformPostId)
-    if (!cancelResult.success) {
-      // 检查是否是「帖子已不存在」的错误（说明 PostFast 已经发出或删除了该帖）
-      // 这种情况下可以安全清除旧 ID 并继续
-      const isNotFound = cancelResult.error?.includes('404') ||
-        cancelResult.error?.toLowerCase().includes('not found') ||
-        cancelResult.error?.includes('does not exist')
 
-      if (isNotFound) {
-        // 旧帖已不在 PostFast 中（已发布或已被删除），安全清除后继续
-        console.warn(`[submitDraftForDelivery] Old post ${draft.platformPostId} not found in PostFast (already published or deleted), clearing and proceeding`)
-        await prisma.contentDraft.update({
-          where: { id: draft.id },
-          data: { platformPostId: null },
-        })
-      } else {
-        // 取消失败（未知错误）— 阻断流程，防止重复帖子
-        await prisma.contentDraft.update({
-          where: { id: draft.id },
-          data: {
-            status: 'failed',
-            agentNote: immediatePublish
-              ? `立即发布失败：此帖文已排期发布且无法取消。`
-              : `发布失败：无法取消旧排期 ${draft.platformPostId}，请稍后重试。${cancelResult.error || ''}`
-          },
-        })
-        return {
-          ok: false as const,
-          status: 400,
-          error: immediatePublish
-            ? `立即发布 failed due to the post is already scheduled and could not be deleted`
-            : `无法取消旧排期，未创建新排期。（${cancelResult.error || '未知错误'}）`,
-        }
-      }
-    }
-  }
 
   // status is already 'publishing' — set by the atomic lock above. Only clear rejectionNote.
   await prisma.contentDraft.update({ where: { id: draft.id }, data: { rejectionNote: null } })

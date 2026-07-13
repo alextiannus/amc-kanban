@@ -126,7 +126,7 @@ export async function PATCH(request: Request, { params }: Params) {
     if ((brand.postfastApiKey && platformName) || isDirectGoogle) {
       // Fire-and-forget publish
       ;(async () => {
-        let result: { success: boolean; postId?: string; url?: string; error?: string }
+        let result: { success: boolean; postId?: string; url?: string; error?: string } = { success: false, error: 'Unknown' }
         let resolvedScheduledAt = draft.scheduledAt ? new Date(draft.scheduledAt) : null
 
         const combinedMediaUrls = Array.from(new Set([
@@ -165,30 +165,58 @@ export async function PATCH(request: Request, { params }: Params) {
             result = { success: false, error: message }
           }
         } else {
-          // Auto-schedule: if no scheduledAt on this draft, get recommended time first
-          const isRescheduleRequested = typeof body.note === 'string' &&
-            (body.note.includes('重新智能排期') || body.note.includes('智能重新排期'))
-
-          if (!resolvedScheduledAt || isRescheduleRequested) {
-            const recommended = await fetchRecommendedScheduleTime(brandId, platformName!)
-            if (recommended) {
-              resolvedScheduledAt = recommended
-              // Write back to DB so the calendar reflects the new time
+          let canProceed = true
+          if (draft.platformPostId && !draft.publishedAt) {
+            const { postfastDeletePost } = await import('@/lib/integrations/postfast')
+            const cancelResult = await postfastDeletePost(brand.postfastApiKey!, draft.platformPostId)
+            if (!cancelResult.success) {
+              const isNotFound = cancelResult.error?.includes('404') ||
+                cancelResult.error?.toLowerCase().includes('not found') ||
+                cancelResult.error?.includes('does not exist')
+              if (isNotFound) {
+                console.warn(`[approve route] Old post ${draft.platformPostId} not found in PostFast, clearing`)
+                await prisma.contentDraft.update({
+                  where: { id: draft.id },
+                  data: { platformPostId: null },
+                })
+              } else {
+                canProceed = false
+                result = { success: false, error: `无法取消旧排期。${cancelResult.error || ''}` }
+              }
+            } else {
               await prisma.contentDraft.update({
                 where: { id: draft.id },
-                data: { scheduledAt: resolvedScheduledAt },
+                data: { platformPostId: null },
               })
             }
           }
 
-          result = await postfastPublish({
-            apiKey: brand.postfastApiKey!,
-            platform: platformName!,
-            caption: draft.caption,
-            mediaUrls: combinedMediaUrls,
-            hashtags: draft.hashtags,
-            scheduledAt: resolvedScheduledAt?.toISOString(),
-          })
+          if (canProceed) {
+            // Auto-schedule: if no scheduledAt on this draft, get recommended time first
+            const isRescheduleRequested = typeof body.note === 'string' &&
+              (body.note.includes('重新智能排期') || body.note.includes('智能重新排期'))
+
+            if (!resolvedScheduledAt || isRescheduleRequested) {
+              const recommended = await fetchRecommendedScheduleTime(brandId, platformName!)
+              if (recommended) {
+                resolvedScheduledAt = recommended
+                // Write back to DB so the calendar reflects the new time
+                await prisma.contentDraft.update({
+                  where: { id: draft.id },
+                  data: { scheduledAt: resolvedScheduledAt },
+                })
+              }
+            }
+
+            result = await postfastPublish({
+              apiKey: brand.postfastApiKey!,
+              platform: platformName!,
+              caption: draft.caption,
+              mediaUrls: combinedMediaUrls,
+              hashtags: draft.hashtags,
+              scheduledAt: resolvedScheduledAt?.toISOString(),
+            })
+          }
         }
 
         // Ensure subsequent status decision uses the final, resolved schedule time.
@@ -208,7 +236,7 @@ export async function PATCH(request: Request, { params }: Params) {
                 postUrl: isScheduled ? null : (result.url ?? null),
                 scheduledAt: resolvedScheduledAt,
               }
-            : { status: 'draft', agentNote: `发布失败: ${result.error}` },
+            : { status: result.error?.includes('取消') ? 'failed' : 'draft', agentNote: `发布失败: ${result.error}` },
         })
 
         const isScheduledFutureForWorkUnit = !isDirectGoogle && !!resolvedScheduledAt && resolvedScheduledAt > new Date()

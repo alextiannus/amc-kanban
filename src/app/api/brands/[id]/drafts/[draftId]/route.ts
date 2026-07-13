@@ -191,6 +191,10 @@ export async function PATCH(request: Request, { params }: Params) {
           platformPostIdUpdate = null // already gone from PostFast — safe to clear
         } else {
           console.warn(`[PATCH Draft] Failed to cancel scheduled post on PostFast: ${cancelResult.error}`)
+          return NextResponse.json(
+            { error: `当前排期取消失败，无法重新排期。（${cancelResult.error || '未知错误'}）` },
+            { status: 400 }
+          )
         }
       }
     }
