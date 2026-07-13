@@ -272,10 +272,6 @@ export default function PostEditDrawer({
       if (assetTypeFilter === 'unused') {
         return (asset.usedCount ?? 0) === 0
       }
-      if (assetTypeFilter === 'all') {
-        const isVid = asset.mimeType?.startsWith('video/')
-        return !isVid
-      }
       return true
     })
   }, [brandAssets, assetTypeFilter])
@@ -1568,7 +1564,7 @@ Return the output strictly in a valid JSON array format, containing:
                               assetTypeFilter === 'all' ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-955/40' : 'text-slate-400'
                             }`}
                           >
-                            全部图文
+                            全部素材
                           </button>
                         </div>
                       </div>
