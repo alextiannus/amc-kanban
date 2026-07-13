@@ -571,7 +571,7 @@ export default function BrandProfileView({
 
   const tabs = [
     { id: 'story', label: '品牌故事', icon: null },
-    { id: 'context', label: '品牌上下文', icon: null },
+    { id: 'context', label: '增长计划', icon: null },
   ] as const
 
   const parseBulletList = (text: string): string[] => {
