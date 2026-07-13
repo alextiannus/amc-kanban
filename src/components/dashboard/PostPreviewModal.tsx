@@ -162,10 +162,12 @@ export default function PostPreviewModal({
 
               const platformLabel = platform === 'ig' ? 'Instagram' : platform === 'xhs' ? '小红书' : platform === 'fb' ? 'Facebook' : platform === 'tiktok' ? 'TikTok' : 'Google Business'
 
+              const mockHandle = brandName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'brand'
+
               return (
-                <div key={cwId} className="flex-shrink-0 flex flex-col self-start rounded-xl border border-slate-800 bg-slate-900 overflow-hidden shadow-lg" style={{ width: 270 }}>
-                  {/* Card Header displaying the copywriter & platform info */}
-                  <div className="flex flex-col border-b border-slate-800 px-3 py-2.5 space-y-1.5 shrink-0 bg-slate-900">
+                <div key={cwId} className="flex-shrink-0 flex flex-col gap-3 self-start" style={{ width: 270 }}>
+                  {/* Copywriter Control Panel - Displayed above the mockup screenshot */}
+                  <div className="flex flex-col rounded-xl border border-slate-800 bg-slate-900 p-3 space-y-2 shrink-0 shadow-md">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 min-w-0">
                         {/* A tiny platform indicator */}
@@ -199,7 +201,7 @@ export default function PostPreviewModal({
                         }`}>
                           {copywriter.name[0]}
                         </div>
-                        <div className="min-w-0 animate-in fade-in duration-200">
+                        <div className="min-w-0">
                           <p className="text-[10px] font-black text-slate-200 truncate">{copywriter.name}</p>
                           <p className="text-[8px] text-slate-500 truncate" title={copywriter.specialty}>{copywriter.specialty}</p>
                         </div>
@@ -229,13 +231,18 @@ export default function PostPreviewModal({
                     </div>
                   </div>
 
-                  {/* Phone screenshot: content IS the phone screenshot */}
+                  {/* Phone screenshot: content IS the phone screenshot, separated and clean */}
                   <div
                     onClick={() => setEditingCopywriterId(cwId)}
-                    className="overflow-hidden cursor-pointer"
+                    className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-lg cursor-pointer"
                   >
                     <PlatformPreviewCard
-                      account={displayAccount}
+                      account={{
+                        id: cwId,
+                        platformId: copywriter.platform,
+                        displayName: brandName,
+                        handle: `@${mockHandle}`,
+                      }}
                       platform={platform}
                       isGenerating={isGenerating}
                       isFailed={isFailed}
