@@ -621,10 +621,8 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
     setSubmitting(true)
     setError(null)
 
-    // Generate a temp password to embed in the invite link
-    const tempPassword = Array.from(crypto.getRandomValues(new Uint8Array(18)))
-      .map(b => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.charAt(b % 62))
-      .join('')
+    // Use default password amc666666 for brand owner registration
+    const tempPassword = 'amc666666'
 
     try {
       const res = await fetch('/api/brands', {

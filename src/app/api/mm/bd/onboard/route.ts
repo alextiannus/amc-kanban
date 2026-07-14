@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Merchant email already registered' }, { status: 409 })
     }
 
-    // 2. Generate temporary password
-    const tempPassword = Math.random().toString(36).substring(2, 10) + 'A1!'
+    // Use default password amc666666 for brand owner registration
+    const tempPassword = 'amc666666'
     const hashedPassword = await hashPassword(tempPassword)
 
     // 3. Create User, Brand, BrandOwner and Subscription inside a transaction

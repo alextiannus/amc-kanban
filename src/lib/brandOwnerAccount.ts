@@ -3,12 +3,12 @@ import { prisma } from './prisma'
 import { hashPassword } from './auth-v2/password'
 
 export type BrandOwnerAccountResult =
-  | { ok: true; user: { id: string; email: string }; created: boolean }
+  | { ok: true; user: { id: string; email: string }; created: boolean; temporaryPassword?: string }
   | { ok: false; reason: 'invalid_email' | 'existing_non_human' }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-export async function findOrCreateBrandOwnerAccount(email: string): Promise<BrandOwnerAccountResult> {
+export async function findOrCreateBrandOwnerAccount(email: string, suppliedPassword?: string): Promise<BrandOwnerAccountResult> {
   const normalizedEmail = email.trim().toLowerCase()
   if (!EMAIL_RE.test(normalizedEmail)) return { ok: false, reason: 'invalid_email' }
 
@@ -29,7 +29,7 @@ export async function findOrCreateBrandOwnerAccount(email: string): Promise<Bran
     return { ok: true, user: { id: existing.id, email: existing.email }, created: false }
   }
 
-  const temporaryPassword = crypto.randomBytes(18).toString('base64url')
+  const temporaryPassword = suppliedPassword || 'amc666666'
   const hashedPassword = await hashPassword(temporaryPassword)
   const user = await prisma.user.create({
     data: {
@@ -42,5 +42,5 @@ export async function findOrCreateBrandOwnerAccount(email: string): Promise<Bran
     select: { id: true, email: true },
   })
 
-  return { ok: true, user, created: true }
+  return { ok: true, user, created: true, temporaryPassword }
 }

@@ -131,13 +131,15 @@ export async function POST(request: Request) {
   const adminCreate = isAmcOperator(sessionUser)
   if (adminCreate) {
     const ownerEmail = typeof body.ownerEmail === 'string' ? body.ownerEmail.trim().toLowerCase() : ''
-    const ownerResult = ownerEmail ? await findOrCreateBrandOwnerAccount(ownerEmail) : null
+    const tempPassword = typeof body._tempPassword === 'string' ? body._tempPassword : ''
+    const ownerResult = ownerEmail ? await findOrCreateBrandOwnerAccount(ownerEmail, tempPassword) : null
 
     if (ownerResult && !ownerResult.ok) {
       return NextResponse.json({ error: ownerResult.reason === 'invalid_email' ? 'Brand owner email is invalid' : 'Brand owner email belongs to a non-human account' }, { status: 400 })
     }
 
     const owner = ownerResult?.ok ? ownerResult.user : { id: sessionUser.id, email: sessionUser.email || null }
+    const ownerCreated = ownerResult?.ok ? ownerResult.created : false
 
     const brand = await prisma.brand.create({
       data: {
@@ -186,6 +188,38 @@ export async function POST(request: Request) {
       console.error('[POST /api/brands] Background assignment failed:', assignmentError)
     })
 
+    // Send welcome email with amc-mm invite link
+    try {
+      const mmHost = process.env.NEXT_PUBLIC_MM_HOST || 'https://amc-mm.immedi.ai'
+      let mmInviteLink = mmHost
+      let finalTempPassword = '(您之前已设置过密码，请使用已有密码登录)'
+
+      if (ownerCreated && tempPassword && ownerResult?.ok) {
+        const { link } = generateInvitationLink(
+          ownerEmail,
+          tempPassword,
+          ownerEmail.split('@')[0],
+          mmHost,
+          { expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 }
+        )
+        mmInviteLink = link
+        finalTempPassword = tempPassword
+      }
+
+      if (ownerResult?.ok) {
+        await sendBrandOnboardingWelcomeEmail({
+          to: ownerEmail,
+          nickname: ownerEmail.split('@')[0],
+          brandName: name.trim(),
+          temporaryPassword: finalTempPassword,
+          mmInviteLink,
+          planName: typeof body.planName === 'string' ? body.planName.trim() : '标准专业代运营套餐',
+        })
+      }
+    } catch (emailErr) {
+      console.error('[POST /api/brands] admin welcome email failed:', emailErr)
+    }
+
     return NextResponse.json({ ...brand, assignment: null, subscription: null }, { status: 201 })
   }
 
@@ -200,7 +234,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '请填写品牌主邮箱' }, { status: 400 })
     }
 
-    const ownerResult = await findOrCreateBrandOwnerAccount(ownerEmail)
+    const tempPassword = typeof body._tempPassword === 'string' ? body._tempPassword : ''
+    const ownerResult = await findOrCreateBrandOwnerAccount(ownerEmail, tempPassword)
     if (!ownerResult.ok) {
       return NextResponse.json(
         { error: ownerResult.reason === 'invalid_email' ? '品牌主邮箱格式无效' : '该邮箱已被非普通用户账号使用' },
@@ -209,7 +244,6 @@ export async function POST(request: Request) {
     }
 
     const { user: owner, created: ownerCreated } = ownerResult
-    const tempPassword = typeof body._tempPassword === 'string' ? body._tempPassword : ''
 
     // Parse plan info from body (wizard supplies planId, planName, durationMonths etc.)
     const planId   = typeof body.planId   === 'string' ? body.planId.trim()   : 'starter'

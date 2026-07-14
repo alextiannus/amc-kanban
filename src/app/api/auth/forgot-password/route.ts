@@ -38,11 +38,24 @@ export async function POST(request: Request) {
     })
 
     const requestUrl = new URL(request.url)
-    const baseUrl =
-      process.env.NEXT_PUBLIC_KANBAN_HOST ||
-      (process.env.NODE_ENV === 'development'
-        ? requestUrl.origin
-        : (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai'))
+    const isMmClient = request.headers.get('x-client-type') === 'mm' || request.headers.get('x-forwarded-host')?.includes('amc-mm')
+    
+    let baseUrl = ''
+    if (isMmClient) {
+      if (process.env.NODE_ENV === 'development') {
+        const xHost = request.headers.get('x-forwarded-host') || 'localhost:3001'
+        const xProto = request.headers.get('x-forwarded-proto') || 'http'
+        baseUrl = `${xProto}://${xHost}`
+      } else {
+        baseUrl = 'https://amc-mm.immedi.ai'
+      }
+    } else {
+      baseUrl =
+        process.env.NEXT_PUBLIC_KANBAN_HOST ||
+        (process.env.NODE_ENV === 'development'
+          ? requestUrl.origin
+          : (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai'))
+    }
 
     const resetLink = `${baseUrl}/reset-password/${rawToken}`
 

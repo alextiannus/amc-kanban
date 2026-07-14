@@ -206,12 +206,24 @@ export async function PATCH(request: Request, { params }: Params) {
       data: { userId: id, token: rawToken, expiresAt },
     })
 
+    const userRoles = await prisma.userBusinessRole.findMany({ where: { userId: id } })
+    const isBrandOwner = userRoles.some((r: any) => r.role === 'BRAND_OWNER')
+
     const requestUrl = new URL(request.url)
-    const baseUrl =
-      process.env.NEXT_PUBLIC_KANBAN_HOST ||
-      (process.env.NODE_ENV === 'development'
-        ? requestUrl.origin
-        : (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai'))
+    let baseUrl = ''
+    if (isBrandOwner) {
+      if (process.env.NODE_ENV === 'development') {
+        baseUrl = 'http://localhost:3001'
+      } else {
+        baseUrl = 'https://amc-mm.immedi.ai'
+      }
+    } else {
+      baseUrl =
+        process.env.NEXT_PUBLIC_KANBAN_HOST ||
+        (process.env.NODE_ENV === 'development'
+          ? requestUrl.origin
+          : (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai'))
+    }
     const resetLink = `${baseUrl}/reset-password/${rawToken}`
 
     await prisma.auditLog.create({
