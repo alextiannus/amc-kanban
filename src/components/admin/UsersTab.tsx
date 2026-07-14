@@ -210,6 +210,8 @@ export default function UsersTab({
           onDeleteUser={onDeleteUser}
           onEditUser={setEditingHumanUser}
           onFetchUsers={onFetchUsers}
+          onSavePermissions={onSavePermissions}
+          savingPerms={savingPerms}
         />
       )}
 

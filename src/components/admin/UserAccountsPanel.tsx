@@ -15,6 +15,7 @@ import {
   Shield,
   Trash2,
   UserPlus,
+  Bot,
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
 
@@ -30,6 +31,8 @@ interface UserAccountsPanelProps {
   onDeleteUser: (user: UserRecord) => Promise<void>
   onEditUser: (user: { id: string; email: string; nickname: string | null; role: string; type: string }) => void
   onFetchUsers?: () => Promise<void>
+  onSavePermissions?: (humanId: string, agentIds: string[]) => Promise<void>
+  savingPerms?: boolean
 }
 
 type UserDraft = {
@@ -43,10 +46,15 @@ export default function UserAccountsPanel({
   users,
   loading,
   creating,
+  actionLoading,
   onCreateUser,
+  onRoleToggle,
+  onToggleBusinessRole,
   onResetPassword,
   onDeleteUser,
   onFetchUsers,
+  onSavePermissions,
+  savingPerms = false,
 }: UserAccountsPanelProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [editingUserId, setEditingUserId] = useState<string | null>(null)
@@ -65,6 +73,15 @@ export default function UserAccountsPanel({
   const [newRole, setNewRole] = useState('USER')
   const [resetTarget, setResetTarget] = useState<UserRecord | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserRecord | null>(null)
+  const [selectedHumanForPerms, setSelectedHumanForPerms] = useState<UserRecord | null>(null)
+  const [assignedAgentIds, setAssignedAgentIds] = useState<string[]>([])
+
+  const handleOpenPermissions = (user: UserRecord) => {
+    setSelectedHumanForPerms(user)
+    setAssignedAgentIds((user.permittedAgents || []).map(pa => pa.agent.id))
+  }
+
+  const allAgents = users.filter(u => u.type === 'AI_AGENT' && !['copywriter@platform.amc', 'designer@platform.amc', 'researcher@platform.amc'].includes(u.email))
 
   const humans = users.filter((u) => u.type === 'HUMAN')
   const filteredHumans = humans.filter((u) => {
@@ -359,13 +376,40 @@ export default function UserAccountsPanel({
                             </label>
                           </div>
                         ) : (
-                          <span className="text-slate-500 dark:text-slate-400">
-                            {ownedBrandCount > 0 || activeKeyCount > 0 ? `${ownedBrandCount} 品牌 / ${activeKeyCount} AI` : '无绑定'}
-                          </span>
+                          <div className="space-y-1">
+                            <span className="font-semibold text-slate-700 dark:text-slate-350">
+                              {ownedBrandCount > 0 ? `${ownedBrandCount} 品牌` : '无绑定品牌'}
+                            </span>
+                            {(() => {
+                              const myOwnedBrands = Array.from(new Set([
+                                ...(user.ownedBrands || []).map(b => b.brand),
+                                ...(user.legacyOwnedBrands || []).map(b => b.brand)
+                              ].filter(Boolean)))
+                              const brandNames = myOwnedBrands.map(b => b.name).join(', ')
+                              return brandNames && (
+                                <p className="text-[10px] text-slate-400 truncate max-w-[180px]" title={brandNames}>
+                                  {brandNames}
+                                </p>
+                              )
+                            })()}
+                          </div>
                         )}
                       </td>
                       <td className="text-slate-500 dark:text-slate-400">
-                        {activeKeyCount > 0 ? `${activeKeyCount} active / ${apiKeys.length} total` : '未生成 Key'}
+                        <div className="space-y-1">
+                          <div className="font-semibold text-slate-700 dark:text-slate-350">
+                            {activeKeyCount > 0 ? `${activeKeyCount} active / ${apiKeys.length} total` : '无 Key'}
+                          </div>
+                          {(() => {
+                            const permittedAgents = user.permittedAgents || []
+                            const agentNames = permittedAgents.map(pa => pa.agent?.nickname || pa.agent?.email).filter(Boolean).join(', ')
+                            return permittedAgents.length > 0 && (
+                              <p className="text-[10px] text-slate-400 truncate max-w-[180px]" title={agentNames}>
+                                授权AI: {agentNames}
+                              </p>
+                            )
+                          })()}
+                        </div>
                       </td>
                       <td>
                         <div className="flex justify-end gap-1.5">
@@ -392,6 +436,13 @@ export default function UserAccountsPanel({
                             <>
                               <button onClick={() => startEdit(user)} className="admin-icon-button" title="编辑成员">
                                 <Edit3 size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleOpenPermissions(user)}
+                                className="admin-icon-button"
+                                title="授权 AI 运营权限"
+                              >
+                                <Bot size={14} className="text-indigo-500" />
                               </button>
                               <button
                                 onClick={() => setExpandedKeyUserId(isKeyExpanded ? null : user.id)}
@@ -630,6 +681,67 @@ export default function UserAccountsPanel({
                   删除
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedHumanForPerms && (
+        <div className="admin-modal-backdrop">
+          <div className="admin-modal max-w-md">
+            <div className="admin-modal-header">
+              <div>
+                <h2 className="text-slate-900 dark:text-white">配置 AI 代理人授权权限</h2>
+                <p className="text-xs text-slate-400 mt-1">设置人类用户 <b>{selectedHumanForPerms.email}</b> 的授权监管 AI 范围：</p>
+              </div>
+              <button onClick={() => setSelectedHumanForPerms(null)} className="admin-icon-button" type="button">×</button>
+            </div>
+            
+            <div className="max-h-60 overflow-y-auto space-y-2 p-5 bg-white dark:bg-slate-900">
+              {allAgents.length === 0 ? (
+                <p className="text-xs text-slate-400 py-4 text-center">暂无可用 AI Agent，请先在 AI 序列配置中创建</p>
+              ) : (
+                allAgents.map(agent => (
+                  <label key={agent.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-all border border-slate-105 dark:border-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={assignedAgentIds.includes(agent.id)}
+                      onChange={e => {
+                        if (e.target.checked) setAssignedAgentIds(prev => [...prev, agent.id])
+                        else setAssignedAgentIds(prev => prev.filter(id => id !== agent.id))
+                      }}
+                      className="rounded border-slate-350 dark:border-slate-700 text-blue-650 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <p className="font-extrabold text-slate-750 dark:text-slate-200">{agent.nickname || '未命名 Agent'}</p>
+                      <p className="text-[10px] text-slate-400 font-mono">{agent.email}</p>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+
+            <div className="admin-modal-footer p-5 flex justify-end gap-2 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+              <button 
+                type="button"
+                onClick={() => setSelectedHumanForPerms(null)} 
+                className="admin-secondary-button"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (onSavePermissions) {
+                    await onSavePermissions(selectedHumanForPerms.id, assignedAgentIds)
+                  }
+                  setSelectedHumanForPerms(null)
+                }}
+                disabled={savingPerms}
+                className="admin-primary-button"
+              >
+                {savingPerms ? '保存中...' : '保存授权'}
+              </button>
             </div>
           </div>
         </div>
