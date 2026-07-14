@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hashPassword } from '@/lib/auth-v2'
 
+export const dynamic = 'force-dynamic'
+
 // GET /api/auth/reset-password?token=xxx — validate a token
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)

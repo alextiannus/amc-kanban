@@ -209,7 +209,9 @@ export async function PATCH(request: Request, { params }: Params) {
     const requestUrl = new URL(request.url)
     const baseUrl =
       process.env.NEXT_PUBLIC_KANBAN_HOST ||
-      (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai')
+      (process.env.NODE_ENV === 'development'
+        ? requestUrl.origin
+        : (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai'))
     const resetLink = `${baseUrl}/reset-password/${rawToken}`
 
     await prisma.auditLog.create({

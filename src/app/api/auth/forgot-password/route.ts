@@ -40,7 +40,9 @@ export async function POST(request: Request) {
     const requestUrl = new URL(request.url)
     const baseUrl =
       process.env.NEXT_PUBLIC_KANBAN_HOST ||
-      (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai')
+      (process.env.NODE_ENV === 'development'
+        ? requestUrl.origin
+        : (requestUrl.hostname !== 'localhost' ? requestUrl.origin : 'https://amc-kanban.immedi.ai'))
 
     const resetLink = `${baseUrl}/reset-password/${rawToken}`
 
