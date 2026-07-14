@@ -2,14 +2,16 @@ import { NextResponse } from 'next/server'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { prisma } from '@/lib/prisma'
-// @ts-ignore
-import { fetch as undiciFetch } from 'undici'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const log: string[] = []
   try {
+    // Dynamically import undici fetch to avoid build-time worker thread evaluation crashes
+    // @ts-ignore
+    const { fetch: undiciFetch } = await import('undici')
+
     log.push('Starting database query for MCP server configs...')
     const configs = await prisma.mcpServerConfig.findMany()
     log.push(`Found ${configs.length} configs in database: ${JSON.stringify(configs.map((c: any) => ({ name: c.name, url: c.url, isActive: c.isActive }))) }`)
