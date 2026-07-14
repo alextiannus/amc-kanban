@@ -27,9 +27,9 @@ export async function POST(request: NextRequest) {
     const url = new URL(request.url)
     const queryBrandId = url.searchParams.get('brandId')
     const rawBrandId = String(body.brandId ?? queryBrandId ?? '').trim()
-    const brandId = rawBrandId || null
+    let brandId = rawBrandId || null
 
-    const pendingBrandName = String(body.pendingBrandName ?? '').trim()
+    let pendingBrandName = String(body.pendingBrandName ?? '').trim()
     const pendingBrandLocation = String(body.pendingBrandLocation ?? '').trim()
     const pendingBrandAddress = String(body.pendingBrandAddress ?? '').trim()
     const pendingBrandOwnerEmail = String(body.pendingBrandOwnerEmail ?? '').trim().toLowerCase()
@@ -64,6 +64,48 @@ export async function POST(request: NextRequest) {
     }
     if (pendingBrandName && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resolvedOwnerEmail)) {
       return NextResponse.json({ error: '品牌主邮件格式无效' }, { status: 400 })
+    }
+
+    if (pendingBrandName) {
+      const { findOrCreateBrandOwnerAccount } = await import('@/lib/brandOwnerAccount')
+      const brandOwner = await findOrCreateBrandOwnerAccount(resolvedOwnerEmail)
+      if (brandOwner.ok) {
+        const brandOwnerId = brandOwner.user.id
+        const existingBrand = await prisma.brand.findFirst({
+          where: {
+            ownerId: brandOwnerId,
+            name: pendingBrandName,
+            status: 'ACTIVE',
+          },
+          include: {
+            subscriptions: {
+              where: { status: 'PENDING' },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        })
+
+        if (existingBrand) {
+          console.log(`[MM-Sub] Found existing active brand: ${existingBrand.id} for owner: ${brandOwnerId}`)
+          const existingPendingSub = existingBrand.subscriptions[0]
+          if (existingPendingSub) {
+            console.log(`[MM-Sub] Reusing existing pending subscription: ${existingPendingSub.id}`)
+            return NextResponse.json({
+              success: true,
+              status: 'PENDING',
+              message: '订阅申请已提交，等待付款确认后由 Admin 激活',
+              subscriptionId: existingPendingSub.id,
+              subscription: existingPendingSub,
+              brand: existingBrand,
+            })
+          } else {
+            console.log(`[MM-Sub] Brand exists but has no pending subscription. Mapping request to existing brand: ${existingBrand.id}`)
+            brandId = existingBrand.id
+            pendingBrandName = ''
+          }
+        }
+      }
     }
 
     if (brandId) {

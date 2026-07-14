@@ -5,7 +5,7 @@ import {
   Bot, Edit3, Save, RefreshCw, FolderOpen, AlertCircle, Database, ChevronRight, Download
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
-import TrainingDataSection from '../TrainingDataSection'
+import TrainingDataSection from '@/components/TrainingDataSection'
 
 interface PlatformAiTabProps {
   users: UserRecord[]

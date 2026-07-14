@@ -104,7 +104,22 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
   const brandOwnerId = brandOwner.user.id
 
   console.log(`[createBrand] starting $transaction brand.create (${Date.now() - t0}ms)`)
-  const brand = await prisma.$transaction(async (tx: any) => {
+  const result = await prisma.$transaction(async (tx: any) => {
+    const existingBrand = await tx.brand.findFirst({
+      where: {
+        ownerId: brandOwnerId,
+        name,
+        status: 'ACTIVE',
+      },
+    })
+    if (existingBrand) {
+      await tx.brandSubscription.update({
+        where: { id: input.subscriptionId },
+        data: { brandId: existingBrand.id },
+      })
+      return { brand: existingBrand, alreadyCreated: true }
+    }
+
     const created = await tx.brand.create({
       data: {
         ownerId: brandOwnerId,
@@ -122,9 +137,17 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       data: { brandId: created.id },
     })
 
-    return created
+    return { brand: created, alreadyCreated: false }
   })
-  console.log(`[createBrand] $transaction done, brand.id=${brand.id} (${Date.now() - t0}ms)`)
+  const brand = result.brand
+  console.log(`[createBrand] $transaction done, brand.id=${brand.id}, alreadyCreated=${result.alreadyCreated} (${Date.now() - t0}ms)`)
+
+  if (result.alreadyCreated) {
+    ensureBrandWorkspace(brand.id).catch((workspaceError) => {
+      console.error('[createBrand] existing workspace init failed:', workspaceError)
+    })
+    return { ok: true as const, brand, alreadyCreated: true as const, agentId: null }
+  }
 
   // 4. Outside transaction: initialize crew and compatibility mappings
   try {

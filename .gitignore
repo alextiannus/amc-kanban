@@ -67,3 +67,5 @@ src/components/dashboard/MMSideMenu.tsx
 src/components/dashboard/MMSubPageOverlay.tsx
 *.code-workspace
 .git_corrupt/
+amc_budgetaryplan.xlsx
+*.xlsx
