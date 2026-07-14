@@ -221,7 +221,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
 
 export const ALLOWED_DURATIONS = [3, 6, 12] as const
 
-export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.01'
+export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.02'
 
 export function calculatePricing(
   planId: string,
