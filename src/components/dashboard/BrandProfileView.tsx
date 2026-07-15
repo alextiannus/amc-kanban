@@ -30,6 +30,7 @@ interface Brand {
 
 interface Props {
   brand?: Brand
+  onUpdate?: (updated: any) => void
   onClose?: () => void
   brandTone?: string
   setBrandTone?: React.Dispatch<React.SetStateAction<string>>
@@ -63,6 +64,7 @@ function PlanBadge({ plan }: { plan: string }) {
 
 export default function BrandProfileView({
   brand,
+  onUpdate,
   onClose,
   brandTone,
   setBrandTone,
@@ -232,6 +234,9 @@ export default function BrandProfileView({
       setProfileMarkdown(serverMarkdown)
       setProfileSaved(true)
       showToastVal('品牌 Profile 已保存', 'success')
+      if (data.brand && onUpdate) {
+        onUpdate(data.brand)
+      }
       setTimeout(() => setProfileSaved(false), 2500)
     } catch (e) {
       console.error(e)
@@ -456,6 +461,10 @@ export default function BrandProfileView({
       if (res.ok) {
         showToastVal('品牌信息已保存', 'success')
         setEditingName(false)
+        const data = await res.json()
+        if (onUpdate) {
+          onUpdate(data)
+        }
       } else {
         showToastVal('保存失败，请重试', 'error')
       }

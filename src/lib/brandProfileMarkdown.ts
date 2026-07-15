@@ -349,3 +349,25 @@ export async function readBrandProfileMarkdown(
     return refreshBrandProfileMarkdown(brandId)
   }
 }
+
+export function parseDescriptionFromMarkdown(markdown: string): string | null {
+  const header = '## 2. 品牌介绍（来自系统字段 description）'
+  const nextHeader = '## 3. 品牌推广核心语境'
+  
+  const idx = markdown.indexOf(header)
+  if (idx === -1) return null
+  
+  const startIdx = idx + header.length
+  const remaining = markdown.slice(startIdx)
+  
+  const nextIdx = remaining.indexOf(nextHeader)
+  if (nextIdx === -1) {
+    const fallbackIdx = remaining.search(/\n(##|#)\s/)
+    if (fallbackIdx !== -1) {
+      return remaining.slice(0, fallbackIdx).trim()
+    }
+    return remaining.trim()
+  }
+  
+  return remaining.slice(0, nextIdx).trim()
+}

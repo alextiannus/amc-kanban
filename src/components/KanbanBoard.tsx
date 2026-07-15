@@ -422,7 +422,14 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
                 </div>
               </div>
             }>
-              <BrandProfileView key={activeBrand?.id ?? 'no-brand'} brand={activeBrand ?? undefined} />
+              <BrandProfileView 
+                key={activeBrand?.id ?? 'no-brand'} 
+                brand={activeBrand ?? undefined} 
+                onUpdate={(updated) => {
+                  setActiveBrand(updated)
+                  setBrands(prev => prev.map(b => b.id === updated.id ? { ...b, name: updated.name } : b))
+                }}
+              />
             </Suspense>
           </MobileLayout>
         </div>

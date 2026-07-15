@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canOwnBrand, canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { prisma } from '@/lib/prisma'
 import {
   readBrandProfileMarkdown,
   refreshBrandProfileMarkdown,
   writeBrandProfileMarkdown,
+  parseDescriptionFromMarkdown,
 } from '@/lib/brandProfileMarkdown'
 
 type Params = { params: Promise<{ id: string }> }
@@ -87,11 +89,23 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const saved = await writeBrandProfileMarkdown(id, body.markdown)
 
+  // Extract description from saved markdown and update database
+  const parsedDesc = parseDescriptionFromMarkdown(body.markdown)
+  let updatedBrand = null
+  if (parsedDesc !== null) {
+    const cleanDesc = parsedDesc.includes('（暂无，请在') ? null : parsedDesc.trim() || null
+    updatedBrand = await prisma.brand.update({
+      where: { id },
+      data: { description: cleanDesc }
+    })
+  }
+
   return NextResponse.json({
     ok: true,
     updated: true,
     brandId: id,
     relativePath: saved.relativePath,
     markdown: saved.markdown,
+    brand: updatedBrand,
   })
 }
