@@ -34,7 +34,11 @@ export async function GET(
     const [pendingActions, todayDrafts, recentPublished] = await Promise.all([
       // Pending action items (awaiting brand owner attention)
       prisma.actionItem.count({
-        where: { brandId, status: { in: ['pending', 'awaiting_approval', 'PENDING', 'AWAITING_APPROVAL'] } },
+        where: { 
+          brandId, 
+          status: { in: ['pending', 'awaiting_approval', 'PENDING', 'AWAITING_APPROVAL'] },
+          type: { in: ['sentiment_alert', 'content_draft', 'content_approval', 'setup_brand', 'complete_config'] }
+        },
       }).catch(() => 0),
 
       // Drafts scheduled for today
