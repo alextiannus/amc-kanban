@@ -1352,9 +1352,22 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
                         )}
                       </div>
 
-                      {/* Brand Label */}
-                      <div className="absolute bottom-2 left-2 bg-slate-900/75 text-white text-[9px] font-black px-1.5 py-0.5 rounded backdrop-blur-sm truncate max-w-[85%]">
-                        {asset.brandName}
+                      {/* Brand Label & Type Badge */}
+                      <div className="absolute bottom-2 left-2 flex items-center gap-1 z-10 select-none">
+                        <div className="bg-slate-900/75 text-white text-[9px] font-black px-1.5 py-0.5 rounded backdrop-blur-sm truncate max-w-[65px]" title={asset.brandName}>
+                          {asset.brandName}
+                        </div>
+                        {isVideo ? (
+                          <span className="flex items-center gap-0.5 bg-indigo-600/90 text-white text-[9px] font-black px-1.5 py-0.5 rounded backdrop-blur-sm shadow-sm" title="视频">
+                            <Video className="w-2.5 h-2.5" />
+                            <span>视频</span>
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-0.5 bg-emerald-600/90 text-white text-[9px] font-black px-1.5 py-0.5 rounded backdrop-blur-sm shadow-sm" title="图片">
+                            <ImageIcon className="w-2.5 h-2.5" />
+                            <span>图片</span>
+                          </span>
+                        )}
                       </div>
 
                       {/* Bottom-Right: Zoom preview button */}

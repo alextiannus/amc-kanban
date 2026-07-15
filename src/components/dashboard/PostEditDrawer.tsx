@@ -32,7 +32,8 @@ import {
   MoreVertical,
   MessageSquare,
   Zap,
-  Send
+  Send,
+  Image as ImageIcon
 } from 'lucide-react'
 import PostPreviewModal from './PostPreviewModal'
 import { callGeminiDirect } from '@/lib/gemini-direct'
@@ -1590,8 +1591,22 @@ Return the output strictly in a valid JSON array format, containing:
                                   <img src={asset.url} className="h-full w-full object-cover pointer-events-none" alt="" />
                                 )}
                                 <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20" />
+                                
+                                {/* Type Badge */}
+                                <div className="absolute bottom-1 left-1 z-10 select-none">
+                                  {isVid ? (
+                                    <span className="flex items-center bg-indigo-600/90 text-white text-[8px] font-black p-0.5 rounded shadow-sm" title="视频">
+                                      <Video className="w-2.5 h-2.5" />
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center bg-emerald-600/90 text-white text-[8px] font-black p-0.5 rounded shadow-sm" title="图片">
+                                      <ImageIcon className="w-2.5 h-2.5" />
+                                    </span>
+                                  )}
+                                </div>
+
                                 {isSelected && (
-                                  <div className="absolute inset-0 bg-emerald-500/10 flex items-center justify-center">
+                                  <div className="absolute inset-0 bg-emerald-500/10 flex items-center justify-center z-10">
                                     <span className="bg-emerald-500 text-white rounded-full p-0.5">
                                       <Check className="h-3 w-3 stroke-[3px]" />
                                     </span>
