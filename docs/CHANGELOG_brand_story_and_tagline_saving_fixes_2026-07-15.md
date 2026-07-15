@@ -28,6 +28,10 @@ Users reported that brand story and tagline updates (stored in the `description`
 ### 3. Immediate State Update on Save (amc-mm)
 - Updated the save handler in `BrandOwnerDashboard.tsx` to read the returned JSON from the `PATCH /api/brands/[id]` endpoint and immediately call `setActiveBrand(updatedBrand)`. This ensures that the merchant portal updates its view of the tagline and description immediately upon saving.
 
+### 4. Dynamic Tagline Rendering & Auto-save Slang Terms (amc-mm)
+- Fixed a bug in `BrandStorySubPage.tsx` where the brand's tagline in the hero banner was hardcoded to `“传承经典美味，主理本地生活印记”`. Implemented dynamic extraction: it now extracts and displays the first sentence of the brand's database description, defaulting to the placeholder only if no description exists.
+- Addressed a UX issue where typed slang terms (in the slang dictionary input fields) were lost if the user clicked "Save" without first clicking the `+ Add` button. The save handler in `BrandOwnerDashboard.tsx` now automatically appends any pending slang key/value input to the saved dictionary.
+
 ---
 
 ## Verification & Deployment
