@@ -383,7 +383,7 @@ export async function POST(request: NextRequest) {
       {
         quantity: 1,
         price_data: {
-          currency: 'usd',
+          currency: 'sgd',
           unit_amount: summary.totalDueUsd * 100,
           product_data: {
             name: `AMC ${selectedPlan.name} x ${summary.durationMonths} months`,

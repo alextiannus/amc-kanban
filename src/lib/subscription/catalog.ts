@@ -48,7 +48,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'starter',
     name: '自媒体基础运营',
-    monthlyUsd: 600,
+    monthlyUsd: 800,
     description: '消灭宣传真空，建立基础数字存在',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · 品牌主理人',
     suitableFor: '新商家，或只有微信/小红书账号、海外本地平台处于真空状态、无法持续更新的商家',
@@ -74,7 +74,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'essential',
     name: 'Growth · 品牌建设版',
-    monthlyUsd: 2800,
+    monthlyUsd: 3600,
     description: '全平台覆盖 + 视频内容 + 博主矩阵',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
     suitableFor: '希望确立品牌策略、明确目标客群，通过全平台覆盖、视频内容与大规模博主推广积极拉新，并通过团购等转化设计唤醒老顾客的商家',
@@ -136,7 +136,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     pricing: 'monthly',
     usd: 200,
     description: '支持添加多个门店，共享品牌资产与 AI 员工。',
-    details: ['+$200 / 门店 / 月', '共享素材库与发布排期', '统一看板管理与多店数据监控'],
+    details: ['+S$200 / 门店 / 月', '共享素材库与发布排期', '统一看板管理与多店数据监控'],
   },
   {
     id: 'onsite_photo',
@@ -144,7 +144,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     pricing: 'one_time',
     usd: 200,
     description: '半天现场专业素材与新品拍摄等专业服务，交付高清图文与短视频素材包。',
-    details: ['+$200 / 次 (含后期，包含新品专业拍摄等)'],
+    details: ['+S$200 / 次 (含后期，包含新品专业拍摄等)'],
   },
   {
     id: 'kol_light',
@@ -152,7 +152,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     pricing: 'one_time',
     usd: 599,
     description: '3-5 位本地生活博主探店发布与轻量曝光套餐。',
-    details: ['+$599 / 次', '适合新品、活动或门店基础曝光'],
+    details: ['+S$599 / 次', '适合新品、活动或门店基础曝光'],
   },
   {
     id: 'influencer_visit',
@@ -160,7 +160,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     pricing: 'one_time',
     usd: 1200,
     description: '15 位本地生活博主（KOL/KOC）探店发布与种草覆盖整合套餐。',
-    details: ['+$1,200 / 季 (保曝光)'],
+    details: ['+S$1,200 / 季 (保曝光)'],
   },
   {
     id: 'dianping_ops',
@@ -168,7 +168,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     pricing: 'one_time',
     usd: 2300,
     description: '全方位大众点评门店开通与深度代运营服务，提升品牌曝光与转化。',
-    details: ['+$2,300 / 年'],
+    details: ['+S$2,300 / 年'],
   },
   {
     id: 'ordering_site',
@@ -176,7 +176,7 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     pricing: 'monthly',
     usd: 220,
     description: '品牌专属独立站，支持在线订座、外卖配送与到店自取，摆脱第三方佣金。',
-    details: ['+$220 / 月'],
+    details: ['+S$220 / 月'],
   },
 ]
 

@@ -51,7 +51,7 @@ const PLANS: PlanOption[] = [
   {
     id: 'starter',
     name: '自媒体基础运营',
-    monthlyUsd: 600,
+    monthlyUsd: 800,
     description: '消灭宣传真空，建立基础数字存在',
     highlights: [
       '30-36条/月图文内容创作',
@@ -66,7 +66,7 @@ const PLANS: PlanOption[] = [
   {
     id: 'essential',
     name: 'Tier 2 · 品牌建设版',
-    monthlyUsd: 2800,
+    monthlyUsd: 3600,
     description: '全平台覆盖 + 视频内容 + 博主矩阵',
     highlights: [
       '≥20条图文 + 8条短视频/月',
@@ -275,7 +275,7 @@ function Step2({ state, onPlan, onDuration, currentUser, onChange, onValidatePro
                   </div>
                   <div className="text-right flex-shrink-0 ml-2">
                     <div className={`font-bold text-base ${selected ? c.text : 'text-slate-700 dark:text-slate-200'}`}>
-                      ${plan.monthlyUsd.toLocaleString()}
+                      SGD {plan.monthlyUsd.toLocaleString()}
                     </div>
                     <div className="text-xs text-slate-400">/月</div>
                   </div>
@@ -377,10 +377,10 @@ function Step3({ state }: { state: WizardState }) {
     { 
       label: '月费',     
       value: state.promoValid 
-        ? `$${discountedMonthly.toLocaleString()} USD (折上折: 已应用优惠)`
-        : `$${discountedMonthly.toLocaleString()} USD${discountPct ? ` (${discountPct}% 折)` : ''}` 
+        ? `SGD ${discountedMonthly.toLocaleString()} (折上折: 已应用优惠)`
+        : `SGD ${discountedMonthly.toLocaleString()}${discountPct ? ` (${discountPct}% 折)` : ''}` 
     },
-    { label: '合同总额',  value: `$${totalDue.toLocaleString()} USD` },
+    { label: '合同总额',  value: `SGD ${totalDue.toLocaleString()}` },
   ]
 
   return (
@@ -423,7 +423,7 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
     location: '',
     planId: 'essential',
     planName: '品牌建设版',
-    monthlyBaseUsd: 2800,
+    monthlyBaseUsd: 3600,
     durationMonths: 3,
     promoCode: '',
     promoDiscountType: null,
@@ -720,7 +720,7 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
           <div className="flex items-center gap-2">
             {step === 2 && (
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 mr-1">
-                合计 <span className="text-slate-800 dark:text-slate-100">${totalDue.toLocaleString()}</span> USD
+                合计 <span className="text-slate-800 dark:text-slate-100">SGD {totalDue.toLocaleString()}</span>
               </span>
             )}
 
