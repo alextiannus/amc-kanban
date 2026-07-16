@@ -1592,18 +1592,11 @@ Return the output strictly in a valid JSON array format, containing:
                                 )}
                                 <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20" />
                                 
-                                {/* Type Badge */}
-                                <div className="absolute bottom-1 left-1 z-10 select-none">
-                                  {isVid ? (
-                                    <span className="flex items-center bg-indigo-600/90 text-white text-[8px] font-black p-0.5 rounded shadow-sm" title="视频">
-                                      <Video className="w-2.5 h-2.5" />
-                                    </span>
-                                  ) : (
-                                    <span className="flex items-center bg-emerald-600/90 text-white text-[8px] font-black p-0.5 rounded shadow-sm" title="图片">
-                                      <ImageIcon className="w-2.5 h-2.5" />
-                                    </span>
-                                  )}
-                                </div>
+                                {isVid && (
+                                  <div className="absolute bottom-1 right-1 bg-black/60 p-1 rounded z-10 flex items-center justify-center">
+                                    <Play className="h-2.5 w-2.5 text-white fill-white" />
+                                  </div>
+                                )}
 
                                 {isSelected && (
                                   <div className="absolute inset-0 bg-emerald-500/10 flex items-center justify-center z-10">
