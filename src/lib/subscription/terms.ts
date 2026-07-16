@@ -23,8 +23,8 @@ Vendor: DeliveryChinatown Pte. Ltd., service brand AMC - Your AI Marketing Crew.
 供应商：DeliveryChinatown Pte. Ltd.，服务品牌为 AMC - Your AI Marketing Crew。
 
 2. Service Description / 服务说明
-AMC is a digital marketing management solution that supports brand workspace setup, digital marketing needs analysis, strategy development, campaign workflow, AI-assisted content generation, media asset management, review and approval workflow, reporting, recommendations and handover documentation.
-AMC 是数字营销管理方案，支持品牌工作区设置、数字营销需求分析、策略制定、营销活动流程、AI 辅助内容生成、素材管理、审核批准流程、报告、优化建议和交接文档。
+AMC is a specialised marketing and sales content generation solution that supports brand workspace setup, business and brand context collection, campaign workflow, AI-assisted content generation, media asset management, review and approval workflow, reporting, recommendations, business data export and handover documentation.
+AMC 是专用于营销与销售内容生成的方案，支持品牌工作区设置、企业与品牌语境收集、营销活动流程、AI 辅助内容生成、素材管理、审核批准流程、报告、优化建议、业务数据导出和交接文档。
 
 3. Package Scope / 套餐范围
 The exact package, subscription term, deliverables, platform coverage, usage limits, fees, add-ons and payment milestones are stated in the accepted quotation, order, Annex 3, invoice or statement of work.
@@ -35,12 +35,16 @@ If the Customer intends to apply for PSG support, the Customer remains responsib
 如客户计划申请 PSG 补贴，客户仍需自行负责 PSG 申请、资格、声明、支持文件和补贴合规。AMC 可协助提供报价单、发票、使用报告、产品资料和截图证据。PSG 获批及报销结果由相关政府机构决定，AMC 不作保证。
 
 5. Customer and User Obligations / 客户与用户义务
-The Customer must provide accurate company, brand, outlet, product, pricing, promotion, menu, service and contact information; provide timely access, permissions, materials and approvals; ensure approving users are authorised; ensure customer-supplied materials are owned or properly licensed; inform AMC of restricted claims or regulated content; avoid uploading unnecessary sensitive personal data; maintain account security; and pay approved fees, taxes and non-supportable third-party costs.
-客户须提供准确的公司、品牌、门店、产品、价格、促销、菜单、服务和联系方式；及时提供账号权限、素材和审批；确保审批人已获授权；确保客户提供的素材自有或已合法授权；提前告知受限制或受监管的内容；避免上传不必要的敏感个人数据；维护账号安全；并支付已确认费用、税费及不受补贴支持的第三方费用。
+The Customer must provide accurate company, brand, outlet, product, pricing, promotion, menu, service and business contact information; provide timely access, permissions, materials and approvals; ensure approving users are authorised; ensure customer-supplied materials are owned or properly licensed; inform AMC of restricted claims or regulated content; avoid uploading unnecessary personal data or sensitive personal data; maintain account security; and pay approved fees, taxes and non-supportable third-party costs.
+客户须提供准确的公司、品牌、门店、产品、价格、促销、菜单、服务和商务联系方式；及时提供账号权限、素材和审批；确保审批人已获授权；确保客户提供的素材自有或已合法授权；提前告知受限制或受监管的内容；避免上传不必要的个人数据或敏感个人数据；维护账号安全；并支付已确认费用、税费及不受补贴支持的第三方费用。
 
 6. Content Approval and Publishing / 内容审批与发布
 Unless an autopilot or pre-approved publishing mode is expressly agreed in writing, all AI-generated or operator-prepared content is draft content until approved by the Customer or an authorised representative. The Customer is responsible for checking factual accuracy, offer validity, pricing, promotion terms, compliance requirements and suitability before approval.
 除非双方书面同意自动发布或预批准发布模式，所有 AI 生成或运营人员准备的内容，在客户或授权代表批准前均为草稿。客户负责在批准前核对事实准确性、优惠有效性、价格、促销条款、合规要求和适用性。
+
+6A. Responsible AI and Data Scope / 负责任 AI 与数据范围
+AMC uses business profile, brand information, approved assets, campaign briefs, platform/channel configuration, operational records and business contact information for B2B service coordination. The Customer must not upload consumer personal data, NRIC/passport numbers, payment card data, employee HR data, health data, private customer records or other sensitive personal data unless separately agreed in writing and legally required safeguards are in place.
+AMC 使用企业资料、品牌信息、已批准素材、活动 brief、平台/渠道配置、运营记录，以及用于 B2B 服务协调的商务联系人信息。除非双方另行书面约定并已落实必要法律保护措施，客户不得上传消费者个人数据、NRIC/护照号码、支付卡数据、员工 HR 数据、健康数据、私人客户记录或其他敏感个人数据。
 
 7. Third-Party Platforms / 第三方平台
 AMC may support workflows for Google Business Profile, Instagram, Facebook, TikTok, WhatsApp, websites, booking links, analytics tools and other third-party platforms. These terms are between AMC and the Customer only. AMC is not responsible for third-party outages, policy enforcement, account suspensions, API changes, data delays or platform decisions. The Customer remains responsible for complying with third-party platform terms.
@@ -63,8 +67,8 @@ Customer-supplied materials remain owned by the Customer or its licensors. Final
 客户提供的素材仍归客户或其授权方所有。付费套餐下专为客户制作并最终确认的营销内容，客户可用于自身业务。AMC 保留平台、软件、模板、工作流、提示词、方法论、可复用框架、经验、内部工具和既有材料的所有权。
 
 12. Confidentiality and Personal Data / 保密与个人数据
-Both parties must keep confidential non-public business information, commercial terms, reports, credentials, customer data and operational records. Where personal data is processed, both parties must comply with applicable personal data protection laws, including Singapore PDPA where applicable.
-双方应保护非公开商业信息、商业条款、报告、凭证、客户数据和运营记录。涉及个人数据处理时，双方应遵守适用的个人数据保护法律，包括适用的新加坡 PDPA。
+Both parties must keep confidential non-public business information, commercial terms, reports, credentials, customer data and operational records. The standard AMC marketing and sales content generation scope is designed around business, brand, campaign and operational data. Where personal data is separately processed, both parties must comply with applicable personal data protection laws, including Singapore PDPA where applicable.
+双方应保护非公开商业信息、商业条款、报告、凭证、客户数据和运营记录。AMC 标准营销与销售内容生成范围围绕企业、品牌、活动和运营数据设计。如双方另行涉及个人数据处理，应遵守适用的个人数据保护法律，包括适用的新加坡 PDPA。
 
 13. Support, Changes and Revisions / 支持、变更与修改
 Standard support covers normal product usage, workflow assistance, package clarification and reasonable troubleshooting. If no revision limit is stated in the quotation, up to 2 revision rounds per campaign asset are included. Additional revisions, major changes, urgent turnaround, new scope or changes caused by late Customer input may require a change request and additional fees.

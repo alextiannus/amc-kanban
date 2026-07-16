@@ -32,6 +32,89 @@ function csvList(value: string[] | null | undefined) {
   return value && value.length > 0 ? value.join(', ') : '-'
 }
 
+function escapeCell(value: unknown, separator = ',') {
+  const text = String(value ?? '').replace(/\r?\n/g, ' ').trim()
+  if (text.includes(separator) || text.includes('"') || text.includes('\n')) {
+    return `"${text.replace(/"/g, '""')}"`
+  }
+  return text
+}
+
+function buildDelimited(report: any, separator: ',' | '\t') {
+  const rows: unknown[][] = [
+    ['section', 'field', 'value'],
+    ['solution', 'name', report.solution.name],
+    ['solution', 'vendor', report.solution.vendor],
+    ['customer', 'brand_id', report.customer.brandId],
+    ['customer', 'brand_name', report.customer.brandName],
+    ['customer', 'location', report.customer.location || ''],
+    ['period', 'from', formatDate(report.period.from)],
+    ['period', 'to', formatDate(report.period.to)],
+    ['deployment', 'plan_name', report.deployment.planName || ''],
+    ['deployment', 'subscription_status', report.deployment.subscriptionStatus || ''],
+    ['deployment', 'connected_accounts', report.deployment.connectedAccounts],
+    ['metrics', 'content_drafts_created', report.metrics.contentDraftsCreated],
+    ['metrics', 'content_approved_or_scheduled', report.metrics.contentApprovedOrScheduled],
+    ['metrics', 'posts_published', report.metrics.postsPublished],
+    ['metrics', 'media_assets_uploaded', report.metrics.mediaAssetsUploaded],
+    ['metrics', 'media_assets_reused_in_drafts', report.metrics.mediaAssetsReusedInDrafts],
+    ['metrics', 'action_items_completed', report.metrics.actionItemsCompleted],
+    ['metrics', 'workflow_tasks_completed', report.metrics.workflowTasksCompleted],
+    ['metrics', 'activity_log_entries', report.metrics.activityLogEntries],
+    [],
+    ['content_activity', 'date', 'platform', 'status', 'summary', 'hashtags'],
+    ...report.contentActivity.map((item: any) => ['content_activity', item.date, item.platform, item.status, item.summary, item.hashtags]),
+    [],
+    ['activity_log', 'date', 'actor', 'activity', 'resource'],
+    ...report.activityLog.map((item: any) => ['activity_log', item.date, item.actor, item.action, item.resource]),
+  ]
+  return rows.map((row) => row.map((cell) => escapeCell(cell, separator)).join(separator)).join('\n')
+}
+
+function escapeXml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+function buildXml(report: any) {
+  const contentItems = report.contentActivity.map((item: any) => (
+    `    <contentActivity date="${escapeXml(item.date)}" platform="${escapeXml(item.platform)}" status="${escapeXml(item.status)}">` +
+    `<summary>${escapeXml(item.summary)}</summary><hashtags>${escapeXml(item.hashtags)}</hashtags></contentActivity>`
+  )).join('\n')
+  const activityItems = report.activityLog.map((item: any) => (
+    `    <activityLog date="${escapeXml(item.date)}" actor="${escapeXml(item.actor)}" resource="${escapeXml(item.resource)}">` +
+    `<action>${escapeXml(item.action)}</action></activityLog>`
+  )).join('\n')
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<amcUsageReport generatedAt="${escapeXml(report.generatedAt)}">
+  <solution name="${escapeXml(report.solution.name)}" vendor="${escapeXml(report.solution.vendor)}" />
+  <customer brandId="${escapeXml(report.customer.brandId)}" brandName="${escapeXml(report.customer.brandName)}" location="${escapeXml(report.customer.location || '')}" />
+  <period from="${escapeXml(report.period.from)}" to="${escapeXml(report.period.to)}" />
+  <deployment planName="${escapeXml(report.deployment.planName || '')}" subscriptionStatus="${escapeXml(report.deployment.subscriptionStatus || '')}" connectedAccounts="${escapeXml(report.deployment.connectedAccounts)}" />
+  <metrics>
+    <contentDraftsCreated>${escapeXml(report.metrics.contentDraftsCreated)}</contentDraftsCreated>
+    <contentApprovedOrScheduled>${escapeXml(report.metrics.contentApprovedOrScheduled)}</contentApprovedOrScheduled>
+    <postsPublished>${escapeXml(report.metrics.postsPublished)}</postsPublished>
+    <mediaAssetsUploaded>${escapeXml(report.metrics.mediaAssetsUploaded)}</mediaAssetsUploaded>
+    <mediaAssetsReusedInDrafts>${escapeXml(report.metrics.mediaAssetsReusedInDrafts)}</mediaAssetsReusedInDrafts>
+    <actionItemsCompleted>${escapeXml(report.metrics.actionItemsCompleted)}</actionItemsCompleted>
+    <workflowTasksCompleted>${escapeXml(report.metrics.workflowTasksCompleted)}</workflowTasksCompleted>
+    <activityLogEntries>${escapeXml(report.metrics.activityLogEntries)}</activityLogEntries>
+  </metrics>
+  <contentActivities>
+${contentItems}
+  </contentActivities>
+  <activityLogs>
+${activityItems}
+  </activityLogs>
+</amcUsageReport>
+`
+}
+
 function buildMarkdown(report: any) {
   const lines: string[] = []
 
@@ -233,8 +316,8 @@ export async function GET(req: Request, { params }: Params) {
 
   const report = {
     solution: {
-      name: 'AMC AI Marketing Crew',
-      vendor: 'Immedi AI / AMC',
+      name: 'AI Marketing Crew Marketing and Sales Content Generation Platform',
+      vendor: 'DeliveryChinatown Pte. Ltd. / AMC',
     },
     customer: {
       brandId: brand.id,
@@ -270,8 +353,19 @@ export async function GET(req: Request, { params }: Params) {
     activityLog,
   }
 
-  if (url.searchParams.get('format') === 'markdown') {
-    const markdown = buildMarkdown(report)
+  const format = (url.searchParams.get('format') || 'json').toLowerCase()
+  if (['markdown', 'csv', 'tsv', 'xml'].includes(format)) {
+    const body =
+      format === 'markdown' ? buildMarkdown(report) :
+      format === 'csv' ? buildDelimited(report, ',') :
+      format === 'tsv' ? buildDelimited(report, '\t') :
+      buildXml(report)
+    const contentType =
+      format === 'markdown' ? 'text/markdown; charset=utf-8' :
+      format === 'csv' ? 'text/csv; charset=utf-8' :
+      format === 'tsv' ? 'text/tab-separated-values; charset=utf-8' :
+      'application/xml; charset=utf-8'
+    const ext = format === 'markdown' ? 'md' : format
     await prisma.auditLog.create({
       data: {
         actorId: session.user.id,
@@ -283,14 +377,14 @@ export async function GET(req: Request, { params }: Params) {
         metadata: {
           from: from.toISOString(),
           to: to.toISOString(),
-          format: 'markdown',
+          format,
         },
       },
     })
-    return new NextResponse(markdown, {
+    return new NextResponse(body, {
       headers: {
-        'Content-Type': 'text/markdown; charset=utf-8',
-        'Content-Disposition': `attachment; filename="amc-usage-report-${brandId}-${formatDate(from)}-${formatDate(to)}.md"`,
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="amc-usage-report-${brandId}-${formatDate(from)}-${formatDate(to)}.${ext}"`,
       },
     })
   }
