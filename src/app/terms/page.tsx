@@ -32,14 +32,14 @@ export default function TermsOfService() {
         <div className="space-y-8 text-sm leading-7 text-slate-600">
           <section className="space-y-4">
             <p>
-              These Service Terms apply to AI Marketing Crew digital marketing services, AMC portals and related
+              These Service Terms apply to AI Marketing Crew services, AMC portals and related
               subscription workflows, including amc.immedi.ai, amc-mm.immedi.ai and amc-kanban.immedi.ai. By
               registering, requesting work, subscribing to a package or using the portal, you agree to these terms.
             </p>
 
             <TermsSection title="1. Parties and Service Description">
               AI Marketing Crew (&quot;AMC&quot;) is provided by DeliveryChinatown Pte. Ltd. directly to the SME customer.
-              AMC supports brand workspace setup, digital marketing needs analysis, strategy development, campaign
+              AMC supports brand workspace setup, marketing needs analysis, strategy development, campaign
               workflow, AI-assisted content generation, content review, publishing coordination, usage reporting,
               campaign review and handover documentation.
             </TermsSection>
@@ -131,12 +131,12 @@ export default function TermsOfService() {
 
           <section className="space-y-4">
             <p>
-              本服务条款适用于 AI Marketing Crew 数字营销服务、AMC 门户及相关订阅流程，包括 amc.immedi.ai、amc-mm.immedi.ai
+              本服务条款适用于 AI Marketing Crew 服务、AMC 门户及相关订阅流程，包括 amc.immedi.ai、amc-mm.immedi.ai
               和 amc-kanban.immedi.ai。注册、提出服务请求、订阅套餐或使用门户，即表示您同意本条款。
             </p>
 
             <TermsSection title="一、合同主体与服务说明">
-              AI Marketing Crew（&quot;AMC&quot;）由 DeliveryChinatown Pte. Ltd. 直接向 SME 客户提供。AMC 支持品牌工作区设置、数字营销需求分析、策略制定、营销活动流程、AI 辅助内容生成、内容审核、发布协调、使用报告、活动复盘和交接文档。
+              AI Marketing Crew（&quot;AMC&quot;）由 DeliveryChinatown Pte. Ltd. 直接向 SME 客户提供。AMC 支持品牌工作区设置、营销需求分析、策略制定、营销活动流程、AI 辅助内容生成、内容审核、发布协调、使用报告、活动复盘和交接文档。
             </TermsSection>
 
             <TermsSection title="二、套餐范围">
