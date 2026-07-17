@@ -28,56 +28,85 @@ export interface SetupNotification {
  *    - Dismissed/Removed once all three platforms are connected for that brand.
  */
 export async function syncSetupNotifications(userId: string): Promise<SetupNotification[]> {
-  // 1. Fetch user's brands and active subscriptions
-  // In amc-kanban, a brand belongs to a user if they are a crew member.
-  const crewMembers = await prisma.crewMember.findMany({
-    where: { userId, active: true },
-    select: { crewId: true }
+  // Check if the user is an Admin/AMC Operator
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true }
   })
-  const crewIds = crewMembers.map((m: any) => m.crewId)
+  const isAdmin = user?.role === 'ADMIN'
 
-  // Also check organization cascade:
-  const orgMemberships = await prisma.organizationMember.findMany({
-    where: { memberId: userId },
-    select: { ownerId: true }
-  })
-  const orgOwnerIds = orgMemberships.map((m: any) => m.ownerId)
-
-  const queryOr: any[] = [
-    { crew: { id: { in: crewIds } } }
-  ]
-
-  if (orgOwnerIds.length > 0) {
-    // Fetch crewIds for organization owners
-    const orgOwnerCrewMembers = await prisma.crewMember.findMany({
-      where: { userId: { in: orgOwnerIds }, active: true },
-      select: { crewId: true }
-    })
-    const orgOwnerCrewIds = orgOwnerCrewMembers.map((m: any) => m.crewId)
-    if (orgOwnerCrewIds.length > 0) {
-      queryOr.push({ crew: { id: { in: orgOwnerCrewIds } } })
-    }
-  }
-
-  const brands = await prisma.brand.findMany({
-    where: {
-      status: { not: 'ARCHIVED' },
-      OR: queryOr
-    },
-    include: {
-      accounts: true,
-      knowledge: true,
-      subscriptions: {
-        where: {
-          status: 'ACTIVE',
-          OR: [
-            { contractEndDate: null },
-            { contractEndDate: { gt: new Date() } }
-          ]
+  let brands = []
+  if (isAdmin) {
+    brands = await prisma.brand.findMany({
+      where: {
+        status: { not: 'ARCHIVED' }
+      },
+      include: {
+        accounts: true,
+        knowledge: true,
+        subscriptions: {
+          where: {
+            status: 'ACTIVE',
+            OR: [
+              { contractEndDate: null },
+              { contractEndDate: { gt: new Date() } }
+            ]
+          }
         }
       }
+    })
+  } else {
+    // 1. Fetch user's brands and active subscriptions
+    // In amc-kanban, a brand belongs to a user if they are a crew member.
+    const crewMembers = await prisma.crewMember.findMany({
+      where: { userId, active: true },
+      select: { crewId: true }
+    })
+    const crewIds = crewMembers.map((m: any) => m.crewId)
+
+    // Also check organization cascade:
+    const orgMemberships = await prisma.organizationMember.findMany({
+      where: { memberId: userId },
+      select: { ownerId: true }
+    })
+    const orgOwnerIds = orgMemberships.map((m: any) => m.ownerId)
+
+    const queryOr: any[] = [
+      { crew: { id: { in: crewIds } } }
+    ]
+
+    if (orgOwnerIds.length > 0) {
+      // Fetch crewIds for organization owners
+      const orgOwnerCrewMembers = await prisma.crewMember.findMany({
+        where: { userId: { in: orgOwnerIds }, active: true },
+        select: { crewId: true }
+      })
+      const orgOwnerCrewIds = orgOwnerCrewMembers.map((m: any) => m.crewId)
+      if (orgOwnerCrewIds.length > 0) {
+        queryOr.push({ crew: { id: { in: orgOwnerCrewIds } } })
+      }
     }
-  })
+
+    brands = await prisma.brand.findMany({
+      where: {
+        status: { not: 'ARCHIVED' },
+        OR: queryOr
+      },
+      include: {
+        accounts: true,
+        knowledge: true,
+        subscriptions: {
+          where: {
+            status: 'ACTIVE',
+            OR: [
+              { contractEndDate: null },
+              { contractEndDate: { gt: new Date() } }
+            ]
+          }
+        }
+      }
+    })
+  }
 
   const hasBrandWithSubscription = brands.some((brand: any) => brand.subscriptions.length > 0)
 
