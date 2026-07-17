@@ -34,8 +34,8 @@ const creatorOptions = [
     id: 'product_showcase',
     label: '产品展示',
     hint: '多图生成产品/菜品动态展示',
-    defaultIdea: 'Show the selected products or dishes as a polished short showcase video',
-    duration: 10,
+    defaultIdea: '把选中的产品/菜品素材做成一条有质感的短视频展示',
+    duration: 6,
     flow: '主打画面 → 细节展示 → 到店/下单引导',
     basis: '更重视产品细节、质感、真实商家场景和简洁行动引导。',
   },
@@ -43,8 +43,8 @@ const creatorOptions = [
     id: 'story_campaign',
     label: '剧情短片',
     hint: 'idea + 素材生成多段剧情视频',
-    defaultIdea: 'Tell a short customer story using the selected merchant assets',
-    duration: 18,
+    defaultIdea: '用已选素材讲一个顾客发现并选择商家的短故事',
+    duration: 12,
     flow: '开场问题 → 发现商家 → 体验过程 → 行动引导',
     basis: '会把素材组织成一个有起承转合的顾客场景故事。',
   },
@@ -52,8 +52,8 @@ const creatorOptions = [
     id: 'review_to_video',
     label: '好评视频',
     hint: '把顾客评价变成信任素材',
-    defaultIdea: 'Turn a positive customer review into a trustworthy social proof video',
-    duration: 10,
+    defaultIdea: '把一条顾客好评变成可信、有画面感的社交视频',
+    duration: 6,
     flow: '顾客证明 → 可信细节 → 尝试引导',
     basis: '更重视评论证据、真实体验和低压力的信任建立。',
   },
@@ -61,8 +61,8 @@ const creatorOptions = [
     id: 'event_offer',
     label: '活动促销',
     hint: '节日、开业、限时优惠',
-    defaultIdea: 'Promote a timely offer or event with selected merchant visuals',
-    duration: 12,
+    defaultIdea: '用已选素材介绍一个限时优惠、节日活动或开业促销',
+    duration: 8,
     flow: '优惠亮点 → 价值说明 → 领取/预约方式',
     basis: '会突出时间感、优惠内容、使用方式和清晰 CTA。',
   },
@@ -70,8 +70,8 @@ const creatorOptions = [
     id: 'menu_recommendation',
     label: '菜单推荐',
     hint: '今日推荐 / 套餐视频',
-    defaultIdea: 'Recommend today’s menu pick or set meal using selected dish photos',
-    duration: 12,
+    defaultIdea: '用菜品图片推荐今日主打、套餐或菜单亮点',
+    duration: 6,
     flow: '今日推荐 → 菜单细节 → 下单引导',
     basis: '更适合把菜品、套餐、价格和推荐理由说清楚。',
   },
@@ -79,8 +79,8 @@ const creatorOptions = [
     id: 'local_discovery',
     label: '本地发现',
     hint: '附近场景与商圈搜索',
-    defaultIdea: 'Introduce this merchant as a useful nearby local discovery',
-    duration: 10,
+    defaultIdea: '把这个商家介绍成附近值得发现和收藏的本地选择',
+    duration: 6,
     flow: '附近发现 → 到店理由 → 找到商家',
     basis: '会围绕商圈、附近需求、门店可发现性来组织画面。',
   },
@@ -105,8 +105,36 @@ const sceneTitleMap: Record<string, string> = {
   'Find It': '找到商家',
 }
 
+const intentMap: Record<string, string> = {
+  'Stop the scroll with a specific local or product hook.': '用一个明确的产品或本地场景开场，先抓住注意力。',
+  'Prove the claim with product, store, review, or offer evidence.': '用产品、门店、评价或优惠细节证明卖点。',
+  'Finish with one clear merchant-friendly call to action.': '用一个清楚的行动引导收尾。',
+  'Show the customer situation before the merchant appears.': '先呈现顾客遇到的真实场景或需求。',
+  'Introduce the merchant as the practical answer.': '把商家作为这个需求的自然解决方案引出。',
+  'Show the product or service being enjoyed.': '展示产品或服务被体验、享用的过程。',
+  'Close with one simple next step.': '用一个简单下一步完成转化。',
+}
+
+const cameraMotionMap: Record<string, string> = {
+  'cinematic push-in, product detail motion, natural light': '自然光下缓慢推进，突出产品细节。',
+  'close-up detail sweep, subtle parallax, appetizing or service-focused motion': '近距离扫过细节，轻微视差，突出食欲或服务感。',
+  'clean branded end frame, gentle zoom, no visual clutter': '干净的品牌收尾画面，轻微放大，不堆信息。',
+  'slow push-in with natural handheld energy': '自然手持感的慢速推进。',
+  'quick reveal, rack focus to hero product or storefront': '快速揭示，焦点转到主打产品或门店。',
+  'smooth lateral move across details, warm motion accents': '横向平滑移动，带一点温暖的动态细节。',
+  'clean end frame with gentle zoom and readable text': '清楚的结束画面，轻微放大，文字保持可读。',
+}
+
 function displaySceneTitle(scene: VideoScene) {
   return sceneTitleMap[scene.title] || scene.title
+}
+
+function displayIntent(scene: VideoScene) {
+  return intentMap[scene.intent] || scene.intent
+}
+
+function displayCameraMotion(scene: VideoScene) {
+  return cameraMotionMap[scene.cameraMotion] || scene.cameraMotion
 }
 
 function VideoCreatorPageInner() {
@@ -123,13 +151,14 @@ function VideoCreatorPageInner() {
   const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all'>('unused')
   const [assetPageSize, setAssetPageSize] = useState(12)
   const [creatorType, setCreatorType] = useState('product_showcase')
-  const [idea, setIdea] = useState('Showcase selected merchant assets as a short social video')
+  const [idea, setIdea] = useState(creatorOptions[0].defaultIdea)
   const [platform, setPlatform] = useState('tiktok')
   const [aspectRatio, setAspectRatio] = useState('9:16')
-  const [duration, setDuration] = useState(10)
+  const [duration, setDuration] = useState(creatorOptions[0].duration)
   const [loadingAssets, setLoadingAssets] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [submittingVideo, setSubmittingVideo] = useState(false)
+  const [checkingVideo, setCheckingVideo] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<any>(null)
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({})
@@ -191,8 +220,8 @@ function VideoCreatorPageInner() {
     }
   }, [promptDrafts, videoPlan])
   const planReady = Boolean(videoPlan)
-  const videoReady = Boolean(execution)
-  const currentStep = videoReady ? 3 : planReady ? 2 : 1
+  const videoReady = execution?.status === 'completed'
+  const currentStep = execution ? 3 : planReady ? 2 : 1
   const stepCards = [
     {
       step: 1,
@@ -210,7 +239,7 @@ function VideoCreatorPageInner() {
       step: 3,
       title: '生成视频并保存',
       description: '确认分镜后调用 Seedance，生成结果会回到素材库。',
-      status: currentStep === 3 ? '已完成' : '待开始',
+      status: videoReady ? '已完成' : currentStep === 3 ? '生成中' : '待开始',
     },
   ]
 
@@ -315,6 +344,37 @@ function VideoCreatorPageInner() {
       setError(err?.message || '生成视频失败')
     } finally {
       setSubmittingVideo(false)
+    }
+  }
+
+  const handleCheckVideo = async () => {
+    const taskId = execution?.providerTaskIds?.[0]
+    if (!taskId) {
+      setError('还没有可查询的视频任务。请先点击生成视频。')
+      return
+    }
+    setCheckingVideo(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/content/video/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId,
+          taskId,
+          title: videoPlan?.title || idea,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '检查视频结果失败')
+      setResult((prev: any) => ({
+        ...prev,
+        execution: json.execution,
+      }))
+    } catch (err: any) {
+      setError(err?.message || '检查视频结果失败')
+    } finally {
+      setCheckingVideo(false)
     }
   }
 
@@ -553,7 +613,7 @@ function VideoCreatorPageInner() {
                   按卡片顺序完成：先生成分镜，修改画面描述，最后生成视频。
                 </p>
               </div>
-              {(generating || submittingVideo) && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
+              {(generating || submittingVideo || checkingVideo) && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
             </div>
             {error && <p className="mt-3 rounded-lg bg-rose-50 p-3 text-xs font-bold leading-relaxed text-rose-600">{error}</p>}
             {!videoPlan ? (
@@ -562,28 +622,42 @@ function VideoCreatorPageInner() {
                   <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
                     <Sparkles className="h-5 w-5" />
                   </div>
-                  <p className="mt-3 text-sm font-black text-slate-700">先生成可编辑分镜</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                    左侧确认素材、平台、比例和视频目标后，点击“生成可编辑分镜”。AI 会把视频拆成几个镜头卡片，你可以逐个修改。
-                  </p>
+                  <p className="mt-3 text-sm font-black text-slate-700">等待分镜</p>
                 </div>
               </div>
             ) : (
               <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]">
                 <aside className="space-y-3 xl:sticky xl:top-[92px] xl:self-start">
                   {execution?.outputUrl && (
-                    <div className="overflow-hidden rounded-lg border border-slate-200 bg-black">
+                    <div className="overflow-hidden rounded-lg border border-emerald-200 bg-black shadow-sm">
                       <video src={execution.outputUrl} className="max-h-[520px] w-full" controls playsInline />
+                      <div className="flex items-center justify-between gap-2 bg-white px-3 py-2 text-xs font-black text-emerald-700">
+                        <span>已保存到素材库</span>
+                        <span>AI 视频</span>
+                      </div>
                     </div>
                   )}
                   {execution && (
-                    <div className={`rounded-lg p-3 text-xs font-bold ${
+                    <div className={`rounded-lg border p-3 text-xs font-bold ${
                       execution.status === 'completed'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-amber-50 text-amber-700'
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border-amber-200 bg-amber-50 text-amber-700'
                     }`}>
-                      视频生成状态：{execution.status === 'completed' ? '已完成并保存到素材库' : '已提交，视频仍在处理中'}
-                      {execution.providerTaskIds?.length ? ` · Provider Task: ${execution.providerTaskIds.join(', ')}` : ''}
+                      <div className="flex items-center justify-between gap-3">
+                        <span>{execution.status === 'completed' ? '已完成' : '生成中'}</span>
+                        {execution.status !== 'completed' && <Loader2 className="h-4 w-4 animate-spin" />}
+                      </div>
+                      {execution.status !== 'completed' ? (
+                        <button
+                          type="button"
+                          onClick={handleCheckVideo}
+                          disabled={checkingVideo}
+                          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-xs font-black text-white hover:bg-amber-700 disabled:opacity-60"
+                        >
+                          {checkingVideo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                          刷新结果
+                        </button>
+                      ) : null}
                     </div>
                   )}
                   <div className="rounded-lg bg-slate-50 p-3">
@@ -596,7 +670,7 @@ function VideoCreatorPageInner() {
                       <p>目标：{selectedCreator.label}</p>
                       <p>结构：{selectedCreator.flow}</p>
                       <p>素材：{selectedAssetIds.length} 个已选素材</p>
-                      <p>平台与比例：{platform} · {aspectRatio} · {duration}s</p>
+                      <p>平台与比例：{platform} · {aspectRatio} · {duration} 秒</p>
                       <p>Idea：{idea}</p>
                     </div>
                   </div>
@@ -604,15 +678,15 @@ function VideoCreatorPageInner() {
                   <button
                     type="button"
                     onClick={handleSubmitVideo}
-                    disabled={submittingVideo || generating}
+                    disabled={submittingVideo || generating || (execution && execution.status !== 'completed')}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-60"
                   >
                     {submittingVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    第 3 步：生成视频
+                    {execution?.status === 'completed' ? '重新生成视频' : execution ? '生成中' : '第 3 步：生成视频'}
                   </button>
 
                   <details className="rounded-lg border border-slate-200 p-3">
-                    <summary className="cursor-pointer text-xs font-black text-slate-600">技术任务详情</summary>
+                    <summary className="cursor-pointer text-xs font-black text-slate-600">高级信息：任务编号与模型参数</summary>
                     <div className="mt-2 space-y-1">
                       {(videoPlan.seedanceJobs || []).map((job: any) => (
                         <p key={job.id} className="break-all text-[11px] text-slate-500">
@@ -623,7 +697,7 @@ function VideoCreatorPageInner() {
                   </details>
                 </aside>
 
-                <div className="grid min-w-0 grid-cols-1 gap-3 2xl:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-1 gap-3">
                   {scenes.map((scene) => {
                     const job = videoPlan.seedanceJobs?.find((item: any) => item.id.endsWith(`-${scene.id}`))
                     return (
@@ -631,9 +705,9 @@ function VideoCreatorPageInner() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-xs font-black">第 {Number(scene.id)} 镜 · {displaySceneTitle(scene)}</p>
-                          <p className="mt-1 text-[11px] text-slate-500">{scene.intent}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">{displayIntent(scene)}</p>
                         </div>
-                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{scene.durationSec}s</span>
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{scene.durationSec} 秒</span>
                       </div>
                       <div className="mt-3 grid gap-2 text-[11px] sm:grid-cols-2">
                         <div className="rounded-lg bg-slate-50 p-2">
@@ -642,21 +716,23 @@ function VideoCreatorPageInner() {
                         </div>
                         <div className="rounded-lg bg-slate-50 p-2">
                           <p className="font-black text-slate-500">镜头运动</p>
-                          <p className="mt-1 text-slate-600">{scene.cameraMotion}</p>
+                          <p className="mt-1 text-slate-600">{displayCameraMotion(scene)}</p>
                         </div>
                       </div>
                       {job && (
-                        <label className="mt-3 block">
-                          <span className="text-[11px] font-black text-slate-500">给视频模型的画面描述，可直接修改</span>
-                        <textarea
-                          value={promptDrafts[job.id] || ''}
-                          onChange={(event) => {
-                            setPromptDrafts((prev) => ({ ...prev, [job.id]: event.target.value }))
-                          }}
-                          rows={7}
-                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-indigo-400"
-                        />
-                        </label>
+                        <details className="mt-3 rounded-lg border border-slate-200 p-3">
+                          <summary className="cursor-pointer text-[11px] font-black text-slate-500">
+                            高级：查看或修改 Seedance 提示词
+                          </summary>
+                          <textarea
+                            value={promptDrafts[job.id] || ''}
+                            onChange={(event) => {
+                              setPromptDrafts((prev) => ({ ...prev, [job.id]: event.target.value }))
+                            }}
+                            rows={7}
+                            className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-indigo-400"
+                          />
+                        </details>
                       )}
                     </div>
                     )

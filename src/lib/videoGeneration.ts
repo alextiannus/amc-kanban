@@ -147,6 +147,74 @@ export async function generateVideoFromPlan(input: {
   throw new Error(`Unsupported video provider for execution: ${config.provider}`)
 }
 
+export async function refreshVideoGenerationTask(input: {
+  brandId: string
+  actorId: string
+  taskId: string
+  title?: string
+}): Promise<VideoGenerationExecution> {
+  const config = await getVideoProviderConfig()
+  if (!config?.apiKey) {
+    throw new Error('视频生成模型未配置。请在 Admin → AI 模型配置中启用 provider=seedance，taskTags=video_generation。')
+  }
+  if (config.provider !== 'seedance' && config.provider !== 'volcengine') {
+    throw new Error(`当前视频状态查询仅支持 Seedance / BytePlus Ark。当前 provider=${config.provider}`)
+  }
+
+  const baseUrl = seedanceBaseUrl(config.baseUrl)
+  const response = await fetch(seedanceTaskUrl(baseUrl, input.taskId), {
+    headers: { authorization: `Bearer ${config.apiKey}` },
+  })
+  const json = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(seedanceErrorMessage(json) || `Seedance task status check failed with ${response.status}`)
+  }
+
+  const status = String(json?.status || json?.data?.status || '').toLowerCase()
+  const outputUrl = extractVideoUrl(json)
+  if (!outputUrl) {
+    if (status.includes('fail') || status.includes('cancel') || status.includes('error')) {
+      throw new Error(seedanceErrorMessage(json) || `Seedance task ${input.taskId} failed`)
+    }
+    return {
+      ok: true,
+      jobId: input.taskId,
+      status: 'processing',
+      provider: config.provider,
+      providerTaskIds: [input.taskId],
+    }
+  }
+
+  const existing = await prisma.mediaAsset.findFirst({
+    where: {
+      brandId: input.brandId,
+      OR: [
+        { filename: `seedance-${input.taskId}.mp4` },
+        { url: outputUrl },
+      ],
+    },
+    select: { id: true, url: true, mimeType: true, filename: true },
+  })
+  const asset = existing || await createVideoAsset({
+    brandId: input.brandId,
+    actorId: input.actorId,
+    url: outputUrl,
+    filename: `seedance-${input.taskId}.mp4`,
+    caption: `AI 生视频：${input.title || input.taskId}`,
+    sourceAssets: [],
+  })
+
+  return {
+    ok: true,
+    jobId: input.taskId,
+    status: 'completed',
+    provider: config.provider,
+    providerTaskIds: [input.taskId],
+    outputUrl: asset.url,
+    assets: [asset],
+  }
+}
+
 async function generateWithSeedanceGateway(args: {
   config: VideoProviderConfig
   input: { brandId: string; actorId: string; plan: { title?: string }; assetIds?: string[]; imageUrls?: string[] }
@@ -156,7 +224,6 @@ async function generateWithSeedanceGateway(args: {
   const { config, input, assets, jobs } = args
   const baseUrl = seedanceBaseUrl(config.baseUrl)
   const providerTaskIds: string[] = []
-  const createdAssets: VideoGenerationExecution['assets'] = []
 
   for (const job of jobs) {
     const references = resolveJobReferences(job, assets, input.imageUrls)
@@ -182,29 +249,14 @@ async function generateWithSeedanceGateway(args: {
     const taskId = String(json?.id || json?.task_id || json?.taskId || json?.data?.id || json?.data?.task_id || '')
     if (!taskId) throw new Error('Seedance provider did not return a task id')
     providerTaskIds.push(taskId)
-
-    const outputUrl = await pollSeedanceGateway(baseUrl, config.apiKey!, taskId)
-    if (outputUrl) {
-      const asset = await createVideoAsset({
-        brandId: input.brandId,
-        actorId: input.actorId,
-        url: outputUrl,
-        filename: `seedance-${taskId}.mp4`,
-        caption: `Seedance video: ${input.plan.title || job.id}`,
-        sourceAssets: assets,
-      })
-      createdAssets.push(asset)
-    }
   }
 
   return {
     ok: true,
     jobId: providerTaskIds[0],
-    status: createdAssets.length ? 'completed' : 'processing',
+    status: 'submitted',
     provider: config.provider,
     providerTaskIds,
-    outputUrl: createdAssets[0]?.url,
-    assets: createdAssets,
   }
 }
 
