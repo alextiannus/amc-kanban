@@ -11,6 +11,11 @@
 
 import nodemailer from 'nodemailer'
 import { prisma } from './prisma'
+import {
+  SUBSCRIPTION_TERMS_FILENAME,
+  buildSubscriptionTermsPdf,
+  getSubscriptionTermsMarkdown,
+} from './subscription/terms'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -611,11 +616,27 @@ export async function sendBrandOnboardingWelcomeEmail(params: {
     formattedText = formattedText.replace(/\{\{#planName\}\}.*?\{\{\/planName\}\}/g, '')
   }
 
+  const serviceTermsMarkdown = getSubscriptionTermsMarkdown()
+  const serviceTermsPdf = buildSubscriptionTermsPdf(serviceTermsMarkdown)
+  const agreementHtml = `
+    <div style="margin-top:24px;padding:16px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;color:#334155;font-size:12px;line-height:1.6;">
+      <strong>Service Agreement Acknowledgement</strong><br/>
+      By subscribing to AMC, paying for a subscription, creating a brand workspace, or continuing to use the service, the customer acknowledges and agrees to the full AI Marketing Crew Service Terms from Deliverychinatown Pte. Ltd. (UEN 201835327N, Singapore), including GenAI risk acknowledgement, data rights and protection obligations, IP responsibilities, content approval obligations and limitation of liability. The full Service Terms are attached as a PDF.
+    </div>`
+  const agreementText = `\n\nService Agreement Acknowledgement:\nBy subscribing to AMC, paying for a subscription, creating a brand workspace, or continuing to use the service, the customer acknowledges and agrees to the full AI Marketing Crew Service Terms from Deliverychinatown Pte. Ltd. (UEN 201835327N, Singapore), including GenAI risk acknowledgement, data rights and protection obligations, IP responsibilities, content approval obligations and limitation of liability. The full Service Terms are attached as a PDF.`
+
   return sendEmail({
     to,
     subject: interpolateTemplate(subject, vars),
-    html: interpolateTemplate(formattedHtml, vars),
-    text: interpolateTemplate(formattedText, vars)
+    html: interpolateTemplate(formattedHtml, vars) + agreementHtml,
+    text: interpolateTemplate(formattedText, vars) + agreementText,
+    attachments: [
+      {
+        filename: SUBSCRIPTION_TERMS_FILENAME,
+        content: serviceTermsPdf,
+        contentType: 'application/pdf',
+      },
+    ],
   })
 }
 
@@ -758,35 +779,8 @@ export async function sendBrandCongratsEmailWithContract(params: {
   const { to, nickname, brandName, planName, mmInviteLink } = params
 
   const displayPlan = planName || '标准专业代运营套餐 (Starter Plan)'
-
-  const contractText = `AI MARKETING CREW SERVICE AGREEMENT
-------------------------------------------------------------------
-Solution: AI Marketing Crew Marketing and Sales Content Generation Platform  
-Vendor: DeliveryChinatown Pte. Ltd. (UEN 201835327N)
-Customer: ${brandName}
-Version: AMC-SMSA-v1.03 / PSG sample T&Cs v1.2  
-Date: ${new Date().toLocaleDateString('en-SG')}
-
-1. Parties
-This Service Agreement is entered into between DeliveryChinatown Pte. Ltd. (UEN 201835327N, registered in Singapore) and the SME customer "${brandName}".
-
-2. Solution Description
-AI Marketing Crew ("AMC") is a specialized marketing and sales content generation solution that supports SMEs with brand workspace setup, business and brand context collection, campaign workflow, AI-assisted content generation, media asset library, review and approval workflow, scheduling, and monthly reporting.
-
-3. Service Scope
-Packages include Starter AI Marketing Crew (SGD 5,200/yr), Essential AI Marketing Crew (SGD 10,600/yr), and Booster AI Marketing Crew (SGD 16,800/yr). Standard deliverables are set by the accepted subscription order.
-
-4. Client Obligations
-The Customer must provide accurate business descriptions, products details, and outlets locations. The Customer is responsible for checking the factual accuracy, legality, and validity of all drafts before publishing.
-
-5. Limitation of Liability
-DeliveryChinatown's total liability arising out of or related to this agreement is limited to the fees paid by the Customer during the 3 months immediately preceding the event.
-
-6. Governing Law
-This Agreement is governed by the laws of Singapore.
-
-DeliveryChinatown Pte. Ltd.
-`
+  const contractText = getSubscriptionTermsMarkdown()
+  const contractPdf = buildSubscriptionTermsPdf(contractText)
 
   const subject = `【AMC】祝贺！您的品牌 ${brandName} 已成功创建 | Brand Created Successfully`
   const html = `<!DOCTYPE html>
@@ -828,9 +822,10 @@ DeliveryChinatown Pte. Ltd.
           <span>${brandName} · ${displayPlan}</span>
         </div>
 
-        <p>We have attached the service terms and conditions agreement (e-contract) from <strong>DeliveryChinatown Pte. Ltd.</strong> to this email for your records. You can also view the summary of the terms below:</p>
+        <p>We have attached the AI Marketing Crew Service Terms from <strong>Deliverychinatown Pte. Ltd. (UEN 201835327N, Singapore)</strong> to this email as a PDF for your records.</p>
+        <p>By subscribing to AMC, paying for a subscription, creating a brand workspace, or continuing to use the service, you acknowledge and agree to the full Service Agreement, including GenAI risk acknowledgement, data rights and protection obligations, IP responsibilities, content approval obligations and limitation of liability.</p>
         
-        <div class="contract-box">${contractText}</div>
+        <div class="contract-box">${contractText.slice(0, 2400)}${contractText.length > 2400 ? '\n\n[Full Service Terms attached as PDF]' : ''}</div>
 
         ${mmInviteLink ? `
         <div class="cta-wrap">
@@ -855,7 +850,9 @@ Dear ${nickname},
 
 Your brand "${brandName}" (${displayPlan}) has been successfully created on the AMC platform.
 
-We have attached the official service terms and conditions agreement (e-contract) from DeliveryChinatown Pte. Ltd. to this email.
+We have attached the official AI Marketing Crew Service Terms from Deliverychinatown Pte. Ltd. (UEN 201835327N, Singapore) as a PDF.
+
+By subscribing to AMC, paying for a subscription, creating a brand workspace, or continuing to use the service, you acknowledge and agree to the full Service Agreement, including GenAI risk acknowledgement, data rights and protection obligations, IP responsibilities, content approval obligations and limitation of liability.
 
 Best regards,
 The AI Marketing Crew Team`
@@ -867,10 +864,10 @@ The AI Marketing Crew Team`
     text,
     attachments: [
       {
-        filename: 'DeliveryChinatown_AMC_Service_Agreement.txt',
-        content: contractText,
+        filename: SUBSCRIPTION_TERMS_FILENAME,
+        content: contractPdf,
+        contentType: 'application/pdf',
       }
     ]
   })
 }
-

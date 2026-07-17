@@ -83,6 +83,16 @@ export async function GET(request: Request) {
             some: { userId: sessionUser.id, active: true }
           }
         }
+      },
+      // Owned brands (via multi-owner BrandOwner join table)
+      {
+        owners: {
+          some: { ownerId: sessionUser.id }
+        }
+      },
+      // Legacy single-owner mapping
+      {
+        ownerId: sessionUser.id
       }
     ]
 
