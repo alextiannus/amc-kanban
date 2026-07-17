@@ -38,6 +38,29 @@ const creatorOptions = [
   { id: 'local_discovery', label: '本地发现', hint: '附近场景与商圈搜索' },
 ]
 
+const sceneTitleMap: Record<string, string> = {
+  'Hero Product': '主打画面',
+  Details: '细节展示',
+  Visit: '行动引导',
+  'Problem Moment': '开场问题',
+  Discovery: '发现商家',
+  Experience: '体验过程',
+  Action: '行动引导',
+  Offer: '优惠亮点',
+  Value: '价值说明',
+  Redeem: '领取方式',
+  'Today Pick': '今日推荐',
+  'Menu Detail': '菜单细节',
+  Order: '下单引导',
+  'Near You': '附近发现',
+  'Why Visit': '到店理由',
+  'Find It': '找到商家',
+}
+
+function displaySceneTitle(scene: VideoScene) {
+  return sceneTitleMap[scene.title] || scene.title
+}
+
 function VideoCreatorPageInner() {
   const params = useSearchParams()
   const router = useRouter()
@@ -222,7 +245,7 @@ function VideoCreatorPageInner() {
           </button>
           <div className="flex items-center gap-2 text-sm font-black">
             <Film className="h-4 w-4 text-indigo-600" />
-            AI Video Creator
+            AI 生视频
           </div>
           <div className="w-14" />
         </div>
@@ -233,7 +256,7 @@ function VideoCreatorPageInner() {
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-indigo-600" />
-              <h1 className="text-sm font-black">视频制作设置</h1>
+              <h1 className="text-sm font-black">1. 选择内容</h1>
             </div>
 
             <label className="mb-1 block text-[11px] font-bold text-slate-500">视频目标</label>
@@ -255,11 +278,12 @@ function VideoCreatorPageInner() {
               ))}
             </div>
 
-            <label className="mb-1 mt-4 block text-[11px] font-bold text-slate-500">Idea / 活动目标</label>
+            <label className="mb-1 mt-4 block text-[11px] font-bold text-slate-500">视频想表达什么</label>
             <textarea
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
               rows={4}
+              placeholder="例如：突出招牌菜、展示门店环境、介绍本周优惠"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
             />
 
@@ -294,9 +318,8 @@ function VideoCreatorPageInner() {
               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-60"
             >
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              生成剧本 / Prompt
+              生成可编辑分镜
             </button>
-            {error && <p className="mt-3 rounded-lg bg-rose-50 p-2 text-xs font-bold text-rose-600">{error}</p>}
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -304,7 +327,7 @@ function VideoCreatorPageInner() {
               <div>
                 <h2 className="text-xs font-black text-slate-700">素材选择</h2>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  已选 {selectedAssetIds.length} 个素材，可继续从素材库添加。
+                  已选 {selectedAssetIds.length} 个素材，可继续添加或移除。
                 </p>
               </div>
               {loadingAssets && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
@@ -333,7 +356,7 @@ function VideoCreatorPageInner() {
             </div>
 
             <p className="mt-1 text-[11px] text-slate-500">
-              当前视频会按这些素材生成分镜提示。
+              系统会根据这些图片生成每个镜头的画面描述。
             </p>
             <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-3">
               {selectedAssets.map((asset) => (
@@ -404,16 +427,28 @@ function VideoCreatorPageInner() {
           <div className="min-h-[calc(100vh-112px)] rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-black">剧本与视频生成</h2>
+                <h2 className="text-sm font-black">2. 编辑分镜，3. 生成视频</h2>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  先生成可编辑分镜 Prompt，确认后再调用 Seedance 生成视频。
+                  先检查每个镜头的画面描述，确认后再调用 Seedance。
                 </p>
               </div>
               {(generating || submittingVideo) && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
             </div>
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[11px] font-bold">
+              <div className={`rounded-lg border px-2 py-2 ${videoPlan ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-indigo-200 bg-indigo-50 text-indigo-700'}`}>
+                生成分镜
+              </div>
+              <div className={`rounded-lg border px-2 py-2 ${videoPlan ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                编辑画面
+              </div>
+              <div className={`rounded-lg border px-2 py-2 ${execution ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                生成视频
+              </div>
+            </div>
+            {error && <p className="mt-3 rounded-lg bg-rose-50 p-3 text-xs font-bold leading-relaxed text-rose-600">{error}</p>}
             {!videoPlan ? (
               <div className="mt-4 flex min-h-[420px] items-center justify-center rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
-                点击左侧按钮后将在这里看到可编辑剧本和 Seedance Prompt。
+                先点击左侧“生成可编辑分镜”，这里会出现每个镜头的画面描述。你可以直接改文字，再生成视频。
               </div>
             ) : (
               <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]">
@@ -434,7 +469,7 @@ function VideoCreatorPageInner() {
                     </div>
                   )}
                   <div className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-sm font-black">{videoPlan.title}</p>
+                    <p className="text-sm font-black">视频方案</p>
                     <p className="mt-1 text-xs leading-relaxed text-slate-600">{videoPlan.strategy}</p>
                   </div>
 
@@ -448,44 +483,56 @@ function VideoCreatorPageInner() {
                     使用 Seedance 生成视频
                   </button>
 
-                  <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-xs font-black">Seedance Jobs</p>
+                  <details className="rounded-lg border border-slate-200 p-3">
+                    <summary className="cursor-pointer text-xs font-black text-slate-600">技术任务详情</summary>
                     <div className="mt-2 space-y-1">
                       {(videoPlan.seedanceJobs || []).map((job: any) => (
-                        <p key={job.id} className="break-all text-[11px] text-slate-600">
+                        <p key={job.id} className="break-all text-[11px] text-slate-500">
                           {job.id} · {job.mode} · {job.modelHint} · {job.request?.duration}s
                         </p>
                       ))}
                     </div>
-                  </div>
+                  </details>
                 </aside>
 
                 <div className="grid min-w-0 grid-cols-1 gap-3 2xl:grid-cols-2">
-                  {scenes.map((scene) => (
+                  {scenes.map((scene) => {
+                    const job = videoPlan.seedanceJobs?.find((item: any) => item.id.endsWith(`-${scene.id}`))
+                    return (
                     <div key={scene.id} className="min-w-0 rounded-lg border border-slate-200 p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-xs font-black">{scene.id}. {scene.title}</p>
+                          <p className="text-xs font-black">第 {Number(scene.id)} 镜 · {displaySceneTitle(scene)}</p>
                           <p className="mt-1 text-[11px] text-slate-500">{scene.intent}</p>
                         </div>
                         <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{scene.durationSec}s</span>
                       </div>
-                      <p className="mt-2 text-xs font-bold text-indigo-700">{scene.textOverlay}</p>
-                      <p className="mt-2 text-[11px] leading-relaxed text-slate-600">{scene.cameraMotion}</p>
-                      {videoPlan.seedanceJobs?.find((job: any) => job.id.endsWith(`-${scene.id}`)) && (
+                      <div className="mt-3 grid gap-2 text-[11px] sm:grid-cols-2">
+                        <div className="rounded-lg bg-slate-50 p-2">
+                          <p className="font-black text-slate-500">画面字幕</p>
+                          <p className="mt-1 font-bold text-indigo-700">{scene.textOverlay}</p>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-2">
+                          <p className="font-black text-slate-500">镜头运动</p>
+                          <p className="mt-1 text-slate-600">{scene.cameraMotion}</p>
+                        </div>
+                      </div>
+                      {job && (
+                        <label className="mt-3 block">
+                          <span className="text-[11px] font-black text-slate-500">给视频模型的画面描述，可直接修改</span>
                         <textarea
-                          value={promptDrafts[videoPlan.seedanceJobs.find((job: any) => job.id.endsWith(`-${scene.id}`)).id] || ''}
+                          value={promptDrafts[job.id] || ''}
                           onChange={(event) => {
-                            const job = videoPlan.seedanceJobs.find((item: any) => item.id.endsWith(`-${scene.id}`))
-                            if (!job) return
                             setPromptDrafts((prev) => ({ ...prev, [job.id]: event.target.value }))
                           }}
                           rows={7}
-                          className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-indigo-400"
+                          className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-indigo-400"
                         />
+                        </label>
                       )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
