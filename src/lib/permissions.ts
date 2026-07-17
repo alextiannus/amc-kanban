@@ -108,7 +108,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       items: [
         { id: 'managementOverview', view: 'managementOverview', label: '主理人总览', icon: 'Users' },
         { id: 'dataAnalysis',       view: 'dataAnalysis',       label: '账号快照',   icon: 'Camera' },
-        { id: 'amc-growth',         view: 'managementOverview', label: 'Growth 智能规划', icon: 'TrendingUp', href: 'https://amc-growth.immedi.ai/public/' },
+        { id: 'amc-growth',         view: 'managementOverview', label: '智能规划', icon: 'TrendingUp', href: 'https://amc-growth.immedi.ai/public/' },
       ],
     })
   }
@@ -118,7 +118,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
     const brandItems: MenuItemDef[] = [
       { id: 'dashboard',    view: 'dashboard',    label: '品牌故事',      icon: 'BookOpen' },
       { id: 'calendar',     view: 'calendar',     label: '发布日历',        icon: 'Calendar' },
-      { id: 'drafts',       view: 'drafts',       label: '发布内容 (Post)', icon: 'FileText' },
+      { id: 'drafts',       view: 'drafts',       label: '发布内容', icon: 'FileText' },
       { id: 'assets',       view: 'assets',       label: '素材库',          icon: 'Images' },
       { id: 'game',         view: 'game',         label: '店内活动',        icon: 'Gift' },
       { id: 'socialInsight',view: 'socialInsight',label: '数据分析',        icon: 'BarChart2' },
