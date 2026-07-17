@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import React, { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Check, Film, Loader2, Play, Plus, RefreshCw, Sparkles, X } from 'lucide-react'
+import { ArrowLeft, Check, Film, Loader2, Play, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
 
 type Asset = {
   id: string
@@ -157,6 +157,7 @@ function VideoCreatorPageInner() {
   const [duration, setDuration] = useState(creatorOptions[0].duration)
   const [assetFilter, setAssetFilter] = useState<'unused' | 'all'>('unused')
   const [assetPageSize, setAssetPageSize] = useState(12)
+  const [expandedAssetRowId, setExpandedAssetRowId] = useState<string | null>(null)
   const [loadingAssets, setLoadingAssets] = useState(false)
   const [planning, setPlanning] = useState(false)
   const [finalBusy, setFinalBusy] = useState(false)
@@ -184,11 +185,6 @@ function VideoCreatorPageInner() {
       .finally(() => setLoadingAssets(false))
   }, [brandId])
 
-  const selectedAssets = useMemo(
-    () => assets.filter((asset) => selectedAssetIds.includes(asset.id)),
-    [assets, selectedAssetIds],
-  )
-
   const visibleAssets = useMemo(() => {
     const selected = new Set(selectedAssetIds)
     const imageAssets = assets.filter((asset) => !asset.mimeType?.startsWith('video/'))
@@ -202,8 +198,8 @@ function VideoCreatorPageInner() {
     })
   }, [assets, assetFilter, selectedAssetIds])
 
-  const selectedFinalUrls = rows
-    .filter((row) => row.includeInFinal)
+  const selectedFinalRows = rows.filter((row) => row.includeInFinal && row.execution?.outputUrl)
+  const selectedFinalUrls = selectedFinalRows
     .map((row) => row.execution?.outputUrl)
     .filter((url): url is string => typeof url === 'string' && Boolean(url))
 
@@ -228,13 +224,6 @@ function VideoCreatorPageInner() {
     }
   }
 
-  const toggleGlobalAsset = (assetId: string) => {
-    setSelectedAssetIds((prev) => prev.includes(assetId)
-      ? prev.filter((id) => id !== assetId)
-      : [...prev, assetId])
-    resetPlan()
-  }
-
   const toggleRowAsset = (rowId: string, assetId: string) => {
     setRows((prev) => prev.map((row) => {
       if (row.rowId !== rowId) return row
@@ -248,6 +237,8 @@ function VideoCreatorPageInner() {
   const assetRefsForRow = (assetIds: string[]) => assets
     .filter((asset) => assetIds.includes(asset.id))
     .map((asset) => ({ id: asset.id, url: asset.url, mimeType: asset.mimeType }))
+
+  const selectedAssetsForRow = (row: SceneRow) => assets.filter((asset) => row.assetIds.includes(asset.id))
 
   const buildRows = (videoPlan: any): SceneRow[] => {
     const scenes: VideoScene[] = videoPlan?.scenes || []
@@ -264,6 +255,65 @@ function VideoCreatorPageInner() {
         includeInFinal: true,
       }
     })
+  }
+
+  const handleAddRow = () => {
+    const last = rows[rows.length - 1]
+    const nextIndex = rows.length + 1
+    const nextId = String(nextIndex).padStart(2, '0')
+    const baseScene: VideoScene = last?.scene || {
+      id: nextId,
+      title: 'Custom Shot',
+      durationSec: 4,
+      intent: 'Prove the claim with product, store, review, or offer evidence.',
+      assetRefs: [],
+      visualPrompt: idea,
+      cameraMotion: 'close-up detail sweep, subtle parallax, appetizing or service-focused motion',
+      textOverlay: selectedCreator.label,
+    }
+    const scene: VideoScene = {
+      ...baseScene,
+      id: nextId,
+      title: `Custom Shot ${nextIndex}`,
+      durationSec: Math.max(4, Math.min(6, baseScene.durationSec || 4)),
+      assetRefs: [],
+      textOverlay: baseScene.textOverlay || selectedCreator.label,
+      visualPrompt: baseScene.visualPrompt || idea,
+    }
+    const job = last?.job
+      ? {
+          ...last.job,
+          id: `seedance-custom-${nextId}`,
+          request: { ...last.job.request, prompt: scene.visualPrompt, duration: scene.durationSec },
+        }
+      : {
+          id: `seedance-custom-${nextId}`,
+          provider: 'seedance',
+          mode: 'image_to_video',
+          modelHint: 'seedance-2.0-fast',
+          request: {
+            prompt: scene.visualPrompt,
+            ratio: aspectRatio,
+            duration: scene.durationSec,
+            references: [],
+            negativePrompt: 'distorted text, inaccurate logo, fake price, fake address, low quality, watermark',
+          },
+        }
+    setRows((prev) => [...prev, {
+      rowId: `custom-${Date.now()}`,
+      scene,
+      job,
+      prompt: job.request.prompt || scene.visualPrompt,
+      assetIds: [],
+      includeInFinal: true,
+    }])
+    setFinalExecution(null)
+  }
+
+  const handleDeleteRow = (rowId: string) => {
+    setRows((prev) => prev.filter((row) => row.rowId !== rowId))
+    setFinalExecution(null)
+    if (expandedAssetRowId === rowId) setExpandedAssetRowId(null)
   }
 
   const validateBase = () => {
@@ -405,6 +455,7 @@ function VideoCreatorPageInner() {
             `把这些已生成分镜合成为一条完整的${selectedCreator.label}短视频。`,
             `整体目标：${idea}`,
             `平台：${platform}，比例：${aspectRatio}。`,
+            `按以下分镜剧本顺序组织成片：${selectedFinalRows.map((row, index) => `${index + 1}. ${sceneTitle(row.scene)}：${row.prompt}`).join('\n')}`,
             `保持画面连续、节奏清楚、转场自然、商家信息真实。`,
           ].join('\n'),
           ratio: aspectRatio,
@@ -489,92 +540,62 @@ function VideoCreatorPageInner() {
 
       <main className="mx-auto max-w-[1800px] space-y-4 px-3 py-4 sm:px-5">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-black">整体视频设定</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {creatorOptions.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleSelectCreator(item.id)}
-                      className={`rounded-lg border p-3 text-left ${
-                        creatorType === item.id ? 'border-indigo-500 bg-indigo-50 text-indigo-800' : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <p className="text-xs font-black">{item.label}</p>
-                      <p className="mt-1 text-[11px] text-slate-500">{item.hint}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <label className="block">
-                <span className="text-[11px] font-black text-slate-500">视频目标</span>
-                <textarea
-                  value={idea}
-                  onChange={(event) => {
-                    setIdea(event.target.value)
-                    resetPlan()
-                  }}
-                  rows={3}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-                />
-              </label>
-
-              <div className="grid grid-cols-3 gap-2">
-                <label className="text-[11px] font-black text-slate-500">
-                  平台
-                  <select value={platform} onChange={(e) => { setPlatform(e.target.value); resetPlan() }} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs">
-                    <option value="tiktok">TikTok</option>
-                    <option value="instagram">Instagram</option>
-                    <option value="facebook">Facebook</option>
-                    <option value="google_business">Google</option>
-                  </select>
-                </label>
-                <label className="text-[11px] font-black text-slate-500">
-                  比例
-                  <select value={aspectRatio} onChange={(e) => { setAspectRatio(e.target.value); resetPlan() }} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs">
-                    <option value="9:16">9:16</option>
-                    <option value="1:1">1:1</option>
-                    <option value="4:5">4:5</option>
-                    <option value="16:9">16:9</option>
-                  </select>
-                </label>
-                <label className="text-[11px] font-black text-slate-500">
-                  秒数
-                  <input value={duration} onChange={(e) => { setDuration(Number(e.target.value) || selectedCreator.duration); resetPlan() }} type="number" min={4} max={15} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
-                </label>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-black">整体视频设定</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                {creatorOptions.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleSelectCreator(item.id)}
+                    className={`rounded-lg border p-3 text-left ${
+                      creatorType === item.id ? 'border-indigo-500 bg-indigo-50 text-indigo-800' : 'border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <p className="text-xs font-black">{item.label}</p>
+                    <p className="mt-1 text-[11px] text-slate-500">{item.hint}</p>
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-black text-slate-700">本次素材</p>
-                {loadingAssets && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <button onClick={() => setAssetFilter('unused')} className={`rounded-md px-2 py-1 text-[11px] font-black ${assetFilter === 'unused' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>未使用</button>
-                <button onClick={() => setAssetFilter('all')} className={`rounded-md px-2 py-1 text-[11px] font-black ${assetFilter === 'all' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>全部</button>
-              </div>
-              <div className="mt-3 grid grid-cols-5 gap-2">
-                {selectedAssets.map((asset) => (
-                  <button key={asset.id} onClick={() => toggleGlobalAsset(asset.id)} className="relative aspect-square overflow-hidden rounded-lg border border-indigo-400">
-                    <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
-                    <X className="absolute right-1 top-1 h-4 w-4 rounded-full bg-black/60 p-0.5 text-white" />
-                  </button>
-                ))}
-                {visibleAssets.slice(0, assetPageSize).filter((asset) => !selectedAssetIds.includes(asset.id)).map((asset) => (
-                  <button key={asset.id} onClick={() => toggleGlobalAsset(asset.id)} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200">
-                    <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
-                    <Plus className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white/90 p-0.5 text-slate-700" />
-                  </button>
-                ))}
-              </div>
-              {visibleAssets.length > assetPageSize && (
-                <button onClick={() => setAssetPageSize((size) => size + 12)} className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600">更多素材</button>
-              )}
+            <label className="block">
+              <span className="text-[11px] font-black text-slate-500">视频目标</span>
+              <textarea
+                value={idea}
+                onChange={(event) => {
+                  setIdea(event.target.value)
+                  resetPlan()
+                }}
+                rows={3}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+              />
+            </label>
+
+            <div className="grid grid-cols-3 gap-2">
+              <label className="text-[11px] font-black text-slate-500">
+                平台
+                <select value={platform} onChange={(e) => { setPlatform(e.target.value); resetPlan() }} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs">
+                  <option value="tiktok">TikTok</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="google_business">Google</option>
+                </select>
+              </label>
+              <label className="text-[11px] font-black text-slate-500">
+                比例
+                <select value={aspectRatio} onChange={(e) => { setAspectRatio(e.target.value); resetPlan() }} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs">
+                  <option value="9:16">9:16</option>
+                  <option value="1:1">1:1</option>
+                  <option value="4:5">4:5</option>
+                  <option value="16:9">16:9</option>
+                </select>
+              </label>
+              <label className="text-[11px] font-black text-slate-500">
+                秒数
+                <input value={duration} onChange={(e) => { setDuration(Number(e.target.value) || selectedCreator.duration); resetPlan() }} type="number" min={4} max={15} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
+              </label>
             </div>
           </div>
 
@@ -598,12 +619,23 @@ function VideoCreatorPageInner() {
         {error && <p className="rounded-lg bg-rose-50 p-3 text-xs font-black text-rose-600">{error}</p>}
 
         <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[72px_minmax(180px,240px)_minmax(320px,1fr)_180px_220px] gap-3 border-b border-slate-100 px-4 py-3 text-[11px] font-black text-slate-500 max-xl:hidden">
-            <span>镜头</span>
-            <span>素材</span>
-            <span>设定</span>
-            <span>操作</span>
-            <span>预览</span>
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+            <div className="grid flex-1 grid-cols-[minmax(220px,280px)_80px_minmax(320px,1fr)_190px_220px] gap-3 text-[11px] font-black text-slate-500 max-xl:hidden">
+              <span>素材</span>
+              <span>镜头</span>
+              <span>设定</span>
+              <span>操作</span>
+              <span>预览</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleAddRow}
+              disabled={!plan && rows.length === 0}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              添加分镜
+            </button>
           </div>
 
           {rows.length === 0 ? (
@@ -615,25 +647,56 @@ function VideoCreatorPageInner() {
           ) : (
             <div className="divide-y divide-slate-100">
               {rows.map((row, index) => (
-                <div key={row.rowId} className="grid min-h-[148px] grid-cols-1 gap-3 px-4 py-3 xl:grid-cols-[72px_minmax(180px,240px)_minmax(320px,1fr)_180px_220px]">
+                <div key={row.rowId} className="grid min-h-[148px] grid-cols-1 gap-3 px-4 py-3 xl:grid-cols-[minmax(220px,280px)_80px_minmax(320px,1fr)_190px_220px]">
+                  <div className="self-start">
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {selectedAssetsForRow(row).slice(0, 4).map((asset) => (
+                        <button key={asset.id} type="button" onClick={() => toggleRowAsset(row.rowId, asset.id)} className="relative aspect-square overflow-hidden rounded-md border border-indigo-500 ring-2 ring-indigo-100">
+                          <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
+                          <Check className="absolute right-1 top-1 h-4 w-4 rounded-full bg-indigo-600 p-0.5 text-white" />
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setExpandedAssetRowId(expandedAssetRowId === row.rowId ? null : row.rowId)}
+                        className="grid aspect-square place-items-center rounded-md border border-dashed border-slate-300 bg-slate-50 text-slate-500 hover:border-indigo-300 hover:text-indigo-600"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {expandedAssetRowId === row.rowId && (
+                      <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => setAssetFilter('unused')} className={`rounded-md px-2 py-1 text-[10px] font-black ${assetFilter === 'unused' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>未使用</button>
+                            <button onClick={() => setAssetFilter('all')} className={`rounded-md px-2 py-1 text-[10px] font-black ${assetFilter === 'all' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>全部</button>
+                          </div>
+                          {loadingAssets && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                        </div>
+                        <div className="grid max-h-56 grid-cols-4 gap-1.5 overflow-y-auto pr-1">
+                          {visibleAssets.slice(0, assetPageSize).map((asset) => {
+                            const active = row.assetIds.includes(asset.id)
+                            return (
+                              <button key={asset.id} type="button" onClick={() => toggleRowAsset(row.rowId, asset.id)} className={`relative aspect-square overflow-hidden rounded-md border ${active ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200'}`}>
+                                <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
+                                {active && <Check className="absolute right-1 top-1 h-4 w-4 rounded-full bg-indigo-600 p-0.5 text-white" />}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        {visibleAssets.length > assetPageSize && (
+                          <button onClick={() => setAssetPageSize((size) => size + 12)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-600">更多素材</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex items-start gap-3 xl:block">
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-700">{index + 1}</span>
                     <div className="min-w-0 xl:mt-2">
                       <p className="text-xs font-black">{sceneTitle(row.scene)}</p>
                       <p className="mt-1 text-[11px] text-slate-500">{row.scene.durationSec} 秒</p>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-5 gap-1.5 self-start">
-                    {selectedAssets.map((asset) => {
-                      const active = row.assetIds.includes(asset.id)
-                      return (
-                        <button key={asset.id} type="button" onClick={() => toggleRowAsset(row.rowId, asset.id)} className={`relative aspect-square overflow-hidden rounded-md border ${active ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200 opacity-60'}`}>
-                          <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
-                          {active && <Check className="absolute right-1 top-1 h-4 w-4 rounded-full bg-indigo-600 p-0.5 text-white" />}
-                        </button>
-                      )
-                    })}
                   </div>
 
                   <div className="min-w-0 self-start">
@@ -685,6 +748,14 @@ function VideoCreatorPageInner() {
                     <span className={`rounded-full px-2 py-1 text-center text-[10px] font-black ${row.execution?.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : row.execution ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
                       {row.execution?.status === 'completed' ? '已完成' : row.execution ? '生成中' : '待生成'}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRow(row.rowId)}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-rose-100 bg-white px-3 py-2 text-xs font-black text-rose-600 hover:bg-rose-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      删除分镜
+                    </button>
                   </div>
 
                   <div className="self-start">
