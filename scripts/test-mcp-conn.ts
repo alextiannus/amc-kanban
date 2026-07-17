@@ -8,7 +8,9 @@ async function main() {
   const transport = new StreamableHTTPClientTransport(url, {
     requestInit: {
       headers: {
-        Authorization: 'Bearer 60677f288ebce1648b46b'
+        Authorization: 'Bearer mcp_prod_amc_OuChopCY-paKN2cdTjM9XLfpHibTKTYVzEYWdR8u8pI',
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json'
       }
     }
   })

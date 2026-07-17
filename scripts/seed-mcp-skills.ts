@@ -40,15 +40,22 @@ async function main() {
   for (const brand of brands) {
     console.log(`Seeding brand: ${brand.name} (${brand.id})`)
 
-    // 1. Create or update MCP Config for dct-logistics
+    // 1. Create or update MCP Config for deliverychinatown
     const mcpConfig = {
-      name: 'dct-logistics',
+      name: 'deliverychinatown',
       url: 'https://devmcp.12eat.ai/mcp',
       headers: {
-        Authorization: 'Bearer 60677f288ebce1648b46b'
+        Authorization: 'Bearer mcp_prod_amc_OuChopCY-paKN2cdTjM9XLfpHibTKTYVzEYWdR8u8pI',
+        Accept: 'application/json, text/event-stream',
+        'Content-Type': 'application/json'
       },
       isActive: true
     }
+
+    // Clean up old stale dct-logistics config
+    await prisma.mcpServerConfig.deleteMany({
+      where: { brandId: brand.id, name: 'dct-logistics' }
+    })
 
     const existingMcp = await prisma.mcpServerConfig.findFirst({
       where: { brandId: brand.id, name: mcpConfig.name }
