@@ -1,20 +1,58 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 export const SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.04'
 export const SUBSCRIPTION_TERMS_TITLE = 'AI Marketing Crew Service Terms / AI Marketing Crew 服务条款'
-export const SUBSCRIPTION_TERMS_FILENAME = 'AI-Marketing-Crew-Service-Terms.pdf'
+export const SUBSCRIPTION_TERMS_EN_FILENAME = 'AI-Marketing-Crew-Service-Terms-English.pdf'
+export const SUBSCRIPTION_TERMS_ZH_FILENAME = 'AI-Marketing-Crew-Service-Terms-Chinese.pdf'
+export const SUBSCRIPTION_TERMS_FILENAME = SUBSCRIPTION_TERMS_EN_FILENAME
+export const SUBSCRIPTION_TERMS_FILENAMES = {
+  en: SUBSCRIPTION_TERMS_EN_FILENAME,
+  zh: SUBSCRIPTION_TERMS_ZH_FILENAME,
+} as const
+
+export type SubscriptionTermsLanguage = keyof typeof SUBSCRIPTION_TERMS_FILENAMES
 
 const TERMS_RELATIVE_PATH = join('src', 'content', 'service-terms.md')
+const TERMS_PDF_RELATIVE_DIR = join('public', 'legal')
 
-export function getSubscriptionTermsMarkdown(): string {
-  return readFileSync(join(process.cwd(), TERMS_RELATIVE_PATH), 'utf8').trim()
+function projectPath(relativePath: string): string {
+  return join(process.cwd(), relativePath)
+}
+
+export function getSubscriptionTermsMarkdown(language?: SubscriptionTermsLanguage): string {
+  const markdown = readFileSync(projectPath(TERMS_RELATIVE_PATH), 'utf8').trim()
+  if (!language) return markdown
+
+  const [english, chinese] = markdown.split(/\n---\n/, 2)
+  return (language === 'zh' ? chinese || markdown : english || markdown).trim()
 }
 
 export const SUBSCRIPTION_TERMS_FULL_TEXT = getSubscriptionTermsMarkdown()
 
 export const SUBSCRIPTION_TERMS_NOTICE =
   'Please read the full service terms and tick to agree before creating a payment order. By subscribing, paying, creating a brand workspace or continuing to use AMC, you acknowledge and agree to the full Service Terms, including GenAI risk, data rights and protection, IP responsibilities and limitation of liability. 请完整阅读服务条款并勾选同意，方可创建支付订单。订阅、付款、创建品牌工作区或继续使用 AMC，即表示您确认并同意完整服务条款，包括 GenAI 风险、数据权利与保护、知识产权责任和责任限制。'
+
+export function getSubscriptionTermsPdfPath(language: SubscriptionTermsLanguage = 'en'): string {
+  return projectPath(join(TERMS_PDF_RELATIVE_DIR, SUBSCRIPTION_TERMS_FILENAMES[language]))
+}
+
+export function getSubscriptionTermsPdf(language: SubscriptionTermsLanguage = 'en'): Buffer {
+  const pdfPath = getSubscriptionTermsPdfPath(language)
+  const sourcePath = projectPath(TERMS_RELATIVE_PATH)
+
+  if (existsSync(pdfPath) && statSync(pdfPath).mtimeMs >= statSync(sourcePath).mtimeMs) {
+    return readFileSync(pdfPath)
+  }
+
+  if (language === 'en') {
+    return buildSubscriptionTermsPdf(getSubscriptionTermsMarkdown('en'))
+  }
+
+  throw new Error(
+    `Standard ${language} service terms PDF is missing or older than ${TERMS_RELATIVE_PATH}. Run npm run generate:service-terms-pdfs.`,
+  )
+}
 
 function markdownToPlainText(markdown: string): string {
   return markdown
@@ -136,4 +174,3 @@ export function buildSubscriptionTermsPdf(markdown = getSubscriptionTermsMarkdow
 
   return buildPdf(objects, catalogId)
 }
-

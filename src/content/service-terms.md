@@ -5,7 +5,7 @@
 **Location:** Singapore  
 **Service brand:** AMC - Your AI Marketing Crew  
 **Version:** AMC-SMSA-v1.04  
-**Updated:** 17 July 2026
+**Updated:** 17 July 2025
 
 ## Acceptance and Subscription Acknowledgement
 
@@ -17,7 +17,7 @@ This agreement is governed by the laws of Singapore.
 
 ## 1. Parties
 
-**Customer:** the SME, merchant, brand owner or authorised representative subscribing to AMC services.
+**Customer:** The user, who subscribed the AMC services.
 
 **Vendor:** Deliverychinatown Pte. Ltd., UEN 201835327N, located in Singapore, service brand AMC - Your AI Marketing Crew.
 

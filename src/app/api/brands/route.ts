@@ -87,7 +87,7 @@ export async function GET(request: Request) {
       // Owned brands (via multi-owner BrandOwner join table)
       {
         owners: {
-          some: { ownerId: sessionUser.id }
+          some: { userId: sessionUser.id }
         }
       },
       // Legacy single-owner mapping

@@ -12,8 +12,8 @@
 import nodemailer from 'nodemailer'
 import { prisma } from './prisma'
 import {
-  SUBSCRIPTION_TERMS_FILENAME,
-  buildSubscriptionTermsPdf,
+  SUBSCRIPTION_TERMS_FILENAMES,
+  getSubscriptionTermsPdf,
   getSubscriptionTermsMarkdown,
 } from './subscription/terms'
 
@@ -42,6 +42,21 @@ export interface EmailResult {
   success: boolean
   messageId?: string
   error?: string
+}
+
+function buildServiceTermsPdfAttachments() {
+  return [
+    {
+      filename: SUBSCRIPTION_TERMS_FILENAMES.en,
+      content: getSubscriptionTermsPdf('en'),
+      contentType: 'application/pdf',
+    },
+    {
+      filename: SUBSCRIPTION_TERMS_FILENAMES.zh,
+      content: getSubscriptionTermsPdf('zh'),
+      contentType: 'application/pdf',
+    },
+  ]
 }
 
 // ─── Config Loader ────────────────────────────────────────────────────────────
@@ -616,8 +631,6 @@ export async function sendBrandOnboardingWelcomeEmail(params: {
     formattedText = formattedText.replace(/\{\{#planName\}\}.*?\{\{\/planName\}\}/g, '')
   }
 
-  const serviceTermsMarkdown = getSubscriptionTermsMarkdown()
-  const serviceTermsPdf = buildSubscriptionTermsPdf(serviceTermsMarkdown)
   const agreementHtml = `
     <div style="margin-top:24px;padding:16px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;color:#334155;font-size:12px;line-height:1.6;">
       <strong>Service Agreement Acknowledgement</strong><br/>
@@ -630,13 +643,7 @@ export async function sendBrandOnboardingWelcomeEmail(params: {
     subject: interpolateTemplate(subject, vars),
     html: interpolateTemplate(formattedHtml, vars) + agreementHtml,
     text: interpolateTemplate(formattedText, vars) + agreementText,
-    attachments: [
-      {
-        filename: SUBSCRIPTION_TERMS_FILENAME,
-        content: serviceTermsPdf,
-        contentType: 'application/pdf',
-      },
-    ],
+    attachments: buildServiceTermsPdfAttachments(),
   })
 }
 
@@ -678,7 +685,8 @@ export async function sendSubscriptionSuccessEmail(params: {
     to,
     subject: interpolateTemplate(subject, vars),
     html: interpolateTemplate(html, vars),
-    text: interpolateTemplate(text, vars)
+    text: interpolateTemplate(text, vars),
+    attachments: buildServiceTermsPdfAttachments(),
   })
 }
 
@@ -780,7 +788,6 @@ export async function sendBrandCongratsEmailWithContract(params: {
 
   const displayPlan = planName || '标准专业代运营套餐 (Starter Plan)'
   const contractText = getSubscriptionTermsMarkdown()
-  const contractPdf = buildSubscriptionTermsPdf(contractText)
 
   const subject = `【AMC】祝贺！您的品牌 ${brandName} 已成功创建 | Brand Created Successfully`
   const html = `<!DOCTYPE html>
@@ -862,12 +869,6 @@ The AI Marketing Crew Team`
     subject,
     html,
     text,
-    attachments: [
-      {
-        filename: SUBSCRIPTION_TERMS_FILENAME,
-        content: contractPdf,
-        contentType: 'application/pdf',
-      }
-    ]
+    attachments: buildServiceTermsPdfAttachments(),
   })
 }
