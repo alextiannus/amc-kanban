@@ -39,6 +39,8 @@ export async function GET(request: Request, { params }: Params) {
       negPrompts: [],
       menuItems: [],
       voiceId: '',
+      audienceAssumptions: '',
+      productAssumptions: '',
     })
   }
 
@@ -49,6 +51,8 @@ export async function GET(request: Request, { params }: Params) {
     negPrompts: knowledge.negPrompts || [],
     menuItems: knowledge.menuItems || [],
     voiceId: knowledge.voiceId || '',
+    audienceAssumptions: (knowledge as any).audienceAssumptions || '',
+    productAssumptions: (knowledge as any).productAssumptions || '',
   })
 }
 
@@ -71,7 +75,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const body = await request.json().catch(() => ({}))
 
-  const { brandTone, slangDict, negPrompts, menuItems, voiceId } = body
+  const { brandTone, slangDict, negPrompts, menuItems, voiceId, audienceAssumptions, productAssumptions } = body
 
   // Update or Create
   const knowledge = await prisma.brandKnowledge.upsert({
@@ -82,6 +86,8 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(negPrompts !== undefined && { negPrompts }),
       ...(menuItems !== undefined && { menuItems }),
       ...(voiceId !== undefined && { voiceId }),
+      ...(audienceAssumptions !== undefined && { audienceAssumptions } as any),
+      ...(productAssumptions !== undefined && { productAssumptions } as any),
     },
     create: {
       brandId,
@@ -90,6 +96,8 @@ export async function PATCH(request: Request, { params }: Params) {
       negPrompts: negPrompts || [],
       menuItems: menuItems || [],
       voiceId: voiceId || '',
+      ...(audienceAssumptions !== undefined && { audienceAssumptions } as any),
+      ...(productAssumptions !== undefined && { productAssumptions } as any),
     },
   })
 
@@ -101,5 +109,7 @@ export async function PATCH(request: Request, { params }: Params) {
     negPrompts: knowledge.negPrompts,
     menuItems: knowledge.menuItems,
     voiceId: knowledge.voiceId,
+    audienceAssumptions: (knowledge as any).audienceAssumptions || '',
+    productAssumptions: (knowledge as any).productAssumptions || '',
   })
 }

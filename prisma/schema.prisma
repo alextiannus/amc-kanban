@@ -886,6 +886,11 @@ model BrandKnowledge {
   negPrompts String[] // List of forbidden words or guidelines
   voiceId   String?  // The chosen AI voice ID
 
+  // Structured brand context (from brand owner + amc-growth sync)
+  audienceAssumptions String? // Who the target audience is
+  productAssumptions  String? // Core sell points / key differentiators
+  growthSyncHash      String? // Hash of last amc-growth brand-story data (for change detection)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
