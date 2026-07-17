@@ -27,6 +27,8 @@ export type RemoteVideoCreatorRequest = {
   reviews?: Array<{ author?: string; rating?: number; text: string; source?: string }>
   menuItems?: Array<{ name: string; price?: string; description?: string; assetId?: string }>
   usageReport?: Record<string, unknown>
+  scriptPresetId?: string
+  scriptDraft?: unknown
   actorId?: string
   actorType?: string
   actorRole?: string
@@ -143,6 +145,8 @@ export async function createRemoteVideoPlan(input: RemoteVideoCreatorRequest): P
       reviews: input.reviews,
       menuItems: input.menuItems,
       usageReport: input.usageReport,
+      scriptPresetId: input.scriptPresetId,
+      scriptDraft: input.scriptDraft,
     }),
     cache: 'no-store',
   })
@@ -150,6 +154,35 @@ export async function createRemoteVideoPlan(input: RemoteVideoCreatorRequest): P
   const data = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(data?.error || `Remote video creator failed with ${response.status}`)
+  }
+  return data
+}
+
+export async function fetchRemoteContentCatalog(): Promise<unknown> {
+  const isLocal = process.env.NODE_ENV !== 'production'
+    || process.env.APP_BASE_URL?.includes('localhost')
+    || process.env.JWT_SECRET?.includes('local')
+    || process.env.JWT_SECRET?.includes('change-in-production')
+
+  const baseUrl = process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/+$/, '')
+    || (isLocal ? 'http://localhost:4010' : undefined)
+  if (!baseUrl || process.env.AMC_CONTENT_REMOTE_ENABLED === 'false') {
+    throw new Error('AMC content service is not configured')
+  }
+
+  const headers: Record<string, string> = {}
+  const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()
+    || (isLocal ? 'local-service-token' : undefined)
+  if (token) headers.authorization = `Bearer ${token}`
+
+  const response = await fetch(`${baseUrl}/v1/platforms`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(data?.error || `Remote content catalog failed with ${response.status}`)
   }
   return data
 }

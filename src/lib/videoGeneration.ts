@@ -1,4 +1,9 @@
 import { prisma } from '@/lib/prisma'
+import { spawn } from 'node:child_process'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { makeBrandAssetKey, uploadHuaweiObsObject } from '@/lib/integrations/huaweiObs'
 
 type VideoAsset = {
   id: string
@@ -36,6 +41,69 @@ export type VideoGenerationExecution = {
   providerTaskIds: string[]
   outputUrl?: string
   assets?: Array<{ id: string; url: string; mimeType: string; filename?: string | null }>
+}
+
+export async function assembleVideoClips(input: {
+  brandId: string
+  actorId: string
+  title: string
+  clipUrls: string[]
+  aspectRatio?: string
+  scriptSummary?: string
+}): Promise<VideoGenerationExecution> {
+  if (input.clipUrls.length === 0) throw new Error('至少需要一个已生成分镜视频才能合成最终视频。')
+  if (input.clipUrls.length === 1) throw new Error('至少需要两个分镜视频才能合成最终视频。')
+
+  const workspace = await mkdtemp(join(tmpdir(), 'amc-video-assembly-'))
+  try {
+    const inputPaths: string[] = []
+    for (let index = 0; index < input.clipUrls.length; index += 1) {
+      const response = await fetch(input.clipUrls[index])
+      if (!response.ok) throw new Error(`下载第 ${index + 1} 个分镜视频失败：HTTP ${response.status}`)
+      const buffer = Buffer.from(await response.arrayBuffer())
+      const filePath = join(workspace, `clip-${index}.mp4`)
+      await writeFile(filePath, buffer)
+      inputPaths.push(filePath)
+    }
+
+    const outputPath = join(workspace, 'final.mp4')
+    await runFfmpegConcat(inputPaths, outputPath, input.aspectRatio || '9:16')
+    const outputBuffer = await readFile(outputPath)
+    const key = makeBrandAssetKey({
+      brandId: input.brandId,
+      folder: 'AI生视频',
+      filename: `ai-video-final-${Date.now()}.mp4`,
+    })
+    const upload = await uploadHuaweiObsObject({
+      key,
+      body: outputBuffer,
+      contentType: 'video/mp4',
+      cacheControl: 'public, max-age=31536000',
+    })
+    if (!upload.ok) throw new Error(upload.error || '最终视频上传素材库失败')
+
+    const asset = await createVideoAsset({
+      brandId: input.brandId,
+      actorId: input.actorId,
+      url: upload.url,
+      filename: key.split('/').pop() || 'ai-video-final.mp4',
+      caption: `AI 生视频最终成片：${input.title}${input.scriptSummary ? `\n${input.scriptSummary}` : ''}`,
+      sourceAssets: [],
+      videoRole: 'final',
+    })
+
+    return {
+      ok: true,
+      jobId: `assembly-${Date.now()}`,
+      status: 'completed',
+      provider: 'ffmpeg',
+      providerTaskIds: [],
+      outputUrl: asset.url,
+      assets: [asset],
+    }
+  } finally {
+    await rm(workspace, { recursive: true, force: true }).catch(() => undefined)
+  }
 }
 
 type VideoProviderConfig = {
@@ -382,6 +450,57 @@ function buildLegacySeedancePayload(input: {
 function clampSeedanceDuration(duration: number): number {
   if (!Number.isFinite(duration)) return 5
   return Math.max(4, Math.min(15, Math.round(duration)))
+}
+
+function targetVideoSize(aspectRatio: string): { width: number; height: number } {
+  if (aspectRatio === '16:9') return { width: 1280, height: 720 }
+  if (aspectRatio === '1:1') return { width: 1080, height: 1080 }
+  if (aspectRatio === '4:5') return { width: 864, height: 1080 }
+  return { width: 720, height: 1280 }
+}
+
+async function runFfmpegConcat(inputPaths: string[], outputPath: string, aspectRatio: string) {
+  const { width, height } = targetVideoSize(aspectRatio)
+  const inputArgs = inputPaths.flatMap((path) => ['-i', path])
+  const filters = inputPaths.map((_, index) =>
+    `[${index}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30[v${index}]`,
+  )
+  const concatInputs = inputPaths.map((_, index) => `[v${index}]`).join('')
+  const filterComplex = `${filters.join(';')};${concatInputs}concat=n=${inputPaths.length}:v=1:a=0[v]`
+  const args = [
+    '-y',
+    ...inputArgs,
+    '-filter_complex',
+    filterComplex,
+    '-map',
+    '[v]',
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-crf',
+    '23',
+    '-pix_fmt',
+    'yuv420p',
+    '-movflags',
+    '+faststart',
+    outputPath,
+  ]
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk).slice(-4000)
+    })
+    child.on('error', (error: any) => {
+      reject(new Error(error?.code === 'ENOENT' ? '服务器未安装 ffmpeg，无法按分镜顺序拼接最终视频。' : error?.message || 'ffmpeg failed'))
+    })
+    child.on('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(stderr || `ffmpeg exited with code ${code}`))
+    })
+  })
 }
 
 async function generateWithKieAi(args: {

@@ -37,6 +37,23 @@ type SceneRow = {
   busy?: boolean
 }
 
+type VideoScriptPreset = {
+  id: string
+  name: string
+  description?: string
+  creatorType: string
+  vertical?: string
+  bestFor?: string[]
+  structure?: string
+  shotDrafts: Array<{
+    title: string
+    visualPrompt: string
+    cameraMotion: string
+    textOverlay: string
+    voiceover?: string
+  }>
+}
+
 const creatorOptions = [
   {
     id: 'product_showcase',
@@ -186,6 +203,10 @@ function VideoCreatorPageInner() {
   const [assetPageSize, setAssetPageSize] = useState(12)
   const [expandedAssetRowId, setExpandedAssetRowId] = useState<string | null>(null)
   const [loadingAssets, setLoadingAssets] = useState(false)
+  const [loadingPresets, setLoadingPresets] = useState(false)
+  const [scriptPresets, setScriptPresets] = useState<VideoScriptPreset[]>([])
+  const [selectedScriptId, setSelectedScriptId] = useState('')
+  const [scriptDraft, setScriptDraft] = useState<VideoScriptPreset | null>(null)
   const [planning, setPlanning] = useState(false)
   const [finalBusy, setFinalBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -211,6 +232,25 @@ function VideoCreatorPageInner() {
       .catch(() => setError('素材加载失败'))
       .finally(() => setLoadingAssets(false))
   }, [brandId])
+
+  useEffect(() => {
+    setLoadingPresets(true)
+    fetch(`/api/content/video/presets?creatorType=${encodeURIComponent(creatorType)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        const presets = Array.isArray(json.presets) ? json.presets : []
+        setScriptPresets(presets)
+        const next = presets[0] || null
+        setSelectedScriptId(next?.id || '')
+        setScriptDraft(next ? structuredClone(next) : null)
+      })
+      .catch(() => {
+        setScriptPresets([])
+        setSelectedScriptId('')
+        setScriptDraft(null)
+      })
+      .finally(() => setLoadingPresets(false))
+  }, [creatorType])
 
   const assetIdsInRows = useMemo(
     () => Array.from(new Set(rows.flatMap((row) => row.assetIds))),
@@ -256,6 +296,24 @@ function VideoCreatorPageInner() {
     }
   }
 
+  const handleSelectScript = (scriptId: string) => {
+    const preset = scriptPresets.find((item) => item.id === scriptId) || null
+    setSelectedScriptId(scriptId)
+    setScriptDraft(preset ? structuredClone(preset) : null)
+    resetPlan()
+  }
+
+  const updateScriptShot = (index: number, patch: Partial<VideoScriptPreset['shotDrafts'][number]>) => {
+    setScriptDraft((prev) => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        shotDrafts: prev.shotDrafts.map((shot, shotIndex) => shotIndex === index ? { ...shot, ...patch } : shot),
+      }
+    })
+    resetPlan()
+  }
+
   const toggleRowAsset = (rowId: string, assetId: string) => {
     setRows((prev) => prev.map((row) => {
       if (row.rowId !== rowId) return row
@@ -264,6 +322,19 @@ function VideoCreatorPageInner() {
         : [...row.assetIds, assetId]
       return { ...row, assetIds: next, execution: undefined }
     }))
+    setFinalExecution(null)
+  }
+
+  const updateRowDuration = (rowId: string, durationSec: number) => {
+    const nextDuration = Math.max(4, Math.min(15, Math.round(durationSec || 4)))
+    setRows((prev) => prev.map((row) => row.rowId === rowId
+      ? {
+          ...row,
+          scene: { ...row.scene, durationSec: nextDuration },
+          job: row.job ? { ...row.job, request: { ...row.job.request, duration: nextDuration } } : row.job,
+          execution: undefined,
+        }
+      : row))
     setFinalExecution(null)
   }
 
@@ -383,6 +454,8 @@ function VideoCreatorPageInner() {
           aspectRatio,
           targetDurationSec: duration,
           assetIds: selectedAssetIds,
+          scriptPresetId: selectedScriptId,
+          scriptDraft,
           executionMode: 'plan_only',
         }),
       })
@@ -449,10 +522,10 @@ function VideoCreatorPageInner() {
     }
   }
 
-  const handleCheckRow = async (row: SceneRow) => {
+  const handleCheckRow = async (row: SceneRow, auto = false) => {
     const taskId = row.execution?.providerTaskIds?.[0]
     if (!taskId) return
-    setRow(row.rowId, { busy: true })
+    if (!auto) setRow(row.rowId, { busy: true })
     setError(null)
     try {
       const res = await fetch('/api/content/video/status', {
@@ -470,7 +543,7 @@ function VideoCreatorPageInner() {
       if (!res.ok) throw new Error(json.error || '刷新分镜失败')
       setRow(row.rowId, { execution: json.execution, busy: false })
     } catch (err: any) {
-      setError(err?.message || '刷新分镜失败')
+      if (!auto) setError(err?.message || '刷新分镜失败')
       setRow(row.rowId, { busy: false })
     }
   }
@@ -480,53 +553,22 @@ function VideoCreatorPageInner() {
     setFinalBusy(true)
     setError(null)
     try {
-      const finalJob = {
-        id: 'seedance-final-assembly-01',
-        provider: 'seedance',
-        mode: 'reference_to_video',
-        modelHint: 'dreamina-seedance-2-0-fast-260128',
-        request: {
-          prompt: [
-            `把这些已生成分镜合成为一条完整的${selectedCreator.label}短视频。`,
-            `整体目标：${idea}`,
-            `平台：${platform}，比例：${aspectRatio}。`,
-            `按以下分镜剧本顺序组织成片：${selectedFinalRows.map((row, index) => `${index + 1}. ${sceneTitle(row.scene)}：${row.prompt}`).join('\n')}`,
-            `保持画面连续、节奏清楚、转场自然、商家信息真实。`,
-          ].join('\n'),
-          ratio: aspectRatio,
-          duration: Math.max(4, Math.min(15, duration)),
-          resolution: '480p',
-          generateAudio: false,
-          references: selectedFinalUrls.map((url) => ({ url, mimeType: 'video/mp4' })),
-          negativePrompt: '错乱文字, 伪造价格, 伪造地址, 多余logo, 低清晰度',
-        },
-      }
-      const res = await fetch('/api/content/video/create', {
+      const res = await fetch('/api/content/video/assemble', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           brandId,
-          creatorType,
-          idea,
-          theme: idea,
-          platform,
+          title: `${plan.title || idea} - 最终成片`,
           aspectRatio,
-          targetDurationSec: duration,
-          mediaUrls: selectedFinalUrls,
-          executionMode: 'submit',
-          plan: {
-            ...plan,
-            title: `${plan.title || idea} - 最终成片`,
-            scenes: [],
-            seedanceJobs: [finalJob],
-          },
+          clipUrls: selectedFinalUrls,
+          scriptSummary: selectedFinalRows.map((row, index) => `${index + 1}. ${sceneTitle(row.scene)}：${row.prompt}`).join('\n'),
         }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || '生成最终视频失败')
+      if (!res.ok) throw new Error(json.error || '合成最终视频失败')
       setFinalExecution(json.execution)
     } catch (err: any) {
-      setError(err?.message || '生成最终视频失败')
+      setError(err?.message || '合成最终视频失败')
     } finally {
       setFinalBusy(false)
     }
@@ -557,6 +599,20 @@ function VideoCreatorPageInner() {
       setFinalBusy(false)
     }
   }
+
+  useEffect(() => {
+    const pendingRows = rows.filter((row) => row.execution?.providerTaskIds?.[0] && row.execution?.status !== 'completed' && !row.busy)
+    if (pendingRows.length === 0) return
+    const timer = window.setInterval(() => {
+      setRows((currentRows) => {
+        currentRows
+          .filter((row) => row.execution?.providerTaskIds?.[0] && row.execution?.status !== 'completed' && !row.busy)
+          .forEach((row) => void handleCheckRow(row, true))
+        return currentRows
+      })
+    }, 8000)
+    return () => window.clearInterval(timer)
+  }, [rows])
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -608,6 +664,51 @@ function VideoCreatorPageInner() {
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
               />
             </label>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black text-slate-700">剧本草稿</p>
+                  <p className="mt-1 text-[11px] text-slate-500">{scriptDraft?.structure || selectedCreator.flow}</p>
+                </div>
+                <select
+                  value={selectedScriptId}
+                  onChange={(event) => handleSelectScript(event.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700"
+                >
+                  {loadingPresets && <option value="">加载中...</option>}
+                  {!loadingPresets && scriptPresets.length === 0 && <option value="">默认剧本</option>}
+                  {scriptPresets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>{preset.name}</option>
+                  ))}
+                </select>
+              </div>
+              {scriptDraft?.description && <p className="mt-2 text-xs text-slate-600">{scriptDraft.description}</p>}
+              {scriptDraft && (
+                <div className="mt-3 grid gap-2 lg:grid-cols-3">
+                  {scriptDraft.shotDrafts.map((shot, index) => (
+                    <div key={`${scriptDraft.id}-${index}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                      <input
+                        value={shot.title}
+                        onChange={(event) => updateScriptShot(index, { title: event.target.value })}
+                        className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs font-black outline-none focus:border-indigo-400"
+                      />
+                      <textarea
+                        value={shot.visualPrompt}
+                        onChange={(event) => updateScriptShot(index, { visualPrompt: event.target.value })}
+                        rows={3}
+                        className="mt-2 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[11px] leading-relaxed outline-none focus:border-indigo-400"
+                      />
+                      <input
+                        value={shot.textOverlay}
+                        onChange={(event) => updateScriptShot(index, { textOverlay: event.target.value })}
+                        className="mt-2 w-full rounded-md border border-slate-200 px-2 py-1.5 text-[11px] outline-none focus:border-indigo-400"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-3 gap-2">
               <label className="text-[11px] font-black text-slate-500">
@@ -663,7 +764,7 @@ function VideoCreatorPageInner() {
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-60"
             >
               {planning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              生成分镜表
+              确认剧本并生成分镜表
             </button>
           </div>
         </section>
@@ -753,6 +854,17 @@ function VideoCreatorPageInner() {
 
                   <div className="min-w-0 self-start">
                     <div className="grid gap-2 sm:grid-cols-3">
+                      <label className="rounded-lg bg-slate-50 p-2">
+                        <span className="text-[10px] font-black text-slate-400">秒数</span>
+                        <input
+                          value={row.scene.durationSec}
+                          onChange={(event) => updateRowDuration(row.rowId, Number(event.target.value))}
+                          type="number"
+                          min={4}
+                          max={15}
+                          className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-black text-slate-700 outline-none focus:border-indigo-400"
+                        />
+                      </label>
                       <div className="rounded-lg bg-slate-50 p-2">
                         <p className="text-[10px] font-black text-slate-400">字幕</p>
                         <p className="mt-1 line-clamp-2 text-xs font-bold text-indigo-700">{row.scene.textOverlay}</p>
@@ -760,10 +872,6 @@ function VideoCreatorPageInner() {
                       <div className="rounded-lg bg-slate-50 p-2">
                         <p className="text-[10px] font-black text-slate-400">镜头</p>
                         <p className="mt-1 line-clamp-2 text-xs text-slate-600">{sceneMotion(row.scene)}</p>
-                      </div>
-                      <div className="rounded-lg bg-slate-50 p-2">
-                        <p className="text-[10px] font-black text-slate-400">目的</p>
-                        <p className="mt-1 line-clamp-2 text-xs text-slate-600">{sceneIntent(row.scene)}</p>
                       </div>
                     </div>
                     <details className="mt-2 rounded-lg border border-slate-200 p-2">
@@ -797,9 +905,6 @@ function VideoCreatorPageInner() {
                       {row.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : row.execution?.status === 'completed' ? <RefreshCw className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                       {row.execution?.status === 'completed' ? '重新生成' : row.execution ? '刷新结果' : '生成分镜'}
                     </button>
-                    <span className={`rounded-full px-2 py-1 text-center text-[10px] font-black ${row.execution?.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : row.execution ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
-                      {row.execution?.status === 'completed' ? '已完成' : row.execution ? '生成中' : '待生成'}
-                    </span>
                     <button
                       type="button"
                       onClick={() => handleDeleteRow(row.rowId)}
@@ -813,6 +918,13 @@ function VideoCreatorPageInner() {
                   <div className="self-start">
                     {row.execution?.outputUrl ? (
                       <video src={row.execution.outputUrl} className="aspect-video w-full rounded-lg bg-black object-contain" controls playsInline />
+                    ) : row.execution ? (
+                      <div className="grid aspect-video w-full place-items-center rounded-lg border border-dashed border-amber-200 bg-amber-50 text-amber-700">
+                        <div className="flex flex-col items-center gap-2 text-center">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span className="text-[11px] font-black">视频生成中</span>
+                        </div>
+                      </div>
                     ) : (
                       <div className="grid aspect-video w-full place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-slate-300">
                         <Film className="h-5 w-5" />

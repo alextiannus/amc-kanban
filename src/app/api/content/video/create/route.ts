@@ -75,6 +75,8 @@ export async function POST(request: Request) {
           reviews: Array.isArray(body.reviews) ? body.reviews : undefined,
           menuItems: Array.isArray(body.menuItems) ? body.menuItems : undefined,
           usageReport: body.usageReport && typeof body.usageReport === 'object' ? body.usageReport : undefined,
+          scriptPresetId: optionalString(body.scriptPresetId),
+          scriptDraft: body.scriptDraft && typeof body.scriptDraft === 'object' ? body.scriptDraft : undefined,
           actorId: actor.id,
           actorType: actor.type,
           actorRole: actor.role,
