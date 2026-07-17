@@ -38,6 +38,7 @@ export async function GET(request: Request, { params }: Params) {
       slangDict: {},
       negPrompts: [],
       menuItems: [],
+      voiceId: '',
     })
   }
 
@@ -47,6 +48,7 @@ export async function GET(request: Request, { params }: Params) {
     slangDict: knowledge.slangDict || {},
     negPrompts: knowledge.negPrompts || [],
     menuItems: knowledge.menuItems || [],
+    voiceId: knowledge.voiceId || '',
   })
 }
 
@@ -69,7 +71,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const body = await request.json().catch(() => ({}))
 
-  const { brandTone, slangDict, negPrompts, menuItems } = body
+  const { brandTone, slangDict, negPrompts, menuItems, voiceId } = body
 
   // Update or Create
   const knowledge = await prisma.brandKnowledge.upsert({
@@ -79,6 +81,7 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(slangDict !== undefined && { slangDict }),
       ...(negPrompts !== undefined && { negPrompts }),
       ...(menuItems !== undefined && { menuItems }),
+      ...(voiceId !== undefined && { voiceId }),
     },
     create: {
       brandId,
@@ -86,6 +89,7 @@ export async function PATCH(request: Request, { params }: Params) {
       slangDict: slangDict || {},
       negPrompts: negPrompts || [],
       menuItems: menuItems || [],
+      voiceId: voiceId || '',
     },
   })
 
@@ -96,5 +100,6 @@ export async function PATCH(request: Request, { params }: Params) {
     slangDict: knowledge.slangDict,
     negPrompts: knowledge.negPrompts,
     menuItems: knowledge.menuItems,
+    voiceId: knowledge.voiceId,
   })
 }

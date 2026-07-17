@@ -883,6 +883,7 @@ model BrandKnowledge {
   slangDict Json?    // JSON dictionary of localized slang mappings
   brandTone String?  // String description of customized tone/perspective
   negPrompts String[] // List of forbidden words or guidelines
+  voiceId   String?  // The chosen AI voice ID
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
