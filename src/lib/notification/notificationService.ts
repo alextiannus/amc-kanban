@@ -66,6 +66,7 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
     },
     include: {
       accounts: true,
+      knowledge: true,
       subscriptions: {
         where: {
           status: 'ACTIVE',
@@ -191,6 +192,53 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
       // Brand is not active/subscribed or missing postfast key, connection notification is not relevant.
       await prisma.notification.deleteMany({
         where: { userId, brandId: brand.id, type: 'COMPLETE_CONFIG' }
+      })
+    }
+
+    // --- Process Check (c): Complete Brand Context configuration ---
+    if (hasSubscription) {
+      const hasDesc = !!brand.description?.trim()
+      const hasTone = !!brand.knowledge?.brandTone?.trim()
+      const hasVoice = !!brand.knowledge?.voiceId?.trim()
+
+      if (!hasDesc || !hasTone || !hasVoice) {
+        const missing: string[] = []
+        if (!hasDesc) missing.push('品牌故事简介')
+        if (!hasTone) missing.push('内容风格声调')
+        if (!hasVoice) missing.push('AI 语音音色')
+        const missingStr = missing.join('、')
+        const message = `您的品牌【${brand.name}】尚未完善 ${missingStr}。请前往“品牌故事”补充以让您的 AI 助手更贴合品牌形象。`
+
+        const existing = await prisma.notification.findFirst({
+          where: { userId, brandId: brand.id, type: 'COMPLETE_CONTEXT' }
+        })
+
+        if (!existing) {
+          await prisma.notification.create({
+            data: {
+              userId,
+              brandId: brand.id,
+              type: 'COMPLETE_CONTEXT',
+              title: '完善品牌故事与声音',
+              message,
+              status: 'UNREAD'
+            }
+          })
+        } else if (existing.message !== message) {
+          await prisma.notification.update({
+            where: { id: existing.id },
+            data: { message, status: 'UNREAD' }
+          })
+        }
+      } else {
+        // All context settings are complete: clean up notification if any exists
+        await prisma.notification.deleteMany({
+          where: { userId, brandId: brand.id, type: 'COMPLETE_CONTEXT' }
+        })
+      }
+    } else {
+      await prisma.notification.deleteMany({
+        where: { userId, brandId: brand.id, type: 'COMPLETE_CONTEXT' }
       })
     }
   }
