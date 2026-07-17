@@ -2,17 +2,14 @@
 
 /* eslint-disable @next/next/no-img-element */
 import React, { Suspense, useEffect, useMemo, useState } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Film, Loader2, Plus, Sparkles, Wand2, X } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ArrowLeft, Check, Film, Loader2, Play, Plus, RefreshCw, Sparkles, X } from 'lucide-react'
 
 type Asset = {
   id: string
   url: string
   filename?: string | null
   mimeType: string
-  aiTags?: string[]
-  aiCaption?: string | null
-  brandName?: string
   usedCount?: number
   createdAt?: string
 }
@@ -29,60 +26,65 @@ type VideoScene = {
   voiceover?: string
 }
 
+type SceneRow = {
+  rowId: string
+  scene: VideoScene
+  job: any
+  prompt: string
+  assetIds: string[]
+  includeInFinal: boolean
+  execution?: any
+  busy?: boolean
+}
+
 const creatorOptions = [
   {
     id: 'product_showcase',
     label: '产品展示',
-    hint: '多图生成产品/菜品动态展示',
+    hint: '产品/菜品动态展示',
     defaultIdea: '把选中的产品/菜品素材做成一条有质感的短视频展示',
     duration: 6,
     flow: '主打画面 → 细节展示 → 到店/下单引导',
-    basis: '更重视产品细节、质感、真实商家场景和简洁行动引导。',
   },
   {
     id: 'story_campaign',
     label: '剧情短片',
-    hint: 'idea + 素材生成多段剧情视频',
+    hint: '多段剧情视频',
     defaultIdea: '用已选素材讲一个顾客发现并选择商家的短故事',
     duration: 12,
     flow: '开场问题 → 发现商家 → 体验过程 → 行动引导',
-    basis: '会把素材组织成一个有起承转合的顾客场景故事。',
   },
   {
     id: 'review_to_video',
     label: '好评视频',
-    hint: '把顾客评价变成信任素材',
+    hint: '评价变信任素材',
     defaultIdea: '把一条顾客好评变成可信、有画面感的社交视频',
     duration: 6,
     flow: '顾客证明 → 可信细节 → 尝试引导',
-    basis: '更重视评论证据、真实体验和低压力的信任建立。',
   },
   {
     id: 'event_offer',
     label: '活动促销',
-    hint: '节日、开业、限时优惠',
+    hint: '节日/开业/优惠',
     defaultIdea: '用已选素材介绍一个限时优惠、节日活动或开业促销',
     duration: 8,
     flow: '优惠亮点 → 价值说明 → 领取/预约方式',
-    basis: '会突出时间感、优惠内容、使用方式和清晰 CTA。',
   },
   {
     id: 'menu_recommendation',
     label: '菜单推荐',
-    hint: '今日推荐 / 套餐视频',
+    hint: '今日推荐/套餐',
     defaultIdea: '用菜品图片推荐今日主打、套餐或菜单亮点',
     duration: 6,
     flow: '今日推荐 → 菜单细节 → 下单引导',
-    basis: '更适合把菜品、套餐、价格和推荐理由说清楚。',
   },
   {
     id: 'local_discovery',
     label: '本地发现',
-    hint: '附近场景与商圈搜索',
+    hint: '附近场景/商圈',
     defaultIdea: '把这个商家介绍成附近值得发现和收藏的本地选择',
     duration: 6,
     flow: '附近发现 → 到店理由 → 找到商家',
-    basis: '会围绕商圈、附近需求、门店可发现性来组织画面。',
   },
 ]
 
@@ -106,35 +108,35 @@ const sceneTitleMap: Record<string, string> = {
 }
 
 const intentMap: Record<string, string> = {
-  'Stop the scroll with a specific local or product hook.': '用一个明确的产品或本地场景开场，先抓住注意力。',
+  'Stop the scroll with a specific local or product hook.': '用明确的产品或本地场景开场。',
   'Prove the claim with product, store, review, or offer evidence.': '用产品、门店、评价或优惠细节证明卖点。',
-  'Finish with one clear merchant-friendly call to action.': '用一个清楚的行动引导收尾。',
-  'Show the customer situation before the merchant appears.': '先呈现顾客遇到的真实场景或需求。',
-  'Introduce the merchant as the practical answer.': '把商家作为这个需求的自然解决方案引出。',
-  'Show the product or service being enjoyed.': '展示产品或服务被体验、享用的过程。',
+  'Finish with one clear merchant-friendly call to action.': '用清楚的行动引导收尾。',
+  'Show the customer situation before the merchant appears.': '先呈现顾客遇到的真实需求。',
+  'Introduce the merchant as the practical answer.': '把商家自然引出为解决方案。',
+  'Show the product or service being enjoyed.': '展示产品或服务被体验的过程。',
   'Close with one simple next step.': '用一个简单下一步完成转化。',
 }
 
-const cameraMotionMap: Record<string, string> = {
-  'cinematic push-in, product detail motion, natural light': '自然光下缓慢推进，突出产品细节。',
-  'close-up detail sweep, subtle parallax, appetizing or service-focused motion': '近距离扫过细节，轻微视差，突出食欲或服务感。',
-  'clean branded end frame, gentle zoom, no visual clutter': '干净的品牌收尾画面，轻微放大，不堆信息。',
-  'slow push-in with natural handheld energy': '自然手持感的慢速推进。',
-  'quick reveal, rack focus to hero product or storefront': '快速揭示，焦点转到主打产品或门店。',
-  'smooth lateral move across details, warm motion accents': '横向平滑移动，带一点温暖的动态细节。',
-  'clean end frame with gentle zoom and readable text': '清楚的结束画面，轻微放大，文字保持可读。',
+const motionMap: Record<string, string> = {
+  'cinematic push-in, product detail motion, natural light': '自然光缓慢推进，突出产品细节',
+  'close-up detail sweep, subtle parallax, appetizing or service-focused motion': '近景扫过细节，轻微视差',
+  'clean branded end frame, gentle zoom, no visual clutter': '干净收尾，轻微放大',
+  'slow push-in with natural handheld energy': '自然手持慢推',
+  'quick reveal, rack focus to hero product or storefront': '快速揭示，焦点转到主角',
+  'smooth lateral move across details, warm motion accents': '平滑横移，突出细节',
+  'clean end frame with gentle zoom and readable text': '清楚结束画面，文字可读',
 }
 
-function displaySceneTitle(scene: VideoScene) {
+function sceneTitle(scene: VideoScene) {
   return sceneTitleMap[scene.title] || scene.title
 }
 
-function displayIntent(scene: VideoScene) {
+function sceneIntent(scene: VideoScene) {
   return intentMap[scene.intent] || scene.intent
 }
 
-function displayCameraMotion(scene: VideoScene) {
-  return cameraMotionMap[scene.cameraMotion] || scene.cameraMotion
+function sceneMotion(scene: VideoScene) {
+  return motionMap[scene.cameraMotion] || scene.cameraMotion
 }
 
 function VideoCreatorPageInner() {
@@ -148,20 +150,25 @@ function VideoCreatorPageInner() {
 
   const [assets, setAssets] = useState<Asset[]>([])
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>(initialAssetIds)
-  const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all'>('unused')
-  const [assetPageSize, setAssetPageSize] = useState(12)
   const [creatorType, setCreatorType] = useState('product_showcase')
   const [idea, setIdea] = useState(creatorOptions[0].defaultIdea)
   const [platform, setPlatform] = useState('tiktok')
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [duration, setDuration] = useState(creatorOptions[0].duration)
+  const [assetFilter, setAssetFilter] = useState<'unused' | 'all'>('unused')
+  const [assetPageSize, setAssetPageSize] = useState(12)
   const [loadingAssets, setLoadingAssets] = useState(false)
-  const [generating, setGenerating] = useState(false)
-  const [submittingVideo, setSubmittingVideo] = useState(false)
-  const [checkingVideo, setCheckingVideo] = useState(false)
+  const [planning, setPlanning] = useState(false)
+  const [finalBusy, setFinalBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<any>(null)
-  const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({})
+  const [plan, setPlan] = useState<any>(null)
+  const [rows, setRows] = useState<SceneRow[]>([])
+  const [finalExecution, setFinalExecution] = useState<any>(null)
+
+  const selectedCreator = useMemo(
+    () => creatorOptions.find((item) => item.id === creatorType) || creatorOptions[0],
+    [creatorType],
+  )
 
   useEffect(() => {
     setSelectedAssetIds(initialAssetIds)
@@ -181,10 +188,11 @@ function VideoCreatorPageInner() {
     () => assets.filter((asset) => selectedAssetIds.includes(asset.id)),
     [assets, selectedAssetIds],
   )
-  const availableAssets = useMemo(() => {
+
+  const visibleAssets = useMemo(() => {
     const selected = new Set(selectedAssetIds)
     const imageAssets = assets.filter((asset) => !asset.mimeType?.startsWith('video/'))
-    const filtered = assetTypeFilter === 'unused'
+    const filtered = assetFilter === 'unused'
       ? imageAssets.filter((asset: any) => (asset.usedCount ?? 0) === 0 || selected.has(asset.id))
       : imageAssets
     return [...filtered].sort((a: any, b: any) => {
@@ -192,76 +200,27 @@ function VideoCreatorPageInner() {
       const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0
       return tB - tA
     })
-  }, [assets, assetTypeFilter, selectedAssetIds])
+  }, [assets, assetFilter, selectedAssetIds])
 
-  const videoPlan = result?.remote?.result || result?.result
-  const execution = result?.execution
-  const scenes: VideoScene[] = videoPlan?.scenes || []
-  const selectedCreator = useMemo(
-    () => creatorOptions.find((item) => item.id === creatorType) || creatorOptions[0],
-    [creatorType],
-  )
-  const editablePlan = useMemo(() => {
-    if (!videoPlan) return null
-    const jobs = (videoPlan.seedanceJobs || []).map((job: any) => ({
-      ...job,
-      request: {
-        ...job.request,
-        prompt: promptDrafts[job.id] || job.request?.prompt || '',
-      },
-    }))
-    return {
-      ...videoPlan,
-      seedanceJobs: jobs,
-      scenes: (videoPlan.scenes || []).map((scene: VideoScene) => {
-        const job = jobs.find((item: any) => item.id.endsWith(`-${scene.id}`))
-        return job ? { ...scene, visualPrompt: job.request.prompt } : scene
-      }),
-    }
-  }, [promptDrafts, videoPlan])
-  const planReady = Boolean(videoPlan)
-  const videoReady = execution?.status === 'completed'
-  const currentStep = execution ? 3 : planReady ? 2 : 1
-  const stepCards = [
-    {
-      step: 1,
-      title: '选择素材与目标',
-      description: '选择图片，告诉 AI 这条视频要表达什么。',
-      status: currentStep > 1 ? '已完成' : '正在进行',
-    },
-    {
-      step: 2,
-      title: '生成并编辑分镜',
-      description: '先让 AI 写好每个镜头，再按你的判断修改。',
-      status: currentStep > 2 ? '已完成' : currentStep === 2 ? '正在进行' : '待开始',
-    },
-    {
-      step: 3,
-      title: '生成视频并保存',
-      description: '确认分镜后调用 Seedance，生成结果会回到素材库。',
-      status: videoReady ? '已完成' : currentStep === 3 ? '生成中' : '待开始',
-    },
-  ]
+  const selectedFinalUrls = rows
+    .filter((row) => row.includeInFinal)
+    .map((row) => row.execution?.outputUrl)
+    .filter((url): url is string => typeof url === 'string' && Boolean(url))
 
-  useEffect(() => {
-    if (!videoPlan?.seedanceJobs?.length) return
-    setPromptDrafts(Object.fromEntries(
-      videoPlan.seedanceJobs.map((job: any) => [job.id, job.request?.prompt || '']),
-    ))
-  }, [videoPlan])
+  const setRow = (rowId: string, patch: Partial<SceneRow>) => {
+    setRows((prev) => prev.map((row) => row.rowId === rowId ? { ...row, ...patch } : row))
+  }
 
-  const toggleAsset = (assetId: string) => {
-    setSelectedAssetIds((prev) => prev.includes(assetId)
-      ? prev.filter((id) => id !== assetId)
-      : [...prev, assetId])
-    setResult(null)
-    setError(null)
+  const resetPlan = () => {
+    setPlan(null)
+    setRows([])
+    setFinalExecution(null)
   }
 
   const handleSelectCreator = (creatorId: string) => {
     const next = creatorOptions.find((item) => item.id === creatorId)
     setCreatorType(creatorId)
-    setResult(null)
+    resetPlan()
     setError(null)
     if (next) {
       setIdea(next.defaultIdea)
@@ -269,13 +228,51 @@ function VideoCreatorPageInner() {
     }
   }
 
-  const validateInput = () => {
+  const toggleGlobalAsset = (assetId: string) => {
+    setSelectedAssetIds((prev) => prev.includes(assetId)
+      ? prev.filter((id) => id !== assetId)
+      : [...prev, assetId])
+    resetPlan()
+  }
+
+  const toggleRowAsset = (rowId: string, assetId: string) => {
+    setRows((prev) => prev.map((row) => {
+      if (row.rowId !== rowId) return row
+      const next = row.assetIds.includes(assetId)
+        ? row.assetIds.filter((id) => id !== assetId)
+        : [...row.assetIds, assetId]
+      return { ...row, assetIds: next, execution: undefined }
+    }))
+  }
+
+  const assetRefsForRow = (assetIds: string[]) => assets
+    .filter((asset) => assetIds.includes(asset.id))
+    .map((asset) => ({ id: asset.id, url: asset.url, mimeType: asset.mimeType }))
+
+  const buildRows = (videoPlan: any): SceneRow[] => {
+    const scenes: VideoScene[] = videoPlan?.scenes || []
+    const jobs: any[] = videoPlan?.seedanceJobs || []
+    return scenes.map((scene, index) => {
+      const job = jobs.find((item) => item.id.endsWith(`-${scene.id}`)) || jobs[index]
+      const fallbackAssetIds = scene.assetRefs?.filter((id) => assets.some((asset) => asset.id === id)) || []
+      return {
+        rowId: scene.id,
+        scene,
+        job,
+        prompt: job?.request?.prompt || scene.visualPrompt || '',
+        assetIds: index === 0 ? selectedAssetIds : fallbackAssetIds,
+        includeInFinal: true,
+      }
+    })
+  }
+
+  const validateBase = () => {
     if (!brandId) {
       setError('缺少 brandId')
       return false
     }
     if (!idea.trim()) {
-      setError('请输入视频 idea 或营销目标')
+      setError('请输入视频目标')
       return false
     }
     if (selectedAssetIds.length === 0) {
@@ -286,10 +283,10 @@ function VideoCreatorPageInner() {
   }
 
   const handleGeneratePlan = async () => {
-    if (!validateInput()) return
-    setGenerating(true)
+    if (!validateBase()) return
+    setPlanning(true)
     setError(null)
-    setResult(null)
+    setFinalExecution(null)
     try {
       const res = await fetch('/api/content/video/create', {
         method: 'POST',
@@ -307,20 +304,113 @@ function VideoCreatorPageInner() {
         }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || '生成剧本失败')
-      setResult(json)
+      if (!res.ok) throw new Error(json.error || '生成分镜失败')
+      const videoPlan = json?.remote?.result || json?.result
+      setPlan(videoPlan)
+      setRows(buildRows(videoPlan))
     } catch (err: any) {
-      setError(err?.message || '生成剧本失败')
+      setError(err?.message || '生成分镜失败')
     } finally {
-      setGenerating(false)
+      setPlanning(false)
     }
   }
 
-  const handleSubmitVideo = async () => {
-    if (!validateInput() || !editablePlan) return
-    setSubmittingVideo(true)
+  const handleGenerateRow = async (row: SceneRow) => {
+    if (!plan || !row.job) return
+    if (row.assetIds.length === 0) {
+      setError(`第 ${Number(row.scene.id)} 镜至少需要一个素材`)
+      return
+    }
+    setRow(row.rowId, { busy: true })
     setError(null)
     try {
+      const refs = assetRefsForRow(row.assetIds)
+      const sceneJob = {
+        ...row.job,
+        request: {
+          ...row.job.request,
+          prompt: row.prompt,
+          references: refs,
+          ratio: aspectRatio,
+          duration: row.scene.durationSec,
+        },
+      }
+      const res = await fetch('/api/content/video/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId,
+          creatorType,
+          idea,
+          theme: idea,
+          platform,
+          aspectRatio,
+          targetDurationSec: row.scene.durationSec,
+          assetIds: row.assetIds,
+          executionMode: 'submit',
+          plan: {
+            ...plan,
+            scenes: [row.scene],
+            seedanceJobs: [sceneJob],
+          },
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '生成分镜视频失败')
+      setRow(row.rowId, { execution: json.execution, busy: false })
+    } catch (err: any) {
+      setError(err?.message || '生成分镜视频失败')
+      setRow(row.rowId, { busy: false })
+    }
+  }
+
+  const handleCheckRow = async (row: SceneRow) => {
+    const taskId = row.execution?.providerTaskIds?.[0]
+    if (!taskId) return
+    setRow(row.rowId, { busy: true })
+    setError(null)
+    try {
+      const res = await fetch('/api/content/video/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId,
+          taskId,
+          title: `${plan?.title || idea} - 第 ${Number(row.scene.id)} 镜`,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '刷新分镜失败')
+      setRow(row.rowId, { execution: json.execution, busy: false })
+    } catch (err: any) {
+      setError(err?.message || '刷新分镜失败')
+      setRow(row.rowId, { busy: false })
+    }
+  }
+
+  const handleGenerateFinal = async () => {
+    if (!plan || selectedFinalUrls.length === 0) return
+    setFinalBusy(true)
+    setError(null)
+    try {
+      const finalJob = {
+        id: 'seedance-final-assembly-01',
+        provider: 'seedance',
+        mode: 'reference_to_video',
+        modelHint: 'dreamina-seedance-2-0-fast-260128',
+        request: {
+          prompt: [
+            `把这些已生成分镜合成为一条完整的${selectedCreator.label}短视频。`,
+            `整体目标：${idea}`,
+            `平台：${platform}，比例：${aspectRatio}。`,
+            `保持画面连续、节奏清楚、转场自然、商家信息真实。`,
+          ].join('\n'),
+          ratio: aspectRatio,
+          duration: Math.max(4, Math.min(15, duration)),
+          references: selectedFinalUrls.map((url) => ({ url, mimeType: 'video/mp4' })),
+          negativePrompt: '错乱文字, 伪造价格, 伪造地址, 多余logo, 低清晰度',
+        },
+      }
       const res = await fetch('/api/content/video/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -332,28 +422,30 @@ function VideoCreatorPageInner() {
           platform,
           aspectRatio,
           targetDurationSec: duration,
-          assetIds: selectedAssetIds,
+          mediaUrls: selectedFinalUrls,
           executionMode: 'submit',
-          plan: editablePlan,
+          plan: {
+            ...plan,
+            title: `${plan.title || idea} - 最终成片`,
+            scenes: [],
+            seedanceJobs: [finalJob],
+          },
         }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || '生成视频失败')
-      setResult(json)
+      if (!res.ok) throw new Error(json.error || '生成最终视频失败')
+      setFinalExecution(json.execution)
     } catch (err: any) {
-      setError(err?.message || '生成视频失败')
+      setError(err?.message || '生成最终视频失败')
     } finally {
-      setSubmittingVideo(false)
+      setFinalBusy(false)
     }
   }
 
-  const handleCheckVideo = async () => {
-    const taskId = execution?.providerTaskIds?.[0]
-    if (!taskId) {
-      setError('还没有可查询的视频任务。请先点击生成视频。')
-      return
-    }
-    setCheckingVideo(true)
+  const handleCheckFinal = async () => {
+    const taskId = finalExecution?.providerTaskIds?.[0]
+    if (!taskId) return
+    setFinalBusy(true)
     setError(null)
     try {
       const res = await fetch('/api/content/video/status', {
@@ -362,19 +454,16 @@ function VideoCreatorPageInner() {
         body: JSON.stringify({
           brandId,
           taskId,
-          title: videoPlan?.title || idea,
+          title: `${plan?.title || idea} - 最终成片`,
         }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || '检查视频结果失败')
-      setResult((prev: any) => ({
-        ...prev,
-        execution: json.execution,
-      }))
+      if (!res.ok) throw new Error(json.error || '刷新最终视频失败')
+      setFinalExecution(json.execution)
     } catch (err: any) {
-      setError(err?.message || '检查视频结果失败')
+      setError(err?.message || '刷新最终视频失败')
     } finally {
-      setCheckingVideo(false)
+      setFinalBusy(false)
     }
   }
 
@@ -382,10 +471,7 @@ function VideoCreatorPageInner() {
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:px-5">
         <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-3">
-          <button
-            onClick={() => router.back()}
-            className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100"
-          >
+          <button onClick={() => router.back()} className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100">
             <ArrowLeft className="h-4 w-4" />
             返回
           </button>
@@ -397,352 +483,254 @@ function VideoCreatorPageInner() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1800px] space-y-3 px-3 py-3 sm:space-y-4 sm:px-5 sm:py-5">
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {stepCards.map((item) => {
-            const active = item.step === currentStep
-            const done = item.step < currentStep || (item.step === 3 && videoReady)
-            return (
-              <div
-                key={item.step}
-                className={`rounded-lg border bg-white p-4 shadow-sm ${
-                  active ? 'border-indigo-300 ring-2 ring-indigo-100' : done ? 'border-emerald-200' : 'border-slate-200'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${
-                    done ? 'bg-emerald-100 text-emerald-700' : active ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'
-                  }`}>
-                    {item.step}
-                  </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
-                    done ? 'bg-emerald-50 text-emerald-700' : active ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-50 text-slate-400'
-                  }`}>
-                    {item.status}
-                  </span>
-                </div>
-                <h2 className="mt-3 text-sm font-black text-slate-900">{item.title}</h2>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">{item.description}</p>
-              </div>
-            )
-          })}
-        </section>
-
-        <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]">
-        <section className="space-y-3 sm:space-y-4 lg:sticky lg:top-[76px] lg:self-start">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center gap-2">
-              <Wand2 className="h-4 w-4 text-indigo-600" />
-              <h1 className="text-sm font-black">选择素材与目标</h1>
-            </div>
-
-            <label className="mb-1 block text-[11px] font-bold text-slate-500">视频目标</label>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {creatorOptions.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleSelectCreator(item.id)}
-                  className={`rounded-lg border p-2 text-left transition ${
-                    creatorType === item.id
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-800'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <p className="text-xs font-black">{item.label}</p>
-                  <p className="mt-0.5 text-[10px] leading-snug text-slate-500">{item.hint}</p>
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50 p-3">
-              <p className="text-[11px] font-black text-indigo-800">{selectedCreator.flow}</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-indigo-700">{selectedCreator.basis}</p>
-            </div>
-
-            <label className="mb-1 mt-4 block text-[11px] font-bold text-slate-500">视频想表达什么</label>
-            <textarea
-              value={idea}
-              onChange={(e) => setIdea(e.target.value)}
-              rows={4}
-              placeholder="例如：突出招牌菜、展示门店环境、介绍本周优惠"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-            />
-
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <label className="text-[11px] font-bold text-slate-500">
-                平台
-                <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs">
-                  <option value="tiktok">TikTok</option>
-                  <option value="instagram">Instagram</option>
-                  <option value="facebook">Facebook</option>
-                  <option value="google_business">Google</option>
-                </select>
-              </label>
-              <label className="text-[11px] font-bold text-slate-500">
-                比例
-                <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs">
-                  <option value="9:16">9:16</option>
-                  <option value="1:1">1:1</option>
-                  <option value="4:5">4:5</option>
-                  <option value="16:9">16:9</option>
-                </select>
-              </label>
-              <label className="text-[11px] font-bold text-slate-500">
-                秒数
-                <input value={duration} onChange={(e) => setDuration(Number(e.target.value) || 10)} type="number" min={4} max={24} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
-              </label>
-            </div>
-
-            <button
-              onClick={handleGeneratePlan}
-              disabled={generating || selectedAssetIds.length === 0}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-60"
-            >
-              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              生成可编辑分镜
-            </button>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-2">
+      <main className="mx-auto max-w-[1800px] space-y-4 px-3 py-4 sm:px-5">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
+            <div className="space-y-4">
               <div>
-                <h2 className="text-xs font-black text-slate-700">素材选择</h2>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  已选 {selectedAssetIds.length} 个素材，可继续添加或移除。
-                </p>
+                <p className="text-sm font-black">整体视频设定</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {creatorOptions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleSelectCreator(item.id)}
+                      className={`rounded-lg border p-3 text-left ${
+                        creatorType === item.id ? 'border-indigo-500 bg-indigo-50 text-indigo-800' : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <p className="text-xs font-black">{item.label}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">{item.hint}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
-              {loadingAssets && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+
+              <label className="block">
+                <span className="text-[11px] font-black text-slate-500">视频目标</span>
+                <textarea
+                  value={idea}
+                  onChange={(event) => {
+                    setIdea(event.target.value)
+                    resetPlan()
+                  }}
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                />
+              </label>
+
+              <div className="grid grid-cols-3 gap-2">
+                <label className="text-[11px] font-black text-slate-500">
+                  平台
+                  <select value={platform} onChange={(e) => { setPlatform(e.target.value); resetPlan() }} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs">
+                    <option value="tiktok">TikTok</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="facebook">Facebook</option>
+                    <option value="google_business">Google</option>
+                  </select>
+                </label>
+                <label className="text-[11px] font-black text-slate-500">
+                  比例
+                  <select value={aspectRatio} onChange={(e) => { setAspectRatio(e.target.value); resetPlan() }} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs">
+                    <option value="9:16">9:16</option>
+                    <option value="1:1">1:1</option>
+                    <option value="4:5">4:5</option>
+                    <option value="16:9">16:9</option>
+                  </select>
+                </label>
+                <label className="text-[11px] font-black text-slate-500">
+                  秒数
+                  <input value={duration} onChange={(e) => { setDuration(Number(e.target.value) || selectedCreator.duration); resetPlan() }} type="number" min={4} max={15} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
+                </label>
+              </div>
             </div>
-            <div className="mt-3 flex items-center justify-between gap-2">
-              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                {[
-                  { key: 'unused', label: '未使用' },
-                  { key: 'all', label: '全部' },
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => {
-                      setAssetTypeFilter(item.key as 'unused' | 'all')
-                      setAssetPageSize(12)
-                    }}
-                    className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${
-                      assetTypeFilter === item.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'
-                    }`}
-                  >
-                    {item.label}
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-black text-slate-700">本次素材</p>
+                {loadingAssets && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <button onClick={() => setAssetFilter('unused')} className={`rounded-md px-2 py-1 text-[11px] font-black ${assetFilter === 'unused' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>未使用</button>
+                <button onClick={() => setAssetFilter('all')} className={`rounded-md px-2 py-1 text-[11px] font-black ${assetFilter === 'all' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}>全部</button>
+              </div>
+              <div className="mt-3 grid grid-cols-5 gap-2">
+                {selectedAssets.map((asset) => (
+                  <button key={asset.id} onClick={() => toggleGlobalAsset(asset.id)} className="relative aspect-square overflow-hidden rounded-lg border border-indigo-400">
+                    <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
+                    <X className="absolute right-1 top-1 h-4 w-4 rounded-full bg-black/60 p-0.5 text-white" />
+                  </button>
+                ))}
+                {visibleAssets.slice(0, assetPageSize).filter((asset) => !selectedAssetIds.includes(asset.id)).map((asset) => (
+                  <button key={asset.id} onClick={() => toggleGlobalAsset(asset.id)} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200">
+                    <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
+                    <Plus className="absolute right-1 top-1 h-4 w-4 rounded-full bg-white/90 p-0.5 text-slate-700" />
                   </button>
                 ))}
               </div>
-            </div>
-
-            <p className="mt-1 text-[11px] text-slate-500">
-              系统会根据这些图片生成每个镜头的画面描述。
-            </p>
-            <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-3">
-              {selectedAssets.map((asset) => (
-                <div key={asset.id} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200">
-                  {asset.mimeType.startsWith('video/') ? (
-                    <video src={`${asset.url}#t=0.1`} className="h-full w-full object-cover" muted />
-                  ) : (
-                    <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => toggleAsset(asset.id)}
-                    className="absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
-                    title="移除素材"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-              {!loadingAssets && selectedAssets.length === 0 && (
-                <div className="col-span-3 rounded-lg border border-dashed border-slate-200 p-4 text-center text-[11px] text-slate-400">
-                  请从下方素材库添加至少一张图片。
-                </div>
+              {visibleAssets.length > assetPageSize && (
+                <button onClick={() => setAssetPageSize((size) => size + 12)} className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600">更多素材</button>
               )}
             </div>
+          </div>
 
-            <div className="mt-4 border-t border-slate-100 pt-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[11px] font-black text-slate-500">从素材库添加</p>
-                <p className="text-[10px] text-slate-400">{availableAssets.length} 个可选素材</p>
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+            <div className="min-w-0">
+              <p className="text-xs font-black text-slate-700">{selectedCreator.flow}</p>
+              <p className="mt-1 truncate text-[11px] text-slate-500">{selectedAssetIds.length} 个素材 · {duration} 秒 · {aspectRatio}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleGeneratePlan}
+              disabled={planning || selectedAssetIds.length === 0}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-60"
+            >
+              {planning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              生成分镜表
+            </button>
+          </div>
+        </section>
+
+        {error && <p className="rounded-lg bg-rose-50 p-3 text-xs font-black text-rose-600">{error}</p>}
+
+        <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="grid grid-cols-[72px_minmax(180px,240px)_minmax(320px,1fr)_180px_220px] gap-3 border-b border-slate-100 px-4 py-3 text-[11px] font-black text-slate-500 max-xl:hidden">
+            <span>镜头</span>
+            <span>素材</span>
+            <span>设定</span>
+            <span>操作</span>
+            <span>预览</span>
+          </div>
+
+          {rows.length === 0 ? (
+            <div className="grid min-h-[240px] place-items-center p-8">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                <Film className="h-5 w-5" />
               </div>
-              <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-3">
-                {availableAssets.slice(0, assetPageSize).map((asset) => {
-                  const selected = selectedAssetIds.includes(asset.id)
-                  return (
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {rows.map((row, index) => (
+                <div key={row.rowId} className="grid min-h-[148px] grid-cols-1 gap-3 px-4 py-3 xl:grid-cols-[72px_minmax(180px,240px)_minmax(320px,1fr)_180px_220px]">
+                  <div className="flex items-start gap-3 xl:block">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-black text-slate-700">{index + 1}</span>
+                    <div className="min-w-0 xl:mt-2">
+                      <p className="text-xs font-black">{sceneTitle(row.scene)}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">{row.scene.durationSec} 秒</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-1.5 self-start">
+                    {selectedAssets.map((asset) => {
+                      const active = row.assetIds.includes(asset.id)
+                      return (
+                        <button key={asset.id} type="button" onClick={() => toggleRowAsset(row.rowId, asset.id)} className={`relative aspect-square overflow-hidden rounded-md border ${active ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200 opacity-60'}`}>
+                          <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
+                          {active && <Check className="absolute right-1 top-1 h-4 w-4 rounded-full bg-indigo-600 p-0.5 text-white" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="min-w-0 self-start">
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-lg bg-slate-50 p-2">
+                        <p className="text-[10px] font-black text-slate-400">字幕</p>
+                        <p className="mt-1 line-clamp-2 text-xs font-bold text-indigo-700">{row.scene.textOverlay}</p>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-2">
+                        <p className="text-[10px] font-black text-slate-400">镜头</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-slate-600">{sceneMotion(row.scene)}</p>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-2">
+                        <p className="text-[10px] font-black text-slate-400">目的</p>
+                        <p className="mt-1 line-clamp-2 text-xs text-slate-600">{sceneIntent(row.scene)}</p>
+                      </div>
+                    </div>
+                    <details className="mt-2 rounded-lg border border-slate-200 p-2">
+                      <summary className="cursor-pointer text-[11px] font-black text-slate-500">提示词</summary>
+                      <textarea
+                        value={row.prompt}
+                        onChange={(event) => setRow(row.rowId, { prompt: event.target.value, execution: undefined })}
+                        rows={5}
+                        className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-[11px] leading-relaxed outline-none focus:border-indigo-400"
+                      />
+                    </details>
+                  </div>
+
+                  <div className="flex flex-col gap-2 self-start">
                     <button
-                      key={asset.id}
                       type="button"
-                      onClick={() => toggleAsset(asset.id)}
-                      className={`group relative aspect-square overflow-hidden rounded-lg border ${
-                        selected ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200 hover:border-slate-300'
+                      onClick={() => setRow(row.rowId, { includeInFinal: !row.includeInFinal })}
+                      className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-black ${
+                        row.includeInFinal ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500'
                       }`}
                     >
-                      <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover transition group-hover:scale-105" />
-                      <span className={`absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full ${
-                        selected ? 'bg-indigo-600 text-white' : 'bg-white/90 text-slate-600'
-                      }`}>
-                        {selected ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                      </span>
+                      <Check className="h-4 w-4" />
+                      加入成片
                     </button>
-                  )
-                })}
+                    <button
+                      type="button"
+                      onClick={() => row.execution?.status && row.execution.status !== 'completed' ? handleCheckRow(row) : handleGenerateRow(row)}
+                      disabled={row.busy}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      {row.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : row.execution?.status === 'completed' ? <RefreshCw className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                      {row.execution?.status === 'completed' ? '重新生成' : row.execution ? '刷新结果' : '生成分镜'}
+                    </button>
+                    <span className={`rounded-full px-2 py-1 text-center text-[10px] font-black ${row.execution?.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : row.execution ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                      {row.execution?.status === 'completed' ? '已完成' : row.execution ? '生成中' : '待生成'}
+                    </span>
+                  </div>
+
+                  <div className="self-start">
+                    {row.execution?.outputUrl ? (
+                      <video src={row.execution.outputUrl} className="aspect-video w-full rounded-lg bg-black object-contain" controls playsInline />
+                    ) : (
+                      <div className="grid aspect-video w-full place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-slate-300">
+                        <Film className="h-5 w-5" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {rows.length > 0 && (
+          <section className="sticky bottom-3 z-10 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-emerald-50 text-emerald-700">
+                  <Film className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-black">最终视频</p>
+                  <p className="text-xs text-slate-500">{selectedFinalUrls.length}/{rows.filter((row) => row.includeInFinal).length} 个已选分镜可用</p>
+                </div>
               </div>
-              {availableAssets.length > assetPageSize && (
-                <button
-                  type="button"
-                  onClick={() => setAssetPageSize((size) => size + 12)}
-                  className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                >
-                  加载更多素材
-                </button>
+
+              {finalExecution?.outputUrl && (
+                <video src={finalExecution.outputUrl} className="h-24 rounded-lg bg-black" controls playsInline />
               )}
-            </div>
-          </div>
-        </section>
 
-        <section className="min-w-0 space-y-4">
-          <div className="min-h-[calc(100vh-112px)] rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-black">编辑分镜并生成视频</h2>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  按卡片顺序完成：先生成分镜，修改画面描述，最后生成视频。
-                </p>
-              </div>
-              {(generating || submittingVideo || checkingVideo) && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
-            </div>
-            {error && <p className="mt-3 rounded-lg bg-rose-50 p-3 text-xs font-bold leading-relaxed text-rose-600">{error}</p>}
-            {!videoPlan ? (
-              <div className="mt-4 grid min-h-[420px] place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
-                <div className="max-w-sm">
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
-                    <Sparkles className="h-5 w-5" />
-                  </div>
-                  <p className="mt-3 text-sm font-black text-slate-700">等待分镜</p>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]">
-                <aside className="space-y-3 xl:sticky xl:top-[92px] xl:self-start">
-                  {execution?.outputUrl && (
-                    <div className="overflow-hidden rounded-lg border border-emerald-200 bg-black shadow-sm">
-                      <video src={execution.outputUrl} className="max-h-[520px] w-full" controls playsInline />
-                      <div className="flex items-center justify-between gap-2 bg-white px-3 py-2 text-xs font-black text-emerald-700">
-                        <span>已保存到素材库</span>
-                        <span>AI 视频</span>
-                      </div>
-                    </div>
-                  )}
-                  {execution && (
-                    <div className={`rounded-lg border p-3 text-xs font-bold ${
-                      execution.status === 'completed'
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                        : 'border-amber-200 bg-amber-50 text-amber-700'
-                    }`}>
-                      <div className="flex items-center justify-between gap-3">
-                        <span>{execution.status === 'completed' ? '已完成' : '生成中'}</span>
-                        {execution.status !== 'completed' && <Loader2 className="h-4 w-4 animate-spin" />}
-                      </div>
-                      {execution.status !== 'completed' ? (
-                        <button
-                          type="button"
-                          onClick={handleCheckVideo}
-                          disabled={checkingVideo}
-                          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-xs font-black text-white hover:bg-amber-700 disabled:opacity-60"
-                        >
-                          {checkingVideo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                          刷新结果
-                        </button>
-                      ) : null}
-                    </div>
-                  )}
-                  <div className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-sm font-black">第 2 步：检查视频方案</p>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-600">{videoPlan.strategy}</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-xs font-black text-slate-700">分镜依据</p>
-                    <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-slate-500">
-                      <p>目标：{selectedCreator.label}</p>
-                      <p>结构：{selectedCreator.flow}</p>
-                      <p>素材：{selectedAssetIds.length} 个已选素材</p>
-                      <p>平台与比例：{platform} · {aspectRatio} · {duration} 秒</p>
-                      <p>Idea：{idea}</p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleSubmitVideo}
-                    disabled={submittingVideo || generating || (execution && execution.status !== 'completed')}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-60"
-                  >
-                    {submittingVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    {execution?.status === 'completed' ? '重新生成视频' : execution ? '生成中' : '第 3 步：生成视频'}
+              <div className="flex gap-2">
+                {finalExecution && finalExecution.status !== 'completed' ? (
+                  <button onClick={handleCheckFinal} disabled={finalBusy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-black text-white disabled:opacity-60">
+                    {finalBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    刷新最终视频
                   </button>
-
-                  <details className="rounded-lg border border-slate-200 p-3">
-                    <summary className="cursor-pointer text-xs font-black text-slate-600">高级信息：任务编号与模型参数</summary>
-                    <div className="mt-2 space-y-1">
-                      {(videoPlan.seedanceJobs || []).map((job: any) => (
-                        <p key={job.id} className="break-all text-[11px] text-slate-500">
-                          {job.id} · {job.mode} · {job.modelHint} · {job.request?.duration}s
-                        </p>
-                      ))}
-                    </div>
-                  </details>
-                </aside>
-
-                <div className="grid min-w-0 grid-cols-1 gap-3">
-                  {scenes.map((scene) => {
-                    const job = videoPlan.seedanceJobs?.find((item: any) => item.id.endsWith(`-${scene.id}`))
-                    return (
-                    <div key={scene.id} className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-xs font-black">第 {Number(scene.id)} 镜 · {displaySceneTitle(scene)}</p>
-                          <p className="mt-1 text-[11px] text-slate-500">{displayIntent(scene)}</p>
-                        </div>
-                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{scene.durationSec} 秒</span>
-                      </div>
-                      <div className="mt-3 grid gap-2 text-[11px] sm:grid-cols-2">
-                        <div className="rounded-lg bg-slate-50 p-2">
-                          <p className="font-black text-slate-500">画面字幕</p>
-                          <p className="mt-1 font-bold text-indigo-700">{scene.textOverlay}</p>
-                        </div>
-                        <div className="rounded-lg bg-slate-50 p-2">
-                          <p className="font-black text-slate-500">镜头运动</p>
-                          <p className="mt-1 text-slate-600">{displayCameraMotion(scene)}</p>
-                        </div>
-                      </div>
-                      {job && (
-                        <details className="mt-3 rounded-lg border border-slate-200 p-3">
-                          <summary className="cursor-pointer text-[11px] font-black text-slate-500">
-                            高级：查看或修改 Seedance 提示词
-                          </summary>
-                          <textarea
-                            value={promptDrafts[job.id] || ''}
-                            onChange={(event) => {
-                              setPromptDrafts((prev) => ({ ...prev, [job.id]: event.target.value }))
-                            }}
-                            rows={7}
-                            className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-indigo-400"
-                          />
-                        </details>
-                      )}
-                    </div>
-                    )
-                  })}
-                </div>
+                ) : (
+                  <button onClick={handleGenerateFinal} disabled={finalBusy || selectedFinalUrls.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-black text-white disabled:opacity-60">
+                    {finalBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    合成最终视频
+                  </button>
+                )}
               </div>
-            )}
-          </div>
-        </section>
-        </div>
+            </div>
+          </section>
+        )}
       </main>
     </div>
   )
@@ -750,7 +738,7 @@ function VideoCreatorPageInner() {
 
 export default function VideoCreatorPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-sm text-slate-500">Loading video creator...</div>}>
+    <Suspense fallback={<div className="p-8 text-sm text-slate-500">正在打开视频制作页面...</div>}>
       <VideoCreatorPageInner />
     </Suspense>
   )
