@@ -227,7 +227,10 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
     }
 
     // --- Process Check (c): Complete Brand Context configuration ---
-    if (hasSubscription) {
+    // Only prompt for brand story AFTER the user has connected at least one social account.
+    // This avoids overwhelming new users with too many setup prompts at once.
+    const hasAnyAccount = brand.accounts.length > 0
+    if (hasSubscription && hasAnyAccount) {
       const hasDesc = !!brand.description?.trim()
       const hasTone = !!brand.knowledge?.brandTone?.trim()
       const hasVoice = !!brand.knowledge?.voiceId?.trim()
@@ -269,6 +272,7 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
         })
       }
     } else {
+      // No subscription, or no accounts connected yet: remove brand context notification
       await prisma.notification.deleteMany({
         where: { userId, brandId: brand.id, type: 'COMPLETE_CONTEXT' }
       })
