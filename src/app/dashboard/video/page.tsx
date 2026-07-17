@@ -30,12 +30,60 @@ type VideoScene = {
 }
 
 const creatorOptions = [
-  { id: 'product_showcase', label: '产品展示', hint: '多图生成产品/菜品动态展示' },
-  { id: 'story_campaign', label: '剧情短片', hint: 'idea + 素材生成多段剧情视频' },
-  { id: 'review_to_video', label: '好评视频', hint: '把顾客评价变成信任素材' },
-  { id: 'event_offer', label: '活动促销', hint: '节日、开业、限时优惠' },
-  { id: 'menu_recommendation', label: '菜单推荐', hint: '今日推荐 / 套餐视频' },
-  { id: 'local_discovery', label: '本地发现', hint: '附近场景与商圈搜索' },
+  {
+    id: 'product_showcase',
+    label: '产品展示',
+    hint: '多图生成产品/菜品动态展示',
+    defaultIdea: 'Show the selected products or dishes as a polished short showcase video',
+    duration: 10,
+    flow: '主打画面 → 细节展示 → 到店/下单引导',
+    basis: '更重视产品细节、质感、真实商家场景和简洁行动引导。',
+  },
+  {
+    id: 'story_campaign',
+    label: '剧情短片',
+    hint: 'idea + 素材生成多段剧情视频',
+    defaultIdea: 'Tell a short customer story using the selected merchant assets',
+    duration: 18,
+    flow: '开场问题 → 发现商家 → 体验过程 → 行动引导',
+    basis: '会把素材组织成一个有起承转合的顾客场景故事。',
+  },
+  {
+    id: 'review_to_video',
+    label: '好评视频',
+    hint: '把顾客评价变成信任素材',
+    defaultIdea: 'Turn a positive customer review into a trustworthy social proof video',
+    duration: 10,
+    flow: '顾客证明 → 可信细节 → 尝试引导',
+    basis: '更重视评论证据、真实体验和低压力的信任建立。',
+  },
+  {
+    id: 'event_offer',
+    label: '活动促销',
+    hint: '节日、开业、限时优惠',
+    defaultIdea: 'Promote a timely offer or event with selected merchant visuals',
+    duration: 12,
+    flow: '优惠亮点 → 价值说明 → 领取/预约方式',
+    basis: '会突出时间感、优惠内容、使用方式和清晰 CTA。',
+  },
+  {
+    id: 'menu_recommendation',
+    label: '菜单推荐',
+    hint: '今日推荐 / 套餐视频',
+    defaultIdea: 'Recommend today’s menu pick or set meal using selected dish photos',
+    duration: 12,
+    flow: '今日推荐 → 菜单细节 → 下单引导',
+    basis: '更适合把菜品、套餐、价格和推荐理由说清楚。',
+  },
+  {
+    id: 'local_discovery',
+    label: '本地发现',
+    hint: '附近场景与商圈搜索',
+    defaultIdea: 'Introduce this merchant as a useful nearby local discovery',
+    duration: 10,
+    flow: '附近发现 → 到店理由 → 找到商家',
+    basis: '会围绕商圈、附近需求、门店可发现性来组织画面。',
+  },
 ]
 
 const sceneTitleMap: Record<string, string> = {
@@ -120,6 +168,10 @@ function VideoCreatorPageInner() {
   const videoPlan = result?.remote?.result || result?.result
   const execution = result?.execution
   const scenes: VideoScene[] = videoPlan?.scenes || []
+  const selectedCreator = useMemo(
+    () => creatorOptions.find((item) => item.id === creatorType) || creatorOptions[0],
+    [creatorType],
+  )
   const editablePlan = useMemo(() => {
     if (!videoPlan) return null
     const jobs = (videoPlan.seedanceJobs || []).map((job: any) => ({
@@ -175,6 +227,17 @@ function VideoCreatorPageInner() {
       : [...prev, assetId])
     setResult(null)
     setError(null)
+  }
+
+  const handleSelectCreator = (creatorId: string) => {
+    const next = creatorOptions.find((item) => item.id === creatorId)
+    setCreatorType(creatorId)
+    setResult(null)
+    setError(null)
+    if (next) {
+      setIdea(next.defaultIdea)
+      setDuration(next.duration)
+    }
   }
 
   const validateInput = () => {
@@ -319,7 +382,7 @@ function VideoCreatorPageInner() {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setCreatorType(item.id)}
+                  onClick={() => handleSelectCreator(item.id)}
                   className={`rounded-lg border p-2 text-left transition ${
                     creatorType === item.id
                       ? 'border-indigo-500 bg-indigo-50 text-indigo-800'
@@ -330,6 +393,10 @@ function VideoCreatorPageInner() {
                   <p className="mt-0.5 text-[10px] leading-snug text-slate-500">{item.hint}</p>
                 </button>
               ))}
+            </div>
+            <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50 p-3">
+              <p className="text-[11px] font-black text-indigo-800">{selectedCreator.flow}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-indigo-700">{selectedCreator.basis}</p>
             </div>
 
             <label className="mb-1 mt-4 block text-[11px] font-bold text-slate-500">视频想表达什么</label>
@@ -522,6 +589,16 @@ function VideoCreatorPageInner() {
                   <div className="rounded-lg bg-slate-50 p-3">
                     <p className="text-sm font-black">第 2 步：检查视频方案</p>
                     <p className="mt-1 text-xs leading-relaxed text-slate-600">{videoPlan.strategy}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <p className="text-xs font-black text-slate-700">分镜依据</p>
+                    <div className="mt-2 space-y-1 text-[11px] leading-relaxed text-slate-500">
+                      <p>目标：{selectedCreator.label}</p>
+                      <p>结构：{selectedCreator.flow}</p>
+                      <p>素材：{selectedAssetIds.length} 个已选素材</p>
+                      <p>平台与比例：{platform} · {aspectRatio} · {duration}s</p>
+                      <p>Idea：{idea}</p>
+                    </div>
                   </div>
 
                   <button
