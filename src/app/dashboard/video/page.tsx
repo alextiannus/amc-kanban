@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import React, { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Film, Loader2, Play, Sparkles, Wand2 } from 'lucide-react'
+import { ArrowLeft, Film, Loader2, Sparkles, Wand2 } from 'lucide-react'
 
 type Asset = {
   id: string
@@ -46,7 +46,7 @@ function VideoCreatorPageInner() {
   }, [params])
 
   const [assets, setAssets] = useState<Asset[]>([])
-  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>(initialAssetIds)
+  const selectedAssetIds = initialAssetIds
   const [creatorType, setCreatorType] = useState('product_showcase')
   const [idea, setIdea] = useState('Showcase selected merchant assets as a short social video')
   const [platform, setPlatform] = useState('tiktok')
@@ -73,13 +73,8 @@ function VideoCreatorPageInner() {
   )
 
   const videoPlan = result?.remote?.result || result?.result
+  const execution = result?.execution
   const scenes: VideoScene[] = videoPlan?.scenes || []
-
-  const toggleAsset = (assetId: string) => {
-    setSelectedAssetIds((prev) => prev.includes(assetId)
-      ? prev.filter((id) => id !== assetId)
-      : [...prev, assetId])
-  }
 
   const handleGeneratePlan = async () => {
     if (!brandId) {
@@ -111,13 +106,14 @@ function VideoCreatorPageInner() {
           aspectRatio,
           targetDurationSec: duration,
           assetIds: selectedAssetIds,
+          executionMode: 'submit',
         }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || '生成视频方案失败')
+      if (!res.ok) throw new Error(json.error || '生成视频失败')
       setResult(json)
     } catch (err: any) {
-      setError(err?.message || '生成视频方案失败')
+      setError(err?.message || '生成视频失败')
     } finally {
       setGenerating(false)
     }
@@ -204,75 +200,71 @@ function VideoCreatorPageInner() {
 
             <button
               onClick={handleGeneratePlan}
-              disabled={generating}
+              disabled={generating || selectedAssetIds.length === 0}
               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-60"
             >
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              生成视频方案
+              生成视频
             </button>
             {error && <p className="mt-3 rounded-lg bg-rose-50 p-2 text-xs font-bold text-rose-600">{error}</p>}
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-xs font-black text-slate-700">已选素材</h2>
-            <p className="mt-1 text-[11px] text-slate-500">{selectedAssetIds.length} 个素材将作为视频参考</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {selectedAssetIds.length} 个素材将作为视频参考。需要调整素材请返回素材库重新选择。
+            </p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {selectedAssets.map((asset) => (
-                <button key={asset.id} onClick={() => toggleAsset(asset.id)} className="relative aspect-square overflow-hidden rounded-lg border border-indigo-300">
+                <div key={asset.id} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200">
                   {asset.mimeType.startsWith('video/') ? (
                     <video src={`${asset.url}#t=0.1`} className="h-full w-full object-cover" muted />
                   ) : (
                     <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
                   )}
-                </button>
+                </div>
               ))}
+              {!loadingAssets && selectedAssets.length === 0 && (
+                <div className="col-span-3 rounded-lg border border-dashed border-slate-200 p-4 text-center text-[11px] text-slate-400">
+                  未读取到已选素材，请返回素材库重新进入。
+                </div>
+              )}
             </div>
           </div>
         </section>
 
         <section className="space-y-4">
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-black">素材选择</h2>
-                <p className="text-[11px] text-slate-500">可继续补选素材，生成前后都不会修改原素材。</p>
+                <h2 className="text-sm font-black">视频生成结果</h2>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  系统会先生成剧本分镜，再按分镜提示调用已配置的视频 API。
+                </p>
               </div>
-              {loadingAssets && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+              {generating && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
             </div>
-            <div className="grid grid-cols-3 gap-3 md:grid-cols-5 xl:grid-cols-6">
-              {assets.slice(0, 36).map((asset) => {
-                const checked = selectedAssetIds.includes(asset.id)
-                return (
-                  <button
-                    key={asset.id}
-                    onClick={() => toggleAsset(asset.id)}
-                    className={`group relative aspect-square overflow-hidden rounded-lg border ${checked ? 'border-indigo-500 ring-2 ring-indigo-200' : 'border-slate-200'}`}
-                  >
-                    {asset.mimeType.startsWith('video/') ? (
-                      <>
-                        <video src={`${asset.url}#t=0.1`} className="h-full w-full object-cover" muted />
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
-                          <Play className="h-5 w-5 fill-white" />
-                        </span>
-                      </>
-                    ) : (
-                      <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover transition group-hover:scale-105" />
-                    )}
-                    {checked && <span className="absolute right-1.5 top-1.5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white">选中</span>}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-black">生成结果</h2>
             {!videoPlan ? (
               <div className="mt-4 rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
-                生成后将在这里看到分镜、Seedance 任务和拼接计划。
+                点击生成后将在这里看到剧本分镜、生成状态和视频结果。
               </div>
             ) : (
               <div className="mt-4 space-y-4">
+                {execution?.outputUrl && (
+                  <div className="overflow-hidden rounded-lg border border-slate-200 bg-black">
+                    <video src={execution.outputUrl} className="max-h-[520px] w-full" controls playsInline />
+                  </div>
+                )}
+                {execution && (
+                  <div className={`rounded-lg p-3 text-xs font-bold ${
+                    execution.status === 'completed'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-amber-50 text-amber-700'
+                  }`}>
+                    视频生成状态：{execution.status === 'completed' ? '已完成并保存到素材库' : '已提交，视频仍在处理中'}
+                    {execution.providerTaskIds?.length ? ` · Provider Task: ${execution.providerTaskIds.join(', ')}` : ''}
+                  </div>
+                )}
                 <div className="rounded-lg bg-slate-50 p-3">
                   <p className="text-sm font-black">{videoPlan.title}</p>
                   <p className="mt-1 text-xs leading-relaxed text-slate-600">{videoPlan.strategy}</p>

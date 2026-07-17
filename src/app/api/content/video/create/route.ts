@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { createRemoteVideoPlan } from '@/lib/amc-content/remoteContentService'
+import { generateVideoFromPlan } from '@/lib/videoGeneration'
 
 export const maxDuration = 120
 
@@ -75,10 +76,28 @@ export async function POST(request: Request) {
       actorRole: actor.role,
     })
 
+    let execution: unknown = undefined
+    if (stringOrEmpty(body.executionMode) === 'submit') {
+      const remoteResult = result as { result?: any; remote?: { result?: any } }
+      const plan = remoteResult.result || remoteResult.remote?.result
+      if (!plan) {
+        return NextResponse.json({ error: 'Video plan was not returned by content service' }, { status: 502 })
+      }
+      execution = await generateVideoFromPlan({
+        brandId,
+        actorId: actor.id,
+        plan,
+        assetIds,
+        imageUrls: mediaUrls,
+        aspectRatio: optionalString(body.aspectRatio),
+      })
+    }
+
     return NextResponse.json({
       success: true,
       latencyMs: Date.now() - startedAt,
       remote: result,
+      execution,
     })
   } catch (err: any) {
     console.error('[VideoCreate] failed:', err)
