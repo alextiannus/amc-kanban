@@ -24,6 +24,8 @@ type SeedanceJob = {
   }
 }
 
+type SeedanceReference = { url: string; mimeType?: string | null }
+
 export type VideoGenerationExecution = {
   ok: true
   jobId: string
@@ -157,7 +159,8 @@ async function generateWithSeedanceGateway(args: {
   const createdAssets: VideoGenerationExecution['assets'] = []
 
   for (const job of jobs) {
-    const imageUrls = resolveJobImageUrls(job, assets, input.imageUrls)
+    const references = resolveJobReferences(job, assets, input.imageUrls)
+    const imageUrls = references.filter((ref) => isImageReference(ref)).map((ref) => ref.url)
     const isBytePlusArk = isBytePlusSeedanceBase(baseUrl)
 
     const response = await fetch(seedanceCreateTaskUrl(baseUrl), {
@@ -167,7 +170,7 @@ async function generateWithSeedanceGateway(args: {
         authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify(isBytePlusArk
-        ? buildBytePlusSeedancePayload({ config, job, imageUrls })
+        ? buildBytePlusSeedancePayload({ config, job, references })
         : buildLegacySeedancePayload({ config, job, imageUrls })),
     })
 
@@ -255,16 +258,12 @@ function seedanceTaskUrl(baseUrl: string, taskId: string): string {
 function buildBytePlusSeedancePayload(input: {
   config: VideoProviderConfig
   job: SeedanceJob
-  imageUrls: string[]
+  references: SeedanceReference[]
 }) {
-  const { config, job, imageUrls } = input
+  const { config, job, references } = input
   const content: any[] = [
     { type: 'text', text: job.request.prompt },
-    ...imageUrls.slice(0, 9).map((url, index) => ({
-      type: 'image_url',
-      image_url: { url },
-      role: index === 0 && job.mode === 'image_to_video' ? 'first_frame' : 'reference_image',
-    })),
+    ...references.flatMap((ref) => bytePlusReferenceContent(ref)).slice(0, 15),
   ]
   return {
     model: normalizeSeedanceModel(config.modelName || job.modelHint || 'dreamina-seedance-2-0-fast-260128'),
@@ -273,8 +272,18 @@ function buildBytePlusSeedancePayload(input: {
     ratio: job.request.ratio || '9:16',
     duration: clampSeedanceDuration(job.request.duration || 5),
     watermark: false,
-    generate_audio: false,
+    generate_audio: true,
   }
+}
+
+function bytePlusReferenceContent(ref: SeedanceReference): any[] {
+  if (isVideoReference(ref)) {
+    return [{ type: 'video_url', video_url: { url: ref.url }, role: 'reference_video' }]
+  }
+  if (isAudioReference(ref)) {
+    return [{ type: 'audio_url', audio_url: { url: ref.url }, role: 'reference_audio' }]
+  }
+  return [{ type: 'image_url', image_url: { url: ref.url }, role: 'reference_image' }]
 }
 
 function buildLegacySeedancePayload(input: {
@@ -411,11 +420,43 @@ async function createVideoAsset(input: {
 }
 
 function resolveJobImageUrls(job: SeedanceJob, assets: VideoAsset[], imageUrls?: string[]): string[] {
+  return resolveJobReferences(job, assets, imageUrls)
+    .filter((ref) => isImageReference(ref))
+    .map((ref) => ref.url)
+    .slice(0, 9)
+}
+
+function resolveJobReferences(job: SeedanceJob, assets: VideoAsset[], imageUrls?: string[]): SeedanceReference[] {
   const refs = job.request.references || []
-  const urls = refs.map((ref) => ref.url).filter(Boolean)
-  if (urls.length) return urls.slice(0, 9)
-  const assetUrls = assets.filter((asset) => asset.mimeType?.startsWith('image/')).map((asset) => asset.url)
-  return Array.from(new Set([...(imageUrls || []), ...assetUrls])).slice(0, 9)
+  if (refs.length) {
+    return dedupeReferences(refs.map((ref) => ({ url: ref.url, mimeType: ref.mimeType }))).slice(0, 15)
+  }
+  const directImageRefs = (imageUrls || []).map((url) => ({ url, mimeType: 'image/*' }))
+  const assetRefs = assets
+    .filter((asset) => asset.mimeType?.startsWith('image/') || asset.mimeType?.startsWith('video/') || asset.mimeType?.startsWith('audio/'))
+    .map((asset) => ({ url: asset.url, mimeType: asset.mimeType }))
+  return dedupeReferences([...directImageRefs, ...assetRefs]).slice(0, 15)
+}
+
+function dedupeReferences(refs: SeedanceReference[]): SeedanceReference[] {
+  const seen = new Set<string>()
+  return refs.filter((ref) => {
+    if (!ref.url || seen.has(ref.url)) return false
+    seen.add(ref.url)
+    return true
+  })
+}
+
+function isImageReference(ref: SeedanceReference): boolean {
+  return !ref.mimeType || ref.mimeType.startsWith('image/') || ref.mimeType === 'image/*'
+}
+
+function isVideoReference(ref: SeedanceReference): boolean {
+  return Boolean(ref.mimeType?.startsWith('video/'))
+}
+
+function isAudioReference(ref: SeedanceReference): boolean {
+  return Boolean(ref.mimeType?.startsWith('audio/'))
 }
 
 function fallbackJob(input: { plan: { title?: string; strategy?: string }; imageUrls?: string[]; aspectRatio?: string }): SeedanceJob {
@@ -437,6 +478,7 @@ function fallbackJob(input: { plan: { title?: string; strategy?: string }; image
 function extractVideoUrl(json: any): string {
   const candidates = [
     json?.content?.video_url,
+    json?.content?.video_url?.url,
     json?.content?.[0]?.video_url,
     json?.content?.[0]?.video_url?.url,
     json?.output?.video_url,
@@ -449,6 +491,7 @@ function extractVideoUrl(json: any): string {
     json?.data?.output?.video_url,
     json?.data?.output?.url,
     json?.data?.content?.video_url,
+    json?.data?.content?.video_url?.url,
     json?.data?.content?.[0]?.video_url,
     json?.data?.content?.[0]?.video_url?.url,
     json?.data?.video_url,
