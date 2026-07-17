@@ -58,6 +58,13 @@ export async function canUserAccessBrand(
                   },
                 },
                 {
+                  ownedBrands: {
+                    some: {
+                      brandId,
+                    },
+                  },
+                },
+                {
                   organizationsJoined: {
                     some: {
                       owner: {

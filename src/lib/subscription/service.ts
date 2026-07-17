@@ -71,7 +71,7 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       // Note: allow PENDING and ACTIVE — for BILLING mode, brand is created while subscription is still PENDING
       OR: [{ contractEndDate: null }, { contractEndDate: { gt: now } }],
     },
-    select: { id: true, brandId: true },
+    select: { id: true, brandId: true, planName: true },
   })
   console.log(`[createBrand] findFirst subscription (${Date.now() - t0}ms): found=${!!subscription}`)
 
@@ -210,6 +210,32 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     console.log('[createBrandForActivatedSubscription] Background principal assignment succeeded:', result.selectedAgentId)
   }).catch((assignmentError: any) => {
     console.error('[createBrandForActivatedSubscription] Background principal assignment failed:', assignmentError)
+  })
+
+  // Send congrats onboarding email with e-contract (non-blocking)
+  const mmHost = process.env.NEXT_PUBLIC_MM_HOST || 'https://amc-mm.immedi.ai'
+  prisma.user.findUnique({
+    where: { id: brandOwner.user.id },
+    select: { nickname: true }
+  }).then((u: { nickname: string | null } | null) => {
+    const finalNickname = u?.nickname || normalizedOwnerEmail.split('@')[0]
+    import('@/lib/email').then(({ sendBrandCongratsEmailWithContract }) => {
+      sendBrandCongratsEmailWithContract({
+        to: normalizedOwnerEmail,
+        nickname: finalNickname,
+        brandName: brand.name,
+        planName: subscription.planName,
+        mmInviteLink: mmHost,
+      }).then((res: any) => {
+        console.log(`[createBrand] Onboarding email sent: success=${res.success}`)
+      }).catch((err: any) => {
+        console.error('[createBrand] Failed to send onboarding email:', err)
+      })
+    }).catch((importErr: any) => {
+      console.error('[createBrand] Failed to import email lib:', importErr)
+    })
+  }).catch((dbErr: any) => {
+    console.error('[createBrand] Failed to fetch user nickname for email:', dbErr)
   })
 
   return { ok: true as const, brand, alreadyCreated: false as const, agentId: null }

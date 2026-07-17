@@ -30,6 +30,7 @@ export interface SendEmailOptions {
   html: string
   text?: string
   replyTo?: string
+  attachments?: any[]
 }
 
 export interface EmailResult {
@@ -109,6 +110,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailResult>
       html: options.html,
       text: options.text,
       replyTo: options.replyTo,
+      attachments: options.attachments,
     })
 
     console.log(`[email] Sent message ${info.messageId} to ${options.to}`)
@@ -745,3 +747,130 @@ ${resetLink}
 
   return sendEmail({ to, subject, html, text })
 }
+
+export async function sendBrandCongratsEmailWithContract(params: {
+  to: string
+  nickname: string
+  brandName: string
+  planName?: string
+  mmInviteLink?: string
+}): Promise<EmailResult> {
+  const { to, nickname, brandName, planName, mmInviteLink } = params
+
+  const displayPlan = planName || '标准专业代运营套餐 (Starter Plan)'
+
+  const contractText = `AI MARKETING CREW SERVICE AGREEMENT
+------------------------------------------------------------------
+Solution: AI Marketing Crew Marketing and Sales Content Generation Platform  
+Vendor: DeliveryChinatown Pte. Ltd. (UEN 201835327N)
+Customer: ${brandName}
+Version: AMC-SMSA-v1.03 / PSG sample T&Cs v1.2  
+Date: ${new Date().toLocaleDateString('en-SG')}
+
+1. Parties
+This Service Agreement is entered into between DeliveryChinatown Pte. Ltd. (UEN 201835327N, registered in Singapore) and the SME customer "${brandName}".
+
+2. Solution Description
+AI Marketing Crew ("AMC") is a specialized marketing and sales content generation solution that supports SMEs with brand workspace setup, business and brand context collection, campaign workflow, AI-assisted content generation, media asset library, review and approval workflow, scheduling, and monthly reporting.
+
+3. Service Scope
+Packages include Starter AI Marketing Crew (SGD 5,200/yr), Essential AI Marketing Crew (SGD 10,600/yr), and Booster AI Marketing Crew (SGD 16,800/yr). Standard deliverables are set by the accepted subscription order.
+
+4. Client Obligations
+The Customer must provide accurate business descriptions, products details, and outlets locations. The Customer is responsible for checking the factual accuracy, legality, and validity of all drafts before publishing.
+
+5. Limitation of Liability
+DeliveryChinatown's total liability arising out of or related to this agreement is limited to the fees paid by the Customer during the 3 months immediately preceding the event.
+
+6. Governing Law
+This Agreement is governed by the laws of Singapore.
+
+DeliveryChinatown Pte. Ltd.
+`
+
+  const subject = `【AMC】祝贺！您的品牌 ${brandName} 已成功创建 | Brand Created Successfully`
+  const html = `<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>欢迎开启 AI 营销之旅</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f0f4ff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .wrap { max-width: 580px; margin: 40px auto; }
+    .card { background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(99,102,241,0.10); }
+    .hero { background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%); padding: 40px; text-align: center; }
+    .hero h1 { margin: 0; color: #fff; font-size: 22px; font-weight: 800; }
+    .hero p  { margin: 6px 0 0; color: rgba(255,255,255,0.8); font-size: 13px; }
+    .body { padding: 36px 40px; }
+    .body p { color: #374151; font-size: 14px; line-height: 1.6; margin: 0 0 14px; }
+    .brand-badge { display: inline-flex; align-items: center; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 10px 16px; margin: 4px 0 20px; }
+    .brand-badge span { font-size: 14px; font-weight: 700; color: #1d4ed8; }
+    .cta-wrap { text-align: center; margin: 28px 0; }
+    .cta { display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%); color: #fff; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 15px; }
+    .contract-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; font-size: 11px; font-family: monospace; max-height: 200px; overflow-y: auto; white-space: pre-wrap; margin: 20px 0; }
+    .footer { background: #f8fafc; padding: 20px 40px; border-top: 1px solid #e2e8f0; text-align: center; }
+    .footer p { font-size: 11px; color: #94a3b8; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="hero">
+        <h1>🎉 Congratulations! Brand Created Successfully</h1>
+        <p>AI Marketing Crew — Let AI Staff Boost Your Sales</p>
+      </div>
+      <div class="body">
+        <p>Dear <strong>${nickname}</strong>,</p>
+        <p>Your brand <strong>${brandName}</strong> has been successfully created on the AMC platform! We are thrilled to welcome you to the future of AI-powered automated social media marketing.</p>
+        
+        <div class="brand-badge">
+          <span>${brandName} · ${displayPlan}</span>
+        </div>
+
+        <p>We have attached the service terms and conditions agreement (e-contract) from <strong>DeliveryChinatown Pte. Ltd.</strong> to this email for your records. You can also view the summary of the terms below:</p>
+        
+        <div class="contract-box">${contractText}</div>
+
+        ${mmInviteLink ? `
+        <div class="cta-wrap">
+          <a href="${mmInviteLink}" class="cta" style="color: #ffffff;">Access AMC Dashboard →</a>
+        </div>` : ''}
+
+        <p>If you have any questions or require assistance connecting your Instagram, TikTok, or Google Business Profile accounts, our customer support team is always here to help.</p>
+        
+        <p>Warm regards,<br/><strong>The AI Marketing Crew Team</strong></p>
+      </div>
+      <div class="footer">
+        <p>This is an automated email from DeliveryChinatown Pte. Ltd. Please do not reply directly.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`
+
+  const text = `Congratulations! Brand Created Successfully
+  
+Dear ${nickname},
+
+Your brand "${brandName}" (${displayPlan}) has been successfully created on the AMC platform.
+
+We have attached the official service terms and conditions agreement (e-contract) from DeliveryChinatown Pte. Ltd. to this email.
+
+Best regards,
+The AI Marketing Crew Team`
+
+  return sendEmail({
+    to,
+    subject,
+    html,
+    text,
+    attachments: [
+      {
+        filename: 'DeliveryChinatown_AMC_Service_Agreement.txt',
+        content: contractText,
+      }
+    ]
+  })
+}
+
