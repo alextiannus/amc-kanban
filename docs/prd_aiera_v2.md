@@ -517,7 +517,7 @@ interface VideoScene {
 **API 接入方案**：
 - 官方渠道：**BytePlus ModelArk** (`console.byteplus.com`)
 - API 类型：异步任务制（提交 → 轮询 → 获取结果 URL）
-- API 密钥：存入 `SystemConfig.seedanceApiKey`（遵循现有 SystemConfig 规范）
+- API 密钥：存入 `LLMConfig`（provider=`seedance`/`volcengine`，taskTags 包含 `video_generation` 或 `image_to_video`），遵循当前 AI 模型配置与审计规范
 
 **定价结构（Seedance 2.0）**：
 
@@ -820,7 +820,7 @@ const costUSD = tokenConsumed * tokenUnitPrice
 function estimateCost(scenes: VideoScene[]): CostEstimate {
   const totalSeconds = scenes.reduce((sum, s) => sum + s.duration, 0)
   const resolution = scenes[0].seedanceParams?.resolution ?? '1080p'
-  const ratePerSec = SEEDANCE_RATE_TABLE[resolution]  // 从 SystemConfig 读
+  const ratePerSec = SEEDANCE_RATE_TABLE[resolution]  // 从 LLMConfig provider metadata 或业务配置读
   return {
     totalSeconds,
     estimatedCostUSD: totalSeconds * ratePerSec,

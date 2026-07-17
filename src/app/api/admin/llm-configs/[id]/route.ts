@@ -10,6 +10,12 @@ function maskKey(key: string | null | undefined): string | null {
   return `••••••${key.slice(-4)}`
 }
 
+function isVideoModelConfig(taskTags: unknown): boolean {
+  if (!Array.isArray(taskTags)) return false
+  const tags = new Set(taskTags.map((tag) => String(tag).trim()))
+  return tags.has('video_generation') || tags.has('image_to_video') || tags.has('video_provider')
+}
+
 type Params = { params: Promise<{ id: string }> }
 
 // PATCH /api/admin/llm-configs/[id] - Update a configuration
@@ -60,14 +66,19 @@ export async function PATCH(request: Request, { params }: Params) {
       }
     }
 
-    // Validate configuration usability
     const testProvider = provider !== undefined ? String(provider).trim() : current.provider
     const testModelName = modelName !== undefined ? String(modelName).trim() : current.modelName
     const testBaseUrl = baseUrl !== undefined ? (baseUrl ? String(baseUrl).trim() : null) : current.baseUrl
+    const nextTaskTags = taskTags !== undefined
+      ? Array.isArray(taskTags) ? taskTags.map(t => String(t).trim()).filter(Boolean) : []
+      : current.taskTags
 
-    const validation = await validateLLMConfig(testProvider, testModelName, nextApiKey, testBaseUrl)
-    if (!validation.success) {
-      return NextResponse.json({ error: `大模型配置可用性验证失败: ${validation.error}` }, { status: 400 })
+    // Video generation providers are async job APIs, not chat-completion models.
+    if (!isVideoModelConfig(nextTaskTags)) {
+      const validation = await validateLLMConfig(testProvider, testModelName, nextApiKey, testBaseUrl)
+      if (!validation.success) {
+        return NextResponse.json({ error: `大模型配置可用性验证失败: ${validation.error}` }, { status: 400 })
+      }
     }
 
     const nextIsDefault = isDefault !== undefined ? Boolean(isDefault) : current.isDefault
@@ -90,9 +101,7 @@ export async function PATCH(request: Request, { params }: Params) {
         ...(baseUrl !== undefined && { baseUrl: baseUrl ? String(baseUrl).trim() : null }),
         ...(isEnabled !== undefined && { isEnabled: Boolean(isEnabled) }),
         isDefault: nextIsDefault,
-        ...(taskTags !== undefined && {
-          taskTags: Array.isArray(taskTags) ? taskTags.map(t => String(t).trim()) : [],
-        }),
+        ...(taskTags !== undefined && { taskTags: nextTaskTags }),
       },
     })
 

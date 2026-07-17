@@ -10,6 +10,12 @@ function maskKey(key: string | null | undefined): string | null {
   return `••••••${key.slice(-4)}`
 }
 
+function isVideoModelConfig(taskTags: unknown): boolean {
+  if (!Array.isArray(taskTags)) return false
+  const tags = new Set(taskTags.map((tag) => String(tag).trim()))
+  return tags.has('video_generation') || tags.has('image_to_video') || tags.has('video_provider')
+}
+
 // GET /api/admin/llm-configs - List all configurations
 export async function GET() {
   const session = await getSession()
@@ -68,15 +74,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'API key cannot be empty' }, { status: 400 })
     }
 
-    // Validate configuration usability
-    const validation = await validateLLMConfig(
-      String(provider).trim(),
-      String(modelName).trim(),
-      cleanApiKey,
-      baseUrl ? String(baseUrl).trim() : null
-    )
-    if (!validation.success) {
-      return NextResponse.json({ error: `大模型配置可用性验证失败: ${validation.error}` }, { status: 400 })
+    const cleanTaskTags = Array.isArray(taskTags) ? taskTags.map((t: any) => String(t).trim()).filter(Boolean) : []
+
+    // Video generation providers are async job APIs, not chat-completion models.
+    if (!isVideoModelConfig(cleanTaskTags)) {
+      const validation = await validateLLMConfig(
+        String(provider).trim(),
+        String(modelName).trim(),
+        cleanApiKey,
+        baseUrl ? String(baseUrl).trim() : null
+      )
+      if (!validation.success) {
+        return NextResponse.json({ error: `大模型配置可用性验证失败: ${validation.error}` }, { status: 400 })
+      }
     }
 
     // If marked as default, unset default on other configurations
@@ -96,7 +106,7 @@ export async function POST(request: Request) {
         baseUrl: baseUrl ? String(baseUrl).trim() : null,
         isEnabled: Boolean(isEnabled),
         isDefault: Boolean(isDefault),
-        taskTags: Array.isArray(taskTags) ? taskTags.map((t: any) => String(t).trim()) : [],
+        taskTags: cleanTaskTags,
       },
     })
 

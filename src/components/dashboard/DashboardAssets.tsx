@@ -586,6 +586,15 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
     void loadBrandAccounts()
   }
 
+  const openVideoCreator = (assetIds: string[]) => {
+    if (!brandId || assetIds.length === 0) return
+    const query = new URLSearchParams({
+      brandId,
+      assetIds: assetIds.join(','),
+    })
+    window.location.href = `/dashboard/video?${query.toString()}`
+  }
+
   // Handler for mouse up globally (to terminate dragging)
   const handleMouseUpGlobal = useCallback(() => {
     isDragSelecting.current = false
@@ -2191,6 +2200,14 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
             >
               <Plus className="w-3.5 h-3.5" />
               <span>新建发布</span>
+            </button>
+
+            <button
+              onClick={() => openVideoCreator(selected)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-900 text-white hover:bg-slate-700 active:scale-95 transition-all shadow-sm"
+            >
+              <Video className="w-3.5 h-3.5" />
+              <span>AI生视频</span>
             </button>
 
             {/* 添加标签 */}

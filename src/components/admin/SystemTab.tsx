@@ -413,7 +413,8 @@ export default function SystemTab({
                 <p className="text-[10px] text-indigo-500 dark:text-indigo-500">
                   MiniMax TTS：provider=minimax，taskTags 含 tts<br/>
                   文案生成：taskTags 含 copywriting<br/>
-                  AI 语音伴侣：taskTags 含 companion
+                  AI 语音伴侣：taskTags 含 companion<br/>
+                  视频生成：provider=seedance / kieai / fal / volcengine，taskTags 含 video_generation 或 image_to_video
                 </p>
               </div>
             </div>
@@ -781,6 +782,10 @@ export default function SystemTab({
                           anthropic: 'claude-3-5-sonnet-20241022',
                           deepseek: 'deepseek-chat',
                           custom_shim: 'custom-model',
+                          seedance: 'seedance-2.0-fast',
+                          fal: 'bytedance/seedance-2.0/image-to-video',
+                          kieai: 'veo3_fast',
+                          volcengine: 'seedance-2.0',
                         }
                         const currentDefaults = [
                           'gemini-2.0-flash',
@@ -788,6 +793,10 @@ export default function SystemTab({
                           'claude-3-5-sonnet-20241022',
                           'deepseek-chat',
                           'custom-model',
+                          'seedance-2.0-fast',
+                          'bytedance/seedance-2.0/image-to-video',
+                          'veo3_fast',
+                          'seedance-2.0',
                           ''
                         ]
                         const modelName = (!prev.modelName || currentDefaults.includes(prev.modelName))
@@ -808,6 +817,10 @@ export default function SystemTab({
                     <option value="anthropic">Anthropic Claude</option>
                     <option value="deepseek">DeepSeek API</option>
                     <option value="custom_shim">自定义格式 (Shim)</option>
+                    <option value="seedance">Seedance Video</option>
+                    <option value="fal">Fal Video</option>
+                    <option value="kieai">Kie.ai Video</option>
+                    <option value="volcengine">Volcengine Video</option>
                   </select>
                 </label>
 
@@ -848,7 +861,7 @@ export default function SystemTab({
                   <input
                     value={llmForm.taskTagsStr}
                     onChange={e => setLlmForm(prev => ({ ...prev, taskTagsStr: e.target.value }))}
-                    placeholder="英文逗号分隔，例如: copywriter, summary"
+                    placeholder="英文逗号分隔，例如: copywriting, companion, video_generation, image_to_video"
                     className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
                   />
                 </label>

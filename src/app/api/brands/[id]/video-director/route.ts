@@ -111,11 +111,26 @@ ${basePrompt}`
   return `${basePrompt}\n\nStyle constraints: smooth motion, cinematic camera movement, realistic lighting, stable identity, no flicker, no deformation.`
 }
 
-async function pollKieVideo(taskId: string, apiKey: string) {
+async function getVideoProviderConfig() {
+  const config = await prisma.lLMConfig.findFirst({
+    where: {
+      isEnabled: true,
+      provider: 'kieai',
+      OR: [
+        { taskTags: { has: 'video_generation' } },
+        { taskTags: { has: 'image_to_video' } },
+      ],
+    },
+    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+  })
+  return config
+}
+
+async function pollKieVideo(taskId: string, apiKey: string, baseUrl: string) {
   let retries = 20
   while (retries > 0) {
     await new Promise(resolve => setTimeout(resolve, 3000))
-    const recordRes = await fetch(`https://api.kie.ai/api/v1/veo/record-info?taskId=${taskId}`, {
+    const recordRes = await fetch(`${baseUrl}/api/v1/veo/record-info?taskId=${taskId}`, {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
@@ -189,14 +204,17 @@ export async function POST(request: Request, { params }: Params) {
     imageCount: normalizedImages.length,
   })
 
-  const apiKey = process.env.KIEAI_API_KEY
+  const videoConfig = await getVideoProviderConfig()
+  const apiKey = videoConfig?.apiKey || ''
+  const baseUrl = (videoConfig?.baseUrl || 'https://api.kie.ai').replace(/\/+$/, '')
+  const modelName = videoConfig?.modelName || 'veo3_fast'
   let finalVideoUrl = ''
 
   if (!apiKey) {
-    return NextResponse.json({ error: 'VideoDirector provider key is not configured.' }, { status: 500 })
+    return NextResponse.json({ error: 'VideoDirector provider is not configured in Admin → AI 模型配置. Use provider=kieai and taskTags=video_generation.' }, { status: 500 })
   }
 
-  const generateRes = await fetch('https://api.kie.ai/api/v1/veo/generate', {
+  const generateRes = await fetch(`${baseUrl}/api/v1/veo/generate`, {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
@@ -205,7 +223,7 @@ export async function POST(request: Request, { params }: Params) {
     body: JSON.stringify({
       prompt: enhancedPrompt,
       imageUrls: normalizedImages,
-      model: 'veo3_fast',
+      model: modelName,
       aspectRatio: '9:16',
     }),
   })
@@ -220,7 +238,7 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'No taskId returned from video provider.' }, { status: 502 })
   }
 
-  finalVideoUrl = await pollKieVideo(taskId, apiKey)
+  finalVideoUrl = await pollKieVideo(taskId, apiKey, baseUrl)
   if (!finalVideoUrl) {
     return NextResponse.json({ error: 'Video generation timed out. Please retry.' }, { status: 504 })
   }
