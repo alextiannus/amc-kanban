@@ -429,6 +429,8 @@ function VideoCreatorPageInner() {
           brandId,
           taskId,
           title: `${plan?.title || idea} - 第 ${Number(row.scene.id)} 镜`,
+          assetIds: row.assetIds,
+          videoRole: 'scene',
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -510,6 +512,7 @@ function VideoCreatorPageInner() {
           brandId,
           taskId,
           title: `${plan?.title || idea} - 最终成片`,
+          videoRole: 'final',
         }),
       })
       const json = await res.json().catch(() => ({}))

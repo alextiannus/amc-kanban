@@ -154,6 +154,8 @@ export async function refreshVideoGenerationTask(input: {
   actorId: string
   taskId: string
   title?: string
+  assetIds?: string[]
+  videoRole?: 'scene' | 'final'
 }): Promise<VideoGenerationExecution> {
   const config = await getVideoProviderConfig()
   if (!config?.apiKey) {
@@ -187,10 +189,18 @@ export async function refreshVideoGenerationTask(input: {
     }
   }
 
+  const sourceAssets = input.assetIds?.length
+    ? await prisma.mediaAsset.findMany({
+        where: { brandId: input.brandId, id: { in: input.assetIds } },
+        select: { id: true, url: true, mimeType: true, filename: true, aiTags: true, aiCaption: true, aiCategory: true },
+      })
+    : []
+  const filenamePrefix = input.videoRole === 'final' ? 'seedance-final' : 'seedance-scene'
   const existing = await prisma.mediaAsset.findFirst({
     where: {
       brandId: input.brandId,
       OR: [
+        { filename: `${filenamePrefix}-${input.taskId}.mp4` },
         { filename: `seedance-${input.taskId}.mp4` },
         { url: outputUrl },
       ],
@@ -201,9 +211,10 @@ export async function refreshVideoGenerationTask(input: {
     brandId: input.brandId,
     actorId: input.actorId,
     url: outputUrl,
-    filename: `seedance-${input.taskId}.mp4`,
+    filename: `${filenamePrefix}-${input.taskId}.mp4`,
     caption: `AI 生视频：${input.title || input.taskId}`,
-    sourceAssets: [],
+    sourceAssets,
+    videoRole: input.videoRole || 'scene',
   })
 
   return {
@@ -454,11 +465,13 @@ async function createVideoAsset(input: {
   filename: string
   caption: string
   sourceAssets: VideoAsset[]
+  videoRole?: 'scene' | 'final'
 }) {
   const tags = Array.from(new Set([
     ...input.sourceAssets.flatMap((asset) => asset.aiTags || []),
     'AI视频',
     'Seedance',
+    input.videoRole === 'final' ? '最终成片' : '分镜视频',
   ]))
   const asset = await prisma.mediaAsset.create({
     data: {
@@ -467,7 +480,7 @@ async function createVideoAsset(input: {
       filename: input.filename,
       mimeType: 'video/mp4',
       aiReady: true,
-      aiCategory: input.sourceAssets[0]?.aiCategory || '素材库',
+      aiCategory: 'AI生视频',
       aiTags: tags,
       aiCaption: input.caption,
       sourceType: 'ai_video',

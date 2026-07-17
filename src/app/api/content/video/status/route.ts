@@ -24,6 +24,10 @@ export async function POST(request: Request) {
     const brandId = typeof body?.brandId === 'string' ? body.brandId.trim() : ''
     const taskId = typeof body?.taskId === 'string' ? body.taskId.trim() : ''
     const title = typeof body?.title === 'string' ? body.title.trim() : undefined
+    const assetIds = Array.isArray(body?.assetIds)
+      ? body.assetIds.map((item: unknown) => typeof item === 'string' ? item.trim() : '').filter(Boolean)
+      : []
+    const videoRole = body?.videoRole === 'final' ? 'final' : 'scene'
 
     if (!brandId) return NextResponse.json({ error: 'brandId is required' }, { status: 400 })
     if (!taskId) return NextResponse.json({ error: 'taskId is required' }, { status: 400 })
@@ -36,6 +40,8 @@ export async function POST(request: Request) {
       actorId: actor.id,
       taskId,
       title,
+      assetIds,
+      videoRole,
     })
 
     return NextResponse.json({ success: true, execution })
