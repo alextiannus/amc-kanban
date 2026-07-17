@@ -122,7 +122,8 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
           type: 'SETUP_BRAND',
           title: '创建您的第一个品牌',
           message: '请开始创建您的第一个品牌并激活订阅，开启您的 AI 社交媒体营销之旅。',
-          status: 'UNREAD'
+          status: 'UNREAD',
+          actionUrl: '/dashboard?action=create_brand'
         }
       })
     }
@@ -202,13 +203,14 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
               type: 'COMPLETE_CONFIG',
               title: '完善您的账号配置',
               message,
-              status: 'UNREAD'
+              status: 'UNREAD',
+              actionUrl: null
             }
           })
-        } else if (existing.message !== message) {
+        } else if (existing.message !== message || existing.actionUrl !== null) {
           await prisma.notification.update({
             where: { id: existing.id },
-            data: { message, status: 'UNREAD' }
+            data: { message, status: 'UNREAD', actionUrl: null }
           })
         }
       } else {
@@ -250,13 +252,14 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
               type: 'COMPLETE_CONTEXT',
               title: '完善品牌故事与声音',
               message,
-              status: 'UNREAD'
+              status: 'UNREAD',
+              actionUrl: '/dashboard?action=brand_story'
             }
           })
-        } else if (existing.message !== message) {
+        } else if (existing.message !== message || !existing.actionUrl) {
           await prisma.notification.update({
             where: { id: existing.id },
-            data: { message, status: 'UNREAD' }
+            data: { message, status: 'UNREAD', actionUrl: '/dashboard?action=brand_story' }
           })
         }
       } else {
@@ -298,6 +301,8 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
     title: n.title,
     message: n.message,
     status: n.status,
+    actionUrl: n.actionUrl || null,
+    // Legacy field: postfast external connect URL, kept for backward compatibility
     connectUrl: n.brand?.postfastConnectLink || null,
     createdAt: n.createdAt,
     updatedAt: n.updatedAt

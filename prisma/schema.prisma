@@ -1097,10 +1097,11 @@ model Notification {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   brandId     String?
   brand       Brand?   @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  type        String   // "SETUP_BRAND" | "COMPLETE_CONFIG" | "INFO" | "WARNING"
+  type        String   // "SETUP_BRAND" | "COMPLETE_CONFIG" | "COMPLETE_CONTEXT" | "INFO" | "WARNING"
   title       String
   message     String
   status      String   @default("UNREAD") // "UNREAD" | "READ" | "DISMISSED"
+  actionUrl   String?  // Deep-link path for in-app navigation, e.g. "/dashboard?action=connect_accounts"
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
