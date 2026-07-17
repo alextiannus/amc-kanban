@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import React, { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Film, Loader2, Sparkles, Wand2 } from 'lucide-react'
+import { ArrowLeft, Film, Loader2, Plus, Sparkles, Wand2, X } from 'lucide-react'
 
 type Asset = {
   id: string
@@ -13,6 +13,8 @@ type Asset = {
   aiTags?: string[]
   aiCaption?: string | null
   brandName?: string
+  usedCount?: number
+  createdAt?: string
 }
 
 type VideoScene = {
@@ -46,7 +48,9 @@ function VideoCreatorPageInner() {
   }, [params])
 
   const [assets, setAssets] = useState<Asset[]>([])
-  const selectedAssetIds = initialAssetIds
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>(initialAssetIds)
+  const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all'>('unused')
+  const [assetPageSize, setAssetPageSize] = useState(12)
   const [creatorType, setCreatorType] = useState('product_showcase')
   const [idea, setIdea] = useState('Showcase selected merchant assets as a short social video')
   const [platform, setPlatform] = useState('tiktok')
@@ -56,6 +60,10 @@ function VideoCreatorPageInner() {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<any>(null)
+
+  useEffect(() => {
+    setSelectedAssetIds(initialAssetIds)
+  }, [initialAssetIds])
 
   useEffect(() => {
     if (!brandId) return
@@ -71,10 +79,30 @@ function VideoCreatorPageInner() {
     () => assets.filter((asset) => selectedAssetIds.includes(asset.id)),
     [assets, selectedAssetIds],
   )
+  const availableAssets = useMemo(() => {
+    const selected = new Set(selectedAssetIds)
+    const imageAssets = assets.filter((asset) => !asset.mimeType?.startsWith('video/'))
+    const filtered = assetTypeFilter === 'unused'
+      ? imageAssets.filter((asset: any) => (asset.usedCount ?? 0) === 0 || selected.has(asset.id))
+      : imageAssets
+    return [...filtered].sort((a: any, b: any) => {
+      const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return tB - tA
+    })
+  }, [assets, assetTypeFilter, selectedAssetIds])
 
   const videoPlan = result?.remote?.result || result?.result
   const execution = result?.execution
   const scenes: VideoScene[] = videoPlan?.scenes || []
+
+  const toggleAsset = (assetId: string) => {
+    setSelectedAssetIds((prev) => prev.includes(assetId)
+      ? prev.filter((id) => id !== assetId)
+      : [...prev, assetId])
+    setResult(null)
+    setError(null)
+  }
 
   const handleGeneratePlan = async () => {
     if (!brandId) {
@@ -210,9 +238,40 @@ function VideoCreatorPageInner() {
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-xs font-black text-slate-700">已选素材</h2>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="text-xs font-black text-slate-700">素材选择</h2>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  已选 {selectedAssetIds.length} 个素材，可继续从素材库添加。
+                </p>
+              </div>
+              {loadingAssets && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                {[
+                  { key: 'unused', label: '未使用' },
+                  { key: 'all', label: '全部' },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      setAssetTypeFilter(item.key as 'unused' | 'all')
+                      setAssetPageSize(12)
+                    }}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${
+                      assetTypeFilter === item.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <p className="mt-1 text-[11px] text-slate-500">
-              {selectedAssetIds.length} 个素材将作为视频参考。需要调整素材请返回素材库重新选择。
+              当前视频会按这些素材生成分镜提示。
             </p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {selectedAssets.map((asset) => (
@@ -222,12 +281,58 @@ function VideoCreatorPageInner() {
                   ) : (
                     <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover" />
                   )}
+                  <button
+                    type="button"
+                    onClick={() => toggleAsset(asset.id)}
+                    className="absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
+                    title="移除素材"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               ))}
               {!loadingAssets && selectedAssets.length === 0 && (
                 <div className="col-span-3 rounded-lg border border-dashed border-slate-200 p-4 text-center text-[11px] text-slate-400">
-                  未读取到已选素材，请返回素材库重新进入。
+                  请从下方素材库添加至少一张图片。
                 </div>
+              )}
+            </div>
+
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[11px] font-black text-slate-500">从素材库添加</p>
+                <p className="text-[10px] text-slate-400">{availableAssets.length} 个可选素材</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {availableAssets.slice(0, assetPageSize).map((asset) => {
+                  const selected = selectedAssetIds.includes(asset.id)
+                  return (
+                    <button
+                      key={asset.id}
+                      type="button"
+                      onClick={() => toggleAsset(asset.id)}
+                      className={`group relative aspect-square overflow-hidden rounded-lg border ${
+                        selected ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <img src={asset.url} alt={asset.filename || 'asset'} className="h-full w-full object-cover transition group-hover:scale-105" />
+                      <span className={`absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full ${
+                        selected ? 'bg-indigo-600 text-white' : 'bg-white/90 text-slate-600'
+                      }`}>
+                        {selected ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              {availableAssets.length > assetPageSize && (
+                <button
+                  type="button"
+                  onClick={() => setAssetPageSize((size) => size + 12)}
+                  className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  加载更多素材
+                </button>
               )}
             </div>
           </div>

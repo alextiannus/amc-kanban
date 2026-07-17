@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
 import { validateLLMConfig } from '@/lib/llmRouter'
+import { validateVideoProviderConfig } from '@/lib/videoGeneration'
 
 function maskKey(key: string | null | undefined): string | null {
   if (!key) return null
@@ -83,8 +84,17 @@ export async function POST(request: Request) {
 
     const cleanTaskTags = Array.isArray(taskTags) ? taskTags.map(normalizeTaskTag).filter(Boolean) : []
 
-    // Video generation providers are async job APIs, not chat-completion models.
-    if (!isVideoModelConfig(provider, cleanTaskTags)) {
+    if (isVideoModelConfig(provider, cleanTaskTags)) {
+      const validation = await validateVideoProviderConfig({
+        provider: String(provider).trim(),
+        modelName: String(modelName).trim(),
+        apiKey: cleanApiKey,
+        baseUrl: baseUrl ? String(baseUrl).trim() : null,
+      })
+      if (!validation.success) {
+        return NextResponse.json({ error: `视频模型配置可用性验证失败: ${validation.error}` }, { status: 400 })
+      }
+    } else {
       const validation = await validateLLMConfig(
         String(provider).trim(),
         String(modelName).trim(),

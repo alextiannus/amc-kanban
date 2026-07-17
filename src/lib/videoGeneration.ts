@@ -44,6 +44,56 @@ type VideoProviderConfig = {
 
 const VIDEO_PROVIDERS = ['seedance', 'fal', 'kieai', 'volcengine']
 
+export async function validateVideoProviderConfig(input: {
+  provider: string
+  modelName: string
+  apiKey: string
+  baseUrl: string | null
+}): Promise<{ success: true } | { success: false; error: string }> {
+  const provider = input.provider.trim().toLowerCase()
+  const apiKey = input.apiKey.trim()
+  if (!apiKey) return { success: false, error: 'API key cannot be empty' }
+
+  try {
+    if (provider === 'seedance' || provider === 'volcengine') {
+      const baseUrl = seedanceBaseUrl(input.baseUrl)
+      const response = await fetch(`${baseUrl}/v1/tasks/amc_config_validation`, {
+        headers: { authorization: `Bearer ${apiKey}` },
+      })
+      const json = await response.json().catch(() => null)
+      if (response.status === 401 || json?.error?.code === 'invalid_api_key') {
+        return { success: false, error: json?.error?.message || 'Invalid or revoked API key.' }
+      }
+      if (response.status === 403) {
+        return { success: false, error: json?.error?.message || 'API key does not have video generation permission.' }
+      }
+      if (response.status === 404 || json?.error?.code === 'not_found') return { success: true }
+      if (response.ok) return { success: true }
+      return { success: false, error: json?.error?.message || json?.message || `Seedance validation failed with ${response.status}` }
+    }
+
+    if (provider === 'kieai') {
+      const baseUrl = (input.baseUrl || 'https://api.kie.ai').replace(/\/+$/, '')
+      const response = await fetch(`${baseUrl}/api/v1/veo/record-info?taskId=amc_config_validation`, {
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${apiKey}`,
+        },
+      })
+      const json = await response.json().catch(() => null)
+      const message = String(json?.message || json?.error || '').toLowerCase()
+      if (response.status === 401 || response.status === 403 || message.includes('invalid') && message.includes('key')) {
+        return { success: false, error: json?.message || 'Invalid or revoked API key.' }
+      }
+      return { success: true }
+    }
+
+    return { success: false, error: `Unsupported video provider: ${input.provider}` }
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Video provider validation request failed' }
+  }
+}
+
 async function getVideoProviderConfig(): Promise<VideoProviderConfig | null> {
   return prisma.lLMConfig.findFirst({
     where: {
@@ -101,7 +151,7 @@ async function generateWithSeedanceGateway(args: {
   jobs: SeedanceJob[]
 }): Promise<VideoGenerationExecution> {
   const { config, input, assets, jobs } = args
-  const baseUrl = (config.baseUrl || 'https://api.seedance2.ai/v1').replace(/\/+$/, '')
+  const baseUrl = seedanceBaseUrl(config.baseUrl)
   const providerTaskIds: string[] = []
   const createdAssets: VideoGenerationExecution['assets'] = []
 
@@ -113,7 +163,7 @@ async function generateWithSeedanceGateway(args: {
       ? 'image-to-video'
       : 'text-to-video'
 
-    const response = await fetch(`${baseUrl}/videos/generations`, {
+    const response = await fetch(`${baseUrl}/v1/videos/generations`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -169,7 +219,7 @@ async function generateWithSeedanceGateway(args: {
 async function pollSeedanceGateway(baseUrl: string, apiKey: string, taskId: string): Promise<string> {
   for (let attempt = 0; attempt < 24; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 3500))
-    const response = await fetch(`${baseUrl}/videos/generations/${encodeURIComponent(taskId)}`, {
+    const response = await fetch(`${baseUrl}/v1/tasks/${encodeURIComponent(taskId)}`, {
       headers: { authorization: `Bearer ${apiKey}` },
     })
     const json = await response.json().catch(() => null)
@@ -182,6 +232,10 @@ async function pollSeedanceGateway(baseUrl: string, apiKey: string, taskId: stri
     }
   }
   return ''
+}
+
+function seedanceBaseUrl(baseUrl: string | null): string {
+  return (baseUrl || 'https://api.seedance2.ai').replace(/\/+$/, '').replace(/\/v1$/, '')
 }
 
 async function generateWithKieAi(args: {
