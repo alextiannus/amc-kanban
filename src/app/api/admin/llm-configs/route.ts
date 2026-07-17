@@ -10,9 +10,16 @@ function maskKey(key: string | null | undefined): string | null {
   return `••••••${key.slice(-4)}`
 }
 
-function isVideoModelConfig(taskTags: unknown): boolean {
+const VIDEO_MODEL_PROVIDERS = new Set(['seedance', 'fal', 'kieai', 'volcengine'])
+
+function normalizeTaskTag(tag: unknown): string {
+  return String(tag).trim().toLowerCase().replace(/[\s-]+/g, '_')
+}
+
+function isVideoModelConfig(provider: unknown, taskTags: unknown): boolean {
+  if (VIDEO_MODEL_PROVIDERS.has(String(provider).trim().toLowerCase())) return true
   if (!Array.isArray(taskTags)) return false
-  const tags = new Set(taskTags.map((tag) => String(tag).trim()))
+  const tags = new Set(taskTags.map(normalizeTaskTag))
   return tags.has('video_generation') || tags.has('image_to_video') || tags.has('video_provider')
 }
 
@@ -74,10 +81,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'API key cannot be empty' }, { status: 400 })
     }
 
-    const cleanTaskTags = Array.isArray(taskTags) ? taskTags.map((t: any) => String(t).trim()).filter(Boolean) : []
+    const cleanTaskTags = Array.isArray(taskTags) ? taskTags.map(normalizeTaskTag).filter(Boolean) : []
 
     // Video generation providers are async job APIs, not chat-completion models.
-    if (!isVideoModelConfig(cleanTaskTags)) {
+    if (!isVideoModelConfig(provider, cleanTaskTags)) {
       const validation = await validateLLMConfig(
         String(provider).trim(),
         String(modelName).trim(),

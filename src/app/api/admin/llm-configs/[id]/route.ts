@@ -10,9 +10,16 @@ function maskKey(key: string | null | undefined): string | null {
   return `••••••${key.slice(-4)}`
 }
 
-function isVideoModelConfig(taskTags: unknown): boolean {
+const VIDEO_MODEL_PROVIDERS = new Set(['seedance', 'fal', 'kieai', 'volcengine'])
+
+function normalizeTaskTag(tag: unknown): string {
+  return String(tag).trim().toLowerCase().replace(/[\s-]+/g, '_')
+}
+
+function isVideoModelConfig(provider: unknown, taskTags: unknown): boolean {
+  if (VIDEO_MODEL_PROVIDERS.has(String(provider).trim().toLowerCase())) return true
   if (!Array.isArray(taskTags)) return false
-  const tags = new Set(taskTags.map((tag) => String(tag).trim()))
+  const tags = new Set(taskTags.map(normalizeTaskTag))
   return tags.has('video_generation') || tags.has('image_to_video') || tags.has('video_provider')
 }
 
@@ -70,11 +77,11 @@ export async function PATCH(request: Request, { params }: Params) {
     const testModelName = modelName !== undefined ? String(modelName).trim() : current.modelName
     const testBaseUrl = baseUrl !== undefined ? (baseUrl ? String(baseUrl).trim() : null) : current.baseUrl
     const nextTaskTags = taskTags !== undefined
-      ? Array.isArray(taskTags) ? taskTags.map(t => String(t).trim()).filter(Boolean) : []
+      ? Array.isArray(taskTags) ? taskTags.map(normalizeTaskTag).filter(Boolean) : []
       : current.taskTags
 
     // Video generation providers are async job APIs, not chat-completion models.
-    if (!isVideoModelConfig(nextTaskTags)) {
+    if (!isVideoModelConfig(testProvider, nextTaskTags)) {
       const validation = await validateLLMConfig(testProvider, testModelName, nextApiKey, testBaseUrl)
       if (!validation.success) {
         return NextResponse.json({ error: `大模型配置可用性验证失败: ${validation.error}` }, { status: 400 })

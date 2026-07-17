@@ -185,7 +185,7 @@ export default function SystemTab({
       
       const tags = llmForm.taskTagsStr
         .split(',')
-        .map(t => t.trim())
+        .map(t => t.trim().toLowerCase().replace(/[\s-]+/g, '_'))
         .filter(Boolean)
 
       const body: any = {
