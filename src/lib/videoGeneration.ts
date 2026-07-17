@@ -43,6 +43,7 @@ type VideoProviderConfig = {
 }
 
 const VIDEO_PROVIDERS = ['seedance', 'fal', 'kieai', 'volcengine']
+const BYTEPLUS_ARK_BASE_URL = 'https://ark.ap-southeast.bytepluses.com'
 
 export async function validateVideoProviderConfig(input: {
   provider: string
@@ -57,7 +58,7 @@ export async function validateVideoProviderConfig(input: {
   try {
     if (provider === 'seedance' || provider === 'volcengine') {
       const baseUrl = seedanceBaseUrl(input.baseUrl)
-      const response = await fetch(`${baseUrl}/v1/tasks/amc_config_validation`, {
+      const response = await fetch(seedanceTaskUrl(baseUrl, 'amc_config_validation'), {
         headers: { authorization: `Bearer ${apiKey}` },
       })
       const json = await response.json().catch(() => null)
@@ -67,7 +68,7 @@ export async function validateVideoProviderConfig(input: {
       if (response.status === 403) {
         return { success: false, error: json?.error?.message || 'API key does not have video generation permission.' }
       }
-      if (response.status === 404 || json?.error?.code === 'not_found') return { success: true }
+      if (response.status === 400 || response.status === 404 || json?.error?.code === 'not_found') return { success: true }
       if (response.ok) return { success: true }
       return { success: false, error: json?.error?.message || json?.message || `Seedance validation failed with ${response.status}` }
     }
@@ -157,34 +158,22 @@ async function generateWithSeedanceGateway(args: {
 
   for (const job of jobs) {
     const imageUrls = resolveJobImageUrls(job, assets, input.imageUrls)
-    const generationType = job.mode === 'reference_to_video'
-      ? 'reference-to-video'
-      : job.mode === 'image_to_video'
-      ? 'image-to-video'
-      : 'text-to-video'
+    const isBytePlusArk = isBytePlusSeedanceBase(baseUrl)
 
-    const response = await fetch(`${baseUrl}/v1/videos/generations`, {
+    const response = await fetch(seedanceCreateTaskUrl(baseUrl), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         authorization: `Bearer ${config.apiKey}`,
       },
-      body: JSON.stringify({
-        model: normalizeSeedanceModel(config.modelName || job.modelHint || 'seedance-2-0'),
-        input: {
-          prompt: job.request.prompt,
-          generation_type: generationType,
-          image_urls: imageUrls,
-          duration: job.request.duration || 5,
-          aspect_ratio: job.request.ratio || '9:16',
-          negative_prompt: job.request.negativePrompt,
-        },
-      }),
+      body: JSON.stringify(isBytePlusArk
+        ? buildBytePlusSeedancePayload({ config, job, imageUrls })
+        : buildLegacySeedancePayload({ config, job, imageUrls })),
     })
 
     const json = await response.json().catch(() => null)
     if (!response.ok) {
-      throw new Error(json?.error?.message || json?.message || `Seedance task creation failed with ${response.status}`)
+      throw new Error(seedanceErrorMessage(json) || `Seedance task creation failed with ${response.status}`)
     }
 
     const taskId = String(json?.id || json?.task_id || json?.taskId || json?.data?.id || json?.data?.task_id || '')
@@ -219,7 +208,7 @@ async function generateWithSeedanceGateway(args: {
 async function pollSeedanceGateway(baseUrl: string, apiKey: string, taskId: string): Promise<string> {
   for (let attempt = 0; attempt < 24; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 3500))
-    const response = await fetch(`${baseUrl}/v1/tasks/${encodeURIComponent(taskId)}`, {
+    const response = await fetch(seedanceTaskUrl(baseUrl, taskId), {
       headers: { authorization: `Bearer ${apiKey}` },
     })
     const json = await response.json().catch(() => null)
@@ -228,22 +217,93 @@ async function pollSeedanceGateway(baseUrl: string, apiKey: string, taskId: stri
     const outputUrl = extractVideoUrl(json)
     if (outputUrl) return outputUrl
     if (status.includes('fail') || status.includes('cancel') || status.includes('error')) {
-      throw new Error(json?.error?.message || json?.message || `Seedance task ${taskId} failed`)
+      throw new Error(seedanceErrorMessage(json) || `Seedance task ${taskId} failed`)
     }
   }
   return ''
 }
 
 function seedanceBaseUrl(baseUrl: string | null): string {
-  return (baseUrl || 'https://api.seedance2.ai').replace(/\/+$/, '').replace(/\/v1$/, '')
+  return (baseUrl || BYTEPLUS_ARK_BASE_URL).replace(/\/+$/, '').replace(/\/v1$/, '').replace(/\/api\/v3$/, '')
 }
 
 function normalizeSeedanceModel(modelName: string): string {
   const normalized = modelName.trim().toLowerCase()
-  if (!normalized || normalized === 'seedance-2.0-fast' || normalized === 'seedance-2.0-standard' || normalized === 'seedance-2.0') {
-    return 'seedance-2-0'
+  if (!normalized || normalized === 'seedance-2.0-fast' || normalized === 'seedance-2-0-fast' || normalized === 'seedance-2-fast') {
+    return 'dreamina-seedance-2-0-fast-260128'
+  }
+  if (normalized === 'seedance-2-0' || normalized === 'seedance-2.0' || normalized === 'seedance-2.0-standard') {
+    return 'dreamina-seedance-2-0-260128'
   }
   return modelName
+}
+
+function isBytePlusSeedanceBase(baseUrl: string): boolean {
+  return baseUrl.includes('bytepluses.com') || baseUrl.includes('byteplus.com') || baseUrl.includes('/api/v3')
+}
+
+function seedanceCreateTaskUrl(baseUrl: string): string {
+  if (isBytePlusSeedanceBase(baseUrl)) return `${baseUrl}/api/v3/contents/generations/tasks`
+  return `${baseUrl}/v1/videos/generations`
+}
+
+function seedanceTaskUrl(baseUrl: string, taskId: string): string {
+  if (isBytePlusSeedanceBase(baseUrl)) return `${baseUrl}/api/v3/contents/generations/tasks/${encodeURIComponent(taskId)}`
+  return `${baseUrl}/v1/tasks/${encodeURIComponent(taskId)}`
+}
+
+function buildBytePlusSeedancePayload(input: {
+  config: VideoProviderConfig
+  job: SeedanceJob
+  imageUrls: string[]
+}) {
+  const { config, job, imageUrls } = input
+  const content: any[] = [
+    { type: 'text', text: job.request.prompt },
+    ...imageUrls.slice(0, 9).map((url, index) => ({
+      type: 'image_url',
+      image_url: { url },
+      role: index === 0 && job.mode === 'image_to_video' ? 'first_frame' : 'reference_image',
+    })),
+  ]
+  return {
+    model: normalizeSeedanceModel(config.modelName || job.modelHint || 'dreamina-seedance-2-0-fast-260128'),
+    content,
+    resolution: '720p',
+    ratio: job.request.ratio || '9:16',
+    duration: clampSeedanceDuration(job.request.duration || 5),
+    watermark: false,
+    generate_audio: false,
+  }
+}
+
+function buildLegacySeedancePayload(input: {
+  config: VideoProviderConfig
+  job: SeedanceJob
+  imageUrls: string[]
+}) {
+  const { config, job, imageUrls } = input
+  const generationType = job.mode === 'reference_to_video'
+    ? 'reference-to-video'
+    : job.mode === 'image_to_video'
+    ? 'image-to-video'
+    : 'text-to-video'
+  return {
+    model: config.modelName || job.modelHint || 'seedance-2.0-fast',
+    input: {
+      prompt: job.request.prompt,
+      generation_type: generationType,
+      image_urls: imageUrls,
+      duration: job.request.duration || 5,
+      aspect_ratio: job.request.ratio || '9:16',
+      negative_prompt: job.request.negativePrompt,
+    },
+  }
+}
+
+function clampSeedanceDuration(duration: number): number {
+  if (!Number.isFinite(duration)) return 5
+  return Math.max(4, Math.min(15, Math.round(duration)))
 }
 
 async function generateWithKieAi(args: {
@@ -376,12 +436,21 @@ function fallbackJob(input: { plan: { title?: string; strategy?: string }; image
 
 function extractVideoUrl(json: any): string {
   const candidates = [
+    json?.content?.video_url,
+    json?.content?.[0]?.video_url,
+    json?.content?.[0]?.video_url?.url,
     json?.output?.video_url,
     json?.output?.url,
+    json?.output?.content?.video_url,
+    json?.output?.content?.[0]?.video_url,
+    json?.output?.content?.[0]?.video_url?.url,
     json?.video_url,
     json?.url,
     json?.data?.output?.video_url,
     json?.data?.output?.url,
+    json?.data?.content?.video_url,
+    json?.data?.content?.[0]?.video_url,
+    json?.data?.content?.[0]?.video_url?.url,
     json?.data?.video_url,
     json?.data?.url,
     json?.data?.result?.video_url,
@@ -391,4 +460,15 @@ function extractVideoUrl(json: any): string {
     json?.data?.output?.videos?.[0]?.url,
   ]
   return String(candidates.find((value) => typeof value === 'string' && value) || '')
+}
+
+function seedanceErrorMessage(json: any): string {
+  return String(
+    json?.error?.message ||
+    json?.error?.code ||
+    json?.message ||
+    json?.code ||
+    json?.error ||
+    '',
+  )
 }

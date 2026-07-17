@@ -138,6 +138,29 @@ function VideoCreatorPageInner() {
       }),
     }
   }, [promptDrafts, videoPlan])
+  const planReady = Boolean(videoPlan)
+  const videoReady = Boolean(execution)
+  const currentStep = videoReady ? 3 : planReady ? 2 : 1
+  const stepCards = [
+    {
+      step: 1,
+      title: '选择素材与目标',
+      description: '选择图片，告诉 AI 这条视频要表达什么。',
+      status: currentStep > 1 ? '已完成' : '正在进行',
+    },
+    {
+      step: 2,
+      title: '生成并编辑分镜',
+      description: '先让 AI 写好每个镜头，再按你的判断修改。',
+      status: currentStep > 2 ? '已完成' : currentStep === 2 ? '正在进行' : '待开始',
+    },
+    {
+      step: 3,
+      title: '生成视频并保存',
+      description: '确认分镜后调用 Seedance，生成结果会回到素材库。',
+      status: currentStep === 3 ? '已完成' : '待开始',
+    },
+  ]
 
   useEffect(() => {
     if (!videoPlan?.seedanceJobs?.length) return
@@ -251,12 +274,43 @@ function VideoCreatorPageInner() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1800px] grid-cols-1 gap-3 px-3 py-3 sm:gap-4 sm:px-5 sm:py-5 lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]">
+      <main className="mx-auto max-w-[1800px] space-y-3 px-3 py-3 sm:space-y-4 sm:px-5 sm:py-5">
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {stepCards.map((item) => {
+            const active = item.step === currentStep
+            const done = item.step < currentStep || (item.step === 3 && videoReady)
+            return (
+              <div
+                key={item.step}
+                className={`rounded-lg border bg-white p-4 shadow-sm ${
+                  active ? 'border-indigo-300 ring-2 ring-indigo-100' : done ? 'border-emerald-200' : 'border-slate-200'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                    done ? 'bg-emerald-100 text-emerald-700' : active ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {item.step}
+                  </div>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                    done ? 'bg-emerald-50 text-emerald-700' : active ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-50 text-slate-400'
+                  }`}>
+                    {item.status}
+                  </span>
+                </div>
+                <h2 className="mt-3 text-sm font-black text-slate-900">{item.title}</h2>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">{item.description}</p>
+              </div>
+            )
+          })}
+        </section>
+
+        <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]">
         <section className="space-y-3 sm:space-y-4 lg:sticky lg:top-[76px] lg:self-start">
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-indigo-600" />
-              <h1 className="text-sm font-black">1. 选择内容</h1>
+              <h1 className="text-sm font-black">选择素材与目标</h1>
             </div>
 
             <label className="mb-1 block text-[11px] font-bold text-slate-500">视频目标</label>
@@ -427,28 +481,25 @@ function VideoCreatorPageInner() {
           <div className="min-h-[calc(100vh-112px)] rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-black">2. 编辑分镜，3. 生成视频</h2>
+                <h2 className="text-sm font-black">编辑分镜并生成视频</h2>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  先检查每个镜头的画面描述，确认后再调用 Seedance。
+                  按卡片顺序完成：先生成分镜，修改画面描述，最后生成视频。
                 </p>
               </div>
               {(generating || submittingVideo) && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[11px] font-bold">
-              <div className={`rounded-lg border px-2 py-2 ${videoPlan ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-indigo-200 bg-indigo-50 text-indigo-700'}`}>
-                生成分镜
-              </div>
-              <div className={`rounded-lg border px-2 py-2 ${videoPlan ? 'border-indigo-200 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
-                编辑画面
-              </div>
-              <div className={`rounded-lg border px-2 py-2 ${execution ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
-                生成视频
-              </div>
-            </div>
             {error && <p className="mt-3 rounded-lg bg-rose-50 p-3 text-xs font-bold leading-relaxed text-rose-600">{error}</p>}
             {!videoPlan ? (
-              <div className="mt-4 flex min-h-[420px] items-center justify-center rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
-                先点击左侧“生成可编辑分镜”，这里会出现每个镜头的画面描述。你可以直接改文字，再生成视频。
+              <div className="mt-4 grid min-h-[420px] place-items-center rounded-lg border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                <div className="max-w-sm">
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <p className="mt-3 text-sm font-black text-slate-700">先生成可编辑分镜</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    左侧确认素材、平台、比例和视频目标后，点击“生成可编辑分镜”。AI 会把视频拆成几个镜头卡片，你可以逐个修改。
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]">
@@ -469,7 +520,7 @@ function VideoCreatorPageInner() {
                     </div>
                   )}
                   <div className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-sm font-black">视频方案</p>
+                    <p className="text-sm font-black">第 2 步：检查视频方案</p>
                     <p className="mt-1 text-xs leading-relaxed text-slate-600">{videoPlan.strategy}</p>
                   </div>
 
@@ -480,7 +531,7 @@ function VideoCreatorPageInner() {
                     className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-60"
                   >
                     {submittingVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    使用 Seedance 生成视频
+                    第 3 步：生成视频
                   </button>
 
                   <details className="rounded-lg border border-slate-200 p-3">
@@ -499,7 +550,7 @@ function VideoCreatorPageInner() {
                   {scenes.map((scene) => {
                     const job = videoPlan.seedanceJobs?.find((item: any) => item.id.endsWith(`-${scene.id}`))
                     return (
-                    <div key={scene.id} className="min-w-0 rounded-lg border border-slate-200 p-3">
+                    <div key={scene.id} className="min-w-0 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-xs font-black">第 {Number(scene.id)} 镜 · {displaySceneTitle(scene)}</p>
@@ -538,6 +589,7 @@ function VideoCreatorPageInner() {
             )}
           </div>
         </section>
+        </div>
       </main>
     </div>
   )
