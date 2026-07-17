@@ -84,17 +84,27 @@ async function executeTool(
   toolName: string,
   args: Record<string, any>,
   brandId: string,
+  locale?: string
 ): Promise<{ resultText: string; actionReply?: string }> {
+  const isEnglish = locale === 'en'
   try {
     if (toolName.includes('__')) {
       const response = await McpClientManager.executeTool(brandId, toolName, args)
       if (response && (response.isError || response.error)) {
         return {
-          resultText: `MCP 工具调用失败：\n${JSON.stringify(response, null, 2)}`,
-          actionReply: '抱歉，第三方服务（物流/配送）暂时不可用，请稍后再试。'
+          resultText: isEnglish
+            ? `MCP Tool execution failed:\n${JSON.stringify(response, null, 2)}`
+            : `MCP 工具调用失败：\n${JSON.stringify(response, null, 2)}`,
+          actionReply: isEnglish
+            ? 'Apologies, the third-party service (logistics/errands) is temporarily unavailable. Please try again later.'
+            : '抱歉，第三方服务（物流/配送）暂时不可用，请稍后再试。'
         }
       }
-      return { resultText: `MCP 工具调用成功！返回数据：\n${JSON.stringify(response, null, 2)}` }
+      return {
+        resultText: isEnglish
+          ? `MCP Tool executed successfully! Response data:\n${JSON.stringify(response, null, 2)}`
+          : `MCP 工具调用成功！返回数据：\n${JSON.stringify(response, null, 2)}`
+      }
     }
 
     switch (toolName) {
@@ -127,16 +137,18 @@ async function executeTool(
         })
 
         if (drafts.length === 0) {
-          return { resultText: `该时段内没有排期内容。` }
+          return { resultText: isEnglish ? 'No scheduled posts found in this period.' : '该时段内没有排期内容。' }
         }
 
         const summary = drafts
           .map(
             (d: { platform: string; caption: string | null; status: string; scheduledAt: Date | null }) =>
-              `${d.platform}: "${d.caption?.slice(0, 40)}..." (${d.status}, ${d.scheduledAt?.toLocaleDateString('zh-CN') ?? '未排期'})`,
+              isEnglish
+                ? `${d.platform}: "${d.caption?.slice(0, 40)}..." (${d.status}, ${d.scheduledAt?.toLocaleDateString('en-US') ?? 'Unscheduled'})`
+                : `${d.platform}: "${d.caption?.slice(0, 40)}..." (${d.status}, ${d.scheduledAt?.toLocaleDateString('zh-CN') ?? '未排期'})`,
           )
           .join('\n')
-        return { resultText: `查询结果：\n${summary}` }
+        return { resultText: isEnglish ? `Query results:\n${summary}` : `查询结果：\n${summary}` }
       }
 
       case 'get_action_items': {
@@ -148,37 +160,41 @@ async function executeTool(
         })
 
         if (items.length === 0) {
-          return { resultText: '目前没有待处理事项，一切就绪！' }
+          return { resultText: isEnglish ? 'No pending action items, all set!' : '目前没有待处理事项，一切就绪！' }
         }
 
         const summary = items
           .map((i: { id: string; type: string; description: string | null; createdAt: Date }) => `- [${i.type}] ${i.description?.slice(0, 60) ?? ''}`)
           .join('\n')
-        return { resultText: `有 ${items.length} 个待处理事项：\n${summary}` }
+        return { resultText: isEnglish ? `Found ${items.length} pending action items:\n${summary}` : `有 ${items.length} 个待处理事项：\n${summary}` }
       }
 
       case 'approve_draft': {
-        // Approve = actually submit to Postfast (schedule or publish based on scheduledAt)
-        // This replaces the old DB-only status update which left Postfast out of sync
         const { draftId, note } = args
         const result = await submitDraftForDelivery({
           brandId,
           draftId,
           actorId: 'voice-chat',
           forcePublish: true,
-          note: note || '语音批准',
+          note: note || (isEnglish ? 'Approved via voice' : '语音批准'),
         })
         if (!result.ok) {
           return {
-            resultText: `批准失败：${result.error}`,
-            actionReply: `批准时出了些问题：${result.error}，请稍后再试。`,
+            resultText: isEnglish ? `Approval failed: ${result.error}` : `批准失败：${result.error}`,
+            actionReply: isEnglish 
+              ? `Something went wrong during approval: ${result.error}. Please try again later.`
+              : `批准时出了些问题：${result.error}，请稍后再试。`,
           }
         }
         const mode = (result as any).mode
         const isScheduled = mode === 'scheduled' || mode === undefined && (result as any).draft?.status === 'scheduled'
         return {
-          resultText: `草稿 ${draftId} 已批准并${isScheduled ? '安排排期' : '发布'}。`,
-          actionReply: `好的，老板！内容已批准，${isScheduled ? '将按计划时间发布' : '现在已发布'}。${note ? `备注：${note}` : ''}`,
+          resultText: isEnglish 
+            ? `Draft ${draftId} has been approved and ${isScheduled ? 'scheduled' : 'published'}.`
+            : `草稿 ${draftId} 已批准并${isScheduled ? '安排排期' : '发布'}。`,
+          actionReply: isEnglish 
+            ? `Sure thing, boss! The post has been approved and ${isScheduled ? 'scheduled as planned' : 'is now published'}.${note ? ` Note: ${note}` : ''}`
+            : `好的，老板！内容已批准，${isScheduled ? '将按计划时间发布' : '现在已发布'}。${note ? `备注：${note}` : ''}`,
         }
       }
 
@@ -186,25 +202,22 @@ async function executeTool(
         const { draftId, scheduledAt } = args
         const newTime = new Date(scheduledAt)
         if (Number.isNaN(newTime.getTime())) {
-          return { resultText: '无效的时间格式，请提供正确的日期时间。' }
+          return { resultText: isEnglish ? 'Invalid date format.' : '无效的时间格式，请提供正确的日期时间。' }
         }
 
-        // Load draft to check if it already has a Postfast post ID
         const draft = await prisma.contentDraft.findFirst({
           where: { id: draftId, brandId },
           include: { account: { select: { platformId: true, handle: true } } },
         })
-        if (!draft) return { resultText: `找不到草稿 ${draftId}。` }
+        if (!draft) return { resultText: isEnglish ? `Draft ${draftId} not found.` : `找不到草稿 ${draftId}。` }
 
         const brand = await prisma.brand.findUnique({
           where: { id: brandId },
           select: { postfastApiKey: true },
         })
 
-        // If already scheduled in Postfast, cancel old and re-schedule
         if (draft.platformPostId && brand?.postfastApiKey && draft.account?.handle !== 'unconfigured') {
           await postfastDeletePost(brand.postfastApiKey, draft.platformPostId)
-          // Re-submit with the new time via submitDraftForDelivery after updating scheduledAt
           await prisma.contentDraft.update({
             where: { id: draftId },
             data: { scheduledAt: newTime, platformPostId: null, status: 'draft' },
@@ -214,26 +227,31 @@ async function executeTool(
             draftId,
             actorId: 'voice-chat',
             forcePublish: true,
-            note: `语音调整排期至 ${newTime.toLocaleString('zh-CN')}`,
+            note: isEnglish ? `Rescheduled to ${newTime.toLocaleString('en-US')}` : `语音调整排期至 ${newTime.toLocaleString('zh-CN')}`,
           })
           if (!resubmit.ok) {
             return {
-              resultText: `调整排期失败：${resubmit.error}`,
-              actionReply: `调整时出了问题：${resubmit.error}，发布时间未更改。`,
+              resultText: isEnglish ? `Rescheduling failed: ${resubmit.error}` : `调整排期失败：${resubmit.error}`,
+              actionReply: isEnglish 
+                ? `Failed to reschedule: ${resubmit.error}; scheduled time unchanged.`
+                : `调整时出了问题：${resubmit.error}，发布时间未更改。`,
             }
           }
         } else {
-          // Not yet in Postfast — just update DB time
           await prisma.contentDraft.update({
             where: { id: draftId },
             data: { scheduledAt: newTime, updatedAt: new Date() },
           })
         }
 
-        const timeStr = newTime.toLocaleString('zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        const timeStr = newTime.toLocaleString(isEnglish ? 'en-US' : 'zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
         return {
-          resultText: `草稿 ${draftId} 已调整发布时间至 ${timeStr}。`,
-          actionReply: `好的！发布时间已更新为 ${timeStr}，请放心。`,
+          resultText: isEnglish 
+            ? `Draft ${draftId} rescheduled to ${timeStr}.`
+            : `草稿 ${draftId} 已调整发布时间至 ${timeStr}。`,
+          actionReply: isEnglish 
+            ? `No problem! The schedule has been updated to ${timeStr}.`
+            : `好的！发布时间已更新为 ${timeStr}，请放心。`,
         }
       }
 
@@ -244,19 +262,25 @@ async function executeTool(
           data: { status: 'draft', updatedAt: new Date() },
         })
         return {
-          resultText: `草稿 ${draftId} 已标记为退回。原因：${reason ?? '用户要求修改'}`,
-          actionReply: `收到，老板！我来重新写一版${reason ? `，根据您的意见：${reason}` : ''}。`,
+          resultText: isEnglish 
+            ? `Draft ${draftId} has been rejected. Reason: ${reason ?? 'Requested by user'}`
+            : `草稿 ${draftId} 已标记为退回。原因：${reason ?? '用户要求修改'}`,
+          actionReply: isEnglish 
+            ? `Understood, boss! I'll rewrite a new draft${reason ? `, based on your feedback: ${reason}` : ''}.`
+            : `收到，老板！我来重新写一版${reason ? `，根据您的意见：${reason}` : ''}。`,
         }
       }
 
       default:
-        return { resultText: '未知工具调用。' }
+        return { resultText: isEnglish ? 'Unknown tool call.' : '未知工具调用。' }
     }
   } catch (err) {
-    console.error(`[voice-chat] Tool execution error (${toolName}):`, err)
+    console.error(err)
     return {
-      resultText: '操作执行时遇到错误，请稍后再试。',
-      actionReply: '抱歉，第三方服务（物流/配送）暂时不可用，请稍后再试。'
+      resultText: isEnglish ? 'An error occurred during operation, please try again later.' : '操作执行时遇到错误，请稍后再试。',
+      actionReply: isEnglish 
+        ? 'Apologies, the third-party service (logistics/errands) is temporarily unavailable. Please try again later.'
+        : '抱歉，第三方服务（物流/配送）暂时不可用，请稍后再试。'
     }
   }
 }
@@ -287,10 +311,12 @@ export async function POST(request: Request, { params }: Params) {
           history = [],
           context = {},
           voiceId = '',
+          locale = 'zh',
         } = body as {
           message?: string
           history?: ChatTurn[]
           voiceId?: string
+          locale?: string
           context?: {
             activeDraftId?: string
             pendingDraftIds?: string[]
@@ -320,23 +346,51 @@ export async function POST(request: Request, { params }: Params) {
           return
         }
 
+        const isEnglish = locale === 'en'
+
         // Build system prompt
         const k = brand.knowledge
         const menuText = k?.menuItems
-          ? `菜单/产品：\n${(k.menuItems as any[]).map((m) => `- ${m.name}: ${m.description ?? ''}`).join('\n')}`
+          ? (isEnglish 
+              ? `Menu / Products:\n${(k.menuItems as any[]).map((m) => `- ${m.name}: ${m.description ?? ''}`).join('\n')}`
+              : `菜单/产品：\n${(k.menuItems as any[]).map((m) => `- ${m.name}: ${m.description ?? ''}`).join('\n')}`)
           : ''
         const slangText = k?.slangDict
-          ? `本地用语：\n${Object.entries(k.slangDict as Record<string, string>).map(([a, b]) => `- "${a}": ${b}`).join('\n')}`
+          ? (isEnglish
+              ? `Local Slang / Terminology:\n${Object.entries(k.slangDict as Record<string, string>).map(([a, b]) => `- "${a}": ${b}`).join('\n')}`
+              : `本地用语：\n${Object.entries(k.slangDict as Record<string, string>).map(([a, b]) => `- "${a}": ${b}`).join('\n')}`)
           : ''
         const draftContext = context.activeDraftId
-          ? `当前正在讨论的草稿 ID: ${context.activeDraftId}`
+          ? (isEnglish ? `Active draft under discussion ID: ${context.activeDraftId}` : `当前正在讨论的草稿 ID: ${context.activeDraftId}`)
           : context.pendingDraftIds?.length
-          ? `待审批草稿 IDs: ${context.pendingDraftIds.join(', ')}`
+          ? (isEnglish ? `Pending draft IDs for approval: ${context.pendingDraftIds.join(', ')}` : `待审批草稿 IDs: ${context.pendingDraftIds.join(', ')}`)
           : ''
 
         const skillsPrompts = brand.companionSkills?.map((s: any) => `[Skill: ${s.displayName}]\n${s.systemPrompt}`).join('\n\n') || ''
 
-        const systemPrompt = [
+        const systemPrompt = isEnglish ? [
+          `You are the exclusive AI marketing companion (employee) for the brand "${brand.name}". Speak in English.`,
+          `Brand Description: ${brand.description ?? 'A high-quality restaurant brand'}`,
+          brand.location ? `Location: ${brand.location}` : '',
+          k?.brandTone ? `Brand Tone/Style: ${k.brandTone}` : '',
+          menuText,
+          slangText,
+          draftContext,
+          skillsPrompts ? `\n\n=== Additional Skills & Rules ===\n${skillsPrompts}` : '',
+          `You can actively call tools to query data or perform actions. Keep your responses concise, helpful, and enthusiastic, like a top-performing AI employee.`,
+          `If you don't understand the user's intent, reply: "I'm sorry, could you please say that again?"`,
+          `\n=== Delivery & Logistics Execution Rules ===`,
+          `- When the user requests shipping, delivering documents, running errands, or checking status, you must automatically call tools in this sequence:`,
+          `  1. Call dct-logistics__autocomplete_address to autocomplete the sender's address (if postal code or abbreviation is provided).`,
+          `  2. Call dct-logistics__autocomplete_address to autocomplete the recipient's address.`,
+          `  3. Once you obtain complete addresses and coordinates for both sides, you must immediately call dct-logistics__quote_flash_order to get a quote. Do not stop midway to ask the user to confirm the addresses; complete the quote query in a single loop step, and then present the quote to the user!`,
+          `- When the user agrees to place the order, confirms the errand, and selects PayNow payment, you must call:`,
+          `  1. Call dct-logistics__submit_flash_order to submit the order.`,
+          `  2. Call dct-logistics__create_flash_order_payment to generate the PayNow QR code.`,
+          `  3. Reply with the final payment status and instructions; do not repeat the quoting process.`,
+          `\n=== Media Upload Trigger Rules ===`,
+          `- When the user expresses a request to upload photos, post videos, upload files, open the album, or select assets, you must append <<ACTION:TRIGGER_UPLOAD>> at the end of your response. For example: "Sure! I've opened the album for you. Please select the assets you'd like to upload. <<ACTION:TRIGGER_UPLOAD>>"`,
+        ].filter(Boolean).join('\n') : [
           `你是品牌"${brand.name}"的专属 AI 营销伴侣（员工），用中英文混合方式沟通（中文为主，专业术语用英文）。`,
           `品牌简介：${brand.description ?? '优质餐厅品牌'}`,
           brand.location ? `位置：${brand.location}` : '',
@@ -358,21 +412,22 @@ export async function POST(request: Request, { params }: Params) {
           `  3. 将最终的支付状态和指引回复给用户，不用重复做前面的报价流程。`,
           `\n=== 媒体素材上传规范 ===`,
           `- 当用户表达需要上传照片、发视频、传图、打开相册、选择素材等指令时，你必须在回答末尾附带 <<ACTION:TRIGGER_UPLOAD>>，例如："好的，已为您打开相册，请选择您要上传的素材。<<ACTION:TRIGGER_UPLOAD>>"`,
-        ]
-          .filter(Boolean)
-          .join('\n')
+        ].filter(Boolean).join('\n')
 
         // Inject the user message (detect GENERATE_AND_PUBLISH intent first for compatibility)
         const generateKeywords = [
           '生成并发布', '帮我发布', '批量生成', '一键生成', '发布到所有', '帮我写并发',
           '立刻发布', '立即发布', '立刻发', '立即发', '立即生成并发布', '立刻生成并发布'
         ]
-        const wantsGenerate = generateKeywords.some((kw) => message.includes(kw))
+        const wantsGenerate = generateKeywords.some((kw) => message.includes(kw)) || 
+          (isEnglish && (message.toLowerCase().includes('generate and publish') || message.toLowerCase().includes('batch generate') || message.toLowerCase().includes('bulk generate')))
 
         if (wantsGenerate) {
           safeEnqueue(controller, encoder.encode(JSON.stringify({
             type: 'done',
-            reply: '好的，老板！我马上为您批量生成内容并排期发布！',
+            reply: isEnglish 
+              ? 'Sure boss! I will batch generate content and schedule publishing for you right away!'
+              : '好的，老板！我马上为您批量生成内容并排期发布！',
             action: 'GENERATE_AND_PUBLISH'
           }) + '\n'))
           controller.close()
@@ -380,13 +435,17 @@ export async function POST(request: Request, { params }: Params) {
         }
 
         // Inject the user message (detect TRIGGER_UPLOAD intent for opening photo library)
-        const uploadKeywords = ['上传', '发张照片', '传照片', '发视频', '传视频', '打开相册', '选择素材', '上传素材', '上传照片', '上传视频']
-        const wantsUpload = uploadKeywords.some((kw) => message.includes(kw))
+        const uploadKeywords = isEnglish 
+          ? ['upload', 'send a photo', 'send photo', 'send video', 'post video', 'open album', 'choose asset', 'select asset', 'upload asset', 'upload photo', 'upload video']
+          : ['上传', '发张照片', '传照片', '发视频', '传视频', '打开相册', '选择素材', '上传素材', '上传照片', '上传视频']
+        const wantsUpload = uploadKeywords.some((kw) => message.toLowerCase().includes(kw))
 
         if (wantsUpload) {
           safeEnqueue(controller, encoder.encode(JSON.stringify({
             type: 'done',
-            reply: '好的，老板！已为您打开手机相册，请选择您要上传的图片或视频素材。',
+            reply: isEnglish 
+              ? 'Sure boss! I have opened the photo library for you. Please select the image or video assets to upload.'
+              : '好的，老板！已为您打开手机相册，请选择您要上传的图片或视频素材。',
             action: 'TRIGGER_UPLOAD'
           }) + '\n'))
           controller.close()
@@ -400,7 +459,7 @@ export async function POST(request: Request, { params }: Params) {
         ]
 
         // Send initial progress update
-        safeEnqueue(controller, encoder.encode(JSON.stringify({ type: 'status', message: '思考中...' }) + '\n'))
+        safeEnqueue(controller, encoder.encode(JSON.stringify({ type: 'status', message: isEnglish ? 'Thinking...' : '思考中...' }) + '\n'))
 
         // 对话历史只发最近 8 轮：减少 token 数，减少 Gemini TTFT
         const trimmedHistory = history.slice(-8)
@@ -415,31 +474,31 @@ export async function POST(request: Request, { params }: Params) {
           120,  // 语音回复必须简短—max_tokens 从 500 降至 120，减少 LLM TTFT
           combinedTools,
           async (toolName, toolArgs) => {
-            let statusMsg = '正在处理...'
+            let statusMsg = isEnglish ? 'Processing...' : '正在处理...'
             if (toolName === 'dct-logistics__autocomplete_address') {
-              statusMsg = `正在解析地址: ${toolArgs.input || ''}...`
+              statusMsg = isEnglish ? `Resolving address: ${toolArgs.input || ''}...` : `正在解析地址: ${toolArgs.input || ''}...`
             } else if (toolName === 'dct-logistics__quote_flash_order') {
-              statusMsg = '正在计算跑腿计价与配送费...'
+              statusMsg = isEnglish ? 'Calculating courier rates and delivery fee...' : '正在计算跑腿计价与配送费...'
             } else if (toolName === 'dct-logistics__submit_flash_order') {
-              statusMsg = '正在提交跑腿服务订单...'
+              statusMsg = isEnglish ? 'Submitting courier service order...' : '正在提交跑腿服务订单...'
             } else if (toolName === 'dct-logistics__create_flash_order_payment') {
-              statusMsg = '正在生成 PayNow 支付二维码...'
+              statusMsg = isEnglish ? 'Generating PayNow payment QR code...' : '正在生成 PayNow 支付二维码...'
             } else if (toolName === 'dct-logistics__query_flash_payment_status') {
-              statusMsg = '正在查询支付状态...'
+              statusMsg = isEnglish ? 'Checking payment status...' : '正在查询支付状态...'
             } else if (toolName.includes('__')) {
-              statusMsg = `正在调用工具: ${toolName.split('__')[1]}...`
+              statusMsg = isEnglish ? `Calling tool: ${toolName.split('__')[1]}...` : `正在调用工具: ${toolName.split('__')[1]}...`
             }
 
             console.log(`[streaming-status] sending status update: "${statusMsg}"`)
             safeEnqueue(controller, encoder.encode(JSON.stringify({ type: 'status', message: statusMsg }) + '\n'))
 
-            const { resultText, actionReply } = await executeTool(toolName, toolArgs, brandId)
+            const { resultText, actionReply } = await executeTool(toolName, toolArgs, brandId, locale)
             return { resultText, actionReply }
           }
         )
 
         console.log(`[voice-chat] callGeminiChat done in ${Date.now() - tGemini}ms, reply length=${result.reply?.length ?? 0}`)
-        const finalReply = result.reply || '抱歉，我处理时遇到了些问题，请再说一遍。'
+        const finalReply = result.reply || (isEnglish ? "Sorry, I ran into some issues processing that. Could you please say it again?" : '抱歉，我处理时遇到了些问题，请再说一遍。')
 
         // 合并 TTS：如果客户端提供了 voiceId，就在服务端就地合成音频并随返回结果一起发回。
         // 这样可以减少一次浏览器↔服务器的往返，把总延迟降低 300-500ms。
