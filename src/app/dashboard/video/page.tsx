@@ -58,8 +58,10 @@ function VideoCreatorPageInner() {
   const [duration, setDuration] = useState(10)
   const [loadingAssets, setLoadingAssets] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [submittingVideo, setSubmittingVideo] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<any>(null)
+  const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({})
 
   useEffect(() => {
     setSelectedAssetIds(initialAssetIds)
@@ -95,6 +97,31 @@ function VideoCreatorPageInner() {
   const videoPlan = result?.remote?.result || result?.result
   const execution = result?.execution
   const scenes: VideoScene[] = videoPlan?.scenes || []
+  const editablePlan = useMemo(() => {
+    if (!videoPlan) return null
+    const jobs = (videoPlan.seedanceJobs || []).map((job: any) => ({
+      ...job,
+      request: {
+        ...job.request,
+        prompt: promptDrafts[job.id] || job.request?.prompt || '',
+      },
+    }))
+    return {
+      ...videoPlan,
+      seedanceJobs: jobs,
+      scenes: (videoPlan.scenes || []).map((scene: VideoScene) => {
+        const job = jobs.find((item: any) => item.id.endsWith(`-${scene.id}`))
+        return job ? { ...scene, visualPrompt: job.request.prompt } : scene
+      }),
+    }
+  }, [promptDrafts, videoPlan])
+
+  useEffect(() => {
+    if (!videoPlan?.seedanceJobs?.length) return
+    setPromptDrafts(Object.fromEntries(
+      videoPlan.seedanceJobs.map((job: any) => [job.id, job.request?.prompt || '']),
+    ))
+  }, [videoPlan])
 
   const toggleAsset = (assetId: string) => {
     setSelectedAssetIds((prev) => prev.includes(assetId)
@@ -104,20 +131,24 @@ function VideoCreatorPageInner() {
     setError(null)
   }
 
-  const handleGeneratePlan = async () => {
+  const validateInput = () => {
     if (!brandId) {
       setError('缺少 brandId')
-      return
+      return false
     }
     if (!idea.trim()) {
       setError('请输入视频 idea 或营销目标')
-      return
+      return false
     }
     if (selectedAssetIds.length === 0) {
       setError('请至少选择一个素材')
-      return
+      return false
     }
+    return true
+  }
 
+  const handleGeneratePlan = async () => {
+    if (!validateInput()) return
     setGenerating(true)
     setError(null)
     setResult(null)
@@ -134,7 +165,38 @@ function VideoCreatorPageInner() {
           aspectRatio,
           targetDurationSec: duration,
           assetIds: selectedAssetIds,
+          executionMode: 'plan_only',
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '生成剧本失败')
+      setResult(json)
+    } catch (err: any) {
+      setError(err?.message || '生成剧本失败')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const handleSubmitVideo = async () => {
+    if (!validateInput() || !editablePlan) return
+    setSubmittingVideo(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/content/video/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId,
+          creatorType,
+          idea,
+          theme: idea,
+          platform,
+          aspectRatio,
+          targetDurationSec: duration,
+          assetIds: selectedAssetIds,
           executionMode: 'submit',
+          plan: editablePlan,
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -143,7 +205,7 @@ function VideoCreatorPageInner() {
     } catch (err: any) {
       setError(err?.message || '生成视频失败')
     } finally {
-      setGenerating(false)
+      setSubmittingVideo(false)
     }
   }
 
@@ -232,7 +294,7 @@ function VideoCreatorPageInner() {
               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-60"
             >
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              生成视频
+              生成剧本 / Prompt
             </button>
             {error && <p className="mt-3 rounded-lg bg-rose-50 p-2 text-xs font-bold text-rose-600">{error}</p>}
           </div>
@@ -342,16 +404,16 @@ function VideoCreatorPageInner() {
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-sm font-black">视频生成结果</h2>
+                <h2 className="text-sm font-black">剧本与视频生成</h2>
                 <p className="mt-1 text-[11px] text-slate-500">
-                  系统会先生成剧本分镜，再按分镜提示调用已配置的视频 API。
+                  先生成可编辑分镜 Prompt，确认后再调用 Seedance 生成视频。
                 </p>
               </div>
-              {generating && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
+              {(generating || submittingVideo) && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
             </div>
             {!videoPlan ? (
               <div className="mt-4 rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
-                点击生成后将在这里看到剧本分镜、生成状态和视频结果。
+                点击左侧按钮后将在这里看到可编辑剧本和 Seedance Prompt。
               </div>
             ) : (
               <div className="mt-4 space-y-4">
@@ -375,6 +437,16 @@ function VideoCreatorPageInner() {
                   <p className="mt-1 text-xs leading-relaxed text-slate-600">{videoPlan.strategy}</p>
                 </div>
 
+                <button
+                  type="button"
+                  onClick={handleSubmitVideo}
+                  disabled={submittingVideo || generating}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-60"
+                >
+                  {submittingVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  使用 Seedance 生成视频
+                </button>
+
                 <div className="space-y-3">
                   {scenes.map((scene) => (
                     <div key={scene.id} className="rounded-lg border border-slate-200 p-3">
@@ -387,6 +459,18 @@ function VideoCreatorPageInner() {
                       </div>
                       <p className="mt-2 text-xs font-bold text-indigo-700">{scene.textOverlay}</p>
                       <p className="mt-2 text-[11px] leading-relaxed text-slate-600">{scene.cameraMotion}</p>
+                      {videoPlan.seedanceJobs?.find((job: any) => job.id.endsWith(`-${scene.id}`)) && (
+                        <textarea
+                          value={promptDrafts[videoPlan.seedanceJobs.find((job: any) => job.id.endsWith(`-${scene.id}`)).id] || ''}
+                          onChange={(event) => {
+                            const job = videoPlan.seedanceJobs.find((item: any) => item.id.endsWith(`-${scene.id}`))
+                            if (!job) return
+                            setPromptDrafts((prev) => ({ ...prev, [job.id]: event.target.value }))
+                          }}
+                          rows={5}
+                          className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-indigo-400"
+                        />
+                      )}
                     </div>
                   ))}
                 </div>

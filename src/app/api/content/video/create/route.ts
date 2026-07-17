@@ -54,27 +54,30 @@ export async function POST(request: Request) {
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const startedAt = Date.now()
-    const result = await createRemoteVideoPlan({
-      brandId,
-      creatorType,
-      platform: optionalString(body.platform) || 'tiktok',
-      theme,
-      idea: optionalString(body.idea) || theme,
-      objective: optionalString(body.objective),
-      industryVertical: optionalString(body.industryVertical),
-      assetIds,
-      mediaUrls,
-      aspectRatio: optionalString(body.aspectRatio),
-      targetDurationSec: numberOrUndefined(body.targetDurationSec),
-      language: optionalString(body.language),
-      offer: optionalString(body.offer),
-      reviews: Array.isArray(body.reviews) ? body.reviews : undefined,
-      menuItems: Array.isArray(body.menuItems) ? body.menuItems : undefined,
-      usageReport: body.usageReport && typeof body.usageReport === 'object' ? body.usageReport : undefined,
-      actorId: actor.id,
-      actorType: actor.type,
-      actorRole: actor.role,
-    })
+    const suppliedPlan = body.plan && typeof body.plan === 'object' ? body.plan : null
+    const result = suppliedPlan
+      ? { success: true, result: suppliedPlan }
+      : await createRemoteVideoPlan({
+          brandId,
+          creatorType,
+          platform: optionalString(body.platform) || 'tiktok',
+          theme,
+          idea: optionalString(body.idea) || theme,
+          objective: optionalString(body.objective),
+          industryVertical: optionalString(body.industryVertical),
+          assetIds,
+          mediaUrls,
+          aspectRatio: optionalString(body.aspectRatio),
+          targetDurationSec: numberOrUndefined(body.targetDurationSec),
+          language: optionalString(body.language),
+          offer: optionalString(body.offer),
+          reviews: Array.isArray(body.reviews) ? body.reviews : undefined,
+          menuItems: Array.isArray(body.menuItems) ? body.menuItems : undefined,
+          usageReport: body.usageReport && typeof body.usageReport === 'object' ? body.usageReport : undefined,
+          actorId: actor.id,
+          actorType: actor.type,
+          actorRole: actor.role,
+        })
 
     let execution: unknown = undefined
     if (stringOrEmpty(body.executionMode) === 'submit') {

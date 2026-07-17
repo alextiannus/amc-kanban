@@ -170,7 +170,7 @@ async function generateWithSeedanceGateway(args: {
         authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify({
-        model: config.modelName || job.modelHint || 'seedance-2-0',
+        model: normalizeSeedanceModel(config.modelName || job.modelHint || 'seedance-2-0'),
         input: {
           prompt: job.request.prompt,
           generation_type: generationType,
@@ -236,6 +236,14 @@ async function pollSeedanceGateway(baseUrl: string, apiKey: string, taskId: stri
 
 function seedanceBaseUrl(baseUrl: string | null): string {
   return (baseUrl || 'https://api.seedance2.ai').replace(/\/+$/, '').replace(/\/v1$/, '')
+}
+
+function normalizeSeedanceModel(modelName: string): string {
+  const normalized = modelName.trim().toLowerCase()
+  if (!normalized || normalized === 'seedance-2.0-fast' || normalized === 'seedance-2.0-standard' || normalized === 'seedance-2.0') {
+    return 'seedance-2-0'
+  }
+  return modelName
 }
 
 async function generateWithKieAi(args: {
