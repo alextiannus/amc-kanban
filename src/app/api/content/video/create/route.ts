@@ -46,7 +46,8 @@ export async function POST(request: Request) {
     if (!brandId) return NextResponse.json({ error: 'brandId is required' }, { status: 400 })
     if (!creatorTypes.has(creatorType)) return NextResponse.json({ error: 'Unsupported video creator' }, { status: 400 })
     if (!theme) return NextResponse.json({ error: 'theme or idea is required' }, { status: 400 })
-    if (assetIds.length === 0 && mediaUrls.length === 0 && creatorType !== 'monthly_report') {
+    const executionMode = stringOrEmpty(body.executionMode)
+    if (executionMode === 'submit' && assetIds.length === 0 && mediaUrls.length === 0 && creatorType !== 'monthly_report') {
       return NextResponse.json({ error: 'Select at least one media asset for this video creator' }, { status: 400 })
     }
 
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
         })
 
     let execution: unknown = undefined
-    if (stringOrEmpty(body.executionMode) === 'submit') {
+    if (executionMode === 'submit') {
       const remoteResult = result as { result?: any; remote?: { result?: any } }
       const plan = remoteResult.result || remoteResult.remote?.result
       if (!plan) {

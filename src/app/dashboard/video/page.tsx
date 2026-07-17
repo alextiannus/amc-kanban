@@ -139,6 +139,33 @@ function sceneMotion(scene: VideoScene) {
   return motionMap[scene.cameraMotion] || scene.cameraMotion
 }
 
+function splitSceneDurations(totalDuration: number, sceneCount: number): number[] {
+  if (sceneCount <= 0) return []
+  const safeTotal = Math.max(sceneCount * 4, Math.round(totalDuration || sceneCount * 4))
+  const base = Math.floor(safeTotal / sceneCount)
+  const durations = Array.from({ length: sceneCount }, () => base)
+  let remainder = safeTotal - base * sceneCount
+  let index = 0
+  while (remainder > 0) {
+    durations[index % sceneCount] += 1
+    remainder -= 1
+    index += 1
+  }
+  return durations.map((value) => Math.max(4, value))
+}
+
+function withBalancedDurations(rows: SceneRow[], totalDuration: number): SceneRow[] {
+  const durations = splitSceneDurations(totalDuration, rows.length)
+  return rows.map((row, index) => {
+    const durationSec = durations[index] || row.scene.durationSec || 4
+    return {
+      ...row,
+      scene: { ...row.scene, durationSec },
+      job: row.job ? { ...row.job, request: { ...row.job.request, duration: durationSec } } : row.job,
+    }
+  })
+}
+
 function VideoCreatorPageInner() {
   const params = useSearchParams()
   const router = useRouter()
@@ -185,8 +212,13 @@ function VideoCreatorPageInner() {
       .finally(() => setLoadingAssets(false))
   }, [brandId])
 
+  const assetIdsInRows = useMemo(
+    () => Array.from(new Set(rows.flatMap((row) => row.assetIds))),
+    [rows],
+  )
+
   const visibleAssets = useMemo(() => {
-    const selected = new Set(selectedAssetIds)
+    const selected = new Set([...selectedAssetIds, ...assetIdsInRows])
     const imageAssets = assets.filter((asset) => !asset.mimeType?.startsWith('video/'))
     const filtered = assetFilter === 'unused'
       ? imageAssets.filter((asset: any) => (asset.usedCount ?? 0) === 0 || selected.has(asset.id))
@@ -196,7 +228,7 @@ function VideoCreatorPageInner() {
       const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0
       return tB - tA
     })
-  }, [assets, assetFilter, selectedAssetIds])
+  }, [assets, assetFilter, selectedAssetIds, assetIdsInRows])
 
   const selectedFinalRows = rows.filter((row) => row.includeInFinal && row.execution?.outputUrl)
   const selectedFinalUrls = selectedFinalRows
@@ -232,6 +264,7 @@ function VideoCreatorPageInner() {
         : [...row.assetIds, assetId]
       return { ...row, assetIds: next, execution: undefined }
     }))
+    setFinalExecution(null)
   }
 
   const assetRefsForRow = (assetIds: string[]) => assets
@@ -243,7 +276,7 @@ function VideoCreatorPageInner() {
   const buildRows = (videoPlan: any): SceneRow[] => {
     const scenes: VideoScene[] = videoPlan?.scenes || []
     const jobs: any[] = videoPlan?.seedanceJobs || []
-    return scenes.map((scene, index) => {
+    const builtRows = scenes.map((scene, index) => {
       const job = jobs.find((item) => item.id.endsWith(`-${scene.id}`)) || jobs[index]
       const fallbackAssetIds = scene.assetRefs?.filter((id) => assets.some((asset) => asset.id === id)) || []
       return {
@@ -255,6 +288,7 @@ function VideoCreatorPageInner() {
         includeInFinal: true,
       }
     })
+    return withBalancedDurations(builtRows, duration)
   }
 
   const handleAddRow = () => {
@@ -299,19 +333,22 @@ function VideoCreatorPageInner() {
             negativePrompt: 'distorted text, inaccurate logo, fake price, fake address, low quality, watermark',
           },
         }
-    setRows((prev) => [...prev, {
+    const nextRows = [...rows, {
       rowId: `custom-${Date.now()}`,
       scene,
       job,
       prompt: job.request.prompt || scene.visualPrompt,
       assetIds: [],
       includeInFinal: true,
-    }])
+    }]
+    const nextDuration = Math.max(duration, nextRows.length * 4)
+    if (nextDuration !== duration) setDuration(nextDuration)
+    setRows(withBalancedDurations(nextRows, nextDuration))
     setFinalExecution(null)
   }
 
   const handleDeleteRow = (rowId: string) => {
-    setRows((prev) => prev.filter((row) => row.rowId !== rowId))
+    setRows((prev) => withBalancedDurations(prev.filter((row) => row.rowId !== rowId), duration))
     setFinalExecution(null)
     if (expandedAssetRowId === rowId) setExpandedAssetRowId(null)
   }
@@ -323,10 +360,6 @@ function VideoCreatorPageInner() {
     }
     if (!idea.trim()) {
       setError('请输入视频目标')
-      return false
-    }
-    if (selectedAssetIds.length === 0) {
-      setError('请至少选择一个素材')
       return false
     }
     return true
@@ -597,7 +630,23 @@ function VideoCreatorPageInner() {
               </label>
               <label className="text-[11px] font-black text-slate-500">
                 秒数
-                <input value={duration} onChange={(e) => { setDuration(Number(e.target.value) || selectedCreator.duration); resetPlan() }} type="number" min={4} max={15} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs" />
+                <input
+                  value={duration}
+                  onChange={(e) => {
+                    const nextDuration = Math.max(4, Number(e.target.value) || selectedCreator.duration)
+                    setDuration(nextDuration)
+                    if (rows.length > 0) {
+                      setRows(withBalancedDurations(rows, nextDuration).map((row) => ({ ...row, execution: undefined })))
+                      setFinalExecution(null)
+                    } else {
+                      resetPlan()
+                    }
+                  }}
+                  type="number"
+                  min={4}
+                  max={60}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"
+                />
               </label>
             </div>
           </div>
@@ -605,12 +654,12 @@ function VideoCreatorPageInner() {
           <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
             <div className="min-w-0">
               <p className="text-xs font-black text-slate-700">{selectedCreator.flow}</p>
-              <p className="mt-1 truncate text-[11px] text-slate-500">{selectedAssetIds.length} 个素材 · {duration} 秒 · {aspectRatio}</p>
+              <p className="mt-1 truncate text-[11px] text-slate-500">{rows.length || '自动'} 个分镜 · {duration} 秒 · {aspectRatio}</p>
             </div>
             <button
               type="button"
               onClick={handleGeneratePlan}
-              disabled={planning || selectedAssetIds.length === 0}
+              disabled={planning}
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700 disabled:opacity-60"
             >
               {planning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
