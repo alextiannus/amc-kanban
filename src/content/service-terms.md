@@ -4,8 +4,8 @@
 **UEN:** 201835327N  
 **Location:** Singapore  
 **Service brand:** AMC - Your AI Marketing Crew  
-**Version:** AMC-SMSA-v1.04  
-**Updated:** 17 July 2025
+**Version:** AMC-SMSA-v1.05  
+**Updated:** 17 July 2026
 
 ## Acceptance and Subscription Acknowledgement
 
@@ -102,31 +102,47 @@ AMC may provide usage reports, campaign reports, digital asset logs, published c
 
 Upon completion or termination, subject to payment of outstanding fees, AMC will provide reasonable handover of approved strategy documents, campaign reports, customer-owned assets, published content logs and relevant platform access notes where applicable.
 
-## 12. Support, Changes and Revisions
+## 12. Service Level Agreement, Support and Resolution
+
+AMC provides post-sales support from Monday to Friday, excluding Singapore public holidays, from 09:00 to 18:00 Singapore time via online support, email, contact form or teleconference. Email and contact form requests may be submitted at any time and will be handled during support hours.
+
+AMC will use commercially reasonable efforts to acknowledge and triage support requests within the following target response times: critical service access issues within 1 business day, standard product or workflow issues within 2 business days, and general questions or change requests within 3 business days.
+
+Resolution depends on issue severity, Customer cooperation, third-party platform availability, account permissions, supplied information and technical complexity. AMC may provide a workaround, correction, support guidance, escalation plan, change request or scheduled product fix. Issues caused by Customer systems, third-party platforms, missing permissions, unsupported scope or late Customer input are not subject to guaranteed resolution times.
+
+## 13. Confidentiality and Security
+
+Each party must keep confidential and must not disclose to third parties any non-public business information, commercial terms, reports, credentials, customer data, operational records, technical information or other confidential information received from the other party, except where disclosure is required to provide the services, comply with law, or involve professional advisers, contractors or service providers who are bound by confidentiality obligations.
+
+AMC will apply reasonable administrative, technical and operational security measures appropriate to the service, which may include access control, role-based permissions, operational logging, secure hosting practices, data minimisation, credential handling controls, backup or recovery procedures, and reasonable protection of data in transit where supported by the relevant platform or service provider.
+
+If either party becomes aware of an actual or suspected material unauthorised access, disclosure, loss or compromise affecting Customer data or service credentials, that party must notify the other party without undue delay after confirmation, provide available relevant information, cooperate in reasonable investigation and remediation steps, and take reasonable measures to reduce further risk. The Customer must promptly notify AMC of unauthorised access to Customer accounts, devices or third-party platforms used with the service.
+
+## 14. Support, Changes and Revisions
 
 Standard support covers normal product usage, workflow assistance, package clarification and reasonable troubleshooting. If no revision limit is stated in the quotation, up to 2 revision rounds per campaign asset are included.
 
 Additional revisions, major changes, urgent turnaround, new scope or changes caused by late Customer input may require a change request and additional fees.
 
-## 13. Refunds, Cancellation and Termination
+## 15. Refunds, Cancellation and Termination
 
 Refunds and cancellations are handled according to the accepted quotation, order form and applicable law. Fees for work already performed, activated subscription periods, completed reports, completed onboarding and delivered assets are non-refundable unless otherwise stated.
 
 AMC may suspend service for non-payment, misuse, security risk or breach after reasonable notice where practicable.
 
-## 14. No Guaranteed Outcomes
+## 16. No Guaranteed Outcomes
 
 AMC will use reasonable care and skill but does not guarantee sales, revenue, profit, ROAS, conversion, reach, followers, likes, engagement, search ranking, Google Maps ranking, review score improvement or third-party platform performance.
 
 KPIs are campaign targets or measurement references, not guaranteed results unless expressly stated in writing.
 
-## 15. Limitation of Liability
+## 17. Limitation of Liability
 
 To the fullest extent permitted by law, AMC's total liability arising from or relating to the service is limited to the fees paid by the Customer for the affected package during the 3 months immediately before the event giving rise to the claim.
 
 AMC is not liable for indirect, consequential, special, punitive or loss-of-profit damages.
 
-## 16. Acceptance
+## 18. Acceptance
 
 The Customer accepts these terms by signing the quotation, order form or service agreement, confirming acceptance in writing, ticking the agreement checkbox, submitting a subscription order, paying for a subscription, creating a brand workspace, or continuing to use the service.
 
@@ -138,7 +154,7 @@ The Customer accepts these terms by signing the quotation, order form or service
 **UEN：** 201835327N  
 **所在地：** 新加坡  
 **服务品牌：** AMC - Your AI Marketing Crew  
-**版本：** AMC-SMSA-v1.04  
+**版本：** AMC-SMSA-v1.05  
 **更新日期：** 2026 年 7 月 17 日
 
 ## 接受与订阅确认
@@ -236,30 +252,46 @@ AMC 可提供使用报告、活动报告、数字资产记录、已发布内容�
 
 项目完成或终止时，在结清应付费用后，AMC 将合理交接已批准的策略文件、活动报告、客户自有资产、已发布内容记录和相关平台访问说明。
 
-## 十二、支持、变更与修改
+## 十二、服务水平、支持与处理机制
+
+AMC 提供售后支持时间为新加坡时间周一至周五 09:00 至 18:00，新加坡公共假期除外。支持方式包括线上支持、电子邮件、联系表单或电话/视频会议。客户可随时通过电子邮件或联系表单提交支持请求，AMC 将在支持时间内处理。
+
+AMC 将以商业上合理的努力按以下目标响应时间确认并分级处理支持请求：重大服务访问问题为 1 个工作日内，标准产品或流程问题为 2 个工作日内，一般问题或变更请求为 3 个工作日内。
+
+问题处理取决于严重程度、客户配合、第三方平台可用性、账号权限、客户提供信息及技术复杂度。AMC 可提供临时方案、修正、支持指引、升级处理计划、变更请求或计划内产品修复。由客户系统、第三方平台、缺少权限、超出服务范围或客户延迟输入导致的问题，不适用保证解决时限。
+
+## 十三、保密与安全
+
+双方须对从对方获得的非公开商业信息、商业条款、报告、凭证、客户数据、运营记录、技术信息及其他保密信息保密，且不得向第三方披露，但为提供服务、遵守法律，或向受保密义务约束的专业顾问、承包商或服务供应商披露的情况除外。
+
+AMC 将采取与服务相适应的合理管理、技术和运营安全措施，包括但不限于访问控制、基于角色的权限、运营日志、安全托管实践、数据最小化、凭证处理控制、备份或恢复流程，以及在相关平台或服务供应商支持时对传输中数据采取合理保护。
+
+如任一方知悉实际或疑似重大未授权访问、披露、丢失或泄露，且影响客户数据或服务凭证，该方须在确认后无不合理延迟地通知另一方，提供可获得的相关信息，配合合理调查和补救措施，并采取合理措施降低进一步风险。客户如发现其账号、设备或与服务相关的第三方平台发生未授权访问，应及时通知 AMC。
+
+## 十四、支持、变更与修改
 
 标准支持包括正常产品使用、流程协助、套餐解释和合理故障排查。如报价未注明修改次数，每个营销资产包含最多 2 轮修改。
 
 额外修改、重大策略变化、紧急交付、新范围或客户延迟输入导致的变更，可能需要变更请求和额外费用。
 
-## 十三、退款、取消与终止
+## 十五、退款、取消与终止
 
 退款和取消以已接受的报价、订单和适用法律为准。已完成工作、已激活订阅期、已完成报告、已完成 onboarding 和已交付资产的费用原则上不退款，除非另有约定。
 
 如发生未付款、误用、安全风险或违约，AMC 可在合理可行情况下通知后暂停服务。
 
-## 十四、结果免责声明
+## 十六、结果免责声明
 
 AMC 将以合理谨慎和技能提供服务，但不保证销售额、收入、利润、ROAS、转化、触达、粉丝、点赞、互动、搜索排名、Google Maps 排名、评分提升或第三方平台表现。
 
 除非书面明确约定，KPI 为活动目标或衡量参考，不代表保证结果。
 
-## 十五、责任限制
+## 十七、责任限制
 
 在法律允许的最大范围内，AMC 因服务产生或相关的总责任，以客户在引发索赔事件前 3 个月内就受影响套餐向 AMC 支付的费用为限。
 
 AMC 不承担间接、后果性、特殊、惩罚性或利润损失责任。
 
-## 十六、接受
+## 十八、接受
 
 客户通过签署报价、订单或服务协议、书面确认、勾选同意框、提交订阅订单、支付订阅费用、创建品牌工作区或继续使用服务，即表示接受本条款。

@@ -372,6 +372,24 @@ export async function resolveAssignment(input: ResolveInput): Promise<ResolveRes
           throw new AssignmentError('INVALID_SUBJECT_ID', 'brand subject must be an active brand id', 400)
         }
 
+        await tx.brandAgent.upsert({
+          where: {
+            brandId_agentId: {
+              brandId: subjectId,
+              agentId: selected.agentId,
+            },
+          },
+          create: {
+            brandId: subjectId,
+            agentId: selected.agentId,
+            role: 'worker',
+            active: true,
+          },
+          update: {
+            active: true,
+          },
+        })
+
         await tx.brandOwner.upsert({
           where: {
             brandId_userId: {
