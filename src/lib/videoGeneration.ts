@@ -227,7 +227,11 @@ async function pollSeedanceGateway(baseUrl: string, apiKey: string, taskId: stri
 }
 
 function seedanceBaseUrl(baseUrl: string | null): string {
-  return (baseUrl || BYTEPLUS_ARK_BASE_URL).replace(/\/+$/, '').replace(/\/v1$/, '').replace(/\/api\/v3$/, '')
+  return (baseUrl || BYTEPLUS_ARK_BASE_URL)
+    .replace(/\/+$/, '')
+    .replace(/\/v1$/, '')
+    .replace(/\/api\/v3\/contents\/generations\/tasks$/, '')
+    .replace(/\/api\/v3$/, '')
 }
 
 function normalizeSeedanceModel(modelName: string): string {

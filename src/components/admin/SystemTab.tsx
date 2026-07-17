@@ -854,7 +854,7 @@ export default function SystemTab({
                   <input
                     value={llmForm.baseUrl}
                     onChange={e => setLlmForm(prev => ({ ...prev, baseUrl: e.target.value }))}
-                    placeholder="例: https://api.openai.com/v1 (缺省则使用厂商默认端点)"
+                    placeholder="Seedance 例: https://ark.ap-southeast.bytepluses.com (缺省则使用厂商默认端点)"
                     className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
                   />
                 </label>
