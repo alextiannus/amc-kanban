@@ -211,8 +211,8 @@ function VideoCreatorPageInner() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-5 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:px-5">
+        <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-3">
           <button
             onClick={() => router.back()}
             className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100"
@@ -228,8 +228,8 @@ function VideoCreatorPageInner() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl grid-cols-1 gap-4 px-5 py-5 lg:grid-cols-[360px_1fr]">
-        <section className="space-y-4">
+      <main className="mx-auto grid max-w-[1800px] grid-cols-1 gap-3 px-3 py-3 sm:gap-4 sm:px-5 sm:py-5 lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]">
+        <section className="space-y-3 sm:space-y-4 lg:sticky lg:top-[76px] lg:self-start">
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-indigo-600" />
@@ -237,7 +237,7 @@ function VideoCreatorPageInner() {
             </div>
 
             <label className="mb-1 block text-[11px] font-bold text-slate-500">视频目标</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {creatorOptions.map((item) => (
                 <button
                   key={item.id}
@@ -335,7 +335,7 @@ function VideoCreatorPageInner() {
             <p className="mt-1 text-[11px] text-slate-500">
               当前视频会按这些素材生成分镜提示。
             </p>
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-3">
               {selectedAssets.map((asset) => (
                 <div key={asset.id} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200">
                   {asset.mimeType.startsWith('video/') ? (
@@ -365,7 +365,7 @@ function VideoCreatorPageInner() {
                 <p className="text-[11px] font-black text-slate-500">从素材库添加</p>
                 <p className="text-[10px] text-slate-400">{availableAssets.length} 个可选素材</p>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-3">
                 {availableAssets.slice(0, assetPageSize).map((asset) => {
                   const selected = selectedAssetIds.includes(asset.id)
                   return (
@@ -400,8 +400,8 @@ function VideoCreatorPageInner() {
           </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="min-w-0 space-y-4">
+          <div className="min-h-[calc(100vh-112px)] rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-sm font-black">剧本与视频生成</h2>
@@ -412,50 +412,63 @@ function VideoCreatorPageInner() {
               {(generating || submittingVideo) && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
             </div>
             {!videoPlan ? (
-              <div className="mt-4 rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
+              <div className="mt-4 flex min-h-[420px] items-center justify-center rounded-lg border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
                 点击左侧按钮后将在这里看到可编辑剧本和 Seedance Prompt。
               </div>
             ) : (
-              <div className="mt-4 space-y-4">
-                {execution?.outputUrl && (
-                  <div className="overflow-hidden rounded-lg border border-slate-200 bg-black">
-                    <video src={execution.outputUrl} className="max-h-[520px] w-full" controls playsInline />
+              <div className="mt-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]">
+                <aside className="space-y-3 xl:sticky xl:top-[92px] xl:self-start">
+                  {execution?.outputUrl && (
+                    <div className="overflow-hidden rounded-lg border border-slate-200 bg-black">
+                      <video src={execution.outputUrl} className="max-h-[520px] w-full" controls playsInline />
+                    </div>
+                  )}
+                  {execution && (
+                    <div className={`rounded-lg p-3 text-xs font-bold ${
+                      execution.status === 'completed'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-amber-50 text-amber-700'
+                    }`}>
+                      视频生成状态：{execution.status === 'completed' ? '已完成并保存到素材库' : '已提交，视频仍在处理中'}
+                      {execution.providerTaskIds?.length ? ` · Provider Task: ${execution.providerTaskIds.join(', ')}` : ''}
+                    </div>
+                  )}
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-sm font-black">{videoPlan.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-600">{videoPlan.strategy}</p>
                   </div>
-                )}
-                {execution && (
-                  <div className={`rounded-lg p-3 text-xs font-bold ${
-                    execution.status === 'completed'
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : 'bg-amber-50 text-amber-700'
-                  }`}>
-                    视频生成状态：{execution.status === 'completed' ? '已完成并保存到素材库' : '已提交，视频仍在处理中'}
-                    {execution.providerTaskIds?.length ? ` · Provider Task: ${execution.providerTaskIds.join(', ')}` : ''}
+
+                  <button
+                    type="button"
+                    onClick={handleSubmitVideo}
+                    disabled={submittingVideo || generating}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-60"
+                  >
+                    {submittingVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    使用 Seedance 生成视频
+                  </button>
+
+                  <div className="rounded-lg border border-slate-200 p-3">
+                    <p className="text-xs font-black">Seedance Jobs</p>
+                    <div className="mt-2 space-y-1">
+                      {(videoPlan.seedanceJobs || []).map((job: any) => (
+                        <p key={job.id} className="break-all text-[11px] text-slate-600">
+                          {job.id} · {job.mode} · {job.modelHint} · {job.request?.duration}s
+                        </p>
+                      ))}
+                    </div>
                   </div>
-                )}
-                <div className="rounded-lg bg-slate-50 p-3">
-                  <p className="text-sm font-black">{videoPlan.title}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-600">{videoPlan.strategy}</p>
-                </div>
+                </aside>
 
-                <button
-                  type="button"
-                  onClick={handleSubmitVideo}
-                  disabled={submittingVideo || generating}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2.5 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-60"
-                >
-                  {submittingVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  使用 Seedance 生成视频
-                </button>
-
-                <div className="space-y-3">
+                <div className="grid min-w-0 grid-cols-1 gap-3 2xl:grid-cols-2">
                   {scenes.map((scene) => (
-                    <div key={scene.id} className="rounded-lg border border-slate-200 p-3">
+                    <div key={scene.id} className="min-w-0 rounded-lg border border-slate-200 p-3">
                       <div className="flex items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-xs font-black">{scene.id}. {scene.title}</p>
                           <p className="mt-1 text-[11px] text-slate-500">{scene.intent}</p>
                         </div>
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{scene.durationSec}s</span>
+                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{scene.durationSec}s</span>
                       </div>
                       <p className="mt-2 text-xs font-bold text-indigo-700">{scene.textOverlay}</p>
                       <p className="mt-2 text-[11px] leading-relaxed text-slate-600">{scene.cameraMotion}</p>
@@ -467,23 +480,12 @@ function VideoCreatorPageInner() {
                             if (!job) return
                             setPromptDrafts((prev) => ({ ...prev, [job.id]: event.target.value }))
                           }}
-                          rows={5}
+                          rows={7}
                           className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-[11px] leading-relaxed text-slate-700 outline-none focus:border-indigo-400"
                         />
                       )}
                     </div>
                   ))}
-                </div>
-
-                <div className="rounded-lg border border-slate-200 p-3">
-                  <p className="text-xs font-black">Seedance Jobs</p>
-                  <div className="mt-2 space-y-1">
-                    {(videoPlan.seedanceJobs || []).map((job: any) => (
-                      <p key={job.id} className="text-[11px] text-slate-600">
-                        {job.id} · {job.mode} · {job.modelHint} · {job.request?.duration}s
-                      </p>
-                    ))}
-                  </div>
                 </div>
               </div>
             )}
