@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mail, Lock, Eye, EyeOff, User, Globe, Phone, ArrowRight, Loader2, Sparkles, MessageSquare, MapPin, AlertCircle } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, User, Globe, Phone, ArrowRight, Loader2, Sparkles, MessageSquare, MapPin, AlertCircle, Sun, Moon, Languages } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { useI18n } from '@/lib/i18n'
 
 const InstagramIcon = ({ className }: { className?: string }) => (
   <svg
@@ -38,6 +40,10 @@ const LABEL_CLASS = 'block font-jetbrains text-xs text-slate-500 mb-2 ml-1'
 const INPUT_CLASS = 'w-full bg-slate-50 border border-slate-200 rounded-lg py-4 pl-12 pr-4 text-slate-800 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600/50 transition-all placeholder:text-slate-400 font-hanken text-base shadow-sm'
 
 export default function Login() {
+  const { theme, resolvedTheme, setTheme } = useTheme()
+  const { language, setLanguage, t } = useI18n()
+  const currentTheme = resolvedTheme || theme || 'light'
+
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -291,6 +297,30 @@ export default function Login() {
 
   return (
     <div className="min-h-screen w-full relative flex items-center justify-center bg-[#F8FAFC] overflow-hidden text-slate-800 p-4 md:p-8">
+      {/* Top Right Controls (Language & Theme Switchers) */}
+      <div className="absolute top-4 right-4 md:top-6 md:right-6 z-50 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setLanguage(language === 'en' ? 'zh' : 'en')}
+          className="h-9 px-3 rounded-full flex items-center justify-center gap-1.5 text-slate-500 hover:text-indigo-650 hover:bg-slate-100/80 dark:hover:bg-slate-800 transition-all font-bold text-xs bg-white/70 dark:bg-slate-900/70 border border-slate-200/50 dark:border-slate-800/50 shadow-sm backdrop-blur-sm"
+          aria-label={t('切换语言', 'Switch language')}
+          title={t('切换语言', 'Switch language')}
+        >
+          <Languages size={15} />
+          <span>{language === 'en' ? '中文' : 'EN'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
+          className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100/80 dark:hover:bg-slate-800 transition-all bg-white/70 dark:bg-slate-900/70 border border-slate-200/50 dark:border-slate-800/50 shadow-sm backdrop-blur-sm"
+          aria-label={t('切换主题', 'Toggle theme')}
+          title={t('切换主题', 'Toggle theme')}
+        >
+          {currentTheme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+      </div>
+
       {/* Background aurora glows and grid */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         <div className="aurora-glow-1"></div>
@@ -311,19 +341,19 @@ export default function Login() {
                   <Sparkles className="h-5 w-5 text-indigo-500" />
                 </div>
                 <div>
-                  <h2 className="font-manrope font-semibold text-lg text-slate-800">Autopilot Console</h2>
-                  <p className="font-hanken text-xs text-slate-500">Autonomous marketing agent logs</p>
+                  <h2 className="font-manrope font-semibold text-lg text-slate-800">{t('自动驾驶控制台', 'Autopilot Console')}</h2>
+                  <p className="font-hanken text-xs text-slate-500">{t('智能内容营销智能体日志', 'Autonomous marketing agent logs')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200/80 px-3 py-1.5 rounded-full">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10B981]"></div>
-                <span className="font-jetbrains text-[10px] text-emerald-700 tracking-wider font-semibold">LIVE ACTIVE</span>
+                <span className="font-jetbrains text-[10px] text-emerald-700 tracking-wider font-semibold">{t('运行中', 'LIVE ACTIVE')}</span>
               </div>
             </div>
 
             {/* Live Feed Section */}
             <div className="space-y-4">
-              <h3 className="font-jetbrains text-xs text-slate-400 uppercase tracking-wider">Active Agent Response</h3>
+              <h3 className="font-jetbrains text-xs text-slate-400 uppercase tracking-wider">{t('智能体执行结果', 'Active Agent Response')}</h3>
               {commentsList.length > 0 && (() => {
                 const c = commentsList[0];
                 return (
@@ -353,7 +383,7 @@ export default function Login() {
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5 mb-1">
-                          <span className="font-jetbrains text-[9px] text-emerald-700 uppercase font-semibold">Auto-Reply Submitted</span>
+                          <span className="font-jetbrains text-[9px] text-emerald-700 uppercase font-semibold">{t('回复已自动提交', 'Auto-Reply Submitted')}</span>
                         </div>
                         <p className="font-hanken text-xs text-slate-700 leading-relaxed">{c.reply}</p>
                       </div>
@@ -432,7 +462,7 @@ export default function Login() {
                   !isRegister ? 'bg-white text-slate-800 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Sign In / 登录
+                {t('登录', 'Sign In')}
               </button>
               <button
                 type="button"
@@ -441,7 +471,7 @@ export default function Login() {
                   isRegister ? 'bg-white text-slate-800 shadow-sm border border-slate-200/60' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Sign Up / 注册
+                {t('注册', 'Sign Up')}
               </button>
             </div>
 
@@ -450,7 +480,7 @@ export default function Login() {
               {/* Nickname Field (Register only) */}
               {isRegister && (
                 <div>
-                  <label className={LABEL_CLASS} htmlFor="nickname">Name / 您的姓名或昵称</label>
+                  <label className={LABEL_CLASS} htmlFor="nickname">{t('您的姓名或昵称', 'Name')}</label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                     <input
@@ -468,7 +498,7 @@ export default function Login() {
 
               {/* Email Field */}
               <div>
-                <label className={LABEL_CLASS} htmlFor="email">Email Address / 电子邮箱</label>
+                <label className={LABEL_CLASS} htmlFor="email">{t('电子邮箱', 'Email Address')}</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                   <input
@@ -487,7 +517,7 @@ export default function Login() {
               {/* Phone Field (Register only) */}
               {isRegister && (
                 <div>
-                  <label className={LABEL_CLASS} htmlFor="phone">Phone Number / 联系电话</label>
+                  <label className={LABEL_CLASS} htmlFor="phone">{t('联系电话', 'Phone Number')}</label>
                   <div className="relative">
                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                     <input
@@ -506,7 +536,7 @@ export default function Login() {
               {/* Country Field (Register only) */}
               {isRegister && (
                 <div>
-                  <label className={LABEL_CLASS} htmlFor="country">Country / City (所在城市)</label>
+                  <label className={LABEL_CLASS} htmlFor="country">{t('所在城市/国家', 'Country / City')}</label>
                   <div className="relative">
                     <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                     <input
@@ -525,14 +555,14 @@ export default function Login() {
               {/* Password Field */}
               <div>
                 <div className="flex justify-between items-center mb-2 ml-1 mr-1">
-                  <label className="block font-jetbrains text-xs text-slate-500" htmlFor="password">Password / 密码</label>
+                  <label className="block font-jetbrains text-xs text-slate-500" htmlFor="password">{t('密码', 'Password')}</label>
                   {!isRegister && (
                     <button
                       type="button"
                       onClick={() => { setShowForgotModal(true); setForgotSent(false); setForgotEmail(email); setForgotError('') }}
                       className="font-jetbrains text-xs text-purple-600 hover:text-purple-700 transition-colors hover:underline"
                     >
-                      忘记密码？
+                      {t('忘记密码？', 'Forgot Password?')}
                     </button>
                   )}
                 </div>
@@ -544,7 +574,7 @@ export default function Login() {
                     required
                     autoComplete={isRegister ? 'new-password' : 'current-password'}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg py-4 pl-12 pr-12 text-slate-800 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600/50 transition-all placeholder:text-slate-400 font-hanken text-base shadow-sm"
-                    placeholder={isRegister ? 'At least 8 characters' : '••••••••'}
+                    placeholder={isRegister ? t('最少 8 位字符', 'At least 8 characters') : '••••••••'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -561,7 +591,7 @@ export default function Login() {
               {/* Confirm Password Field (Register only) */}
               {isRegister && (
                 <div>
-                  <label className={LABEL_CLASS} htmlFor="confirm-password">Confirm Password / 确认密码</label>
+                  <label className={LABEL_CLASS} htmlFor="confirm-password">{t('确认密码', 'Confirm Password')}</label>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5" />
                     <input
@@ -570,7 +600,7 @@ export default function Login() {
                       required
                       autoComplete="new-password"
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg py-4 pl-12 pr-12 text-slate-800 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600/50 transition-all placeholder:text-slate-400 font-hanken text-base shadow-sm"
-                      placeholder="Confirm password"
+                      placeholder={t('再次输入密码', 'Confirm password')}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                     />
@@ -597,7 +627,15 @@ export default function Login() {
                     className="w-4 h-4 mt-0.5 rounded text-purple-600 focus:ring-purple-500 border-slate-300 focus:outline-none cursor-pointer"
                   />
                   <label htmlFor="agree-terms" className="text-[11px] text-slate-500 leading-normal font-hanken select-none">
-                    I agree to the <a href="/terms" target="_blank" className="text-purple-600 hover:underline font-semibold">Terms of Service</a> and <a href="/privacy" target="_blank" className="text-purple-600 hover:underline font-semibold">Privacy Policy</a> (compliant with Singapore PDPA). <br /> 我同意并接受<a href="/terms" target="_blank" className="text-purple-600 hover:underline font-semibold">服务条款</a>与<a href="/privacy" target="_blank" className="text-purple-600 hover:underline font-semibold">隐私政策</a>（符合新加坡 PDPA 规范）。
+                    {language === 'en' ? (
+                      <>
+                        I agree to the <a href="/terms" target="_blank" className="text-purple-600 hover:underline font-semibold">Terms of Service</a> and <a href="/privacy" target="_blank" className="text-purple-600 hover:underline font-semibold">Privacy Policy</a> (compliant with Singapore PDPA).
+                      </>
+                    ) : (
+                      <>
+                        我同意并接受<a href="/terms" target="_blank" className="text-purple-600 hover:underline font-semibold">服务条款</a>与<a href="/privacy" target="_blank" className="text-purple-600 hover:underline font-semibold">隐私政策</a>（符合新加坡 PDPA 规范）。
+                      </>
+                    )}
                   </label>
                 </div>
               )}
@@ -620,7 +658,7 @@ export default function Login() {
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    Meet Your AI Staff
+                    {t('开启您的 AI 员工', 'Meet Your AI Staff')}
                     <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
@@ -632,9 +670,9 @@ export default function Login() {
                 powered by <span className="text-slate-700">Immedi.ai</span>
               </p>
               <div className="flex justify-center gap-4 font-jetbrains text-[10px] text-slate-400">
-                <a href="/terms" target="_blank" className="hover:text-slate-600 hover:underline">Terms of Service / 服务条款</a>
+                <a href="/terms" target="_blank" className="hover:text-slate-600 hover:underline">{t('服务条款', 'Terms of Service')}</a>
                 <span>•</span>
-                <a href="/privacy" target="_blank" className="hover:text-slate-600 hover:underline">Privacy Policy / 隐私政策</a>
+                <a href="/privacy" target="_blank" className="hover:text-slate-600 hover:underline">{t('隐私政策', 'Privacy Policy')}</a>
               </div>
             </div>
           </div>
@@ -648,8 +686,8 @@ export default function Login() {
         >
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-5">
-              <h2 className="text-lg font-bold text-white">重置密码</h2>
-              <p className="text-indigo-100 text-xs mt-1">输入账号邮箱，我们会发送重置链接</p>
+              <h2 className="text-lg font-bold text-white">{t('重置密码', 'Reset Password')}</h2>
+              <p className="text-indigo-100 text-xs mt-1">{t('输入账号邮箱，我们会发送重置链接', 'Enter your email to receive a password reset link')}</p>
             </div>
             <div className="p-6">
               {forgotSent ? (
@@ -658,20 +696,20 @@ export default function Login() {
                     <svg className="w-7 h-7 text-emerald-500" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></svg>
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-slate-800">邮件已发送！</p>
-                    <p className="text-xs text-slate-500 mt-1">若该邮箱已注册，您将收到一封含重置链接的邮件。链接有效期 15 分钟。</p>
+                    <p className="text-sm font-bold text-slate-800">{t('邮件已发送！', 'Email Sent!')}</p>
+                    <p className="text-xs text-slate-500 mt-1">{t('若该邮箱已注册，您将收到一封含重置链接的邮件。链接有效期 15 分钟。', 'If this email is registered, you will receive a reset link valid for 15 minutes.')}</p>
                   </div>
                   <button
                     onClick={() => setShowForgotModal(false)}
                     className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition-colors"
                   >
-                    关闭
+                    {t('关闭', 'Close')}
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleForgotSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5">账号邮箱</label>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5">{t('账号邮箱', 'Account Email')}</label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input
@@ -694,14 +732,14 @@ export default function Login() {
                       onClick={() => setShowForgotModal(false)}
                       className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold text-sm transition-colors"
                     >
-                      取消
+                      {t('取消', 'Cancel')}
                     </button>
                     <button
                       type="submit"
                       disabled={forgotLoading || !forgotEmail}
                       className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-sm transition-colors flex items-center justify-center gap-1.5"
                     >
-                      {forgotLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : '发送重置邮件'}
+                      {forgotLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : t('发送重置邮件', 'Send Reset Email')}
                     </button>
                   </div>
                 </form>

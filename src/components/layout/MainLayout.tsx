@@ -3,11 +3,12 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { useTheme } from 'next-themes'
-import { Sun, Moon, GraduationCap } from 'lucide-react'
+import { Sun, Moon, GraduationCap, Languages } from 'lucide-react'
 import Sidebar from './Sidebar'
 import UserMenu from './UserMenu'
 import { type Brand } from './BrandSwitcher'
 import { resolveRoles, type BoardView } from '@/lib/permissions'
+import { useI18n } from '@/lib/i18n'
 
 interface MainLayoutProps {
   children: React.ReactNode
@@ -31,17 +32,17 @@ interface MainLayoutProps {
   onTasksCleared: () => void
 }
 
-const VIEW_LABEL_MAP: Record<BoardView, string> = {
-  dashboard: '品牌故事',
-  calendar: '发布日历',
-  drafts: '发布内容 (Post)',
-  assets: '素材库',
-  game: '店内活动',
-  socialInsight: '数据分析',
-  dataAnalysis: '账号快照',
-  agents: '历史 AI 序列',
-  logs: '工作日志',
-  managementOverview: '主理人总览',
+const VIEW_LABEL_MAP: Record<BoardView, { zh: string; en: string }> = {
+  dashboard: { zh: '品牌故事', en: 'Brand Story' },
+  calendar: { zh: '发布日历', en: 'Publishing Calendar' },
+  drafts: { zh: '发布内容 (Post)', en: 'Post Drafts' },
+  assets: { zh: '素材库', en: 'Asset Library' },
+  game: { zh: '店内活动', en: 'In-store Campaigns' },
+  socialInsight: { zh: '数据分析', en: 'Growth Analytics' },
+  dataAnalysis: { zh: '账号快照', en: 'Account Snapshot' },
+  agents: { zh: '历史 AI 序列', en: 'AI Workflow History' },
+  logs: { zh: '工作日志', en: 'Work Logs' },
+  managementOverview: { zh: '主理人总览', en: 'Principal Overview' },
 }
 
 export default function MainLayout({
@@ -58,8 +59,10 @@ export default function MainLayout({
   onTasksCleared,
 }: MainLayoutProps) {
   const { theme, resolvedTheme, setTheme } = useTheme()
+  const { language, setLanguage, t } = useI18n()
   const currentTheme = resolvedTheme || theme || 'light'
   const userRoles = resolveRoles(user)
+  const viewLabel = VIEW_LABEL_MAP[currentView]
 
   // Mobile: sidebar drawer state
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -127,7 +130,7 @@ export default function MainLayout({
           <button
             className="lg:hidden flex items-center justify-center w-9 h-9 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             onClick={() => setMobileSidebarOpen(true)}
-            aria-label="打开菜单"
+            aria-label={t('打开菜单', 'Open menu')}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="2" y1="4.5" x2="16" y2="4.5" />
@@ -138,7 +141,7 @@ export default function MainLayout({
 
           {/* Page title on desktop & mobile */}
           <span className="text-sm lg:text-base font-extrabold text-slate-800 dark:text-slate-100 truncate mx-2 lg:mx-4">
-            {VIEW_LABEL_MAP[currentView] || 'AI Marketing Crew'}
+            {viewLabel ? t(viewLabel.zh, viewLabel.en) : 'AI Marketing Crew'}
           </span>
 
           {/* Spacer to push controls to the right */}
@@ -151,16 +154,26 @@ export default function MainLayout({
               target="_blank"
               rel="noopener noreferrer"
               className="px-3 h-9 rounded-full flex items-center justify-center gap-1.5 text-slate-500 hover:text-indigo-650 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors font-bold text-xs shrink-0 cursor-pointer"
-              title="AMC 学院"
+              title={t('AMC 学院', 'AMC Academy')}
             >
               <GraduationCap size={16} className="text-indigo-500" />
-              <span>AMC 学院</span>
+              <span>{t('AMC 学院', 'AMC Academy')}</span>
             </a>
+
+            <button
+              onClick={() => setLanguage(language === 'en' ? 'zh' : 'en')}
+              className="px-3 h-9 rounded-full flex items-center justify-center gap-1.5 text-slate-500 hover:text-blue-650 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors font-bold text-xs shrink-0"
+              aria-label={t('切换语言', 'Switch language')}
+              title={t('切换语言', 'Switch language')}
+            >
+              <Languages size={16} />
+              <span>{language === 'en' ? '中文' : 'EN'}</span>
+            </button>
 
             <button
               onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
               className="w-9 h-9 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              aria-label="切换主题"
+              aria-label={t('切换主题', 'Toggle theme')}
             >
               {currentTheme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
             </button>

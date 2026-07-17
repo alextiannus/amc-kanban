@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronDown, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useI18n } from '@/lib/i18n'
 
 export interface Brand {
   id: string
@@ -24,6 +25,7 @@ interface BrandSwitcherProps {
 }
 
 export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: BrandSwitcherProps) {
+  const { t } = useI18n()
   const [showBrandMenu, setShowBrandMenu] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -32,18 +34,18 @@ export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: B
     const subscription = brand.subscriptions?.[0]
     if (!subscription) {
       return {
-        label: '未绑定配套',
+        label: t('未绑定配套', 'No package linked'),
         className: 'bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300',
       }
     }
     if (subscription.status === 'ACTIVE') {
       return {
-        label: subscription.planName ? `已配套 ${subscription.planName}` : '配套已激活',
+        label: subscription.planName ? t(`已配套 ${subscription.planName}`, `Package: ${subscription.planName}`) : t('配套已激活', 'Package active'),
         className: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300',
       }
     }
     return {
-      label: subscription.planName ? `${subscription.planName} (${subscription.status || 'UNKNOWN'})` : `配套 ${subscription.status || 'UNKNOWN'}`,
+      label: subscription.planName ? `${subscription.planName} (${subscription.status || 'UNKNOWN'})` : t(`配套 ${subscription.status || 'UNKNOWN'}`, `Package ${subscription.status || 'UNKNOWN'}`),
       className: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
     }
   }
@@ -76,7 +78,7 @@ export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: B
           <span className="text-[9px] font-black text-white">{(activeBrand?.name ?? '?').charAt(0).toUpperCase()}</span>
         </div>
         <span className="text-sm font-bold text-slate-700 dark:text-slate-200 max-w-[120px] truncate">
-          {activeBrand?.name ?? '选择品牌'}
+          {activeBrand?.name ?? t('选择品牌', 'Select Brand')}
         </span>
         <ChevronDown
           size={13}
@@ -87,7 +89,7 @@ export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: B
       {showBrandMenu && (
         <div className="absolute left-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="px-3 py-2 border-b border-slate-50 dark:border-slate-800">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">切换品牌</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('切换品牌', 'Switch Brand')}</p>
           </div>
           <div className="p-1.5 space-y-0.5">
             {brands.map((b) => {
@@ -126,7 +128,7 @@ export default function BrandSwitcher({ brands, activeBrand, setActiveBrand }: B
               className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-left text-slate-500 dark:text-slate-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
             >
               <Plus size={14} className="shrink-0" />
-              <span className="text-xs font-bold">添加新品牌</span>
+              <span className="text-xs font-bold">{t('添加新品牌', 'Add New Brand')}</span>
             </button>
 </div>
         </div>

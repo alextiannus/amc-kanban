@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { User as UserIcon, Settings, LogOut } from 'lucide-react'
 import { resolveRoles, type BoardView } from '@/lib/permissions'
+import { useI18n } from '@/lib/i18n'
 
 interface UserMenuProps {
   user: {
@@ -26,9 +27,9 @@ interface UserMenuProps {
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN:         'Admin',
-  BRAND_OWNER:   '品牌主',
-  AMC_PRINCIPAL: '主理人',
-  BD:            '商务拓展',
+  BRAND_OWNER:   'Brand Owner',
+  AMC_PRINCIPAL: 'Principal',
+  BD:            'Business Development',
   AMC_AGENT:     'AMC Agent',
 }
 
@@ -41,14 +42,20 @@ export default function UserMenu({
   onNewAgentKeyGenerated: _onNewAgentKeyGenerated,
   onTasksCleared: _onTasksCleared,
 }: UserMenuProps) {
+  const { t, isEn } = useI18n()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
   const roles = resolveRoles(user)
   const roleLabel = roles.length > 0
-    ? roles.map(r => ROLE_LABELS[r] || r).join(' / ')
-    : '用户'
+    ? roles.map(r => isEn ? (ROLE_LABELS[r] || r) : (
+      r === 'BRAND_OWNER' ? '品牌主' :
+      r === 'AMC_PRINCIPAL' ? '主理人' :
+      r === 'BD' ? '商务拓展' :
+      ROLE_LABELS[r] || r
+    )).join(' / ')
+    : t('用户', 'User')
 
   useEffect(() => {
     if (!open) return
@@ -78,7 +85,7 @@ export default function UserMenu({
         className="flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:shadow-md hover:scale-105 transition-all duration-200 border border-slate-200 dark:border-slate-700 overflow-hidden"
       >
         {user?.avatar ? (
-          <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
+          <img src={user.avatar} alt={t('头像', 'Avatar')} className="w-full h-full object-cover" />
         ) : user ? (
           (user.nickname || user.email).charAt(0).toUpperCase()
         ) : (
@@ -104,7 +111,7 @@ export default function UserMenu({
               onClick={() => { setOpen(false); router.push('/profile') }}
               className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
             >
-              <Settings size={15} /> 设置中心
+              <Settings size={15} /> {t('设置中心', 'Settings')}
             </button>
 
             <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
@@ -113,7 +120,7 @@ export default function UserMenu({
               onClick={handleLogout}
               className="flex items-center gap-3 px-3 py-2 w-full text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"
             >
-              <LogOut size={15} /> 退出登录
+              <LogOut size={15} /> {t('退出登录', 'Log out')}
             </button>
           </div>
         </div>

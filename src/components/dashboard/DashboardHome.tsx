@@ -13,6 +13,7 @@ import { ActionCard, AgentAvatar } from './DashboardHomeCards'
 import BrandHeroCard from './BrandHeroCard'
 import BrandStorySlides from './BrandStorySlides'
 import { parseBrandProfile, type BrandProfileData } from './parseBrandProfile'
+import { useI18n } from '@/lib/i18n'
 
 // ── Platform Catalog ──────────────────────────────────────────────────
 const ALL_PLATFORMS = [
@@ -160,6 +161,7 @@ function PlatformLogo({ icon, iconDark, name, size = 20 }: { icon: string; iconD
 }
 
 function KpiCard({ account, brandId, onDelete }: { account: ConnectedAccount; brandId?: string; onDelete?: () => void }) {
+  const { t } = useI18n()
   const platform = ALL_PLATFORMS.find(p => p.id === account.platformId)
   if (!platform) return null
   // Extract a hex color from the icon URL for tinting
@@ -170,7 +172,10 @@ function KpiCard({ account, brandId, onDelete }: { account: ConnectedAccount; br
     e.preventDefault()
     e.stopPropagation()
     if (!brandId) return
-    const confirmed = window.confirm(`确定要删除此 ${platform.name} 账号 (${account.handle}) 吗？删除后相关发帖和快照数据将被清除。`)
+    const confirmed = window.confirm(t(
+      `确定要删除此 ${platform.name} 账号 (${account.handle}) 吗？删除后相关发帖和快照数据将被清除。`,
+      `Delete this ${platform.name} account (${account.handle})? Related posts and snapshot data will be removed.`,
+    ))
     if (!confirmed) return
 
     try {
@@ -181,11 +186,11 @@ function KpiCard({ account, brandId, onDelete }: { account: ConnectedAccount; br
         onDelete?.()
       } else {
         const errJson = await res.json().catch(() => ({}))
-        alert(errJson.error || '删除失败，请重试')
+        alert(errJson.error || t('删除失败，请重试', 'Delete failed. Please try again.'))
       }
     } catch (err) {
       console.error(err)
-      alert('网络错误，请稍后重试')
+      alert(t('网络错误，请稍后重试', 'Network error. Please try again later.'))
     }
   }
 
@@ -204,7 +209,7 @@ function KpiCard({ account, brandId, onDelete }: { account: ConnectedAccount; br
           <button
             onClick={handleDelete}
             className="p-1 rounded bg-slate-50 hover:bg-rose-50 dark:bg-slate-850 dark:hover:bg-rose-950/30 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer border border-transparent hover:border-rose-100 dark:hover:border-rose-900/30"
-            title="删除账号"
+            title={t('删除账号', 'Delete account')}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -257,6 +262,7 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
   isAdmin?: boolean
 }) {
   void isAdmin
+  const { t } = useI18n()
   const [step, setStep] = useState<'pick' | 'form'>('pick')
   const [selectedPlatform, setSelectedPlatform] = useState<typeof ALL_PLATFORMS[0] | null>(null)
   const [form, setForm] = useState({ handle: '', profileUrl: '', loginUsername: '', loginPassword: '' })
@@ -305,7 +311,7 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
             </button>
           )}
           <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 flex-1">
-            {step === 'pick' ? '选择平台' : `添加 ${selectedPlatform?.name} 账号`}
+            {step === 'pick' ? t('选择平台', 'Select Platform') : t(`添加 ${selectedPlatform?.name} 账号`, `Add ${selectedPlatform?.name} Account`)}
           </h3>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
             <X className="w-4 h-4" />
@@ -343,11 +349,11 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
 
             {/* Handle */}
             <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">账号 Handle *</label>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">{t('账号 Handle', 'Account Handle')} *</label>
               <input
                 value={form.handle}
                 onChange={e => setForm(p => ({ ...p, handle: e.target.value }))}
-                placeholder={`@${selectedPlatform.name.toLowerCase()} 用户名`}
+                placeholder={`@${selectedPlatform.name.toLowerCase()} ${t('用户名', 'username')}`}
                 className="w-full px-3 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                 id="add-account-handle"
               />
@@ -355,7 +361,7 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
 
             {/* Profile URL */}
             <div>
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">主页链接</label>
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">{t('主页链接', 'Profile URL')}</label>
               <input
                 type="url"
                 value={form.profileUrl}
@@ -368,10 +374,10 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
 
             {/* Login credentials */}
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">登录凭证（Admin 可查看）</p>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">{t('登录凭证（Admin 可查看）', 'Login credentials (Admin visible)')}</p>
               <div className="space-y-3">
                 <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">登录账号 / 邮箱</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">{t('登录账号 / 邮箱', 'Login / Email')}</label>
                   <input
                     value={form.loginUsername}
                     onChange={e => setForm(p => ({ ...p, loginUsername: e.target.value }))}
@@ -381,7 +387,7 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">密码</label>
+                  <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">{t('密码', 'Password')}</label>
                   <div className="relative">
                     <input
                       type={showPw ? 'text' : 'password'}
@@ -396,7 +402,7 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
                       onClick={() => setShowPw(p => !p)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-xs font-bold"
                     >
-                      {showPw ? '隐藏' : '显示'}
+                      {showPw ? t('隐藏', 'Hide') : t('显示', 'Show')}
                     </button>
                   </div>
                 </div>
@@ -410,7 +416,7 @@ function AddAccountModal({ brandId, onDone, onClose, isAdmin }: {
               className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-all disabled:opacity-50 shadow-sm shadow-blue-500/20"
               id="add-account-submit"
             >
-              {saving ? '保存中…' : '保存账号'}
+              {saving ? t('保存中…', 'Saving...') : t('保存账号', 'Save Account')}
             </button>
           </div>
         )}
@@ -441,6 +447,7 @@ function ActivityCard({ icon, label, sub, time, status, actionLabel, onAction }:
   actionLabel?: string
   onAction?: () => void
 }) {
+  const { t } = useI18n()
   const meta = status ? STATUS_META[status] : null
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md hover:border-slate-200 dark:hover:border-slate-700 transition-all group">
@@ -459,7 +466,7 @@ function ActivityCard({ icon, label, sub, time, status, actionLabel, onAction }:
       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
         <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">{time}</span>
         {meta && (
-          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${meta.cls}`}>{meta.label}</span>
+          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${meta.cls}`}>{t(meta.label, status === 'done' ? 'Published' : status === 'pending' ? 'Pending Review' : 'Scheduled')}</span>
         )}
         {actionLabel && onAction && (
           <button
@@ -515,6 +522,7 @@ function BrandSwitcher({ brands, activeBrand, onChange }: {
   activeBrand: Brand
   onChange: (b: Brand) => void
 }) {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -549,7 +557,7 @@ function BrandSwitcher({ brands, activeBrand, onChange }: {
       {open && (
         <div className="absolute top-full left-0 mt-2 z-50 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl shadow-xl overflow-hidden min-w-[200px]">
           <div className="px-3 pt-2.5 pb-1">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">切换品牌</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{t('切换品牌', 'Switch Brand')}</p>
           </div>
           {brands.map(b => (
             <button
@@ -594,6 +602,7 @@ interface DashboardHomeProps {
 }
 
 export default function DashboardHome({ brand: propBrand, activeBrandId, onActiveBrandIdChange }: DashboardHomeProps) {
+  const { t } = useI18n()
   void activeBrandId
   void onActiveBrandIdChange
   // ── Brand: driven entirely by the parent (KanbanBoard top-bar switcher) ──
@@ -659,27 +668,27 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
   const handleSyncAccounts = async () => {
     if (!activeBrand?.id) return
     setSyncingAccounts(true)
-    setSyncStatus('正在同步...')
+    setSyncStatus(t('正在同步...', 'Syncing...'))
     try {
       const res = await fetch(`/api/brands/${activeBrand.id}/sync-postfast`, {
         method: 'POST',
       })
       const data = await res.json()
       if (res.ok) {
-        setSyncStatus('同步成功')
-        alert(`已成功同步 ${data.accountCount || 0} 个社交媒体账号和发布数据！`)
+        setSyncStatus(t('同步成功', 'Synced'))
+        alert(t(`已成功同步 ${data.accountCount || 0} 个社交媒体账号和发布数据！`, `${data.accountCount || 0} social media accounts and post records synced.`))
         setTimeout(() => setSyncStatus(null), 3000)
         // Refresh details
         loadDetail(activeBrand.id)
       } else {
-        setSyncStatus('同步失败')
-        alert(data.error || '同步账号失败')
+        setSyncStatus(t('同步失败', 'Sync failed'))
+        alert(data.error || t('同步账号失败', 'Failed to sync accounts'))
         setTimeout(() => setSyncStatus(null), 5000)
       }
     } catch (e) {
       console.error(e)
-      setSyncStatus('同步失败')
-      alert('同步请求失败，请检查网络连接')
+      setSyncStatus(t('同步失败', 'Sync failed'))
+      alert(t('同步请求失败，请检查网络连接', 'Sync request failed. Please check your network connection.'))
       setTimeout(() => setSyncStatus(null), 5000)
     } finally {
       setSyncingAccounts(false)
@@ -815,7 +824,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
       <div className="p-8 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin" />
-          <p className="text-xs text-slate-400 font-medium">加载品牌数据…</p>
+          <p className="text-xs text-slate-400 font-medium">{t('加载品牌数据…', 'Loading brand data...')}</p>
         </div>
       </div>
     )
@@ -827,13 +836,13 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
           <Store className="w-8 h-8 text-slate-400" />
         </div>
         <div className="text-center">
-          <p className="text-sm font-bold text-slate-600 dark:text-slate-300">暂无品牌</p>
-          <p className="text-xs text-slate-400 mt-1 mb-4">请先让 Agent 初始化品牌，或手动创建</p>
+          <p className="text-sm font-bold text-slate-600 dark:text-slate-300">{t('暂无品牌', 'No brand yet')}</p>
+          <p className="text-xs text-slate-400 mt-1 mb-4">{t('请先让 Agent 初始化品牌，或手动创建', 'Ask the Agent to initialize a brand, or create one manually.')}</p>
           <button
             onClick={() => router.push('/profile/principal/brands/new')}
             className="inline-flex items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700 px-4 py-2 text-xs font-bold text-white transition-colors"
           >
-            手动创建品牌
+            {t('手动创建品牌', 'Create Brand Manually')}
           </button>
         </div>
       </div>
@@ -871,7 +880,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
       <section>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            <BarChart2 className="w-4 h-4" /> 账号资产配置
+            <BarChart2 className="w-4 h-4" /> {t('账号资产配置', 'Account Asset Setup')}
           </h3>
           <div className="flex items-center gap-2">
             <button
@@ -884,13 +893,13 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
               ) : (
                 <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
               )}
-              {syncStatus || '同步账号'}
+              {syncStatus || t('同步账号', 'Sync Accounts')}
             </button>
             <button
               onClick={() => setShowAddAccount(true)}
               className="inline-flex items-center justify-center gap-1 rounded-xl bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-xs font-bold text-white transition-all cursor-pointer shadow-sm shadow-blue-500/10 active:scale-95"
             >
-              <span>+</span> 绑定新账号
+              <span>+</span> {t('绑定新账号', 'Connect Account')}
             </button>
           </div>
         </div>
@@ -953,7 +962,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
           <section>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-500" /> 待处理事项
+                <AlertCircle className="w-4 h-4 text-amber-500" /> {t('待处理事项', 'Action Items')}
               </h3>
               <span className="text-[10px] font-black text-white bg-amber-500 px-2.5 py-0.5 rounded-full">{pendingItems.length} NEW</span>
             </div>
