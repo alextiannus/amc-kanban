@@ -24,6 +24,7 @@ export async function GET() {
       authVersion: true,
       nickname: true,
       avatar: true,
+      locale: true,
       businessRoles: { select: { role: true } },
     }
   })

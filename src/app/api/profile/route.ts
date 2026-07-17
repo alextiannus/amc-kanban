@@ -25,6 +25,7 @@ export async function GET() {
         introduction: true,
         avatar: true,
         inviteCode: true,
+        locale: true,
         organizationMembers: {
           orderBy: { createdAt: 'asc' },
           include: {
@@ -145,7 +146,12 @@ export async function PATCH(request: Request) {
       const nickname = formData.get('nickname')
       const introduction = formData.get('introduction')
       const password = formData.get('password')
+      const locale = formData.get('locale')
       const avatarFile = formData.get('avatar') as File | null
+
+      if (typeof locale === 'string') {
+        updateData.locale = locale.trim() || null
+      }
 
       if (typeof nickname === 'string') {
         updateData.nickname = nickname.trim() || null
@@ -189,8 +195,12 @@ export async function PATCH(request: Request) {
         updateData.avatar = `/uploads/${fileName}`
       }
     } else {
-      const body = await request.json() as { password?: unknown; nickname?: unknown; introduction?: unknown }
-      const { password, nickname, introduction } = body
+      const body = await request.json() as { password?: unknown; nickname?: unknown; introduction?: unknown; locale?: unknown }
+      const { password, nickname, introduction, locale } = body
+
+      if (locale !== undefined) {
+        updateData.locale = typeof locale === 'string' ? (locale.trim() || null) : null
+      }
 
       if (nickname !== undefined) {
         updateData.nickname = typeof nickname === 'string' ? (nickname.trim() || null) : null
@@ -224,6 +234,7 @@ export async function PATCH(request: Request) {
         nickname: true,
         introduction: true,
         avatar: true,
+        locale: true,
       }
     })
 

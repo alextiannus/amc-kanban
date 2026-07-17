@@ -17,6 +17,7 @@ model User {
   authVersion  Int      @default(1)
   country      String?
   phone        String?
+  locale       String?
   
   // AI Agent 独占属性
   nickname     String?
