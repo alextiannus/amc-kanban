@@ -19,6 +19,8 @@ type SeedanceJob = {
     prompt: string
     ratio?: string
     duration?: number
+    resolution?: '480p' | '720p' | '1080p'
+    generateAudio?: boolean
     references?: Array<{ id?: string; url: string; mimeType?: string }>
     negativePrompt?: string
   }
@@ -226,7 +228,7 @@ async function generateWithSeedanceGateway(args: {
   const providerTaskIds: string[] = []
 
   for (const job of jobs) {
-    const references = resolveJobReferences(job, assets, input.imageUrls)
+    const references = limitSeedanceReferences(resolveJobReferences(job, assets, input.imageUrls))
     const imageUrls = references.filter((ref) => isImageReference(ref)).map((ref) => ref.url)
     const isBytePlusArk = isBytePlusSeedanceBase(baseUrl)
 
@@ -324,11 +326,11 @@ function buildBytePlusSeedancePayload(input: {
   return {
     model: normalizeSeedanceModel(config.modelName || job.modelHint || 'dreamina-seedance-2-0-fast-260128'),
     content,
-    resolution: '720p',
+    resolution: job.request.resolution || '480p',
     ratio: job.request.ratio || '9:16',
     duration: clampSeedanceDuration(job.request.duration || 5),
     watermark: false,
-    generate_audio: true,
+    generate_audio: Boolean(job.request.generateAudio),
   }
 }
 
@@ -501,6 +503,25 @@ function dedupeReferences(refs: SeedanceReference[]): SeedanceReference[] {
     seen.add(ref.url)
     return true
   })
+}
+
+function limitSeedanceReferences(refs: SeedanceReference[]): SeedanceReference[] {
+  const images: SeedanceReference[] = []
+  const videos: SeedanceReference[] = []
+  const audios: SeedanceReference[] = []
+  const others: SeedanceReference[] = []
+  for (const ref of refs) {
+    if (isVideoReference(ref)) videos.push(ref)
+    else if (isAudioReference(ref)) audios.push(ref)
+    else if (isImageReference(ref)) images.push(ref)
+    else others.push(ref)
+  }
+  return [
+    ...images.slice(0, 4),
+    ...videos.slice(0, 1),
+    ...audios.slice(0, 1),
+    ...others.slice(0, 2),
+  ]
 }
 
 function isImageReference(ref: SeedanceReference): boolean {

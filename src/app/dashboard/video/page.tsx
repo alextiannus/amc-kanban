@@ -333,6 +333,8 @@ function VideoCreatorPageInner() {
           references: refs,
           ratio: aspectRatio,
           duration: row.scene.durationSec,
+          resolution: '480p',
+          generateAudio: false,
         },
       }
       const res = await fetch('/api/content/video/create', {
@@ -407,6 +409,8 @@ function VideoCreatorPageInner() {
           ].join('\n'),
           ratio: aspectRatio,
           duration: Math.max(4, Math.min(15, duration)),
+          resolution: '480p',
+          generateAudio: false,
           references: selectedFinalUrls.map((url) => ({ url, mimeType: 'video/mp4' })),
           negativePrompt: '错乱文字, 伪造价格, 伪造地址, 多余logo, 低清晰度',
         },
