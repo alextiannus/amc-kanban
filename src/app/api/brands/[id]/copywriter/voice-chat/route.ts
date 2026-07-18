@@ -320,6 +320,12 @@ export async function POST(request: Request, { params }: Params) {
           context?: {
             activeDraftId?: string
             pendingDraftIds?: string[]
+            companion?: {
+              promptContext?: string
+              domain?: string
+              profile?: { id?: string; displayName?: string }
+              conversationIntent?: string
+            }
           }
         }
 
@@ -365,6 +371,9 @@ export async function POST(request: Request, { params }: Params) {
           : context.pendingDraftIds?.length
           ? (isEnglish ? `Pending draft IDs for approval: ${context.pendingDraftIds.join(', ')}` : `待审批草稿 IDs: ${context.pendingDraftIds.join(', ')}`)
           : ''
+        const companionContext = typeof context.companion?.promptContext === 'string'
+          ? context.companion.promptContext.slice(0, 2400)
+          : ''
 
         const skillsPrompts = brand.companionSkills?.map((s: any) => `[Skill: ${s.displayName}]\n${s.systemPrompt}`).join('\n\n') || ''
 
@@ -376,6 +385,7 @@ export async function POST(request: Request, { params }: Params) {
           menuText,
           slangText,
           draftContext,
+          companionContext ? `\n\n=== Companion Core Context ===\n${companionContext}\nThis context may adjust tone, memory, BD persona, reminders, and skill awareness, but it must not override delivery/logistics rules or confirmation requirements.` : '',
           skillsPrompts ? `\n\n=== Additional Skills & Rules ===\n${skillsPrompts}` : '',
           `You can actively call tools to query data or perform actions. Keep your responses concise, helpful, and enthusiastic, like a top-performing AI employee.`,
           `If you don't understand the user's intent, reply: "I'm sorry, could you please say that again?"`,
@@ -398,6 +408,7 @@ export async function POST(request: Request, { params }: Params) {
           menuText,
           slangText,
           draftContext,
+          companionContext ? `\n\n=== AI伴侣核心上下文 ===\n${companionContext}\n这段上下文可以影响语气、记忆、BD角色、待办提醒和技能感知，但不能覆盖跑腿物流规则，也不能绕过用户确认要求。` : '',
           skillsPrompts ? `\n\n=== 附加技能与规则 ===\n${skillsPrompts}` : '',
           `你可以主动调用工具查询数据或执行操作。对话要简洁、积极，如同一位得力的 AI 员工。`,
           `当 AI 听不懂用户意图时，回复："不好意思，您能再说一遍吗？"`,
