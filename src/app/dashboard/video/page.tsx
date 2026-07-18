@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import React, { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Check, Film, Loader2, Play, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Sparkles, Trash2, X } from 'lucide-react'
 
 type Asset = {
   id: string
@@ -52,6 +52,11 @@ type VideoScriptPreset = {
     textOverlay: string
     voiceover?: string
   }>
+}
+
+type VideoPreview = {
+  url: string
+  title: string
 }
 
 const creatorOptions = [
@@ -144,6 +149,122 @@ const motionMap: Record<string, string> = {
   'clean end frame with gentle zoom and readable text': '清楚结束画面，文字可读',
 }
 
+const textMap: Record<string, string> = {
+  'Hook -> Proof/Body -> CTA': '开场钩子 → 证明/主体 → 行动引导',
+  'Problem -> Solution -> CTA': '问题场景 → 解决方案 → 行动引导',
+  'Discovery -> Reason -> Action': '发现商家 → 到店理由 → 下一步行动',
+  'Before -> Turning point -> After -> CTA': '之前状态 → 转折点 → 之后效果 → 行动引导',
+  'Review quote -> Visual proof -> CTA': '评价引用 → 画面证明 → 行动引导',
+  'Reason 1 -> Reason 2 -> Reason 3 -> CTA': '理由一 → 理由二 → 理由三 → 行动引导',
+  'Offer hook -> Value -> Deadline/CTA': '优惠钩子 → 价值说明 → 截止/行动',
+  'Occasion -> Atmosphere -> CTA': '活动时刻 → 现场氛围 → 行动引导',
+  'Menu reveal -> Hero detail -> Order cue': '菜单亮相 → 主打细节 → 下单提示',
+  'Ingredient -> Cooking detail -> Taste cue': '食材亮点 → 做法细节 → 口感提示',
+  'Show use -> Show benefit -> CTA': '展示使用 → 展示好处 → 行动引导',
+  'Before -> Process -> After': '之前状态 → 过程细节 → 之后效果',
+  'Daily moment -> Merchant fit -> Outcome -> Save cue': '日常时刻 → 商家出现 → 体验结果 → 收藏提示',
+  'POV discovery -> Walk in -> Try it -> Save': '第一视角发现 → 走近细节 → 体验瞬间 → 收藏',
+  'Comment hook -> Proof montage -> CTA': '评论钩子 → 素材证明 → 行动引导',
+  'Review signal -> Merchant care -> Invitation': '好评信号 → 商家用心 → 邀请体验',
+  'Bundle reveal -> Value stack -> Claim cue': '套餐亮相 → 价值展示 → 领取提示',
+  'Reminder -> Reason -> Action': '提醒 → 理由 → 行动',
+  'Price hook -> What you get -> Order cue': '价位钩子 → 包含内容 → 下单提示',
+  'Staff pick -> Detail -> Try next': '店家推荐 → 推荐理由 → 试试它',
+  'Nearby cue -> Route clue -> Store detail -> Save': '附近提示 → 路线线索 → 门店细节 → 收藏',
+  'Plan idea -> Experience detail -> Invite': '计划灵感 → 体验细节 → 邀请收尾',
+  'Month -> Output -> Signals -> Next': '本月概览 → 内容产出 → 客户信号 → 下月重点',
+  'Before -> Work done -> After -> Next': '之前状态 → 完成工作 → 现在状态 → 下一步',
+  'Usage -> Output -> Approval -> Value': '使用记录 → 产出证明 → 审批过程 → 价值总结',
+  'Signal -> Insight -> Recommendation -> Action': '关键信号 → 洞察 → 建议 → 行动',
+  'Old asset -> Improvement -> New presentation': '旧素材状态 → 优化过程 → 新呈现',
+  'Missing context -> Updated presence -> Easier choice': '信息不完整 → 资料补齐 → 更容易选择',
+  'Scattered -> Systemized -> Consistent': '零散状态 → 系统化 → 持续输出',
+  'Assets -> Message -> Launch ready': '素材准备 → 信息清楚 → 准备上线',
+  'Fresh from the wok': '刚出锅的鲜香',
+  'Rich color, aroma, and texture': '色香与质感都看得见',
+  'Ready to enjoy': '可以开吃了',
+  'Worth a closer look': '值得仔细看看',
+  'Real details, clearly shown': '真实细节，清楚呈现',
+  'Save this for later': '先收藏起来',
+  'Need a better local option?': '想找个更好的附近选择？',
+  'Found nearby': '附近发现',
+  'Easy to choose': '更容易选择',
+  'Save for next time': '下次就选它',
+  'Hard to choose?': '选择困难？',
+  'Then this stood out': '这个细节让人记住',
+  'Now it makes sense': '现在选择更清楚',
+  'Try it next': '下次试试',
+  'Customers noticed this': '顾客提到了这个细节',
+  'Real words, real details': '真实评价，真实细节',
+  'See why locals save it': '看看为什么本地人会收藏',
+  'Reason 1': '理由一',
+  'Reason 2': '理由二',
+  'Reason 3': '理由三',
+  'Save this option': '收藏这个选择',
+  'Limited-time offer': '限时优惠',
+  'Worth checking out': '值得了解',
+  'Book, visit, or message today': '今天预约、到店或咨询',
+  'Happening now': '活动进行中',
+  'A local reason to visit': '一个到店理由',
+  'Visit today': '今天来看看',
+  'Today recommendation': '今日推荐',
+  'Fresh details': '新鲜细节',
+  'Ask today': '今天可以咨询',
+  'Fresh ingredient detail': '食材细节',
+  'Made with care': '用心制作',
+  'Ready to try': '可以试试',
+  'Near you': '就在附近',
+  'A practical local pick': '实用的附近选择',
+  'Save this place': '收藏这个地方',
+  'Lunch nearby?': '附近午餐？',
+  'A practical pick': '一个实用选择',
+  'Save for next meal': '下次用餐收藏',
+  'See it in action': '看看实际效果',
+  'The useful detail': '有用的细节',
+  'Before': '之前',
+  'After': '之后',
+  'In a normal day': '日常的一刻',
+  'This fits the moment': '正好适合这个场景',
+  'Found this nearby': '附近发现这个',
+  'Closer look': '靠近看看',
+  'Worth trying': '值得试试',
+  'Save this': '收藏起来',
+}
+
+function localizeText(value?: string) {
+  if (!value) return value || ''
+  return textMap[value] || value
+}
+
+function hasChinese(value?: string) {
+  return Boolean(value && /[\u3400-\u9fff]/.test(value))
+}
+
+function localizeVisualPrompt(shot: VideoScriptPreset['shotDrafts'][number]) {
+  if (hasChinese(shot.visualPrompt)) return shot.visualPrompt
+  const overlay = localizeText(shot.textOverlay)
+  return `${shot.title}：使用已选素材生成真实商家短视频画面。突出“${overlay}”这个表达，动作自然，细节清楚，避免虚构价格、虚假招牌、夸张承诺或不真实画面。`
+}
+
+function localizeVoiceover(shot: VideoScriptPreset['shotDrafts'][number]) {
+  if (!shot.voiceover || hasChinese(shot.voiceover)) return shot.voiceover
+  return `围绕“${localizeText(shot.textOverlay)}”做一句自然、简短的中文旁白。`
+}
+
+function localizeScriptPreset(preset: VideoScriptPreset): VideoScriptPreset {
+  return {
+    ...preset,
+    structure: localizeText(preset.structure),
+    shotDrafts: preset.shotDrafts.map((shot) => ({
+      ...shot,
+      visualPrompt: localizeVisualPrompt(shot),
+      textOverlay: localizeText(shot.textOverlay),
+      cameraMotion: motionMap[shot.cameraMotion] || shot.cameraMotion,
+      voiceover: localizeVoiceover(shot),
+    })),
+  }
+}
+
 function sceneTitle(scene: VideoScene) {
   return sceneTitleMap[scene.title] || scene.title
 }
@@ -213,6 +334,7 @@ function VideoCreatorPageInner() {
   const [plan, setPlan] = useState<any>(null)
   const [rows, setRows] = useState<SceneRow[]>([])
   const [finalExecution, setFinalExecution] = useState<any>(null)
+  const [videoPreview, setVideoPreview] = useState<VideoPreview | null>(null)
 
   const selectedCreator = useMemo(
     () => creatorOptions.find((item) => item.id === creatorType) || creatorOptions[0],
@@ -238,7 +360,7 @@ function VideoCreatorPageInner() {
     fetch(`/api/content/video/presets?creatorType=${encodeURIComponent(creatorType)}`)
       .then((res) => res.json())
       .then((json) => {
-        const presets = Array.isArray(json.presets) ? json.presets : []
+        const presets = Array.isArray(json.presets) ? json.presets.map(localizeScriptPreset) : []
         setScriptPresets(presets)
         const next = presets[0] || null
         setSelectedScriptId(next?.id || '')
@@ -453,6 +575,7 @@ function VideoCreatorPageInner() {
           platform,
           aspectRatio,
           targetDurationSec: duration,
+          language: 'zh',
           assetIds: selectedAssetIds,
           scriptPresetId: selectedScriptId,
           scriptDraft,
@@ -504,6 +627,7 @@ function VideoCreatorPageInner() {
           platform,
           aspectRatio,
           targetDurationSec: row.scene.durationSec,
+          language: 'zh',
           assetIds: row.assetIds,
           executionMode: 'submit',
           plan: {
@@ -669,7 +793,7 @@ function VideoCreatorPageInner() {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-black text-slate-700">剧本草稿</p>
-                  <p className="mt-1 text-[11px] text-slate-500">{scriptDraft?.structure || selectedCreator.flow}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">{localizeText(scriptDraft?.structure) || selectedCreator.flow}</p>
                 </div>
                 <select
                   value={selectedScriptId}
@@ -867,7 +991,7 @@ function VideoCreatorPageInner() {
                       </label>
                       <div className="rounded-lg bg-slate-50 p-2">
                         <p className="text-[10px] font-black text-slate-400">字幕</p>
-                        <p className="mt-1 line-clamp-2 text-xs font-bold text-indigo-700">{row.scene.textOverlay}</p>
+                        <p className="mt-1 line-clamp-2 text-xs font-bold text-indigo-700">{localizeText(row.scene.textOverlay)}</p>
                       </div>
                       <div className="rounded-lg bg-slate-50 p-2">
                         <p className="text-[10px] font-black text-slate-400">镜头</p>
@@ -917,7 +1041,15 @@ function VideoCreatorPageInner() {
 
                   <div className="self-start">
                     {row.execution?.outputUrl ? (
-                      <video src={row.execution.outputUrl} className="aspect-video w-full rounded-lg bg-black object-contain" controls playsInline />
+                      <button
+                        type="button"
+                        onClick={() => setVideoPreview({ url: row.execution.outputUrl, title: `第 ${index + 1} 镜预览` })}
+                        className="group grid aspect-video w-full place-items-center rounded-lg bg-slate-950 text-white shadow-sm transition hover:bg-slate-900"
+                      >
+                        <span className="grid h-12 w-12 place-items-center rounded-full bg-white/95 text-indigo-600 shadow-lg transition group-hover:scale-105">
+                          <Play className="h-5 w-5 fill-indigo-600" />
+                        </span>
+                      </button>
                     ) : row.execution ? (
                       <div className="grid aspect-video w-full place-items-center rounded-lg border border-dashed border-amber-200 bg-amber-50 text-amber-700">
                         <div className="flex flex-col items-center gap-2 text-center">
@@ -951,7 +1083,14 @@ function VideoCreatorPageInner() {
               </div>
 
               {finalExecution?.outputUrl && (
-                <video src={finalExecution.outputUrl} className="h-24 rounded-lg bg-black" controls playsInline />
+                <button
+                  type="button"
+                  onClick={() => setVideoPreview({ url: finalExecution.outputUrl, title: '最终视频预览' })}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-black text-slate-700 hover:border-indigo-300 hover:text-indigo-700"
+                >
+                  <Play className="h-4 w-4" />
+                  播放最终视频
+                </button>
               )}
 
               <div className="flex gap-2">
@@ -971,6 +1110,25 @@ function VideoCreatorPageInner() {
           </section>
         )}
       </main>
+
+      {videoPreview && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/90 p-3 backdrop-blur-sm" onClick={() => setVideoPreview(null)}>
+          <div className="relative w-full max-w-4xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between gap-3 text-white">
+              <p className="truncate text-sm font-black">{videoPreview.title}</p>
+              <div className="flex items-center gap-2">
+                <a href={videoPreview.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20" title="新标签页打开">
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+                <button onClick={() => setVideoPreview(null)} className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20" title="关闭">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <video src={videoPreview.url} className="max-h-[82vh] w-full rounded-lg bg-black object-contain shadow-2xl" controls autoPlay playsInline preload="metadata" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

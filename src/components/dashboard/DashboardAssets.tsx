@@ -144,8 +144,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
   const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '已使用'])
   const [selectedFolder, setSelectedFolder] = useState<string>('all')
 
-  // Image Lightbox Preview State
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
+  const [previewMedia, setPreviewMedia] = useState<DashboardAsset | null>(null)
 
   // Designer AI Chat State
   const [designerPromptText, setDesignerPromptText] = useState('')
@@ -743,12 +742,15 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
     setActiveAssetId(id)
   }
 
-  const handleCardClick = (id: string, e: React.MouseEvent) => {
+  const handleCardClick = (asset: DashboardAsset, e: React.MouseEvent) => {
     e.stopPropagation()
     if (isBatchSelectMode) {
-      toggleSelect(id, e)
+      toggleSelect(asset.id, e)
     } else {
-      setActiveAssetId(id)
+      setActiveAssetId(asset.id)
+      if (asset.mimeType.startsWith('video/') && isPreviewable(asset)) {
+        setPreviewMedia(asset)
+      }
     }
   }
 
@@ -1288,7 +1290,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
                     draggable={!isSelectingState}
                     onDragStart={(e) => handleDragStart(asset.id, e)}
                     onDragEnd={handleDragEnd}
-                    onClick={(e) => handleCardClick(asset.id, e)}
+                    onClick={(e) => handleCardClick(asset, e)}
                     onMouseEnter={() => handleCardMouseEnter(asset.id)}
                     onTouchMove={isSelectingState ? handleTouchMove : undefined}
                     style={{ touchAction: isSelectingState ? 'none' : 'auto' }}
@@ -1302,20 +1304,15 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
                           alt={asset.filename || 'asset'}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
-                      ) : previewable && isVideo ? (
-                        <div className="relative w-full h-full">
-                          <video
-                            src={`${asset.url}#t=0.1`}
-                            preload="metadata"
-                            muted
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/25">
-                            <div className="w-10 h-10 rounded-full bg-white/95 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all">
-                              <Play className="w-5 h-5 text-indigo-600 fill-indigo-600 ml-0.5" />
-                            </div>
-                          </div>
-                        </div>
+	                      ) : previewable && isVideo ? (
+	                        <div className="relative flex h-full w-full items-center justify-center bg-slate-950">
+	                          <Video className="h-10 w-10 text-white/45" />
+	                          <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+	                            <div className="w-10 h-10 rounded-full bg-white/95 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all">
+	                              <Play className="w-5 h-5 text-indigo-600 fill-indigo-600 ml-0.5" />
+	                            </div>
+	                          </div>
+	                        </div>
                       ) : (
                         <div className={`w-full h-full bg-gradient-to-br ${GRADIENT_PLACEHOLDERS[i % GRADIENT_PLACEHOLDERS.length]} flex items-center justify-center`}>
                           {isVideo ? (
@@ -1366,16 +1363,16 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
                         {asset.brandName}
                       </div>
 
-                      {/* Bottom-Right: Zoom preview button */}
+                      {/* Bottom-Right: Preview button */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          setPreviewImageUrl(asset.url)
+                          setPreviewMedia(asset)
                         }}
                         className="absolute bottom-2 right-2 w-7 h-7 bg-slate-950/60 dark:bg-black/60 hover:bg-indigo-600 text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 active:scale-95 transition-all shadow-md backdrop-blur-sm z-20"
-                        title="点击放大查看原图"
+                        title={isVideo ? '播放视频' : '放大查看'}
                       >
-                        <Maximize2 className="w-3.5 h-3.5" />
+                        {isVideo ? <Play className="w-3.5 h-3.5 fill-white" /> : <Maximize2 className="w-3.5 h-3.5" />}
                       </button>
                     </div>
 
@@ -1404,14 +1401,14 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
       </main>
 
 
-      {/* Lightbox original media preview modal */}
-      {previewImageUrl && (
+      {/* Original media preview modal */}
+      {previewMedia && (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 backdrop-blur-sm transition-all animate-fade-in"
-          onClick={() => setPreviewImageUrl(null)}
+          onClick={() => setPreviewMedia(null)}
         >
           <button
-            onClick={() => setPreviewImageUrl(null)}
+            onClick={() => setPreviewMedia(null)}
             className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all"
             title="关闭预览"
           >
@@ -1422,24 +1419,26 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
             className="max-w-[90vw] max-h-[90vh] flex items-center justify-center relative"
             onClick={e => e.stopPropagation()}
           >
-            {previewImageUrl.toLowerCase().endsWith('.mp4') || previewImageUrl.includes('/videos/') ? (
+            {previewMedia.mimeType.startsWith('video/') ? (
               <video
-                src={previewImageUrl}
+                src={previewMedia.url}
                 controls
                 autoPlay
+                playsInline
+                preload="metadata"
                 className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
               />
             ) : (
               <img
-                src={previewImageUrl}
-                alt="Original preview"
+                src={previewMedia.url}
+                alt={previewMedia.filename || '素材预览'}
                 className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl select-none"
               />
             )}
             
             <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 text-white/70 text-xs font-mono bg-black/40 px-3 py-1 rounded-full backdrop-blur-md whitespace-nowrap">
               <a
-                href={previewImageUrl}
+                href={previewMedia.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:underline flex items-center gap-1 hover:text-white"
