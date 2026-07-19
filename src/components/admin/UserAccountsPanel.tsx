@@ -26,7 +26,7 @@ interface UserAccountsPanelProps {
   actionLoading: Record<string, string>
   onCreateUser: (email: string, type: string, role: string) => Promise<void>
   onRoleToggle: (user: UserRecord) => Promise<void>
-  onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD') => void
+  onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => void
   onResetPassword: (user: UserRecord) => Promise<void>
   onDeleteUser: (user: UserRecord) => Promise<void>
   onEditUser: (user: { id: string; email: string; nickname: string | null; role: string; type: string }) => void
@@ -116,7 +116,7 @@ export default function UserAccountsPanel({
     })
   }
 
-  const toggleDraftBusinessRole = (role: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD') => {
+  const toggleDraftBusinessRole = (role: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => {
     setDraft((prev) => ({
       ...prev,
       businessRoles: prev.businessRoles.includes(role)
@@ -243,6 +243,7 @@ export default function UserAccountsPanel({
         {roles.has('AMC_PRINCIPAL') && <span className="admin-badge admin-badge-blue">主理人</span>}
         {roles.has('BRAND_OWNER') && <span className="admin-badge admin-badge-green">品牌主</span>}
         {roles.has('BD') && <span className="admin-badge admin-badge-amber">BD</span>}
+        {roles.has('RESEARCHER') && <span className="admin-badge admin-badge-slate">Researcher</span>}
         {user.role !== 'ADMIN' && roles.size === 0 && <span className="text-slate-400">普通成员</span>}
       </div>
     )
@@ -373,6 +374,14 @@ export default function UserAccountsPanel({
                                 onChange={() => toggleDraftBusinessRole('BD')}
                               />
                               <span>BD</span>
+                            </label>
+                            <label className="admin-check">
+                              <input
+                                type="checkbox"
+                                checked={draft.businessRoles.includes('RESEARCHER')}
+                                onChange={() => toggleDraftBusinessRole('RESEARCHER')}
+                              />
+                              <span>Researcher</span>
                             </label>
                           </div>
                         ) : (

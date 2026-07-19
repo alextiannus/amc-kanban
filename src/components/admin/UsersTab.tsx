@@ -24,7 +24,7 @@ export interface UserRecord {
   chatLink?: string | null
   driveFolder?: string | null
   businessRoles: Array<{
-    role: string // 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD'
+    role: string // 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER'
   }>
   ownedBrands: Array<{
     brand: { id: string; name: string; status: string }
@@ -62,7 +62,7 @@ interface UsersTabProps {
   actionLoading: Record<string, string>
   onCreateUser: (email: string, type: string, role: string) => Promise<void>
   onRoleToggle: (user: UserRecord) => Promise<void>
-  onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD') => void
+  onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => void
   onResetPassword: (user: UserRecord) => Promise<void>
   onDeleteUser: (user: UserRecord) => Promise<void>
   onSaveAgentDraft: (agentId: string, draft: any) => Promise<boolean>

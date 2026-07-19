@@ -11,16 +11,16 @@ interface UserGroupsPanelProps {
   loading: boolean
   actionLoading: Record<string, string>
   onRoleToggle: (user: UserRecord) => Promise<void>
-  onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD') => void
+  onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => void
 }
 
 interface GroupDef {
-  id: 'admins' | 'principals' | 'owners' | 'bd'
+  id: 'admins' | 'principals' | 'owners' | 'bd' | 'researchers'
   name: string
   description: string
   roleType: 'system' | 'business'
   systemRole?: 'ADMIN'
-  businessRole?: 'AMC_PRINCIPAL' | 'BRAND_OWNER' | 'BD'
+  businessRole?: 'AMC_PRINCIPAL' | 'BRAND_OWNER' | 'BD' | 'RESEARCHER'
 }
 
 const GROUPS: GroupDef[] = [
@@ -51,6 +51,13 @@ const GROUPS: GroupDef[] = [
     description: '负责对接商户、协助商户入驻和跟进服务的商务发展角色。',
     roleType: 'business',
     businessRole: 'BD'
+  },
+  {
+    id: 'researchers',
+    name: '研究员组 (Researchers)',
+    description: '负责查看内容角色库与增长研究系统，只展示连接到 amc-content 和 amc-growth 的主菜单。',
+    roleType: 'business',
+    businessRole: 'RESEARCHER'
   }
 ]
 
@@ -61,7 +68,7 @@ export default function UserGroupsPanel({
   onRoleToggle,
   onToggleBusinessRole
 }: UserGroupsPanelProps) {
-  const [selectedGroupId, setSelectedGroupId] = useState<'admins' | 'principals' | 'owners' | 'bd'>('admins')
+  const [selectedGroupId, setSelectedGroupId] = useState<'admins' | 'principals' | 'owners' | 'bd' | 'researchers'>('admins')
   const [addingUserId, setAddingUserId] = useState('')
 
   const activeGroup = GROUPS.find(g => g.id === selectedGroupId)!

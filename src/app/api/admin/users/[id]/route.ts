@@ -64,7 +64,7 @@ export async function PATCH(request: Request, { params }: Params) {
       data.authVersion = { increment: 1 }
     }
 
-    const validBusinessRoles = ['BRAND_OWNER', 'AMC_PRINCIPAL', 'BD'] as const
+    const validBusinessRoles = ['BRAND_OWNER', 'AMC_PRINCIPAL', 'BD', 'RESEARCHER'] as const
     type ValidBusinessRole = (typeof validBusinessRoles)[number]
     const nextBusinessRoles = Array.isArray(body.businessRoles)
       ? Array.from(new Set((body.businessRoles as unknown[]).filter((role): role is ValidBusinessRole => typeof role === 'string' && validBusinessRoles.includes(role as ValidBusinessRole))))

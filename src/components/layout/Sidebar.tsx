@@ -8,6 +8,7 @@ import {
   Users, Inbox,
   Bot, Shield,
   Briefcase, TrendingUp,
+  Sparkles,
   ChevronLeft, ChevronRight, ChevronDown,
   Lock, Plus,
   BookOpen,
@@ -23,7 +24,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   BarChart2, Camera, Activity,
   Users, Inbox,
   Bot, Shield,
-  Briefcase, TrendingUp,
+  Briefcase, TrendingUp, Sparkles,
   BookOpen,
 }
 
@@ -50,10 +51,12 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '主理人': 'Principal',
   '品牌主': 'Brand Owner',
   'BD 商务': 'BD',
+  'Researcher': 'Researcher',
   '即将上线': 'Coming Soon',
   '主理人总览': 'Principal Overview',
   '账号快照': 'Account Snapshot',
   '智能规划': 'Growth Planning',
+  'AI 角色库': 'AI Role Library',
   '品牌故事': 'Brand Story',
   '发布日历': 'Publishing Calendar',
   '发布内容': 'Post Drafts',
@@ -280,6 +283,12 @@ export default function Sidebar({
         const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         if (isLocal) {
           targetUrl = 'http://localhost:4188/public/'
+        }
+      }
+      if (targetUrl.includes('amc-content.immedi.ai')) {
+        const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        if (isLocal) {
+          targetUrl = 'http://localhost:4010/admin/ai-roles'
         }
       }
       if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {

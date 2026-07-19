@@ -1,4 +1,4 @@
-export const GLOBAL_ROLES = ['ADMIN', 'AMC_PRINCIPAL', 'BRAND_OWNER', 'BD'] as const
+export const GLOBAL_ROLES = ['ADMIN', 'AMC_PRINCIPAL', 'BRAND_OWNER', 'BD', 'RESEARCHER'] as const
 
 export type GlobalRole = (typeof GLOBAL_ROLES)[number]
 export type ActorType = 'HUMAN' | 'AMC_AGENT'

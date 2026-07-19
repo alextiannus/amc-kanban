@@ -61,6 +61,7 @@ export const ROLE_CAPABILITIES: Record<GlobalRole, readonly Capability[]> = {
   AMC_PRINCIPAL: [...BRAND_OPERATOR_CAPABILITIES, 'brand.create', 'agent.manage'],
   BRAND_OWNER: BRAND_OPERATOR_CAPABILITIES,
   BD: ['brand.read', 'brand.create', 'subscription.manage'],
+  RESEARCHER: ['brand.read'],
 }
 
 export function hasCapability(roles: readonly GlobalRole[], capability: Capability): boolean {

@@ -312,7 +312,7 @@ function AdminPageInner() {
     }
   }
 
-  const toggleBusinessRole = (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD') => {
+  const toggleBusinessRole = (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => {
     const roles = new Set((user.businessRoles || []).map((role) => role.role))
     if (roles.has(roleName)) roles.delete(roleName)
     else roles.add(roleName)
@@ -849,10 +849,16 @@ function AdminPageInner() {
           background: rgb(254 243 199);
           color: rgb(180 83 9);
         }
+        .admin-badge-slate {
+          border-color: rgb(203 213 225);
+          background: rgb(248 250 252);
+          color: rgb(71 85 105);
+        }
         .dark .admin-badge-indigo,
         .dark .admin-badge-blue,
         .dark .admin-badge-green,
-        .dark .admin-badge-amber {
+        .dark .admin-badge-amber,
+        .dark .admin-badge-slate {
           background: rgb(15 23 42);
           border-color: rgb(51 65 85);
           color: rgb(203 213 225);

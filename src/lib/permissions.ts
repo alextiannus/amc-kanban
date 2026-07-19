@@ -2,7 +2,7 @@
  * permissions.ts — Centralized role resolution & menu configuration
  */
 
-export type AppRole = 'ADMIN' | 'AMC_PRINCIPAL' | 'BRAND_OWNER' | 'BD'
+export type AppRole = 'ADMIN' | 'AMC_PRINCIPAL' | 'BRAND_OWNER' | 'BD' | 'RESEARCHER'
 
 export type BoardView =
   | 'dashboard'
@@ -26,7 +26,7 @@ export interface UserInfo {
 export function resolveRoles(user: UserInfo | null): AppRole[] {
   if (!user) return []
   if (user.userRoles && user.userRoles.length > 0) {
-    const valid: AppRole[] = ['ADMIN', 'AMC_PRINCIPAL', 'BRAND_OWNER', 'BD']
+    const valid: AppRole[] = ['ADMIN', 'AMC_PRINCIPAL', 'BRAND_OWNER', 'BD', 'RESEARCHER']
     return user.userRoles.filter((r): r is AppRole => valid.includes(r as AppRole))
   }
   if (user.role === 'ADMIN') return ['ADMIN']
@@ -40,6 +40,7 @@ export function canAccessView(roles: AppRole[], view: BoardView): boolean {
   const isAdmin = roles.includes('ADMIN')
   const isPrincipal = roles.includes('AMC_PRINCIPAL')
   const isOwner = roles.includes('BRAND_OWNER')
+  const isResearcher = roles.includes('RESEARCHER')
   switch (view) {
     case 'dashboard':
     case 'calendar':
@@ -52,7 +53,7 @@ export function canAccessView(roles: AppRole[], view: BoardView): boolean {
     case 'dataAnalysis':
       return isAdmin || isPrincipal
     case 'managementOverview':
-      return isAdmin || isPrincipal
+      return isAdmin || isPrincipal || isResearcher
     case 'agents':
     case 'logs':
       return isAdmin || isPrincipal || isOwner
@@ -95,11 +96,23 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
   const isPrincipal = roles.includes('AMC_PRINCIPAL')
   const isOwner     = roles.includes('BRAND_OWNER')
   const isBD        = roles.includes('BD')
+  const isResearcher = roles.includes('RESEARCHER')
 
   const canBrandOps = isAdmin || isPrincipal || isOwner
   const canManage   = isAdmin || isPrincipal
 
   const groups: MenuGroupDef[] = []
+
+  if (isResearcher && !isAdmin && !isPrincipal && !isOwner && !isBD) {
+    groups.push({
+      groupLabel: 'Researcher',
+      items: [
+        { id: 'amc-content-roles', view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/ai-roles' },
+        { id: 'amc-growth',        view: 'managementOverview', label: '智能规划', icon: 'TrendingUp', href: 'https://amc-growth.immedi.ai/public/' },
+      ],
+    })
+    return groups
+  }
 
   // ── 1. 主理人 (Admin / Principal) ────────────────────────────────
   if (canManage) {
@@ -108,6 +121,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       items: [
         { id: 'managementOverview', view: 'managementOverview', label: '主理人总览', icon: 'Users' },
         { id: 'dataAnalysis',       view: 'dataAnalysis',       label: '账号快照',   icon: 'Camera' },
+        { id: 'amc-content-roles',  view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/ai-roles' },
         { id: 'amc-growth',         view: 'managementOverview', label: '智能规划', icon: 'TrendingUp', href: 'https://amc-growth.immedi.ai/public/' },
       ],
     })
