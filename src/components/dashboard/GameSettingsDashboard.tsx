@@ -117,7 +117,14 @@ function allocateGridSlots(prizesList: Prize[]): Prize[] {
 }
 
 export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUrl }: Props) {
-  const getBase = () => kanbanBaseUrl || (typeof window !== 'undefined' ? window.location.origin : '')
+  const getBase = () => {
+    if (kanbanBaseUrl) return kanbanBaseUrl
+    if (typeof window === 'undefined') return ''
+    const { protocol, hostname, port, origin } = window.location
+    if (port || hostname === 'localhost' || hostname === '127.0.0.1') return origin
+    if (hostname === 'amc-kanban.immedi.ai') return origin
+    return `${protocol}//amc-kanban.immedi.ai`
+  }
 
   const [config, setConfig] = useState<GameConfig | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1048,4 +1055,3 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
     </div>
   )
 }
-

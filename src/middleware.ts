@@ -33,6 +33,7 @@ export default async function proxy(request: NextRequest) {
     pathname === '/privacy' ||
     pathname === '/game' || 
     pathname.startsWith('/game/') ||
+    pathname.startsWith('/board/game/poster/') ||
     pathname.startsWith('/presentation/') ||
     pathname.startsWith('/reset-password/') || // token-based reset (no session needed)
     pathname.startsWith('/invite/') ||             // invitation acceptance
