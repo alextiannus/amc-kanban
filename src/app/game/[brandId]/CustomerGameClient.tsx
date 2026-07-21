@@ -16,9 +16,11 @@ type GameConfig = {
   title: string
   description: string | null
   themeColor: string
+  taskReviewEnabled?: boolean
   taskGoogleMapsEnabled: boolean
   taskXiaohongshuEnabled: boolean
   taskInstagramEnabled: boolean
+  maxSpinsPerUserDay?: number | null
   templateType: 'WHEEL' | 'GRID'
   prizes: Prize[]
   brand?: {
@@ -46,6 +48,13 @@ type SpinResult = {
   pointsBalance: number
 }
 
+type Platform = 'GOOGLE' | 'XIAOHONGSHU' | 'INSTAGRAM'
+
+type PendingSubmission = {
+  submissionId: string
+  platform: Platform
+}
+
 function getSessionId(brandId: string): string {
   const key = `amc-game-session:${brandId}`
   const existing = window.localStorage.getItem(key)
@@ -55,11 +64,22 @@ function getSessionId(brandId: string): string {
   return next
 }
 
-function platformUrl(config: GameConfig | null, platform: 'GOOGLE' | 'XIAOHONGSHU' | 'INSTAGRAM'): string | undefined {
+function platformLabel(platform: Platform): string {
+  if (platform === 'GOOGLE') return 'Google review'
+  if (platform === 'XIAOHONGSHU') return 'Xiaohongshu'
+  return 'Instagram'
+}
+
+function platformUrl(config: GameConfig | null, platform: Platform): string | undefined {
   if (!config) return undefined
   if (platform === 'GOOGLE') return config.brand?.googleReviewUrl || config.brand?.googleBusinessUrl || undefined
   const account = config.brand?.accounts?.find((item) => item.platformId.toLowerCase() === platform.toLowerCase())
   return account?.profileUrl || undefined
+}
+
+function inventoryLabel(prize: Prize): string {
+  if (prize.totalInventory === null) return 'Unlimited'
+  return `${Math.max(prize.totalInventory - (prize.claimedCount || 0), 0)} left`
 }
 
 function allocateGridSlots(prizesList: Prize[]): Prize[] {
@@ -203,7 +223,11 @@ function GameBoard({
                 >
                   {prize ? (
                     <>
-                      <span className="text-2xl">{prizeIcon(prize.type)}</span>
+                      {prize.imageUrl ? (
+                        <img src={prize.imageUrl} alt="" className="h-8 w-8 rounded-lg object-cover" />
+                      ) : (
+                        <span className="text-2xl">{prizeIcon(prize.type)}</span>
+                      )}
                       <span className="mt-1 w-full truncate text-[11px] font-black leading-tight text-white">{prize.name}</span>
                       <span className="mt-0.5 text-[9px] font-bold text-amber-300">{(prize.probability * 100).toFixed(0)}%</span>
                     </>
@@ -328,7 +352,11 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [agreed, setAgreed] = useState(false)
+  const [selectedPlatform, setSelectedPlatform] = useState<Platform>('GOOGLE')
+  const [pendingSubmission, setPendingSubmission] = useState<PendingSubmission | null>(null)
+  const [staffPin, setStaffPin] = useState('')
+  const [submittingTask, setSubmittingTask] = useState(false)
+  const [confirmingTask, setConfirmingTask] = useState(false)
   const [spinning, setSpinning] = useState(false)
   const [spinResult, setSpinResult] = useState<SpinResult | null>(null)
   const [wheelRotation, setWheelRotation] = useState(0)
@@ -336,6 +364,20 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
   const accent = config?.themeColor || '#2563eb'
   const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
+  const activePlatforms = useMemo<Platform[]>(() => {
+    if (!config) return []
+    const platforms: Platform[] = []
+    if (config.taskGoogleMapsEnabled) platforms.push('GOOGLE')
+    if (config.taskXiaohongshuEnabled) platforms.push('XIAOHONGSHU')
+    if (config.taskInstagramEnabled) platforms.push('INSTAGRAM')
+    return platforms
+  }, [config])
+
+  useEffect(() => {
+    if (activePlatforms.length > 0 && !activePlatforms.includes(selectedPlatform)) {
+      setSelectedPlatform(activePlatforms[0])
+    }
+  }, [activePlatforms, selectedPlatform])
 
   useEffect(() => {
     const id = getSessionId(brandId)
@@ -363,27 +405,48 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     void load()
   }, [brandId])
 
-  async function submitReview(platform: 'GOOGLE' | 'XIAOHONGSHU' | 'INSTAGRAM') {
-    if (!sessionId) return
-    if (!agreed) {
-      setError('Please confirm the copyright and participation agreement first.')
-      return
-    }
+  async function submitReview(platform: Platform) {
+    if (!sessionId || submittingTask) return
     setError('')
     setMessage('')
+    setSubmittingTask(true)
     const form = new FormData()
     form.set('brandId', brandId)
     form.set('sessionId', sessionId)
     form.set('taskType', 'REVIEW_SUBMIT')
     form.set('reviewPlatform', platform)
-    form.set('copyrightAgreed', 'true')
     const response = await fetch('/api/game/tasks', { method: 'POST', body: form })
     const data = await response.json().catch(() => ({}))
+    setSubmittingTask(false)
     if (!response.ok) {
       setError(data.error || 'Submission failed.')
       return
     }
-    setMessage('Submitted. Please show this screen to the staff for confirmation.')
+    setPendingSubmission({ submissionId: data.submissionId, platform })
+    setStaffPin('')
+    setMessage('Completed. Please ask staff to enter the PIN and confirm your points.')
+  }
+
+  async function confirmSubmission() {
+    if (!pendingSubmission || !staffPin.trim() || confirmingTask) return
+    setError('')
+    setMessage('')
+    setConfirmingTask(true)
+    const response = await fetch('/api/game/tasks/override', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ submissionId: pendingSubmission.submissionId, pinCode: staffPin.trim() }),
+    })
+    const data = await response.json().catch(() => ({}))
+    setConfirmingTask(false)
+    if (!response.ok) {
+      setError(data.error || 'Staff confirmation failed.')
+      return
+    }
+    setStatus((prev) => prev ? { ...prev, pointsBalance: data.pointsBalance } : { pointsBalance: data.pointsBalance, unclaimedPrizes: [] })
+    setPendingSubmission(null)
+    setStaffPin('')
+    setMessage('Confirmed. 5 points have been added. You can play now.')
   }
 
   async function spin() {
@@ -474,6 +537,9 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             <div className="rounded-2xl bg-white p-4 shadow-sm">
               <p className="text-[11px] font-bold uppercase text-slate-400">Points</p>
               <p className="mt-1 text-3xl font-black" style={{ color: accent }}>{status?.pointsBalance ?? 0}</p>
+              <p className="mt-1 text-[11px] font-bold text-slate-400">
+                {config?.maxSpinsPerUserDay ? `${config.maxSpinsPerUserDay} spins per day` : 'No daily limit'}
+              </p>
             </div>
             <button
               onClick={spin}
@@ -509,42 +575,90 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             </div>
           ) : null}
 
-          <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-black">Earn points</h2>
-            <p className="mt-1 text-xs leading-5 text-slate-500">Leave a review or follow the merchant channel, then ask staff to confirm your submission.</p>
-            <label className="mt-3 flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-600">
-              <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-0.5" />
-              I confirm I own the content I submit and agree it may be used by the merchant for marketing.
-            </label>
-            <div className="mt-3 grid gap-2">
-              {config?.taskGoogleMapsEnabled && (
-                <a href={platformUrl(config, 'GOOGLE')} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-black">
-                  Open Google review
-                </a>
+          {config?.taskReviewEnabled !== false && activePlatforms.length > 0 && (
+            <div className="rounded-2xl bg-white p-4 shadow-sm">
+              <h2 className="text-sm font-black">Earn points</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Publish on one channel, then ask store staff to confirm with the PIN. Each confirmed task adds 5 points.</p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {activePlatforms.map((platform) => (
+                  <button
+                    key={platform}
+                    onClick={() => setSelectedPlatform(platform)}
+                    className="rounded-xl border px-2 py-2 text-xs font-black"
+                    style={{
+                      borderColor: selectedPlatform === platform ? accent : 'rgb(226 232 240)',
+                      color: selectedPlatform === platform ? accent : 'rgb(51 65 85)',
+                      backgroundColor: selectedPlatform === platform ? `${accent}14` : '#ffffff',
+                    }}
+                  >
+                    {platformLabel(platform)}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 grid gap-2">
+                {platformUrl(config, selectedPlatform) ? (
+                  <a href={platformUrl(config, selectedPlatform)} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-black">
+                    Open {platformLabel(selectedPlatform)}
+                  </a>
+                ) : (
+                  <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-bold text-slate-500">
+                    Staff will verify this channel in store.
+                  </div>
+                )}
+                <button
+                  onClick={() => submitReview(selectedPlatform)}
+                  disabled={submittingTask}
+                  className="rounded-xl px-3 py-3 text-sm font-black text-white disabled:opacity-60"
+                  style={{ background: accent }}
+                >
+                  {submittingTask ? 'Recording...' : 'I published it'}
+                </button>
+              </div>
+
+              {pendingSubmission && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-black uppercase text-slate-400">Staff confirmation</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{platformLabel(pendingSubmission.platform)} is waiting for staff PIN confirmation.</p>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      value={staffPin}
+                      onChange={(event) => setStaffPin(event.target.value)}
+                      inputMode="numeric"
+                      type="password"
+                      placeholder="Staff PIN"
+                      className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold outline-none focus:border-slate-400"
+                    />
+                    <button
+                      onClick={confirmSubmission}
+                      disabled={confirmingTask || !staffPin.trim()}
+                      className="rounded-xl px-4 py-3 text-sm font-black text-white disabled:opacity-60"
+                      style={{ background: accent }}
+                    >
+                      {confirmingTask ? 'Checking' : 'Confirm'}
+                    </button>
+                  </div>
+                </div>
               )}
-              {config?.taskXiaohongshuEnabled && (
-                <a href={platformUrl(config, 'XIAOHONGSHU')} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-black">
-                  Open Xiaohongshu
-                </a>
-              )}
-              {config?.taskInstagramEnabled && (
-                <a href={platformUrl(config, 'INSTAGRAM')} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-black">
-                  Open Instagram
-                </a>
-              )}
-              <button onClick={() => submitReview('GOOGLE')} className="rounded-xl px-3 py-3 text-sm font-black text-white" style={{ background: accent }}>
-                I completed the task
-              </button>
             </div>
-          </div>
+          )}
 
           <div className="rounded-2xl bg-white p-4 shadow-sm">
             <h2 className="text-sm font-black">Prize pool</h2>
             <div className="mt-3 grid gap-2">
               {activePrizes.map((prize) => (
-                <div key={prize.id || prize.name} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                  <span className="text-sm font-bold">{prize.name}</span>
-                  <span className="text-xs font-bold text-slate-400">{prize.type}</span>
+                <div key={prize.id || prize.name} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {prize.imageUrl ? (
+                      <img src={prize.imageUrl} alt="" className="h-10 w-10 rounded-xl object-cover" />
+                    ) : (
+                      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-xl">{prizeIcon(prize.type)}</span>
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold">{prize.name}</p>
+                      <p className="text-[11px] font-bold text-slate-400">{Number((prize.probability * 100).toFixed(1))}% chance</p>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-xs font-bold text-slate-400">{inventoryLabel(prize)}</span>
                 </div>
               ))}
             </div>
