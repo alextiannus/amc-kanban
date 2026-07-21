@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
   if (!principal) {
     const resumePath = `${requestUrl.pathname}?returnTo=${encodeURIComponent(returnTo)}`
-    const loginUrl = new URL('/', requestUrl.origin)
+    const loginUrl = new URL('/', publicKanbanOrigin(request))
     loginUrl.searchParams.set('returnTo', resumePath)
     return NextResponse.redirect(loginUrl)
   }
@@ -54,6 +54,18 @@ export async function GET(request: Request) {
   callback.searchParams.set('ticket', ticket)
   callback.searchParams.set('returnTo', returnTo)
   return NextResponse.redirect(callback)
+}
+
+function publicKanbanOrigin(request: Request) {
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'https'
+  if (forwardedHost && !forwardedHost.startsWith('localhost')) return `${forwardedProto}://${forwardedHost}`
+
+  const requestUrl = new URL(request.url)
+  if (requestUrl.hostname !== 'localhost' && requestUrl.hostname !== '127.0.0.1') return requestUrl.origin
+
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  return configured ? new URL(configured).origin : 'https://amc-kanban.immedi.ai'
 }
 
 function configuredGrowthUrl() {
