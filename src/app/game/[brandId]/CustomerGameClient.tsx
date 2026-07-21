@@ -77,6 +77,53 @@ function platformUrl(config: GameConfig | null, platform: Platform): string | un
   return account?.profileUrl || undefined
 }
 
+function getPlatformAccount(config: GameConfig | null, platform: Platform) {
+  if (!config || platform === 'GOOGLE') return undefined
+  return config.brand?.accounts?.find((item) => item.platformId.toLowerCase() === platform.toLowerCase())
+}
+
+function instagramUsername(config: GameConfig | null): string | undefined {
+  const account = getPlatformAccount(config, 'INSTAGRAM')
+  const handle = account?.handle?.replace(/^@/, '').trim()
+  if (handle) return handle
+
+  const profileUrl = account?.profileUrl
+  if (!profileUrl) return undefined
+  try {
+    const url = new URL(profileUrl)
+    return url.pathname.split('/').filter(Boolean)[0]
+  } catch {
+    return undefined
+  }
+}
+
+function buildPlatformOpenTarget(config: GameConfig | null, platform: Platform): { appUrl: string; webUrl: string } {
+  const webUrl = platformUrl(config, platform)
+
+  if (platform === 'GOOGLE') {
+    const fallback = webUrl || 'https://www.google.com/maps'
+    const encodedFallback = encodeURIComponent(fallback)
+    return {
+      appUrl: `comgooglemaps://?q=${encodedFallback}`,
+      webUrl: fallback,
+    }
+  }
+
+  if (platform === 'INSTAGRAM') {
+    const username = instagramUsername(config)
+    return {
+      appUrl: username ? `instagram://user?username=${encodeURIComponent(username)}` : 'instagram://app',
+      webUrl: webUrl || (username ? `https://www.instagram.com/${encodeURIComponent(username)}/` : 'https://www.instagram.com/'),
+    }
+  }
+
+  const fallback = webUrl || 'https://www.xiaohongshu.com/'
+  return {
+    appUrl: `xhsdiscover://webview?url=${encodeURIComponent(fallback)}`,
+    webUrl: fallback,
+  }
+}
+
 function inventoryLabel(prize: Prize): string {
   if (prize.totalInventory === null) return 'Unlimited'
   return `${Math.max(prize.totalInventory - (prize.claimedCount || 0), 0)} left`
@@ -449,6 +496,20 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     setMessage('Confirmed. 5 points have been added. You can play now.')
   }
 
+  function openPlatform(platform: Platform) {
+    setSelectedPlatform(platform)
+    const target = buildPlatformOpenTarget(config, platform)
+
+    const fallbackTimer = window.setTimeout(() => {
+      window.location.href = target.webUrl
+    }, 900)
+
+    const clearFallback = () => window.clearTimeout(fallbackTimer)
+    window.addEventListener('pagehide', clearFallback, { once: true })
+    window.addEventListener('blur', clearFallback, { once: true })
+    window.location.href = target.appUrl
+  }
+
   async function spin() {
     if (!sessionId || spinning) return
     setError('')
@@ -583,7 +644,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                 {activePlatforms.map((platform) => (
                   <button
                     key={platform}
-                    onClick={() => setSelectedPlatform(platform)}
+                    onClick={() => openPlatform(platform)}
                     className="rounded-xl border px-2 py-2 text-xs font-black"
                     style={{
                       borderColor: selectedPlatform === platform ? accent : 'rgb(226 232 240)',
@@ -596,15 +657,12 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                 ))}
               </div>
               <div className="mt-3 grid gap-2">
-                {platformUrl(config, selectedPlatform) ? (
-                  <a href={platformUrl(config, selectedPlatform)} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-black">
-                    Open {platformLabel(selectedPlatform)}
-                  </a>
-                ) : (
-                  <div className="rounded-xl bg-slate-50 px-3 py-3 text-sm font-bold text-slate-500">
-                    Staff will verify this channel in store.
-                  </div>
-                )}
+                <button
+                  onClick={() => openPlatform(selectedPlatform)}
+                  className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-black text-left"
+                >
+                  Open {platformLabel(selectedPlatform)} app
+                </button>
                 <button
                   onClick={() => submitReview(selectedPlatform)}
                   disabled={submittingTask}
