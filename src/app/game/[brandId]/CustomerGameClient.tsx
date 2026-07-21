@@ -34,6 +34,9 @@ type GameConfig = {
 
 type GameStatus = {
   pointsBalance: number
+  spinsTodayCount?: number
+  maxSpinsPerUserDay?: number
+  spinsRemainingToday?: number
   unclaimedPrizes: {
     logId: string
     prizeName: string
@@ -43,9 +46,12 @@ type GameStatus = {
 }
 
 type SpinResult = {
-  prize: { name: string; type: string; imageUrl?: string | null }
-  redemptionCode: string
+  prize: { id?: string; name: string; type: string; imageUrl?: string | null }
+  redemptionCode: string | null
   pointsBalance: number
+  spinsTodayCount?: number
+  maxSpinsPerUserDay?: number
+  spinsRemainingToday?: number
 }
 
 type Platform = 'GOOGLE' | 'XIAOHONGSHU' | 'INSTAGRAM'
@@ -71,11 +77,13 @@ const copy = {
     points: 'Points',
     noDailyLimit: 'No daily limit',
     spinsPerDay: (count: number) => `${count} spins per day`,
+    spinsRemaining: (remaining: number, max: number) => `${remaining}/${max} spins left today`,
     cost: 'Cost: 5 points',
     spin: 'Spin',
     spinning: 'Spinning...',
     youWon: 'You won',
     showCode: 'Show this code to store staff.',
+    noCodeNeeded: 'No redemption code needed.',
     unclaimedRewards: 'Unclaimed rewards',
     earnPoints: 'Earn points',
     earnPointsBody: 'Publish on one channel, then ask store staff to confirm with the PIN. Each confirmed task adds 5 points.',
@@ -118,11 +126,13 @@ const copy = {
     points: '积分',
     noDailyLimit: '不限每日次数',
     spinsPerDay: (count: number) => `每日 ${count} 次`,
+    spinsRemaining: (remaining: number, max: number) => `今日剩余 ${remaining}/${max} 次`,
     cost: '每次 5 积分',
     spin: '抽奖',
     spinning: '抽奖中...',
     youWon: '恭喜中奖',
     showCode: '请向店员出示兑换码。',
+    noCodeNeeded: '无需兑换码。',
     unclaimedRewards: '待领取奖品',
     earnPoints: '赚取积分',
     earnPointsBody: '选择一个平台发布后，请店员输入 PIN 确认。每次确认可获得 5 积分。',
@@ -234,6 +244,20 @@ function buildPlatformOpenTarget(config: GameConfig | null, platform: Platform):
 function inventoryLabel(prize: Prize, locale: Locale): string {
   if (prize.totalInventory === null) return copy[locale].unlimited
   return copy[locale].left(Math.max(prize.totalInventory - (prize.claimedCount || 0), 0))
+}
+
+function prizeKey(prize: { id?: string; name: string }): string {
+  return prize.id || prize.name
+}
+
+function wheelTargetRotation(currentRotation: number, prizes: Prize[], targetPrize: { id?: string; name: string }): number {
+  const targetIndex = prizes.findIndex((prize) => prizeKey(prize) === prizeKey(targetPrize))
+  if (targetIndex < 0 || prizes.length === 0) return currentRotation + 360 * 5
+  const segmentAngle = 360 / prizes.length
+  const targetCenterAngle = targetIndex * segmentAngle + segmentAngle / 2
+  const currentTurns = Math.floor(currentRotation / 360)
+  const baseRotation = (currentTurns + 5) * 360 - targetCenterAngle
+  return baseRotation <= currentRotation ? baseRotation + 360 : baseRotation
 }
 
 function allocateGridSlots(prizesList: Prize[]): Prize[] {
@@ -387,7 +411,6 @@ function GameBoard({
                         <span className="text-2xl">{prizeIcon(prize.type)}</span>
                       )}
                       <span className="mt-1 w-full truncate text-[11px] font-black leading-tight text-white">{prize.name}</span>
-                      <span className="mt-0.5 text-[9px] font-bold text-amber-300">{(prize.probability * 100).toFixed(0)}%</span>
                     </>
                   ) : (
                     <span className="text-xs font-bold text-slate-500">{t.empty}</span>
@@ -478,9 +501,6 @@ function GameBoard({
                   transform={`rotate(${displayRotation}, ${textPos.x}, ${textPos.y})`}
                 >
                   <tspan x={textPos.x} dy="-0.4em">{prize.name.length > 9 ? `${prize.name.slice(0, 7)}..` : prize.name}</tspan>
-                  <tspan x={textPos.x} dy="1.2em" fontSize="2.5" fill={darkText ? '#8da628' : '#f3e8d0'} fontWeight="bold">
-                    {Number((prize.probability * 100).toFixed(1))}%
-                  </tspan>
                 </text>
               </g>
             )
@@ -524,6 +544,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const accent = config?.themeColor || '#2563eb'
   const t = copy[locale]
   const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
+  const dailyLimit = status?.maxSpinsPerUserDay ?? config?.maxSpinsPerUserDay ?? null
+  const spinsRemaining = status?.spinsRemainingToday ?? dailyLimit
   const activePlatforms = useMemo<Platform[]>(() => {
     if (!config) return []
     const platforms: Platform[] = []
@@ -630,27 +652,52 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     setMessage('')
     setSpinResult(null)
     setSpinning(true)
-    if (config?.templateType === 'GRID') {
-      for (let step = 0; step < 28; step += 1) {
-        window.setTimeout(() => setGridActiveSlot(step % 8), step * 80)
-      }
-    } else {
-      setWheelRotation((previous) => previous + 360 * 5 + Math.floor(Math.random() * 360))
-    }
     const response = await fetch('/api/game/spin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ brandId, sessionId }),
     })
     const data = await response.json().catch(() => ({}))
-    setSpinning(false)
-    if (config?.templateType === 'GRID') setGridActiveSlot(null)
     if (!response.ok) {
+      setSpinning(false)
+      if (config?.templateType === 'GRID') setGridActiveSlot(null)
       setError(data.error || t.spinFailed)
       return
     }
-    setSpinResult(data)
-    setStatus((prev) => prev ? { ...prev, pointsBalance: data.pointsBalance } : prev)
+
+    if (config?.templateType === 'GRID') {
+      const slots = allocateGridSlots(config.prizes)
+      const targetSlot = Math.max(0, slots.findIndex((prize) => prize && prizeKey(prize) === prizeKey(data.prize)))
+      for (let step = 0; step <= 32 + targetSlot; step += 1) {
+        window.setTimeout(() => setGridActiveSlot(step % 8), step * 80)
+      }
+      window.setTimeout(() => {
+        setGridActiveSlot(targetSlot)
+        setSpinning(false)
+        setSpinResult(data)
+        setStatus((prev) => prev ? {
+          ...prev,
+          pointsBalance: data.pointsBalance,
+          spinsTodayCount: data.spinsTodayCount,
+          maxSpinsPerUserDay: data.maxSpinsPerUserDay,
+          spinsRemainingToday: data.spinsRemainingToday,
+        } : prev)
+      }, (33 + targetSlot) * 80)
+      return
+    }
+
+    setWheelRotation((previous) => wheelTargetRotation(previous, config?.prizes || [], data.prize))
+    window.setTimeout(() => {
+      setSpinning(false)
+      setSpinResult(data)
+      setStatus((prev) => prev ? {
+        ...prev,
+        pointsBalance: data.pointsBalance,
+        spinsTodayCount: data.spinsTodayCount,
+        maxSpinsPerUserDay: data.maxSpinsPerUserDay,
+        spinsRemainingToday: data.spinsRemainingToday,
+      } : prev)
+    }, 5000)
   }
 
   if (loading) {
@@ -707,7 +754,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                 locale={locale}
               />
               <p className="mt-3 text-center text-[11px] font-bold text-slate-400">
-                {t.cost} · {config.maxSpinsPerUserDay ? t.spinsPerDay(config.maxSpinsPerUserDay) : t.noDailyLimit}
+                {t.cost} · {dailyLimit ? t.spinsRemaining(spinsRemaining ?? dailyLimit, dailyLimit) : t.noDailyLimit}
               </p>
             </section>
           )}
@@ -716,8 +763,14 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <p className="text-xs font-bold uppercase text-emerald-700">{t.youWon}</p>
               <h2 className="mt-1 text-xl font-black text-emerald-950">{spinResult.prize.name}</h2>
-              <p className="mt-2 rounded-xl bg-white px-3 py-2 text-center text-2xl font-black tracking-[0.2em] text-emerald-700">{spinResult.redemptionCode}</p>
-              <p className="mt-2 text-xs font-semibold text-emerald-700">{t.showCode}</p>
+              {spinResult.redemptionCode ? (
+                <>
+                  <p className="mt-2 rounded-xl bg-white px-3 py-2 text-center text-2xl font-black tracking-[0.2em] text-emerald-700">{spinResult.redemptionCode}</p>
+                  <p className="mt-2 text-xs font-semibold text-emerald-700">{t.showCode}</p>
+                </>
+              ) : (
+                <p className="mt-2 rounded-xl bg-white px-3 py-2 text-center text-sm font-black text-emerald-700">{t.noCodeNeeded}</p>
+              )}
             </div>
           )}
 

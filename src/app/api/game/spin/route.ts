@@ -91,7 +91,7 @@ export async function POST(request: Request) {
       })
 
       // 8. Increment claimedCount if inventory is limited
-      if (selectedPrize.totalInventory !== null) {
+      if (selectedPrize.type !== 'THANKS' && selectedPrize.totalInventory !== null) {
         await tx.gamePrize.update({
           where: { id: selectedPrize.id },
           data: { claimedCount: { increment: 1 } },
@@ -117,17 +117,21 @@ export async function POST(request: Request) {
         throw new Error('Failed to generate unique code, please try again.')
       }
 
-      // 10. Record Spin Log
+      const isThanks = selectedPrize.type === 'THANKS'
+
+      // 10. Record Spin Log. THANKS keeps an internal code for audit uniqueness, but customers do not see it.
       await tx.gameSpinLog.create({
         data: {
           sessionId: session.id,
           prizeId: selectedPrize.id,
           pointsDeducted: 5,
           redemptionCode,
-          status: 'UNCLAIMED',
+          status: isThanks ? 'RECORDED' : 'UNCLAIMED',
           expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Valid for 30 days
         },
       })
+
+      const spinsTodayAfter = spinsTodayCount + 1
 
       return {
         prize: {
@@ -136,8 +140,11 @@ export async function POST(request: Request) {
           type: selectedPrize.type,
           imageUrl: selectedPrize.imageUrl,
         },
-        redemptionCode,
+        redemptionCode: isThanks ? null : redemptionCode,
         pointsBalance: session.pointsBalance - 5,
+        spinsTodayCount: spinsTodayAfter,
+        maxSpinsPerUserDay: config.maxSpinsPerUserDay,
+        spinsRemainingToday: Math.max(config.maxSpinsPerUserDay - spinsTodayAfter, 0),
       }
     })
 

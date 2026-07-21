@@ -44,8 +44,26 @@ export async function GET(request: Request) {
       },
     })
 
+    const config = await prisma.gameConfig.findUnique({
+      where: { brandId },
+      select: { maxSpinsPerUserDay: true },
+    })
+
+    const startOfDay = new Date()
+    startOfDay.setHours(0, 0, 0, 0)
+    const spinsTodayCount = await prisma.gameSpinLog.count({
+      where: {
+        sessionId: session.id,
+        createdAt: { gte: startOfDay },
+      },
+    })
+    const maxSpinsPerUserDay = config?.maxSpinsPerUserDay ?? 3
+
     return NextResponse.json({
       pointsBalance: session.pointsBalance,
+      spinsTodayCount,
+      maxSpinsPerUserDay,
+      spinsRemainingToday: Math.max(maxSpinsPerUserDay - spinsTodayCount, 0),
       unclaimedPrizes: unclaimedSpins.map((log: any) => ({
         logId: log.id,
         prizeName: log.prize.name,

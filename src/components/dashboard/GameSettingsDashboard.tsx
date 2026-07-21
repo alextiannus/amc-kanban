@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Save, Loader2, Plus, Trash2, HelpCircle, Check, Copy, Printer, RefreshCw, Eye } from 'lucide-react'
+import { Save, Loader2, Plus, Trash2, HelpCircle, Check, Copy, Printer, RefreshCw, Eye, Search, TicketCheck } from 'lucide-react'
 import QRCode from 'qrcode'
 
 interface Prize {
@@ -143,6 +143,18 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
   const [googlePlaceId, setGooglePlaceId] = useState('')
   const [googleReviewUrl, setGoogleReviewUrl] = useState('')
   const [googleBusinessUrl, setGoogleBusinessUrl] = useState('')
+  const [redemptionCode, setRedemptionCode] = useState('')
+  const [redemptionLoading, setRedemptionLoading] = useState(false)
+  const [redemptionMessage, setRedemptionMessage] = useState('')
+  const [redemptionError, setRedemptionError] = useState('')
+  const [redemptionResult, setRedemptionResult] = useState<{
+    redemptionCode: string
+    status: string
+    prizeName: string
+    prizeType: string
+    createdAt?: string
+    claimedAt?: string | null
+  } | null>(null)
 
   // Wheel preview state
   const [wheelRotation, setWheelRotation] = useState(0)
@@ -299,6 +311,57 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
     window.open(printUrl, '_blank')
   }
 
+  const lookupRedemption = async () => {
+    if (!config || !redemptionCode.trim()) return
+    setRedemptionLoading(true)
+    setRedemptionError('')
+    setRedemptionMessage('')
+    setRedemptionResult(null)
+    try {
+      const params = new URLSearchParams({
+        brandId,
+        code: redemptionCode.trim().toUpperCase(),
+        pinCode: config.clerkPin,
+      })
+      const res = await fetch(`/api/game/redemptions?${params.toString()}`, { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '查询失败')
+      const item = data.redemptions?.[0]
+      if (!item) throw new Error('未找到该兑奖码')
+      setRedemptionResult(item)
+    } catch (err) {
+      setRedemptionError(err instanceof Error ? err.message : '查询失败')
+    } finally {
+      setRedemptionLoading(false)
+    }
+  }
+
+  const claimRedemption = async () => {
+    if (!config || !redemptionCode.trim()) return
+    setRedemptionLoading(true)
+    setRedemptionError('')
+    setRedemptionMessage('')
+    try {
+      const res = await fetch('/api/game/redemptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId,
+          redemptionCode: redemptionCode.trim().toUpperCase(),
+          pinCode: config.clerkPin,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '核销失败')
+      setRedemptionResult(data.redemption)
+      setRedemptionMessage('核销成功，系统已存档。')
+    } catch (err) {
+      setRedemptionError(err instanceof Error ? err.message : '核销失败')
+    } finally {
+      setRedemptionLoading(false)
+    }
+  }
+
   const triggerPreviewSpin = () => {
     if (isPreviewSpinning || !config || config.prizes.length === 0) return
     setIsPreviewSpinning(true)
@@ -373,7 +436,7 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
         <div className="min-w-0">
           <h2 className="text-base font-black text-slate-800 dark:text-slate-100 leading-tight">店内活动设置</h2>
           <p className="text-[10px] text-slate-400 mt-0.5 hidden sm:block">
-            配置扫码抽奖游戏，吸引顾客提交评价或分享，沉淀UGC素材。
+            配置扫码抽奖游戏，顾客发布后由员工确认加积分。
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -818,7 +881,6 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
                             {prize.type === 'COUPON' ? '🎫' : prize.type === 'POINTS' ? '🪙' : prize.type === 'PHYSICAL' ? '🎁' : '🌸'}
                           </span>
                           <span className="text-[9px] font-bold text-slate-200 truncate w-full leading-tight">{prize.name}</span>
-                          <span className="text-[7.5px] font-semibold text-amber-400 mt-0.5">{(prize.probability * 100).toFixed(0)}%</span>
                         </div>
                       );
                     });
@@ -901,9 +963,6 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
                               transform={`rotate(${displayRotation}, ${textPos.x}, ${textPos.y})`}
                             >
                               <tspan x={textPos.x} dy="-0.5em">{p.name.length > 8 ? p.name.substring(0, 6) + '..' : p.name}</tspan>
-                              <tspan x={textPos.x} dy="1.1em" fontSize="2.2" fill={fillColor === '#f3e8d0' ? '#8da628' : '#f3e8d0'} fontWeight="bold">
-                                {Number((p.probability * 100).toFixed(1))}%
-                              </tspan>
                             </text>
                           </g>
                         )
@@ -1024,6 +1083,56 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
             >
               <Printer size={13} />
               打印贴纸 (80mm × 80mm)
+            </button>
+          </div>
+
+          {/* Redemption */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 shadow-sm space-y-3">
+            <div>
+              <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">兑奖查询 / 核销</h3>
+              <p className="mt-1 text-[10px] leading-4 text-slate-400">输入客户手机上的中奖码，可查询状态并核销。核销后会记录 claimedAt，用于后续活动效果分析。</p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={redemptionCode}
+                onChange={(event) => setRedemptionCode(event.target.value.toUpperCase())}
+                placeholder="输入中奖码"
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black tracking-widest text-slate-800 outline-none focus:border-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <button
+                onClick={lookupRedemption}
+                disabled={redemptionLoading || !redemptionCode.trim()}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                title="查询"
+              >
+                {redemptionLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+              </button>
+            </div>
+            {redemptionResult && (
+              <div className="rounded-xl bg-slate-50 p-3 text-xs dark:bg-slate-800/60">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-black text-slate-800 dark:text-slate-100">{redemptionResult.prizeName}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                    redemptionResult.status === 'CLAIMED'
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                      : redemptionResult.status === 'UNCLAIMED'
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                        : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                  }`}>{redemptionResult.status}</span>
+                </div>
+                <p className="mt-1 font-mono text-[11px] font-bold tracking-widest text-slate-500">{redemptionResult.redemptionCode}</p>
+                {redemptionResult.claimedAt && <p className="mt-1 text-[10px] text-slate-400">已核销：{new Date(redemptionResult.claimedAt).toLocaleString()}</p>}
+              </div>
+            )}
+            {redemptionError && <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600 dark:bg-red-950/30 dark:text-red-300">{redemptionError}</p>}
+            {redemptionMessage && <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">{redemptionMessage}</p>}
+            <button
+              onClick={claimRedemption}
+              disabled={redemptionLoading || !redemptionCode.trim() || redemptionResult?.status === 'CLAIMED'}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {redemptionLoading ? <Loader2 size={14} className="animate-spin" /> : <TicketCheck size={14} />}
+              确认核销并存档
             </button>
           </div>
 
