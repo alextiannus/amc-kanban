@@ -62,6 +62,265 @@ function platformUrl(config: GameConfig | null, platform: 'GOOGLE' | 'XIAOHONGSH
   return account?.profileUrl || undefined
 }
 
+function allocateGridSlots(prizesList: Prize[]): Prize[] {
+  const activePrizes = prizesList.filter((prize) => prize.probability > 0 || prize.name)
+  if (activePrizes.length === 0) return []
+
+  if (activePrizes.length > 8) {
+    return [...activePrizes].sort((a, b) => b.probability - a.probability).slice(0, 8)
+  }
+
+  const allocatedCounts = activePrizes.map(() => 1)
+  let remainingSlots = 8 - activePrizes.length
+
+  while (remainingSlots > 0) {
+    let bestIndex = -1
+    let maxDeficit = -Infinity
+
+    for (let index = 0; index < activePrizes.length; index += 1) {
+      const targetFraction = 8 * activePrizes[index].probability
+      const deficit = targetFraction - allocatedCounts[index]
+      if (deficit > maxDeficit) {
+        maxDeficit = deficit
+        bestIndex = index
+      }
+    }
+
+    if (bestIndex === -1) break
+    allocatedCounts[bestIndex] += 1
+    remainingSlots -= 1
+  }
+
+  const rawSlots: Prize[] = []
+  activePrizes.forEach((prize, index) => {
+    for (let count = 0; count < allocatedCounts[index]; count += 1) {
+      rawSlots.push(prize)
+    }
+  })
+
+  const counts: Record<string, number> = {}
+  rawSlots.forEach((item) => {
+    const key = item.id || item.name
+    counts[key] = (counts[key] || 0) + 1
+  })
+
+  const sortedSlots: Prize[] = []
+  ;[...activePrizes]
+    .sort((a, b) => counts[b.id || b.name] - counts[a.id || a.name])
+    .forEach((prize) => {
+      const key = prize.id || prize.name
+      for (let index = 0; index < (counts[key] || 0); index += 1) {
+        sortedSlots.push(prize)
+      }
+    })
+
+  const order = [0, 2, 4, 6, 1, 3, 5, 7]
+  const orderedSlots: Prize[] = new Array(8)
+  for (let index = 0; index < 8; index += 1) {
+    orderedSlots[order[index]] = sortedSlots[index]
+  }
+  return orderedSlots
+}
+
+function prizeIcon(type: Prize['type']): string {
+  if (type === 'COUPON') return '🎫'
+  if (type === 'POINTS') return '🪙'
+  if (type === 'PHYSICAL') return '🎁'
+  return '✨'
+}
+
+function GameBoard({
+  config,
+  spinning,
+  wheelRotation,
+  gridActiveSlot,
+  onSpin,
+}: {
+  config: GameConfig
+  spinning: boolean
+  wheelRotation: number
+  gridActiveSlot: number | null
+  onSpin: () => void
+}) {
+  if (config.templateType === 'GRID') {
+    const slots = allocateGridSlots(config.prizes)
+    const gridIndices = [0, 1, 2, 5, 8, 7, 6, 3]
+
+    return (
+      <div className="rounded-[28px] bg-slate-950 p-4 shadow-xl shadow-slate-950/20">
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes customer-grid-led-odd {
+            0%, 100% { background-color: #ffffff; box-shadow: 0 0 2px #fff, 0 0 6px #f59e0b; }
+            50% { background-color: #fbbf24; box-shadow: 0 0 2px #fbbf24, 0 0 8px #d97706; }
+          }
+          @keyframes customer-grid-led-even {
+            0%, 100% { background-color: #fbbf24; box-shadow: 0 0 2px #fbbf24, 0 0 8px #d97706; }
+            50% { background-color: #ffffff; box-shadow: 0 0 2px #fff, 0 0 6px #f59e0b; }
+          }
+          .customer-grid-led-odd { animation: customer-grid-led-odd 1.2s infinite; }
+          .customer-grid-led-even { animation: customer-grid-led-even 1.2s infinite; }
+        `}} />
+        <div className="relative mx-auto aspect-square w-full max-w-[320px] rounded-[24px] border-4 border-slate-900/70 p-4">
+          <div className="absolute left-8 right-8 top-1 flex justify-between">
+            <span className="customer-grid-led-odd h-2 w-2 rounded-full" />
+            <span className="customer-grid-led-even h-2 w-2 rounded-full" />
+            <span className="customer-grid-led-odd h-2 w-2 rounded-full" />
+          </div>
+          <div className="absolute bottom-1 left-8 right-8 flex justify-between">
+            <span className="customer-grid-led-even h-2 w-2 rounded-full" />
+            <span className="customer-grid-led-odd h-2 w-2 rounded-full" />
+            <span className="customer-grid-led-even h-2 w-2 rounded-full" />
+          </div>
+          <div className="grid h-full w-full grid-cols-3 gap-2">
+            {Array.from({ length: 9 }).map((_, gridIndex) => {
+              if (gridIndex === 4) {
+                return (
+                  <button
+                    key={gridIndex}
+                    onClick={onSpin}
+                    disabled={spinning || config.prizes.length === 0}
+                    className="rounded-2xl border border-white/20 text-white shadow-lg active:scale-95 disabled:opacity-70"
+                    style={{ background: `radial-gradient(circle, ${config.themeColor || '#db2777'} 0%, #4c0519 100%)` }}
+                  >
+                    <span className="block text-xs font-black uppercase tracking-widest">Tap</span>
+                    <span className="block text-lg font-black uppercase tracking-widest">Spin</span>
+                  </button>
+                )
+              }
+
+              const slotIndex = gridIndices.indexOf(gridIndex)
+              const prize = slots[slotIndex]
+              const isActive = gridActiveSlot === slotIndex
+              return (
+                <div
+                  key={gridIndex}
+                  className="flex flex-col items-center justify-center overflow-hidden rounded-2xl border p-1 text-center transition-all duration-150"
+                  style={{
+                    borderColor: isActive ? (config.themeColor || '#db2777') : 'rgba(51, 65, 85, 0.9)',
+                    backgroundColor: isActive ? `${config.themeColor || '#db2777'}2b` : 'rgba(15, 23, 42, 0.7)',
+                    boxShadow: isActive ? `0 0 16px ${config.themeColor || '#db2777'}` : 'none',
+                  }}
+                >
+                  {prize ? (
+                    <>
+                      <span className="text-2xl">{prizeIcon(prize.type)}</span>
+                      <span className="mt-1 w-full truncate text-[11px] font-black leading-tight text-white">{prize.name}</span>
+                      <span className="mt-0.5 text-[9px] font-bold text-amber-300">{(prize.probability * 100).toFixed(0)}%</span>
+                    </>
+                  ) : (
+                    <span className="text-xs font-bold text-slate-500">Empty</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const prizes = config.prizes.length ? config.prizes : [{ name: 'No prize', type: 'THANKS' as const, probability: 1, totalInventory: null }]
+  const sliceColors = ['#3d2010', '#e87b1e', '#f3e8d0', '#8da628', '#4a6b1e', '#c0392b', '#2563eb', '#7c3aed']
+
+  return (
+    <div className="relative mx-auto flex aspect-square w-full max-w-[330px] items-center justify-center">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes customer-wheel-led-odd {
+          0%, 100% { fill: #ffffff; filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px #e87b1e); }
+          50% { fill: #f3e8d0; filter: drop-shadow(0 0 1px #f3e8d0); }
+        }
+        @keyframes customer-wheel-led-even {
+          0%, 100% { fill: #f3e8d0; filter: drop-shadow(0 0 1px #f3e8d0); }
+          50% { fill: #ffffff; filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 4px #e87b1e); }
+        }
+        .customer-wheel-led-odd { animation: customer-wheel-led-odd 1.2s infinite; }
+        .customer-wheel-led-even { animation: customer-wheel-led-even 1.2s infinite; }
+      `}} />
+      <div className="absolute inset-[-10px] rounded-full border-[8px] border-white shadow-xl shadow-slate-950/25" />
+      <div className="absolute top-[-14px] z-30 flex h-9 w-8 items-center justify-center drop-shadow-lg">
+        <svg width="24" height="30" viewBox="0 0 18 22" fill="none">
+          <path d="M9 22L1 6C1 6 4.5 0 9 0C13.5 0 17 6 17 6L9 22Z" fill="#3d2010" stroke="#ffffff" strokeWidth="1.2" />
+          <circle cx="9" cy="7" r="3.2" fill="#ffffff" />
+          <circle cx="9" cy="7" r="1.6" fill="#3d2010" />
+        </svg>
+      </div>
+      <button
+        onClick={onSpin}
+        disabled={spinning || config.prizes.length === 0}
+        className="absolute z-20 flex h-20 w-20 items-center justify-center rounded-full border-[5px] border-white bg-white text-sm font-black uppercase tracking-widest text-[#3d2010] shadow-xl active:scale-95 disabled:opacity-70"
+      >
+        {spinning ? '...' : 'Spin'}
+      </button>
+      <div
+        className="h-full w-full overflow-hidden rounded-full border-[6px] border-white transition-transform duration-[5000ms] ease-[cubic-bezier(0.1,0.8,0.1,1)]"
+        style={{ transform: `rotate(${wheelRotation}deg)` }}
+      >
+        <svg viewBox="0 0 100 100" className="h-full w-full">
+          {prizes.map((prize, index) => {
+            const segments = prizes.length
+            const angle = 360 / segments
+            const startAngle = index * angle
+            const endAngle = startAngle + angle
+            const radius = 50
+            const start = ((startAngle - 90) * Math.PI) / 180
+            const end = ((endAngle - 90) * Math.PI) / 180
+            const point1 = { x: 50 + radius * Math.cos(start), y: 50 + radius * Math.sin(start) }
+            const point2 = { x: 50 + radius * Math.cos(end), y: 50 + radius * Math.sin(end) }
+            const fillColor = sliceColors[index % sliceColors.length]
+            const textAngle = startAngle + angle / 2
+            const textRad = ((textAngle - 90) * Math.PI) / 180
+            const textPos = { x: 50 + 30 * Math.cos(textRad), y: 50 + 30 * Math.sin(textRad) }
+            const isUpsideDown = textAngle % 360 > 90 && textAngle % 360 < 270
+            const displayRotation = isUpsideDown ? textAngle + 180 : textAngle
+            const darkText = fillColor === '#f3e8d0'
+
+            return (
+              <g key={prize.id || `${prize.name}-${index}`}>
+                <path
+                  d={`M 50 50 L ${point1.x} ${point1.y} A 50 50 0 ${angle <= 180 ? '0' : '1'} 1 ${point2.x} ${point2.y} Z`}
+                  fill={fillColor}
+                  stroke="#ffffff"
+                  strokeWidth="0.5"
+                />
+                <text
+                  x={textPos.x}
+                  y={textPos.y}
+                  fill={darkText ? '#3d2010' : '#ffffff'}
+                  fontSize="3.6"
+                  fontWeight="900"
+                  textAnchor="middle"
+                  alignmentBaseline="middle"
+                  paintOrder="stroke"
+                  stroke={darkText ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'}
+                  strokeWidth="0.4"
+                  transform={`rotate(${displayRotation}, ${textPos.x}, ${textPos.y})`}
+                >
+                  <tspan x={textPos.x} dy="-0.4em">{prize.name.length > 9 ? `${prize.name.slice(0, 7)}..` : prize.name}</tspan>
+                  <tspan x={textPos.x} dy="1.2em" fontSize="2.5" fill={darkText ? '#8da628' : '#f3e8d0'} fontWeight="bold">
+                    {Number((prize.probability * 100).toFixed(1))}%
+                  </tspan>
+                </text>
+              </g>
+            )
+          })}
+        </svg>
+      </div>
+      <div className="pointer-events-none absolute inset-0 z-10 h-full w-full">
+        <svg viewBox="0 0 100 100" className="h-full w-full">
+          <circle cx="50" cy="50" r="49" fill="none" stroke="#ffffff" strokeWidth="2" />
+          {Array.from({ length: 24 }).map((_, index) => {
+            const angle = (index * 360) / 24
+            const rad = (angle * Math.PI) / 180
+            const cx = 50 + 48 * Math.cos(rad)
+            const cy = 50 + 48 * Math.sin(rad)
+            return <circle key={index} cx={cx} cy={cy} r="1.2" className={index % 2 === 0 ? 'customer-wheel-led-odd' : 'customer-wheel-led-even'} />
+          })}
+        </svg>
+      </div>
+    </div>
+  )
+}
+
 export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [config, setConfig] = useState<GameConfig | null>(null)
   const [status, setStatus] = useState<GameStatus | null>(null)
@@ -72,6 +331,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [agreed, setAgreed] = useState(false)
   const [spinning, setSpinning] = useState(false)
   const [spinResult, setSpinResult] = useState<SpinResult | null>(null)
+  const [wheelRotation, setWheelRotation] = useState(0)
+  const [gridActiveSlot, setGridActiveSlot] = useState<number | null>(null)
 
   const accent = config?.themeColor || '#2563eb'
   const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
@@ -131,6 +392,13 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     setMessage('')
     setSpinResult(null)
     setSpinning(true)
+    if (config?.templateType === 'GRID') {
+      for (let step = 0; step < 28; step += 1) {
+        window.setTimeout(() => setGridActiveSlot(step % 8), step * 80)
+      }
+    } else {
+      setWheelRotation((previous) => previous + 360 * 5 + Math.floor(Math.random() * 360))
+    }
     const response = await fetch('/api/game/spin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -138,6 +406,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     })
     const data = await response.json().catch(() => ({}))
     setSpinning(false)
+    if (config?.templateType === 'GRID') setGridActiveSlot(null)
     if (!response.ok) {
       setError(data.error || 'Spin failed.')
       return
@@ -178,6 +447,29 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         </header>
 
         <div className="-mt-5 flex-1 space-y-4 rounded-t-[28px] bg-slate-50 px-5 pb-8 pt-5">
+          {config && (
+            <section className="rounded-[28px] bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+                    {config.templateType === 'GRID' ? 'Lucky Grid' : 'Lucky Wheel'}
+                  </p>
+                  <h2 className="text-base font-black text-slate-950">Tap to play</h2>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
+                  {config.templateType === 'GRID' ? 'Grid' : 'Wheel'}
+                </span>
+              </div>
+              <GameBoard
+                config={config}
+                spinning={spinning}
+                wheelRotation={wheelRotation}
+                gridActiveSlot={gridActiveSlot}
+                onSpin={spin}
+              />
+            </section>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl bg-white p-4 shadow-sm">
               <p className="text-[11px] font-bold uppercase text-slate-400">Points</p>
