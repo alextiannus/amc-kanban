@@ -108,7 +108,6 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       groupLabel: 'Researcher',
       items: [
         { id: 'amc-content-roles', view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/ai-roles' },
-        { id: 'amc-growth',        view: 'managementOverview', label: 'Growth 智能规划', icon: 'TrendingUp', href: 'https://amc-growth.immedi.ai/public/' },
       ],
     })
     return groups
@@ -122,7 +121,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
         { id: 'managementOverview', view: 'managementOverview', label: '主理人总览', icon: 'Users' },
         { id: 'dataAnalysis',       view: 'dataAnalysis',       label: '账号快照',   icon: 'Camera' },
         { id: 'amc-content-roles',  view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/ai-roles' },
-        { id: 'amc-growth',         view: 'managementOverview', label: 'Growth 智能规划', icon: 'TrendingUp', href: 'https://amc-growth.immedi.ai/public/' },
+        { id: 'amc-growth',         view: 'managementOverview', label: 'Growth 智能规划', icon: 'TrendingUp', href: '/api/integrations/amc-growth/sso/start?returnTo=%2Fdashboard' },
       ],
     })
   }

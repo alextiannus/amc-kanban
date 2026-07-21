@@ -279,6 +279,10 @@ export default function Sidebar({
     if (item.comingSoon) return
     if (item.href) {
       let targetUrl = item.href
+      if (targetUrl.startsWith('/api/integrations/amc-growth/sso/start')) {
+        window.location.assign(targetUrl)
+        return
+      }
       if (targetUrl.includes('amc-growth.immedi.ai')) {
         const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         if (isLocal) {
