@@ -1553,3 +1553,17 @@ Admin → AI 模型配置 页面：
 ### 品牌故事与上下文同步及呈现 (amc-kanban)
 - **多维度数据同步**：在 `sync-growth` 接口中，增加对 brand-story 资源的同步拉取，利用 HTML 注释标记块自动将“品牌故事讲述”合流并写入本地品牌 Profile 文件的第 12 章节。
 - **UIUX 重组**：重构 `BrandProfileView.tsx` 页面的标签页结构为 `'品牌故事'`（呈现品牌故事、品牌定位、招牌菜、门店信息、用餐攻略）与 `'品牌上下文'`（呈现分析、增长诊断及 30/90/180天计划）。
+
+## AMC Growth 调研运营后台与单点登录（当前方案）
+
+`amc-growth` 的内部 Dashboard 是品牌调研运营中心，不向品牌客户或官网访客开放。官网继续只提交公开 intake 并显示受理编号；任务、证据、初级报告、高级报告、人工复核和 Provider 状态由内部后台管理。
+
+- Dashboard 使用 React SPA，中文为主，包含总览、调研任务、报告库、人工复核、数据源和知识库。
+- Kanban 是身份提供方。`/api/integrations/amc-growth/sso/start` 基于当前 Auth V2 Session 签发 60 秒、`aud=amc-growth`、带唯一 `jti` 的一次性票据。
+- 仅 `ADMIN` 与 `AMC_PRINCIPAL` 可以兑换票据；`BD` 和 `BRAND_OWNER` 必须被拒绝。
+- Growth 兑换票据时在 PostgreSQL 记录 `jti` 防重放，并创建 60 分钟 HttpOnly、Secure、SameSite=Lax Session。
+- `AMC_GROWTH_SSO_SECRET` 由 Kanban 与 Growth 共享；`AMC_GROWTH_SESSION_SECRET` 仅由 Growth 使用。
+- Growth Cookie 写操作同时校验同源 `Origin` 与 CSRF Token；前端隐藏按钮不构成授权，所有管理 API 在服务端校验角色。
+- `ADMIN` 拥有 Provider 验证和非敏感配置权限；`AMC_PRINCIPAL` 可管理任务和人工复核，但不能修改基础设施配置。
+- `AMC_KNOWLEDGE_TOKEN` 继续用于内部 API/MCP 应急访问，不作为 Dashboard 的常规登录方式。
+- 公开 intake 路径、响应格式、60 天去重、配额与 TikHub 两阶段任务保持不变；现有 Bearer Token API 保持兼容。

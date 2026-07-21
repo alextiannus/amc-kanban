@@ -230,7 +230,11 @@ export default function Login() {
       })
       const data = await res.json()
       if (res.ok) {
-        router.push('/board')
+        const requestedReturn = new URLSearchParams(window.location.search).get('returnTo')
+        const safeReturn = requestedReturn?.startsWith('/api/integrations/amc-growth/sso/start')
+          ? requestedReturn
+          : '/board'
+        router.push(safeReturn)
         router.refresh()
       } else {
         setError(data.error || 'Login failed')
@@ -268,7 +272,11 @@ export default function Login() {
       })
       const data = await res.json()
       if (res.ok) {
-        router.push('/board')
+        const requestedReturn = new URLSearchParams(window.location.search).get('returnTo')
+        const safeReturn = requestedReturn?.startsWith('/api/integrations/amc-growth/sso/start')
+          ? requestedReturn
+          : '/board'
+        router.push(safeReturn)
         router.refresh()
       } else {
         setError(data.error || 'Registration failed')

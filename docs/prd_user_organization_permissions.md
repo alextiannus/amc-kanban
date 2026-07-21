@@ -897,3 +897,19 @@ AUTH_V2_LEGACY_SESSION_CUTOFF_AT=<T0 + 24h 的 ISO 时间>
 - 在 Render Node 20/CI 完成原生 Argon2 与生产构建验证。
 - 记录上线前后鉴权 P50/P95、查询次数、401/403 比例和旧 Key 命中数。
 - T+24h 设置 `AUTH_V2_LEGACY_KEYS=false`，确认旧委托与旧明文 Key 均不可用。
+
+## AMC Growth SSO 授权边界（当前方案）
+
+Growth SSO 是 Auth V2 的受限下游授权，不新增角色，也不改变品牌 Crew 权限模型。
+
+| 角色 | 进入 Growth Dashboard | 查看全部调研 | 任务与复核操作 | Provider 配置 |
+|---|---:|---:|---:|---:|
+| `ADMIN` | 允许 | 允许 | 允许 | 允许 |
+| `AMC_PRINCIPAL` | 允许 | 允许 | 允许 | 拒绝 |
+| `BD` | 拒绝 | 拒绝 | 拒绝 | 拒绝 |
+| `BRAND_OWNER` | 拒绝 | 拒绝 | 拒绝 | 拒绝 |
+
+- Kanban SSO start 必须从 Auth V2 Session 重新读取用户状态、`authVersion` 和显式角色，不能信任浏览器传入角色。
+- 票据受众固定为 `amc-growth`，有效期 60 秒，`jti` 仅允许兑换一次。
+- Growth Session 只代表 Growth 后台访问权，不能反向用于 Kanban API，也不能代替 Agent API Key。
+- Growth 管理写操作记录操作者 userId、email 和角色；公开 intake 不建立用户会话。

@@ -692,3 +692,10 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 | PATCH | `/api/tasks/{id}/status` |
 | DELETE | `/api/tasks/unassigned` |
 <!-- API_ROUTE_INVENTORY:END -->
+
+## AMC Growth SSO（内部）
+
+- `GET /api/integrations/amc-growth/sso/start?returnTo=/dashboard/...`
+- 只接受已登录的人类 Auth V2 Session，允许角色为 `ADMIN`、`AMC_PRINCIPAL`。
+- 接口签发 60 秒、`aud=amc-growth`、带唯一 `jti` 的一次性票据并跳转 Growth callback。
+- `AMC_GROWTH_SSO_SECRET` 必须与 Growth 服务一致；响应和日志不得回显该 Secret。
