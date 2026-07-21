@@ -3,6 +3,9 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 const prisma = new PrismaClient()
+const isProductionRuntime = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
+const liveExpressMcpUrl = process.env.LIVEEXPRESS_MCP_URL || (isProductionRuntime ? '' : 'https://devmcp.12eat.ai/mcp')
+const liveExpressMcpToken = process.env.LIVEEXPRESS_MCP_TOKEN || ''
 
 // Simple helper to parse frontmatter from markdown files
 function parseFrontmatter(content: string) {
@@ -40,41 +43,52 @@ async function main() {
   for (const brand of brands) {
     console.log(`Seeding brand: ${brand.name} (${brand.id})`)
 
-    // 1. Create or update MCP Config for deliverychinatown
-    const mcpConfig = {
-      name: 'deliverychinatown',
-      url: 'https://devmcp.12eat.ai/mcp',
-      headers: {
-        Authorization: 'Bearer mcp_prod_amc_OuChopCY-paKN2cdTjM9XLfpHibTKTYVzEYWdR8u8pI',
-        Accept: 'application/json, text/event-stream',
-        'Content-Type': 'application/json'
-      },
-      isActive: true
-    }
-
-    // Clean up old stale dct-logistics config
+    // 1. Create or update MCP Config for deliverychinatown.
+    // Production must provide a real MCP URL explicitly; never seed the dev MCP
+    // endpoint into live brand configs because it can expose demo ERP data.
     await prisma.mcpServerConfig.deleteMany({
-      where: { brandId: brand.id, name: 'dct-logistics' }
+      where: {
+        brandId: brand.id,
+        OR: [
+          { name: 'dct-logistics' },
+          { url: 'https://devmcp.12eat.ai/mcp' },
+        ],
+      }
     })
 
-    const existingMcp = await prisma.mcpServerConfig.findFirst({
-      where: { brandId: brand.id, name: mcpConfig.name }
-    })
+    if (liveExpressMcpUrl) {
+      const mcpConfig = {
+        name: 'deliverychinatown',
+        url: liveExpressMcpUrl,
+        headers: {
+          ...(liveExpressMcpToken ? { Authorization: `Bearer ${liveExpressMcpToken}` } : {}),
+          Accept: 'application/json, text/event-stream',
+          'Content-Type': 'application/json'
+        },
+        isActive: true
+      }
 
-    if (existingMcp) {
-      await prisma.mcpServerConfig.update({
-        where: { id: existingMcp.id },
-        data: mcpConfig
+      const existingMcp = await prisma.mcpServerConfig.findFirst({
+        where: { brandId: brand.id, name: mcpConfig.name }
       })
-      console.log(`Updated MCP Server config for brand ${brand.name}`)
+
+      if (existingMcp) {
+        await prisma.mcpServerConfig.update({
+          where: { id: existingMcp.id },
+          data: mcpConfig
+        })
+        console.log(`Updated MCP Server config for brand ${brand.name}`)
+      } else {
+        await prisma.mcpServerConfig.create({
+          data: {
+            brandId: brand.id,
+            ...mcpConfig
+          }
+        })
+        console.log(`Created MCP Server config for brand ${brand.name}`)
+      }
     } else {
-      await prisma.mcpServerConfig.create({
-        data: {
-          brandId: brand.id,
-          ...mcpConfig
-        }
-      })
-      console.log(`Created MCP Server config for brand ${brand.name}`)
+      console.log(`Skipped MCP Server config for brand ${brand.name}; LIVEEXPRESS_MCP_URL is not set`)
     }
 
     // 2. Parse and seed Skill Files

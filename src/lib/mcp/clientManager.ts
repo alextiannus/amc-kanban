@@ -14,6 +14,26 @@ interface CachedTools {
   timestamp: number
 }
 
+const BLOCKED_PRODUCTION_MCP_HOSTS = new Set([
+  'devmcp.12eat.ai',
+])
+
+function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
+}
+
+function isBlockedProductionMcpUrl(rawUrl: string): boolean {
+  if (!isProductionRuntime()) return false
+  if (process.env.ALLOW_DEV_MCP_IN_PRODUCTION === 'true') return false
+
+  try {
+    const url = new URL(rawUrl)
+    return BLOCKED_PRODUCTION_MCP_HOSTS.has(url.hostname.toLowerCase())
+  } catch {
+    return true
+  }
+}
+
 export class McpClientManager {
   private static connections: Map<string, ConnectedServer[]> = new Map()
   private static toolsCache: Map<string, CachedTools> = new Map()
@@ -79,9 +99,16 @@ export class McpClientManager {
     const configs = await prisma.mcpServerConfig.findMany({
       where: { brandId, isActive: true }
     })
+    const allowedConfigs = configs.filter((config: any) => {
+      const blocked = isBlockedProductionMcpUrl(config.url)
+      if (blocked) {
+        console.warn(`[MCP Client Manager] Skipping production-blocked MCP server: ${config.name} (${config.url})`)
+      }
+      return !blocked
+    })
 
     // Filter out servers where the circuit breaker is currently tripped
-    const untrippedConfigs = configs.filter((c: any) => !this.isCircuitTripped(brandId, c.name))
+    const untrippedConfigs = allowedConfigs.filter((c: any) => !this.isCircuitTripped(brandId, c.name))
 
     const cached = this.connections.get(brandId)
     // If cached connection count matches untripped active config count, return cached connections.
@@ -97,7 +124,7 @@ export class McpClientManager {
 
     const connected: ConnectedServer[] = []
 
-    for (const config of configs) {
+    for (const config of allowedConfigs) {
       // Skip connecting if the circuit breaker is tripped for this server
       if (this.isCircuitTripped(brandId, config.name)) {
         console.warn(`[MCP Client Manager] Circuit breaker active for ${config.name}. Skipping connection.`)
@@ -264,9 +291,11 @@ export class McpClientManager {
       }
     }
 
-    const configsCount = await prisma.mcpServerConfig.count({
-      where: { brandId, isActive: true }
+    const configs = await prisma.mcpServerConfig.findMany({
+      where: { brandId, isActive: true },
+      select: { url: true },
     })
+    const configsCount = configs.filter((config: any) => !isBlockedProductionMcpUrl(config.url)).length
 
     if (connections.length === configsCount) {
       this.toolsCache.set(brandId, {
