@@ -55,6 +55,113 @@ type PendingSubmission = {
   platform: Platform
 }
 
+type Locale = 'zh' | 'en'
+
+const copy = {
+  en: {
+    loading: 'Loading activity...',
+    unavailableTitle: 'Activity unavailable',
+    defaultBrand: 'AMC Activity',
+    defaultTitle: 'Scan & Win',
+    luckyGrid: 'Lucky Grid',
+    luckyWheel: 'Lucky Wheel',
+    tapToPlay: 'Tap to play',
+    grid: 'Grid',
+    wheel: 'Wheel',
+    points: 'Points',
+    noDailyLimit: 'No daily limit',
+    spinsPerDay: (count: number) => `${count} spins per day`,
+    cost: 'Cost: 5 points',
+    spin: 'Spin',
+    spinning: 'Spinning...',
+    youWon: 'You won',
+    showCode: 'Show this code to store staff.',
+    unclaimedRewards: 'Unclaimed rewards',
+    earnPoints: 'Earn points',
+    earnPointsBody: 'Publish on one channel, then ask store staff to confirm with the PIN. Each confirmed task adds 5 points.',
+    published: 'I published it',
+    recording: 'Recording...',
+    staffConfirmation: 'Staff confirmation',
+    waitingConfirmation: (platform: string) => `${platform} is waiting for staff PIN confirmation.`,
+    staffPin: 'Staff PIN',
+    checking: 'Checking',
+    confirm: 'Confirm',
+    prizePool: 'Prize pool',
+    chance: (value: string) => `${value}% chance`,
+    unlimited: 'Unlimited',
+    left: (count: number) => `${count} left`,
+    empty: 'Empty',
+    tap: 'Tap',
+    activityNotReady: 'This activity is not ready yet.',
+    statusLoadFailed: 'Unable to load your game status.',
+    openFailed: 'Unable to open this activity.',
+    submitFailed: 'Submission failed.',
+    confirmationFailed: 'Staff confirmation failed.',
+    spinFailed: 'Spin failed.',
+    taskSubmitted: 'Completed. Please ask staff to enter the PIN and confirm your points.',
+    taskConfirmed: 'Confirmed. 5 points have been added. You can play now.',
+    googleReview: 'Google review',
+    xiaohongshu: 'Xiaohongshu',
+    instagram: 'Instagram',
+    noPrize: 'No prize',
+  },
+  zh: {
+    loading: '活动加载中...',
+    unavailableTitle: '活动暂不可用',
+    defaultBrand: 'AMC 活动',
+    defaultTitle: '扫码抽奖',
+    luckyGrid: '幸运九宫格',
+    luckyWheel: '幸运转盘',
+    tapToPlay: '点击抽奖',
+    grid: '九宫格',
+    wheel: '转盘',
+    points: '积分',
+    noDailyLimit: '不限每日次数',
+    spinsPerDay: (count: number) => `每日 ${count} 次`,
+    cost: '每次 5 积分',
+    spin: '抽奖',
+    spinning: '抽奖中...',
+    youWon: '恭喜中奖',
+    showCode: '请向店员出示兑换码。',
+    unclaimedRewards: '待领取奖品',
+    earnPoints: '赚取积分',
+    earnPointsBody: '选择一个平台发布后，请店员输入 PIN 确认。每次确认可获得 5 积分。',
+    published: '我已发布',
+    recording: '提交中...',
+    staffConfirmation: '员工确认',
+    waitingConfirmation: (platform: string) => `${platform} 等待员工输入 PIN 确认。`,
+    staffPin: '员工 PIN',
+    checking: '确认中',
+    confirm: '确认',
+    prizePool: '奖品池',
+    chance: (value: string) => `${value}% 概率`,
+    unlimited: '不限量',
+    left: (count: number) => `剩余 ${count}`,
+    empty: '空',
+    tap: '点击',
+    activityNotReady: '活动还没有准备好。',
+    statusLoadFailed: '无法加载你的游戏状态。',
+    openFailed: '无法打开活动。',
+    submitFailed: '提交失败。',
+    confirmationFailed: '员工确认失败。',
+    spinFailed: '抽奖失败。',
+    taskSubmitted: '已提交，请让店员输入 PIN 确认积分。',
+    taskConfirmed: '确认成功，已增加 5 积分。现在可以抽奖了。',
+    googleReview: 'Google 评价',
+    xiaohongshu: '小红书',
+    instagram: 'Instagram',
+    noPrize: '谢谢参与',
+  },
+}
+
+function detectLocale(): Locale {
+  if (typeof window === 'undefined') return 'en'
+  const lang = new URLSearchParams(window.location.search).get('lang')?.toLowerCase()
+  if (lang?.startsWith('zh')) return 'zh'
+  if (lang?.startsWith('en')) return 'en'
+  return window.navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
 function getSessionId(brandId: string): string {
   const key = `amc-game-session:${brandId}`
   const existing = window.localStorage.getItem(key)
@@ -64,10 +171,10 @@ function getSessionId(brandId: string): string {
   return next
 }
 
-function platformLabel(platform: Platform): string {
-  if (platform === 'GOOGLE') return 'Google review'
-  if (platform === 'XIAOHONGSHU') return 'Xiaohongshu'
-  return 'Instagram'
+function platformLabel(platform: Platform, locale: Locale): string {
+  if (platform === 'GOOGLE') return copy[locale].googleReview
+  if (platform === 'XIAOHONGSHU') return copy[locale].xiaohongshu
+  return copy[locale].instagram
 }
 
 function platformUrl(config: GameConfig | null, platform: Platform): string | undefined {
@@ -124,9 +231,9 @@ function buildPlatformOpenTarget(config: GameConfig | null, platform: Platform):
   }
 }
 
-function inventoryLabel(prize: Prize): string {
-  if (prize.totalInventory === null) return 'Unlimited'
-  return `${Math.max(prize.totalInventory - (prize.claimedCount || 0), 0)} left`
+function inventoryLabel(prize: Prize, locale: Locale): string {
+  if (prize.totalInventory === null) return copy[locale].unlimited
+  return copy[locale].left(Math.max(prize.totalInventory - (prize.claimedCount || 0), 0))
 }
 
 function allocateGridSlots(prizesList: Prize[]): Prize[] {
@@ -202,13 +309,17 @@ function GameBoard({
   wheelRotation,
   gridActiveSlot,
   onSpin,
+  locale,
 }: {
   config: GameConfig
   spinning: boolean
   wheelRotation: number
   gridActiveSlot: number | null
   onSpin: () => void
+  locale: Locale
 }) {
+  const t = copy[locale]
+
   if (config.templateType === 'GRID') {
     const slots = allocateGridSlots(config.prizes)
     const gridIndices = [0, 1, 2, 5, 8, 7, 6, 3]
@@ -249,8 +360,8 @@ function GameBoard({
                     className="rounded-2xl border border-white/20 text-white shadow-lg active:scale-95 disabled:opacity-70"
                     style={{ background: `radial-gradient(circle, ${config.themeColor || '#db2777'} 0%, #4c0519 100%)` }}
                   >
-                    <span className="block text-xs font-black uppercase tracking-widest">Tap</span>
-                    <span className="block text-lg font-black uppercase tracking-widest">Spin</span>
+                    <span className="block text-xs font-black uppercase tracking-widest">{t.tap}</span>
+                    <span className="block text-lg font-black uppercase tracking-widest">{t.spin}</span>
                   </button>
                 )
               }
@@ -279,7 +390,7 @@ function GameBoard({
                       <span className="mt-0.5 text-[9px] font-bold text-amber-300">{(prize.probability * 100).toFixed(0)}%</span>
                     </>
                   ) : (
-                    <span className="text-xs font-bold text-slate-500">Empty</span>
+                    <span className="text-xs font-bold text-slate-500">{t.empty}</span>
                   )}
                 </div>
               )
@@ -290,7 +401,7 @@ function GameBoard({
     )
   }
 
-  const prizes = config.prizes.length ? config.prizes : [{ name: 'No prize', type: 'THANKS' as const, probability: 1, totalInventory: null }]
+  const prizes = config.prizes.length ? config.prizes : [{ name: t.noPrize, type: 'THANKS' as const, probability: 1, totalInventory: null }]
   const sliceColors = ['#3d2010', '#e87b1e', '#f3e8d0', '#8da628', '#4a6b1e', '#c0392b', '#2563eb', '#7c3aed']
 
   return (
@@ -320,7 +431,7 @@ function GameBoard({
         disabled={spinning || config.prizes.length === 0}
         className="absolute z-20 flex h-20 w-20 items-center justify-center rounded-full border-[5px] border-white bg-white text-sm font-black uppercase tracking-widest text-[#3d2010] shadow-xl active:scale-95 disabled:opacity-70"
       >
-        {spinning ? '...' : 'Spin'}
+        {spinning ? '...' : t.spin}
       </button>
       <div
         className="h-full w-full overflow-hidden rounded-full border-[6px] border-white transition-transform duration-[5000ms] ease-[cubic-bezier(0.1,0.8,0.1,1)]"
@@ -408,8 +519,10 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [spinResult, setSpinResult] = useState<SpinResult | null>(null)
   const [wheelRotation, setWheelRotation] = useState(0)
   const [gridActiveSlot, setGridActiveSlot] = useState<number | null>(null)
+  const [locale, setLocale] = useState<Locale>('en')
 
   const accent = config?.themeColor || '#2563eb'
+  const t = copy[locale]
   const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
   const activePlatforms = useMemo<Platform[]>(() => {
     if (!config) return []
@@ -427,6 +540,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }, [activePlatforms, selectedPlatform])
 
   useEffect(() => {
+    setLocale(detectLocale())
     const id = getSessionId(brandId)
     setSessionId(id)
 
@@ -438,12 +552,12 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
           fetch(`/api/game/config?brandId=${encodeURIComponent(brandId)}&public=true`, { cache: 'no-store' }),
           fetch(`/api/game/status?brandId=${encodeURIComponent(brandId)}&sessionId=${encodeURIComponent(id)}`, { cache: 'no-store' }),
         ])
-        if (!configRes.ok) throw new Error('This activity is not ready yet.')
-        if (!statusRes.ok) throw new Error('Unable to load your game status.')
+        if (!configRes.ok) throw new Error(copy[detectLocale()].activityNotReady)
+        if (!statusRes.ok) throw new Error(copy[detectLocale()].statusLoadFailed)
         setConfig(await configRes.json())
         setStatus(await statusRes.json())
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to open this activity.')
+        setError(err instanceof Error ? err.message : copy[detectLocale()].openFailed)
       } finally {
         setLoading(false)
       }
@@ -466,12 +580,12 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     const data = await response.json().catch(() => ({}))
     setSubmittingTask(false)
     if (!response.ok) {
-      setError(data.error || 'Submission failed.')
+      setError(data.error || t.submitFailed)
       return
     }
     setPendingSubmission({ submissionId: data.submissionId, platform })
     setStaffPin('')
-    setMessage('Completed. Please ask staff to enter the PIN and confirm your points.')
+    setMessage(t.taskSubmitted)
   }
 
   async function confirmSubmission() {
@@ -487,13 +601,13 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     const data = await response.json().catch(() => ({}))
     setConfirmingTask(false)
     if (!response.ok) {
-      setError(data.error || 'Staff confirmation failed.')
+      setError(data.error || t.confirmationFailed)
       return
     }
     setStatus((prev) => prev ? { ...prev, pointsBalance: data.pointsBalance } : { pointsBalance: data.pointsBalance, unclaimedPrizes: [] })
     setPendingSubmission(null)
     setStaffPin('')
-    setMessage('Confirmed. 5 points have been added. You can play now.')
+    setMessage(t.taskConfirmed)
   }
 
   function openPlatform(platform: Platform) {
@@ -532,7 +646,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     setSpinning(false)
     if (config?.templateType === 'GRID') setGridActiveSlot(null)
     if (!response.ok) {
-      setError(data.error || 'Spin failed.')
+      setError(data.error || t.spinFailed)
       return
     }
     setSpinResult(data)
@@ -544,7 +658,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
         <div className="text-center">
           <div className="mx-auto mb-4 h-10 w-10 rounded-full border-4 border-white/20 border-t-white animate-spin" />
-          <p className="text-sm font-semibold text-white/70">Loading activity...</p>
+          <p className="text-sm font-semibold text-white/70">{t.loading}</p>
         </div>
       </main>
     )
@@ -554,7 +668,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
         <div className="max-w-sm rounded-2xl bg-white p-6 text-center text-slate-900">
-          <h1 className="text-lg font-black">Activity unavailable</h1>
+          <h1 className="text-lg font-black">{t.unavailableTitle}</h1>
           <p className="mt-2 text-sm text-slate-500">{error}</p>
         </div>
       </main>
@@ -565,8 +679,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     <main className="min-h-screen bg-slate-950 text-slate-900">
       <section className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-slate-50">
         <header className="px-5 pb-8 pt-8 text-white" style={{ background: accent }}>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-white/70">{config?.brand?.name || 'AMC Activity'}</p>
-          <h1 className="mt-3 text-3xl font-black leading-tight">{config?.title || 'Scan & Win'}</h1>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-white/70">{config?.brand?.name || t.defaultBrand}</p>
+          <h1 className="mt-3 text-3xl font-black leading-tight">{config?.title || t.defaultTitle}</h1>
           {config?.description && <p className="mt-3 text-sm leading-6 text-white/85">{config.description}</p>}
         </header>
 
@@ -576,12 +690,12 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
               <div className="mb-3 flex items-center justify-between">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                    {config.templateType === 'GRID' ? 'Lucky Grid' : 'Lucky Wheel'}
+                    {config.templateType === 'GRID' ? t.luckyGrid : t.luckyWheel}
                   </p>
-                  <h2 className="text-base font-black text-slate-950">Tap to play</h2>
+                  <h2 className="text-base font-black text-slate-950">{t.tapToPlay}</h2>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
-                  {config.templateType === 'GRID' ? 'Grid' : 'Wheel'}
+                  {t.points}: <span style={{ color: accent }}>{status?.pointsBalance ?? 0}</span>
                 </span>
               </div>
               <GameBoard
@@ -590,41 +704,26 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                 wheelRotation={wheelRotation}
                 gridActiveSlot={gridActiveSlot}
                 onSpin={spin}
+                locale={locale}
               />
+              <p className="mt-3 text-center text-[11px] font-bold text-slate-400">
+                {t.cost} · {config.maxSpinsPerUserDay ? t.spinsPerDay(config.maxSpinsPerUserDay) : t.noDailyLimit}
+              </p>
             </section>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-[11px] font-bold uppercase text-slate-400">Points</p>
-              <p className="mt-1 text-3xl font-black" style={{ color: accent }}>{status?.pointsBalance ?? 0}</p>
-              <p className="mt-1 text-[11px] font-bold text-slate-400">
-                {config?.maxSpinsPerUserDay ? `${config.maxSpinsPerUserDay} spins per day` : 'No daily limit'}
-              </p>
-            </div>
-            <button
-              onClick={spin}
-              disabled={spinning}
-              className="rounded-2xl px-4 py-3 text-left font-black text-white shadow-sm disabled:opacity-60"
-              style={{ background: accent }}
-            >
-              <span className="block text-[11px] uppercase text-white/70">Cost: 5 points</span>
-              {spinning ? 'Spinning...' : 'Spin Now'}
-            </button>
-          </div>
-
           {spinResult && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-xs font-bold uppercase text-emerald-700">You won</p>
+              <p className="text-xs font-bold uppercase text-emerald-700">{t.youWon}</p>
               <h2 className="mt-1 text-xl font-black text-emerald-950">{spinResult.prize.name}</h2>
               <p className="mt-2 rounded-xl bg-white px-3 py-2 text-center text-2xl font-black tracking-[0.2em] text-emerald-700">{spinResult.redemptionCode}</p>
-              <p className="mt-2 text-xs font-semibold text-emerald-700">Show this code to store staff.</p>
+              <p className="mt-2 text-xs font-semibold text-emerald-700">{t.showCode}</p>
             </div>
           )}
 
           {status?.unclaimedPrizes?.length ? (
             <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-xs font-black uppercase text-slate-400">Unclaimed rewards</p>
+              <p className="text-xs font-black uppercase text-slate-400">{t.unclaimedRewards}</p>
               <div className="mt-3 space-y-2">
                 {status.unclaimedPrizes.map((prize) => (
                   <div key={prize.logId} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
@@ -638,8 +737,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
           {config?.taskReviewEnabled !== false && activePlatforms.length > 0 && (
             <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-black">Earn points</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-500">Publish on one channel, then ask store staff to confirm with the PIN. Each confirmed task adds 5 points.</p>
+              <h2 className="text-sm font-black">{t.earnPoints}</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{t.earnPointsBody}</p>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {activePlatforms.map((platform) => (
                   <button
@@ -652,38 +751,32 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                       backgroundColor: selectedPlatform === platform ? `${accent}14` : '#ffffff',
                     }}
                   >
-                    {platformLabel(platform)}
+                    {platformLabel(platform, locale)}
                   </button>
                 ))}
               </div>
               <div className="mt-3 grid gap-2">
-                <button
-                  onClick={() => openPlatform(selectedPlatform)}
-                  className="rounded-xl border border-slate-200 px-3 py-3 text-sm font-black text-left"
-                >
-                  Open {platformLabel(selectedPlatform)} app
-                </button>
                 <button
                   onClick={() => submitReview(selectedPlatform)}
                   disabled={submittingTask}
                   className="rounded-xl px-3 py-3 text-sm font-black text-white disabled:opacity-60"
                   style={{ background: accent }}
                 >
-                  {submittingTask ? 'Recording...' : 'I published it'}
+                  {submittingTask ? t.recording : t.published}
                 </button>
               </div>
 
               {pendingSubmission && (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-black uppercase text-slate-400">Staff confirmation</p>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{platformLabel(pendingSubmission.platform)} is waiting for staff PIN confirmation.</p>
+                  <p className="text-xs font-black uppercase text-slate-400">{t.staffConfirmation}</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{t.waitingConfirmation(platformLabel(pendingSubmission.platform, locale))}</p>
                   <div className="mt-3 flex gap-2">
                     <input
                       value={staffPin}
                       onChange={(event) => setStaffPin(event.target.value)}
                       inputMode="numeric"
                       type="password"
-                      placeholder="Staff PIN"
+                      placeholder={t.staffPin}
                       className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold outline-none focus:border-slate-400"
                     />
                     <button
@@ -692,7 +785,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                       className="rounded-xl px-4 py-3 text-sm font-black text-white disabled:opacity-60"
                       style={{ background: accent }}
                     >
-                      {confirmingTask ? 'Checking' : 'Confirm'}
+                      {confirmingTask ? t.checking : t.confirm}
                     </button>
                   </div>
                 </div>
@@ -701,7 +794,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
           )}
 
           <div className="rounded-2xl bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-black">Prize pool</h2>
+            <h2 className="text-sm font-black">{t.prizePool}</h2>
             <div className="mt-3 grid gap-2">
               {activePrizes.map((prize) => (
                 <div key={prize.id || prize.name} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
@@ -713,10 +806,10 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                     )}
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold">{prize.name}</p>
-                      <p className="text-[11px] font-bold text-slate-400">{Number((prize.probability * 100).toFixed(1))}% chance</p>
+                      <p className="text-[11px] font-bold text-slate-400">{t.chance(String(Number((prize.probability * 100).toFixed(1))))}</p>
                     </div>
                   </div>
-                  <span className="shrink-0 text-xs font-bold text-slate-400">{inventoryLabel(prize)}</span>
+                  <span className="shrink-0 text-xs font-bold text-slate-400">{inventoryLabel(prize, locale)}</span>
                 </div>
               ))}
             </div>
