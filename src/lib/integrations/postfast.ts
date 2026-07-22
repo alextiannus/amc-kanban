@@ -213,6 +213,7 @@ export interface PostFastPublishInput {
   hashtags?: string[]
   scheduledAt?: string          // ISO 8601 UTC
   accountId?: string            // specific account ID to post from
+  gbpLocationId?: string         // required by PostFast for Google Business Profile posts
 }
 
 export interface PostFastPublishResult {
@@ -294,7 +295,7 @@ export async function postfastGetGBPLocations(apiKey: string, accountId: string)
   const dataObj = asObject(r.data)
   const locSource = Array.isArray(r.data) ? (r.data as JsonRecord[]) : (Array.isArray(dataObj.locations) ? dataObj.locations as JsonRecord[] : [])
   const locs = locSource.map((l) => ({
-    id: asString(l.id) || asString(l.locationId),
+    id: asString(l.locationId) || asString(l.gbpLocationId) || asString(l.id),
     name: asString(l.name) || asString(l.locationName),
     address: asString(l.address) || undefined,
     placeId: asString(l.placeId) || asString(l.googlePlaceId) || undefined,
@@ -543,6 +544,41 @@ async function uploadPublicUrlToPostfast(apiKey: string, url: string): Promise<s
   return slot.storageKey
 }
 
+function extractGoogleLocationId(rawHandle?: string | null): string {
+  const handle = String(rawHandle ?? '').trim()
+  if (!handle || handle === 'unconfigured') return ''
+  const match = handle.match(/locations\/([^/?#]+)/)
+  return match?.[1] ?? ''
+}
+
+async function resolveGbpLocationId(input: {
+  apiKey: string
+  socialMediaId: string
+  requestedLocationId?: string
+  accountHandle?: string | null
+}): Promise<{ locationId?: string; error?: string }> {
+  const wanted = input.requestedLocationId || extractGoogleLocationId(input.accountHandle)
+  const locationsResult = await postfastGetGBPLocations(input.apiKey, input.socialMediaId)
+  if (!locationsResult.success) {
+    return { error: `无法获取 PostFast Google Business locations: ${locationsResult.error || 'unknown error'}` }
+  }
+  if (locationsResult.locations.length === 0) {
+    return { error: 'PostFast Google Business 账号没有同步到任何 location，请在 PostFast 重新连接或同步 GBP locations。' }
+  }
+
+  if (wanted) {
+    const wantedNorm = normalizeHandle(wanted)
+    const matched = locationsResult.locations.find((location) =>
+      normalizeHandle(location.id) === wantedNorm ||
+      normalizeHandle(location.placeId) === wantedNorm ||
+      normalizeHandle(location.name).includes(wantedNorm)
+    )
+    if (matched) return { locationId: matched.id }
+  }
+
+  return { locationId: locationsResult.locations[0].id }
+}
+
 /**
  * POST /social-posts
  * Publish or schedule a post.
@@ -569,6 +605,7 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   }
 
   let matchedAccount: PostFastAccount | undefined
+  let dbAccountForPublish: { platformId: string; handle: string | null } | null = null
 
   if (input.accountId) {
     // Try matching PostFast account ID directly
@@ -579,9 +616,11 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
       try {
         const { prisma } = await import('@/lib/prisma')
         const dbAccount = await prisma.socialAccount.findUnique({
-          where: { id: input.accountId }
+          where: { id: input.accountId },
+          select: { platformId: true, handle: true },
         })
         if (dbAccount) {
+          dbAccountForPublish = dbAccount
           const targetPlatformId = normalizePlatform(dbAccount.platformId)
           const targetHandle = normalizeHandle(dbAccount.handle)
           matchedAccount = accounts.find(a =>
@@ -609,6 +648,7 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   }
 
   const socialMediaId = matchedAccount.id
+  const isGoogleBusinessPost = normalizePlatform(input.platform) === 'google' || normalizePlatform(matchedAccount.platformId) === 'google'
 
   // 2. Resolve media keys (download & upload public URLs to S3 in the background)
   const mediaKeys: string[] = []
@@ -646,6 +686,19 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   const post: Record<string, unknown> = {
     socialMediaId,
     content,
+  }
+
+  if (isGoogleBusinessPost) {
+    const resolvedLocation = await resolveGbpLocationId({
+      apiKey: input.apiKey,
+      socialMediaId,
+      requestedLocationId: input.gbpLocationId,
+      accountHandle: dbAccountForPublish?.handle,
+    })
+    if (!resolvedLocation.locationId) {
+      return { success: false, error: resolvedLocation.error || '发布失败：Google Business 缺少 gbpLocationId。' }
+    }
+    post.gbpLocationId = resolvedLocation.locationId
   }
 
   if (normalizedSchedule.value) {

@@ -72,6 +72,16 @@ async function startMockPostFast() {
       ])
     }
 
+    if (method === 'GET' && url === '/social-media/pf_acc_google/gbp-locations') {
+      return json(res, 200, [
+        {
+          locationId: 'gbp_location_001',
+          name: 'AMC Google Business Location',
+          address: '1 Test Street',
+        },
+      ])
+    }
+
     if (method === 'POST' && url === '/file/get-signed-upload-urls') {
       assert.equal(body.count, 1)
       assert.equal(body.contentType, 'video/mp4')
@@ -97,6 +107,7 @@ async function startMockPostFast() {
       if (post.socialMediaId === 'pf_acc_google') {
         assert.equal(post.content, 'Google map update')
         assert.match(post.scheduledAt, /^\d{4}-\d{2}-\d{2}T/)
+        assert.equal(post.gbpLocationId, 'gbp_location_001')
         return json(res, 200, {
           posts: [
             {
@@ -217,6 +228,7 @@ async function main() {
     assert.match(past.error || '', /排期时间/)
 
     assert.ok(seen.some((r) => r.method === 'GET' && r.url.startsWith('/social-media/my-social-accounts')))
+    assert.ok(seen.some((r) => r.method === 'GET' && r.url === '/social-media/pf_acc_google/gbp-locations'))
     assert.ok(seen.some((r) => r.method === 'POST' && r.url === '/file/get-signed-upload-urls'))
     assert.ok(seen.some((r) => r.method === 'PUT' && r.url === '/upload/video-key'))
     assert.ok(seen.some((r) => r.method === 'POST' && r.url === '/social-posts'))
