@@ -121,9 +121,8 @@ export async function PATCH(request: Request, { params }: Params) {
     await prisma.contentDraft.update({ where: { id: draft.id }, data: { status: 'publishing' } })
 
     const platformName = item.account?.platformId
-    const isDirectGoogle = platformName === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
 
-    if ((brand.postfastApiKey && platformName) || isDirectGoogle) {
+    if (brand.postfastApiKey && platformName) {
       // Fire-and-forget publish
       ;(async () => {
         let result: { success: boolean; postId?: string; url?: string; error?: string } = { success: false, error: 'Unknown' }
@@ -134,89 +133,57 @@ export async function PATCH(request: Request, { params }: Params) {
           ...(draft.assetRefs || []).map((ref: any) => ref.asset.url),
         ].filter(Boolean)))
 
-        if (isDirectGoogle) {
-          try {
-            const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
-            const accessToken = await getGoogleAccessToken(brand.googleRefreshToken!)
-            
-            let googleAccountId = brand.googleAccountId || 'primary'
-            let googleLocationId = brand.googleLocationId!
-            
-            if (item.account && item.account.platformId === 'google') {
-              const handle = item.account.handle
-              const match = handle.match(/accounts\/([^\/]+)\/locations\/([^\/]+)/)
-              if (match) {
-                googleAccountId = `accounts/${match[1]}`
-                googleLocationId = match[2]
-              } else {
-                googleLocationId = handle
-              }
-            }
-
-            result = await createGoogleGBPLocalPost({
-              accountId: googleAccountId,
-              locationId: googleLocationId,
-              caption: draft.caption,
-              mediaUrls: combinedMediaUrls,
-              accessToken,
-            })
-          } catch (e: unknown) {
-            const message = e instanceof Error ? e.message : 'Direct Google GBP publish failed'
-            result = { success: false, error: message }
-          }
-        } else {
-          let canProceed = true
-          if (draft.platformPostId && !draft.publishedAt) {
-            const { postfastDeletePost } = await import('@/lib/integrations/postfast')
-            const cancelResult = await postfastDeletePost(brand.postfastApiKey!, draft.platformPostId)
-            if (!cancelResult.success) {
-              const isNotFound = cancelResult.error?.includes('404') ||
-                cancelResult.error?.toLowerCase().includes('not found') ||
-                cancelResult.error?.includes('does not exist')
-              if (isNotFound) {
-                console.warn(`[approve route] Old post ${draft.platformPostId} not found in PostFast, clearing`)
-                await prisma.contentDraft.update({
-                  where: { id: draft.id },
-                  data: { platformPostId: null },
-                })
-              } else {
-                canProceed = false
-                result = { success: false, error: `无法取消旧排期。${cancelResult.error || ''}` }
-              }
-            } else {
+        let canProceed = true
+        if (draft.platformPostId && !draft.publishedAt) {
+          const { postfastDeletePost } = await import('@/lib/integrations/postfast')
+          const cancelResult = await postfastDeletePost(brand.postfastApiKey!, draft.platformPostId)
+          if (!cancelResult.success) {
+            const isNotFound = cancelResult.error?.includes('404') ||
+              cancelResult.error?.toLowerCase().includes('not found') ||
+              cancelResult.error?.includes('does not exist')
+            if (isNotFound) {
+              console.warn(`[approve route] Old post ${draft.platformPostId} not found in PostFast, clearing`)
               await prisma.contentDraft.update({
                 where: { id: draft.id },
                 data: { platformPostId: null },
               })
+            } else {
+              canProceed = false
+              result = { success: false, error: `无法取消旧排期。${cancelResult.error || ''}` }
             }
-          }
-
-          if (canProceed) {
-            // Auto-schedule: if no scheduledAt on this draft, get recommended time first
-            const isRescheduleRequested = typeof body.note === 'string' &&
-              (body.note.includes('重新智能排期') || body.note.includes('智能重新排期'))
-
-            if (!resolvedScheduledAt || isRescheduleRequested) {
-              const recommended = await fetchRecommendedScheduleTime(brandId, platformName!)
-              if (recommended) {
-                resolvedScheduledAt = recommended
-                // Write back to DB so the calendar reflects the new time
-                await prisma.contentDraft.update({
-                  where: { id: draft.id },
-                  data: { scheduledAt: resolvedScheduledAt },
-                })
-              }
-            }
-
-            result = await postfastPublish({
-              apiKey: brand.postfastApiKey!,
-              platform: platformName!,
-              caption: draft.caption,
-              mediaUrls: combinedMediaUrls,
-              hashtags: draft.hashtags,
-              scheduledAt: resolvedScheduledAt?.toISOString(),
+          } else {
+            await prisma.contentDraft.update({
+              where: { id: draft.id },
+              data: { platformPostId: null },
             })
           }
+        }
+
+        if (canProceed) {
+          // Auto-schedule: if no scheduledAt on this draft, get recommended time first
+          const isRescheduleRequested = typeof body.note === 'string' &&
+            (body.note.includes('重新智能排期') || body.note.includes('智能重新排期'))
+
+          if (!resolvedScheduledAt || isRescheduleRequested) {
+            const recommended = await fetchRecommendedScheduleTime(brandId, platformName!)
+            if (recommended) {
+              resolvedScheduledAt = recommended
+              // Write back to DB so the calendar reflects the new time
+              await prisma.contentDraft.update({
+                where: { id: draft.id },
+                data: { scheduledAt: resolvedScheduledAt },
+              })
+            }
+          }
+
+          result = await postfastPublish({
+            apiKey: brand.postfastApiKey!,
+            platform: platformName!,
+            caption: draft.caption,
+            mediaUrls: combinedMediaUrls,
+            hashtags: draft.hashtags,
+            scheduledAt: resolvedScheduledAt?.toISOString(),
+          })
         }
 
         // Ensure subsequent status decision uses the final, resolved schedule time.
@@ -224,7 +191,7 @@ export async function PATCH(request: Request, { params }: Params) {
           resolvedScheduledAt = null
         }
 
-        const isScheduled = !isDirectGoogle && !!resolvedScheduledAt && resolvedScheduledAt > new Date()
+        const isScheduled = !!resolvedScheduledAt && resolvedScheduledAt > new Date()
 
         await prisma.contentDraft.update({
           where: { id: draft.id },
@@ -239,7 +206,7 @@ export async function PATCH(request: Request, { params }: Params) {
             : { status: result.error?.includes('取消') ? 'failed' : 'draft', agentNote: `发布失败: ${result.error}` },
         })
 
-        const isScheduledFutureForWorkUnit = !isDirectGoogle && !!resolvedScheduledAt && resolvedScheduledAt > new Date()
+        const isScheduledFutureForWorkUnit = !!resolvedScheduledAt && resolvedScheduledAt > new Date()
         await updateLinkedWorkUnit(
           result.success
             ? { status: isScheduledFutureForWorkUnit ? 'in_progress' : 'done', requiredInput: null, publishedUrl: result.url ?? null }

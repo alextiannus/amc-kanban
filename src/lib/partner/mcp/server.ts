@@ -824,62 +824,17 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       where: { id: brandId },
       select: {
         postfastApiKey: true,
-        googlePreferOAuth: true,
-        googleRefreshToken: true,
-        googleAccountId: true,
-        googleLocationId: true,
       }
     })
     if (!brand) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
 
-    const isDirectGoogle = platform === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
-
-    let result: { success: boolean; postId?: string; url?: string; error?: string }
-
-    if (isDirectGoogle) {
-      try {
-        const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
-        const accessToken = await getGoogleAccessToken(brand.googleRefreshToken!)
-        
-        let googleAccountId = brand.googleAccountId || 'primary'
-        let googleLocationId = brand.googleLocationId!
-        
-        if (accountId) {
-          const targetAccount = await prisma.socialAccount.findFirst({
-            where: { id: accountId, brandId },
-            select: { platformId: true, handle: true },
-          })
-          if (targetAccount && targetAccount.platformId === 'google') {
-            const handle = targetAccount.handle
-            const match = handle.match(/accounts\/([^\/]+)\/locations\/([^\/]+)/)
-            if (match) {
-              googleAccountId = `accounts/${match[1]}`
-              googleLocationId = match[2]
-            } else {
-              googleLocationId = handle
-            }
-          }
-        }
-
-        result = await createGoogleGBPLocalPost({
-          accountId: googleAccountId,
-          locationId: googleLocationId,
-          caption,
-          mediaUrls,
-          accessToken,
-        })
-      } catch (e: unknown) {
-        result = { success: false, error: errorMessage(e, 'Direct Google GBP publish failed') }
-      }
-    } else {
-      if (!brand.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured for this brand. Run update_brand_config first.' }], isError: true }
-      const { postfastPublish } = await import('@/lib/integrations/postfast')
-      result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId })
-    }
+    if (!brand.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured for this brand. Run update_brand_config first.' }], isError: true }
+    const { postfastPublish } = await import('@/lib/integrations/postfast')
+    const result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId })
 
     if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
     const responseContent: Array<{ type: 'text'; text: string }> = [
-      { type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform, scheduledAt: isDirectGoogle ? 'immediate' : (scheduledAt ?? 'immediate') }) }
+      { type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform, scheduledAt: scheduledAt ?? 'immediate' }) }
     ]
     const notice = getSkillUpdateNotice()
     if (notice) {
@@ -1275,36 +1230,17 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           return { content: [{ type: 'text' as const, text: 'Error: platform and caption are required for publish_post' }], isError: true }
         }
 
-        const isDirectGoogle = platform === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
-        let result: { success: boolean; postId?: string; url?: string; error?: string }
-
-        if (isDirectGoogle) {
-          try {
-            const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
-            const accessToken = await getGoogleAccessToken(brand.googleRefreshToken!)
-            result = await createGoogleGBPLocalPost({
-              accountId: brand.googleAccountId || 'primary',
-              locationId: brand.googleLocationId!,
-              caption,
-              mediaUrls,
-              accessToken,
-            })
-          } catch (e: unknown) {
-            result = { success: false, error: errorMessage(e, 'Direct Google GBP publish failed') }
-          }
-        } else {
-          if (!brand.postfastApiKey) {
-            return { content: [{ type: 'text' as const, text: 'Error: PostFast API key required for publish_post' }], isError: true }
-          }
-          const { postfastPublish } = await import('@/lib/integrations/postfast')
-          result = await postfastPublish({
-            apiKey: brand.postfastApiKey,
-            platform,
-            caption,
-            mediaUrls,
-            hashtags,
-          })
+        if (!brand.postfastApiKey) {
+          return { content: [{ type: 'text' as const, text: 'Error: PostFast API key required for publish_post' }], isError: true }
         }
+        const { postfastPublish } = await import('@/lib/integrations/postfast')
+        const result = await postfastPublish({
+          apiKey: brand.postfastApiKey,
+          platform,
+          caption,
+          mediaUrls,
+          hashtags,
+        })
 
         if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
         return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform }) }] }

@@ -69,10 +69,6 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
       name: true,
       autoPilot: true,
       postfastApiKey: true,
-      googlePreferOAuth: true,
-      googleRefreshToken: true,
-      googleAccountId: true,
-      googleLocationId: true,
     },
   })
   if (!brand) return { ok: false as const, status: 404, error: 'Brand not found' }
@@ -212,8 +208,6 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   }
 
   const platformId = normalizePublishPlatform(draft.account.platformId)
-  const isGooglePlatform = platformId === 'google'
-  const isDirectGoogleConfigured = isGooglePlatform && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
 
   if (draft.account.handle === 'unconfigured') {
     // Unconfigured accounts (e.g. 小红书/Facebook not yet connected) cannot be
@@ -246,7 +240,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   }
 
 
-  if (!brand.postfastApiKey && !isDirectGoogleConfigured) {
+  if (!brand.postfastApiKey) {
     await prisma.contentDraft.update({ where: { id: draft.id }, data: { status: 'failed', agentNote: '发布失败：品牌尚未配置 PostFast API Key。' } })
     return { ok: false as const, status: 400, error: '品牌尚未配置 PostFast API Key。' }
   }
@@ -314,56 +308,18 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     ...assetMediaUrls,
   ])
 
-  let result: { success: boolean; postId?: string; url?: string; error?: string }
-
-  if (isDirectGoogleConfigured && !scheduled) {
-    try {
-      const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
-      const accessToken = await getGoogleAccessToken(brand.googleRefreshToken!)
-
-      let googleAccountId = brand.googleAccountId || 'primary'
-      let googleLocationId = brand.googleLocationId!
-      const match = draft.account.handle?.match(/accounts\/([^/]+)\/locations\/([^/]+)/)
-      if (match) {
-        googleAccountId = `accounts/${match[1]}`
-        googleLocationId = match[2]
-      } else if (draft.account.handle && draft.account.handle !== 'unconfigured') {
-        googleLocationId = draft.account.handle
-      }
-
-      result = await createGoogleGBPLocalPost({
-        accountId: googleAccountId,
-        locationId: googleLocationId,
-        caption: draft.caption,
-        mediaUrls,
-        accessToken,
-      })
-      console.log(`[submitDraftForDelivery] Direct Google publish result: success=${result.success}, postId=${result.postId ?? 'none'}, error=${result.error ?? 'none'}`)
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Google Business direct publish failed'
-      result = { success: false, error: message }
-    }
-  } else {
-    if (isGooglePlatform && scheduled && !brand.postfastApiKey) {
-      result = {
-        success: false,
-        error: 'Google Business 直连不支持未来排期。请连接 PostFast 的 Google Business 账号，或选择立即发布。',
-      }
-    } else {
-      console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, immediatePublish: ${input.immediatePublish}, draftId: ${draft.id}`)
-      result = await postfastPublish({
-        apiKey: brand.postfastApiKey!,
-        platform: platformId,
-        accountId: draft.accountId || undefined,
-        caption: draft.caption,
-        mediaStorageKeys,
-        mediaUrls,
-        hashtags: draft.hashtags,
-        scheduledAt: resolvedScheduledAt?.toISOString(),
-      })
-      console.log(`[submitDraftForDelivery] postfastPublish result: success=${result.success}, postId=${result.postId ?? 'none'}, error=${result.error ?? 'none'}`)
-    }
-  }
+  console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, immediatePublish: ${input.immediatePublish}, draftId: ${draft.id}`)
+  const result = await postfastPublish({
+    apiKey: brand.postfastApiKey,
+    platform: platformId,
+    accountId: draft.accountId || undefined,
+    caption: draft.caption,
+    mediaStorageKeys,
+    mediaUrls,
+    hashtags: draft.hashtags,
+    scheduledAt: resolvedScheduledAt?.toISOString(),
+  })
+  console.log(`[submitDraftForDelivery] postfastPublish result: success=${result.success}, postId=${result.postId ?? 'none'}, error=${result.error ?? 'none'}`)
 
   const updated = await prisma.contentDraft.update({
     where: { id: draft.id },

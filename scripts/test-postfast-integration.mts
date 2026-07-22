@@ -62,6 +62,13 @@ async function startMockPostFast() {
           displayName: 'Video Store',
           isConnected: true,
         },
+        {
+          id: 'pf_acc_google',
+          platform: 'GOOGLE',
+          platformUsername: 'amc_maps',
+          displayName: 'AMC Google Business',
+          isConnected: true,
+        },
       ])
     }
 
@@ -87,6 +94,21 @@ async function startMockPostFast() {
 
     if (method === 'POST' && url === '/social-posts') {
       const post = body?.posts?.[0]
+      if (post.socialMediaId === 'pf_acc_google') {
+        assert.equal(post.content, 'Google map update')
+        assert.match(post.scheduledAt, /^\d{4}-\d{2}-\d{2}T/)
+        return json(res, 200, {
+          posts: [
+            {
+              id: 'pf_post_google_001',
+              status: 'SCHEDULED',
+              scheduledAt: post.scheduledAt,
+              url: 'https://postfa.st/posts/pf_post_google_001',
+            },
+          ],
+        })
+      }
+
       assert.equal(post.socialMediaId, 'pf_acc_instagram')
       assert.equal(post.content, 'Lunch special\n\n#amc #food')
       assert.match(post.scheduledAt, /^\d{4}-\d{2}-\d{2}T/)
@@ -142,7 +164,7 @@ async function main() {
   try {
     const accounts = await postfast.postfastFetchAccounts(API_KEY)
     assert.equal(accounts.success, true)
-    assert.equal(accounts.accounts.length, 2)
+    assert.equal(accounts.accounts.length, 3)
     assert.equal(accounts.accounts[0].platformId, 'instagram')
 
     const uploadSlots = await postfast.postfastGetSignedUploadUrls(API_KEY, [
@@ -167,6 +189,15 @@ async function main() {
     assert.equal(publish.success, true)
     assert.equal(publish.postId, 'pf_post_scheduled_001')
     assert.equal(publish.scheduledAt, scheduledAt)
+
+    const googlePublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'google_business',
+      caption: 'Google map update',
+      scheduledAt,
+    })
+    assert.equal(googlePublish.success, true)
+    assert.equal(googlePublish.postId, 'pf_post_google_001')
 
     const list = await postfast.postfastListPosts(API_KEY, { status: 'scheduled', platform: 'instagram', limit: 10, page: 0 })
     assert.equal(list.success, true)

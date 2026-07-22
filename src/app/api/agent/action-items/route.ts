@@ -165,56 +165,20 @@ export async function POST(request: Request) {
       const platformName: string | undefined =
         account?.platformId ?? platformHint ?? draftData?.platform
 
-      const isDirectGoogle = platformName === 'google' && brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
-
-      if (!isDirectGoogle && !brand.postfastApiKey) {
+      if (!brand.postfastApiKey) {
         publishError = '自动发布失败：品牌未配置发布后端密钥（postfastApiKey）'
       } else if (!platformName) {
         publishError = '自动发布失败：未指定发布平台，请在 draftData.platform 传入平台名（如 instagram）'
       } else {
-        let publish: { success: boolean; postId?: string; url?: string; error?: string }
-
-        if (isDirectGoogle) {
-          try {
-            const { getGoogleAccessToken, createGoogleGBPLocalPost } = await import('@/lib/integrations/google')
-            const accessToken = await getGoogleAccessToken(brand.googleRefreshToken!)
-            
-            let googleAccountId = brand.googleAccountId || 'primary'
-            let googleLocationId = brand.googleLocationId!
-            
-            if (account && account.platformId === 'google') {
-              const handle = account.handle
-              const match = handle.match(/accounts\/([^\/]+)\/locations\/([^\/]+)/)
-              if (match) {
-                googleAccountId = `accounts/${match[1]}`
-                googleLocationId = match[2]
-              } else {
-                googleLocationId = handle
-              }
-            }
-
-            publish = await createGoogleGBPLocalPost({
-              accountId: googleAccountId,
-              locationId: googleLocationId,
-              caption: draft.caption,
-              mediaUrls: draft.mediaUrls,
-              accessToken,
-            })
-          } catch (e: unknown) {
-            const message = e instanceof Error ? e.message : 'Direct Google GBP publish failed'
-            publish = { success: false, error: message }
-          }
-        } else {
-          publish = await postfastPublish({
-            apiKey: brand.postfastApiKey!,
-            platform: platformName,
-            caption: draft.caption,
-            mediaUrls: draft.mediaUrls,
-            hashtags: draft.hashtags,
-            scheduledAt: draft.scheduledAt?.toISOString(),
-            accountId: accountId ?? undefined,
-          })
-        }
+        const publish = await postfastPublish({
+          apiKey: brand.postfastApiKey,
+          platform: platformName,
+          caption: draft.caption,
+          mediaUrls: draft.mediaUrls,
+          hashtags: draft.hashtags,
+          scheduledAt: draft.scheduledAt?.toISOString(),
+          accountId: accountId ?? undefined,
+        })
 
         if (!publish.success) {
           publishError = `自动发布失败：${publish.error ?? 'unknown error'}`
