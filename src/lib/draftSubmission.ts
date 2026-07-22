@@ -22,6 +22,16 @@ function uniq(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)))
 }
 
+function extractPostfastStorageKey(url: string) {
+  if (!url) return ''
+  if (url.startsWith('/api/integrations/postfast/file/')) {
+    const parts = url.split('/')
+    return parts.slice(6).join('/')
+  }
+  if (!url.startsWith('http') && !url.startsWith('/')) return url
+  return ''
+}
+
 /**
  * Compute a smart recommended publish time through the shared service.
  * Called when a draft has no scheduledAt set — ensures all content goes
@@ -270,9 +280,22 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   // For scheduled posts: only mark as 'scheduled' if the time is genuinely in the future.
   const scheduled = !immediatePublish && isFuture(resolvedScheduledAt)
 
+  const assetMediaStorageKeys = draft.assetRefs
+    .filter((ref: any) => ref.asset?.sourceType === 'postfast')
+    .map((ref: any) => extractPostfastStorageKey(ref.asset.url))
+
+  const assetMediaUrls = draft.assetRefs
+    .filter((ref: any) => ref.asset?.sourceType !== 'postfast')
+    .map((ref: any) => ref.asset.url)
+
+  const mediaStorageKeys = uniq([
+    ...draft.mediaUrls.map(extractPostfastStorageKey),
+    ...assetMediaStorageKeys,
+  ])
+
   const mediaUrls = uniq([
-    ...draft.mediaUrls,
-    ...draft.assetRefs.map((ref: any) => ref.asset.url),
+    ...draft.mediaUrls.filter((url: string) => !extractPostfastStorageKey(url)),
+    ...assetMediaUrls,
   ])
 
   console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${draft.account.platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, immediatePublish: ${input.immediatePublish}, draftId: ${draft.id}`)
@@ -281,6 +304,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     platform: draft.account.platformId,
     accountId: draft.accountId || undefined,
     caption: draft.caption,
+    mediaStorageKeys,
     mediaUrls,
     hashtags: draft.hashtags,
     scheduledAt: resolvedScheduledAt?.toISOString(),

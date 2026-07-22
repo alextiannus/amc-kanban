@@ -618,24 +618,21 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   }
 
   if (input.mediaUrls && input.mediaUrls.length > 0) {
-    for (const url of input.mediaUrls) {
-      if (url.startsWith('/api/integrations/postfast/file/')) {
-        const parts = url.split('/')
-        const key = parts.slice(6).join('/')
-        mediaKeys.push(key)
-        continue
-      }
-      if (!url.startsWith('http') && !url.startsWith('/')) {
-        // If it's already a storage key/token (doesn't start with http or /), treat it as a mediaStorageKey directly
-        mediaKeys.push(url)
-        continue
-      }
-      try {
-        const storageKey = await uploadPublicUrlToPostfast(input.apiKey, url)
-        mediaKeys.push(storageKey)
-      } catch (e: unknown) {
-        return { success: false, error: `媒体文件上传失败 (${url}): ${e instanceof Error ? e.message : String(e)}` }
-      }
+    try {
+      const uploadedKeys = await Promise.all(input.mediaUrls.map(async (url) => {
+        if (url.startsWith('/api/integrations/postfast/file/')) {
+          const parts = url.split('/')
+          return parts.slice(6).join('/')
+        }
+        if (!url.startsWith('http') && !url.startsWith('/')) {
+          // If it's already a storage key/token (doesn't start with http or /), treat it as a mediaStorageKey directly
+          return url
+        }
+        return await uploadPublicUrlToPostfast(input.apiKey, url)
+      }))
+      mediaKeys.push(...uploadedKeys)
+    } catch (e: unknown) {
+      return { success: false, error: e instanceof Error ? `媒体文件上传失败: ${e.message}` : `媒体文件上传失败: ${String(e)}` }
     }
   }
 
