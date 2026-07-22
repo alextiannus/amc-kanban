@@ -107,6 +107,7 @@ async function startMockPostFast() {
       if (post.socialMediaId === 'pf_acc_google') {
         assert.equal(post.content, 'Google map update')
         assert.match(post.scheduledAt, /^\d{4}-\d{2}-\d{2}T/)
+        assert.equal(body.controls.gbpLocationId, 'gbp_location_001')
         assert.equal(post.gbpLocationId, 'gbp_location_001')
         assert.equal(post.controls.gbpLocationId, 'gbp_location_001')
         return json(res, 200, {

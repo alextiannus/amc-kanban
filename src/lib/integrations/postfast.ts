@@ -687,6 +687,7 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     socialMediaId,
     content,
   }
+  const requestControls: Record<string, unknown> = {}
 
   if (isGoogleBusinessPost) {
     const resolvedLocation = await resolveGbpLocationId({
@@ -699,6 +700,7 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
       return { success: false, error: resolvedLocation.error || '发布失败：Google Business 缺少 gbpLocationId。' }
     }
     post.gbpLocationId = resolvedLocation.locationId
+    requestControls.gbpLocationId = resolvedLocation.locationId
     post.controls = {
       ...(asObject(post.controls)),
       gbpLocationId: resolvedLocation.locationId,
@@ -718,7 +720,10 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   }
 
   // PostFast requires the post(s) wrapped in a "posts" array (max 15 per request)
-  const body = JSON.stringify({ posts: [post] })
+  const body = JSON.stringify({
+    posts: [post],
+    ...(Object.keys(requestControls).length > 0 ? { controls: requestControls } : {}),
+  })
   console.log(`[postfastPublish] REQUEST body: ${body}`)
 
   const r = await pfFetch(input.apiKey, '/social-posts', {
