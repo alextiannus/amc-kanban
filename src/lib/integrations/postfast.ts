@@ -699,6 +699,10 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
       return { success: false, error: resolvedLocation.error || '发布失败：Google Business 缺少 gbpLocationId。' }
     }
     post.gbpLocationId = resolvedLocation.locationId
+    post.controls = {
+      ...(asObject(post.controls)),
+      gbpLocationId: resolvedLocation.locationId,
+    }
   }
 
   if (normalizedSchedule.value) {
