@@ -203,9 +203,10 @@ export async function syncBrand(brand: {
     }
   }
 
-  // 3. Sync last 9 days of post analytics → stored in postfastSnapshot.analyticsPosts
+  // 3. Sync the full dashboard window of post analytics → stored in postfastSnapshot.analyticsPosts
   let analyticsPosts: any[] = []
-  const analyticsFrom = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000)
+  const analyticsWindowDays = 180
+  const analyticsFrom = new Date(Date.now() - analyticsWindowDays * 24 * 60 * 60 * 1000)
   const analyticsTo = new Date()
   try {
     const analyticsResult = await postfastGetAnalytics(brand.postfastApiKey, {
@@ -214,7 +215,7 @@ export async function syncBrand(brand: {
     })
     if (analyticsResult.success && analyticsResult.posts.length > 0) {
       analyticsPosts = analyticsResult.posts
-      console.log(`[PostFast Cron] brand ${brand.id}: fetched ${analyticsPosts.length} analytics posts (last 9 days)`)
+      console.log(`[PostFast Cron] brand ${brand.id}: fetched ${analyticsPosts.length} analytics posts (last ${analyticsWindowDays} days)`)
     } else if (analyticsResult.error) {
       console.warn(`[PostFast Cron] brand ${brand.id}: analytics fetch warning — ${analyticsResult.error}`)
     }

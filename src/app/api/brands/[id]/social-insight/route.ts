@@ -55,6 +55,16 @@ type ApifyCachedPost = {
   views?: number
 }
 
+const METRIC_SOURCE_PRIORITY: Record<string, number> = {
+  postfast: 3,
+  instagram: 2,
+  tiktok: 2,
+  xiaohongshu: 2,
+  facebook: 2,
+  apify: 2,
+  internal: 1,
+}
+
 type ApifyCachedReview = {
   reviewerName?: string
   rating?: number
@@ -84,6 +94,72 @@ export interface AnalyticsPost {
   impressions: number
   reach: number
   engRate: number
+}
+
+function normalizePostUrl(value?: string | null): string {
+  if (!value || !value.startsWith('http')) return ''
+  try {
+    const url = new URL(value)
+    url.search = ''
+    url.hash = ''
+    return `${url.hostname.replace(/^www\./, '')}${url.pathname.replace(/\/+$/, '')}`.toLowerCase()
+  } catch {
+    return value.toLowerCase().split('?')[0].replace(/\/+$/, '')
+  }
+}
+
+function normalizePostCaption(value?: string | null): string {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/#[\p{L}\p{N}_-]+/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120)
+}
+
+function postIdentityKeys(post: AnalyticsPost): string[] {
+  const keys: string[] = []
+  const rawId = post.id.replace(/^pf_/, '').replace(/^apify_[^_]+_/, '')
+  const normalizedUrl = normalizePostUrl(post.postUrl)
+  const publishedDay = post.publishedAt.slice(0, 10)
+  const captionKey = normalizePostCaption(post.caption)
+
+  if (post.source === 'postfast' && rawId) keys.push(`postfast:${rawId}`)
+  if (post.source === 'internal' && post.postUrl && !post.postUrl.startsWith('http')) keys.push(`postfast:${post.postUrl}`)
+  if (normalizedUrl) keys.push(`url:${normalizedUrl}`)
+  if (captionKey) keys.push(`content:${post.platform.toLowerCase()}:${publishedDay}:${captionKey}`)
+
+  return keys
+}
+
+function metricWeight(post: AnalyticsPost): number {
+  const interactions = post.likes + post.comments + post.shares
+  const hasRealMetrics = post.impressions > 0 || post.reach > 0 || interactions > 0
+  return (hasRealMetrics ? 100 : 0) + (METRIC_SOURCE_PRIORITY[post.source] ?? 0)
+}
+
+function dedupeAnalyticsPosts(posts: AnalyticsPost[]): AnalyticsPost[] {
+  const selected: AnalyticsPost[] = []
+  const keyToIndex = new Map<string, number>()
+
+  for (const post of [...posts].sort((a, b) => metricWeight(b) - metricWeight(a))) {
+    const keys = postIdentityKeys(post)
+    const existingIndex = keys.map((key) => keyToIndex.get(key)).find((idx) => idx !== undefined)
+
+    if (existingIndex === undefined) {
+      const index = selected.push(post) - 1
+      keys.forEach((key) => keyToIndex.set(key, index))
+      continue
+    }
+
+    const existing = selected[existingIndex]
+    if (metricWeight(post) > metricWeight(existing)) {
+      selected[existingIndex] = post
+      keys.forEach((key) => keyToIndex.set(key, existingIndex))
+    }
+  }
+
+  return selected.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
 }
 
 // ── Fetch published posts from PostFast (DB-first, live fallback) ─────────────
@@ -576,7 +652,7 @@ export async function GET(req: Request, { params }: Params) {
         : 0,
     }))
 
-  const posts: AnalyticsPost[] = [...filteredPostfastPosts, ...internalDrafts, ...apifyPosts]
+  const posts: AnalyticsPost[] = dedupeAnalyticsPosts([...filteredPostfastPosts, ...internalDrafts, ...apifyPosts])
   const hasPostfastData = pfResult.posts.length > 0
   const hasApifyData = apifyPosts.length > 0 || asArray<ApifyCachedReview>(apifyMeta.googleReviews).length > 0
 
@@ -884,4 +960,3 @@ export async function GET(req: Request, { params }: Params) {
     },
   })
 }
-
