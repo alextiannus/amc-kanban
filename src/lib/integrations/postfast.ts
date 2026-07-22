@@ -71,6 +71,27 @@ function normalizePlatform(rawPlatform: unknown): string {
   return PLATFORM_MAP[upper] ?? PLATFORM_MAP[compact] ?? PLATFORM_MAP[noUnderscore] ?? compact.toLowerCase()
 }
 
+function normalizeHandle(rawHandle: unknown): string {
+  return String(rawHandle ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, '')
+    .replace(/^https?:\/\/[^/]+\//, '')
+    .replace(/^\/+|\/+$/g, '')
+}
+
+function normalizeScheduledAt(rawScheduledAt?: string): { value?: string; error?: string } {
+  if (!rawScheduledAt) return {}
+  const date = new Date(rawScheduledAt)
+  if (Number.isNaN(date.getTime())) {
+    return { error: '发布失败：scheduledAt 时间格式无效，请使用 ISO 时间或重新选择排期时间。' }
+  }
+  if (date.getTime() <= Date.now() + 60_000) {
+    return { error: '发布失败：排期时间必须晚于当前时间至少 1 分钟。' }
+  }
+  return { value: date.toISOString() }
+}
+
 function normalizePostStatus(rawStatusInput: unknown): PostFastPost['status'] {
   const raw = asString(rawStatusInput).toLowerCase().trim()
   if (!raw) return 'draft'
@@ -348,7 +369,7 @@ export async function postfastListPosts(apiKey: string, options?: {
     return {
       id: asString(p.id),
       platform: pfPlatform,
-      platformId: PLATFORM_MAP[pfPlatform] ?? pfPlatform.toLowerCase(),
+      platformId: normalizePlatform(p.platform),
       caption: asString(p.content) || asString(p.caption),   // API returns 'content', not 'caption'
       status,
       scheduledAt: asString(p.scheduledAt) || asString(p.scheduled_at) || undefined,
@@ -454,7 +475,10 @@ export async function postfastUploadFile(
  * PostFast expects: { posts: [{ platform, caption, ... }] }
  */
 function detectMediaType(keyOrUrl: string): 'IMAGE' | 'VIDEO' {
-  const ext = keyOrUrl.split('?')[0].split('.').pop()?.toLowerCase() || ''
+  const normalized = keyOrUrl.split('?')[0].toLowerCase()
+  if (normalized.startsWith('video/')) return 'VIDEO'
+  if (normalized.startsWith('image/')) return 'IMAGE'
+  const ext = normalized.split('.').pop() || ''
   if (['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp'].includes(ext)) {
     return 'VIDEO'
   }
@@ -533,6 +557,10 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   if (!input.platform || typeof input.platform !== 'string') {
     return { success: false, error: '发布失败：platform 未指定' }
   }
+  const normalizedSchedule = normalizeScheduledAt(input.scheduledAt)
+  if (normalizedSchedule.error) {
+    return { success: false, error: normalizedSchedule.error }
+  }
 
   // 1. Fetch connected accounts from PostFast to resolve the PostFast account ID (socialMediaId)
   const { success: fetchSuccess, accounts, error: fetchError } = await postfastFetchAccounts(input.apiKey)
@@ -554,11 +582,11 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
           where: { id: input.accountId }
         })
         if (dbAccount) {
-          const targetPlatformId = dbAccount.platformId.toLowerCase()
-          const targetHandle = dbAccount.handle.toLowerCase()
+          const targetPlatformId = normalizePlatform(dbAccount.platformId)
+          const targetHandle = normalizeHandle(dbAccount.handle)
           matchedAccount = accounts.find(a =>
-            a.platformId.toLowerCase() === targetPlatformId &&
-            a.handle.toLowerCase() === targetHandle
+            normalizePlatform(a.platformId) === targetPlatformId &&
+            normalizeHandle(a.handle) === targetHandle
           )
         }
       } catch (e: unknown) {
@@ -623,8 +651,8 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     content,
   }
 
-  if (input.scheduledAt) {
-    post.scheduledAt = input.scheduledAt
+  if (normalizedSchedule.value) {
+    post.scheduledAt = normalizedSchedule.value
   }
 
   if (mediaKeys.length > 0) {
@@ -657,7 +685,7 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     success: true,
     postId: asString(createdObj.post_id) || asString(createdObj.id) || undefined,
     url: asString(createdObj.url) || asString(createdObj.postUrl) || undefined,
-    scheduledAt: input.scheduledAt,
+    scheduledAt: asString(createdObj.scheduledAt) || normalizedSchedule.value,
   }
 }
 

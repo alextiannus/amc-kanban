@@ -16,7 +16,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { postfastPublish } from '@/lib/integrations/postfast'
+import { postfastListPosts, postfastPublish } from '@/lib/integrations/postfast'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
@@ -262,10 +262,39 @@ export async function GET(request: Request, { params }: Params) {
   const ok = await canSessionAccessBrandProject(brandId, user.id, user.type ?? 'HUMAN', user.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // TODO: Implement list posts endpoint
-  // - Query PostFast for scheduled/published posts
-  // - Merge with any native platform data
-  // - Return unified format
-  
-  return NextResponse.json({ error: 'Not implemented' }, { status: 501 })
+  const url = new URL(request.url)
+  const statusParam = url.searchParams.get('status')?.toLowerCase()
+  const platform = url.searchParams.get('platform') || undefined
+  const limitParam = Number(url.searchParams.get('limit') || '50')
+  const pageParam = Number(url.searchParams.get('page') || '0')
+  const status = ['scheduled', 'published', 'failed', 'draft'].includes(statusParam || '')
+    ? statusParam as 'scheduled' | 'published' | 'failed' | 'draft'
+    : undefined
+
+  const brand = await prisma.brand.findFirst({
+    where: { id: brandId },
+    select: { postfastApiKey: true },
+  })
+  if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+  if (!brand.postfastApiKey) {
+    return NextResponse.json({ posts: [], total: 0, engine: 'postfast', configured: false })
+  }
+
+  const result = await postfastListPosts(brand.postfastApiKey, {
+    status,
+    platform,
+    limit: Number.isFinite(limitParam) ? limitParam : 50,
+    page: Number.isFinite(pageParam) ? pageParam : 0,
+  })
+
+  if (!result.success) {
+    return NextResponse.json({ error: result.error || 'Failed to list PostFast posts' }, { status: 400 })
+  }
+
+  return NextResponse.json({
+    posts: result.posts,
+    total: result.total ?? result.posts.length,
+    engine: 'postfast',
+    configured: true,
+  })
 }
