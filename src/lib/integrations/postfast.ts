@@ -208,12 +208,20 @@ export interface PostFastPublishInput {
   apiKey: string
   platform: string
   caption: string
+  mediaItems?: PostFastMediaInput[] // preferred: preserves MIME/type metadata
   mediaStorageKeys?: string[]   // keys from signed upload (preferred)
   mediaUrls?: string[]          // public URLs (fallback)
   hashtags?: string[]
   scheduledAt?: string          // ISO 8601 UTC
   accountId?: string            // specific account ID to post from
   gbpLocationId?: string         // required by PostFast for Google Business Profile posts
+}
+
+export interface PostFastMediaInput {
+  storageKey?: string
+  url?: string
+  mimeType?: string
+  type?: 'IMAGE' | 'VIDEO'
 }
 
 export interface PostFastPublishResult {
@@ -475,7 +483,37 @@ export async function postfastUploadFile(
  * Publish or schedule a post.
  * PostFast expects: { posts: [{ platform, caption, ... }] }
  */
-function detectMediaType(keyOrUrl: string): 'IMAGE' | 'VIDEO' {
+function normalizeMimeType(value?: string | null): string {
+  return String(value ?? '').split(';')[0].trim().toLowerCase()
+}
+
+function mimeExtension(mimeType: string): string {
+  if (mimeType === 'image/png') return '.png'
+  if (mimeType === 'image/gif') return '.gif'
+  if (mimeType === 'image/webp') return '.webp'
+  if (mimeType === 'video/mp4') return '.mp4'
+  if (mimeType === 'video/quicktime') return '.mov'
+  if (mimeType === 'video/webm') return '.webm'
+  return '.jpg'
+}
+
+function inferMimeTypeFromExtension(filename: string): string {
+  const normalized = filename.split('?')[0].toLowerCase()
+  const ext = normalized.split('.').pop() || ''
+  if (ext === 'png') return 'image/png'
+  if (ext === 'gif') return 'image/gif'
+  if (ext === 'webp') return 'image/webp'
+  if (ext === 'mp4') return 'video/mp4'
+  if (ext === 'mov') return 'video/quicktime'
+  if (ext === 'webm') return 'video/webm'
+  return ''
+}
+
+function detectMediaType(keyOrUrl: string, mimeType?: string | null, explicitType?: 'IMAGE' | 'VIDEO'): 'IMAGE' | 'VIDEO' {
+  if (explicitType === 'VIDEO' || explicitType === 'IMAGE') return explicitType
+  const normalizedMimeType = normalizeMimeType(mimeType)
+  if (normalizedMimeType.startsWith('video/')) return 'VIDEO'
+  if (normalizedMimeType.startsWith('image/')) return 'IMAGE'
   const normalized = keyOrUrl.split('?')[0].toLowerCase()
   if (normalized.startsWith('video/')) return 'VIDEO'
   if (normalized.startsWith('image/')) return 'IMAGE'
@@ -486,9 +524,9 @@ function detectMediaType(keyOrUrl: string): 'IMAGE' | 'VIDEO' {
   return 'IMAGE'
 }
 
-async function uploadPublicUrlToPostfast(apiKey: string, url: string): Promise<string> {
+async function uploadPublicUrlToPostfast(apiKey: string, url: string, mimeTypeHint?: string | null): Promise<{ storageKey: string; mimeType: string }> {
   let fileBuffer: Buffer
-  let mimeType = 'image/jpeg'
+  let mimeType = normalizeMimeType(mimeTypeHint) || 'image/jpeg'
   let filename = 'file.jpg'
 
   if (url.startsWith('/') || !url.startsWith('http')) {
@@ -498,13 +536,8 @@ async function uploadPublicUrlToPostfast(apiKey: string, url: string): Promise<s
     const absolutePath = join(process.cwd(), 'public', url.split('?')[0])
     fileBuffer = await readFile(absolutePath)
     
-    const ext = path.extname(absolutePath).toLowerCase()
     filename = path.basename(absolutePath)
-    if (ext === '.png') mimeType = 'image/png'
-    else if (ext === '.gif') mimeType = 'image/gif'
-    else if (ext === '.webp') mimeType = 'image/webp'
-    else if (ext === '.mp4') mimeType = 'video/mp4'
-    else if (ext === '.mov') mimeType = 'video/quicktime'
+    mimeType = normalizeMimeType(mimeTypeHint) || inferMimeTypeFromExtension(absolutePath) || 'image/jpeg'
   } else {
     const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -512,16 +545,13 @@ async function uploadPublicUrlToPostfast(apiKey: string, url: string): Promise<s
     const arrayBuffer = await res.arrayBuffer()
     fileBuffer = Buffer.from(arrayBuffer)
 
-    mimeType = res.headers.get('content-type') || 'image/jpeg'
-    mimeType = mimeType.split(';')[0].trim()
+    const responseMimeType = normalizeMimeType(res.headers.get('content-type'))
+    mimeType = normalizeMimeType(mimeTypeHint) || responseMimeType || 'image/jpeg'
 
     const urlParts = url.split('/')
     filename = urlParts[urlParts.length - 1].split('?')[0] || 'file'
     if (!filename.includes('.')) {
-      if (mimeType.startsWith('image/png')) filename += '.png'
-      else if (mimeType.startsWith('image/gif')) filename += '.gif'
-      else if (mimeType.startsWith('video/mp4')) filename += '.mp4'
-      else filename += '.jpg'
+      filename += mimeExtension(mimeType)
     }
   }
 
@@ -541,7 +571,7 @@ async function uploadPublicUrlToPostfast(apiKey: string, url: string): Promise<s
     throw new Error(uploadResult.error || 'Upload failed')
   }
 
-  return slot.storageKey
+  return { storageKey: slot.storageKey, mimeType }
 }
 
 function extractGoogleLocationId(rawHandle?: string | null): string {
@@ -651,26 +681,56 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   const isGoogleBusinessPost = normalizePlatform(input.platform) === 'google' || normalizePlatform(matchedAccount.platformId) === 'google'
 
   // 2. Resolve media keys (download & upload public URLs to S3 in the background)
-  const mediaKeys: string[] = []
+  const resolvedMediaItems: Array<{ key: string; mimeType?: string; type?: 'IMAGE' | 'VIDEO' }> = []
+  const seenMediaKeys = new Set<string>()
+  const pushResolvedMedia = (media: { key: string; mimeType?: string; type?: 'IMAGE' | 'VIDEO' }) => {
+    if (!media.key || seenMediaKeys.has(media.key)) return
+    seenMediaKeys.add(media.key)
+    resolvedMediaItems.push(media)
+  }
+
+  if (input.mediaItems && input.mediaItems.length > 0) {
+    try {
+      const uploadedItems = await Promise.all(input.mediaItems.map(async (item) => {
+        const storageKey = item.storageKey || (item.url?.startsWith('/api/integrations/postfast/file/')
+          ? item.url.split('/').slice(6).join('/')
+          : (!item.url?.startsWith('http') && !item.url?.startsWith('/') ? item.url : ''))
+        if (storageKey) {
+          return { key: storageKey, mimeType: item.mimeType, type: item.type }
+        }
+        if (item.url) {
+          const uploaded = await uploadPublicUrlToPostfast(input.apiKey, item.url, item.mimeType)
+          return { key: uploaded.storageKey, mimeType: uploaded.mimeType, type: item.type }
+        }
+        return null
+      }))
+      uploadedItems.forEach((item) => {
+        if (item) pushResolvedMedia(item)
+      })
+    } catch (e: unknown) {
+      return { success: false, error: e instanceof Error ? `媒体文件上传失败: ${e.message}` : `媒体文件上传失败: ${String(e)}` }
+    }
+  }
 
   if (input.mediaStorageKeys && input.mediaStorageKeys.length > 0) {
-    mediaKeys.push(...input.mediaStorageKeys)
+    input.mediaStorageKeys.forEach((key) => pushResolvedMedia({ key }))
   }
 
   if (input.mediaUrls && input.mediaUrls.length > 0) {
     try {
-      const uploadedKeys = await Promise.all(input.mediaUrls.map(async (url) => {
+      const uploadedItems = await Promise.all(input.mediaUrls.map(async (url) => {
         if (url.startsWith('/api/integrations/postfast/file/')) {
           const parts = url.split('/')
-          return parts.slice(6).join('/')
+          return { key: parts.slice(6).join('/') }
         }
         if (!url.startsWith('http') && !url.startsWith('/')) {
           // If it's already a storage key/token (doesn't start with http or /), treat it as a mediaStorageKey directly
-          return url
+          return { key: url }
         }
-        return await uploadPublicUrlToPostfast(input.apiKey, url)
+        const uploaded = await uploadPublicUrlToPostfast(input.apiKey, url)
+        return { key: uploaded.storageKey, mimeType: uploaded.mimeType }
       }))
-      mediaKeys.push(...uploadedKeys)
+      uploadedItems.forEach(pushResolvedMedia)
     } catch (e: unknown) {
       return { success: false, error: e instanceof Error ? `媒体文件上传失败: ${e.message}` : `媒体文件上传失败: ${String(e)}` }
     }
@@ -711,10 +771,10 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     post.scheduledAt = normalizedSchedule.value
   }
 
-  if (mediaKeys.length > 0) {
-    post.mediaItems = mediaKeys.map((key, index) => ({
-      key,
-      type: detectMediaType(key),
+  if (resolvedMediaItems.length > 0) {
+    post.mediaItems = resolvedMediaItems.map((item, index) => ({
+      key: item.key,
+      type: detectMediaType(item.key, item.mimeType, item.type),
       sortOrder: index,
     }))
   }

@@ -22,6 +22,16 @@ function uniq(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)))
 }
 
+function uniqMediaItems(values: Array<{ storageKey?: string; url?: string; mimeType?: string }>) {
+  const seen = new Set<string>()
+  return values.filter((item) => {
+    const key = item.storageKey || item.url
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function normalizePublishPlatform(platform?: string | null) {
   const normalized = String(platform ?? '').toLowerCase().trim()
   if (['google_business', 'google_maps', 'google_map', 'google_business_profile', 'gbp', 'gmb'].includes(normalized)) {
@@ -290,22 +300,27 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   // For scheduled posts: only mark as 'scheduled' if the time is genuinely in the future.
   const scheduled = !immediatePublish && isFuture(resolvedScheduledAt)
 
-  const assetMediaStorageKeys = draft.assetRefs
-    .filter((ref: any) => ref.asset?.sourceType === 'postfast')
-    .map((ref: any) => extractPostfastStorageKey(ref.asset.url))
-
-  const assetMediaUrls = draft.assetRefs
-    .filter((ref: any) => ref.asset?.sourceType !== 'postfast')
-    .map((ref: any) => ref.asset.url)
-
   const mediaStorageKeys = uniq([
     ...draft.mediaUrls.map(extractPostfastStorageKey),
-    ...assetMediaStorageKeys,
   ])
 
   const mediaUrls = uniq([
     ...draft.mediaUrls.filter((url: string) => !extractPostfastStorageKey(url)),
-    ...assetMediaUrls,
+  ])
+
+  const mediaItems = uniqMediaItems([
+    ...mediaStorageKeys.map((storageKey) => ({ storageKey })),
+    ...mediaUrls.map((url) => ({ url })),
+    ...draft.assetRefs.map((ref: any) => {
+      const asset = ref.asset
+      const storageKey = asset?.sourceType === 'postfast'
+        ? (extractPostfastStorageKey(asset.url) || asset.url)
+        : ''
+      return {
+        ...(storageKey ? { storageKey } : { url: asset?.url }),
+        mimeType: asset?.mimeType,
+      }
+    }),
   ])
 
   console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, immediatePublish: ${input.immediatePublish}, draftId: ${draft.id}`)
@@ -314,8 +329,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     platform: platformId,
     accountId: draft.accountId || undefined,
     caption: draft.caption,
-    mediaStorageKeys,
-    mediaUrls,
+    mediaItems,
     hashtags: draft.hashtags,
     scheduledAt: resolvedScheduledAt?.toISOString(),
   })

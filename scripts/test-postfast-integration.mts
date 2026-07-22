@@ -123,6 +123,21 @@ async function startMockPostFast() {
       }
 
       assert.equal(post.socialMediaId, 'pf_acc_instagram')
+      if (post.content === 'Opaque video key') {
+        assert.equal(post.mediaItems[0].key, 'opaque-storage-key')
+        assert.equal(post.mediaItems[0].type, 'VIDEO')
+        return json(res, 200, {
+          posts: [
+            {
+              id: 'pf_post_opaque_video_001',
+              status: 'SCHEDULED',
+              scheduledAt: post.scheduledAt,
+              url: 'https://postfa.st/posts/pf_post_opaque_video_001',
+            },
+          ],
+        })
+      }
+
       assert.equal(post.content, 'Lunch special\n\n#amc #food')
       assert.match(post.scheduledAt, /^\d{4}-\d{2}-\d{2}T/)
       assert.equal(post.mediaItems[0].key, 'video/reel-key')
@@ -202,6 +217,17 @@ async function main() {
     assert.equal(publish.success, true)
     assert.equal(publish.postId, 'pf_post_scheduled_001')
     assert.equal(publish.scheduledAt, scheduledAt)
+
+    const opaqueVideoPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      caption: 'Opaque video key',
+      mediaItems: [{ storageKey: 'opaque-storage-key', mimeType: 'video/mp4' }],
+      scheduledAt,
+    })
+    assert.equal(opaqueVideoPublish.success, true)
+    assert.equal(opaqueVideoPublish.postId, 'pf_post_opaque_video_001')
 
     const googlePublish = await postfast.postfastPublish({
       apiKey: API_KEY,
