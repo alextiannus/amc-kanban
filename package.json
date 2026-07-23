@@ -16,6 +16,7 @@
     "test:amc-content": "node --experimental-strip-types scripts/test-amc-content.mts",
     "test:content-engine-integration": "node --experimental-strip-types scripts/test-content-engine-integration.mts",
     "test:postfast-integration": "node --experimental-strip-types scripts/test-postfast-integration.mts",
+    "test:llm-routing-policy": "node --experimental-strip-types scripts/test-llm-routing-policy.mts",
     "test:execution": "node --experimental-strip-types scripts/test-project-execution.mts",
     "test:assignment-pool": "node --experimental-strip-types scripts/test-assignment-pool.mts",
     "test:assignment-flow": "node --experimental-strip-types scripts/test-assignment-flow.mts",

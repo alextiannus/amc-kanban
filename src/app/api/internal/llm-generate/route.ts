@@ -28,15 +28,44 @@ export async function POST(request: Request) {
   const maxTokens = typeof body.maxTokens === 'number'
     ? Math.max(1, Math.min(4000, Math.round(body.maxTokens)))
     : 1200
+  const responseFormat = body.responseFormat === 'json' ? 'json' : 'text'
+  const temperature = typeof body.temperature === 'number' && Number.isFinite(body.temperature)
+    ? Math.max(0, Math.min(2, body.temperature))
+    : undefined
+  const deadlineMs = typeof body.deadlineMs === 'number' && Number.isFinite(body.deadlineMs)
+    ? Math.max(1000, Math.min(110_000, Math.round(body.deadlineMs)))
+    : undefined
+  const maxAttempts = typeof body.maxAttempts === 'number' && Number.isFinite(body.maxAttempts)
+    ? Math.max(1, Math.min(4, Math.round(body.maxAttempts)))
+    : undefined
+  const rawAttemptTimeouts: unknown[] = Array.isArray(body.attemptTimeoutMs)
+    ? body.attemptTimeoutMs
+    : typeof body.attemptTimeoutMs === 'number'
+      ? [body.attemptTimeoutMs]
+      : []
+  const attemptTimeoutMs = rawAttemptTimeouts
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    .slice(0, 4)
+    .map((value) => Math.max(1000, Math.min(110_000, Math.round(value))))
 
   if (!prompt) return NextResponse.json({ error: 'prompt is required' }, { status: 400 })
 
-  const result = await callLLM(taskTag, prompt, maxTokens)
+  const result = await callLLM(taskTag, prompt, maxTokens, {
+    jsonMode: responseFormat === 'json',
+    temperature,
+    signal: request.signal,
+    deadlineMs,
+    attemptTimeoutMs: attemptTimeoutMs.length ? attemptTimeoutMs : undefined,
+    maxAttempts,
+  })
   if (!result.text) {
     return NextResponse.json({
       error: result.error || 'LLM generation failed',
       provider: result.provider,
       modelName: result.modelName,
+      latencyMs: result.latencyMs,
+      attempts: result.attempts,
+      timedOut: result.timedOut,
     }, { status: 502 })
   }
 
@@ -45,5 +74,8 @@ export async function POST(request: Request) {
     text: result.text,
     provider: result.provider,
     modelName: result.modelName,
+    latencyMs: result.latencyMs,
+    attempts: result.attempts,
+    timedOut: result.timedOut,
   })
 }

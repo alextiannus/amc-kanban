@@ -1481,6 +1481,7 @@ src/agents/skills/
 |------|---------|---------|
 | 文案生成、评论回复 | `copywriting` | `callLLM('copywriting')` → `llmRouter.ts` |
 | AI 语音伴侣对话 | `companion` | `callLLMChat('companion')` → `llmRouter.ts` |
+| Growth V2 初级报告证据归纳 | `growth_report_analysis` | Growth → `/api/internal/llm-generate` → `callLLM()`；使用 JSON 模式、受控模型尝试次数和调用截止时间 |
 | 商家端 TTS 语音合成 | `tts` | `tts-proxy/route.ts` → `LLMConfig[tts]` → MiniMax T2A API |
 | 多模态图像分析 | `google` provider | `generateMultimodalText()` → `LLMConfig[provider=google]` |
 | 管理后台 AI 建议 | `companion` | browser → `/api/llm/chat` → `callLLMChat` |
@@ -1566,4 +1567,6 @@ Admin → AI 模型配置 页面：
 - Growth Cookie 写操作同时校验同源 `Origin` 与 CSRF Token；前端隐藏按钮不构成授权，所有管理 API 在服务端校验角色。
 - `ADMIN` 拥有 Provider 验证和非敏感配置权限；`AMC_PRINCIPAL` 可管理任务和人工复核，但不能修改基础设施配置。
 - `AMC_KNOWLEDGE_TOKEN` 继续用于内部 API/MCP 应急访问，不作为 Dashboard 的常规登录方式。
+- 官网 V2 初级报告使用质量优先的受控 AI 策略：主模型最多 40 秒、一个备用模型最多 15 秒、总截止时间 58 秒；输出使用 JSON 模式，超时或全部模型失败时使用规则分析安全回退并正常交付单一报告版本。该策略同时适用于中文和英文初级报告，不改变高级报告策略。
+- `/api/internal/llm-generate` 只对持有内部服务令牌的调用方接受可选生成策略，包括 JSON 输出、温度、总截止时间、分次超时和最大尝试次数；调用取消必须向 Provider 传播。Provider、模型、尝试次数和耗时只进入内部响应与审计，不通过公开评估 API 暴露。
 - 公开 intake 路径、响应格式、60 天去重、配额与 TikHub 两阶段任务保持不变；现有 Bearer Token API 保持兼容。

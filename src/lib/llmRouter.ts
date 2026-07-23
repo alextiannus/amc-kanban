@@ -6,6 +6,26 @@ export interface LLMCallResult {
   provider: string
   modelName: string
   error?: string
+  latencyMs?: number
+  timedOut?: boolean
+  attempts?: LLMCallAttempt[]
+}
+
+export interface LLMCallAttempt {
+  provider: string
+  modelName: string
+  latencyMs: number
+  status: 'success' | 'failed' | 'timeout' | 'aborted' | 'skipped'
+  error?: string
+}
+
+export interface LLMCallOptions {
+  temperature?: number
+  jsonMode?: boolean
+  signal?: AbortSignal
+  deadlineMs?: number
+  attemptTimeoutMs?: number[]
+  maxAttempts?: number
 }
 
 // ============================================================
@@ -51,8 +71,14 @@ async function executeSingleLLMCall(
   baseUrl: string | null,
   prompt: string,
   maxTokens: number,
-  options: { temperature?: number; jsonMode?: boolean } = {},
-): Promise<LLMCallResult & { rateLimited?: boolean }> {
+  options: { temperature?: number; jsonMode?: boolean; signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<LLMCallResult & { rateLimited?: boolean; aborted?: boolean }> {
+  const timeoutSignal = options.timeoutMs && options.timeoutMs > 0
+    ? AbortSignal.timeout(options.timeoutMs)
+    : null
+  const requestSignal = options.signal && timeoutSignal
+    ? AbortSignal.any([options.signal, timeoutSignal])
+    : options.signal ?? timeoutSignal ?? undefined
   try {
     let responseText: string | null = null
     let errorMsg: string | undefined = undefined
@@ -63,6 +89,7 @@ async function executeSingleLLMCall(
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: requestSignal,
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
@@ -103,6 +130,7 @@ async function executeSingleLLMCall(
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
         },
+        signal: requestSignal,
         body: JSON.stringify({
           model: modelName,
           messages: [{ role: 'user', content: prompt }],
@@ -137,6 +165,7 @@ async function executeSingleLLMCall(
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01'
         },
+        signal: requestSignal,
         body: JSON.stringify({
           model: modelName,
           max_tokens: maxTokens,
@@ -174,9 +203,12 @@ async function executeSingleLLMCall(
       rateLimited,
     }
   } catch (error: any) {
-    const errorMsg = `Request failed for ${provider}/${modelName}: ${error.message || error}`
+    const timedOut = timeoutSignal?.aborted === true && options.signal?.aborted !== true
+    const aborted = options.signal?.aborted === true
+    const reason = timedOut ? 'timed out' : aborted ? 'was aborted' : (error.message || error)
+    const errorMsg = `Request failed for ${provider}/${modelName}: ${reason}`
     console.error(`[LLM Router]`, error)
-    return { text: null, provider, modelName, error: errorMsg, rateLimited: false }
+    return { text: null, provider, modelName, error: errorMsg, rateLimited: false, timedOut, aborted }
   }
 }
 
@@ -430,10 +462,136 @@ export async function callLLMChat(
  * LLM switching completely seamless to the caller when at least one fallback
  * provider is healthy.
  */
+type LLMRouterConfig = {
+  provider: string
+  modelName: string
+  baseUrl: string | null
+  apiKey: string | null
+  displayName: string
+}
+
+export async function callLLMWithConfigs(
+  configsToTry: LLMRouterConfig[],
+  prompt: string,
+  maxTokens: number,
+  options: LLMCallOptions = {},
+): Promise<LLMCallResult> {
+  const startedAt = Date.now()
+  const attempts: LLMCallAttempt[] = []
+  const errors: string[] = []
+  const deadlineMs = Number.isFinite(options.deadlineMs) && Number(options.deadlineMs) > 0
+    ? Number(options.deadlineMs)
+    : Number.POSITIVE_INFINITY
+  const maxAttempts = Number.isFinite(options.maxAttempts) && Number(options.maxAttempts) > 0
+    ? Math.max(1, Math.floor(Number(options.maxAttempts)))
+    : Number.POSITIVE_INFINITY
+  let providerCalls = 0
+  let timedOut = false
+
+  for (const config of configsToTry) {
+    const provider = config.provider
+    const modelName = config.modelName
+    const baseUrl = config.baseUrl
+
+    if (options.signal?.aborted) {
+      attempts.push({ provider, modelName, latencyMs: 0, status: 'aborted', error: 'Caller aborted request' })
+      break
+    }
+
+    const remainingMs = deadlineMs - (Date.now() - startedAt)
+    if (remainingMs <= 0 || providerCalls >= maxAttempts) {
+      timedOut = timedOut || remainingMs <= 0
+      break
+    }
+
+    if (isCircuitOpen(provider, modelName)) {
+      const error = 'Skipped because the rate-limit circuit is open'
+      attempts.push({ provider, modelName, latencyMs: 0, status: 'skipped', error })
+      errors.push(`${config.displayName} (${provider}): ${error}`)
+      continue
+    }
+
+    const apiKey = config.apiKey || ''
+    if (!apiKey) {
+      const error = `API key missing for ${provider}/${modelName} — store the key in Admin → AI 模型配置`
+      console.warn(`[LLM Router] ${error}`)
+      attempts.push({ provider, modelName, latencyMs: 0, status: 'skipped', error })
+      errors.push(`${config.displayName} (${provider}): ${error}`)
+      continue
+    }
+
+    const configuredAttemptTimeout = options.attemptTimeoutMs?.[
+      Math.min(providerCalls, Math.max(0, (options.attemptTimeoutMs?.length ?? 1) - 1))
+    ]
+    const attemptTimeoutMs = Math.max(1, Math.min(
+      remainingMs,
+      Number.isFinite(configuredAttemptTimeout) && Number(configuredAttemptTimeout) > 0
+        ? Number(configuredAttemptTimeout)
+        : remainingMs,
+    ))
+    const attemptStartedAt = Date.now()
+    providerCalls += 1
+
+    console.log(`[LLM Router] Trying: ${config.displayName} (${provider}/${modelName})`)
+    const result = await executeSingleLLMCall(provider, modelName, apiKey, baseUrl, prompt, maxTokens, {
+      temperature: options.temperature,
+      jsonMode: options.jsonMode,
+      signal: options.signal,
+      timeoutMs: attemptTimeoutMs,
+    })
+    const latencyMs = Date.now() - attemptStartedAt
+    const status: LLMCallAttempt['status'] = result.text && !result.error
+      ? 'success'
+      : result.aborted
+        ? 'aborted'
+        : result.timedOut
+          ? 'timeout'
+          : 'failed'
+    attempts.push({
+      provider,
+      modelName,
+      latencyMs,
+      status,
+      ...(result.error ? { error: result.error } : {}),
+    })
+
+    if (result.text && !result.error) {
+      console.log(`[LLM Router] ✅ Success via ${config.displayName} (${provider}/${modelName})`)
+      return {
+        ...result,
+        latencyMs: Date.now() - startedAt,
+        timedOut,
+        attempts,
+      }
+    }
+
+    if (result.rateLimited) tripCircuit(provider, modelName)
+    timedOut = timedOut || Boolean(result.timedOut)
+    const errDetail = result.error || 'Unknown error'
+    console.warn(`[LLM Router] ${config.displayName} failed: ${errDetail}. Trying next...`)
+    errors.push(`${config.displayName} (${provider}): ${errDetail}`)
+    if (result.aborted) break
+  }
+
+  if (!configsToTry.length) errors.push('No enabled LLM configuration is available')
+  const combinedError = `All LLM configurations failed:\n- ` + errors.join('\n- ')
+  console.error(`[LLM Router] ${combinedError}`)
+  return {
+    text: null,
+    provider: attempts.at(-1)?.provider || 'none',
+    modelName: attempts.at(-1)?.modelName || 'none',
+    error: combinedError,
+    latencyMs: Date.now() - startedAt,
+    timedOut: timedOut || (Number.isFinite(deadlineMs) && Date.now() - startedAt >= deadlineMs),
+    attempts,
+  }
+}
+
 export async function callLLM(
   taskTag: string,
   prompt: string,
-  maxTokens: number = 1000
+  maxTokens: number = 1000,
+  options: LLMCallOptions = {},
 ): Promise<LLMCallResult> {
   // 1. Fetch all matching enabled configurations, sorted by priority DESC
   const matchingConfigs = await prisma.lLMConfig.findMany({
@@ -455,82 +613,30 @@ export async function callLLM(
     orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
   })
 
-  const configsToTry = [...matchingConfigs, ...defaultConfigs]
-  const errors: string[] = []
+  const configsToTry: LLMRouterConfig[] = [...matchingConfigs, ...defaultConfigs].map((config) => ({
+    provider: config.provider,
+    modelName: config.modelName,
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    displayName: config.displayName,
+  }))
 
-  // Try each configuration in sequence (circuit breaker skips rate-limited ones)
-  for (const config of configsToTry) {
-    const provider = config.provider
-    const modelName = config.modelName
-    const baseUrl = config.baseUrl
-
-    // Skip immediately if circuit is open (recent 429)
-    if (isCircuitOpen(provider, modelName)) {
-      errors.push(`${config.displayName} (${provider}): skipped — circuit open (rate-limited)`)
-      continue
-    }
-
-    // Key must be stored in LLMConfig.apiKey — no SystemConfig fallback.
-    const apiKey = config.apiKey || ''
-
-    if (!apiKey) {
-      const errorMsg = `API key missing for ${provider}/${modelName} — store the key in Admin → AI 模型配置`
-      console.warn(`[LLM Router] ${errorMsg}`)
-      errors.push(`${config.displayName} (${provider}): ${errorMsg}`)
-      continue
-    }
-
-    console.log(`[LLM Router] Trying: ${config.displayName} (${provider}/${modelName})`)
-    const result = await executeSingleLLMCall(provider, modelName, apiKey, baseUrl, prompt, maxTokens)
-
-    if (result.text && !result.error) {
-      console.log(`[LLM Router] \u2705 Success via ${config.displayName} (${provider}/${modelName})`)
-      return result
-    }
-
-    // Trip circuit on rate limit so this provider is skipped for the next 5 min
-    if (result.rateLimited) {
-      tripCircuit(provider, modelName)
-    }
-
-    const errDetail = result.error || 'Unknown error'
-    console.warn(`[LLM Router] ${config.displayName} failed: ${errDetail}. Trying next...`)
-    errors.push(`${config.displayName} (${provider}): ${errDetail}`)
-  }
-
-  // 3. System env fallback — only if SYSTEM_DEFAULT_LLM_* vars are fully set.
-  // Configure AI models via Admin → AI 模型配置 instead of relying on this.
-  console.log('[LLM Router] All DB configs exhausted. Checking system env fallback...')
-
+  // Preserve the legacy system fallback for existing callers. New credentials must
+  // still be configured in LLMConfig through Admin.
   const sysProvider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || ''
   const sysModelName = process.env.SYSTEM_DEFAULT_LLM_MODEL || ''
   const sysApiKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
-
   if (sysProvider && sysModelName && sysApiKey) {
-    if (isCircuitOpen(sysProvider, sysModelName)) {
-      errors.push(`System Fallback (${sysProvider}): skipped — circuit open`)
-    } else {
-      const result = await executeSingleLLMCall(sysProvider, sysModelName, sysApiKey, null, prompt, maxTokens)
-      if (result.text && !result.error) {
-        console.log(`[LLM Router] ✅ System env fallback (${sysProvider}/${sysModelName})`)
-        return result
-      }
-      if (result.rateLimited) tripCircuit(sysProvider, sysModelName)
-      errors.push(`System Fallback (${sysProvider}): ${result.error || 'Unknown error'}`)
-    }
-  } else {
-    errors.push('System Fallback: SYSTEM_DEFAULT_LLM_* env vars not fully configured')
+    configsToTry.push({
+      provider: sysProvider,
+      modelName: sysModelName,
+      baseUrl: null,
+      apiKey: sysApiKey,
+      displayName: 'System fallback',
+    })
   }
 
-  const combinedError = `All LLM configurations failed:\n- ` + errors.join('\n- ')
-  console.error(`[LLM Router] ${combinedError}`)
-
-  return {
-    text: null,
-    provider: 'none',
-    modelName: 'none',
-    error: combinedError
-  }
+  return callLLMWithConfigs(configsToTry, prompt, maxTokens, options)
 }
 
 /**
