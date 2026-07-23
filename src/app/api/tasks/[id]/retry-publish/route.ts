@@ -86,17 +86,39 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: { status: 'publishing', agentNote: null },
   })
 
-  const combinedMediaUrls = Array.from(new Set([
-    ...(draft.mediaUrls || []),
-    ...(draft.assetRefs || []).map((ref: any) => ref.asset.url),
-  ].filter(Boolean)))
+  // Build mediaItems preserving mimeType so videos are not misidentified as images
+  const seenKeys = new Set<string>()
+  const mediaItems: Array<{ storageKey?: string; url?: string; mimeType?: string }> = []
+  for (const url of (draft.mediaUrls || [])) {
+    if (!url || seenKeys.has(url)) continue
+    seenKeys.add(url)
+    if (url.startsWith('/api/integrations/postfast/file/')) {
+      const key = url.split('/').slice(6).join('/')
+      mediaItems.push({ storageKey: key })
+    } else {
+      mediaItems.push({ url })
+    }
+  }
+  for (const ref of (draft.assetRefs || [])) {
+    const asset = ref.asset
+    if (!asset?.url || seenKeys.has(asset.url)) continue
+    seenKeys.add(asset.url)
+    if (asset.sourceType === 'postfast') {
+      const key = asset.url.startsWith('/api/integrations/postfast/file/')
+        ? asset.url.split('/').slice(6).join('/')
+        : asset.url
+      mediaItems.push({ storageKey: key, mimeType: asset.mimeType ?? undefined })
+    } else {
+      mediaItems.push({ url: asset.url, mimeType: asset.mimeType ?? undefined })
+    }
+  }
 
   // Attempt publish
   const publish = await postfastPublish({
     apiKey: brand.postfastApiKey,
     platform: platformName,
     caption: draft.caption,
-    mediaUrls: combinedMediaUrls,
+    mediaItems,
     hashtags: draft.hashtags,
     scheduledAt: draft.scheduledAt?.toISOString(),
   })

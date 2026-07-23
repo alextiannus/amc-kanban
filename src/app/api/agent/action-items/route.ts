@@ -170,11 +170,43 @@ export async function POST(request: Request) {
       } else if (!platformName) {
         publishError = '自动发布失败：未指定发布平台，请在 draftData.platform 传入平台名（如 instagram）'
       } else {
+        // Re-fetch the draft with assetRefs to get mimeType for each media file
+        const draftWithAssets = await prisma.contentDraft.findUnique({
+          where: { id: draftId },
+          include: { assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
+        })
+
+        // Build mediaItems preserving mimeType so videos are not misidentified as images
+        const seenKeys = new Set<string>()
+        const mediaItems: Array<{ storageKey?: string; url?: string; mimeType?: string }> = []
+        for (const url of (draft.mediaUrls || [])) {
+          if (!url || seenKeys.has(url)) continue
+          seenKeys.add(url)
+          if (url.startsWith('/api/integrations/postfast/file/')) {
+            mediaItems.push({ storageKey: url.split('/').slice(6).join('/') })
+          } else {
+            mediaItems.push({ url })
+          }
+        }
+        for (const ref of (draftWithAssets?.assetRefs || [])) {
+          const asset = ref.asset
+          if (!asset?.url || seenKeys.has(asset.url)) continue
+          seenKeys.add(asset.url)
+          if (asset.sourceType === 'postfast') {
+            const key = asset.url.startsWith('/api/integrations/postfast/file/')
+              ? asset.url.split('/').slice(6).join('/')
+              : asset.url
+            mediaItems.push({ storageKey: key, mimeType: asset.mimeType ?? undefined })
+          } else {
+            mediaItems.push({ url: asset.url, mimeType: asset.mimeType ?? undefined })
+          }
+        }
+
         const publish = await postfastPublish({
           apiKey: brand.postfastApiKey,
           platform: platformName,
           caption: draft.caption,
-          mediaUrls: draft.mediaUrls,
+          mediaItems,
           hashtags: draft.hashtags,
           scheduledAt: draft.scheduledAt?.toISOString(),
           accountId: accountId ?? undefined,

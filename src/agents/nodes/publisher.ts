@@ -224,11 +224,45 @@ export async function publisherNode(state: any) {
 
     console.log(`Brand ${brand.name} has PostFast API key. Initiating actual social media publish...`);
     try {
+      // Build mediaItems preserving mimeType so videos are not misidentified as images.
+      // When existingDraftId is set, read assetRefs from DB; otherwise fall back to plain URLs.
+      let publishMediaItems: Array<{ storageKey?: string; url?: string; mimeType?: string }> | undefined
+      if (existingDraftId) {
+        const draftWithAssets = await prisma.contentDraft.findUnique({
+          where: { id: existingDraftId },
+          include: { assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
+        })
+        const seenKeys = new Set<string>()
+        publishMediaItems = []
+        for (const url of (mediaUrls || [])) {
+          if (!url || seenKeys.has(url)) continue
+          seenKeys.add(url)
+          if (url.startsWith('/api/integrations/postfast/file/')) {
+            publishMediaItems.push({ storageKey: url.split('/').slice(6).join('/') })
+          } else {
+            publishMediaItems.push({ url })
+          }
+        }
+        for (const ref of (draftWithAssets?.assetRefs || [])) {
+          const asset = ref.asset
+          if (!asset?.url || seenKeys.has(asset.url)) continue
+          seenKeys.add(asset.url)
+          if (asset.sourceType === 'postfast') {
+            const key = asset.url.startsWith('/api/integrations/postfast/file/')
+              ? asset.url.split('/').slice(6).join('/')
+              : asset.url
+            publishMediaItems.push({ storageKey: key, mimeType: asset.mimeType ?? undefined })
+          } else {
+            publishMediaItems.push({ url: asset.url, mimeType: asset.mimeType ?? undefined })
+          }
+        }
+      }
+
       const publishRes = await postfastPublish({
         apiKey: brand.postfastApiKey,
         platform,
         caption,
-        mediaUrls: mediaUrls || [],
+        ...(publishMediaItems ? { mediaItems: publishMediaItems } : { mediaUrls: mediaUrls || [] }),
         hashtags: cleanHashtags,
         accountId: socialAccount.id
       });
