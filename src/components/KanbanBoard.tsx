@@ -161,13 +161,16 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     try {
       const res = await fetch('/api/auth/me')
       if (res.ok) {
-        setUser(await res.json())
+        const data = await res.json()
+        setUser(data)
+        return data
       } else if (res.status === 401) {
         router.push('/')
       }
     } catch (e) {
       console.error('[KanbanBoard] fetchUser error', e)
     }
+    return null
   }
 
   const fetchSubscriptionState = async () => {
@@ -258,10 +261,19 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
 
   useEffect(() => {
     let eventSource: EventSource | null = null
-    queueMicrotask(() => {
-      void fetchUser()
-      void fetchSubscriptionState()
+    queueMicrotask(async () => {
+      // Fetch user first — role determines whether subscription check is needed
+      const fetchedUser = await fetchUser()
       void fetchBrands()
+
+      // If the user is ADMIN or AMC_PRINCIPAL, bypass subscription gate immediately
+      // so they never see the "订阅未激活" screen due to a race condition.
+      const fetchedRoles = resolveRoles(fetchedUser)
+      if (fetchedRoles.includes('ADMIN') || fetchedRoles.includes('AMC_PRINCIPAL')) {
+        setSubscriptionActive(true)
+      } else {
+        void fetchSubscriptionState()
+      }
 
       eventSource = new EventSource('/api/events')
       eventSource.onmessage = (event) => {

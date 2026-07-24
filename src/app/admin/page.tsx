@@ -43,6 +43,25 @@ function AdminPageInner() {
   const tabParam = searchParams.get('tab')
   const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>((tabParam as AdminTab) || 'users')
 
+  // ── Role guard: only ADMIN users may access this page ────────────────────
+  const [authChecked, setAuthChecked] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.role === 'ADMIN' || data?.userRoles?.includes('ADMIN')) {
+          setIsAdmin(true)
+        } else {
+          router.replace('/board')
+        }
+      })
+      .catch(() => router.replace('/board'))
+      .finally(() => setAuthChecked(true))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Modals state
   const [invitationData, setInvitationData] = useState<InvitationResult | null>(null)
   const [resetData, setResetData] = useState<{ email: string; resetLink: string; emailSent?: boolean } | null>(null)
@@ -687,6 +706,29 @@ function AdminPageInner() {
       ]
     }
   ]
+
+  // Guard rendering: wait for auth check before showing admin UI
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <RefreshCw size={20} className="animate-spin" />
+          <span className="text-xs font-semibold">正在验证访问权限...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <Shield size={20} />
+          <span className="text-xs font-semibold">权限不足，正在跳转...</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="admin-page min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row text-slate-800 dark:text-slate-200">
