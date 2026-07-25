@@ -673,24 +673,11 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       // Step 3: Create drafts per Copywriter and media unit.
       setAiJobStep(3)
       const selectedAssets = assets.filter((a) => aiJobAssetIds.includes(a.id))
-      const videoAssets = selectedAssets.filter(isVideoAsset)
-      const imageAssets = selectedAssets.filter((a) => !isVideoAsset(a))
-      const mediaUnits = [
-        ...videoAssets.map((asset) => ({
-          assetIds: [asset.id],
-          mediaUrls: [asset.url],
-          label: asset.filename || '视频素材',
-          kind: 'video' as const,
-        })),
-        ...(imageAssets.length > 0
-          ? [{
-              assetIds: imageAssets.map((asset) => asset.id),
-              mediaUrls: imageAssets.map((asset) => asset.url),
-              label: imageAssets.length === 1 ? (imageAssets[0].filename || '图片素材') : `${imageAssets.length} 张图片素材`,
-              kind: 'image' as const,
-            }]
-          : []),
-      ]
+      const mediaUnits = selectedAssets.map((asset) => ({
+        assetIds: [asset.id],
+        mediaUrls: [asset.url],
+        label: asset.filename || '素材',
+      }))
 
       // Mark statuses as 'creating'
       setAiJobStatuses(Object.fromEntries(
@@ -719,7 +706,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             // Any text outside these delimiters is ignored by the agent.
             const creativeInstruction = aiJobNote.trim()
               ? aiJobNote.trim()
-              : `为 ${copywriter.platform} 平台针对这${mediaUnit.kind === 'video' ? '条视频' : '组素材'}创作符合品牌调性的优质内容，结合素材视觉风格生成吸引人的文案`
+              : `为 ${copywriter.platform} 平台针对这个素材创作符合品牌调性的优质内容，结合素材视觉风格生成吸引人的文案`
             const draftAgentNote = `【AI 生成指令】${creativeInstruction}【/AI 生成指令】`
 
             const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
