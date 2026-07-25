@@ -112,6 +112,14 @@ function isVideoUrl(url: string): boolean {
   return /\.(mp4|mov|avi|webm|ogg|m4v|3gp)(?:\?.*)?$/i.test(path)
 }
 
+function isVideoAsset(asset: DashboardAsset): boolean {
+  return asset.mimeType.startsWith('video/') || isVideoUrl(asset.url) || isVideoUrl(asset.filename || '')
+}
+
+function isImageAsset(asset: DashboardAsset): boolean {
+  return asset.mimeType.startsWith('image/') && !isVideoAsset(asset)
+}
+
 function parseTags(value: string) {
   return value
     .split(/[#,，,\s]+/)
@@ -665,8 +673,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       // Step 3: Create drafts per Copywriter and media unit.
       setAiJobStep(3)
       const selectedAssets = assets.filter((a) => aiJobAssetIds.includes(a.id))
-      const videoAssets = selectedAssets.filter((a) => a.mimeType.startsWith('video/'))
-      const imageAssets = selectedAssets.filter((a) => !a.mimeType.startsWith('video/'))
+      const videoAssets = selectedAssets.filter(isVideoAsset)
+      const imageAssets = selectedAssets.filter((a) => !isVideoAsset(a))
       const mediaUnits = [
         ...videoAssets.map((asset) => ({
           assetIds: [asset.id],
@@ -997,7 +1005,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       toggleSelect(asset.id, e)
     } else {
       setActiveAssetId(asset.id)
-      if (asset.mimeType.startsWith('video/') && isPreviewable(asset)) {
+      if (isVideoAsset(asset) && isPreviewable(asset)) {
         setPreviewMedia(asset)
       }
     }
@@ -1024,9 +1032,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     } else if (viewFilter === 'ai_pending') {
       if (a.aiReady) return false
     } else if (viewFilter === 'images') {
-      if (!a.mimeType.startsWith('image/')) return false
+      if (!isImageAsset(a)) return false
     } else if (viewFilter === 'videos') {
-      if (!a.mimeType.startsWith('video/')) return false
+      if (!isVideoAsset(a)) return false
     } else if (viewFilter === 'scheduled') {
       if (!a.aiTags.includes('草稿排期') && !a.aiTags.includes('排期发布')) return false
     }
@@ -1053,8 +1061,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const countUnused = assets.filter(a => a.usedCount === 0).length
   const countHighPerf = assets.filter(a => a.usedCount > 2).length
   const countAiPending = assets.filter(a => !a.aiReady).length
-  const countImages = assets.filter(a => a.mimeType.startsWith('image/')).length
-  const countVideos = assets.filter(a => a.mimeType.startsWith('video/')).length
+  const countImages = assets.filter(isImageAsset).length
+  const countVideos = assets.filter(isVideoAsset).length
   const countScheduled = assets.filter(a => a.aiTags.includes('草稿排期') || a.aiTags.includes('排期发布')).length
 
   const activeAsset = assets.find(a => a.id === activeAssetId) || filtered[0] || assets[0]
@@ -1530,7 +1538,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 const isSelected = selected.includes(asset.id)
                 const isActive = activeAssetId === asset.id
                 const previewable = isPreviewable(asset)
-                const isVideo = asset.mimeType.startsWith('video/')
+                const isVideo = isVideoAsset(asset)
 
                 return (
                   <div
@@ -1547,7 +1555,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                   >
                     {/* Thumbnail Container */}
                     <div className="relative aspect-square w-full overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                      {previewable && asset.mimeType.startsWith('image/') ? (
+                      {previewable && isImageAsset(asset) ? (
                         <img
                           src={asset.url}
                           alt={asset.filename || 'asset'}
@@ -1682,7 +1690,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                     if (!a) return null
                     return (
                       <div key={id} className="w-14 h-14 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0 relative">
-                        {a.mimeType.startsWith('video/') ? (
+                        {isVideoAsset(a) ? (
                           <>
                             <video src={a.url} className="w-full h-full object-cover" muted />
                             <div className="absolute inset-0 flex items-center justify-center bg-black/30">
@@ -1923,7 +1931,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             className="max-w-[90vw] max-h-[90vh] flex items-center justify-center relative"
             onClick={e => e.stopPropagation()}
           >
-            {previewMedia.mimeType.startsWith('video/') ? (
+            {isVideoAsset(previewMedia) ? (
               <video
                 src={previewMedia.url}
                 controls
@@ -2047,7 +2055,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                     {scheduleTargetIds.map((id, index) => {
                       const matched = assets.find(a => a.id === id)
                       if (!matched) return null
-                      const isVid = matched.mimeType.startsWith('video/')
+                      const isVid = isVideoAsset(matched)
                       return (
                         <div
                           key={id}
