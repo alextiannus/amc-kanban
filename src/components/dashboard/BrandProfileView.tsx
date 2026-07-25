@@ -911,7 +911,7 @@ export default function BrandProfileView({
                       href={`tel:${brand.phone}`}
                       className="px-3 py-1.5 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-[10px] font-extrabold flex items-center gap-1 hover:bg-black dark:hover:bg-slate-100 active:scale-95 transition-all shadow-sm"
                     >
-                      📞 电话预约
+                      电话预约
                     </a>
                   )}
                   {showStoryEditor ? null : (
@@ -1056,7 +1056,7 @@ export default function BrandProfileView({
                     <div>
                       <span className="text-[10px] font-bold text-slate-400 block uppercase">绑定运营门店</span>
                       <span className="text-sm font-extrabold text-slate-800 dark:text-white">
-                        {draftLocation ? `📍 双门店联营` : `📍 单店主理`}
+                        {draftLocation ? '双门店联营' : '单店主理'}
                       </span>
                     </div>
                   </div>
@@ -1068,7 +1068,7 @@ export default function BrandProfileView({
                     <div>
                       <span className="text-[10px] font-bold text-slate-400 block uppercase">托管驾驶级别</span>
                       <span className="text-sm font-extrabold text-slate-800 dark:text-white">
-                        {brand.autoPilot ? '🤖 智能托管 (L4)' : '✍️ 辅助生成 (L1)'}
+                        {brand.autoPilot ? '智能托管 (L4)' : '辅助生成 (L1)'}
                       </span>
                     </div>
                   </div>
@@ -1147,7 +1147,9 @@ export default function BrandProfileView({
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
                   <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
                     <div className="flex items-start gap-2 pt-0.5">
-                      <span className="text-base leading-none">✨</span>
+                      <div className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      </div>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">AI 品牌声调<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Brand Tone</span></span>
                     </div>
                     <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
@@ -1156,7 +1158,9 @@ export default function BrandProfileView({
                   </div>
                   <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
                     <div className="flex items-start gap-2 pt-0.5">
-                      <span className="text-base leading-none">👥</span>
+                      <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center flex-shrink-0">
+                        <Users className="w-3.5 h-3.5 text-blue-500" />
+                      </div>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">目标客群<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Target Audience</span></span>
                     </div>
                     <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
@@ -1165,7 +1169,9 @@ export default function BrandProfileView({
                   </div>
                   <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
                     <div className="flex items-start gap-2 pt-0.5">
-                      <span className="text-base leading-none">🎯</span>
+                      <div className="w-6 h-6 rounded-lg bg-violet-50 dark:bg-violet-950/30 flex items-center justify-center flex-shrink-0">
+                        <Goal className="w-3.5 h-3.5 text-violet-500" />
+                      </div>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">商业目标<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Founder Vision</span></span>
                     </div>
                     <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
@@ -1174,7 +1180,9 @@ export default function BrandProfileView({
                   </div>
                   <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
                     <div className="flex items-start gap-2 pt-0.5">
-                      <span className="text-base leading-none">💎</span>
+                      <div className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center flex-shrink-0">
+                        <Star className="w-3.5 h-3.5 text-emerald-500" />
+                      </div>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">核心卖点<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Selling Points</span></span>
                     </div>
                     <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
@@ -1183,7 +1191,9 @@ export default function BrandProfileView({
                   </div>
                   <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
                     <div className="flex items-start gap-2 pt-0.5">
-                      <span className="text-base leading-none">🗣️</span>
+                      <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center flex-shrink-0">
+                        <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+                      </div>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">本地话术<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Local Slang · {Object.keys(activeSlangDict).length} 条</span></span>
                     </div>
                     <div>
@@ -1207,7 +1217,9 @@ export default function BrandProfileView({
                   </div>
                   <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
                     <div className="flex items-start gap-2 pt-0.5">
-                      <span className="text-base leading-none">📍</span>
+                      <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                        <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                      </div>
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">运营区域<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Location</span></span>
                     </div>
                     <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
@@ -1476,12 +1488,12 @@ export default function BrandProfileView({
           {!editingBiz && (
             <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
               {[
-                { label: '📍 门店地址', value: draftAddress },
-                { label: '📞 联系电话', value: draftPhone },
-                { label: '🌐 品牌网站', value: draftWebsite },
-                { label: '🕐 营业时间', value: draftBusinessHours },
-                { label: '📅 订座链接', value: draftReservationUrl },
-                { label: '🛒 自有下单', value: draftOrderingUrl },
+                { label: '门店地址', value: draftAddress },
+                { label: '联系电话', value: draftPhone },
+                { label: '品牌网站', value: draftWebsite },
+                { label: '营业时间', value: draftBusinessHours },
+                { label: '订座链接', value: draftReservationUrl },
+                { label: '自有下单', value: draftOrderingUrl },
               ].map(({ label, value }) => (
                 <div key={label} className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
                   <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">{label}</span>
@@ -1492,7 +1504,7 @@ export default function BrandProfileView({
               ))}
               {draftDeliveryUrls.length > 0 && (
                 <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">🚚 外卖平台</span>
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">外卖平台</span>
                   <div className="flex flex-wrap gap-1.5">
                     {draftDeliveryUrls.map((d, i) => (
                       <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
@@ -1588,7 +1600,7 @@ export default function BrandProfileView({
           <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
             {/* 商圈信息 */}
             <div className="px-5 py-4">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">🗺️ 商圈信息</p>
+              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">商圈信息</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 block mb-1">所在市场</span>
@@ -1607,7 +1619,7 @@ export default function BrandProfileView({
 
             {/* 竞争对手 */}
             <div className="px-5 py-4">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">⚔️ 竞争对手</p>
+              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">竞争对手</p>
               {draftCompetitors.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {draftCompetitors.map((c, i) => (
@@ -1623,7 +1635,7 @@ export default function BrandProfileView({
 
             {/* 品牌网络情况 */}
             <div className="px-5 py-4">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">📡 品牌网络情况</p>
+              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">品牌网络情况</p>
               {brandAccounts.length > 0 ? (
                 <div className="space-y-2">
                   {brandAccounts.map(acc => {
@@ -1717,11 +1729,11 @@ export default function BrandProfileView({
           {!editingPromo && (
             <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
               {[
-                { label: '📅 推广周期', value: `${promoPlan.period === 'monthly' ? '月度' : promoPlan.period === 'weekly' ? '周度' : '半年度'} ${promoPlan.startDate ? `${promoPlan.startDate} → ${promoPlan.endDate}` : ''}`.trim() },
-                { label: '🎯 推广方向', value: promoPlan.direction },
-                { label: '✍️ 文案要求', value: promoPlan.copywritingRequirements },
-                { label: '🔊 品牌 Voice', value: promoPlan.brandVoice },
-                { label: '✨ 品牌形象', value: promoPlan.brandImage },
+                { label: '推广周期', value: `${promoPlan.period === 'monthly' ? '月度' : promoPlan.period === 'weekly' ? '周度' : '半年度'} ${promoPlan.startDate ? `${promoPlan.startDate} → ${promoPlan.endDate}` : ''}`.trim() },
+                { label: '推广方向', value: promoPlan.direction },
+                { label: '文案要求', value: promoPlan.copywritingRequirements },
+                { label: '品牌 Voice', value: promoPlan.brandVoice },
+                { label: '品牌形象', value: promoPlan.brandImage },
               ].map(({ label, value }) => (
                 <div key={label} className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
                   <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">{label}</span>
@@ -1732,7 +1744,7 @@ export default function BrandProfileView({
               ))}
               {promoPlan.keyMessages.length > 0 && (
                 <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">💬 核心信息</span>
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">核心信息</span>
                   <div className="flex flex-wrap gap-1">
                     {promoPlan.keyMessages.map((m, i) => (
                       <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800">{m}</span>
@@ -1741,7 +1753,7 @@ export default function BrandProfileView({
                 </div>
               )}
               <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">⚡ 发布频率</span>
+                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">发布频率</span>
                 <span className="text-xs text-slate-700 dark:text-slate-200">{publishingFreq.postsPerDay} 帖/天（全平台默认）</span>
               </div>
             </div>
