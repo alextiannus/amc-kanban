@@ -44,7 +44,7 @@ interface Props {
   subscriptionHref?: string
 }
 
-type Tab = 'story' | 'growth' | 'config' | 'context'
+type Tab = 'story' | 'bizinfo' | 'knowledge' | 'promo'
 
 // ─── Plan badge helper ────────────────────────────────────────────────────────
 
@@ -123,11 +123,51 @@ export default function BrandProfileView({
   const setBrandToneVal = setBrandTone || setLocalBrandTone
   const setSlangDictVal = setSlangDict || setLocalSlangDict
 
+  // Section 1: Brand Story extras
+  const [draftAudience, setDraftAudience] = useState('')
+  const [draftProduct, setDraftProduct] = useState('')
+  const [draftNegPrompts, setDraftNegPrompts] = useState<string[]>([])
+  const [newNegPrompt, setNewNegPrompt] = useState('')
+
+  // Section 2: Business Info
+  const [draftBusinessHours, setDraftBusinessHours] = useState('')
+  const [draftReservationUrl, setDraftReservationUrl] = useState('')
+  const [draftOrderingUrl, setDraftOrderingUrl] = useState('')
+  const [draftDeliveryUrls, setDraftDeliveryUrls] = useState<Array<{platform: string; url: string}>>([])
+
+  // Section 3: Knowledge Base
+  const [draftMarket, setDraftMarket] = useState('')
+  const [draftDistrict, setDraftDistrict] = useState('')
+  const [draftCompetitors, setDraftCompetitors] = useState<string[]>([])
+  const [newCompetitor, setNewCompetitor] = useState('')
+
+  // Section 4: Promo Plan
+  const [promoPlan, setPromoPlan] = useState<{
+    period: string; startDate: string; endDate: string
+    direction: string; copywritingRequirements: string
+    brandVoice: string; brandImage: string
+    keyMessages: string[]; campaigns: Array<{name: string; dates: string; desc: string}>
+  }>({
+    period: 'monthly', startDate: '', endDate: '',
+    direction: '', copywritingRequirements: '',
+    brandVoice: '', brandImage: '',
+    keyMessages: [], campaigns: [],
+  })
+  const [newKeyMessage, setNewKeyMessage] = useState('')
+  // Per-brand publishing frequency
+  const [publishingFreq, setPublishingFreq] = useState<{
+    postsPerDay: number
+    platforms: Record<string, { postsPerDay?: number; postsPerWeek?: number; preferredHours?: number[] }>
+  }>({ postsPerDay: 1, platforms: {} })
+
   // Inline brand info editing
   const [editingName, setEditingName] = useState(false)
   const [draftName, setDraftName] = useState(brand.name || '')
   const [draftDesc, setDraftDesc] = useState(brand.description || '')
   const [draftLocation, setDraftLocation] = useState(brand.location || '')
+  const [draftAddress, setDraftAddress] = useState((brand as any).address || '')
+  const [draftPhone, setDraftPhone] = useState((brand as any).phone || '')
+  const [draftWebsite, setDraftWebsite] = useState((brand as any).website || '')
 
   // Logo upload
   const logoInputRef = useRef<HTMLInputElement>(null)
@@ -181,17 +221,74 @@ export default function BrandProfileView({
         setDraftDesc(dataBrand.description || '')
         setDraftLocation(dataBrand.location || '')
         setBrandSettings(dataBrand)
-        if (dataBrand.logoUrl) {
-          setLogoPreview(dataBrand.logoUrl)
-        }
+        // Always reset logo — don't keep brand A's logo if brand B has none
+        setLogoPreview(dataBrand.logoUrl || null)
+        // Always reset contact fields — prevents A's address from showing on B
+        setDraftAddress((dataBrand as any).address || '')
+        setDraftPhone((dataBrand as any).phone || '')
+        setDraftWebsite((dataBrand as any).website || '')
+      } else {
+        // Fetch failed — ensure all brand meta fields are cleared
+        setDraftName(''); setDraftDesc(''); setDraftLocation('')
+        setDraftAddress(''); setDraftPhone(''); setDraftWebsite('')
+        setLogoPreview(null)
       }
 
-      // 2. Fetch brand knowledge (tone & slang)
+      // 2. Fetch brand knowledge (all sections)
       const resKnowledge = await fetch(`/api/brands/${brandId}/knowledge`)
       if (resKnowledge.ok) {
-        const dataKnowledge = await resKnowledge.json()
-        setLocalBrandTone(dataKnowledge.brandTone || '')
-        setLocalSlangDict(dataKnowledge.slangDict || {})
+        const k = await resKnowledge.json()
+        // Section 1 — brand story / tone
+        setLocalBrandTone(k.brandTone || '')
+        setLocalSlangDict(k.slangDict || {})
+        setDraftAudience(k.audienceAssumptions || '')
+        setDraftProduct(k.productAssumptions || '')
+        setDraftNegPrompts(k.negPrompts || [])
+        // Section 2 — business info
+        // Always set (not conditionally): if brand B has no hours, clear the field
+        if (typeof k.businessHours === 'string') setDraftBusinessHours(k.businessHours)
+        else if (k.businessHours && typeof k.businessHours === 'object') setDraftBusinessHours(JSON.stringify(k.businessHours, null, 2))
+        else setDraftBusinessHours('')
+        setDraftReservationUrl(k.reservationUrl || '')
+        setDraftOrderingUrl(k.orderingUrl || '')
+        setDraftDeliveryUrls(Array.isArray(k.deliveryUrls) ? k.deliveryUrls : [])
+        // Section 3 — knowledge base
+        setDraftMarket(k.market || '')
+        setDraftDistrict(k.district || '')
+        setDraftCompetitors(Array.isArray(k.competitors) ? k.competitors : [])
+        // Section 4 — promo plan & publishing frequency
+        // Always overwrite — never merge — so empty brand B doesn't inherit brand A's plan.
+        // Merge on top of full defaults so partial/legacy DB objects never crash the UI
+        // (e.g. old promoPlan with no keyMessages would make .map() throw).
+        const PROMO_DEFAULTS = {
+          period: 'monthly', startDate: '', endDate: '',
+          direction: '', copywritingRequirements: '',
+          brandVoice: '', brandImage: '',
+          keyMessages: [] as string[], campaigns: [] as Array<{name:string;dates:string;desc:string}>,
+        }
+        const rawPlan = k.promoPlan && typeof k.promoPlan === 'object' ? k.promoPlan : {}
+        setPromoPlan({
+          ...PROMO_DEFAULTS,
+          ...rawPlan,
+          // Guard every array/object field explicitly
+          keyMessages: Array.isArray(rawPlan.keyMessages) ? rawPlan.keyMessages : [],
+          campaigns: Array.isArray(rawPlan.campaigns) ? rawPlan.campaigns : [],
+        })
+        const rawFreq = k.publishingFreq && typeof k.publishingFreq === 'object' ? k.publishingFreq : {}
+        setPublishingFreq({
+          postsPerDay: typeof rawFreq.postsPerDay === 'number' && rawFreq.postsPerDay > 0 ? rawFreq.postsPerDay : 1,
+          platforms: rawFreq.platforms && typeof rawFreq.platforms === 'object' && !Array.isArray(rawFreq.platforms)
+            ? rawFreq.platforms
+            : {},
+        })
+      } else {
+        // No knowledge record for this brand — reset every section to empty defaults
+        setLocalBrandTone(''); setLocalSlangDict({})
+        setDraftAudience(''); setDraftProduct(''); setDraftNegPrompts([])
+        setDraftBusinessHours(''); setDraftReservationUrl(''); setDraftOrderingUrl(''); setDraftDeliveryUrls([])
+        setDraftMarket(''); setDraftDistrict(''); setDraftCompetitors([])
+        setPromoPlan({ period: 'monthly', startDate: '', endDate: '', direction: '', copywritingRequirements: '', brandVoice: '', brandImage: '', keyMessages: [], campaigns: [] })
+        setPublishingFreq({ postsPerDay: 1, platforms: {} })
       }
 
       // 3. Fetch subscription
@@ -456,15 +553,20 @@ export default function BrandProfileView({
       const res = await fetch(`/api/brands/${brandId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: draftName, description: draftDesc, location: draftLocation }),
+        body: JSON.stringify({
+          name: draftName,
+          description: draftDesc,
+          location: draftLocation,
+          address: draftAddress,
+          phone: draftPhone,
+          website: draftWebsite,
+        }),
       })
       if (res.ok) {
         showToastVal('品牌信息已保存', 'success')
         setEditingName(false)
         const data = await res.json()
-        if (onUpdate) {
-          onUpdate(data)
-        }
+        if (onUpdate) onUpdate(data)
       } else {
         showToastVal('保存失败，请重试', 'error')
       }
@@ -474,6 +576,28 @@ export default function BrandProfileView({
       setSaving(false)
     }
   }
+
+  // Save any knowledge section fields
+  const saveKnowledge = async (fields: Record<string, unknown>, successMsg?: string) => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/knowledge`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      })
+      if (res.ok) {
+        showToastVal(successMsg ?? '已保存', 'success')
+      } else {
+        showToastVal('保存失败，请重试', 'error')
+      }
+    } catch {
+      showToastVal('网络错误，保存失败', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
 
   const handleSaveVoice = async () => {
     setSaving(true)
@@ -579,9 +703,11 @@ export default function BrandProfileView({
   }
 
   const tabs = [
-    { id: 'story', label: '品牌故事', icon: null },
-    { id: 'context', label: '增长计划', icon: null },
-  ] as const
+    { id: 'story' as const,     label: '📖 品牌故事',   desc: '品牌定位、受众、卖点' },
+    { id: 'bizinfo' as const,   label: '🏪 经营信息',   desc: '营业时间、订座、外卖' },
+    { id: 'knowledge' as const, label: '🔍 知识库配置', desc: '市场、竞品、菜单、话术' },
+    { id: 'promo' as const,     label: '📅 推广计划',   desc: '当期方向、文案要求、发布频率' },
+  ]
 
   const parseBulletList = (text: string): string[] => {
     if (!text) return []
@@ -1423,156 +1549,370 @@ export default function BrandProfileView({
             </motion.div>
           )}
 
-          {activeTab === 'context' && (
+
+          {/* ── 🏪 经营信息 Tab ──────────────────────────────────────────────── */}
+          {activeTab === 'bizinfo' && (
             <motion.div
-              key="context"
+              key="bizinfo"
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.15 }}
-              className="p-5 space-y-6 pb-12 max-w-5xl mx-auto w-full"
+              className="p-6 space-y-6 pb-16 max-w-3xl mx-auto w-full"
             >
-              {/* AMC Growth Sync Controller */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3 w-full">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-black text-slate-800 dark:text-white">🚀 战略诊断与增长计划</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">垂直滚动贴合展示。每一个 Slide 垂直排列，使用滚轮或 Page Down 即可顺滑翻页</p>
-                  </div>
-                  <button
-                    onClick={handleSyncGrowth}
-                    disabled={syncing}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white disabled:opacity-60 active:scale-95 transition-all cursor-pointer shadow-md"
-                  >
-                    {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                    {syncStatus || '一键同步品牌故事与上下文'}
-                  </button>
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-indigo-500" /> 门店地址与联系方式
+                </h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <label className="block">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">门店地址</span>
+                    <input value={draftAddress} onChange={e => setDraftAddress(e.target.value)}
+                      placeholder="如：2 Orchard Turn, Singapore 238801"
+                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">联系电话</span>
+                    <input value={draftPhone} onChange={e => setDraftPhone(e.target.value)}
+                      placeholder="+65 6123 4567"
+                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌网站</span>
+                    <input value={draftWebsite} onChange={e => setDraftWebsite(e.target.value)}
+                      placeholder="https://yourbrand.com"
+                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                  </label>
                 </div>
+                <button onClick={handleSaveBrandInfo} disabled={saving}
+                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all">
+                  {saving ? '保存中…' : '保存门店信息'}
+                </button>
               </div>
 
-              {/* ── VERTICAL SCROLL-SNAP KEYNOTE PLAYER ── */}
-              {presentationSlides.length > 0 ? (
-                <div className="space-y-4 w-full">
-                  <div className="flex items-center justify-between px-1 text-[10px] text-slate-450 dark:text-slate-500 font-extrabold uppercase tracking-wider">
-                    <span className="flex items-center gap-1.5">
-                      <Sparkles size={12} className="text-indigo-500 animate-pulse" />
-                      垂直滚动幻灯片大屏 (每一个 Page Down 为一页)
-                    </span>
-                    <span>共 {presentationSlides.length} 页</span>
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                <h3 className="text-sm font-black text-slate-800 dark:text-white">🕐 营业时间</h3>
+                <textarea value={draftBusinessHours} onChange={e => setDraftBusinessHours(e.target.value)}
+                  rows={4}
+                  placeholder={"周一至周五：11:00 - 22:00\n周末及公假：10:00 - 23:00"}
+                  className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 resize-none" />
+                <button onClick={() => saveKnowledge({ businessHours: draftBusinessHours }, '营业时间已保存')} disabled={saving}
+                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all">
+                  {saving ? '保存中…' : '保存营业时间'}
+                </button>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                <h3 className="text-sm font-black text-slate-800 dark:text-white">🔗 订座与下单链接</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <label className="block">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">订座链接（Chope / OpenTable / 自有）</span>
+                    <input value={draftReservationUrl} onChange={e => setDraftReservationUrl(e.target.value)}
+                      placeholder="https://chope.co/..."
+                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">自有下单链接</span>
+                    <input value={draftOrderingUrl} onChange={e => setDraftOrderingUrl(e.target.value)}
+                      placeholder="https://yourbrand.com/order"
+                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                  </label>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">外卖平台链接</p>
+                  {draftDeliveryUrls.map((d, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <input value={d.platform} onChange={e => { const n = [...draftDeliveryUrls]; n[i] = { ...n[i], platform: e.target.value }; setDraftDeliveryUrls(n) }}
+                        placeholder="平台名称（如 GrabFood）" className="w-32 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                      <input value={d.url} onChange={e => { const n = [...draftDeliveryUrls]; n[i] = { ...n[i], url: e.target.value }; setDraftDeliveryUrls(n) }}
+                        placeholder="链接 URL" className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                      <button onClick={() => setDraftDeliveryUrls(draftDeliveryUrls.filter((_, j) => j !== i))}
+                        className="p-1 text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                    </div>
+                  ))}
+                  <button onClick={() => setDraftDeliveryUrls([...draftDeliveryUrls, { platform: '', url: '' }])}
+                    className="flex items-center gap-1.5 text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline">
+                    <Plus size={12} /> 添加外卖平台
+                  </button>
+                </div>
+                <button onClick={() => saveKnowledge({ reservationUrl: draftReservationUrl, orderingUrl: draftOrderingUrl, deliveryUrls: draftDeliveryUrls }, '链接已保存')} disabled={saving}
+                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all">
+                  {saving ? '保存中…' : '保存链接配置'}
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── 🔍 知识库配置 Tab ────────────────────────────────────────────── */}
+          {activeTab === 'knowledge' && (
+            <motion.div
+              key="knowledge"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.15 }}
+              className="p-6 space-y-6 pb-16 max-w-3xl mx-auto w-full"
+            >
+              {/* Market & District */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
+                  <Compass className="w-4 h-4 text-indigo-500" /> 市场与商圈定位
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">所在市场</span>
+                    <input value={draftMarket} onChange={e => setDraftMarket(e.target.value)}
+                      placeholder="如：Singapore, KL, Bangkok"
+                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">商圈</span>
+                    <input value={draftDistrict} onChange={e => setDraftDistrict(e.target.value)}
+                      placeholder="如：Orchard, Bugis, KLCC"
+                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                  </label>
+                </div>
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">主要竞争对手</span>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {draftCompetitors.map((c, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800">
+                        {c}
+                        <button onClick={() => setDraftCompetitors(draftCompetitors.filter((_, j) => j !== i))}><X size={10} /></button>
+                      </span>
+                    ))}
                   </div>
+                  <div className="flex gap-2 mt-2">
+                    <input value={newCompetitor} onChange={e => setNewCompetitor(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && newCompetitor.trim()) { setDraftCompetitors([...draftCompetitors, newCompetitor.trim()]); setNewCompetitor('') }}}
+                      placeholder="输入竞品名后按 Enter"
+                      className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                    <button onClick={() => { if (newCompetitor.trim()) { setDraftCompetitors([...draftCompetitors, newCompetitor.trim()]); setNewCompetitor('') }}}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700">
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                </div>
+                <button onClick={() => saveKnowledge({ market: draftMarket, district: draftDistrict, competitors: draftCompetitors }, '市场配置已保存')} disabled={saving}
+                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all">
+                  {saving ? '保存中…' : '保存市场配置'}
+                </button>
+              </div>
 
-                  {/* Scroll-Snap Container (Hidden scrollbars, mandatory snap alignments) */}
-                  <div className="w-full h-[450px] md:h-[520px] overflow-y-auto scroll-smooth snap-y snap-mandatory scrollbar-none rounded-3xl border border-slate-200/50 dark:border-slate-800 shadow-xl bg-slate-900">
-                    {presentationSlides.map((slide, idx) => (
-                      <div
-                        key={idx}
-                        className="w-full h-full flex-shrink-0 snap-start snap-always relative overflow-hidden flex flex-col justify-between transition-all duration-300"
-                      >
-                        {/* Backdrop Gradient for each card */}
-                        <div className={`absolute inset-0 bg-gradient-to-br ${getGrowthSlideGradient(idx)}`} />
-                        <div className="absolute inset-0 opacity-[0.05]"
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                        />
-                        <div className="absolute -top-12 -right-12 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
-
-                        {/* Slide Content layout */}
-                        <div className="relative z-10 p-8 md:p-12 flex flex-col justify-between h-full text-white w-full">
-                          {/* Slide Title */}
-                          <div>
-                            <div className="flex items-center justify-between mb-4">
-                              <span className="text-4xl md:text-5xl leading-none">
-                                {getGrowthSlideEmoji(slide.title)}
-                              </span>
-                              <span className="bg-white/20 backdrop-blur-md px-3.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider text-white">
-                                Page {idx + 1} / {presentationSlides.length}
-                              </span>
-                            </div>
-                            <h3 className="text-lg md:text-xl font-black tracking-wide leading-snug drop-shadow-md border-b border-white/15 pb-2.5 max-w-4xl">
-                              {slide.title}
-                            </h3>
-                          </div>
-
-                          {/* Body markdown */}
-                          <div className="flex-1 overflow-y-auto min-h-0 pr-1 mt-4 scrollbar-thin scrollbar-thumb-white/20 max-w-4xl">
-                            {formatSlideContent(slide.content)}
-                          </div>
-
-                          {/* Footer help indicator inside each page down slide */}
-                          <div className="mt-3 flex items-center justify-between text-[9px] text-white/50 font-bold border-t border-white/10 pt-2 flex-shrink-0">
-                            <span>AMC GROWTH 智能诊断分析报告</span>
-                            {idx < presentationSlides.length - 1 ? (
-                              <span className="flex items-center gap-1">往下滑动切换至下一页 ↓</span>
-                            ) : (
-                              <span>演示完毕 🏁</span>
-                            )}
-                          </div>
-                        </div>
+              {/* Brand Tone & Slang */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                <h3 className="text-sm font-black text-slate-800 dark:text-white">🗣️ 品牌语气与话术词典</h3>
+                <label className="block">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌调性描述</span>
+                  <textarea value={activeBrandTone} onChange={e => setBrandToneVal(e.target.value)} rows={3}
+                    placeholder="例：轻松幽默、接地气、偶尔带一点俏皮话；绝不使用过度正式或官方的口吻。"
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 resize-none" />
+                </label>
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">本地化话术词典</span>
+                  <div className="space-y-1 mt-2">
+                    {Object.entries(activeSlangDict).map(([term, meaning]) => (
+                      <div key={term} className="flex items-center gap-2 text-xs py-1 border-b border-slate-50 dark:border-slate-800">
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400 w-24 shrink-0">"{term}"</span>
+                        <span className="text-slate-600 dark:text-slate-400 flex-1">→ {meaning as string}</span>
+                        <button onClick={() => { const d = { ...activeSlangDict }; delete d[term]; setSlangDictVal(d) }} className="text-slate-300 hover:text-red-500"><X size={12} /></button>
                       </div>
                     ))}
                   </div>
+                  <div className="flex gap-2 mt-2">
+                    <input value={newTerm} onChange={e => setNewTerm(e.target.value)} placeholder="原词" className="w-28 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                    <input value={newMeaning} onChange={e => setNewMeaning(e.target.value)} placeholder="本地化表达" className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                    <button onClick={() => { const t = newTerm.trim(); const m = newMeaning.trim(); if (t && m) { setSlangDictVal({ ...activeSlangDict, [t]: m }); setNewTerm(''); setNewMeaning('') }}}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
+                  </div>
                 </div>
-              ) : (
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-8 shadow-sm text-center w-full">
-                  <div className="max-w-xs mx-auto space-y-2">
-                    <FileText className="w-8 h-8 text-slate-300 mx-auto" />
-                    <p className="text-xs font-bold text-slate-555">暂无分析数据与幻灯片</p>
-                    <p className="text-[10px] text-slate-400">
-                      点击“一键同步最新分析”按钮，从 AMC Growth 智能系统拉取该品牌的专属战略诊断、行动大纲和报告大盘。
-                    </p>
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">禁止使用词 / 负面 Prompt</span>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {draftNegPrompts.map((w, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800">
+                        {w} <button onClick={() => setDraftNegPrompts(draftNegPrompts.filter((_, j) => j !== i))}><X size={10} /></button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <input value={newNegPrompt} onChange={e => setNewNegPrompt(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && newNegPrompt.trim()) { setDraftNegPrompts([...draftNegPrompts, newNegPrompt.trim()]); setNewNegPrompt('') }}}
+                      placeholder="禁用词后按 Enter" className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                    <button onClick={() => { if (newNegPrompt.trim()) { setDraftNegPrompts([...draftNegPrompts, newNegPrompt.trim()]); setNewNegPrompt('') }}}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
+                  </div>
+                </div>
+                <button onClick={() => saveKnowledge({ brandTone: activeBrandTone, slangDict: activeSlangDict, negPrompts: draftNegPrompts }, '知识库配置已保存')} disabled={saving}
+                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all">
+                  {saving ? '保存中…' : '保存知识库配置'}
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── 📅 推广计划 Tab ──────────────────────────────────────────────── */}
+          {activeTab === 'promo' && (
+            <motion.div
+              key="promo"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.15 }}
+              className="p-6 space-y-6 pb-16 max-w-3xl mx-auto w-full"
+            >
+              {/* Promo Period & Direction */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
+                  <Target className="w-4 h-4 text-indigo-500" /> 推广计划设置
+                </h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <label className="block col-span-1">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">计划周期</span>
+                    <select value={promoPlan.period} onChange={e => setPromoPlan(p => ({ ...p, period: e.target.value }))}
+                      className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none">
+                      <option value="monthly">月度</option>
+                      <option value="weekly">周度</option>
+                      <option value="biannual">半年度</option>
+                    </select>
+                  </label>
+                  <label className="block col-span-1">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">开始日期</span>
+                    <input type="date" value={promoPlan.startDate} onChange={e => setPromoPlan(p => ({ ...p, startDate: e.target.value }))}
+                      className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                  </label>
+                  <label className="block col-span-1">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">结束日期</span>
+                    <input type="date" value={promoPlan.endDate} onChange={e => setPromoPlan(p => ({ ...p, endDate: e.target.value }))}
+                      className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">推广方向</span>
+                  <textarea value={promoPlan.direction} onChange={e => setPromoPlan(p => ({ ...p, direction: e.target.value }))} rows={3}
+                    placeholder="本月推广重点：主打夏日新品，配合店庆10周年，强调性价比与品质感…"
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">文案要求</span>
+                  <textarea value={promoPlan.copywritingRequirements} onChange={e => setPromoPlan(p => ({ ...p, copywritingRequirements: e.target.value }))} rows={3}
+                    placeholder="每篇文案需包含明确 CTA（预约/下单）；避免使用纯描述性语言；加入本地化口语元素…"
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌 Voice（声调）</span>
+                    <textarea value={promoPlan.brandVoice} onChange={e => setPromoPlan(p => ({ ...p, brandVoice: e.target.value }))} rows={2}
+                      placeholder="自信、温暖、邻家感，偶尔带一点幽默"
+                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌形象</span>
+                    <textarea value={promoPlan.brandImage} onChange={e => setPromoPlan(p => ({ ...p, brandImage: e.target.value }))} rows={2}
+                      placeholder="精致但不高冷，有温度的街坊餐厅"
+                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
+                  </label>
+                </div>
+                {/* Key Messages */}
+                <div>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">核心信息</span>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {promoPlan.keyMessages.map((m, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800">
+                        {m} <button onClick={() => setPromoPlan(p => ({ ...p, keyMessages: p.keyMessages.filter((_, j) => j !== i) }))}><X size={10} /></button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <input value={newKeyMessage} onChange={e => setNewKeyMessage(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && newKeyMessage.trim()) { setPromoPlan(p => ({ ...p, keyMessages: [...p.keyMessages, newKeyMessage.trim()] })); setNewKeyMessage('') }}}
+                      placeholder="核心信息点，按 Enter 添加"
+                      className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                    <button onClick={() => { if (newKeyMessage.trim()) { setPromoPlan(p => ({ ...p, keyMessages: [...p.keyMessages, newKeyMessage.trim()] })); setNewKeyMessage('') }}}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
+                  </div>
+                </div>
+                <button onClick={() => saveKnowledge({ promoPlan }, '推广计划已保存')} disabled={saving}
+                  className="w-full py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 transition-all">
+                  {saving ? '保存中…' : '💾 保存推广计划'}
+                </button>
+              </div>
+
+              {/* Publishing Frequency */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-500" /> 品牌专属发布频率方案
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">智能排期将优先读取此方案（覆盖全局设置）。</p>
+                </div>
+                <label className="block">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">全平台默认：每天发帖数</span>
+                  <div className="flex items-center gap-3 mt-1">
+                    <input type="number" min={0.5} max={10} step={0.5}
+                      value={publishingFreq.postsPerDay}
+                      onChange={e => setPublishingFreq(f => ({ ...f, postsPerDay: parseFloat(e.target.value) || 1 }))}
+                      className="w-24 px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none text-center font-bold" />
+                    <span className="text-xs text-slate-500">帖/天</span>
+                    <span className="text-[10px] text-slate-400">（0.5 = 每2天1帖；2 = 每天2帖）</span>
+                  </div>
+                </label>
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">各平台自定义频率（留空使用全局设置）</p>
+                  {['instagram', 'xiaohongshu', 'tiktok', 'facebook'].map(platform => {
+                    const cfg = publishingFreq.platforms[platform] || {}
+                    return (
+                      <div key={platform} className="flex items-center gap-3">
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 w-24 capitalize">{platform}</span>
+                        <input type="number" min={0.5} max={10} step={0.5}
+                          value={cfg.postsPerDay ?? ''} placeholder="帖/天"
+                          onChange={e => {
+                            const v = parseFloat(e.target.value) || undefined
+                            setPublishingFreq(f => ({ ...f, platforms: { ...f.platforms, [platform]: { ...cfg, postsPerDay: v } } }))
+                          }}
+                          className="w-20 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none text-center" />
+                        <span className="text-[10px] text-slate-400">帖/天</span>
+                        <input
+                          value={(cfg.preferredHours ?? []).join(',')}
+                          placeholder="首选时段，如 11,18,20"
+                          onChange={e => {
+                            const hrs = e.target.value.split(',').map(h => parseInt(h.trim())).filter(h => !isNaN(h) && h >= 0 && h <= 23)
+                            setPublishingFreq(f => ({ ...f, platforms: { ...f.platforms, [platform]: { ...cfg, preferredHours: hrs } } }))
+                          }}
+                          className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                      </div>
+                    )
+                  })}
+                </div>
+                <button onClick={() => saveKnowledge({ publishingFreq }, '发布频率已保存')} disabled={saving}
+                  className="w-full py-2 rounded-xl text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60 transition-all">
+                  {saving ? '保存中…' : '⚡ 保存发布频率方案'}
+                </button>
+              </div>
+
+              {/* Legacy Growth Context Slides */}
+              {presentationSlides.length > 0 && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-800 dark:text-white">🚀 战略诊断与增长计划</h3>
+                      <p className="text-[10px] text-slate-400 mt-0.5">从 AMC Growth 同步的智能诊断报告</p>
+                    </div>
+                    <button onClick={handleSyncGrowth} disabled={syncing}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 disabled:opacity-60 active:scale-95 transition-all cursor-pointer">
+                      {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                      {syncStatus || '同步'}
+                    </button>
                   </div>
                 </div>
               )}
-
-              {/* Toggle Detailed Prose Report Trigger */}
-              {(growthContext || growthPlan) && (
-                <div className="w-full pt-2">
-                  <button
-                    onClick={() => setShowDetailedReport(!showDetailedReport)}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 text-xs font-black text-slate-700 dark:text-slate-200 shadow-sm transition-all hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.98] cursor-pointer"
-                  >
-                    {showDetailedReport ? '📊 收起战略诊断报告原文' : '📄 展开查看战略诊断与执行规划全文'}
-                  </button>
-                </div>
-              )}
-
-              {/* Expandable Diagnostic Prose */}
-              <AnimatePresence>
-                {showDetailedReport && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden space-y-4 w-full"
-                  >
-                    {growthContext ? (
-                      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                        <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">
-                          📋 品牌核心战略诊断与定位 (Detailed Diagnosis)
-                        </h3>
-                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthContext}</ReactMarkdown>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {growthPlan ? (
-                      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                        <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest border-b border-slate-100 dark:border-slate-800 pb-2">
-                          🚀 智能增长执行路径与大纲 (Detailed Growth Plan)
-                        </h3>
-                        <div className="prose prose-slate dark:prose-invert max-w-none text-xs leading-relaxed overflow-x-auto">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthPlan}</ReactMarkdown>
-                        </div>
-                      </div>
-                    ) : null}
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+
+
+
 
       {/* ── Brand Config Drawer/Modal ────────────────────────────────────────── */}
       <AnimatePresence>

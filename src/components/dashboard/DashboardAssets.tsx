@@ -36,8 +36,11 @@ import {
   ThumbsUp,
   Star,
   Globe,
-  Store
-, Tag, FolderOpen
+  Store,
+  Tag,
+  FolderOpen,
+  Loader2,
+  Sparkles
 } from 'lucide-react'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
 
@@ -119,10 +122,12 @@ function parseTags(value: string) {
 interface DashboardAssetsProps {
   brandId?: string
   onNavigateToCalendar?: (assetIds: string[]) => void
+  /** Navigate to Post Management / DraftManagementView after AI batch creation */
+  onNavigateToDrafts?: () => void
   onBack?: () => void
 }
 
-export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack }: DashboardAssetsProps) {
+export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavigateToDrafts, onBack }: DashboardAssetsProps) {
   const [activeCategory, setActiveCategory] = useState('all')
   const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos' | 'scheduled'>('unused')
   const [search, setSearch] = useState('')
@@ -145,6 +150,24 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
   const [selectedFolder, setSelectedFolder] = useState<string>('all')
 
   const [previewMedia, setPreviewMedia] = useState<DashboardAsset | null>(null)
+
+  // ── AI Batch Creation Modal State ────────────────────────────────────────
+  const [aiJobOpen, setAiJobOpen] = useState(false)
+  const [aiJobAssetIds, setAiJobAssetIds] = useState<string[]>([])
+  const [aiJobStep, setAiJobStep] = useState<0 | 1 | 2 | 3>(0)
+  // 0=idle, 1=loading context, 2=loading skills, 3=creating
+  const [aiJobCopywriterIds, setAiJobCopywriterIds] = useState<string[]>(
+    COPYWRITER_ROSTER.map((c) => c.id)
+  )
+  const [aiJobStatuses, setAiJobStatuses] = useState<Record<string, 'waiting' | 'creating' | 'done' | 'failed'>>(
+    Object.fromEntries(COPYWRITER_ROSTER.map((c) => [c.id, 'waiting']))
+  )
+  const [aiJobNote, setAiJobNote] = useState('')
+  const [aiJobRunning, setAiJobRunning] = useState(false)
+  const [aiJobDone, setAiJobDone] = useState(false)
+  const [aiJobError, setAiJobError] = useState<string | null>(null)
+  const [aiJobCreatedCount, setAiJobCreatedCount] = useState(0)
+  const [aiJobBrandAccounts, setAiJobBrandAccounts] = useState<any[]>([])
 
   // Designer AI Chat State
   const [designerPromptText, setDesignerPromptText] = useState('')
@@ -592,6 +615,206 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
       assetIds: assetIds.join(','),
     })
     window.location.href = `/dashboard/video?${query.toString()}`
+  }
+
+  // ── AI Batch Creation ────────────────────────────────────────────────────
+  const openAIBulkCreate = async (assetIds: string[]) => {
+    if (!brandId || assetIds.length === 0) return
+    setAiJobAssetIds(assetIds)
+    setAiJobCopywriterIds(COPYWRITER_ROSTER.map((c) => c.id))
+    setAiJobStatuses(Object.fromEntries(COPYWRITER_ROSTER.map((c) => [c.id, 'waiting'])))
+    setAiJobNote('')
+    setAiJobStep(0)
+    setAiJobRunning(false)
+    setAiJobDone(false)
+    setAiJobError(null)
+    setAiJobCreatedCount(0)
+    setAiJobOpen(true)
+    // Load brand accounts
+    try {
+      const res = await fetch(`/api/brands/${brandId}/accounts`)
+      if (res.ok) {
+        const json = await res.json()
+        setAiJobBrandAccounts(json.accounts || [])
+      }
+    } catch {}
+  }
+
+  const handleAIBulkCreate = async () => {
+    if (!brandId || aiJobAssetIds.length === 0 || aiJobRunning) return
+    const selectedCopywriters = COPYWRITER_ROSTER.filter((c) => aiJobCopywriterIds.includes(c.id))
+    if (selectedCopywriters.length === 0) {
+      setAiJobError('请至少选择一位 Copywriter')
+      return
+    }
+
+    setAiJobRunning(true)
+    setAiJobDone(false)
+    setAiJobError(null)
+    setAiJobCreatedCount(0)
+
+    try {
+      // Step 1: Load brand context
+      setAiJobStep(1)
+      await new Promise((r) => setTimeout(r, 800))
+
+      // Step 2: Load platform skills
+      setAiJobStep(2)
+      await new Promise((r) => setTimeout(r, 600))
+
+      // Step 3: Create drafts per Copywriter
+      setAiJobStep(3)
+      const selectedUrls = assets.filter((a) => aiJobAssetIds.includes(a.id)).map((a) => a.url)
+
+      // Mark statuses as 'creating'
+      setAiJobStatuses(Object.fromEntries(
+        selectedCopywriters.map((c) => [c.id, 'creating' as const])
+      ))
+
+      let successCount = 0
+      const createdDraftIds: string[] = []
+      // Track which platform each draft belongs to so scheduling can use per-platform frequency
+      const draftPlatformMap: Record<string, string> = {}
+
+      // Create drafts sequentially (not concurrently) to avoid deadlocks
+      // on concurrent mediaAsset.update(usedCount) across the same asset rows
+      for (const copywriter of selectedCopywriters) {
+        try {
+          const accId = draftAccountIdForCopywriter(copywriter, aiJobBrandAccounts)
+
+          // Use the standard "AI working" sentinel so copywriterNode's caption-fallback
+          // doesn't accidentally treat our placeholder text as a creative direction.
+          // The real creative direction goes in agentNote with the correct delimiters.
+          const draftCaption = '【AI 正在创作中...】'
+
+          // agentNote MUST use 【AI 生成指令】...【/AI 生成指令】 format
+          // because copywriterNode only parses userPrompt from this exact pattern (line 87-91).
+          // Any text outside these delimiters is ignored by the agent.
+          const creativeInstruction = aiJobNote.trim()
+            ? aiJobNote.trim()
+            : `为 ${copywriter.platform} 平台创作符合品牌调性的优质内容，结合素材视觉风格生成吸引人的文案`
+          const draftAgentNote = `【AI 生成指令】${creativeInstruction}【/AI 生成指令】`
+
+          const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accountId: accId,
+              caption: draftCaption,
+              hashtags: [],
+              assetIds: aiJobAssetIds,
+              mediaUrls: selectedUrls,
+              status: 'draft',
+              agentNote: draftAgentNote,
+              // creativeHooks carries the persona context; copywriterNode reads this at line 84-85
+              creativeHooks: `AI批量创作 · ${copywriter.name} · ${copywriter.handle} · ${copywriter.specialty}`,
+              agentId: null,
+              // Do NOT set createTask:true — AI batch create should not flood the
+              // kanban board with WorkUnit tasks. The draft itself is the work item.
+              createTask: false,
+            }),
+          })
+          const draftData = await draftRes.json().catch(() => ({}))
+          if (!draftRes.ok) throw new Error(draftData.error || '创建草稿失败')
+          const draftId = draftData.draft?.id
+          if (draftId) {
+            createdDraftIds.push(draftId)
+            draftPlatformMap[draftId] = copywriter.platform
+          }
+          successCount++
+          setAiJobCreatedCount((prev) => prev + 1)
+          setAiJobStatuses((prev) => ({ ...prev, [copywriter.id]: 'done' }))
+        } catch (e) {
+          console.error(`Copywriter ${copywriter.id} draft creation failed:`, e)
+          setAiJobStatuses((prev) => ({ ...prev, [copywriter.id]: 'failed' }))
+        }
+      }
+
+      // Auto-schedule: group drafts by platform and call scheduling/recommend per group
+      // so publishingFreq.platforms.instagram/.facebook/etc. are respected.
+      if (createdDraftIds.length > 0) {
+        try {
+          // Build platform → draftIds groups
+          const platformGroups: Record<string, string[]> = {}
+          for (const draftId of createdDraftIds) {
+            const plat = draftPlatformMap[draftId] ?? 'unknown'
+            if (!platformGroups[plat]) platformGroups[plat] = []
+            platformGroups[plat].push(draftId)
+          }
+
+          const schedFailures: string[] = []
+
+          // Schedule each platform group independently
+          for (const [platform, groupDraftIds] of Object.entries(platformGroups)) {
+            try {
+              const schedRes = await fetch(`/api/brands/${brandId}/scheduling/recommend`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ platform, numberOfPosts: groupDraftIds.length, urgency: 'normal' }),
+              })
+              if (!schedRes.ok) {
+                schedFailures.push(...groupDraftIds)
+                continue
+              }
+              const schedData = await schedRes.json()
+              const recs: Array<{ recommendedAt: string }> = schedData.recommendations || []
+
+              for (let idx = 0; idx < groupDraftIds.length; idx++) {
+                const rec = recs[idx]
+                if (!rec?.recommendedAt) {
+                  schedFailures.push(groupDraftIds[idx])
+                  continue
+                }
+                const patchRes = await fetch(`/api/brands/${brandId}/drafts/${groupDraftIds[idx]}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ scheduledAt: rec.recommendedAt }),
+                })
+                if (!patchRes.ok) {
+                  schedFailures.push(groupDraftIds[idx])
+                  console.warn(`Failed to schedule draft ${groupDraftIds[idx]}:`, await patchRes.text().catch(() => ''))
+                }
+              }
+            } catch (e) {
+              console.warn(`Schedule group [${platform}] failed (non-fatal):`, e)
+              schedFailures.push(...groupDraftIds)
+            }
+          }
+
+          if (schedFailures.length > 0) {
+            console.warn(`Scheduling: ${schedFailures.length}/${createdDraftIds.length} drafts failed to get a schedule slot.`)
+            setAiJobError(`✅ 草稿已创建，但 ${schedFailures.length} 篇自动排期失败，请在帖子管理中手动设置发布时间。`)
+          }
+        } catch (e) {
+          console.warn('Auto-schedule failed (non-fatal):', e)
+        }
+
+        // Trigger AI copywriter for each draft (fire-and-forget, non-blocking).
+        // The agent runs in the background: draft caption stays 【AI 正在创作中...】
+        // until the agent writes real content. Reviewer will see final content
+        // when they open Post Management a moment later.
+        for (const draftId of createdDraftIds) {
+          fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
+            method: 'POST',
+          }).catch((e) => console.warn(`trigger-copywriter fire-and-forget failed for ${draftId}:`, e))
+        }
+      }
+
+      setAiJobDone(true)
+      // Mark assets as used for AI creation
+      try {
+        await fetch(`/api/brands/${brandId}/assets`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assetIds: aiJobAssetIds, appendTags: ['草稿排期'], aiReady: true }),
+        })
+      } catch {}
+      await loadAssets()
+    } catch (e: any) {
+      setAiJobError(e.message || 'AI 批量创作失败')
+    } finally {
+      setAiJobRunning(false)
+    }
   }
 
   // Handler for mouse up globally (to terminate dragging)
@@ -1401,6 +1624,261 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
       </main>
 
 
+      {/* AI Batch Creation Job Modal */}
+      {aiJobOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-4 flex items-center justify-between shrink-0">
+              <div>
+                <p className="text-xs font-black text-white/70 uppercase tracking-wide">AI 智能创作</p>
+                <h3 className="text-lg font-black text-white">批量内容创作</h3>
+              </div>
+              {!aiJobRunning && (
+                <button
+                  onClick={() => setAiJobOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {/* Selected Assets Preview */}
+              <div>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-wide mb-2">
+                  已选素材 ({aiJobAssetIds.length})
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {aiJobAssetIds.slice(0, 6).map((id) => {
+                    const a = assets.find((x) => x.id === id)
+                    if (!a) return null
+                    return (
+                      <div key={id} className="w-14 h-14 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0 relative">
+                        {a.mimeType.startsWith('video/') ? (
+                          <>
+                            <video src={a.url} className="w-full h-full object-cover" muted />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                              <Play className="h-4 w-4 text-white fill-white" />
+                            </div>
+                          </>
+                        ) : (
+                          <img src={a.url} alt="" className="w-full h-full object-cover" />
+                        )}
+                      </div>
+                    )
+                  })}
+                  {aiJobAssetIds.length > 6 && (
+                    <div className="w-14 h-14 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-xs font-black text-slate-400">
+                      +{aiJobAssetIds.length - 6}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Step Progress */}
+              {(aiJobRunning || aiJobDone) && (
+                <div className="space-y-2">
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-wide">创作进度</p>
+                  {[
+                    { step: 1, label: '加载品牌上下文与创作计划' },
+                    { step: 2, label: '加载平台 Prompt 与创作 Skills' },
+                    { step: 3, label: '内容创作 & 智能排期' },
+                  ].map(({ step, label }) => {
+                    const isActive = aiJobStep === step
+                    const isDone = aiJobStep > step || aiJobDone
+                    return (
+                      <div key={step} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all ${
+                        isDone ? 'bg-emerald-50 dark:bg-emerald-950/20'
+                        : isActive ? 'bg-violet-50 dark:bg-violet-950/20'
+                        : 'bg-slate-50 dark:bg-slate-800/40'
+                      }`}>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                          isDone ? 'bg-emerald-500 text-white'
+                          : isActive ? 'bg-violet-500 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-400'
+                        }`}>
+                          {isDone ? (
+                            <Check className="h-3.5 w-3.5" />
+                          ) : isActive ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <span className="text-[11px] font-black">{step}</span>
+                          )}
+                        </div>
+                        <span className={`text-xs font-bold ${
+                          isDone ? 'text-emerald-700 dark:text-emerald-300'
+                          : isActive ? 'text-violet-700 dark:text-violet-300'
+                          : 'text-slate-400'
+                        }`}>{label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Copywriter Status Cards */}
+              {(aiJobRunning || aiJobDone) && (
+                <div className="space-y-2">
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-wide">Copywriter 状态</p>
+                  {COPYWRITER_ROSTER.filter((c) => aiJobCopywriterIds.includes(c.id)).map((cw) => {
+                    const st = aiJobStatuses[cw.id] || 'waiting'
+                    return (
+                      <div key={cw.id} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-all ${
+                        st === 'done' ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+                        : st === 'failed' ? 'border-rose-200 bg-rose-50 dark:border-rose-900/50 dark:bg-rose-950/20'
+                        : st === 'creating' ? 'border-violet-200 bg-violet-50 dark:border-violet-900/50 dark:bg-violet-950/20'
+                        : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/30'
+                      }`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black shrink-0 ${
+                          st === 'done' ? 'bg-emerald-500 text-white'
+                          : st === 'failed' ? 'bg-rose-500 text-white'
+                          : st === 'creating' ? 'bg-violet-500 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                        }`}>
+                          {(cw.name || 'C').charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">{cw.name || cw.handle}</p>
+                          <p className="text-[11px] text-slate-400 font-semibold">{cw.platform || cw.handle}</p>
+                        </div>
+                        <div className={`text-[11px] font-black px-2 py-0.5 rounded-full ${
+                          st === 'done' ? 'text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/30'
+                          : st === 'failed' ? 'text-rose-700 bg-rose-100 dark:text-rose-300 dark:bg-rose-900/30'
+                          : st === 'creating' ? 'text-violet-700 bg-violet-100 dark:text-violet-300 dark:bg-violet-900/30'
+                          : 'text-slate-500 bg-slate-100 dark:text-slate-400 dark:bg-slate-700'
+                        }`}>
+                          {st === 'done' ? '✅ 完成' : st === 'failed' ? '❌ 失败' : st === 'creating' ? '✍️ 创作中' : '⏳ 等待'}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Agent Note / Content Idea Input (before running) */}
+              {!aiJobRunning && !aiJobDone && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wide mb-1.5">内容创意 / 给 AI 的指令（可选）</label>
+                    <textarea
+                      rows={3}
+                      value={aiJobNote}
+                      onChange={(e) => setAiJobNote(e.target.value)}
+                      placeholder="例如：围绕'周末限定套餐'创作轻松愉快的内容，突出超值性价比..."
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-sm font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:border-violet-400 transition-colors resize-none"
+                    />
+                  </div>
+
+                  {/* Copywriter selection */}
+                  <div>
+                    <label className="block text-xs font-black text-slate-500 uppercase tracking-wide mb-1.5">选择 Copywriter</label>
+                    <div className="space-y-1.5">
+                      {COPYWRITER_ROSTER.map((cw) => (
+                        <label key={cw.id} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={aiJobCopywriterIds.includes(cw.id)}
+                            onChange={(e) => {
+                              setAiJobCopywriterIds((prev) =>
+                                e.target.checked
+                                  ? [...prev, cw.id]
+                                  : prev.filter((id) => id !== cw.id)
+                              )
+                            }}
+                            className="w-4 h-4 rounded border-slate-300 text-violet-600"
+                          />
+                          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{cw.name || cw.handle}</span>
+                          <span className="text-xs text-slate-400">{cw.platform}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Done summary */}
+              {aiJobDone && (
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 px-4 py-3 space-y-1">
+                  <p className="text-sm font-black text-emerald-700 dark:text-emerald-300">✅ 已为 {aiJobCreatedCount} 个平台创建草稿</p>
+                  <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                    🤖 AI Copywriter 正在后台为每个平台生成正式文案，稍后前往 Post Management 即可看到真实内容。
+                  </p>
+                  <p className="text-xs text-emerald-500 dark:text-emerald-500">
+                    已自动按智能排期预设发布时间，草稿显示「AI 正在创作中...」时请稍候刷新。
+                  </p>
+                </div>
+              )}
+
+              {/* Error */}
+              {aiJobError && (
+                <div className="rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 px-4 py-3 text-sm font-semibold text-rose-700 dark:text-rose-300">
+                  {aiJobError}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 px-5 py-4 flex items-center gap-3">
+              {!aiJobDone ? (
+                <>
+                  <button
+                    onClick={handleAIBulkCreate}
+                    disabled={aiJobRunning || aiJobCopywriterIds.length === 0}
+                    className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-sm font-black disabled:opacity-50 transition-all shadow-md"
+                  >
+                    {aiJobRunning ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> AI 创作中...</>
+                    ) : (
+                      <><Sparkles className="h-4 w-4" /> 开始 AI 批量创作</>
+                    )}
+                  </button>
+                  {!aiJobRunning && (
+                    <button
+                      onClick={() => setAiJobOpen(false)}
+                      className="h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      取消
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setAiJobOpen(false)
+                      setSelected([])
+                      setIsBatchSelectMode(false)
+                    }}
+                    className="flex-1 h-11 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    关闭
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAiJobOpen(false)
+                      setSelected([])
+                      setIsBatchSelectMode(false)
+                      // Navigate to Post Management (drafts review) — preferred path after AI batch create
+                      if (onNavigateToDrafts) {
+                        onNavigateToDrafts()
+                      } else if (onNavigateToCalendar) {
+                        // Fallback: if parent only wired calendar, use that
+                        onNavigateToCalendar([])
+                      }
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black transition-colors"
+                  >
+                    <Check className="h-4 w-4" /> 前往 Post Management
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Original media preview modal */}
       {previewMedia && (
         <div
@@ -2199,6 +2677,15 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onBack 
             >
               <Plus className="w-3.5 h-3.5" />
               <span>新建发布</span>
+            </button>
+
+            {/* AI 批量创作 */}
+            <button
+              onClick={() => openAIBulkCreate(selected)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700 active:scale-95 transition-all shadow-sm"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI 批量创作</span>
             </button>
 
             <button

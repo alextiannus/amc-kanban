@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { callGeminiChat } from '@/lib/gemini-chat'
-import { prisma } from '@/lib/prisma'
+import { buildBrandContext } from '@/lib/brandContextBuilder'
+import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 const HOOK_STYLE_GUIDELINES: Record<string, string> = {
   'Contra-Narrative': '反向叙事 (Contra-Narrative)：打破常规认知或习惯，利用冲突制造悬念。例如：“别再盲目跟风点招牌了！”、“大家都以为点招牌最稳妥，其实懂行的全奔着...”',
@@ -27,19 +28,27 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}))
   const { brandId, contentType, contentIdea, hookStyle, businessType } = body
 
-  // 1. Fetch brand details for context
+  // 1. Brand access check — must happen before loading any brand context.
+  // buildBrandContext() exposes private data (address, phone, competitors, promo plan);
+  // a logged-in user who guesses another brand's ID must not receive that data.
+  if (brandId) {
+    const allowed = await canSessionAccessBrandProject(
+      brandId,
+      session.user.id,
+      session.user.type ?? 'HUMAN',
+      session.user.role
+    )
+    if (!allowed) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
+  // 2. Fetch full 4-section brand context via buildBrandContext()
   let brandContext = ''
   if (brandId) {
     try {
-      const brand = await prisma.brand.findUnique({
-        where: { id: brandId },
-        include: { knowledge: true }
-      })
-      if (brand) {
-        brandContext = `Brand Name: ${brand.name}\n`
-        if (brand.description) brandContext += `Brand description: ${brand.description}\n`
-        if (brand.knowledge?.brandTone) brandContext += `Brand Tone/Style: ${brand.knowledge.brandTone}\n`
-      }
+      const ctx = await buildBrandContext(brandId)
+      brandContext = ctx.contextText
     } catch (e) {
       console.warn('Failed to load brand context', e)
     }

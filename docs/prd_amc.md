@@ -251,7 +251,96 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 ---
 
+## 🤖 AMC-Kanban AI 批量创作与主理人审核发布工作流（6 步闭环）
+
+> **实现状态**：已实现（2026-07-25）。适用于后台运营人员（主理人）在 amc-kanban 中发起 AI 内容批量生产。
+
+### 工作流概述
+
+本工作流打通「素材库 → AI 批量创作 → 草稿审核 → 批量发布」全链路，让主理人完成对 AI 生成内容的精细化管控。
+
+---
+
+### Step 1：选择素材（DashboardAssets / 素材库）
+
+- 主理人在素材库（`DashboardAssets`）中多选素材。
+- 视频素材在选中状态下支持缩略图预览，全屏预览支持 `autoPlay` 原生视频播放，配有进度条和音量控制。
+- 素材选完后，底部浮动操作栏出现「**✨ AI 批量创作**」按钮（渐变紫色）。
+
+---
+
+### Step 2 & 3：触发 AI 创作（AIJobModal）
+
+点击「AI 批量创作」按钮后，打开 **AIJobModal**，包含：
+
+#### 配置阶段（运行前）
+- **素材预览缩图**：展示已选 N 个素材（最多 6 格，超出显示 +N）。
+- **内容创意指令**（可选）：自由输入给 AI 的主题指令（如「围绕周末限定套餐，突出超值性价比」）。
+- **Copywriter 选择**：多选各 COPYWRITER_ROSTER 成员，默认全选。
+
+#### 创作进度阶段（运行中）
+三步状态指示器逐步更新：
+1. **加载品牌上下文与创作计划**（加载 BrandKnowledge、CopywriterLog、近期发布节奏）
+2. **加载平台 Prompt 与创作 Skills**（各平台的 persona/tone/format）
+3. **内容创作 & 智能排期**（并行对每个 Copywriter 创建草稿 → 自动调用 `/scheduling/recommend` 设置 `scheduledAt`）
+
+每个 Copywriter 有独立状态卡片：⏳ 等待 → ✍️ 创作中 → ✅ 完成 / ❌ 失败。
+
+#### 完成后
+- 摘要提示「已成功创作 N 个草稿，已自动按智能排期预设发布时间」。
+- 操作按钮：「关闭」 / 「**前往 Post Management**」。
+
+---
+
+### Step 4：主理人审核（DraftManagementView）
+
+**列表排序变更**：
+- 所有 Tab 统一按 `scheduledAt` **升序**排列（最近即将发布的排在最前）；无排期的草稿排末尾。
+
+**Eye Icon 快速预览**：
+- 每张 DraftCard 右下角显示「👁 预览」按钮（不进入编辑器，不触发选择）。
+- 点击后打开 **QuickPreviewModal**（轻量预览模态框）。
+
+**QuickPreviewModal 功能**：
+- 顶部：平台渐变 Header + 账号名 + 状态 badge。
+- 左侧媒体区：图片或视频（视频带完整播放控件 play/pause/muted/progress）。支持多图/多视频左右翻页（含圆点指示器）。
+- 右侧内容区：Caption、Hashtags、scheduledAt、publishedAt、postUrl 外链、agentNote、rejectionNote。
+- 底部操作按钮（4 个）：
+  - ✅ **确认发布**：调用 `PATCH /api/brands/:id/drafts/:id/approve`，成功后关闭 Modal 并切换到 Scheduled Tab。
+  - 🔄 **重新创作**：调用 `POST /api/brands/:id/drafts/:id/trigger-copywriter`，关闭 Modal 等待 AI 重新生成。
+  - ✏️ **手动修改**：关闭 Modal，打开 PostEditDrawer 进入全功能编辑器。
+  - 🗑 **放弃草稿**：两步确认，调用 `DELETE /api/brands/:id/drafts/:id`。
+
+---
+
+### Step 5：批量确认发布
+
+- 主理人在 Post Management 顶部工具栏点击「**Select**」进入选择模式。
+- 多选草稿后，弹出批量操作面板：「批量批准并发布」 + 「批量删除」。
+- 批量批准成功后，草稿状态变为 `approved`/`scheduled`，主理人可选择切换到 Scheduled Tab 确认。
+
+---
+
+### Step 6：检查发布情况
+
+- 切换到 **Published Tab**：展示所有已发布帖子。
+- 每张 DraftCard（Published 状态）展示「↗ 查看」外链按钮（`postUrl`），点击可直接跳转至发布平台的原帖。
+
+---
+
+### 数据模型说明
+
+| 字段 | 来源 | 用途 |
+|------|------|------|
+| `scheduledAt` | `/scheduling/recommend` 自动填充 | 决定 Draft 列表排序和发布时机 |
+| `agentNote` | AIJobModal 用户输入 | 存储用户给 AI 的内容指令 |
+| `assetIds` | DashboardAssets 多选 | 关联创作所用素材 |
+| `postUrl` | 发布成功后回写 | Published Tab 外链查看按钮 |
+
+---
+
 ## 系统配置架构决策 (System Config Architecture)
+
 
 ### 核心原则：所有 AI 模型 API Key 统一存储在 `LLMConfig` 数据表，不写入 Render 环境变量，不使用 SystemConfig 旧字段
 

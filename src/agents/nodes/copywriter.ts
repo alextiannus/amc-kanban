@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma.ts";
 import { callLLM } from "../../lib/llmRouter.ts";
 import { getFewShotExamples } from "../../lib/feedbackService.ts";
 import { getJaccardSimilarity } from "../knowledgeBase.ts";
+import { buildBrandContext } from "@/lib/brandContextBuilder.ts";
 import { loadPlatformSkill, formatSkillForPrompt } from "../skills/skillLoader.ts";
 import { tryGenerateWithAmcContent } from "../../lib/amc-content/legacyCopywriterBridge.ts";
 
@@ -147,43 +148,20 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
     }
   }
 
-  // 1. Fetch custom brand context parameters if BrandKnowledge exists
-  let brandToneText = "";
-  let brandContactText = "";
-  let menuText = "";
-  let slangText = "";
-  let negativePromptText = "";
+  // 1. Build unified brand context from all 4 knowledge sections
+  const brandCtx = await buildBrandContext(brandId);
+  const brandContextText = brandCtx.contextText
+    ? `\n--- BRAND CONTEXT ---\n${brandCtx.contextText}\n--- END BRAND CONTEXT ---\n`
+    : "";
 
-  if (brand) {
-    const details: string[] = [];
-    if (brand.address) details.push(`Address: ${brand.address}`);
-    if (brand.location) details.push(`Location/Area: ${brand.location}`);
-    if (brand.website) details.push(`Website: ${brand.website}`);
-    if (brand.phone) details.push(`Phone: ${brand.phone}`);
-    if (details.length > 0) {
-      brandContactText = `\nBrand Contact & Location Information:\n` + details.map((d: string) => `- ${d}`).join("\n") + "\n";
-    }
-
-    if (brand.knowledge) {
-      const k = brand.knowledge;
-      if (k.brandTone) {
-        brandToneText = `\nBrand Tone/Voice: ${k.brandTone}\n`;
-      }
-      if (k.menuItems) {
-        const menu = k.menuItems as any[];
-        if (menu.length > 0) {
-          menuText = `\nMenu Items Knowledge:\n` + menu.map((item: any) => `- ${item.name} ($${item.price}): ${item.description || ""}`).join("\n") + "\n";
-        }
-      }
-      if (k.slangDict) {
-        const slang = k.slangDict as Record<string, string>;
-        slangText = `\nTarget Local Slang/Terminology mappings to use:\n` + Object.entries(slang).map(([key, val]) => `- "${key}": ${val}`).join("\n") + "\n";
-      }
-      if (k.negPrompts && k.negPrompts.length > 0) {
-        negativePromptText = `\nNEVER use the following words or phrases:\n` + k.negPrompts.map((word: any) => `- "${word}"`).join("\n") + "\n";
-      }
-    }
-  }
+  // Derived helpers for backward-compat variables still used below
+  const brandToneText = brandCtx.brandTone ? `\nBrand Tone/Voice: ${brandCtx.brandTone}\n` : "";
+  const negativePromptText = brand?.knowledge?.negPrompts?.length
+    ? `\nNEVER use the following words or phrases:\n` + (brand.knowledge.negPrompts as string[]).map((w: string) => `- "${w}"`).join("\n") + "\n"
+    : "";
+  const menuText = "";
+  const slangText = "";
+  const brandContactText = "";
 
   // 2. Fetch approved corrections and perform Jaccard-similarity Few-Shot sorting
   let fewShotText = "";
@@ -267,10 +245,7 @@ Task Details: ${task?.description || ""}
 ${userPrompt ? `User Custom Theme / Creative Idea: "${userPrompt}"` : ""}
 ${creativeHooks ? `Creative Hooks / Writing Angles: "${creativeHooks}"` : ""}
 ${attachedAssetsText}
-${brandToneText}
-${brandContactText}
-${menuText}
-${slangText}
+${brandContextText}
 ${negativePromptText}
 ${fewShotText}
 ${refinementPromptText}

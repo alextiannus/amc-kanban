@@ -891,6 +891,24 @@ model BrandKnowledge {
   productAssumptions  String? // Core sell points / key differentiators
   growthSyncHash      String? // Hash of last amc-growth brand-story data (for change detection)
 
+  // ── Section 2: 经营信息 (Business Info) ─────────────────────────────────
+  businessHours  String?  // Free-text business hours e.g. "Mon-Fri: 11:00-22:00, Weekends: 10:00-23:00"
+  reservationUrl String?  // 订座链接
+  orderingUrl    String?  // 下单链接 (own website / app)
+  deliveryUrls   Json?    // [{platform: "GrabFood", url: "..."}, ...]
+
+  // ── Section 3: 知识库配置 (Knowledge Base Config) ────────────────────────
+  market      String?  // 所在市场 e.g. "Singapore", "Kuala Lumpur"
+  district    String?  // 商圈 e.g. "Orchard", "Bugis", "KLCC"
+  competitors Json?    // [String] — list of competitor brand names
+
+  // ── Section 4: 推广计划 (Promotion Plan) ─────────────────────────────────
+  // promoPlan: { period, startDate, endDate, direction, copywritingRequirements,
+  //              brandVoice, brandImage, keyMessages[], campaigns[] }
+  promoPlan      Json?   // Current promotion plan object
+  // publishingFreq: { postsPerDay, platforms: { [platformSlug]: { postsPerDay?, postsPerWeek?, preferredHours? } } }
+  publishingFreq Json?   // Per-brand publishing frequency (overrides global SystemConfig defaults)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

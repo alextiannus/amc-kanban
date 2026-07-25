@@ -396,6 +396,9 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
               setPreselectedAssetIds(assetIds)
               setCurrentView('calendar')
             }}
+            onNavigateToDrafts={() => {
+              setCurrentView('drafts')
+            }}
           />
         </div>
       ) : currentView === 'dataAnalysis' ? (

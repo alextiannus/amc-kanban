@@ -79,10 +79,31 @@ function normalizePlatform(platform?: string): PlatformType | null {
 
 function toBrandContext(brand: any): BrandContext {
   const knowledge = brand.knowledge
+
+  // Build an enriched description that includes audience, product, and market context
+  // so the LLM prompt carries the full 4-module brand knowledge even if BrandContext
+  // doesn't have dedicated fields for them yet.
+  const descParts: string[] = []
+  if (brand.description) descParts.push(brand.description)
+  if (knowledge?.audienceAssumptions) descParts.push(`[目标客群] ${knowledge.audienceAssumptions}`)
+  if (knowledge?.productAssumptions)  descParts.push(`[核心卖点] ${knowledge.productAssumptions}`)
+  if (knowledge?.market || knowledge?.district) {
+    descParts.push(`[所在市场] ${[knowledge.market, knowledge.district].filter(Boolean).join(' · ')}`)
+  }
+  if (Array.isArray(knowledge?.competitors) && knowledge.competitors.length > 0) {
+    descParts.push(`[主要竞争对手] ${knowledge.competitors.join(', ')}`)
+  }
+  if (knowledge?.businessHours) descParts.push(`[营业时间] ${String(knowledge.businessHours)}`)
+
+  // Build requiredTerms from reservation / ordering links so copywriter can mention CTAs
+  const requiredTerms: string[] = []
+  if (knowledge?.reservationUrl) requiredTerms.push(`订座: ${knowledge.reservationUrl}`)
+  if (knowledge?.orderingUrl)    requiredTerms.push(`下单: ${knowledge.orderingUrl}`)
+
   return {
     id: brand.id,
     name: brand.name,
-    description: brand.description ?? undefined,
+    description: descParts.join('\n') || undefined,
     tone: knowledge?.brandTone ?? undefined,
     address: brand.address ?? undefined,
     location: brand.location ?? undefined,
@@ -90,30 +111,52 @@ function toBrandContext(brand: any): BrandContext {
     phone: brand.phone ?? undefined,
     negativePrompts: knowledge?.negPrompts ?? undefined,
     slang: normalizeRecord(knowledge?.slangDict),
+    ...(requiredTerms.length > 0 ? { requiredTerms } : {}),
   }
 }
 
 function toCopyBrief(input: LegacyCopywriterBridgeInput, industryVertical: IndustryVertical): CopyBrief {
+  const knowledge = input.brand.knowledge
+  const promoPlan = knowledge?.promoPlan as Record<string, any> | null | undefined
+
   const theme = input.userPrompt
     || input.task?.title
     || input.task?.description
+    || promoPlan?.direction
     || input.brand.description
     || `${input.brand.name} local service update`
+
+  // Assemble angle: caller's creative hooks → marketing strategy → promo plan direction/requirements
+  const angleParts: string[] = []
+  if (input.creativeHooks)   angleParts.push(input.creativeHooks)
+  if (input.marketingStrategy) angleParts.push(input.marketingStrategy)
+  if (promoPlan?.direction && !angleParts.includes(promoPlan.direction))
+    angleParts.push(`[本期推广方向] ${promoPlan.direction}`)
+  if (promoPlan?.copywritingRequirements)
+    angleParts.push(`[文案要求] ${promoPlan.copywritingRequirements}`)
+  if (promoPlan?.brandVoice)  angleParts.push(`[品牌 Voice] ${promoPlan.brandVoice}`)
+  if (promoPlan?.brandImage)  angleParts.push(`[品牌形象] ${promoPlan.brandImage}`)
+
+  // Merge mustMention: caller's list + promo plan key messages
+  const mustMention: string[] = [
+    ...(input.mustMention ?? []),
+    ...(Array.isArray(promoPlan?.keyMessages) ? promoPlan!.keyMessages : []),
+  ]
 
   return {
     industryVertical,
     offerType: input.offerType,
     theme,
-    angle: input.creativeHooks || input.marketingStrategy || undefined,
+    angle: angleParts.length > 0 ? angleParts.join(' | ') : undefined,
     customerIntent: input.customerIntent || inferCustomerIntent(theme, input.creativeHooks),
     targetEmotion: input.targetEmotion,
     formatHint: input.formatHint,
     locationFocus: input.locationFocus || input.brand.location || input.brand.address || undefined,
     localProof: input.localProof?.length ? input.localProof : inferLocalProof(input),
-    mustMention: input.mustMention,
+    mustMention: mustMention.length > 0 ? mustMention : undefined,
     mustAvoid: [
       ...(input.mustAvoid ?? []),
-      ...(input.brand.knowledge?.negPrompts ?? []),
+      ...(knowledge?.negPrompts ?? []),
     ],
   }
 }

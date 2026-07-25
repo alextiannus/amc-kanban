@@ -19,7 +19,10 @@ export async function POST(
   const body = await request.json().catch(() => ({}))
   const platform = typeof body.platform === 'string' ? body.platform : null
   const urgency = body.urgency === 'urgent' ? 'urgent' : 'normal'
+  const count = typeof body.numberOfPosts === 'number' && body.numberOfPosts > 0
+    ? body.numberOfPosts
+    : 1
   return NextResponse.json(
-    await getSchedulingRecommendations({ brandId, platform, urgency }),
+    await getSchedulingRecommendations({ brandId, platform, urgency, count }),
   )
 }

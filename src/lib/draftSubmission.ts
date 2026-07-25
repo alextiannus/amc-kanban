@@ -98,6 +98,18 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     return { ok: false as const, status: 400, error: '草稿正文不能为空。' }
   }
 
+  // P1 HARD BLOCK: never publish AI placeholder captions.
+  // This covers the race condition where trigger-copywriter hasn't finished yet
+  // and a reviewer tries to approve the draft before real content is generated.
+  const AI_PLACEHOLDER = '【AI 正在创作中...】'
+  if (draft.caption.includes(AI_PLACEHOLDER) || draft.caption.trim() === AI_PLACEHOLDER) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: 'AI 正在生成文案中，请稍候再审核。草稿尚未包含真实内容，暂不可发布。',
+    }
+  }
+
   if (!draft.accountId) {
     return { ok: false as const, status: 400, error: '请先为草稿选择发布账号（确定发布平台）。' }
   }

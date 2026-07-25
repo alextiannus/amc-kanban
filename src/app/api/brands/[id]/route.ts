@@ -94,7 +94,7 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   const body = await request.json()
-  const { name, description, logoUrl, location, timezone, autoPilot } = body
+  const { name, description, logoUrl, location, timezone, autoPilot, address, phone, website } = body
 
   const updated = await prisma.brand.update({
     where: { id },
@@ -108,6 +108,15 @@ export async function PATCH(request: Request, { params }: Params) {
       }),
       ...(location !== undefined && {
         location: typeof location === 'string' ? location.trim() || null : location,
+      }),
+      ...(address !== undefined && {
+        address: typeof address === 'string' ? address.trim() || null : address,
+      }),
+      ...(phone !== undefined && {
+        phone: typeof phone === 'string' ? phone.trim() || null : phone,
+      }),
+      ...(website !== undefined && {
+        website: typeof website === 'string' ? website.trim() || null : website,
       }),
       ...(timezone !== undefined && { timezone }),
       ...(autoPilot !== undefined && { autoPilot }),

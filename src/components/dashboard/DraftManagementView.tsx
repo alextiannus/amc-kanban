@@ -25,6 +25,7 @@ import {
   Play,
   Video,
   Link,
+  ExternalLink,
   Loader2,
   Sparkles,
   Zap,
@@ -41,6 +42,7 @@ import {
   Store,
 } from 'lucide-react'
 import PostPreviewModal from './PostPreviewModal'
+import QuickPreviewModal, { type QuickPreviewDraft } from './QuickPreviewModal'
 import { callGeminiDirect } from '@/lib/gemini-direct'
 import PostEditDrawer from './PostEditDrawer'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
@@ -356,6 +358,12 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
     setSelectedId(null)
     setSelectedAccountIds([])
   }
+  // Quick Preview Modal state
+  const [quickPreviewDraftId, setQuickPreviewDraftId] = useState<string | null>(null)
+  const quickPreviewDraft = useMemo(() => drafts.find(d => d.id === quickPreviewDraftId) || null, [drafts, quickPreviewDraftId])
+  const openQuickPreview = (draftId: string) => setQuickPreviewDraftId(draftId)
+  const closeQuickPreview = () => setQuickPreviewDraftId(null)
+
   const [activeTab, setActiveTab] = useState<TabKey>('scheduled')
   const [query, setQuery] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
@@ -878,7 +886,14 @@ Never include any markdown backticks, conversational preamble, or explanation ou
         if (!normalizedQuery) return true
         return [draft.caption, draft.account?.displayName, draft.account?.handle, draft.hashtags.join(' ')].filter(Boolean).join(' ').toLowerCase().includes(normalizedQuery)
       })
-      .sort((a, b) => new Date(draftTimestamp(b)).getTime() - new Date(draftTimestamp(a)).getTime())
+      .sort((a, b) => {
+        // Published/scheduled: sort by scheduledAt ascending (unscheduled at end)
+        const ta = a.scheduledAt ? new Date(a.scheduledAt).getTime() : Infinity
+        const tb = b.scheduledAt ? new Date(b.scheduledAt).getTime() : Infinity
+        if (ta !== tb) return ta - tb
+        // Fallback: createdAt ascending
+        return new Date(a.createdAt || a.updatedAt).getTime() - new Date(b.createdAt || b.updatedAt).getTime()
+      })
   }, [accountFilter, activeTab, drafts, platformFilter, query, tagFilter])
 
   const groupedDrafts = useMemo(() => {
@@ -1104,6 +1119,51 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     }
   }
 
+  // QuickPreviewModal action handlers
+  const AI_PLACEHOLDER = '【AI 正在创作中...】'
+  const handleQuickApprove = async (draftId: string) => {
+    if (!brandId) return
+    // Guard: block approving placeholder caption (AI hasn't finished writing yet)
+    const draft = drafts.find(d => d.id === draftId)
+    if (draft?.caption?.includes(AI_PLACEHOLDER)) {
+      throw new Error('AI 正在生成文案中，请稍候再审核。')
+    }
+    const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/approve`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note: '主理人快速确认发布' }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(json.error || '批准失败')
+    await loadDrafts()
+    setActiveTab('scheduled')
+  }
+
+  const handleQuickRegenerate = async (draftId: string) => {
+    if (!brandId) return
+    const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
+      method: 'POST',
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(json.error || '重新创作失败')
+    await loadDrafts()
+  }
+
+  const handleQuickDiscard = async (draftId: string) => {
+    if (!brandId) return
+    const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}`, {
+      method: 'DELETE',
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(json.error || '放弃草稿失败')
+    await loadDrafts()
+  }
+
+  const handleQuickEdit = (draftId: string) => {
+    setSelectedId(draftId)
+    setEditorOpen(true)
+  }
+
   const handleSingleSmartSchedule = async (draftId: string) => {
     if (!brandId) return
     setSaving(true)
@@ -1171,6 +1231,15 @@ Never include any markdown backticks, conversational preamble, or explanation ou
 
   const handleBatchApprove = async () => {
     if (!brandId || selectedDraftIds.length === 0) return
+    // Guard: warn if any selected drafts still have placeholder captions
+    const placeholderDrafts = drafts.filter(
+      d => selectedDraftIds.includes(d.id) && d.caption?.includes(AI_PLACEHOLDER)
+    )
+    if (placeholderDrafts.length > 0) {
+      const names = placeholderDrafts.map(d => d.account?.displayName || d.account?.platformId || d.id).join('\n')
+      alert(`有 ${placeholderDrafts.length} 个草稿 AI 尚未生成完毕，请先取消选择这些草稿。\n\nAI 源稿：\n${names}`)
+      return
+    }
     if (!confirm(`确定要批量批准并发布这 ${selectedDraftIds.length} 个草稿吗？`)) return
     setSaving(true)
     setError(null)
@@ -1650,7 +1719,8 @@ Never include any markdown backticks, conversational preamble, or explanation ou
                           compact={compact} 
                           selectMode={selectMode} 
                           selected={selectMode ? selectedDraftIds.includes(draft.id) : selectedId === draft.id} 
-                          onOpen={() => handleCardClick(draft.id)} 
+                          onOpen={() => handleCardClick(draft.id)}
+                          onOpenQuickPreview={() => openQuickPreview(draft.id)}
                           onSmartSchedule={() => handleSingleSmartSchedule(draft.id)}
                         />
                       ))}
@@ -1669,6 +1739,18 @@ Never include any markdown backticks, conversational preamble, or explanation ou
         brandId={brandId}
         brandName={brandName || '当前品牌'}
         onSuccess={loadDrafts}
+      />
+
+      <QuickPreviewModal
+        draft={quickPreviewDraft as QuickPreviewDraft | null}
+        brandId={brandId}
+        isOpen={!!quickPreviewDraftId}
+        onClose={closeQuickPreview}
+        onApprove={handleQuickApprove}
+        onRegenerate={handleQuickRegenerate}
+        onEdit={handleQuickEdit}
+        onDiscard={handleQuickDiscard}
+        brandName={brandName}
       />
     </div>
   )
@@ -1692,14 +1774,16 @@ function DraftCard({
   compact, 
   selectMode, 
   selected, 
-  onOpen, 
+  onOpen,
+  onOpenQuickPreview,
   onSmartSchedule 
 }: { 
   draft: DraftItem 
   compact: boolean 
   selectMode: boolean 
   selected: boolean 
-  onOpen: () => void 
+  onOpen: () => void
+  onOpenQuickPreview: () => void
   onSmartSchedule?: () => void 
 }) {
   const media = mediaForDraft(draft)
@@ -1771,7 +1855,30 @@ function DraftCard({
                 <Sparkles className="h-3 w-3" /> 智能排期
               </button>
             )}
-            <span className="inline-flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> View</span>
+            {draft.postUrl && draft.status === 'published' && (
+              <a
+                href={draft.postUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 rounded bg-violet-50 hover:bg-violet-100 text-violet-600 px-2 py-1 text-[11px] border border-violet-100 transition-colors"
+              >
+                <ExternalLink className="h-3 w-3" /> 查看
+              </a>
+            )}
+            {!selectMode && (
+              <button
+                type="button"
+                title="快速预览"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenQuickPreview()
+                }}
+                className="inline-flex items-center gap-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 px-2 py-1 text-[11px] border border-slate-200 dark:border-slate-700 transition-colors"
+              >
+                <Eye className="h-3.5 w-3.5" /> 预览
+              </button>
+            )}
           </div>
         </div>
       </div>

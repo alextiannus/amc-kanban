@@ -153,13 +153,20 @@ async function fetchInternalDrafts(brandId: string, from: Date, to: Date, platfo
         ? { account: { platformId: { equals: platformFilter, mode: 'insensitive' } } }
         : {}),
     },
-    include: { account: { select: { platformId: true, handle: true } } },
+    include: {
+      account: { select: { platformId: true, handle: true } },
+      // P2 fix: include asset refs so phone preview has media
+      assetRefs: { include: { asset: { select: { url: true } } } },
+    },
     orderBy: { createdAt: 'desc' },
     take: 200,
   })
 
   return drafts.map((d: any) => {
     const bestDate = (d.scheduledAt ?? d.createdAt).toISOString()
+    // Merge assetRefs URLs with explicit mediaUrls (same logic as PostFast enrichment)
+    const assetUrls: string[] = (d.assetRefs ?? []).map((r: any) => r.asset?.url).filter(Boolean)
+    const allMedia: string[] = Array.from(new Set([...assetUrls, ...(d.mediaUrls ?? [])].filter(Boolean)))
     return {
       id: d.id,
       source: 'internal',
@@ -168,10 +175,10 @@ async function fetchInternalDrafts(brandId: string, from: Date, to: Date, platfo
       caption: d.caption,
       postUrl: null,
       publishedAt: bestDate,
-      contentType: detectContentType(d.caption, d.mediaUrls ?? [], d.hashtags ?? []),
+      contentType: detectContentType(d.caption, allMedia, d.hashtags ?? []),
       status: d.status,
       hashtags: d.hashtags ?? [],
-      mediaUrls: d.mediaUrls ?? [],
+      mediaUrls: allMedia,
       scheduledAt: d.scheduledAt?.toISOString() ?? null,
       likes: 0,
       comments: 0,

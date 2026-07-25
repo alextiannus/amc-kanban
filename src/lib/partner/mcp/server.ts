@@ -1520,6 +1520,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         brandId,
         platform: platform ?? null,
         urgency: urgency ?? 'normal',
+        count: numberOfPosts ?? 1,
       })
       return {
         content: [{
