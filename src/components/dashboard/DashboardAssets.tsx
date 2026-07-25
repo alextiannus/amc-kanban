@@ -662,16 +662,33 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       setAiJobStep(2)
       await new Promise((r) => setTimeout(r, 600))
 
-      // Step 3: Create drafts per Copywriter
+      // Step 3: Create drafts per Copywriter and media unit.
       setAiJobStep(3)
-      const selectedUrls = assets.filter((a) => aiJobAssetIds.includes(a.id)).map((a) => a.url)
+      const selectedAssets = assets.filter((a) => aiJobAssetIds.includes(a.id))
+      const videoAssets = selectedAssets.filter((a) => a.mimeType.startsWith('video/'))
+      const imageAssets = selectedAssets.filter((a) => !a.mimeType.startsWith('video/'))
+      const mediaUnits = [
+        ...videoAssets.map((asset) => ({
+          assetIds: [asset.id],
+          mediaUrls: [asset.url],
+          label: asset.filename || '视频素材',
+          kind: 'video' as const,
+        })),
+        ...(imageAssets.length > 0
+          ? [{
+              assetIds: imageAssets.map((asset) => asset.id),
+              mediaUrls: imageAssets.map((asset) => asset.url),
+              label: imageAssets.length === 1 ? (imageAssets[0].filename || '图片素材') : `${imageAssets.length} 张图片素材`,
+              kind: 'image' as const,
+            }]
+          : []),
+      ]
 
       // Mark statuses as 'creating'
       setAiJobStatuses(Object.fromEntries(
         selectedCopywriters.map((c) => [c.id, 'creating' as const])
       ))
 
-      let successCount = 0
       const createdDraftIds: string[] = []
       // Track which platform each draft belongs to so scheduling can use per-platform frequency
       const draftPlatformMap: Record<string, string> = {}
@@ -679,55 +696,58 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       // Create drafts sequentially (not concurrently) to avoid deadlocks
       // on concurrent mediaAsset.update(usedCount) across the same asset rows
       for (const copywriter of selectedCopywriters) {
-        try {
-          const accId = draftAccountIdForCopywriter(copywriter, aiJobBrandAccounts)
+        let copywriterFailed = false
+        const accId = draftAccountIdForCopywriter(copywriter, aiJobBrandAccounts)
 
-          // Use the standard "AI working" sentinel so copywriterNode's caption-fallback
-          // doesn't accidentally treat our placeholder text as a creative direction.
-          // The real creative direction goes in agentNote with the correct delimiters.
-          const draftCaption = '【AI 正在创作中...】'
+        for (const mediaUnit of mediaUnits) {
+          try {
+            // Use the standard "AI working" sentinel so copywriterNode's caption-fallback
+            // doesn't accidentally treat our placeholder text as a creative direction.
+            // The real creative direction goes in agentNote with the correct delimiters.
+            const draftCaption = '【AI 正在创作中...】'
 
-          // agentNote MUST use 【AI 生成指令】...【/AI 生成指令】 format
-          // because copywriterNode only parses userPrompt from this exact pattern (line 87-91).
-          // Any text outside these delimiters is ignored by the agent.
-          const creativeInstruction = aiJobNote.trim()
-            ? aiJobNote.trim()
-            : `为 ${copywriter.platform} 平台创作符合品牌调性的优质内容，结合素材视觉风格生成吸引人的文案`
-          const draftAgentNote = `【AI 生成指令】${creativeInstruction}【/AI 生成指令】`
+            // agentNote MUST use 【AI 生成指令】...【/AI 生成指令】 format
+            // because copywriterNode only parses userPrompt from this exact pattern (line 87-91).
+            // Any text outside these delimiters is ignored by the agent.
+            const creativeInstruction = aiJobNote.trim()
+              ? aiJobNote.trim()
+              : `为 ${copywriter.platform} 平台针对这${mediaUnit.kind === 'video' ? '条视频' : '组素材'}创作符合品牌调性的优质内容，结合素材视觉风格生成吸引人的文案`
+            const draftAgentNote = `【AI 生成指令】${creativeInstruction}【/AI 生成指令】`
 
-          const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              accountId: accId,
-              caption: draftCaption,
-              hashtags: [],
-              assetIds: aiJobAssetIds,
-              mediaUrls: selectedUrls,
-              status: 'draft',
-              agentNote: draftAgentNote,
-              // creativeHooks carries the persona context; copywriterNode reads this at line 84-85
-              creativeHooks: `AI批量创作 · ${copywriter.name} · ${copywriter.handle} · ${copywriter.specialty}`,
-              agentId: null,
-              // Do NOT set createTask:true — AI batch create should not flood the
-              // kanban board with WorkUnit tasks. The draft itself is the work item.
-              createTask: false,
-            }),
-          })
-          const draftData = await draftRes.json().catch(() => ({}))
-          if (!draftRes.ok) throw new Error(draftData.error || '创建草稿失败')
-          const draftId = draftData.draft?.id
-          if (draftId) {
-            createdDraftIds.push(draftId)
-            draftPlatformMap[draftId] = copywriter.platform
+            const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                accountId: accId,
+                caption: draftCaption,
+                hashtags: [],
+                assetIds: mediaUnit.assetIds,
+                mediaUrls: mediaUnit.mediaUrls,
+                status: 'draft',
+                agentNote: draftAgentNote,
+                // creativeHooks carries the persona context; copywriterNode reads this at line 84-85
+                creativeHooks: `AI批量创作 · ${copywriter.name} · ${copywriter.handle} · ${copywriter.specialty} · ${mediaUnit.label}`,
+                agentId: null,
+                // Do NOT set createTask:true — AI batch create should not flood the
+                // kanban board with WorkUnit tasks. The draft itself is the work item.
+                createTask: false,
+              }),
+            })
+            const draftData = await draftRes.json().catch(() => ({}))
+            if (!draftRes.ok) throw new Error(draftData.error || '创建草稿失败')
+            const draftId = draftData.draft?.id
+            if (draftId) {
+              createdDraftIds.push(draftId)
+              draftPlatformMap[draftId] = copywriter.platform
+            }
+            setAiJobCreatedCount((prev) => prev + 1)
+          } catch (e) {
+            copywriterFailed = true
+            console.error(`Copywriter ${copywriter.id} draft creation failed for ${mediaUnit.label}:`, e)
           }
-          successCount++
-          setAiJobCreatedCount((prev) => prev + 1)
-          setAiJobStatuses((prev) => ({ ...prev, [copywriter.id]: 'done' }))
-        } catch (e) {
-          console.error(`Copywriter ${copywriter.id} draft creation failed:`, e)
-          setAiJobStatuses((prev) => ({ ...prev, [copywriter.id]: 'failed' }))
         }
+
+        setAiJobStatuses((prev) => ({ ...prev, [copywriter.id]: copywriterFailed ? 'failed' : 'done' }))
       }
 
       // Auto-schedule: group drafts by platform and call scheduling/recommend per group
@@ -810,6 +830,12 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         })
       } catch {}
       await loadAssets()
+      setAiJobOpen(false)
+      setSelected([])
+      setIsBatchSelectMode(false)
+      if (onNavigateToDrafts) {
+        onNavigateToDrafts()
+      }
     } catch (e: any) {
       setAiJobError(e.message || 'AI 批量创作失败')
     } finally {
@@ -1801,7 +1827,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               {/* Done summary */}
               {aiJobDone && (
                 <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 px-4 py-3 space-y-1">
-                  <p className="text-sm font-black text-emerald-700 dark:text-emerald-300">✅ 已为 {aiJobCreatedCount} 个平台创建草稿</p>
+                  <p className="text-sm font-black text-emerald-700 dark:text-emerald-300">✅ 已创建 {aiJobCreatedCount} 篇草稿</p>
                   <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                     🤖 AI Copywriter 正在后台为每个平台生成正式文案，稍后前往 Post Management 即可看到真实内容。
                   </p>

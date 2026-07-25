@@ -348,7 +348,15 @@ function truncateMiddle(value: string, max = 20) {
   return `${value.slice(0, max - 3)}...`
 }
 
-export default function DraftManagementView({ brandId, brandName }: { brandId?: string; brandName?: string }) {
+export default function DraftManagementView({
+  brandId,
+  brandName,
+  initialTab = 'scheduled',
+}: {
+  brandId?: string
+  brandName?: string
+  initialTab?: TabKey
+}) {
   const [drafts, setDrafts] = useState<DraftItem[]>([])
   const [accounts, setAccounts] = useState<SocialAccountOption[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -364,7 +372,7 @@ export default function DraftManagementView({ brandId, brandName }: { brandId?: 
   const openQuickPreview = (draftId: string) => setQuickPreviewDraftId(draftId)
   const closeQuickPreview = () => setQuickPreviewDraftId(null)
 
-  const [activeTab, setActiveTab] = useState<TabKey>('scheduled')
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const [query, setQuery] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
   const [accountFilter, setAccountFilter] = useState('all')

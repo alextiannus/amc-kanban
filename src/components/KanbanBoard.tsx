@@ -272,7 +272,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
         </div>
       ) : currentView === 'drafts' ? (
         <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
-          <DraftManagementView key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} brandName={activeBrand?.name} />
+          <DraftManagementView key={activeBrand?.id ?? 'no-brand'} brandId={activeBrand?.id} brandName={activeBrand?.name} initialTab="draft" />
         </div>
       ) : currentView === 'assets' ? (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">

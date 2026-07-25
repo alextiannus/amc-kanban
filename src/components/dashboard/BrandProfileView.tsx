@@ -160,6 +160,9 @@ export default function BrandProfileView({
 
   // Inline brand info editing
   const [editingName, setEditingName] = useState(false)
+  const [editingBiz, setEditingBiz] = useState(false)
+  const [editingKnowledge, setEditingKnowledge] = useState(false)
+  const [editingPromo, setEditingPromo] = useState(false)
   const [draftName, setDraftName] = useState(brand.name || '')
   const [draftDesc, setDraftDesc] = useState(brand.description || '')
   const [draftLocation, setDraftLocation] = useState(brand.location || '')
@@ -586,11 +589,14 @@ export default function BrandProfileView({
       })
       if (res.ok) {
         showToastVal(successMsg ?? '已保存', 'success')
+        return true
       } else {
         showToastVal('保存失败，请重试', 'error')
+        return false
       }
     } catch {
       showToastVal('网络错误，保存失败', 'error')
+      return false
     } finally {
       setSaving(false)
     }
