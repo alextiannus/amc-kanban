@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { Store } from 'lucide-react'
 import UserSettingsModal from './UserSettingsModal'
 import MobileLayout from './dashboard/MobileLayout'
-import DashboardHome from './dashboard/DashboardHome'
 import BrandProfileView from './dashboard/BrandProfileView'
 import SocialInsightDashboard from './dashboard/SocialInsightDashboard'
 import DashboardCalendar from './dashboard/DashboardCalendar'
@@ -243,8 +242,6 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       user={user}
       onShowSettings={() => setShowSettings(true)}
       onShowSystemLog={() => setShowSystemLog(true)}
-      onNewAgentKeyGenerated={() => {}}
-      onTasksCleared={() => {}}
     >
       {currentView === 'calendar' ? (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">

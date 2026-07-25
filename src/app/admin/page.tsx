@@ -549,50 +549,6 @@ function AdminPageInner() {
     }
   }
 
-  const handleSaveAgentPrincipals = async (agentId: string, humanIds: string[]) => {
-    setSavingPerms(true)
-    try {
-      const res = await fetch('/api/admin/permissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentId, humanIds }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        alert(data.error || '保存主理人分配失败')
-        return
-      }
-      await fetchUsers()
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setSavingPerms(false)
-    }
-  }
-
-  const handleSaveAgentDraft = async (agentId: string, draft: any): Promise<boolean> => {
-    setActionLoading(p => ({ ...p, [agentId + '_edit']: '1' }))
-    try {
-      const res = await fetch(`/api/admin/users/${agentId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        alert(data.error || '保存 Agent 失败')
-        return false
-      }
-      await fetchUsers()
-      return true
-    } catch (e) {
-      console.error(e)
-      return false
-    } finally {
-      setActionLoading(p => { const n = { ...p }; delete n[agentId + '_edit']; return n })
-    }
-  }
-
   // System Config mutate API handlers
   const handleSaveSystemConfig = async () => {
     if (!systemConfig) return
@@ -1069,7 +1025,7 @@ function AdminPageInner() {
 
         {/* Footer overview count */}
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 text-[10px] text-slate-450 leading-relaxed font-semibold space-y-3">
-          <p>人类用户: {humans.length} | AI: {agents.length}</p>
+          <p>人类用户: {humans.length}</p>
           <p>管理品牌: {brands.length} | 模型: {llmConfigs.length}</p>
         </div>
       </aside>
@@ -1089,18 +1045,6 @@ function AdminPageInner() {
             onDeleteUser={handleDeleteUser}
             onSavePermissions={handleSavePermissions}
             savingPerms={savingPerms}
-            brands={brands}
-            onFetchBrands={fetchBrands}
-            
-            // AI Agent specific props
-            poolMembers={poolMembers}
-            poolDrafts={poolDrafts}
-            onUpdatePoolDraft={handleUpdatePoolDraft}
-            onPatchPoolMember={handlePatchPoolMember}
-            onDeletePoolMember={handleDeletePoolMember}
-            onCreatePoolMember={handleCreatePoolMember}
-            onSaveAgentPrincipals={handleSaveAgentPrincipals}
-            onSaveAgentDraft={handleSaveAgentDraft}
             onFetchUsers={fetchUsers}
           />
         )}

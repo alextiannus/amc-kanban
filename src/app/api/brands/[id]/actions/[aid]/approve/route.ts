@@ -65,40 +65,6 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const body = await request.json().catch(() => ({}))
 
-  const updateLinkedWorkUnit = async (input: {
-    status: 'in_progress' | 'pending' | 'done'
-    requiredInput?: string | null
-    publishedUrl?: string | null
-  }) => {
-    const linked = await prisma.workUnit.findFirst({
-      where: { tags: { has: `action_item:${aid}` } },
-      select: { id: true, materials: true },
-      orderBy: { createdAt: 'desc' },
-    })
-    if (!linked) return
-
-    const parts = (linked.materials ?? '')
-      .split('\n')
-      .map((line: any) => line.trim())
-      .filter(Boolean)
-
-    if (input.publishedUrl) {
-      const existingPublishIndex = parts.findIndex((line: any) => line.startsWith('发布链接:'))
-      const publishLine = `发布链接: ${input.publishedUrl}`
-      if (existingPublishIndex >= 0) parts[existingPublishIndex] = publishLine
-      else parts.push(publishLine)
-    }
-
-    await prisma.workUnit.update({
-      where: { id: linked.id },
-      data: {
-        status: input.status,
-        requiredInput: input.requiredInput ?? null,
-        materials: parts.join('\n'),
-      },
-    })
-  }
-
   // ── Resolve the action item ──────────────────────────────────────────────
   const resolveResult = await prisma.actionItem.updateMany({
     where: { id: aid, brandId, status: 'pending' },
@@ -112,8 +78,6 @@ export async function PATCH(request: Request, { params }: Params) {
   if (resolveResult.count === 0) {
     return NextResponse.json({ error: 'Already resolved' }, { status: 409 })
   }
-
-  await updateLinkedWorkUnit({ status: 'in_progress', requiredInput: null })
 
   // ── Content Approval → Publish ──────────────────────────────────
   if ((item.type === 'content_approval' || item.type === 'content_draft') && item.draft) {
@@ -229,15 +193,6 @@ export async function PATCH(request: Request, { params }: Params) {
             : { status: result.error?.includes('取消') ? 'failed' : 'draft', agentNote: `发布失败: ${result.error}` },
         })
 
-        const isScheduledFutureForWorkUnit = !!resolvedScheduledAt && resolvedScheduledAt > new Date()
-        await updateLinkedWorkUnit(
-          result.success
-            ? { status: isScheduledFutureForWorkUnit ? 'in_progress' : 'done', requiredInput: null, publishedUrl: result.url ?? null }
-            : { status: 'pending', requiredInput: `自动发布失败：${result.error ?? 'unknown error'}。请协助排查原因。` }
-        )
-
-
-
         eventEmitter.emit('board_update')
       })()
     } else {
@@ -246,8 +201,6 @@ export async function PATCH(request: Request, { params }: Params) {
         where: { id: draft.id },
         data: { status: 'published', publishedAt: new Date() },
       })
-      const isScheduledFuture = draft.scheduledAt && new Date(draft.scheduledAt) > new Date()
-      await updateLinkedWorkUnit({ status: isScheduledFuture ? 'in_progress' : 'done', requiredInput: null })
     }
   }
 

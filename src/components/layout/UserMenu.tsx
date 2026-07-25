@@ -21,8 +21,6 @@ interface UserMenuProps {
   setCurrentView: (view: BoardView) => void
   onShowSettings: () => void
   onShowSystemLog: () => void
-  onNewAgentKeyGenerated: (key: string) => void
-  onTasksCleared: () => void
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -39,8 +37,6 @@ export default function UserMenu({
   setCurrentView: _setCurrentView,
   onShowSettings: _onShowSettings,
   onShowSystemLog: _onShowSystemLog,
-  onNewAgentKeyGenerated: _onNewAgentKeyGenerated,
-  onTasksCleared: _onTasksCleared,
 }: UserMenuProps) {
   const { t, isEn } = useI18n()
   const [open, setOpen] = useState(false)

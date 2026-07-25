@@ -15,7 +15,7 @@ import {
   X
 } from 'lucide-react'
 
-// ── Swim lane status definitions (mirrors AgentsWorkflowView.COLUMNS) ──
+// ── Work status definitions used by the log filter ──
 const LANE_STATUSES = [
   { id: 'todo',        label: '待办',   color: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700', activeColor: 'bg-slate-700 dark:bg-slate-200 text-white dark:text-slate-900 border-slate-700 dark:border-slate-200' },
   { id: 'in_progress', label: '执行中', color: 'bg-sky-50 dark:bg-sky-950/30 text-sky-600 dark:text-sky-400 border-sky-100 dark:border-sky-900/40', activeColor: 'bg-sky-500 text-white border-sky-500' },
@@ -57,7 +57,7 @@ export default function AgentLogsView({ brandId }: AgentLogsViewProps) {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
 
-  // Status multi-select filter (swim lane statuses)
+  // Status multi-select filter
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set())
 
   // Expansion of log details
@@ -200,7 +200,7 @@ export default function AgentLogsView({ brandId }: AgentLogsViewProps) {
       {/* 2. Filter Bar */}
       <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4">
 
-        {/* 2a. Status multi-select pills (swim lane statuses) */}
+        {/* 2a. Status multi-select pills */}
         <div>
           <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
             <Filter className="w-3.5 h-3.5" />

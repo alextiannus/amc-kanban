@@ -1100,7 +1100,6 @@ export default function BrandProfileView({
                   </h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-                    {/* Brand Story Description Card (Full Width Span) */}
                     {parsedBrandStoryText && (
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3 md:col-span-2">
                         <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
@@ -1111,8 +1110,6 @@ export default function BrandProfileView({
                         </div>
                       </div>
                     )}
-
-                    {/* Brand Positioning Card */}
                     {parsedBrandPositioning && (
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
                         <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
@@ -1123,8 +1120,6 @@ export default function BrandProfileView({
                         </div>
                       </div>
                     )}
-
-                    {/* Dining Guide Card */}
                     {parsedDiningGuide && (
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
                         <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
@@ -1135,8 +1130,6 @@ export default function BrandProfileView({
                         </div>
                       </div>
                     )}
-
-                    {/* Signature Dishes Card */}
                     {parsedSignatureDishes && (
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
                         <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
@@ -1147,8 +1140,6 @@ export default function BrandProfileView({
                         </div>
                       </div>
                     )}
-
-                    {/* Stores Info Card */}
                     {parsedStoresInfo && (
                       <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 p-6 rounded-3xl shadow-sm space-y-3">
                         <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
@@ -1163,170 +1154,81 @@ export default function BrandProfileView({
                 </div>
               )}
 
-              {/* ── 3. SUBGRID A: BRAND IDENTITY & TARGETS ── */}
-              <div className="space-y-4">
-                <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                  <span className="w-1.5 h-3.5 bg-amber-500 rounded-full" />
-                  品牌声调与客群画像 (Core Positioning)
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                  {/* Card 1: AI Tone */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-850 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
-                    style={{ boxShadow: '0 10px 25px -8px rgba(16,185,129,0.15)' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600" />
-                    <div className="absolute inset-0 opacity-[0.05]"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                    />
-                    <div className="absolute -top-12 -right-12 w-28 h-28 bg-white/10 rounded-full blur-2xl" />
-
-                    <div className="relative z-10 p-5 flex flex-col justify-between h-full text-white min-h-[200px]">
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-2xl leading-none">✨</span>
-                          <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider text-white">AI 品牌声调</span>
-                        </div>
-                        <h4 className="text-xs font-black tracking-wide border-b border-white/15 pb-1">表达风格与语气建议</h4>
-                      </div>
-                      <p className="text-[11px] text-white/90 font-medium leading-relaxed mt-2 line-clamp-5">
-                        {activeBrandTone || '尚未配置语气风格设定。请点击下方“展开编辑品牌故事设定”补充风格设定。'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Card 2: Target Audience */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-800 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
-                    style={{ boxShadow: '0 10px 25px -8px rgba(99,102,241,0.15)' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 via-blue-500 to-indigo-650" />
-                    <div className="absolute inset-0 opacity-[0.05]"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                    />
-                    <div className="absolute -top-12 -right-12 w-28 h-28 bg-white/10 rounded-full blur-2xl" />
-
-                    <div className="relative z-10 p-5 flex flex-col justify-between h-full text-white min-h-[200px]">
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-2xl leading-none">👥</span>
-                          <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider text-white">目标客群画像</span>
-                        </div>
-                        <h4 className="text-xs font-black tracking-wide border-b border-white/15 pb-1">主要客群分析与需求假设</h4>
-                      </div>
-                      <p className="text-[11px] text-white/90 font-medium leading-relaxed mt-2 line-clamp-5">
-                        {parsedAudienceAssumptions || '暂无目标客群画像假设。请在“分析与增长计划”中同步以拉取 AMC-Growth 的商家画像。'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Card 3: Founder Vision */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-850 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
-                    style={{ boxShadow: '0 10px 25px -8px rgba(245,158,11,0.15)' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-br from-amber-500 via-yellow-500 to-amber-600" />
-                    <div className="absolute inset-0 opacity-[0.05]"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                    />
-                    <div className="absolute -top-12 -right-12 w-28 h-28 bg-white/10 rounded-full blur-2xl" />
-
-                    <div className="relative z-10 p-5 flex flex-col justify-between h-full text-white min-h-[200px]">
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-2xl leading-none">🎯</span>
-                          <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider text-white">发展目标期望</span>
-                        </div>
-                        <h4 className="text-xs font-black tracking-wide border-b border-white/15 pb-1">主理人的商业抱负与战略目标</h4>
-                      </div>
-                      <p className="text-[11px] text-white/90 font-medium leading-relaxed mt-2 line-clamp-5">
-                        {parsedTargets || '暂无战略目标数据。请在“分析与增长计划”中同步以拉取 AMC-Growth 的主理人抱负。'}
-                      </p>
-                    </div>
-                  </div>
+              {/* ── 3 & 4. BRAND IDENTITY ATTRIBUTES (unified clean table) ── */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                  <span className="w-1.5 h-4 bg-amber-500 rounded-full" />
+                  <h3 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest">品牌定位与特征 (Brand Identity)</h3>
                 </div>
-              </div>
-
-              {/* ── 4. SUBGRID B: COMPETITIVE EDGE & VOCABULARY ── */}
-              <div className="space-y-4">
-                <h3 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2 pl-1">
-                  <span className="w-1.5 h-3.5 bg-indigo-500 rounded-full" />
-                  竞争优势与特征库 (Brand Identity)
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                  {/* Card 4: Product Advantages */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-850 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
-                    style={{ boxShadow: '0 10px 25px -8px rgba(244,63,94,0.15)' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-br from-rose-500 via-pink-500 to-rose-600" />
-                    <div className="absolute inset-0 opacity-[0.05]"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                    />
-                    <div className="absolute -top-12 -right-12 w-28 h-28 bg-white/10 rounded-full blur-2xl" />
-
-                    <div className="relative z-10 p-5 flex flex-col justify-between h-full text-white min-h-[200px]">
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-2xl leading-none">💎</span>
-                          <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider text-white">优势核心卖点</span>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
+                    <div className="flex items-start gap-2 pt-0.5">
+                      <span className="text-base leading-none">✨</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">AI 品牌声调<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Brand Tone</span></span>
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                      {activeBrandTone || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic text-xs">尚未配置。点击下方"展开编辑"补充。</em>}
+                    </p>
+                  </div>
+                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
+                    <div className="flex items-start gap-2 pt-0.5">
+                      <span className="text-base leading-none">👥</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">目标客群<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Target Audience</span></span>
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                      {parsedAudienceAssumptions || draftAudience || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic text-xs">暂无数据。请同步 AMC-Growth 分析。</em>}
+                    </p>
+                  </div>
+                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
+                    <div className="flex items-start gap-2 pt-0.5">
+                      <span className="text-base leading-none">🎯</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">商业目标<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Founder Vision</span></span>
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                      {parsedTargets || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic text-xs">暂无数据。请同步 AMC-Growth 分析。</em>}
+                    </p>
+                  </div>
+                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
+                    <div className="flex items-start gap-2 pt-0.5">
+                      <span className="text-base leading-none">💎</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">核心卖点<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Selling Points</span></span>
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                      {parsedProductAssumptions || draftProduct || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic text-xs">暂无数据。请同步 AMC-Growth 分析。</em>}
+                    </p>
+                  </div>
+                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
+                    <div className="flex items-start gap-2 pt-0.5">
+                      <span className="text-base leading-none">🗣️</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">本地话术<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Local Slang · {Object.keys(activeSlangDict).length} 条</span></span>
+                    </div>
+                    <div>
+                      {Object.keys(activeSlangDict).length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(activeSlangDict).slice(0, 12).map(([term, meaning]) => (
+                            <span key={term} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
+                              <span className="font-black">"{term}"</span>
+                              <span className="text-indigo-400">→</span>
+                              <span>{meaning}</span>
+                            </span>
+                          ))}
+                          {Object.keys(activeSlangDict).length > 12 && (
+                            <span className="text-[10px] text-slate-400 self-center">+{Object.keys(activeSlangDict).length - 12} 条</span>
+                          )}
                         </div>
-                        <h4 className="text-xs font-black tracking-wide border-b border-white/15 pb-1">品牌特色核心产品假设</h4>
-                      </div>
-                      <p className="text-[11px] text-white/90 font-medium leading-relaxed mt-2 line-clamp-5">
-                        {parsedProductAssumptions || '暂无核心竞争力假设。请在“分析与增长计划”中同步以拉取 AMC-Growth 的商家核心定位。'}
-                      </p>
+                      ) : (
+                        <em className="text-xs text-slate-300 dark:text-slate-600 font-normal not-italic">尚未配置俚语词条。可在知识库 Tab 添加。</em>
+                      )}
                     </div>
                   </div>
-
-                  {/* Card 5: Local Slangs */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-800 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
-                    style={{ boxShadow: '0 10px 25px -8px rgba(139,92,246,0.15)' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-br from-purple-500 via-indigo-500 to-violet-600" />
-                    <div className="absolute inset-0 opacity-[0.05]"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                    />
-                    <div className="absolute -top-12 -right-12 w-28 h-28 bg-white/10 rounded-full blur-2xl" />
-
-                    <div className="relative z-10 p-5 flex flex-col justify-between h-full text-white min-h-[200px]">
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-2xl leading-none">🎯</span>
-                          <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider text-white">本地俚语词汇</span>
-                        </div>
-                        <h4 className="text-xs font-black tracking-wide border-b border-white/15 pb-1">已录入 {Object.keys(activeSlangDict).length} 个本地短语</h4>
-                      </div>
-                      <p className="text-[11px] text-white/90 font-medium leading-relaxed mt-2 line-clamp-5">
-                        {Object.keys(activeSlangDict).length > 0 
-                          ? `常用俚语词条：${Object.keys(activeSlangDict).slice(0, 10).join(' · ')}。点击下方“展开编辑”表单可以继续新增专属短语。`
-                          : '尚未配置俚语词条。添加俚语可帮助 AI Copywriter 自动生成极富本地烟火气的宣传内容。'}
-                      </p>
+                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
+                    <div className="flex items-start gap-2 pt-0.5">
+                      <span className="text-base leading-none">📍</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">运营区域<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Location</span></span>
                     </div>
-                  </div>
-
-                  {/* Card 6: Geographic Location */}
-                  <div className="rounded-2xl overflow-hidden relative border border-slate-200/55 dark:border-slate-800 shadow-md flex flex-col justify-between transition-all duration-300 hover:scale-[1.01]"
-                    style={{ boxShadow: '0 10px 25px -8px rgba(75,85,99,0.15)' }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-br from-slate-500 via-slate-600 to-slate-700" />
-                    <div className="absolute inset-0 opacity-[0.05]"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")` }}
-                    />
-                    <div className="absolute -top-12 -right-12 w-28 h-28 bg-white/10 rounded-full blur-2xl" />
-
-                    <div className="relative z-10 p-5 flex flex-col justify-between h-full text-white min-h-[200px]">
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-2xl leading-none">📍</span>
-                          <span className="bg-white/20 backdrop-blur-md px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider text-white">运营地理定位</span>
-                        </div>
-                        <h4 className="text-xs font-black tracking-wide border-b border-white/15 pb-1">主理区域语境</h4>
-                      </div>
-                      <p className="text-[11px] text-white/90 font-medium leading-relaxed mt-2 line-clamp-5">
-                        {draftLocation 
-                          ? `主要运营与内容生成的地理语境已被定位在：${draftLocation}。这可以让 AI 更好地了解受众特征与地段优势。`
-                          : '暂无地理区域定位。完善主理区域可以帮助 AI 构建本地社区的信任连接。'}
-                      </p>
-                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                      {draftLocation || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic text-xs">暂无地理区域定位。</em>}
+                    </p>
                   </div>
                 </div>
               </div>

@@ -117,7 +117,7 @@ Authorization: Bearer $KANBAN_AGENT_API_KEY
 
 - 直接操作 ContentDraft、ActionItem、MediaAsset、Review、SocialAccount 和发布资源。
 - 需要人工审核、补素材或业务决策时创建 ActionItem，并在描述中写清问题和期望动作。
-- 泳道阶段只作为工作日志 workStage，不创建新的 WorkUnit/任务卡。
+- workStage 只作为工作日志筛选字段，不创建新的 WorkUnit/任务卡。
 - 发布前遵守 autoPilot、审核状态、推荐时间与平台连接状态。
 - 每 30 分钟的外部调度可执行评论、草稿、排期、素材和配额检查；系统本身不会主动唤醒 Agent。
 `
@@ -155,7 +155,7 @@ export function buildAmcSkillText(params?: { apiKey?: string | null; apiBaseUrl?
 - save_local_document / write_daily_memory / read_daily_memory
 - get_platform_benchmarks / get_social_insights
 
-旧 task、泳道和 create_require_input_task 工具仅为迁移兼容，不得用于新流程。
+旧 task 与 create_require_input_task 工具仅为迁移兼容，不得用于新流程。
 
 REST Base URL：${apiBaseUrl}
 `

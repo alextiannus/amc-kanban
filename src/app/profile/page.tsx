@@ -128,7 +128,7 @@ export default function ProfilePage() {
   }
 
   const profileRoles = profile?.userRoles || (profile?.dashboardRole === 'ADMIN' ? ['ADMIN'] : profile?.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : profile?.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : [])
-  const canManageAgents = profileRoles.includes('ADMIN') || profileRoles.includes('AMC_PRINCIPAL')
+  const canAccessPrincipalDashboard = profileRoles.includes('ADMIN') || profileRoles.includes('AMC_PRINCIPAL')
   const canAccessConnectGuide = profileRoles.includes('ADMIN') || profileRoles.includes('BRAND_OWNER')
 
   if (loading) {
@@ -176,7 +176,7 @@ export default function ProfilePage() {
               连接指南
             </button>
           )}
-          {canManageAgents && (
+          {canAccessPrincipalDashboard && (
             <button
               onClick={() => { setPrincipalOpening(true); router.push('/profile/principal') }}
               disabled={principalOpening}

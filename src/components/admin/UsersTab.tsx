@@ -2,13 +2,10 @@
 
 import React, { useState } from 'react'
 import { 
-  Users, Shield, User, Bot, RefreshCw, Key
+  Users, User, RefreshCw
 } from 'lucide-react'
 import UserAccountsPanel from './UserAccountsPanel'
 import UserGroupsPanel from './UserGroupsPanel'
-import AiAgentsPanel from './AiAgentsPanel'
-import { type BrandRecord } from './BrandsTab'
-import { type AssignmentPoolMember } from '@/components/shared/types'
 import EditUserModal from './EditUserModal'
 
 export interface UserRecord {
@@ -65,24 +62,12 @@ interface UsersTabProps {
   onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => void
   onResetPassword: (user: UserRecord) => Promise<void>
   onDeleteUser: (user: UserRecord) => Promise<void>
-  onSaveAgentDraft: (agentId: string, draft: any) => Promise<boolean>
   onSavePermissions: (humanId: string, agentIds: string[]) => Promise<void>
-  onSaveAgentPrincipals: (agentId: string, humanIds: string[]) => Promise<void>
   onFetchUsers: () => Promise<void>
-  onFetchBrands: () => Promise<void>
   savingPerms: boolean
-  brands: BrandRecord[]
-
-  // Pool management
-  poolMembers: AssignmentPoolMember[]
-  poolDrafts: Record<string, { capacity: number; priority: number; industries: string; regions: string }>
-  onUpdatePoolDraft: (agentId: string, patch: any) => void
-  onPatchPoolMember: (member: AssignmentPoolMember, patch: any) => Promise<void>
-  onDeletePoolMember: (member: AssignmentPoolMember) => Promise<void>
-  onCreatePoolMember: (agent: UserRecord) => Promise<void>
 }
 
-type SubTab = 'humans' | 'groups' | 'agents'
+type SubTab = 'humans' | 'groups'
 
 export default function UsersTab({
   users,
@@ -94,25 +79,14 @@ export default function UsersTab({
   onToggleBusinessRole,
   onResetPassword,
   onDeleteUser,
-  onSaveAgentDraft,
   onSavePermissions,
-  onSaveAgentPrincipals,
   onFetchUsers,
-  onFetchBrands,
   savingPerms,
-  brands,
-  poolMembers,
-  poolDrafts,
-  onUpdatePoolDraft,
-  onPatchPoolMember,
-  onDeletePoolMember,
-  onCreatePoolMember
 }: UsersTabProps) {
   const [subTab, setSubTab] = useState<SubTab>('humans')
   const [editingHumanUser, setEditingHumanUser] = useState<{ id: string; email: string; nickname: string | null; role: string; type: string } | null>(null)
 
   const humans = users.filter(u => u.type === 'HUMAN')
-  const agents = users.filter(u => u.type === 'AI_AGENT' && !['copywriter@platform.amc', 'designer@platform.amc', 'researcher@platform.amc'].includes(u.email))
 
   const handleEditHumanUserSave = async (updated: { id: string; email: string; nickname: string | null; role: string; type: string }) => {
     try {
@@ -146,7 +120,7 @@ export default function UsersTab({
             <Users size={18} className="text-blue-500" /> 用户与权限管理中心 (Identity & Access Control)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            在此管理系统内的人类成员、AI 代理，划分预设用户组角色（Admin/Principal/Owner），并执行主理人委托与资产分配授权。
+            在此管理系统内的人类成员，划分预设用户组角色（Admin/Principal/Owner），并执行主理人委托与品牌资产分配授权。
           </p>
         </div>
         <button 
@@ -183,17 +157,6 @@ export default function UsersTab({
           <Users size={14} />
           <span>用户组与角色</span>
         </button>
-        <button
-          onClick={() => setSubTab('agents')}
-          className={`px-4 py-2.5 text-xs font-black border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
-            subTab === 'agents'
-              ? 'border-blue-600 text-blue-600 dark:text-blue-550'
-              : 'border-transparent text-slate-500 hover:text-slate-850 dark:hover:text-slate-200'
-          }`}
-        >
-          <Bot size={14} />
-          <span>历史 AI 序列 ({agents.length})</span>
-        </button>
       </div>
 
       {/* Render selected sub-panel */}
@@ -224,28 +187,6 @@ export default function UsersTab({
           onToggleBusinessRole={onToggleBusinessRole}
         />
       )}
-
-
-
-      {subTab === 'agents' && (
-        <AiAgentsPanel 
-          users={users}
-          loading={loading}
-          actionLoading={actionLoading}
-          onDeleteUser={onDeleteUser}
-          onSaveAgentPrincipals={onSaveAgentPrincipals}
-          onSaveAgentDraft={onSaveAgentDraft}
-          onFetchUsers={onFetchUsers}
-          savingPerms={savingPerms}
-          poolMembers={poolMembers}
-          poolDrafts={poolDrafts}
-          onUpdatePoolDraft={onUpdatePoolDraft}
-          onPatchPoolMember={onPatchPoolMember}
-          onDeletePoolMember={onDeletePoolMember}
-          onCreatePoolMember={onCreatePoolMember}
-        />
-      )}
-
       {/* Edit Human User Modal */}
       {editingHumanUser && (
         <EditUserModal 

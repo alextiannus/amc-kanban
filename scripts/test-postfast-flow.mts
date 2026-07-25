@@ -557,10 +557,10 @@ async function runTests() {
     console.log('Skipped MCP Google publish test because /api/mcp is unavailable.')
   }
 
-  // 7. Test WorkUnit Status Transitions (High Severity: immediate -> done, scheduled -> in_progress)
-  console.log('\n--- 7. Testing WorkUnit Status Transitions ---')
+  // 7. Test ActionItem/ContentDraft status transitions without creating legacy WorkUnits
+  console.log('\n--- 7. Testing ActionItem/ContentDraft Status Transitions ---')
 
-  // A. Auto-Pilot Immediate Publish (should go to done)
+  // A. Auto-Pilot Immediate Publish (draft should become published)
   // Ensure autopilot is enabled on brand
   await prisma.brand.update({
     where: { id: brand.id },
@@ -577,7 +577,7 @@ async function runTests() {
       type: 'content_approval',
       priority: 'normal',
       title: 'Auto-pilot Immediate test post',
-      description: 'Auto-pilot immediate post should transition task to done',
+      description: 'Auto-pilot immediate post should publish the draft',
       draftData: {
         caption: 'Immediate post',
         platform: 'google',
@@ -589,16 +589,21 @@ async function runTests() {
   console.log('Auto-Pilot Immediate Response Status:', autoPilotImmediateRes.status)
   const autoPilotImmediateData = await autoPilotImmediateRes.json()
   assert.equal(autoPilotImmediateRes.status, 201)
-  
-  // Query the created WorkUnit for this action item
-  const workUnitImmediate = await prisma.workUnit.findFirst({
+
+  const actionItemImmediate = await prisma.actionItem.findUnique({
+    where: { id: autoPilotImmediateData.id },
+    include: { draft: true }
+  })
+  assert.ok(actionItemImmediate)
+  assert.equal(actionItemImmediate.status, 'auto_resolved', 'Immediate auto-published action item must be auto_resolved')
+  assert.equal(actionItemImmediate.draft?.status, 'published', 'Immediate auto-published draft must be published')
+  const legacyWorkUnitImmediate = await prisma.workUnit.findFirst({
     where: { tags: { has: `action_item:${autoPilotImmediateData.id}` } }
   })
-  assert.ok(workUnitImmediate, 'WorkUnit should be linked to the action item')
-  console.log('WorkUnit status for immediate publish:', workUnitImmediate.status)
-  assert.equal(workUnitImmediate.status, 'done', 'Immediate auto-published post must transition WorkUnit to done')
+  assert.equal(legacyWorkUnitImmediate, null, 'ActionItem must not create a linked legacy WorkUnit')
+  console.log('Immediate publish status:', actionItemImmediate.status, actionItemImmediate.draft?.status)
 
-  // B. Auto-Pilot Future Scheduled Publish (should go to in_progress)
+  // B. Auto-Pilot Future Scheduled Publish (draft should become scheduled)
   console.log('Testing Auto-Pilot Future Scheduled Publish transition...')
   const tiktokAccount = await prisma.socialAccount.findFirst({
     where: { brandId: brand.id, platformId: 'tiktok' }
@@ -615,7 +620,7 @@ async function runTests() {
       type: 'content_approval',
       priority: 'normal',
       title: 'Auto-pilot Scheduled test post',
-      description: 'Auto-pilot scheduled post should transition task to in_progress',
+      description: 'Auto-pilot scheduled post should schedule the draft',
       draftData: {
         caption: 'Scheduled post',
         platform: 'tiktok',
@@ -628,12 +633,18 @@ async function runTests() {
   const autoPilotScheduledData = await autoPilotScheduledRes.json()
   assert.equal(autoPilotScheduledRes.status, 201)
 
-  const workUnitScheduled = await prisma.workUnit.findFirst({
+  const actionItemScheduled = await prisma.actionItem.findUnique({
+    where: { id: autoPilotScheduledData.id },
+    include: { draft: true }
+  })
+  assert.ok(actionItemScheduled)
+  assert.equal(actionItemScheduled.status, 'auto_resolved', 'Scheduled auto-published action item must be auto_resolved')
+  assert.equal(actionItemScheduled.draft?.status, 'scheduled', 'Future auto-published draft must be scheduled')
+  const legacyWorkUnitScheduled = await prisma.workUnit.findFirst({
     where: { tags: { has: `action_item:${autoPilotScheduledData.id}` } }
   })
-  assert.ok(workUnitScheduled)
-  console.log('WorkUnit status for scheduled publish:', workUnitScheduled.status)
-  assert.equal(workUnitScheduled.status, 'in_progress', 'Future scheduled post must transition WorkUnit to in_progress')
+  assert.equal(legacyWorkUnitScheduled, null, 'Scheduled ActionItem must not create a linked legacy WorkUnit')
+  console.log('Scheduled publish status:', actionItemScheduled.status, actionItemScheduled.draft?.status)
 
   // C. Manual Approve Flow (Immediate vs Scheduled)
   console.log('Testing Manual Approve Flow status transitions...')
@@ -653,7 +664,7 @@ async function runTests() {
       type: 'content_approval',
       priority: 'normal',
       title: 'Manual Immediate test post',
-      description: 'Manual immediate post approve transition to done',
+      description: 'Manual immediate post approval should publish the draft',
       draftData: {
         caption: 'Manual Immediate post',
         platform: 'google',
@@ -689,12 +700,18 @@ async function runTests() {
   // Sleep 500ms to allow asynchronous publish IIFE to complete
   await new Promise(r => setTimeout(r, 500))
 
-  const workUnitManualImmediate = await prisma.workUnit.findFirst({
+  const actionItemManualImmediate = await prisma.actionItem.findUnique({
+    where: { id: manualImmediateData.id },
+    include: { draft: true }
+  })
+  assert.ok(actionItemManualImmediate)
+  assert.equal(actionItemManualImmediate.status, 'approved', 'Manual approval should mark the action item approved')
+  assert.equal(actionItemManualImmediate.draft?.status, 'published', 'Manual immediate approval should publish the draft')
+  const legacyWorkUnitManualImmediate = await prisma.workUnit.findFirst({
     where: { tags: { has: `action_item:${manualImmediateData.id}` } }
   })
-  assert.ok(workUnitManualImmediate)
-  console.log('WorkUnit status after manual approve (immediate):', workUnitManualImmediate.status)
-  assert.equal(workUnitManualImmediate.status, 'done', 'Approved immediate post must transition WorkUnit to done')
+  assert.equal(legacyWorkUnitManualImmediate, null, 'Manual approval must not create a linked legacy WorkUnit')
+  console.log('Manual approve status:', actionItemManualImmediate.status, actionItemManualImmediate.draft?.status)
 
   // ── 8. Testing Draft Creation & Update Validations (Empty content/platform checks) ──
   console.log('\n--- 8. Testing Draft Creation & Update Validations ---')

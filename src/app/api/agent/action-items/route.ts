@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   const isContentApproval = type === 'content_approval' || type === 'content_draft'
 
   // For content flow: if draftUrl is provided by Agent (e.g., Lark doc), use it directly.
-  // Otherwise, if draftData is provided, create an internal ContentDraft and WorkUnit.
+  // Otherwise, if draftData is provided, create an internal ContentDraft.
   if (isContentApproval && !incomingDraftUrl && !draftData) {
     return NextResponse.json({ error: 'draftUrl or draftData is required for content approval action items' }, { status: 400 })
   }
@@ -123,21 +123,6 @@ export async function POST(request: Request) {
       resolvedAt: shouldAutoResolveImmediately ? new Date() : null,
       resolvedBy: shouldAutoResolveImmediately ? 'auto_pilot' : null,
     },
-  })
-
-  // Create linked WorkUnit (Kanban Task) for the ActionItem
-  const initialWorkUnitStatus = shouldAutoResolveImmediately ? 'done' : 'pending'
-  await prisma.workUnit.create({
-    data: {
-      title,
-      description,
-      status: initialWorkUnitStatus,
-      brandId,
-      assigneeId: agent.userId,
-      tags: [`action_item:${item.id}`, platformHint || 'social', 'copywriter'],
-      priority: priority || 'medium',
-      deadline: draftData?.scheduledAt ? new Date(draftData.scheduledAt) : null,
-    }
   })
 
   // If brand is in autoPilot and this is content approval with draft — attempt immediate publish
@@ -238,13 +223,6 @@ export async function POST(request: Request) {
                 resolvedAt: new Date(),
                 resolvedBy: 'auto_pilot',
               },
-            }),
-            prisma.workUnit.updateMany({
-              where: { tags: { has: `action_item:${item.id}` } },
-              data: {
-                status: isScheduled ? 'in_progress' : 'done',
-                materials: publishedUrl ? `发布链接: ${publishedUrl}` : undefined
-              }
             })
           ])
         } else {
@@ -259,13 +237,6 @@ export async function POST(request: Request) {
                 status: 'pending',
                 resolvedNote: publishError,
               },
-            }),
-            prisma.workUnit.updateMany({
-              where: { tags: { has: `action_item:${item.id}` } },
-              data: {
-                status: 'pending',
-                requiredInput: publishError,
-              }
             })
           ])
         }

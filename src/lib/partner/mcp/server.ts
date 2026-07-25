@@ -42,7 +42,7 @@ function getSkillUpdateNotice(): string | null {
 1. Use your own Personal User API Key; never use x-agent-id.
 2. Operate only brands returned by get_brand_config (Capability + Crew scope).
 3. Work directly on drafts, assets, reviews, ActionItems and publishing resources.
-4. Request human input with post_action_item; do not create new WorkUnit/swimlane tasks.
+4. Request human input with post_action_item; do not create new WorkUnit tasks.
 5. Every write is recorded with the real Agent actor in the shared work log.`
     }
   } catch (e) {

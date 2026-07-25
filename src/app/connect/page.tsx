@@ -238,7 +238,7 @@ const CORE_OPERATIONS: OperationItem[] = [
     mcpParams: 'brandId, type, priority?, title, description, platform?',
     restMethod: 'POST',
     restUrl: '/api/agent/action-items',
-    desc: 'Request human review, missing material, or a business decision without creating a WorkUnit/swimlane task.',
+    desc: 'Request human review, missing material, or a business decision without creating a WorkUnit task.',
     payloadExample: `{
   "brandId": "brand_id_here",
   "type": "content_approval",

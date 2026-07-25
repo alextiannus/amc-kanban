@@ -28,8 +28,6 @@ interface MainLayoutProps {
   } | null
   onShowSettings: () => void
   onShowSystemLog: () => void
-  onNewAgentKeyGenerated: (key: string) => void
-  onTasksCleared: () => void
 }
 
 const VIEW_LABEL_MAP: Record<BoardView, { zh: string; en: string }> = {
@@ -54,8 +52,6 @@ export default function MainLayout({
   user,
   onShowSettings,
   onShowSystemLog,
-  onNewAgentKeyGenerated,
-  onTasksCleared,
 }: MainLayoutProps) {
   const { theme, resolvedTheme, setTheme } = useTheme()
   const { language, setLanguage, t } = useI18n()
@@ -79,8 +75,8 @@ export default function MainLayout({
     return () => document.removeEventListener('mousedown', handler)
   }, [mobileSidebarOpen])
 
-  // Suppress unused prop warnings (kept for API compatibility)
-  void onShowSettings; void onShowSystemLog; void onNewAgentKeyGenerated; void onTasksCleared
+  // Suppress unused prop warnings (kept for menu API compatibility)
+  void onShowSettings; void onShowSystemLog
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -183,8 +179,6 @@ export default function MainLayout({
               setCurrentView={setCurrentView}
               onShowSettings={onShowSettings}
               onShowSystemLog={onShowSystemLog}
-              onNewAgentKeyGenerated={onNewAgentKeyGenerated}
-              onTasksCleared={onTasksCleared}
             />
           </div>
         </header>
