@@ -1416,81 +1416,112 @@ export default function BrandProfileView({
                 )}
               </AnimatePresence>
 
-        {/* ── SECTION DIVIDER: 经营信息 ─────────────────────────────────────── */}
-        <div className="flex items-center gap-3 pt-4">
-          <span className="w-1 h-5 rounded-full bg-indigo-500" />
-          <h2 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">🏪 经营信息 (Business Info)</h2>
-          <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
-        </div>
-        <div className="space-y-6">
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-                <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-indigo-500" /> 门店地址与联系方式
-                </h3>
-                <div className="grid grid-cols-1 gap-3">
-                  <label className="block">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">门店地址</span>
-                    <input value={draftAddress} onChange={e => setDraftAddress(e.target.value)}
-                      placeholder="如：2 Orchard Turn, Singapore 238801"
-                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
-                  </label>
-                  <label className="block">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">联系电话</span>
-                    <input value={draftPhone} onChange={e => setDraftPhone(e.target.value)}
-                      placeholder="+65 6123 4567"
-                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
-                  </label>
-                  <label className="block">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌网站</span>
-                    <input value={draftWebsite} onChange={e => setDraftWebsite(e.target.value)}
-                      placeholder="https://yourbrand.com"
-                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
-                  </label>
-                </div>
-                <button onClick={handleSaveBrandInfo} disabled={saving}
-                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all">
-                  {saving ? '保存中…' : '保存门店信息'}
+        {/* ── SECTION: 经营信息 ─────────────────────────────────────────────── */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-indigo-500" />
+              <h2 className="text-xs font-black text-slate-700 dark:text-white flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-indigo-500" /> 经营信息
+              </h2>
+            </div>
+            {editingBiz ? (
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setEditingBiz(false)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer">
+                  <X size={11} /> 取消
+                </button>
+                <button onClick={async () => {
+                  setSaving(true)
+                  try {
+                    const r1 = await fetch(`/api/brands/${brandId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: draftAddress, phone: draftPhone, website: draftWebsite }) })
+                    const r2 = await fetch(`/api/brands/${brandId}/knowledge`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessHours: draftBusinessHours, reservationUrl: draftReservationUrl, orderingUrl: draftOrderingUrl, deliveryUrls: draftDeliveryUrls }) })
+                    if (r1.ok && r2.ok) { showToastVal('经营信息已保存', 'success'); setEditingBiz(false) }
+                    else showToastVal('保存失败，请重试', 'error')
+                  } catch { showToastVal('网络错误', 'error') }
+                  finally { setSaving(false) }
+                }} disabled={saving}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all cursor-pointer">
+                  {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                  {saving ? '保存中…' : '保存'}
                 </button>
               </div>
+            ) : (
+              <button onClick={() => setEditingBiz(true)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer">
+                <Edit3 size={11} /> 编辑
+              </button>
+            )}
+          </div>
 
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-                <h3 className="text-sm font-black text-slate-800 dark:text-white">🕐 营业时间</h3>
-                <textarea value={draftBusinessHours} onChange={e => setDraftBusinessHours(e.target.value)}
-                  rows={4}
+          {/* View Mode */}
+          {!editingBiz && (
+            <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
+              {[
+                { label: '📍 门店地址', value: draftAddress },
+                { label: '📞 联系电话', value: draftPhone },
+                { label: '🌐 品牌网站', value: draftWebsite },
+                { label: '🕐 营业时间', value: draftBusinessHours },
+                { label: '📅 订座链接', value: draftReservationUrl },
+                { label: '🛒 自有下单', value: draftOrderingUrl },
+              ].map(({ label, value }) => (
+                <div key={label} className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">{label}</span>
+                  <span className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                    {value || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂未填写</em>}
+                  </span>
+                </div>
+              ))}
+              {draftDeliveryUrls.length > 0 && (
+                <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">🚚 外卖平台</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {draftDeliveryUrls.map((d, i) => (
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {d.platform}{d.url && <ExternalLink size={9} />}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Edit Mode */}
+          {editingBiz && (
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-1 gap-3">
+                {[
+                  { label: '门店地址', value: draftAddress, set: setDraftAddress, placeholder: '如：2 Orchard Turn, Singapore 238801' },
+                  { label: '联系电话', value: draftPhone, set: setDraftPhone, placeholder: '+65 6123 4567' },
+                  { label: '品牌网站', value: draftWebsite, set: setDraftWebsite, placeholder: 'https://yourbrand.com' },
+                  { label: '订座链接', value: draftReservationUrl, set: setDraftReservationUrl, placeholder: 'https://chope.co/...' },
+                  { label: '自有下单链接', value: draftOrderingUrl, set: setDraftOrderingUrl, placeholder: 'https://yourbrand.com/order' },
+                ].map(({ label, value, set, placeholder }) => (
+                  <label key={label} className="block">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">{label}</span>
+                    <input value={value} onChange={e => set(e.target.value)} placeholder={placeholder}
+                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                  </label>
+                ))}
+              </div>
+              <label className="block">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">营业时间</span>
+                <textarea value={draftBusinessHours} onChange={e => setDraftBusinessHours(e.target.value)} rows={3}
                   placeholder={"周一至周五：11:00 - 22:00\n周末及公假：10:00 - 23:00"}
-                  className="w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 resize-none" />
-                <button onClick={() => saveKnowledge({ businessHours: draftBusinessHours }, '营业时间已保存')} disabled={saving}
-                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all">
-                  {saving ? '保存中…' : '保存营业时间'}
-                </button>
-              </div>
-
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-                <h3 className="text-sm font-black text-slate-800 dark:text-white">🔗 订座与下单链接</h3>
-                <div className="grid grid-cols-1 gap-3">
-                  <label className="block">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">订座链接（Chope / OpenTable / 自有）</span>
-                    <input value={draftReservationUrl} onChange={e => setDraftReservationUrl(e.target.value)}
-                      placeholder="https://chope.co/..."
-                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
-                  </label>
-                  <label className="block">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">自有下单链接</span>
-                    <input value={draftOrderingUrl} onChange={e => setDraftOrderingUrl(e.target.value)}
-                      placeholder="https://yourbrand.com/order"
-                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
-                  </label>
-                </div>
+                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
+              </label>
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2">外卖平台链接</p>
                 <div className="space-y-2">
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">外卖平台链接</p>
                   {draftDeliveryUrls.map((d, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <input value={d.platform} onChange={e => { const n = [...draftDeliveryUrls]; n[i] = { ...n[i], platform: e.target.value }; setDraftDeliveryUrls(n) }}
                         placeholder="平台名称（如 GrabFood）" className="w-32 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
                       <input value={d.url} onChange={e => { const n = [...draftDeliveryUrls]; n[i] = { ...n[i], url: e.target.value }; setDraftDeliveryUrls(n) }}
                         placeholder="链接 URL" className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                      <button onClick={() => setDraftDeliveryUrls(draftDeliveryUrls.filter((_, j) => j !== i))}
-                        className="p-1 text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                      <button onClick={() => setDraftDeliveryUrls(draftDeliveryUrls.filter((_, j) => j !== i))} className="p-1 text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
                     </div>
                   ))}
                   <button onClick={() => setDraftDeliveryUrls([...draftDeliveryUrls, { platform: '', url: '' }])}
@@ -1498,270 +1529,354 @@ export default function BrandProfileView({
                     <Plus size={12} /> 添加外卖平台
                   </button>
                 </div>
-                <button onClick={() => saveKnowledge({ reservationUrl: draftReservationUrl, orderingUrl: draftOrderingUrl, deliveryUrls: draftDeliveryUrls }, '链接已保存')} disabled={saving}
-                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all">
-                  {saving ? '保存中…' : '保存链接配置'}
-                </button>
               </div>
+            </div>
+          )}
         </div>
 
-        {/* ── SECTION DIVIDER: 知识库配置 ───────────────────────────────────── */}
-        <div className="flex items-center gap-3 pt-4">
-          <span className="w-1 h-5 rounded-full bg-violet-500" />
-          <h2 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">🔍 知识库配置 (Knowledge Config)</h2>
-          <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
-        </div>
-        <div className="space-y-6">
-              {/* Market & District */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-                <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
-                  <Compass className="w-4 h-4 text-indigo-500" /> 市场与商圈定位
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">所在市场</span>
-                    <input value={draftMarket} onChange={e => setDraftMarket(e.target.value)}
-                      placeholder="如：Singapore, KL, Bangkok"
-                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
-                  </label>
-                  <label className="block">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">商圈</span>
-                    <input value={draftDistrict} onChange={e => setDraftDistrict(e.target.value)}
-                      placeholder="如：Orchard, Bugis, KLCC"
-                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30" />
-                  </label>
-                </div>
-                <div>
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">主要竞争对手</span>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+        {/* ── SECTION: 知识库配置 ───────────────────────────────────────────── */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-violet-500" />
+              <h2 className="text-xs font-black text-slate-700 dark:text-white flex items-center gap-1.5">
+                <Compass className="w-3.5 h-3.5 text-violet-500" /> 知识库配置
+              </h2>
+            </div>
+            {editingKnowledge ? (
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setEditingKnowledge(false)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer">
+                  <X size={11} /> 取消
+                </button>
+                <button onClick={async () => {
+                  const ok = await saveKnowledge({ market: draftMarket, district: draftDistrict, competitors: draftCompetitors, brandTone: activeBrandTone, slangDict: activeSlangDict, negPrompts: draftNegPrompts }, '知识库配置已保存')
+                  if (ok) setEditingKnowledge(false)
+                }} disabled={saving}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all cursor-pointer">
+                  {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                  {saving ? '保存中…' : '保存'}
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setEditingKnowledge(true)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer">
+                <Edit3 size={11} /> 编辑
+              </button>
+            )}
+          </div>
+
+          {/* View Mode */}
+          {!editingKnowledge && (
+            <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
+              <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">🗺️ 所在市场</span>
+                <span className="text-xs text-slate-700 dark:text-slate-200">{draftMarket || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂未填写</em>}</span>
+              </div>
+              <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">🏙️ 商圈</span>
+                <span className="text-xs text-slate-700 dark:text-slate-200">{draftDistrict || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂未填写</em>}</span>
+              </div>
+              {draftCompetitors.length > 0 && (
+                <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">⚔️ 主要竞品</span>
+                  <div className="flex flex-wrap gap-1">
                     {draftCompetitors.map((c, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800">
-                        {c}
-                        <button onClick={() => setDraftCompetitors(draftCompetitors.filter((_, j) => j !== i))}><X size={10} /></button>
+                      <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">🗣️ 品牌调性</span>
+                <span className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">{activeBrandTone || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂未配置</em>}</span>
+              </div>
+              {Object.keys(activeSlangDict).length > 0 && (
+                <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">💬 话术词典</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(activeSlangDict).slice(0, 8).map(([term, meaning]) => (
+                      <span key={term} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
+                        <span className="font-black">"{term}"</span><span className="text-indigo-400">→</span><span>{meaning as string}</span>
                       </span>
                     ))}
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    <input value={newCompetitor} onChange={e => setNewCompetitor(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && newCompetitor.trim()) { setDraftCompetitors([...draftCompetitors, newCompetitor.trim()]); setNewCompetitor('') }}}
-                      placeholder="输入竞品名后按 Enter"
-                      className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                    <button onClick={() => { if (newCompetitor.trim()) { setDraftCompetitors([...draftCompetitors, newCompetitor.trim()]); setNewCompetitor('') }}}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700">
-                      <Plus size={12} />
-                    </button>
+                    {Object.keys(activeSlangDict).length > 8 && <span className="text-[10px] text-slate-400">+{Object.keys(activeSlangDict).length - 8} 条</span>}
                   </div>
                 </div>
-                <button onClick={() => saveKnowledge({ market: draftMarket, district: draftDistrict, competitors: draftCompetitors }, '市场配置已保存')} disabled={saving}
-                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all">
-                  {saving ? '保存中…' : '保存市场配置'}
-                </button>
-              </div>
-
-              {/* Brand Tone & Slang */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-                <h3 className="text-sm font-black text-slate-800 dark:text-white">🗣️ 品牌语气与话术词典</h3>
-                <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌调性描述</span>
-                  <textarea value={activeBrandTone} onChange={e => setBrandToneVal(e.target.value)} rows={3}
-                    placeholder="例：轻松幽默、接地气、偶尔带一点俏皮话；绝不使用过度正式或官方的口吻。"
-                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 resize-none" />
-                </label>
-                <div>
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">本地化话术词典</span>
-                  <div className="space-y-1 mt-2">
-                    {Object.entries(activeSlangDict).map(([term, meaning]) => (
-                      <div key={term} className="flex items-center gap-2 text-xs py-1 border-b border-slate-50 dark:border-slate-800">
-                        <span className="font-bold text-indigo-600 dark:text-indigo-400 w-24 shrink-0">"{term}"</span>
-                        <span className="text-slate-600 dark:text-slate-400 flex-1">→ {meaning as string}</span>
-                        <button onClick={() => { const d = { ...activeSlangDict }; delete d[term]; setSlangDictVal(d) }} className="text-slate-300 hover:text-red-500"><X size={12} /></button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    <input value={newTerm} onChange={e => setNewTerm(e.target.value)} placeholder="原词" className="w-28 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                    <input value={newMeaning} onChange={e => setNewMeaning(e.target.value)} placeholder="本地化表达" className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                    <button onClick={() => { const t = newTerm.trim(); const m = newMeaning.trim(); if (t && m) { setSlangDictVal({ ...activeSlangDict, [t]: m }); setNewTerm(''); setNewMeaning('') }}}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">禁止使用词 / 负面 Prompt</span>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+              )}
+              {draftNegPrompts.length > 0 && (
+                <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">🚫 禁用词</span>
+                  <div className="flex flex-wrap gap-1">
                     {draftNegPrompts.map((w, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800">
-                        {w} <button onClick={() => setDraftNegPrompts(draftNegPrompts.filter((_, j) => j !== i))}><X size={10} /></button>
-                      </span>
+                      <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800">{w}</span>
                     ))}
                   </div>
-                  <div className="flex gap-2 mt-2">
-                    <input value={newNegPrompt} onChange={e => setNewNegPrompt(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && newNegPrompt.trim()) { setDraftNegPrompts([...draftNegPrompts, newNegPrompt.trim()]); setNewNegPrompt('') }}}
-                      placeholder="禁用词后按 Enter" className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                    <button onClick={() => { if (newNegPrompt.trim()) { setDraftNegPrompts([...draftNegPrompts, newNegPrompt.trim()]); setNewNegPrompt('') }}}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
-                  </div>
                 </div>
-                <button onClick={() => saveKnowledge({ brandTone: activeBrandTone, slangDict: activeSlangDict, negPrompts: draftNegPrompts }, '知识库配置已保存')} disabled={saving}
-                  className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all">
-                  {saving ? '保存中…' : '保存知识库配置'}
-                </button>
+              )}
+            </div>
+          )}
+
+          {/* Edit Mode */}
+          {editingKnowledge && (
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">所在市场</span>
+                  <input value={draftMarket} onChange={e => setDraftMarket(e.target.value)} placeholder="如：Singapore, KL, Bangkok"
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">商圈</span>
+                  <input value={draftDistrict} onChange={e => setDraftDistrict(e.target.value)} placeholder="如：Orchard, Bugis, KLCC"
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
+                </label>
               </div>
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">主要竞争对手</span>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {draftCompetitors.map((c, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800">
+                      {c}<button onClick={() => setDraftCompetitors(draftCompetitors.filter((_, j) => j !== i))}><X size={10} /></button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <input value={newCompetitor} onChange={e => setNewCompetitor(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newCompetitor.trim()) { setDraftCompetitors([...draftCompetitors, newCompetitor.trim()]); setNewCompetitor('') }}}
+                    placeholder="输入竞品名后按 Enter"
+                    className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                  <button onClick={() => { if (newCompetitor.trim()) { setDraftCompetitors([...draftCompetitors, newCompetitor.trim()]); setNewCompetitor('') }}}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
+                </div>
+              </div>
+              <label className="block">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌调性描述</span>
+                <textarea value={activeBrandTone} onChange={e => setBrandToneVal(e.target.value)} rows={3}
+                  placeholder="例：轻松幽默、接地气、偶尔带一点俏皮话…"
+                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
+              </label>
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">本地化话术词典</span>
+                <div className="space-y-1 mt-2">
+                  {Object.entries(activeSlangDict).map(([term, meaning]) => (
+                    <div key={term} className="flex items-center gap-2 text-xs py-1 border-b border-slate-50 dark:border-slate-800">
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400 w-24 shrink-0">"{term}"</span>
+                      <span className="text-slate-600 dark:text-slate-400 flex-1">→ {meaning as string}</span>
+                      <button onClick={() => { const d = { ...activeSlangDict }; delete d[term]; setSlangDictVal(d) }} className="text-slate-300 hover:text-red-500"><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <input value={newTerm} onChange={e => setNewTerm(e.target.value)} placeholder="原词" className="w-28 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                  <input value={newMeaning} onChange={e => setNewMeaning(e.target.value)} placeholder="本地化表达" className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                  <button onClick={() => { const t = newTerm.trim(); const m = newMeaning.trim(); if (t && m) { setSlangDictVal({ ...activeSlangDict, [t]: m }); setNewTerm(''); setNewMeaning('') }}}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
+                </div>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">禁止使用词 / 负面 Prompt</span>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {draftNegPrompts.map((w, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800">
+                      {w}<button onClick={() => setDraftNegPrompts(draftNegPrompts.filter((_, j) => j !== i))}><X size={10} /></button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <input value={newNegPrompt} onChange={e => setNewNegPrompt(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newNegPrompt.trim()) { setDraftNegPrompts([...draftNegPrompts, newNegPrompt.trim()]); setNewNegPrompt('') }}}
+                    placeholder="禁用词后按 Enter" className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                  <button onClick={() => { if (newNegPrompt.trim()) { setDraftNegPrompts([...draftNegPrompts, newNegPrompt.trim()]); setNewNegPrompt('') }}}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ── SECTION DIVIDER: 推广计划 ─────────────────────────────────────── */}
-        <div className="flex items-center gap-3 pt-4">
-          <span className="w-1 h-5 rounded-full bg-amber-500" />
-          <h2 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">📅 推广计划 (Promo Plan)</h2>
-          <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
-        </div>
-        <div className="space-y-6">
-              {/* Promo Period & Direction */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-                <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
-                  <Target className="w-4 h-4 text-indigo-500" /> 推广计划设置
-                </h3>
-                <div className="grid grid-cols-3 gap-3">
-                  <label className="block col-span-1">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">计划周期</span>
-                    <select value={promoPlan.period} onChange={e => setPromoPlan(p => ({ ...p, period: e.target.value }))}
-                      className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none">
-                      <option value="monthly">月度</option>
-                      <option value="weekly">周度</option>
-                      <option value="biannual">半年度</option>
-                    </select>
-                  </label>
-                  <label className="block col-span-1">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">开始日期</span>
-                    <input type="date" value={promoPlan.startDate} onChange={e => setPromoPlan(p => ({ ...p, startDate: e.target.value }))}
-                      className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                  </label>
-                  <label className="block col-span-1">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">结束日期</span>
-                    <input type="date" value={promoPlan.endDate} onChange={e => setPromoPlan(p => ({ ...p, endDate: e.target.value }))}
-                      className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                  </label>
+        {/* ── SECTION: 推广计划 ─────────────────────────────────────────────── */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="w-1 h-4 rounded-full bg-amber-500" />
+              <h2 className="text-xs font-black text-slate-700 dark:text-white flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-amber-500" /> 推广计划
+              </h2>
+            </div>
+            {editingPromo ? (
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setEditingPromo(false)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer">
+                  <X size={11} /> 取消
+                </button>
+                <button onClick={async () => {
+                  const ok = await saveKnowledge({ promoPlan, publishingFreq }, '推广计划已保存')
+                  if (ok) setEditingPromo(false)
+                }} disabled={saving}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60 transition-all cursor-pointer">
+                  {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                  {saving ? '保存中…' : '保存'}
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setEditingPromo(true)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer">
+                <Edit3 size={11} /> 编辑
+              </button>
+            )}
+          </div>
+
+          {/* View Mode */}
+          {!editingPromo && (
+            <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
+              {[
+                { label: '📅 推广周期', value: `${promoPlan.period === 'monthly' ? '月度' : promoPlan.period === 'weekly' ? '周度' : '半年度'} ${promoPlan.startDate ? `${promoPlan.startDate} → ${promoPlan.endDate}` : ''}`.trim() },
+                { label: '🎯 推广方向', value: promoPlan.direction },
+                { label: '✍️ 文案要求', value: promoPlan.copywritingRequirements },
+                { label: '🔊 品牌 Voice', value: promoPlan.brandVoice },
+                { label: '✨ 品牌形象', value: promoPlan.brandImage },
+              ].map(({ label, value }) => (
+                <div key={label} className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">{label}</span>
+                  <span className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                    {value || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂未填写</em>}
+                  </span>
                 </div>
-                <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">推广方向</span>
-                  <textarea value={promoPlan.direction} onChange={e => setPromoPlan(p => ({ ...p, direction: e.target.value }))} rows={3}
-                    placeholder="本月推广重点：主打夏日新品，配合店庆10周年，强调性价比与品质感…"
-                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
-                </label>
-                <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">文案要求</span>
-                  <textarea value={promoPlan.copywritingRequirements} onChange={e => setPromoPlan(p => ({ ...p, copywritingRequirements: e.target.value }))} rows={3}
-                    placeholder="每篇文案需包含明确 CTA（预约/下单）；避免使用纯描述性语言；加入本地化口语元素…"
-                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌 Voice（声调）</span>
-                    <textarea value={promoPlan.brandVoice} onChange={e => setPromoPlan(p => ({ ...p, brandVoice: e.target.value }))} rows={2}
-                      placeholder="自信、温暖、邻家感，偶尔带一点幽默"
-                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
-                  </label>
-                  <label className="block">
-                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌形象</span>
-                    <textarea value={promoPlan.brandImage} onChange={e => setPromoPlan(p => ({ ...p, brandImage: e.target.value }))} rows={2}
-                      placeholder="精致但不高冷，有温度的街坊餐厅"
-                      className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
-                  </label>
-                </div>
-                {/* Key Messages */}
-                <div>
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">核心信息</span>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+              ))}
+              {promoPlan.keyMessages.length > 0 && (
+                <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">💬 核心信息</span>
+                  <div className="flex flex-wrap gap-1">
                     {promoPlan.keyMessages.map((m, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800">
-                        {m} <button onClick={() => setPromoPlan(p => ({ ...p, keyMessages: p.keyMessages.filter((_, j) => j !== i) }))}><X size={10} /></button>
-                      </span>
+                      <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800">{m}</span>
                     ))}
                   </div>
-                  <div className="flex gap-2 mt-2">
-                    <input value={newKeyMessage} onChange={e => setNewKeyMessage(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && newKeyMessage.trim()) { setPromoPlan(p => ({ ...p, keyMessages: [...p.keyMessages, newKeyMessage.trim()] })); setNewKeyMessage('') }}}
-                      placeholder="核心信息点，按 Enter 添加"
-                      className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                    <button onClick={() => { if (newKeyMessage.trim()) { setPromoPlan(p => ({ ...p, keyMessages: [...p.keyMessages, newKeyMessage.trim()] })); setNewKeyMessage('') }}}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
-                  </div>
                 </div>
-                <button onClick={() => saveKnowledge({ promoPlan }, '推广计划已保存')} disabled={saving}
-                  className="w-full py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 transition-all">
-                  {saving ? '保存中…' : '💾 保存推广计划'}
-                </button>
+              )}
+              <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">⚡ 发布频率</span>
+                <span className="text-xs text-slate-700 dark:text-slate-200">{publishingFreq.postsPerDay} 帖/天（全平台默认）</span>
               </div>
+            </div>
+          )}
 
-              {/* Publishing Frequency */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-                <div>
-                  <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-amber-500" /> 品牌专属发布频率方案
-                  </h3>
-                  <p className="text-[10px] text-slate-400 mt-0.5">智能排期将优先读取此方案（覆盖全局设置）。</p>
-                </div>
+          {/* Edit Mode */}
+          {editingPromo && (
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-3 gap-3">
                 <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">全平台默认：每天发帖数</span>
-                  <div className="flex items-center gap-3 mt-1">
-                    <input type="number" min={0.5} max={10} step={0.5}
-                      value={publishingFreq.postsPerDay}
-                      onChange={e => setPublishingFreq(f => ({ ...f, postsPerDay: parseFloat(e.target.value) || 1 }))}
-                      className="w-24 px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none text-center font-bold" />
-                    <span className="text-xs text-slate-500">帖/天</span>
-                    <span className="text-[10px] text-slate-400">（0.5 = 每2天1帖；2 = 每天2帖）</span>
-                  </div>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">计划周期</span>
+                  <select value={promoPlan.period} onChange={e => setPromoPlan(p => ({ ...p, period: e.target.value }))}
+                    className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none">
+                    <option value="monthly">月度</option>
+                    <option value="weekly">周度</option>
+                    <option value="biannual">半年度</option>
+                  </select>
                 </label>
-                <div className="space-y-3">
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">各平台自定义频率（留空使用全局设置）</p>
+                <label className="block">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">开始日期</span>
+                  <input type="date" value={promoPlan.startDate} onChange={e => setPromoPlan(p => ({ ...p, startDate: e.target.value }))}
+                    className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">结束日期</span>
+                  <input type="date" value={promoPlan.endDate} onChange={e => setPromoPlan(p => ({ ...p, endDate: e.target.value }))}
+                    className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                </label>
+              </div>
+              <label className="block">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">推广方向</span>
+                <textarea value={promoPlan.direction} onChange={e => setPromoPlan(p => ({ ...p, direction: e.target.value }))} rows={3}
+                  placeholder="本月推广重点：主打夏日新品，配合店庆10周年…"
+                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">文案要求</span>
+                <textarea value={promoPlan.copywritingRequirements} onChange={e => setPromoPlan(p => ({ ...p, copywritingRequirements: e.target.value }))} rows={3}
+                  placeholder="每篇文案需包含明确 CTA（预约/下单）…"
+                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌 Voice</span>
+                  <textarea value={promoPlan.brandVoice} onChange={e => setPromoPlan(p => ({ ...p, brandVoice: e.target.value }))} rows={2}
+                    placeholder="自信、温暖、邻家感…"
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌形象</span>
+                  <textarea value={promoPlan.brandImage} onChange={e => setPromoPlan(p => ({ ...p, brandImage: e.target.value }))} rows={2}
+                    placeholder="精致但不高冷，有温度的街坊餐厅"
+                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
+                </label>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">核心信息</span>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {promoPlan.keyMessages.map((m, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800">
+                      {m}<button onClick={() => setPromoPlan(p => ({ ...p, keyMessages: p.keyMessages.filter((_, j) => j !== i) }))}><X size={10} /></button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <input value={newKeyMessage} onChange={e => setNewKeyMessage(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newKeyMessage.trim()) { setPromoPlan(p => ({ ...p, keyMessages: [...p.keyMessages, newKeyMessage.trim()] })); setNewKeyMessage('') }}}
+                    placeholder="核心信息点，按 Enter 添加"
+                    className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                  <button onClick={() => { if (newKeyMessage.trim()) { setPromoPlan(p => ({ ...p, keyMessages: [...p.keyMessages, newKeyMessage.trim()] })); setNewKeyMessage('') }}}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
+                </div>
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">⚡ 发布频率方案</span>
+                <p className="text-[10px] text-slate-400 mt-0.5 mb-2">智能排期将优先读取此方案（覆盖全局设置）。</p>
+                <div className="flex items-center gap-3 mb-3">
+                  <input type="number" min={0.5} max={10} step={0.5} value={publishingFreq.postsPerDay}
+                    onChange={e => setPublishingFreq(f => ({ ...f, postsPerDay: parseFloat(e.target.value) || 1 }))}
+                    className="w-20 px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none text-center font-bold" />
+                  <span className="text-xs text-slate-500">帖/天（全平台默认）</span>
+                </div>
+                <div className="space-y-2">
                   {['instagram', 'xiaohongshu', 'tiktok', 'facebook'].map(platform => {
                     const cfg = publishingFreq.platforms[platform] || {}
                     return (
                       <div key={platform} className="flex items-center gap-3">
-                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 w-24 capitalize">{platform}</span>
-                        <input type="number" min={0.5} max={10} step={0.5}
-                          value={cfg.postsPerDay ?? ''} placeholder="帖/天"
-                          onChange={e => {
-                            const v = parseFloat(e.target.value) || undefined
-                            setPublishingFreq(f => ({ ...f, platforms: { ...f.platforms, [platform]: { ...cfg, postsPerDay: v } } }))
-                          }}
+                        <span className="text-[11px] font-bold text-slate-500 w-24 capitalize">{platform}</span>
+                        <input type="number" min={0.5} max={10} step={0.5} value={cfg.postsPerDay ?? ''} placeholder="帖/天"
+                          onChange={e => { const v = parseFloat(e.target.value) || undefined; setPublishingFreq(f => ({ ...f, platforms: { ...f.platforms, [platform]: { ...cfg, postsPerDay: v } } })) }}
                           className="w-20 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none text-center" />
-                        <span className="text-[10px] text-slate-400">帖/天</span>
-                        <input
-                          value={(cfg.preferredHours ?? []).join(',')}
-                          placeholder="首选时段，如 11,18,20"
-                          onChange={e => {
-                            const hrs = e.target.value.split(',').map(h => parseInt(h.trim())).filter(h => !isNaN(h) && h >= 0 && h <= 23)
-                            setPublishingFreq(f => ({ ...f, platforms: { ...f.platforms, [platform]: { ...cfg, preferredHours: hrs } } }))
-                          }}
+                        <input value={(cfg.preferredHours ?? []).join(',')} placeholder="首选时段，如 11,18,20"
+                          onChange={e => { const hrs = e.target.value.split(',').map(h => parseInt(h.trim())).filter(h => !isNaN(h) && h >= 0 && h <= 23); setPublishingFreq(f => ({ ...f, platforms: { ...f.platforms, [platform]: { ...cfg, preferredHours: hrs } } })) }}
                           className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
                       </div>
                     )
                   })}
                 </div>
-                <button onClick={() => saveKnowledge({ publishingFreq }, '发布频率已保存')} disabled={saving}
-                  className="w-full py-2 rounded-xl text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60 transition-all">
-                  {saving ? '保存中…' : '⚡ 保存发布频率方案'}
-                </button>
               </div>
-
-              {/* Legacy Growth Context Slides */}
-              {presentationSlides.length > 0 && (
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-black text-slate-800 dark:text-white">🚀 战略诊断与增长计划</h3>
-                      <p className="text-[10px] text-slate-400 mt-0.5">从 AMC Growth 同步的智能诊断报告</p>
-                    </div>
-                    <button onClick={handleSyncGrowth} disabled={syncing}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 disabled:opacity-60 active:scale-95 transition-all cursor-pointer">
-                      {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                      {syncStatus || '同步'}
-                    </button>
-                  </div>
-                </div>
-              )}
+            </div>
+          )}
         </div>
+
+        {/* Legacy Growth Context Slides */}
+        {presentationSlides.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-slate-800 dark:text-white">🚀 战略诊断与增长计划</h3>
+                <p className="text-[10px] text-slate-400 mt-0.5">从 AMC Growth 同步的智能诊断报告</p>
+              </div>
+              <button onClick={handleSyncGrowth} disabled={syncing}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-900 text-white hover:bg-black dark:bg-slate-100 dark:text-slate-900 disabled:opacity-60 active:scale-95 transition-all cursor-pointer">
+                {syncing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                {syncStatus || '同步'}
+              </button>
+            </div>
+          </div>
+        )}
 
         </div> {/* end single-page wrapper */}
       </div>
