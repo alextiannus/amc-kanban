@@ -67,7 +67,6 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '客户汇总': 'Client Summary',
   '收入总览': 'Revenue Overview',
   '用户管理': 'User Management',
-  '历史 AI 序列': 'AI Workflow History',
   '工作日志': 'Work Logs',
   'Admin 控制台': 'Admin Console',
   '选择品牌': 'Select Brand',
@@ -232,7 +231,7 @@ export default function Sidebar({
     // If the user is hovering over/interacting with the sidebar, do not auto-collapse.
     const viewsWithSubMenu: BoardView[] = [
       'calendar', 'dashboard', 'drafts', 'assets', 
-      'game', 'socialInsight', 'dataAnalysis', 'agents', 
+      'game', 'socialInsight', 'dataAnalysis',
       'logs', 'managementOverview'
     ]
     if (viewsWithSubMenu.includes(currentView) && !collapsed && !isHovered) {

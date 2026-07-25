@@ -40,7 +40,6 @@ const VIEW_LABEL_MAP: Record<BoardView, { zh: string; en: string }> = {
   game: { zh: '店内活动', en: 'In-store Campaigns' },
   socialInsight: { zh: '数据分析', en: 'Growth Analytics' },
   dataAnalysis: { zh: '账号快照', en: 'Account Snapshot' },
-  agents: { zh: '历史 AI 序列', en: 'AI Workflow History' },
   logs: { zh: '工作日志', en: 'Work Logs' },
   managementOverview: { zh: '主理人总览', en: 'Principal Overview' },
 }

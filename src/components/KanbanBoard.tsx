@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import { Store } from 'lucide-react'
-import TaskModal from './TaskModal'
 import UserSettingsModal from './UserSettingsModal'
 import MobileLayout from './dashboard/MobileLayout'
 import DashboardHome from './dashboard/DashboardHome'
@@ -12,8 +11,6 @@ import SocialInsightDashboard from './dashboard/SocialInsightDashboard'
 import DashboardCalendar from './dashboard/DashboardCalendar'
 import MainLayout from './layout/MainLayout'
 import SystemLogModal from './layout/SystemLogModal'
-import NewAgentKeyModal from './layout/NewAgentKeyModal'
-import AgentsWorkflowView from './dashboard/AgentsWorkflowView'
 import GameSettingsDashboard from './dashboard/GameSettingsDashboard'
 import DashboardAssets from './dashboard/DashboardAssets'
 import DraftManagementView from './dashboard/DraftManagementView'
@@ -35,21 +32,6 @@ interface Brand {
   }>
 }
 
-type BoardTask = {
-  id: string
-  status: string
-  title?: string | null
-  description?: string | null
-  materials?: string | null
-  updatedAt?: string | null
-  createdAt?: string | null
-  assigneeId?: string | null
-  assignee?: {
-    nickname?: string | null
-    email?: string | null
-  } | null
-}
-
 function isEffectiveActiveSubscription(subscription?: { status?: string; contractEndDate?: string | null } | null) {
   if (subscription?.status !== 'ACTIVE') return false
   if (!subscription.contractEndDate) return true
@@ -58,17 +40,6 @@ function isEffectiveActiveSubscription(subscription?: { status?: string; contrac
 
 export default function KanbanBoard({ initialView = 'dashboard' }: { initialView?: BoardView }) {
   const router = useRouter()
-  const [tasks, setTasks] = useState<BoardTask[]>([])
-  const [activeTab, setActiveTab] = useState('pending')
-  const [selectedTask, setSelectedTask] = useState<BoardTask | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [summary, setSummary] = useState<{
-    collaborativeAgentsCount: number
-    runningAgentsCount: number
-    notRunningAgentsCount: number
-    pendingTasksCount: number
-    completedTasksCount: number
-  } | null>(null)
   const [user, setUser] = useState<{
     id: string
     email: string
@@ -88,7 +59,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     if (initialView === 'dashboard') {
       try {
         const savedView = window.localStorage.getItem('amc.currentView') as BoardView | null
-        const validViews: BoardView[] = ['agents', 'dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'dataAnalysis', 'logs', 'managementOverview']
+        const validViews: BoardView[] = ['dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'dataAnalysis', 'logs', 'managementOverview']
         if (savedView && validViews.includes(savedView)) {
           setTimeout(() => {
             setCurrentView(savedView)
@@ -112,17 +83,13 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   const [brands, setBrands] = useState<Brand[]>([])
   const [activeBrand, setActiveBrand] = useState<Brand | null>(null)
 
-  const [newApiKey, setNewApiKey] = useState<string | null>(null)
   const [subscriptionCheckMs, setSubscriptionCheckMs] = useState<number>(Date.now())
   const [showSystemLog, setShowSystemLog] = useState(false)
   const [subscriptionActive, setSubscriptionActive] = useState<boolean | null>(null)
   const userRoles = resolveRoles(user)
   const canAccessAnalytics = canAccessView(userRoles, 'socialInsight')
 
-  const activeBrandIdRef = useRef<string | undefined>(undefined)
-
   useEffect(() => {
-    activeBrandIdRef.current = activeBrand?.id
     if (activeBrand?.id) {
       document.body.setAttribute('data-active-brand-id', activeBrand.id)
       try {
@@ -196,60 +163,6 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     }
   }
 
-  const fetchTasks = async (brandId?: string) => {
-    try {
-      const queryBrandId = brandId !== undefined ? brandId : activeBrandIdRef.current
-      const url = queryBrandId ? `/api/tasks?active=true&brandId=${queryBrandId}` : '/api/tasks?active=true'
-      const res = await fetch(url)
-      if (res.ok) {
-        const data = await res.json()
-        setTasks((Array.isArray(data) ? data : data.tasks ?? []) as BoardTask[])
-      }
-    } catch (e) {
-      console.error('[KanbanBoard] fetchTasks error', e)
-    }
-  }
-
-  const fetchSummary = async (brandId?: string) => {
-    try {
-      const queryBrandId = brandId !== undefined ? brandId : activeBrandIdRef.current
-      const url = queryBrandId ? `/api/dashboard/summary?brandId=${queryBrandId}` : '/api/dashboard/summary'
-      const res = await fetch(url)
-      if (res.ok) {
-        const data = await res.json()
-        setSummary(data)
-      }
-    } catch (e) {
-      console.error('[KanbanBoard] fetchSummary error', e)
-    }
-  }
-
-  const createAgentKey = async () => {
-    try {
-      const res = await fetch('/api/agents/keys', { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        alert(data.error || '生成 Agent 密钥失败')
-        return
-      }
-      setNewApiKey(data.apiKey)
-    } catch (e) {
-      console.error('[KanbanBoard] createAgentKey error', e)
-      alert('生成 Agent 密钥失败，请稍后重试')
-    }
-  }
-
-  // Fetch tasks and summary when active brand changes
-  useEffect(() => {
-    if (activeBrand?.id) {
-      fetchTasks(activeBrand.id)
-      fetchSummary(activeBrand.id)
-    } else {
-      fetchTasks()
-      fetchSummary()
-    }
-  }, [activeBrand?.id])
-
   // After user is loaded, bypass subscription gate for ADMIN / AMC_PRINCIPAL roles
   useEffect(() => {
     if (!user) return
@@ -260,7 +173,6 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   }, [user])
 
   useEffect(() => {
-    let eventSource: EventSource | null = null
     queueMicrotask(async () => {
       // Fetch user first — role determines whether subscription check is needed
       const fetchedUser = await fetchUser()
@@ -274,19 +186,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       } else {
         void fetchSubscriptionState()
       }
-
-      eventSource = new EventSource('/api/events')
-      eventSource.onmessage = (event) => {
-        if (event.data === 'update') {
-          void fetchTasks()
-          void fetchSummary()
-        }
-      }
     })
-
-    return () => {
-      eventSource?.close()
-    }
   }, [])
 
   if (subscriptionActive === false) {
@@ -343,20 +243,10 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       user={user}
       onShowSettings={() => setShowSettings(true)}
       onShowSystemLog={() => setShowSystemLog(true)}
-      onNewAgentKeyGenerated={(key) => setNewApiKey(key)}
-      onTasksCleared={() => {
-        fetchTasks()
-        fetchSummary()
-      }}
+      onNewAgentKeyGenerated={() => {}}
+      onTasksCleared={() => {}}
     >
-      {currentView === 'agents' ? (
-        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 md:p-6 lg:p-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <AgentsWorkflowView
-            onOpenDashboard={() => setCurrentView('dashboard')}
-            onCreateAgent={createAgentKey}
-          />
-        </div>
-      ) : currentView === 'calendar' ? (
+      {currentView === 'calendar' ? (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           <DashboardCalendar
             key={activeBrand?.id ?? 'no-brand'}
@@ -450,29 +340,8 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
         </div>
       )}
 
-      {selectedTask && (
-        <TaskModal
-          task={selectedTask}
-          allTasks={tasks}
-          onClose={() => setSelectedTask(null)}
-          onUpdate={() => {
-            fetchTasks()
-            fetchSummary()
-            setSelectedTask(null)
-          }}
-          onTagFilter={(tag) => {
-            setSelectedTask(null)
-            setSearchQuery(tag)
-          }}
-        />
-      )}
-
       {showSettings && user && (
         <UserSettingsModal user={user} onClose={() => setShowSettings(false)} onUpdated={fetchUser} />
-      )}
-
-      {newApiKey && (
-        <NewAgentKeyModal newApiKey={newApiKey} onClose={() => setNewApiKey(null)} />
       )}
 
       {showSystemLog && (

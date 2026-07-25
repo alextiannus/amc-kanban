@@ -3,7 +3,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { 
   User as UserIcon, Mail, Shield, ShieldCheck, Key, Copy, Check, 
   Edit3, Save, ArrowLeft, Users, RefreshCw, Eye, EyeOff 
@@ -30,17 +29,8 @@ type ProfileData = {
   permittedAgents: Array<{ agent: ProfileAgent }>
 }
 
-type VisibleAgent = {
-  id: string
-  email: string
-  nickname?: string | null
-  chatLink?: string | null
-  driveFolder?: string | null
-}
-
 export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null)
-  const [visibleAgents, setVisibleAgents] = useState<VisibleAgent[]>([])
   const [principalOpening, setPrincipalOpening] = useState(false)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -74,26 +64,6 @@ export default function ProfilePage() {
         setProfile(data)
         setNickname(data.nickname || '')
         setIntroduction(data.introduction || '')
-
-        const roles = data.userRoles || (data.dashboardRole === 'ADMIN' ? ['ADMIN'] : data.dashboardRole === 'BRAND_DIRECTOR' ? ['AMC_PRINCIPAL'] : data.dashboardRole === 'BRAND_OWNER' ? ['BRAND_OWNER'] : [])
-        const canManageAgents = roles.includes('ADMIN') || roles.includes('AMC_PRINCIPAL')
-        if (canManageAgents) {
-          const agentsRes = await fetch('/api/agents')
-          if (agentsRes.ok) {
-            const agentsData = await agentsRes.json() as VisibleAgent[]
-            setVisibleAgents(agentsData)
-            return
-          }
-        }
-
-        setVisibleAgents(
-          data.permittedAgents.map((pa) => ({
-            id: pa.agent.id,
-            email: pa.agent.email,
-            chatLink: pa.agent.chatLink,
-            driveFolder: pa.agent.driveFolder,
-          }))
-        )
       } else {
         router.push('/')
       }
@@ -399,57 +369,6 @@ export default function ProfilePage() {
             </form>
           )}
         </div>
-
-        {/* Card 2: AMC Authorized Agents */}
-        <div className="bg-white dark:bg-slate-900/60 p-6 rounded-2xl border border-slate-200/50 dark:border-slate-800/80 shadow-sm">
-          <div className="flex items-center justify-between gap-3 mb-6">
-            <div>
-              <h2 className="text-xs font-extrabold text-slate-455 dark:text-slate-500 uppercase tracking-widest">已授权的可视化智能体 (AMC Agents)</h2>
-              <p className="text-[10px] text-slate-400 mt-0.5">您有权限对其运行状态及创作看板进行管理的 AI 代理人</p>
-            </div>
-            {canManageAgents && (
-              <button
-                onClick={() => router.push('/board/agents')}
-                className="inline-flex items-center rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-650 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/60 dark:text-indigo-400 px-3 py-1.5 text-xs font-black transition-all active:scale-[0.97] cursor-pointer"
-              >
-                管理 Agent
-              </button>
-            )}
-          </div>
-          
-          {visibleAgents.length === 0 ? (
-            <p className="text-xs text-slate-400 italic">当前暂无可用 Agent 授权。</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {visibleAgents.map((agent) => {
-                return (
-                  <Link 
-                    key={agent.id} 
-                    href={`/agents/${agent.id}`} 
-                    className="block bg-slate-50/30 dark:bg-slate-950/20 p-4 rounded-xl border border-slate-100 dark:border-slate-850 hover:border-indigo-500 dark:hover:border-indigo-500/50 transition-colors shadow-sm"
-                  >
-                    <h3 className="font-extrabold text-xs text-slate-800 dark:text-slate-100 mb-0.5">{agent.nickname || agent.email}</h3>
-                    <p className="text-[10px] text-slate-400 font-bold mb-3">{agent.email}</p>
-                    
-                    <div className="flex flex-wrap gap-1.5">
-                      {agent.chatLink && (
-                        <span className="text-[9px] font-bold bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400 px-2 py-0.5 rounded-lg border border-emerald-100/10">
-                          语音聊天
-                        </span>
-                      )}
-                      {agent.driveFolder && (
-                        <span className="text-[9px] font-bold bg-indigo-50 text-indigo-600 dark:bg-indigo-950/20 dark:text-indigo-400 px-2 py-0.5 rounded-lg border border-indigo-100/10">
-                          云盘对接
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
       </div>
     </div>
   )

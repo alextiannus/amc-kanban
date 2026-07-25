@@ -2,11 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Bot, ExternalLink, KeyRound, Plus, RefreshCw, Settings, X } from 'lucide-react'
+import { ArrowLeft, Bot, Plus, RefreshCw, Settings, X } from 'lucide-react'
 import AgentDetailPanel from '@/components/AgentDetailPanel'
-import AgentSequenceView from '@/components/AgentSequenceView'
 import AvatarImage from '@/components/AvatarImage'
-import NewAgentKeyModal from '@/components/layout/NewAgentKeyModal'
 
 type DashboardPayload = {
   dashboardRole: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
@@ -98,7 +96,6 @@ export default function PrincipalDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<DashboardPayload | null>(null)
-  const [newApiKey, setNewApiKey] = useState<string | null>(null)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [agentSelections, setAgentSelections] = useState<Record<string, string>>({})
   const [selectedAgent, setSelectedAgent] = useState<AgentDetail | null>(null)
@@ -154,20 +151,6 @@ export default function PrincipalDashboardPage() {
   const filteredActionLogs = selectedActionBrandId
     ? data.actionLogs.filter((log) => log.brandId === selectedActionBrandId)
     : data.actionLogs
-
-  const createAgentKey = async () => {
-    try {
-      const res = await fetch('/api/agents/keys', { method: 'POST' })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        alert(json.error || '新增 Agent 失败')
-        return
-      }
-      setNewApiKey(json.apiKey)
-    } catch {
-      alert('新增 Agent 失败，请稍后重试')
-    }
-  }
 
   const withBusy = async (key: string, action: () => Promise<void>) => {
     setBusyKey(key)
@@ -310,29 +293,6 @@ export default function PrincipalDashboardPage() {
             <p className="text-2xl font-black text-slate-900 dark:text-slate-50">{data.summary.totalActionLogs}</p>
           </div>
         </div>
-
-        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-          <AgentSequenceView
-            headerAction={(
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                <button
-                  onClick={createAgentKey}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700"
-                >
-                  <KeyRound className="h-4 w-4" /> 新增 AMC Agent
-                </button>
-                <a
-                  href="/connect"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-2 text-sm font-bold text-slate-600 dark:text-slate-300 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-300"
-                >
-                  <ExternalLink className="h-4 w-4" /> 查看 AI 连接方式
-                </a>
-              </div>
-            )}
-          />
-        </section>
 
         <section id="principal-brands-section" className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -490,13 +450,6 @@ export default function PrincipalDashboardPage() {
             ))}
           </div>
         </section>
-
-        {newApiKey && (
-          <NewAgentKeyModal
-            newApiKey={newApiKey}
-            onClose={() => setNewApiKey(null)}
-          />
-        )}
 
         {selectedAgent && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setSelectedAgent(null)}>
