@@ -163,6 +163,11 @@ export default function BrandProfileView({
   const [editingBiz, setEditingBiz] = useState(false)
   const [editingKnowledge, setEditingKnowledge] = useState(false)
   const [editingPromo, setEditingPromo] = useState(false)
+  const [brandAccounts, setBrandAccounts] = useState<Array<{
+    id: string; platformId: string; handle: string; displayName?: string | null;
+    profileUrl?: string | null; followerCount?: number | null; followerDelta?: number | null;
+  }>>([])
+  const [researchSyncing, setResearchSyncing] = useState(false)
   const [draftName, setDraftName] = useState(brand.name || '')
   const [draftDesc, setDraftDesc] = useState(brand.description || '')
   const [draftLocation, setDraftLocation] = useState(brand.location || '')
@@ -310,6 +315,12 @@ export default function BrandProfileView({
   useEffect(() => {
     void loadProfile()
     void loadAllConfig()
+    if (brandId) {
+      fetch(`/api/brands/${brandId}/accounts`)
+        .then(r => r.ok ? r.json() : { accounts: [] })
+        .then(d => setBrandAccounts(Array.isArray(d.accounts) ? d.accounts : []))
+        .catch(() => {})
+    }
   }, [brandId])
 
   const handleSaveProfile = async (nextMarkdown?: string) => {
@@ -1540,166 +1551,133 @@ export default function BrandProfileView({
           )}
         </div>
 
-        {/* ── SECTION: 知识库配置 ───────────────────────────────────────────── */}
+        {/* ── SECTION: 调研分析 ───────────────────────────────────────────── */}
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <span className="w-1 h-4 rounded-full bg-violet-500" />
               <h2 className="text-xs font-black text-slate-700 dark:text-white flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5 text-violet-500" /> 知识库配置
+                <Compass className="w-3.5 h-3.5 text-violet-500" /> 调研分析
               </h2>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">从知识库同步</span>
             </div>
-            {editingKnowledge ? (
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => setEditingKnowledge(false)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer">
-                  <X size={11} /> 取消
-                </button>
-                <button onClick={async () => {
-                  const ok = await saveKnowledge({ market: draftMarket, district: draftDistrict, competitors: draftCompetitors, brandTone: activeBrandTone, slangDict: activeSlangDict, negPrompts: draftNegPrompts }, '知识库配置已保存')
-                  if (ok) setEditingKnowledge(false)
-                }} disabled={saving}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-black disabled:opacity-60 transition-all cursor-pointer">
-                  {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-                  {saving ? '保存中…' : '保存'}
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setEditingKnowledge(true)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer">
-                <Edit3 size={11} /> 编辑
-              </button>
-            )}
+            <button
+              onClick={async () => {
+                setResearchSyncing(true)
+                try {
+                  await Promise.all([
+                    loadAllConfig(),
+                    fetch(`/api/brands/${brandId}/accounts`)
+                      .then(r => r.ok ? r.json() : { accounts: [] })
+                      .then(d => setBrandAccounts(Array.isArray(d.accounts) ? d.accounts : []))
+                  ])
+                  showToastVal('调研数据已同步', 'success')
+                } catch { showToastVal('同步失败', 'error') }
+                finally { setResearchSyncing(false) }
+              }}
+              disabled={researchSyncing}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 border border-violet-200 dark:border-violet-800 transition-colors cursor-pointer disabled:opacity-60"
+            >
+              {researchSyncing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+              {researchSyncing ? '同步中…' : '同步'}
+            </button>
           </div>
 
-          {/* View Mode */}
-          {!editingKnowledge && (
-            <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
-              <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">🗺️ 所在市场</span>
-                <span className="text-xs text-slate-700 dark:text-slate-200">{draftMarket || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂未填写</em>}</span>
-              </div>
-              <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">🏙️ 商圈</span>
-                <span className="text-xs text-slate-700 dark:text-slate-200">{draftDistrict || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂未填写</em>}</span>
-              </div>
-              {draftCompetitors.length > 0 && (
-                <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">⚔️ 主要竞品</span>
-                  <div className="flex flex-wrap gap-1">
-                    {draftCompetitors.map((c, i) => (
-                      <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800">{c}</span>
-                    ))}
-                  </div>
+          {/* Content — read-only */}
+          <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
+            {/* 商圈信息 */}
+            <div className="px-5 py-4">
+              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">🗺️ 商圈信息</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 block mb-1">所在市场</span>
+                  <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                    {draftMarket || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂无数据</em>}
+                  </span>
                 </div>
-              )}
-              <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">🗣️ 品牌调性</span>
-                <span className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">{activeBrandTone || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂未配置</em>}</span>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 block mb-1">商圈</span>
+                  <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                    {draftDistrict || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂无数据</em>}
+                  </span>
+                </div>
               </div>
-              {Object.keys(activeSlangDict).length > 0 && (
-                <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">💬 话术词典</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Object.entries(activeSlangDict).slice(0, 8).map(([term, meaning]) => (
-                      <span key={term} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
-                        <span className="font-black">"{term}"</span><span className="text-indigo-400">→</span><span>{meaning as string}</span>
-                      </span>
-                    ))}
-                    {Object.keys(activeSlangDict).length > 8 && <span className="text-[10px] text-slate-400">+{Object.keys(activeSlangDict).length - 8} 条</span>}
-                  </div>
-                </div>
-              )}
-              {draftNegPrompts.length > 0 && (
-                <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">🚫 禁用词</span>
-                  <div className="flex flex-wrap gap-1">
-                    {draftNegPrompts.map((w, i) => (
-                      <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800">{w}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-          )}
 
-          {/* Edit Mode */}
-          {editingKnowledge && (
-            <div className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">所在市场</span>
-                  <input value={draftMarket} onChange={e => setDraftMarket(e.target.value)} placeholder="如：Singapore, KL, Bangkok"
-                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
-                </label>
-                <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">商圈</span>
-                  <input value={draftDistrict} onChange={e => setDraftDistrict(e.target.value)} placeholder="如：Orchard, Bugis, KLCC"
-                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none focus:ring-2 focus:ring-violet-500/30" />
-                </label>
-              </div>
-              <div>
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">主要竞争对手</span>
-                <div className="flex flex-wrap gap-1.5 mt-2">
+            {/* 竞争对手 */}
+            <div className="px-5 py-4">
+              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">⚔️ 竞争对手</p>
+              {draftCompetitors.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
                   {draftCompetitors.map((c, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800">
-                      {c}<button onClick={() => setDraftCompetitors(draftCompetitors.filter((_, j) => j !== i))}><X size={10} /></button>
+                    <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800">
+                      {c}
                     </span>
                   ))}
                 </div>
-                <div className="flex gap-2 mt-2">
-                  <input value={newCompetitor} onChange={e => setNewCompetitor(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && newCompetitor.trim()) { setDraftCompetitors([...draftCompetitors, newCompetitor.trim()]); setNewCompetitor('') }}}
-                    placeholder="输入竞品名后按 Enter"
-                    className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                  <button onClick={() => { if (newCompetitor.trim()) { setDraftCompetitors([...draftCompetitors, newCompetitor.trim()]); setNewCompetitor('') }}}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
-                </div>
-              </div>
-              <label className="block">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌调性描述</span>
-                <textarea value={activeBrandTone} onChange={e => setBrandToneVal(e.target.value)} rows={3}
-                  placeholder="例：轻松幽默、接地气、偶尔带一点俏皮话…"
-                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
-              </label>
-              <div>
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">本地化话术词典</span>
-                <div className="space-y-1 mt-2">
-                  {Object.entries(activeSlangDict).map(([term, meaning]) => (
-                    <div key={term} className="flex items-center gap-2 text-xs py-1 border-b border-slate-50 dark:border-slate-800">
-                      <span className="font-bold text-indigo-600 dark:text-indigo-400 w-24 shrink-0">"{term}"</span>
-                      <span className="text-slate-600 dark:text-slate-400 flex-1">→ {meaning as string}</span>
-                      <button onClick={() => { const d = { ...activeSlangDict }; delete d[term]; setSlangDictVal(d) }} className="text-slate-300 hover:text-red-500"><X size={12} /></button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <input value={newTerm} onChange={e => setNewTerm(e.target.value)} placeholder="原词" className="w-28 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                  <input value={newMeaning} onChange={e => setNewMeaning(e.target.value)} placeholder="本地化表达" className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                  <button onClick={() => { const t = newTerm.trim(); const m = newMeaning.trim(); if (t && m) { setSlangDictVal({ ...activeSlangDict, [t]: m }); setNewTerm(''); setNewMeaning('') }}}
-                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
-                </div>
-              </div>
-              <div>
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">禁止使用词 / 负面 Prompt</span>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {draftNegPrompts.map((w, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800">
-                      {w}<button onClick={() => setDraftNegPrompts(draftNegPrompts.filter((_, j) => j !== i))}><X size={10} /></button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <input value={newNegPrompt} onChange={e => setNewNegPrompt(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && newNegPrompt.trim()) { setDraftNegPrompts([...draftNegPrompts, newNegPrompt.trim()]); setNewNegPrompt('') }}}
-                    placeholder="禁用词后按 Enter" className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                  <button onClick={() => { if (newNegPrompt.trim()) { setDraftNegPrompts([...draftNegPrompts, newNegPrompt.trim()]); setNewNegPrompt('') }}}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
-                </div>
-              </div>
+              ) : (
+                <em className="text-xs text-slate-300 dark:text-slate-600 font-normal not-italic">暂无竞争对手数据</em>
+              )}
             </div>
-          )}
+
+            {/* 品牌网络情况 */}
+            <div className="px-5 py-4">
+              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">📡 品牌网络情况</p>
+              {brandAccounts.length > 0 ? (
+                <div className="space-y-2">
+                  {brandAccounts.map(acc => {
+                    const platformNames: Record<string, string> = {
+                      instagram: 'Instagram', xiaohongshu: '小红书', tiktok: 'TikTok',
+                      facebook: 'Facebook', youtube: 'YouTube', twitter: 'X (Twitter)'
+                    }
+                    const platformColors: Record<string, string> = {
+                      instagram: 'from-rose-500 to-pink-500',
+                      xiaohongshu: 'from-red-500 to-rose-400',
+                      tiktok: 'from-slate-800 to-slate-600',
+                      facebook: 'from-blue-600 to-blue-500',
+                      youtube: 'from-red-600 to-red-500',
+                      twitter: 'from-sky-500 to-blue-500',
+                    }
+                    const color = platformColors[acc.platformId] || 'from-slate-500 to-slate-400'
+                    const name = platformNames[acc.platformId] || acc.platformId
+                    return (
+                      <div key={acc.id} className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`w-6 h-6 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[9px] font-black`}>
+                            {name[0]}
+                          </span>
+                          <div>
+                            <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200">{name}</p>
+                            <p className="text-[10px] text-slate-400">@{acc.handle}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {acc.followerCount != null ? (
+                            <div>
+                              <p className="text-[11px] font-black text-slate-700 dark:text-white">
+                                {acc.followerCount >= 1000 ? `${(acc.followerCount / 1000).toFixed(1)}K` : acc.followerCount}
+                              </p>
+                              {acc.followerDelta != null && acc.followerDelta !== 0 && (
+                                <p className={`text-[10px] font-bold ${acc.followerDelta > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  {acc.followerDelta > 0 ? '+' : ''}{acc.followerDelta}
+                                </p>
+                              )}
+                              <p className="text-[9px] text-slate-400">followers</p>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-300 dark:text-slate-600">暂无数据</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <em className="text-xs text-slate-300 dark:text-slate-600 font-normal not-italic">暂无社媒账号数据</em>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* ── SECTION: 推广计划 ─────────────────────────────────────────────── */}
