@@ -44,7 +44,6 @@ interface Props {
   subscriptionHref?: string
 }
 
-type Tab = 'story' | 'bizinfo' | 'knowledge' | 'promo'
 
 // ─── Plan badge helper ────────────────────────────────────────────────────────
 
@@ -92,7 +91,6 @@ export default function BrandProfileView({
 
   const brandId = brand.id
 
-  const [activeTab, setActiveTab] = useState<Tab>('story')
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
@@ -702,12 +700,6 @@ export default function BrandProfileView({
     )
   }
 
-  const tabs = [
-    { id: 'story' as const,     label: '📖 品牌故事',   desc: '品牌定位、受众、卖点' },
-    { id: 'bizinfo' as const,   label: '🏪 经营信息',   desc: '营业时间、订座、外卖' },
-    { id: 'knowledge' as const, label: '🔍 知识库配置', desc: '市场、竞品、菜单、话术' },
-    { id: 'promo' as const,     label: '📅 推广计划',   desc: '当期方向、文案要求、发布频率' },
-  ]
 
   const parseBulletList = (text: string): string[] => {
     if (!text) return []
@@ -842,22 +834,6 @@ export default function BrandProfileView({
           </div>
         </div>
 
-        {/* Tab Navigation buttons */}
-        <div className="flex rounded-xl bg-slate-50 dark:bg-slate-800 p-0.5 border border-slate-200/50 dark:border-slate-800">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeTab === tab.id
-                  ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-sm'
-                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
 
         {/* Header Action Buttons */}
         <div className="flex items-center gap-2">
@@ -881,18 +857,9 @@ export default function BrandProfileView({
         </div>
       </div>
 
-      {/* ── Tab Content ──────────────────────────────────────────────────── */}
+      {/* ── Single-page scrolling content ─────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
-        <AnimatePresence mode="wait">
-          {activeTab === 'story' && (
-            <motion.div
-              key="story"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              transition={{ duration: 0.15 }}
-              className="p-6 space-y-8 pb-16 max-w-5xl mx-auto w-full"
-            >
+        <div className="p-6 space-y-10 pb-16 max-w-5xl mx-auto w-full">
               {/* ── MOCK BRAND WEBSITE NAVBAR ── */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl px-6 py-4 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-3">
@@ -1448,20 +1415,14 @@ export default function BrandProfileView({
                   </motion.div>
                 )}
               </AnimatePresence>
-            </motion.div>
-          )}
 
-
-          {/* ── 🏪 经营信息 Tab ──────────────────────────────────────────────── */}
-          {activeTab === 'bizinfo' && (
-            <motion.div
-              key="bizinfo"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              transition={{ duration: 0.15 }}
-              className="p-6 space-y-6 pb-16 max-w-3xl mx-auto w-full"
-            >
+        {/* ── SECTION DIVIDER: 经营信息 ─────────────────────────────────────── */}
+        <div className="flex items-center gap-3 pt-4">
+          <span className="w-1 h-5 rounded-full bg-indigo-500" />
+          <h2 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">🏪 经营信息 (Business Info)</h2>
+          <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
+        </div>
+        <div className="space-y-6">
               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
                 <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-indigo-500" /> 门店地址与联系方式
@@ -1542,19 +1503,15 @@ export default function BrandProfileView({
                   {saving ? '保存中…' : '保存链接配置'}
                 </button>
               </div>
-            </motion.div>
-          )}
+        </div>
 
-          {/* ── 🔍 知识库配置 Tab ────────────────────────────────────────────── */}
-          {activeTab === 'knowledge' && (
-            <motion.div
-              key="knowledge"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              transition={{ duration: 0.15 }}
-              className="p-6 space-y-6 pb-16 max-w-3xl mx-auto w-full"
-            >
+        {/* ── SECTION DIVIDER: 知识库配置 ───────────────────────────────────── */}
+        <div className="flex items-center gap-3 pt-4">
+          <span className="w-1 h-5 rounded-full bg-violet-500" />
+          <h2 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">🔍 知识库配置 (Knowledge Config)</h2>
+          <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
+        </div>
+        <div className="space-y-6">
               {/* Market & District */}
               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
                 <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
@@ -1650,19 +1607,15 @@ export default function BrandProfileView({
                   {saving ? '保存中…' : '保存知识库配置'}
                 </button>
               </div>
-            </motion.div>
-          )}
+        </div>
 
-          {/* ── 📅 推广计划 Tab ──────────────────────────────────────────────── */}
-          {activeTab === 'promo' && (
-            <motion.div
-              key="promo"
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              transition={{ duration: 0.15 }}
-              className="p-6 space-y-6 pb-16 max-w-3xl mx-auto w-full"
-            >
+        {/* ── SECTION DIVIDER: 推广计划 ─────────────────────────────────────── */}
+        <div className="flex items-center gap-3 pt-4">
+          <span className="w-1 h-5 rounded-full bg-amber-500" />
+          <h2 className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">📅 推广计划 (Promo Plan)</h2>
+          <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
+        </div>
+        <div className="space-y-6">
               {/* Promo Period & Direction */}
               <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
                 <h3 className="text-sm font-black text-slate-800 dark:text-white flex items-center gap-2">
@@ -1808,9 +1761,9 @@ export default function BrandProfileView({
                   </div>
                 </div>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        </div>
+
+        </div> {/* end single-page wrapper */}
       </div>
 
 
