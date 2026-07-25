@@ -1066,6 +1066,29 @@ model SalesLead {
   @@index([bdUserId])
 }
 
+// ── AMC Ecosystem Partner Applications ─────────────────────────────────────
+model EcosystemPartnerApplication {
+  id               String   @id @default(cuid())
+  name             String
+  city             String
+  email            String   @unique
+  phone            String?
+  status           String   @default("NEW") // NEW | REVIEWING | ACCEPTED | REJECTED | ARCHIVED
+  source           String   @default("amc-official-website")
+  agreementVersion String
+  services         String[] @default([])
+  notes            String?
+  ipAddress        String?
+  userAgent        String?
+  submittedAt      DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([status])
+  @@index([city])
+  @@index([submittedAt])
+}
+
 model McpServerConfig {
   id          String   @id @default(cuid())
   brandId     String
@@ -1113,4 +1136,3 @@ model Notification {
   @@index([userId])
   @@index([brandId])
 }
-
