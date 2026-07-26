@@ -77,6 +77,7 @@ function testContentGenerationService() {
 function testLegacyEntrypointsUseFacade() {
   const bulkRoute = read('src/app/api/brands/[id]/copywriter/bulk-generate/route.ts')
   const copywriterNode = read('src/agents/nodes/copywriter.ts')
+  const state = read('src/agents/state.ts')
 
   assertIncludes(bulkRoute, "import { generateContentWithFallback } from '@/lib/amc-content/contentGenerationService'", 'bulk route content facade import')
   assertIncludes(bulkRoute, 'const cwResult = await generateContentWithFallback({', 'bulk route content facade call')
@@ -93,6 +94,12 @@ function testLegacyEntrypointsUseFacade() {
   assertIncludes(copywriterNode, "process.env.AMC_CONTENT_ENGINE_ENABLED === 'false'", 'copywriter node feature gate')
   assertIncludes(copywriterNode, 'actorId: state.actorId || state.assigneeId', 'copywriter node forwards actor for remote context ACL')
   assertIncludes(copywriterNode, "contentEngine: 'amc-content'", 'copywriter node engine marker')
+  assertIncludes(state, 'actorId: Annotation<string>', 'graph state preserves actor id for amc-content context ACL')
+  assertIncludes(state, 'actorType: Annotation<string>', 'graph state preserves actor type for amc-content context ACL')
+  assertIncludes(state, 'actorRole: Annotation<string>', 'graph state preserves actor role for amc-content context ACL')
+  assertIncludes(state, 'assigneeId: Annotation<string>', 'graph state preserves assignee fallback actor')
+  assertIncludes(state, 'assetIds: Annotation<string[]>', 'graph state preserves asset ids for amc-content media context')
+  assertIncludes(state, 'skipAmcContent: Annotation<boolean>', 'graph state preserves recursion guard')
 }
 
 function testContentLabStandaloneEntry() {
