@@ -804,14 +804,26 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           console.warn('Auto-schedule failed (non-fatal):', e)
         }
 
-        // Trigger AI copywriter for each draft (fire-and-forget, non-blocking).
-        // The agent runs in the background: draft caption stays 【AI 正在创作中...】
-        // until the agent writes real content. Reviewer will see final content
-        // when they open Post Management a moment later.
+        // Trigger AI copywriter for each draft and wait for completion before
+        // navigating to Post Management, so reviewers see real captions instead
+        // of the placeholder wherever possible.
+        const copywriterFailures: string[] = []
         for (const draftId of createdDraftIds) {
-          fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
-            method: 'POST',
-          }).catch((e) => console.warn(`trigger-copywriter fire-and-forget failed for ${draftId}:`, e))
+          try {
+            const triggerRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
+              method: 'POST',
+            })
+            if (!triggerRes.ok) {
+              copywriterFailures.push(draftId)
+              console.warn(`trigger-copywriter failed for ${draftId}:`, await triggerRes.text().catch(() => ''))
+            }
+          } catch (e) {
+            copywriterFailures.push(draftId)
+            console.warn(`trigger-copywriter failed for ${draftId}:`, e)
+          }
+        }
+        if (copywriterFailures.length > 0) {
+          setAiJobError(`✅ 草稿已创建，但 ${copywriterFailures.length} 篇 AI 文案生成失败，请在 Post Management 中重新创作。`)
         }
       }
 
@@ -992,7 +1004,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       toggleSelect(asset.id, e)
     } else {
       setActiveAssetId(asset.id)
-      if (isVideoAsset(asset) && isPreviewable(asset)) {
+      // Open preview modal for both images and videos
+      if (isPreviewable(asset)) {
         setPreviewMedia(asset)
       }
     }
@@ -1920,7 +1933,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           >
             {isVideoAsset(previewMedia) ? (
               <video
-                src={previewMedia.url}
+                key={previewMedia.id}
+                src={`/api/brands/${brandId}/assets/${previewMedia.id}/stream`}
                 controls
                 autoPlay
                 playsInline
@@ -1929,7 +1943,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               />
             ) : (
               <img
-                src={previewMedia.url}
+                src={`/api/brands/${brandId}/assets/${previewMedia.id}/stream`}
                 alt={previewMedia.filename || '素材预览'}
                 className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl select-none"
               />
