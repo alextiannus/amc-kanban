@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import type { PlatformType } from 'amc-content'
+import type { PlatformType } from '@/lib/amc-content/types'
 import { prisma } from '@/lib/prisma'
 
 export const maxDuration = 30
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       userId: optionalString(body.actorId) || 'amc-content-service',
       promptVersion,
       systemPrompt: stringifyForLog({
-        engine: 'amc-content-remote',
+        engine: 'amc-content',
         promptVersion,
         actorType: optionalString(body.actorType),
         actorRole: optionalString(body.actorRole),

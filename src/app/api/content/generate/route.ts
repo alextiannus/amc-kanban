@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import type { IndustryVertical } from 'amc-content'
+import type { IndustryVertical } from '@/lib/amc-content/types'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { generateContentWithFallback } from '@/lib/amc-content/contentGenerationService'

@@ -12,8 +12,6 @@
     "start:direct": "node node_modules/next/dist/cli/next-start.js -p 3000",
     "lint": "eslint",
     "typecheck": "tsc --project tsconfig.check.json",
-    "typecheck:amc-content": "tsc --project packages/amc-content/tsconfig.json",
-    "test:amc-content": "node --experimental-strip-types scripts/test-amc-content.mts",
     "test:content-engine-integration": "node --experimental-strip-types scripts/test-content-engine-integration.mts",
     "test:postfast-integration": "node --experimental-strip-types scripts/test-postfast-integration.mts",
     "test:llm-routing-policy": "node --experimental-strip-types scripts/test-llm-routing-policy.mts",

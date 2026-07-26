@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import type { IndustryVertical, MediaAssetContext } from 'amc-content'
+import type { IndustryVertical, MediaAssetContext } from '@/lib/amc-content/types'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
 
@@ -49,6 +49,7 @@ export async function POST(request: Request) {
   ])
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+  const promotionPlan = normalizePromotionPlan(brand.knowledge?.promoPlan)
 
   return NextResponse.json({
     brand: {
@@ -62,12 +63,15 @@ export async function POST(request: Request) {
       phone: brand.phone ?? undefined,
       negativePrompts: brand.knowledge?.negPrompts ?? undefined,
       slang: normalizeRecord(brand.knowledge?.slangDict),
+      promotionPlan,
     },
     briefDefaults: {
       industryVertical: optionalIndustryVertical(body.industryVertical),
-      theme: stringOrEmpty(body.theme) || task?.title || task?.description || brand.description || `${brand.name} local service update`,
+      theme: stringOrEmpty(body.theme) || task?.title || task?.description || promotionPlan?.direction || brand.description || `${brand.name} local service update`,
       locationFocus: brand.location || brand.address || undefined,
+      mustMention: promotionPlan?.keyMessages ?? [],
       mustAvoid: brand.knowledge?.negPrompts ?? [],
+      promotionPlan,
     },
     media,
   })
@@ -125,4 +129,37 @@ function optionalIndustryVertical(value: unknown): IndustryVertical | undefined 
 function normalizeRecord(value: unknown): Record<string, string> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   return value as Record<string, string>
+}
+
+function normalizePromotionPlan(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const raw = value as Record<string, any>
+  const plan = {
+    period: optionalText(raw.period),
+    startDate: optionalText(raw.startDate),
+    endDate: optionalText(raw.endDate),
+    direction: optionalText(raw.direction),
+    copywritingRequirements: optionalText(raw.copywritingRequirements),
+    brandVoice: optionalText(raw.brandVoice),
+    brandImage: optionalText(raw.brandImage),
+    keyMessages: stringArray(raw.keyMessages),
+    campaigns: Array.isArray(raw.campaigns)
+      ? raw.campaigns
+          .filter((campaign) => campaign && typeof campaign === 'object')
+          .map((campaign) => ({
+            name: optionalText(campaign.name),
+            dates: optionalText(campaign.dates),
+            desc: optionalText(campaign.desc),
+          }))
+          .filter((campaign) => campaign.name || campaign.dates || campaign.desc)
+      : undefined,
+  }
+  return Object.values(plan).some((item) => Array.isArray(item) ? item.length > 0 : Boolean(item))
+    ? plan
+    : undefined
+}
+
+function optionalText(value: unknown): string | undefined {
+  const text = stringOrEmpty(value)
+  return text || undefined
 }

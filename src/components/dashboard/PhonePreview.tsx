@@ -32,7 +32,7 @@ export interface PreviewPost {
 export function isVideoUrl(url: string): boolean {
   if (!url) return false
   const path = url.split('?')[0].split('#')[0]
-  return /\.(mp4|mov|avi|webm|ogg|m4v|3gp)(?:\?.*)?$/i.test(path) || path.includes('/video/')
+  return /\.(mp4|mov|avi|webm|ogg|m4v|3gp)$/i.test(path)
 }
 
 export function normalizePlatform(platformId?: string | null): PlatformKey {
@@ -280,14 +280,40 @@ export function InstagramPreview({ post, media, idx, setIdx, account }: {
   )
 }
 
-export function TikTokPreview({ post, media, account }: { post: PreviewPost; media: string[]; account: string }) {
-  const cur = media[0]
+export function TikTokPreview({ post, media, idx, setIdx, account }: {
+  post: PreviewPost; media: string[]; idx: number; setIdx: (i: number) => void; account: string
+}) {
+  const cur = media[idx] ?? media[0]
   const caption = [post.caption, ...post.hashtags.map(h => `#${h}`)].join(' ')
+  const hasVideo = media.some(isVideoUrl)
   return (
     <div className="relative flex flex-col h-full bg-black text-white overflow-hidden">
       {/* Full-bleed media */}
       <div className="absolute inset-0">
-        <MediaSlot url={cur ?? ''} className="w-full h-full" />
+        {hasVideo ? (
+          <MediaSlot url={cur ?? ''} className="w-full h-full" />
+        ) : cur ? (
+          <>
+            <img src={cur} alt="" className="h-full w-full object-cover" />
+            {media.length > 1 && (
+              <>
+                <button onClick={() => setIdx(idx > 0 ? idx - 1 : media.length - 1)}
+                  className="absolute left-2 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button onClick={() => setIdx((idx + 1) % media.length)}
+                  className="absolute right-12 top-1/2 z-20 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white">
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+                <div className="absolute top-12 right-3 z-20 rounded-full bg-black/50 px-2 py-0.5 text-[9px] font-bold text-white">
+                  {idx + 1}/{media.length}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <MediaSlot url="" className="w-full h-full" />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/20" />
       </div>
 
@@ -602,7 +628,7 @@ export function PlatformPreview({
   const setIdx = onMediaIndex ?? setLocalIdx
   const media = post.mediaUrls.filter(Boolean)
 
-  if (platform === 'tiktok') return <TikTokPreview post={post} media={media} account={account} />
+  if (platform === 'tiktok') return <TikTokPreview post={post} media={media} idx={idx} setIdx={setIdx} account={account} />
   if (platform === 'xhs')     return <XHSPreview post={post} media={media} idx={idx} setIdx={setIdx} account={account} />
   if (platform === 'facebook') return <FacebookPreview post={post} media={media} idx={idx} setIdx={setIdx} account={account} />
   if (platform === 'google' || platform === 'channel') return <GoogleBusinessPreview post={post} media={media} idx={idx} setIdx={setIdx} account={account} />

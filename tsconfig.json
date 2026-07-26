@@ -22,9 +22,7 @@
     ],
     "allowImportingTsExtensions": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "amc-content": ["./packages/amc-content/src/index.ts"],
-      "amc-content/*": ["./packages/amc-content/src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [

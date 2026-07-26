@@ -4,7 +4,7 @@ import { getFewShotExamples } from "../../lib/feedbackService.ts";
 import { getJaccardSimilarity } from "../knowledgeBase.ts";
 import { buildBrandContext } from "@/lib/brandContextBuilder.ts";
 import { loadPlatformSkill, formatSkillForPrompt } from "../skills/skillLoader.ts";
-import { tryGenerateWithAmcContent } from "../../lib/amc-content/legacyCopywriterBridge.ts";
+import { tryGenerateWithRemoteContentService } from "../../lib/amc-content/remoteContentService.ts";
 
 export async function copywriterNode(state: any) {
   console.log("=== CopywriterNode Running (Composition Mode) ===");
@@ -83,7 +83,7 @@ export async function copywriterNode(state: any) {
   let creativeHooks = "";
   if (draftObj) {
     if (draftObj.creativeHooks) {
-      creativeHooks = draftObj.creativeHooks.trim();
+      creativeHooks = sanitizeCreativeDirection(draftObj.creativeHooks);
     }
     if (draftObj.agentNote && draftObj.agentNote.includes("【AI 生成指令】")) {
       const match = draftObj.agentNote.match(/【AI 生成指令】([\s\S]*?)【\/AI 生成指令】/);
@@ -101,7 +101,7 @@ export async function copywriterNode(state: any) {
   if (!creativeHooks && task && task.description) {
     const match = task.description.match(/(?:创意\s*hooks|Creative\s*Hooks)\s*:\s*([\s\S]+?)(?:\n|$)/i);
     if (match) {
-      creativeHooks = match[1].trim();
+      creativeHooks = sanitizeCreativeDirection(match[1]);
     }
   }
 
@@ -207,22 +207,24 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
     }
   } else {
     try {
-      const amcContentResult = await tryGenerateWithAmcContent({
-        brand,
+      const amcContentResult = await tryGenerateWithRemoteContentService({
+        brandId,
         platform,
-        task,
-        userPrompt,
-        creativeHooks,
-        marketingStrategy,
+        theme: userPrompt || task?.title || task?.description || brand.description || `${brand.name} local service update`,
+        idea: userPrompt,
+        angle: creativeHooks || marketingStrategy,
         draftId: existingDraftId,
         mediaUrls: mediaUrlsToUse,
-        attachedAssets: attachedAssetRecords,
-        assigneeId: state.assigneeId,
+        assetIds: state.assetIds || attachedAssetRecords.map((asset) => asset.id).filter(Boolean),
+        fallbackToLegacy: false,
+        actorId: state.actorId || state.assigneeId,
+        actorType: state.actorType || 'AI_AGENT',
+        actorRole: state.actorRole || 'USER',
       });
 
       if (amcContentResult) {
         console.log(
-          `AI Copywriter generated via amc-content: platform=${amcContentResult.platform}, vertical=${amcContentResult.vertical}, quality=${amcContentResult.quality.score}`,
+          `AI Copywriter generated via amc-content: platform=${platform}, quality=${(amcContentResult.quality as any)?.score ?? 'n/a'}`,
         );
         return {
           caption: amcContentResult.caption,
@@ -508,6 +510,16 @@ Please output ONLY a valid JSON object.`;
     hashtags: aiHashtags,
     aiFailed: !geminiUsed
   };
+}
+
+function sanitizeCreativeDirection(value: unknown): string {
+  if (typeof value !== 'string') return "";
+  const text = value.trim();
+  if (!text) return "";
+  if (/^(AI批量创作|Copywriter)\s*[·:：-]/i.test(text)) return "";
+  if (/\bAI\s*[-·]\s*[\w\s]+\s*[-·]\s*(Instagram|TikTok|Facebook|Google|Xiaohongshu|Rednote)\s+Copywriter\b/i.test(text)) return "";
+  if (/\bIMG_\d+\.(jpe?g|png|webp|mp4|mov)\b/i.test(text)) return "";
+  return text;
 }
 
 function fallbackEnglishTheme(primary?: string, secondary?: string): string {

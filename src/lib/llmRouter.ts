@@ -1,5 +1,5 @@
 import { prisma } from './prisma.ts'
-import type { ResolvedContentModelProfile } from 'amc-content'
+import type { ResolvedContentModelProfile } from './amc-content/types.ts'
 
 export interface LLMCallResult {
   text: string | null

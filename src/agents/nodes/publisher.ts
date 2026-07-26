@@ -67,7 +67,7 @@ export async function publisherNode(state: any) {
       .replace(/^【⚠️ AI 智能写作未成功：[\s\S]*?】\n\n/, '')
       .trim()
     const fallbackHashtags: string[] = state.hashtags || []
-    const hasFallback = !!fallbackCaption && fallbackCaption !== '【AI 正在创作中...】'
+    const hasFallback = !state.requireAmcContent && !!fallbackCaption && fallbackCaption !== '【AI 正在创作中...】'
 
     if (existingDraftId) {
       try {
@@ -108,7 +108,9 @@ export async function publisherNode(state: any) {
           console.log(`Saved rule-based fallback to draft ${existingDraftId} (status: draft).`)
         } else {
           // No content at all — mark as failed
-          const failureReason = state.complianceReason || state.error || 'AI Copywriting failed'
+          const failureReason = state.requireAmcContent
+            ? (state.error || state.complianceReason || 'amc-content Copywriter 创作失败，请重新创作或检查内容服务配置。')
+            : (state.complianceReason || state.error || 'AI Copywriting failed')
           await prisma.contentDraft.update({
             where: { id: existingDraftId },
             data: { status: 'failed', agentNote: failureReason }

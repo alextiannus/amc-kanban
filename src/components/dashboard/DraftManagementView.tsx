@@ -1151,6 +1151,8 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     if (!brandId) return
     const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requireAmcContent: true }),
     })
     const json = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(json.error || '重新创作失败')

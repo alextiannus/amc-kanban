@@ -127,7 +127,7 @@ export default function QuickPreviewModal({
   }
   const handleRegenerate = async () => {
     setLoading('regenerate'); setError(null)
-    try { await onRegenerate(draft.id); onClose() }
+    try { await onRegenerate(draft.id) }
     catch (e) { setError(e instanceof Error ? e.message : '操作失败') }
     finally { setLoading(null) }
   }

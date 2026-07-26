@@ -38,16 +38,13 @@ function testContentGenerationService() {
   const internalContextRoute = read('src/app/api/internal/content-context/route.ts')
   const internalLogRoute = read('src/app/api/internal/content-log/route.ts')
   const internalLlmRoute = read('src/app/api/internal/llm-generate/route.ts')
-  const prismaLogger = read('src/lib/amc-content/loggerAdapter.ts')
 
   assertIncludes(service, "import { prisma } from '../prisma.ts'", 'service prisma access')
-  assertIncludes(service, "import { tryGenerateWithAmcContent } from './legacyCopywriterBridge.ts'", 'service amc-content bridge')
   assertIncludes(service, "import { tryGenerateWithRemoteContentService } from './remoteContentService.ts'", 'service remote bridge')
+  assertNotIncludes(service, 'legacyCopywriterBridge', 'service should not import removed local amc-content bridge')
   assertIncludes(service, 'export async function generateContentWithFallback', 'service public facade')
   assertIncludes(service, 'const remote = await tryGenerateWithRemoteContentService(input)', 'service tries remote first')
-  assertIncludes(service, 'falling back local', 'service logs remote-to-local fallback')
-  assertIncludes(service, 'const result = await tryGenerateWithAmcContent({', 'service primary engine')
-  assertIncludes(service, "contentEngine: 'amc-content'", 'service amc-content result marker')
+  assertIncludes(service, 'falling back legacy', 'service logs remote-to-legacy fallback')
   assertIncludes(service, 'if (input.fallbackToLegacy === false)', 'service fallback opt-out')
   assertIncludes(service, "await import('../../agents/nodes/copywriter.ts')", 'service lazy legacy import')
   assertIncludes(service, 'skipAmcContent: true', 'service recursion guard')
@@ -58,23 +55,22 @@ function testContentGenerationService() {
   assertIncludes(remoteClient, 'AMC_CONTENT_REMOTE_ENABLED', 'remote client feature flag')
   assertIncludes(remoteClient, '/v1/content/generate', 'remote client generate endpoint')
   assertIncludes(remoteClient, 'copywriterId: input.copywriterId', 'remote client forwards selected copywriter id')
-  assertIncludes(remoteClient, "contentEngine: 'amc-content-remote'", 'remote client engine marker')
+  assertIncludes(remoteClient, "contentEngine: 'amc-content'", 'remote client engine marker')
   assertIncludes(remoteClient, "headers['x-amc-actor-id']", 'remote client forwards actor id')
 
   assertIncludes(internalContextRoute, 'CONTENT_SERVICE_INTERNAL_TOKEN', 'internal context token env')
   assertIncludes(internalContextRoute, 'canSessionAccessBrandProject', 'internal context uses kanban ACL')
   assertIncludes(internalContextRoute, 'prisma.brand.findUnique', 'internal context returns brand context')
   assertIncludes(internalContextRoute, 'resolveMedia', 'internal context resolves media')
+  assertIncludes(internalContextRoute, 'promotionPlan', 'internal context returns promotion plan')
 
   assertIncludes(internalLogRoute, 'CONTENT_SERVICE_INTERNAL_TOKEN', 'internal log token env')
   assertIncludes(internalLogRoute, 'prisma.copywriterLog.create', 'internal log persists copywriter logs')
-  assertIncludes(internalLogRoute, "engine: 'amc-content-remote'", 'internal log marks remote engine')
+  assertIncludes(internalLogRoute, "engine: 'amc-content'", 'internal log marks amc-content engine')
   assertIncludes(internalLogRoute, 'latencyMs: optionalInt(body.latencyMs)', 'internal log stores latency')
   assertIncludes(internalLogRoute, 'tokenEstimate: optionalInt(body.tokenEstimate)', 'internal log stores token estimates')
-  assertIncludes(prismaLogger, 'prisma.copywriterLog.create', 'local content logger persists copywriter logs')
-  assertIncludes(prismaLogger, 'latencyMs: event.latencyMs ?? null', 'local content logger stores latency')
   assertIncludes(internalLlmRoute, 'CONTENT_SERVICE_INTERNAL_TOKEN', 'internal LLM route token env')
-  assertIncludes(internalLlmRoute, "callLLM(taskTag, prompt, maxTokens)", 'internal LLM route delegates to LLMConfig router')
+  assertIncludes(internalLlmRoute, 'callLLM(taskTag, prompt, maxTokens, {', 'internal LLM route delegates to LLMConfig router')
   assertIncludes(internalLlmRoute, "'copywriting'", 'internal LLM route defaults to copywriting tag')
 }
 
@@ -92,42 +88,11 @@ function testLegacyEntrypointsUseFacade() {
   assertIncludes(bulkRoute, '[via contentService/${contentEngine}]', 'bulk route generation log marker')
   assertNotIncludes(bulkRoute, "import { copywriterNode }", 'bulk route direct copywriter import')
 
-  assertIncludes(copywriterNode, "import { tryGenerateWithAmcContent }", 'copywriter node bridge import')
-  assertIncludes(copywriterNode, "!state.skipAmcContent && process.env.AMC_CONTENT_ENGINE_ENABLED !== 'false'", 'copywriter node feature gate and recursion guard')
+  assertIncludes(copywriterNode, "import { tryGenerateWithRemoteContentService }", 'copywriter node remote service import')
+  assertNotIncludes(copywriterNode, 'tryGenerateWithAmcContent', 'copywriter node should not use removed local bridge')
+  assertIncludes(copywriterNode, "process.env.AMC_CONTENT_ENGINE_ENABLED === 'false'", 'copywriter node feature gate')
+  assertIncludes(copywriterNode, 'actorId: state.actorId || state.assigneeId', 'copywriter node forwards actor for remote context ACL')
   assertIncludes(copywriterNode, "contentEngine: 'amc-content'", 'copywriter node engine marker')
-}
-
-function testPlatformCopywriterRegistry() {
-  const registry = read('packages/amc-content/src/copywriters/registry.ts')
-  const pipeline = read('packages/amc-content/src/pipeline/createPlatformContent.ts')
-  const index = read('packages/amc-content/src/index.ts')
-  const modelProfiles = read('packages/amc-content/src/modelProfiles.ts')
-  const modelRouterAdapter = read('src/lib/amc-content/modelRouterAdapter.ts')
-
-  for (const provider of ['InstagramCopywriter', 'GoogleBusinessCopywriter', 'XiaohongshuCopywriter', 'FacebookCopywriter', 'TikTokCopywriter']) {
-    assertIncludes(registry, provider, `copywriter registry includes ${provider}`)
-  }
-
-  for (const platform of ['instagram', 'google_business', 'xiaohongshu', 'facebook', 'tiktok']) {
-    assertIncludes(registry, platform, `copywriter registry exposes ${platform}`)
-  }
-
-  assertIncludes(pipeline, 'const copywriter = getPlatformCopywriter(input.platform)', 'pipeline resolves platform copywriter')
-  assertIncludes(pipeline, 'directHookCandidate(input)', 'pipeline uses direct hook fast path')
-  assertIncludes(pipeline, 'copywriter.buildBodyPrompt', 'pipeline delegates body prompt')
-  assertIncludes(pipeline, 'copywriter.buildRewritePrompt', 'pipeline delegates rewrite prompt')
-  assertIncludes(pipeline, 'copywriter.validate(input, content)', 'pipeline delegates platform validation')
-  assertIncludes(index, "export * from './copywriters/registry.ts'", 'package exports copywriter registry')
-  assertIncludes(index, "export * from './modelProfiles.ts'", 'package exports model profiles')
-  assertIncludes(modelProfiles, 'platformModelProfiles', 'model profile platform mapping')
-  assertIncludes(modelProfiles, "google_business: {", 'model profile google mapping')
-  assertIncludes(modelProfiles, "body_composition: 'local_seo_precise_v1'", 'google uses SEO precise profile')
-  assertIncludes(modelProfiles, "xiaohongshu: {", 'model profile xhs mapping')
-  assertIncludes(modelProfiles, "body_composition: 'local_social_creative_v1'", 'xhs uses creative profile')
-  assertIncludes(pipeline, 'modelProfileId: bodyProfile.id', 'pipeline passes body model profile')
-  assertIncludes(pipeline, 'modelProfileId: bodyProfile.id', 'provenance includes model profile')
-  assertIncludes(modelRouterAdapter, 'callLLMWithContentModelProfile', 'adapter uses content model profile router')
-  assertIncludes(modelRouterAdapter, "callLLM('copywriting'", 'adapter keeps legacy router fallback')
 }
 
 function testContentLabStandaloneEntry() {
@@ -174,7 +139,6 @@ function main() {
   testContentGenerateApi()
   testContentGenerationService()
   testLegacyEntrypointsUseFacade()
-  testPlatformCopywriterRegistry()
   testContentLabStandaloneEntry()
   testCopywriterFirstCreativeUi()
   console.log('SUCCESS: content engine integration guards passed')

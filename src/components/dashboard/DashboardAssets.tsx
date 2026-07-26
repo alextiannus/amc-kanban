@@ -570,7 +570,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               scheduledAt: scheduleScheduledAt ? new Date(scheduleScheduledAt).toISOString() : null,
               status: 'draft',
               agentNote: scheduleAgentNote.trim() || null,
-              creativeHooks: `Copywriter: ${copywriter.name} · ${copywriter.handle}`,
+              creativeHooks: scheduleAgentNote.trim() || null,
               agentId: null,
               createTask: true,
             }),
@@ -713,8 +713,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 mediaUrls: mediaUnit.mediaUrls,
                 status: 'draft',
                 agentNote: draftAgentNote,
-                // creativeHooks carries the persona context; copywriterNode reads this at line 84-85
-                creativeHooks: `AI批量创作 · ${copywriter.name} · ${copywriter.handle} · ${copywriter.specialty} · ${mediaUnit.label}`,
+                creativeHooks: creativeInstruction,
                 agentId: null,
                 // Do NOT set createTask:true — AI batch create should not flood the
                 // kanban board with WorkUnit tasks. The draft itself is the work item.

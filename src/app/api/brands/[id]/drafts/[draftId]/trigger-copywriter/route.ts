@@ -115,6 +115,10 @@ export async function POST(request: Request, { params }: Params) {
       error: '',
       aiFailed: false,
       requireAmcContent,
+      actorId: actor.id,
+      actorType: actor.type,
+      actorRole: actor.role,
+      assigneeId,
     }, config)
     if (requireAmcContent && result?.contentEngine !== 'amc-content') {
       throw new Error(`Expected amc-content copywriter, got ${result?.contentEngine || 'unknown engine'}`)

@@ -135,7 +135,7 @@ export default function PostPreviewModal({
         {Object.keys(draftWarnings).length > 0 && (
           <div className="mx-8 mb-2 flex items-start gap-2 rounded-xl border border-amber-800/40 bg-amber-950/30 px-4 py-2">
             <span className="text-sm mt-0.5">⚠️</span>
-            <p className="text-[10px] text-amber-400">部分平台 AI 生成失败，已自动降级为规则引擎内容。</p>
+            <p className="text-[10px] text-amber-400">部分平台 amc-content 创作失败，请点击重写或检查内容服务配置。</p>
           </div>
         )}
 
@@ -436,4 +436,3 @@ export default function PostPreviewModal({
     </div>
   )
 }
-

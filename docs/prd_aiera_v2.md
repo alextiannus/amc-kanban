@@ -636,56 +636,46 @@ CREATE TABLE video_generation_jobs (
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.1 `amc-content` Package 边界（已开始实施）
+### 4.1 `amc-content` 服务边界（已迁移）
 
-AIERA v2 的内容生成核心统一沉淀为本地 package：`packages/amc-content`。该 package 供 `amc-kanban` 调用，但不直接依赖 Next.js Route、Prisma、Session、Capability 或发布系统。
+AIERA v2 的内容生成核心已从 `amc-kanban` 仓库内 package 迁移到独立 `amc-content` 服务。`amc-kanban` 不再保留或调用本地内容引擎包，只通过服务 API 调用 Copywriter，并通过 internal API 向 `amc-content` 提供品牌上下文、素材上下文、LLM 路由和生成日志写入。
 
 **职责边界：**
 
 | 模块 | 负责 |
 |------|------|
-| `packages/amc-content` | 内容生成核心逻辑、平台策略、行业策略、质量门禁、知识检索接口、生成 provenance |
-| `amc-kanban` | 鉴权、品牌权限、DB 读取写入、Job/Worker、ContentDraft/ActionItem、发布与通知 |
+| 独立 `amc-content` 服务 | 内容生成核心逻辑、平台策略、行业策略、质量门禁、Prompt Tuning、生成 provenance、Content Lab |
+| `amc-kanban` | 鉴权、品牌权限、品牌/推广计划/素材上下文、LLMConfig 路由桥接、CopywriterLog 写入、ContentDraft/ActionItem、发布与通知 |
 
-**首批目录结构：**
+**服务调用链路：**
 
 ```
-packages/amc-content/
-  src/
-    types.ts
-    pipeline/createPlatformContent.ts
-    platforms/
-      base.ts
-      registry.ts
-    verticals/
-      registry.ts
-    quality/
-      deterministicGate.ts
+amc-kanban batch / trigger-copywriter
+  -> amc-content POST /v1/content/generate
+  -> amc-kanban POST /api/internal/content-context
+  -> amc-kanban POST /api/internal/llm-generate
+  -> amc-kanban POST /api/internal/content-log
 ```
 
 **调用方式：**
 
 ```typescript
-import { createPlatformContent } from 'amc-content'
-
-const result = await createPlatformContent({
-  brand,
-  brief,
+const result = await tryGenerateWithRemoteContentService({
+  brandId,
   platform: 'xiaohongshu',
-  media,
-  adapters: {
-    modelRouter,
-    knowledgeRepository,
-    logger,
-  },
+  theme,
+  mediaUrls,
+  assetIds,
+  draftId,
+  actorId,
 })
 ```
 
 **设计原则：**
-- `amc-content` 只定义 adapter interface，不直接 import `prisma` 或 `callLLM`。
-- `amc-kanban` 提供 `modelRouter`、`knowledgeRepository`、`logger` 的具体实现。
-- 平台差异走 `PlatformContentProvider`，行业差异走 `VerticalSpec`。
-- 后续 BullMQ/Worker 只需调用同一个 `createPlatformContent()` 入口。
+- `amc-kanban` 不再 import `amc-content` package，也不保留本地 engine fallback。
+- `amc-content` 通过 internal token 拉取上下文；上下文必须包含当前推广计划。
+- 平台差异、行业差异、质量门禁都归独立 `amc-content` 服务维护。
+- BullMQ/Worker 只需调用同一个远端服务入口。
 
 ---
 
@@ -698,7 +688,7 @@ const result = await createPlatformContent({
 - [x] Copywriter 集成 Skill 注入（Hook 阶段 + Body 阶段）
 
 ### Phase 2A — Copywriter 质量闭环（1-2周，下一步优先）
-- [x] 建立 `packages/amc-content` package 骨架
+- [x] 将 `amc-content` 从仓库内 package 迁移为独立服务
 - [x] 定义 `PlatformType`、`IndustryVertical`、`CopyBrief`、`PlatformContentResult`、`QualityResult` 等核心类型
 - [x] 建立 `PlatformContentProvider` registry（xiaohongshu / instagram / facebook / google_business / tiktok）
 - [x] 建立 `VerticalSpec` registry（本地生活行业族群）

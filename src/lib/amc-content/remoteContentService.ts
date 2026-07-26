@@ -1,4 +1,4 @@
-import type { ContentGenerationRequest, ContentGenerationResult } from './contentGenerationService.ts'
+import type { ContentGenerationRequest, ContentGenerationResult } from './types.ts'
 
 type RemoteContentResult = {
   success: true
@@ -96,7 +96,7 @@ export async function tryGenerateWithRemoteContentService(
   return {
     caption: remote.result.caption,
     hashtags: remote.result.hashtags || [],
-    contentEngine: 'amc-content-remote',
+    contentEngine: 'amc-content',
     fallbackUsed: false,
     quality: remote.result.quality,
     provenance: remote.result.provenance,
