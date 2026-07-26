@@ -1562,10 +1562,20 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
 	                      ) : previewable && isVideo ? (
-	                        <div className="relative flex h-full w-full items-center justify-center bg-slate-950">
-	                          <Video className="h-10 w-10 text-white/45" />
-	                          <div className="absolute inset-0 flex items-center justify-center bg-black/10">
-	                            <div className="w-10 h-10 rounded-full bg-white/95 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all">
+	                        <div className="relative flex h-full w-full items-center justify-center bg-slate-950 overflow-hidden">
+	                          {/* First-frame thumbnail: #t=0.1 + preload=metadata fetches only the
+	                              header/index so the browser can render the frame without downloading
+	                              the full file. The stream proxy handles Range requests for this. */}
+	                          <video
+	                            src={`/api/brands/${brandId}/assets/${asset.id}/stream#t=0.1`}
+	                            preload="metadata"
+	                            muted
+	                            playsInline
+	                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+	                          />
+	                          {/* Play button overlay */}
+	                          <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+	                            <div className="w-10 h-10 rounded-full bg-white/95 flex items-center justify-center shadow-lg group-hover:scale-110 active:scale-95 transition-all">
 	                              <Play className="w-5 h-5 text-indigo-600 fill-indigo-600 ml-0.5" />
 	                            </div>
 	                          </div>
