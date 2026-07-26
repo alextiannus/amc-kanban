@@ -129,7 +129,7 @@ export async function POST(request: Request, { params }: Params) {
       await prisma.contentDraft.update({
         where: { id: draftId },
         data: {
-          status: 'failed',
+          status: 'draft',
           agentNote: `AI generation graph error: ${err.message || String(err)}`
         }
       });

@@ -78,6 +78,9 @@ function testLegacyEntrypointsUseFacade() {
   const bulkRoute = read('src/app/api/brands/[id]/copywriter/bulk-generate/route.ts')
   const copywriterNode = read('src/agents/nodes/copywriter.ts')
   const state = read('src/agents/state.ts')
+  const triggerRoute = read('src/app/api/brands/[id]/drafts/[draftId]/trigger-copywriter/route.ts')
+  const llmRouter = read('src/lib/llmRouter.ts')
+  const dashboardAssets = read('src/components/dashboard/DashboardAssets.tsx')
 
   assertIncludes(bulkRoute, "import { generateContentWithFallback } from '@/lib/amc-content/contentGenerationService'", 'bulk route content facade import')
   assertIncludes(bulkRoute, 'const cwResult = await generateContentWithFallback({', 'bulk route content facade call')
@@ -100,6 +103,12 @@ function testLegacyEntrypointsUseFacade() {
   assertIncludes(state, 'assigneeId: Annotation<string>', 'graph state preserves assignee fallback actor')
   assertIncludes(state, 'assetIds: Annotation<string[]>', 'graph state preserves asset ids for amc-content media context')
   assertIncludes(state, 'skipAmcContent: Annotation<boolean>', 'graph state preserves recursion guard')
+  assertIncludes(triggerRoute, "status: 'draft'", 'copywriter trigger keeps failed generation visible in drafts')
+  assertNotIncludes(triggerRoute, "status: 'failed',\n          agentNote: `AI generation graph error", 'copywriter trigger must not hide generation failures from Draft view')
+  assertIncludes(llmRouter, 'const hasFiniteRemaining = Number.isFinite(remainingMs)', 'LLM router avoids passing Infinity timeout to AbortSignal')
+  assertIncludes(llmRouter, ': undefined', 'LLM router leaves timeout unset when no finite deadline exists')
+  assertIncludes(dashboardAssets, 'if (createdDraftIds.length === 0)', 'AI batch create surfaces zero-draft failures')
+  assertIncludes(dashboardAssets, 'if (copywriterFailureCount === 0)', 'AI batch create only auto-closes after successful copywriting')
 }
 
 function testContentLabStandaloneEntry() {

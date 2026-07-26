@@ -738,6 +738,12 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         setAiJobStatuses((prev) => ({ ...prev, [copywriter.id]: copywriterFailed ? 'failed' : 'done' }))
       }
 
+      if (createdDraftIds.length === 0) {
+        throw new Error('草稿创建失败，请检查素材和 Copywriter 配置后重试。')
+      }
+
+      let copywriterFailureCount = 0
+
       // Auto-schedule: group drafts by platform and call scheduling/recommend per group
       // so publishingFreq.platforms.instagram/.facebook/etc. are respected.
       if (createdDraftIds.length > 0) {
@@ -841,6 +847,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           return next
         })
         if (copywriterFailures.length > 0) {
+          copywriterFailureCount = copywriterFailures.length
           setAiJobError(`✅ 草稿已创建，但 ${copywriterFailures.length} 篇 amc-content 文案生成失败，请在 Post Management 中重新创作。`)
         }
       }
@@ -855,11 +862,13 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         })
       } catch {}
       await loadAssets()
-      setAiJobOpen(false)
-      setSelected([])
-      setIsBatchSelectMode(false)
-      if (onNavigateToDrafts) {
-        onNavigateToDrafts()
+      if (copywriterFailureCount === 0) {
+        setAiJobOpen(false)
+        setSelected([])
+        setIsBatchSelectMode(false)
+        if (onNavigateToDrafts) {
+          onNavigateToDrafts()
+        }
       }
     } catch (e: any) {
       setAiJobError(e.message || 'AI 批量创作失败')

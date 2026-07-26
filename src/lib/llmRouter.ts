@@ -523,12 +523,13 @@ export async function callLLMWithConfigs(
     const configuredAttemptTimeout = options.attemptTimeoutMs?.[
       Math.min(providerCalls, Math.max(0, (options.attemptTimeoutMs?.length ?? 1) - 1))
     ]
-    const attemptTimeoutMs = Math.max(1, Math.min(
-      remainingMs,
-      Number.isFinite(configuredAttemptTimeout) && Number(configuredAttemptTimeout) > 0
-        ? Number(configuredAttemptTimeout)
-        : remainingMs,
-    ))
+    const hasFiniteRemaining = Number.isFinite(remainingMs) && remainingMs > 0
+    const hasConfiguredTimeout = Number.isFinite(configuredAttemptTimeout) && Number(configuredAttemptTimeout) > 0
+    const attemptTimeoutMs = hasConfiguredTimeout
+      ? Math.max(1, Math.min(hasFiniteRemaining ? remainingMs : Number(configuredAttemptTimeout), Number(configuredAttemptTimeout)))
+      : hasFiniteRemaining
+        ? Math.max(1, remainingMs)
+        : undefined
     const attemptStartedAt = Date.now()
     providerCalls += 1
 
