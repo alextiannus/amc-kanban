@@ -189,7 +189,7 @@ function accountInitial(draft: DraftItem) {
 
 function mediaForDraft(draft: DraftItem) {
   const assetUrls = draft.assetRefs.map((ref) => ref.asset.url).filter((url): url is string => Boolean(url))
-  return [...draft.mediaUrls, ...assetUrls].filter((url): url is string => Boolean(url)).slice(0, 4)
+  return Array.from(new Set([...draft.mediaUrls, ...assetUrls].filter((url): url is string => Boolean(url)))).slice(0, 4)
 }
 
 function getFallbackHooks(businessType: string, hookStyle: string, topic: string) {

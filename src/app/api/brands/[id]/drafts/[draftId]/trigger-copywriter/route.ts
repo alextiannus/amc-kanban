@@ -89,7 +89,9 @@ export async function POST(request: Request, { params }: Params) {
     data: { caption: '【AI 正在创作中...】' }
   })
 
-  // 4. Asynchronously invoke marketingGraph workflow in the background
+  // 4. Invoke marketingGraph workflow and wait until it writes the draft.
+  // Production runtimes may stop background promises once the response is sent,
+  // so this endpoint must not fire-and-forget the actual copywriting job.
   // Use a draft-scoped thread_id so each draft gets its own isolated checkpoint.
   // This prevents stale state (error, status, aiFailed) from previous runs on the
   // same brand from polluting this draft's copywriting run.
@@ -97,18 +99,20 @@ export async function POST(request: Request, { params }: Params) {
   const platform = draft.account?.platformId || 'instagram'
   
   const { marketingGraph } = await import('@/agents/graph/marketingGraph.ts')
-  void marketingGraph.invoke({
-    taskId: task.id,
-    brandId,
-    draftId,
-    platform,
-    caption: originalCaption,
-    copywriteOnly: true,
-    // Explicitly reset fields that could be stale from a previous checkpoint
-    status: 'in_progress',
-    error: '',
-    aiFailed: false,
-  }, config).catch(async (err: any) => {
+  try {
+    await marketingGraph.invoke({
+      taskId: task.id,
+      brandId,
+      draftId,
+      platform,
+      caption: originalCaption,
+      copywriteOnly: true,
+      // Explicitly reset fields that could be stale from a previous checkpoint
+      status: 'in_progress',
+      error: '',
+      aiFailed: false,
+    }, config)
+  } catch (err: any) {
     console.error(`Background copywriter trigger failed for draft ${draftId}:`, err);
     try {
       await prisma.contentDraft.update({
@@ -129,7 +133,11 @@ export async function POST(request: Request, { params }: Params) {
     } catch (dbErr) {
       console.error(`Failed to update task ${task.id} to failed:`, dbErr);
     }
-  })
+    return NextResponse.json(
+      { error: err.message || 'AI Copywriter failed', taskId: task.id },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({
     success: true,
