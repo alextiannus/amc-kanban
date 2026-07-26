@@ -19,6 +19,8 @@ export async function POST(request: Request, { params }: Params) {
   const { id: brandId, draftId } = await params
   const actor = await getActor(request)
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const body = await request.json().catch(() => ({}))
+  const requireAmcContent = body?.requireAmcContent === true
 
   const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -99,8 +101,9 @@ export async function POST(request: Request, { params }: Params) {
   const platform = draft.account?.platformId || 'instagram'
   
   const { marketingGraph } = await import('@/agents/graph/marketingGraph.ts')
+  let result: any = null
   try {
-    await marketingGraph.invoke({
+    result = await marketingGraph.invoke({
       taskId: task.id,
       brandId,
       draftId,
@@ -111,7 +114,11 @@ export async function POST(request: Request, { params }: Params) {
       status: 'in_progress',
       error: '',
       aiFailed: false,
+      requireAmcContent,
     }, config)
+    if (requireAmcContent && result?.contentEngine !== 'amc-content') {
+      throw new Error(`Expected amc-content copywriter, got ${result?.contentEngine || 'unknown engine'}`)
+    }
   } catch (err: any) {
     console.error(`Background copywriter trigger failed for draft ${draftId}:`, err);
     try {
@@ -139,9 +146,18 @@ export async function POST(request: Request, { params }: Params) {
     )
   }
 
+  const updatedDraft = await prisma.contentDraft.findUnique({
+    where: { id: draftId },
+    select: { id: true, caption: true, hashtags: true, status: true, agentNote: true },
+  })
+
   return NextResponse.json({
     success: true,
     taskId: task.id,
+    contentEngine: result?.contentEngine || null,
+    provenance: result?.provenance || null,
+    quality: result?.quality || null,
+    draft: updatedDraft,
     message: 'AI Copywriter triggered successfully'
   })
 }

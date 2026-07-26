@@ -71,5 +71,21 @@ export const StateAnnotation = Annotation.Root({
   aiFailed: Annotation<boolean>({
     reducer: (x, y) => y !== undefined ? y : x,
     default: () => false
+  }),
+  requireAmcContent: Annotation<boolean>({
+    reducer: (x, y) => y !== undefined ? y : x,
+    default: () => false
+  }),
+  contentEngine: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
+  }),
+  provenance: Annotation<any>({
+    reducer: (x, y) => y ?? x,
+    default: () => null
+  }),
+  quality: Annotation<any>({
+    reducer: (x, y) => y ?? x,
+    default: () => null
   })
 });

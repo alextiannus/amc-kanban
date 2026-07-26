@@ -662,16 +662,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     setAiJobCreatedCount(0)
 
     try {
-      // Step 1: Load brand context
+      // Step 1: Create draft records from selected assets and platforms.
       setAiJobStep(1)
-      await new Promise((r) => setTimeout(r, 800))
-
-      // Step 2: Load platform skills
-      setAiJobStep(2)
-      await new Promise((r) => setTimeout(r, 600))
-
-      // Step 3: Create drafts per Copywriter and media unit.
-      setAiJobStep(3)
       const selectedAssets = assets.filter((a) => aiJobAssetIds.includes(a.id))
       const mediaUnits = selectedAssets.map((asset) => ({
         assetIds: [asset.id],
@@ -687,6 +679,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       const createdDraftIds: string[] = []
       // Track which platform each draft belongs to so scheduling can use per-platform frequency
       const draftPlatformMap: Record<string, string> = {}
+      const draftCopywriterMap: Record<string, string> = {}
 
       // Create drafts sequentially (not concurrently) to avoid deadlocks
       // on concurrent mediaAsset.update(usedCount) across the same asset rows
@@ -734,6 +727,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             if (draftId) {
               createdDraftIds.push(draftId)
               draftPlatformMap[draftId] = copywriter.platform
+              draftCopywriterMap[draftId] = copywriter.id
             }
             setAiJobCreatedCount((prev) => prev + 1)
           } catch (e) {
@@ -748,6 +742,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       // Auto-schedule: group drafts by platform and call scheduling/recommend per group
       // so publishingFreq.platforms.instagram/.facebook/etc. are respected.
       if (createdDraftIds.length > 0) {
+        setAiJobStep(2)
         try {
           // Build platform → draftIds groups
           const platformGroups: Record<string, string[]> = {}
@@ -804,26 +799,50 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           console.warn('Auto-schedule failed (non-fatal):', e)
         }
 
-        // Trigger AI copywriter for each draft and wait for completion before
+        setAiJobStep(3)
+        setAiJobStatuses((prev) => {
+          const next = { ...prev }
+          for (const copywriter of selectedCopywriters) next[copywriter.id] = 'creating'
+          return next
+        })
+
+        // Trigger amc-content copywriter for each draft and wait for completion before
         // navigating to Post Management, so reviewers see real captions instead
         // of the placeholder wherever possible.
         const copywriterFailures: string[] = []
+        const copywriterFailureIds = new Set<string>()
         for (const draftId of createdDraftIds) {
           try {
             const triggerRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
               method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ requireAmcContent: true }),
             })
+            const triggerData = await triggerRes.json().catch(() => ({}))
             if (!triggerRes.ok) {
               copywriterFailures.push(draftId)
-              console.warn(`trigger-copywriter failed for ${draftId}:`, await triggerRes.text().catch(() => ''))
+              if (draftCopywriterMap[draftId]) copywriterFailureIds.add(draftCopywriterMap[draftId])
+              console.warn(`amc-content copywriter failed for ${draftId}:`, triggerData.error || triggerData)
+            } else if (triggerData.contentEngine !== 'amc-content') {
+              copywriterFailures.push(draftId)
+              if (draftCopywriterMap[draftId]) copywriterFailureIds.add(draftCopywriterMap[draftId])
+              console.warn(`Draft ${draftId} did not use amc-content copywriter:`, triggerData.contentEngine)
             }
           } catch (e) {
             copywriterFailures.push(draftId)
-            console.warn(`trigger-copywriter failed for ${draftId}:`, e)
+            if (draftCopywriterMap[draftId]) copywriterFailureIds.add(draftCopywriterMap[draftId])
+            console.warn(`amc-content copywriter failed for ${draftId}:`, e)
           }
         }
+        setAiJobStatuses((prev) => {
+          const next = { ...prev }
+          for (const copywriter of selectedCopywriters) {
+            next[copywriter.id] = copywriterFailureIds.has(copywriter.id) ? 'failed' : 'done'
+          }
+          return next
+        })
         if (copywriterFailures.length > 0) {
-          setAiJobError(`✅ 草稿已创建，但 ${copywriterFailures.length} 篇 AI 文案生成失败，请在 Post Management 中重新创作。`)
+          setAiJobError(`✅ 草稿已创建，但 ${copywriterFailures.length} 篇 amc-content 文案生成失败，请在 Post Management 中重新创作。`)
         }
       }
 
@@ -1726,9 +1745,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 <div className="space-y-2">
                   <p className="text-xs font-black text-slate-400 uppercase tracking-wide">创作进度</p>
                   {[
-                    { step: 1, label: '加载品牌上下文与创作计划' },
-                    { step: 2, label: '加载平台 Prompt 与创作 Skills' },
-                    { step: 3, label: '内容创作 & 智能排期' },
+                    { step: 1, label: '按素材与平台创建草稿' },
+                    { step: 2, label: '按平台智能排期' },
+                    { step: 3, label: 'amc-content Copywriter 创作' },
                   ].map(({ step, label }) => {
                     const isActive = aiJobStep === step
                     const isDone = aiJobStep > step || aiJobDone
@@ -1847,7 +1866,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 px-4 py-3 space-y-1">
                   <p className="text-sm font-black text-emerald-700 dark:text-emerald-300">✅ 已创建 {aiJobCreatedCount} 篇草稿</p>
                   <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                    🤖 AI Copywriter 正在后台为每个平台生成正式文案，稍后前往 Post Management 即可看到真实内容。
+                    amc-content Copywriter 已完成可用文案的生成，系统将进入 Post Management。
                   </p>
                   <p className="text-xs text-emerald-500 dark:text-emerald-500">
                     已自动按智能排期预设发布时间，草稿显示「AI 正在创作中...」时请稍候刷新。

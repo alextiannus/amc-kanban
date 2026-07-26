@@ -199,8 +199,13 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
   let aiCaption = "";
   let aiHashtags: string[] = [];
   let geminiUsed = false;
+  const requireAmcContent = state.requireAmcContent === true;
 
-  if (!state.skipAmcContent && process.env.AMC_CONTENT_ENGINE_ENABLED !== 'false') {
+  if (state.skipAmcContent || process.env.AMC_CONTENT_ENGINE_ENABLED === 'false') {
+    if (requireAmcContent) {
+      throw new Error("amc-content copywriter is required but disabled for this run.");
+    }
+  } else {
     try {
       const amcContentResult = await tryGenerateWithAmcContent({
         brand,
@@ -229,8 +234,15 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
         };
       }
     } catch (err) {
+      if (requireAmcContent) {
+        throw err;
+      }
       console.error("amc-content generation failed; falling back to legacy copywriter:", err);
     }
+  }
+
+  if (requireAmcContent) {
+    throw new Error(`amc-content copywriter did not generate content for platform "${platform}".`);
   }
 
   // --- STAGE 1: HOOK GENERATION ---
