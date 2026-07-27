@@ -79,6 +79,24 @@ interface DashboardAsset {
   createdAt: string
 }
 
+type AIBatchThreadStatus = 'waiting' | 'drafting' | 'scheduling' | 'copywriting' | 'done' | 'failed'
+
+interface AIBatchThread {
+  id: string
+  assetId: string
+  assetLabel: string
+  assetUrl: string
+  assetIsVideo: boolean
+  copywriterId: string
+  copywriterName: string
+  platform: string
+  platformIndex: number
+  platformCount: number
+  status: AIBatchThreadStatus
+  draftId?: string
+  error?: string
+}
+
 function toCategory(asset: DashboardAsset) {
   const cat = asset.aiCategory || 'raw'
   if (cat === 'food' || cat === '菜品' || cat === '产品') return 'food'
@@ -167,9 +185,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [aiJobCopywriterIds, setAiJobCopywriterIds] = useState<string[]>(
     COPYWRITER_ROSTER.map((c) => c.id)
   )
-  const [aiJobStatuses, setAiJobStatuses] = useState<Record<string, 'waiting' | 'creating' | 'done' | 'failed'>>(
-    Object.fromEntries(COPYWRITER_ROSTER.map((c) => [c.id, 'waiting']))
-  )
+  const [aiJobThreads, setAiJobThreads] = useState<AIBatchThread[]>([])
   const [aiJobNote, setAiJobNote] = useState('')
   const [aiJobRunning, setAiJobRunning] = useState(false)
   const [aiJobDone, setAiJobDone] = useState(false)
@@ -630,7 +646,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     if (!brandId || assetIds.length === 0) return
     setAiJobAssetIds(assetIds)
     setAiJobCopywriterIds(COPYWRITER_ROSTER.map((c) => c.id))
-    setAiJobStatuses(Object.fromEntries(COPYWRITER_ROSTER.map((c) => [c.id, 'waiting'])))
+    setAiJobThreads([])
     setAiJobNote('')
     setAiJobStep(0)
     setAiJobRunning(false)
@@ -662,196 +678,147 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     setAiJobCreatedCount(0)
 
     try {
-      // Step 1: Create draft records from selected assets and platforms.
+      const updateThread = (threadId: string, patch: Partial<AIBatchThread>) => {
+        setAiJobThreads((prev) => prev.map((thread) => (
+          thread.id === threadId ? { ...thread, ...patch } : thread
+        )))
+      }
+
       setAiJobStep(1)
       const selectedAssets = assets.filter((a) => aiJobAssetIds.includes(a.id))
-      const mediaUnits = selectedAssets.map((asset) => ({
-        assetIds: [asset.id],
-        mediaUrls: [asset.url],
-        label: asset.filename || '素材',
-      }))
+      if (selectedAssets.length === 0) {
+        throw new Error('没有找到可用于创作的素材，请重新选择素材。')
+      }
 
-      // Mark statuses as 'creating'
-      setAiJobStatuses(Object.fromEntries(
-        selectedCopywriters.map((c) => [c.id, 'creating' as const])
-      ))
+      const rawThreadPlan = selectedCopywriters.flatMap((copywriter) =>
+        selectedAssets.map((asset) => ({
+          id: `${copywriter.id}:${asset.id}`,
+          assetId: asset.id,
+          assetLabel: asset.filename || '素材',
+          assetUrl: asset.url,
+          assetIsVideo: isVideoAsset(asset),
+          copywriterId: copywriter.id,
+          copywriterName: copywriter.name || copywriter.handle,
+          platform: copywriter.platform,
+          status: 'waiting' as const,
+        }))
+      )
+      const platformCounts = rawThreadPlan.reduce<Record<string, number>>((acc, thread) => {
+        acc[thread.platform] = (acc[thread.platform] || 0) + 1
+        return acc
+      }, {})
+      const platformIndexes: Record<string, number> = {}
+      const threadPlan: AIBatchThread[] = rawThreadPlan.map((thread) => {
+        const platformIndex = platformIndexes[thread.platform] || 0
+        platformIndexes[thread.platform] = platformIndex + 1
+        return {
+          ...thread,
+          platformIndex,
+          platformCount: platformCounts[thread.platform] || 1,
+        }
+      })
+      setAiJobThreads(threadPlan)
 
       const createdDraftIds: string[] = []
-      // Track which platform each draft belongs to so scheduling can use per-platform frequency
-      const draftPlatformMap: Record<string, string> = {}
-      const draftCopywriterMap: Record<string, string> = {}
+      let completedCount = 0
+      let failedCount = 0
 
-      // Create drafts sequentially (not concurrently) to avoid deadlocks
-      // on concurrent mediaAsset.update(usedCount) across the same asset rows
-      for (const copywriter of selectedCopywriters) {
-        let copywriterFailed = false
+      const createThreadDraft = async (thread: AIBatchThread) => {
+        const copywriter = selectedCopywriters.find((item) => item.id === thread.copywriterId)
+        if (!copywriter) throw new Error('Copywriter 配置不存在')
         const accId = draftAccountIdForCopywriter(copywriter, aiJobBrandAccounts)
+        const draftCaption = '【AI 正在创作中...】'
+        const creativeInstruction = aiJobNote.trim()
+          ? aiJobNote.trim()
+          : `为 ${copywriter.platform} 平台针对这个素材创作符合品牌调性的优质内容，结合素材视觉风格生成吸引人的文案`
+        const draftAgentNote = `【AI 生成指令】${creativeInstruction}【/AI 生成指令】`
 
-        for (const mediaUnit of mediaUnits) {
+        const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accountId: accId,
+            caption: draftCaption,
+            hashtags: [],
+            assetIds: [thread.assetId],
+            mediaUrls: [thread.assetUrl],
+            status: 'draft',
+            agentNote: draftAgentNote,
+            creativeHooks: creativeInstruction,
+            agentId: null,
+            createTask: false,
+          }),
+        })
+        const draftData = await draftRes.json().catch(() => ({}))
+        if (!draftRes.ok) throw new Error(draftData.error || '创建草稿失败')
+        const draftId = draftData.draft?.id
+        if (!draftId) throw new Error('草稿创建成功但没有返回草稿 ID')
+        return draftId as string
+      }
+
+      const runThread = async (thread: AIBatchThread) => {
+        try {
+          updateThread(thread.id, { status: 'drafting', error: undefined })
+          const draftId = await createThreadDraft(thread)
+          createdDraftIds.push(draftId)
+          setAiJobCreatedCount((prev) => prev + 1)
+          updateThread(thread.id, { status: 'scheduling', draftId })
+
           try {
-            // Use the standard "AI working" sentinel so copywriterNode's caption-fallback
-            // doesn't accidentally treat our placeholder text as a creative direction.
-            // The real creative direction goes in agentNote with the correct delimiters.
-            const draftCaption = '【AI 正在创作中...】'
-
-            // agentNote MUST use 【AI 生成指令】...【/AI 生成指令】 format
-            // because copywriterNode only parses userPrompt from this exact pattern (line 87-91).
-            // Any text outside these delimiters is ignored by the agent.
-            const creativeInstruction = aiJobNote.trim()
-              ? aiJobNote.trim()
-              : `为 ${copywriter.platform} 平台针对这个素材创作符合品牌调性的优质内容，结合素材视觉风格生成吸引人的文案`
-            const draftAgentNote = `【AI 生成指令】${creativeInstruction}【/AI 生成指令】`
-
-            const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
+            const schedRes = await fetch(`/api/brands/${brandId}/scheduling/recommend`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                accountId: accId,
-                caption: draftCaption,
-                hashtags: [],
-                assetIds: mediaUnit.assetIds,
-                mediaUrls: mediaUnit.mediaUrls,
-                status: 'draft',
-                agentNote: draftAgentNote,
-                creativeHooks: creativeInstruction,
-                agentId: null,
-                // Do NOT set createTask:true — AI batch create should not flood the
-                // kanban board with WorkUnit tasks. The draft itself is the work item.
-                createTask: false,
-              }),
+              body: JSON.stringify({ platform: thread.platform, numberOfPosts: thread.platformCount, urgency: 'normal' }),
             })
-            const draftData = await draftRes.json().catch(() => ({}))
-            if (!draftRes.ok) throw new Error(draftData.error || '创建草稿失败')
-            const draftId = draftData.draft?.id
-            if (draftId) {
-              createdDraftIds.push(draftId)
-              draftPlatformMap[draftId] = copywriter.platform
-              draftCopywriterMap[draftId] = copywriter.id
-            }
-            setAiJobCreatedCount((prev) => prev + 1)
-          } catch (e) {
-            copywriterFailed = true
-            console.error(`Copywriter ${copywriter.id} draft creation failed for ${mediaUnit.label}:`, e)
-          }
-        }
-
-        setAiJobStatuses((prev) => ({ ...prev, [copywriter.id]: copywriterFailed ? 'failed' : 'done' }))
-      }
-
-      if (createdDraftIds.length === 0) {
-        throw new Error('草稿创建失败，请检查素材和 Copywriter 配置后重试。')
-      }
-
-      let copywriterFailureCount = 0
-
-      // Auto-schedule: group drafts by platform and call scheduling/recommend per group
-      // so publishingFreq.platforms.instagram/.facebook/etc. are respected.
-      if (createdDraftIds.length > 0) {
-        setAiJobStep(2)
-        try {
-          // Build platform → draftIds groups
-          const platformGroups: Record<string, string[]> = {}
-          for (const draftId of createdDraftIds) {
-            const plat = draftPlatformMap[draftId] ?? 'unknown'
-            if (!platformGroups[plat]) platformGroups[plat] = []
-            platformGroups[plat].push(draftId)
-          }
-
-          const schedFailures: string[] = []
-
-          // Schedule each platform group independently
-          for (const [platform, groupDraftIds] of Object.entries(platformGroups)) {
-            try {
-              const schedRes = await fetch(`/api/brands/${brandId}/scheduling/recommend`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ platform, numberOfPosts: groupDraftIds.length, urgency: 'normal' }),
-              })
-              if (!schedRes.ok) {
-                schedFailures.push(...groupDraftIds)
-                continue
-              }
+            if (schedRes.ok) {
               const schedData = await schedRes.json()
-              const recs: Array<{ recommendedAt: string }> = schedData.recommendations || []
-
-              for (let idx = 0; idx < groupDraftIds.length; idx++) {
-                const rec = recs[idx]
-                if (!rec?.recommendedAt) {
-                  schedFailures.push(groupDraftIds[idx])
-                  continue
-                }
-                const patchRes = await fetch(`/api/brands/${brandId}/drafts/${groupDraftIds[idx]}`, {
+              const rec = schedData.recommendations?.[thread.platformIndex] || schedData.recommendations?.[0]
+              if (rec?.recommendedAt) {
+                const patchRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ scheduledAt: rec.recommendedAt }),
                 })
                 if (!patchRes.ok) {
-                  schedFailures.push(groupDraftIds[idx])
-                  console.warn(`Failed to schedule draft ${groupDraftIds[idx]}:`, await patchRes.text().catch(() => ''))
+                  console.warn(`Failed to schedule draft ${draftId}:`, await patchRes.text().catch(() => ''))
                 }
               }
-            } catch (e) {
-              console.warn(`Schedule group [${platform}] failed (non-fatal):`, e)
-              schedFailures.push(...groupDraftIds)
-            }
-          }
-
-          if (schedFailures.length > 0) {
-            console.warn(`Scheduling: ${schedFailures.length}/${createdDraftIds.length} drafts failed to get a schedule slot.`)
-            setAiJobError(`✅ 草稿已创建，但 ${schedFailures.length} 篇自动排期失败，请在帖子管理中手动设置发布时间。`)
-          }
-        } catch (e) {
-          console.warn('Auto-schedule failed (non-fatal):', e)
-        }
-
-        setAiJobStep(3)
-        setAiJobStatuses((prev) => {
-          const next = { ...prev }
-          for (const copywriter of selectedCopywriters) next[copywriter.id] = 'creating'
-          return next
-        })
-
-        // Trigger amc-content copywriter for each draft and wait for completion before
-        // navigating to Post Management, so reviewers see real captions instead
-        // of the placeholder wherever possible.
-        const copywriterFailures: string[] = []
-        const copywriterFailureIds = new Set<string>()
-        for (const draftId of createdDraftIds) {
-          try {
-            const triggerRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ requireAmcContent: true }),
-            })
-            const triggerData = await triggerRes.json().catch(() => ({}))
-            if (!triggerRes.ok) {
-              copywriterFailures.push(draftId)
-              if (draftCopywriterMap[draftId]) copywriterFailureIds.add(draftCopywriterMap[draftId])
-              console.warn(`amc-content copywriter failed for ${draftId}:`, triggerData.error || triggerData)
-            } else if (triggerData.contentEngine !== 'amc-content') {
-              copywriterFailures.push(draftId)
-              if (draftCopywriterMap[draftId]) copywriterFailureIds.add(draftCopywriterMap[draftId])
-              console.warn(`Draft ${draftId} did not use amc-content copywriter:`, triggerData.contentEngine)
             }
           } catch (e) {
-            copywriterFailures.push(draftId)
-            if (draftCopywriterMap[draftId]) copywriterFailureIds.add(draftCopywriterMap[draftId])
-            console.warn(`amc-content copywriter failed for ${draftId}:`, e)
+            console.warn(`Schedule thread [${thread.id}] failed (non-fatal):`, e)
           }
-        }
-        setAiJobStatuses((prev) => {
-          const next = { ...prev }
-          for (const copywriter of selectedCopywriters) {
-            next[copywriter.id] = copywriterFailureIds.has(copywriter.id) ? 'failed' : 'done'
+
+          setAiJobStep(3)
+          updateThread(thread.id, { status: 'copywriting' })
+          const triggerRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requireAmcContent: true }),
+          })
+          const triggerData = await triggerRes.json().catch(() => ({}))
+          if (!triggerRes.ok) {
+            throw new Error(triggerData.error || 'amc-content 文案生成失败')
           }
-          return next
-        })
-        if (copywriterFailures.length > 0) {
-          copywriterFailureCount = copywriterFailures.length
-          setAiJobError(`✅ 草稿已创建，但 ${copywriterFailures.length} 篇 amc-content 文案生成失败，请在 Post Management 中重新创作。`)
+          if (triggerData.contentEngine !== 'amc-content') {
+            throw new Error(`未使用 amc-content 创作：${triggerData.contentEngine || 'unknown'}`)
+          }
+          completedCount += 1
+          updateThread(thread.id, { status: 'done' })
+        } catch (e: any) {
+          failedCount += 1
+          console.warn(`AI batch thread ${thread.id} failed:`, e)
+          updateThread(thread.id, { status: 'failed', error: e.message || '创作失败' })
         }
       }
 
+      await Promise.allSettled(threadPlan.map((thread) => runThread(thread)))
+
+      if (createdDraftIds.length === 0) {
+        throw new Error('草稿创建失败，请检查素材和 Copywriter 配置后重试。')
+      }
+      if (failedCount > 0) {
+        setAiJobError(`已创建 ${createdDraftIds.length} 篇草稿，其中 ${failedCount} 个创作线程失败，请查看下方进程并在 Post Management 中重新创作。`)
+      }
       setAiJobDone(true)
       // Mark assets as used for AI creation
       try {
@@ -862,7 +829,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         })
       } catch {}
       await loadAssets()
-      if (copywriterFailureCount === 0) {
+      if (failedCount === 0 && completedCount === threadPlan.length) {
         setAiJobOpen(false)
         setSelected([])
         setIsBatchSelectMode(false)
@@ -1789,38 +1756,59 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 </div>
               )}
 
-              {/* Copywriter Status Cards */}
+              {/* Per asset/platform thread status */}
               {(aiJobRunning || aiJobDone) && (
                 <div className="space-y-2">
-                  <p className="text-xs font-black text-slate-400 uppercase tracking-wide">Copywriter 状态</p>
-                  {COPYWRITER_ROSTER.filter((c) => aiJobCopywriterIds.includes(c.id)).map((cw) => {
-                    const st = aiJobStatuses[cw.id] || 'waiting'
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-wide">独立创作线程</p>
+                  {aiJobThreads.map((thread) => {
+                    const st = thread.status
+                    const statusLabel = st === 'done'
+                      ? '完成'
+                      : st === 'failed'
+                        ? '失败'
+                        : st === 'copywriting'
+                          ? 'amc-content 创作中'
+                          : st === 'scheduling'
+                            ? '智能排期中'
+                            : st === 'drafting'
+                              ? '创建草稿中'
+                              : '等待'
                     return (
-                      <div key={cw.id} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-all ${
+                      <div key={thread.id} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-all ${
                         st === 'done' ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/20'
                         : st === 'failed' ? 'border-rose-200 bg-rose-50 dark:border-rose-900/50 dark:bg-rose-950/20'
-                        : st === 'creating' ? 'border-violet-200 bg-violet-50 dark:border-violet-900/50 dark:bg-violet-950/20'
+                        : st === 'copywriting' || st === 'scheduling' || st === 'drafting' ? 'border-violet-200 bg-violet-50 dark:border-violet-900/50 dark:bg-violet-950/20'
                         : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/30'
-                      }`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black shrink-0 ${
-                          st === 'done' ? 'bg-emerald-500 text-white'
-                          : st === 'failed' ? 'bg-rose-500 text-white'
-                          : st === 'creating' ? 'bg-violet-500 text-white'
-                          : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
                         }`}>
-                          {(cw.name || 'C').charAt(0).toUpperCase()}
+                        <div className="h-10 w-10 overflow-hidden rounded-md border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800 shrink-0">
+                          {thread.assetIsVideo ? (
+                            <video src={thread.assetUrl} className="h-full w-full object-cover" muted preload="metadata" />
+                          ) : (
+                            <img src={thread.assetUrl} alt="" className="h-full w-full object-cover" />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">{cw.name || cw.handle}</p>
-                          <p className="text-[11px] text-slate-400 font-semibold">{cw.platform || cw.handle}</p>
+                          <p className="text-xs font-black text-slate-800 dark:text-slate-100 truncate">{thread.assetLabel}</p>
+                          <p className="text-[11px] text-slate-400 font-semibold truncate">
+                            {thread.copywriterName} · {thread.platform}
+                          </p>
+                          {thread.error && (
+                            <p className="mt-0.5 text-[10px] font-semibold text-rose-600 dark:text-rose-300 truncate" title={thread.error}>{thread.error}</p>
+                          )}
                         </div>
                         <div className={`text-[11px] font-black px-2 py-0.5 rounded-full ${
                           st === 'done' ? 'text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/30'
                           : st === 'failed' ? 'text-rose-700 bg-rose-100 dark:text-rose-300 dark:bg-rose-900/30'
-                          : st === 'creating' ? 'text-violet-700 bg-violet-100 dark:text-violet-300 dark:bg-violet-900/30'
+                          : st === 'copywriting' || st === 'scheduling' || st === 'drafting' ? 'text-violet-700 bg-violet-100 dark:text-violet-300 dark:bg-violet-900/30'
                           : 'text-slate-500 bg-slate-100 dark:text-slate-400 dark:bg-slate-700'
                         }`}>
-                          {st === 'done' ? '✅ 完成' : st === 'failed' ? '❌ 失败' : st === 'creating' ? '✍️ 创作中' : '⏳ 等待'}
+                          {st === 'done' ? (
+                            <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" />{statusLabel}</span>
+                          ) : st === 'failed' ? (
+                            <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{statusLabel}</span>
+                          ) : st === 'copywriting' || st === 'scheduling' || st === 'drafting' ? (
+                            <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" />{statusLabel}</span>
+                          ) : statusLabel}
                         </div>
                       </div>
                     )

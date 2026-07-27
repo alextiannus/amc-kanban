@@ -108,7 +108,14 @@ function testLegacyEntrypointsUseFacade() {
   assertIncludes(llmRouter, 'const hasFiniteRemaining = Number.isFinite(remainingMs)', 'LLM router avoids passing Infinity timeout to AbortSignal')
   assertIncludes(llmRouter, ': undefined', 'LLM router leaves timeout unset when no finite deadline exists')
   assertIncludes(dashboardAssets, 'if (createdDraftIds.length === 0)', 'AI batch create surfaces zero-draft failures')
-  assertIncludes(dashboardAssets, 'if (copywriterFailureCount === 0)', 'AI batch create only auto-closes after successful copywriting')
+  assertIncludes(dashboardAssets, 'if (failedCount === 0 && completedCount === threadPlan.length)', 'AI batch create only auto-closes after every thread succeeds')
+  assertIncludes(dashboardAssets, 'const rawThreadPlan = selectedCopywriters.flatMap', 'AI batch create builds one thread per asset/copywriter combination')
+  assertIncludes(dashboardAssets, 'const threadPlan: AIBatchThread[] = rawThreadPlan.map', 'AI batch create enriches each thread with per-platform scheduling indexes')
+  assertIncludes(dashboardAssets, 'await Promise.allSettled(threadPlan.map((thread) => runThread(thread)))', 'AI batch create runs each asset/platform thread independently')
+  assertIncludes(dashboardAssets, 'numberOfPosts: thread.platformCount', 'AI batch thread scheduling requests enough slots for same-platform combinations')
+  assertIncludes(dashboardAssets, 'schedData.recommendations?.[thread.platformIndex]', 'AI batch thread uses its own scheduled slot')
+  assertIncludes(dashboardAssets, "status: 'copywriting'", 'AI batch thread exposes independent amc-content copywriting progress')
+  assertIncludes(dashboardAssets, 'aiJobThreads.map((thread)', 'AI batch UI renders per-thread progress instead of copywriter aggregate status')
 }
 
 function testContentLabStandaloneEntry() {
