@@ -105,7 +105,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
     groups.push({
       groupLabel: 'Researcher',
       items: [
-        { id: 'amc-content-roles', view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/ai-roles' },
+        { id: 'amc-content-roles', view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab' },
       ],
     })
     return groups

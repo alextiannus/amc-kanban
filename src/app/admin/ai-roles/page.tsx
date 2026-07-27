@@ -36,13 +36,13 @@ export default async function AiRolesEntryPage() {
       role: session.user.role === 'ADMIN' || roles.includes('ADMIN') ? 'ADMIN' : 'RESEARCHER',
       exp: Math.floor(Date.now() / 1000) + 60 * 60,
     }, secret)
-    redirect(`${contentUrl}/admin/ai-roles#labToken=${encodeURIComponent(token)}`)
+    redirect(`${contentUrl}/admin/content-lab#labToken=${encodeURIComponent(token)}`)
   }
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-950">
       <div className="mx-auto max-w-2xl rounded-md border border-slate-200 bg-white p-6">
-        <h1 className="text-xl font-semibold">AI Roles is managed by amc-content</h1>
+        <h1 className="text-xl font-semibold">Content Lab is managed by amc-content</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
           Kanban verified your permission, but the standalone content service URL or shared lab token secret is not configured.
         </p>

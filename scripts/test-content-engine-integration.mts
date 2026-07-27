@@ -120,6 +120,7 @@ function testLegacyEntrypointsUseFacade() {
 
 function testContentLabStandaloneEntry() {
   const page = read('src/app/admin/content-lab/page.tsx')
+  const legacyAiRolesPage = read('src/app/admin/ai-roles/page.tsx')
   const internalAdmin = read('src/app/api/internal/content-lab-admin/route.ts')
   const permissions = read('src/lib/permissions.ts')
   const userManagementPermissions = read('src/lib/user-management/permissions.ts')
@@ -129,8 +130,12 @@ function testContentLabStandaloneEntry() {
   assertIncludes(page, "role: 'ADMIN'", 'lab token is admin-scoped')
   assertIncludes(page, 'redirect(`${contentUrl}/admin/content-lab#labToken=', 'entry uses URL fragment to avoid token in request logs')
   assertIncludes(page, "roles.includes('AMC_PRINCIPAL')", 'principal users can open the Content Lab handoff')
+  assertIncludes(legacyAiRolesPage, 'redirect(`${contentUrl}/admin/content-lab#labToken=', 'legacy AI roles entry opens latest amc-content home')
+  assertNotIncludes(legacyAiRolesPage, '/admin/ai-roles#labToken=', 'legacy AI roles entry must not open the old editor')
   assertIncludes(permissions, "label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab'", 'AI role menu opens latest amc-content home')
   assertIncludes(userManagementPermissions, "label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab'", 'user-management menu opens latest amc-content home')
+  assertNotIncludes(permissions, "href: '/admin/ai-roles'", 'main menu no longer points any role to the old AI roles editor')
+  assertNotIncludes(userManagementPermissions, "href: '/admin/ai-roles'", 'user-management menu no longer points any role to the old AI roles editor')
   assertIncludes(internalAdmin, "body.action === 'catalog'", 'internal admin bridge exposes catalog data')
   assertIncludes(internalAdmin, "body.action === 'logs'", 'internal admin bridge exposes review logs')
   assertIncludes(internalAdmin, "body.action === 'annotateLog'", 'internal admin bridge exposes log annotation')
