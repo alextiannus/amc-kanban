@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { IndustryVertical, MediaAssetContext } from '@/lib/amc-content/types'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { buildBrandContext } from '@/lib/brandContextBuilder'
 import { prisma } from '@/lib/prisma'
 
 export const maxDuration = 30
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
   const ok = await canSessionAccessBrandProject(brandId, actorId, actorType, actorRole)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [brand, task, media] = await Promise.all([
+  const [brand, task, media, brandContext] = await Promise.all([
     prisma.brand.findUnique({
       where: { id: brandId },
       include: { knowledge: true },
@@ -46,10 +47,20 @@ export async function POST(request: Request) {
         })
       : Promise.resolve(null),
     resolveMedia(brandId, body),
+    buildBrandContext(brandId),
   ])
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
   const promotionPlan = normalizePromotionPlan(brand.knowledge?.promoPlan)
+  const mediaProof = media
+    .flatMap((item) => [
+      item.caption,
+      item.category,
+      ...(item.tags ?? []),
+    ])
+    .map((item) => stringOrEmpty(item))
+    .filter(Boolean)
+    .slice(0, 20)
 
   return NextResponse.json({
     brand: {
@@ -57,12 +68,17 @@ export async function POST(request: Request) {
       name: brand.name,
       description: brand.description ?? undefined,
       tone: brand.knowledge?.brandTone ?? undefined,
+      contextText: brandContext.contextText || undefined,
+      audience: brand.knowledge?.audienceAssumptions ?? undefined,
+      sellingPoints: brand.knowledge?.productAssumptions ?? undefined,
       address: brand.address ?? undefined,
       location: brand.location ?? undefined,
       website: brand.website ?? undefined,
       phone: brand.phone ?? undefined,
       negativePrompts: brand.knowledge?.negPrompts ?? undefined,
       slang: normalizeRecord(brand.knowledge?.slangDict),
+      menuItems: normalizeMenuItems(brand.knowledge?.menuItems),
+      stores: normalizeStores(brand.knowledge?.stores),
       promotionPlan,
     },
     briefDefaults: {
@@ -71,6 +87,7 @@ export async function POST(request: Request) {
       locationFocus: brand.location || brand.address || undefined,
       mustMention: promotionPlan?.keyMessages ?? [],
       mustAvoid: brand.knowledge?.negPrompts ?? [],
+      localProof: mediaProof,
       promotionPlan,
     },
     media,
@@ -129,6 +146,37 @@ function optionalIndustryVertical(value: unknown): IndustryVertical | undefined 
 function normalizeRecord(value: unknown): Record<string, string> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   return value as Record<string, string>
+}
+
+function normalizeMenuItems(value: unknown) {
+  if (!Array.isArray(value)) return undefined
+  const items = value
+    .filter((item) => item && typeof item === 'object')
+    .map((item: any) => ({
+      name: optionalText(item.name),
+      price: optionalText(item.price),
+      description: optionalText(item.description),
+    }))
+    .filter((item) => item.name || item.description)
+    .slice(0, 20)
+  return items.length ? items : undefined
+}
+
+function normalizeStores(value: unknown) {
+  if (!Array.isArray(value)) return undefined
+  const stores = value
+    .filter((item) => item && typeof item === 'object')
+    .map((item: any) => ({
+      name: optionalText(item.name),
+      address: optionalText(item.address),
+      phone: optionalText(item.phone),
+      businessHours: optionalText(item.businessHours),
+      reservationUrl: optionalText(item.reservationUrl),
+      orderingUrl: optionalText(item.orderingUrl),
+    }))
+    .filter((item) => item.name || item.address || item.phone || item.businessHours)
+    .slice(0, 10)
+  return stores.length ? stores : undefined
 }
 
 function normalizePromotionPlan(value: unknown) {

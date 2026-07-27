@@ -206,7 +206,7 @@ export async function POST(request: Request, { params }: Params) {
             actorId: actor.id,
             actorType: actor.type,
             actorRole: actor.role,
-            fallbackToLegacy: true,
+            fallbackToLegacy: false,
           })
 
           if (cwResult && cwResult.caption) {

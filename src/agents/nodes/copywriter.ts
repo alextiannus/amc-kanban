@@ -356,6 +356,7 @@ Task Details: ${task?.description || ""}
 ${userPrompt ? `User Custom Theme / Creative Idea: "${userPrompt}"` : ""}
 ${creativeHooks ? `Creative Hooks / Writing Angles: "${creativeHooks}"` : ""}
 ${attachedAssetsText}
+${brandContextText}
 ${brandToneText}
 ${brandContactText}
 ${menuText}
@@ -461,6 +462,7 @@ Please output ONLY a valid JSON object.`;
       ? fallbackChineseTheme(userPrompt, creativeHooks)
       : fallbackEnglishTheme(userPrompt, creativeHooks);
     const englishAngle = fallbackEnglishTheme(creativeHooks, undefined);
+    const proofText = fallbackConcreteProof(attachedAssetRecords, brandCtx.contextText, brand.description, brand.location || brand.address);
 
     if (platformLower === "xiaohongshu" || platformLower === "red" || platformLower === "xhs") {
       aiCaption = `📍${brandName} 最新本地生活更新\n\n这次重点是：${themeText}。\n\n适合正在附近找新选择、想提前了解亮点和到店信息的人。${brand.address ? `\n\n📍地址：${brand.address}` : ""}${brand.website ? `\n🌐 详情：${brand.website}` : ""}\n\n可以先收藏，需要时再打开看。`;
@@ -469,8 +471,9 @@ Please output ONLY a valid JSON object.`;
       aiCaption = `${brandName} local update\n\n${themeText}. ${englishAngle !== "a fresh local update" ? `Focus: ${englishAngle}. ` : ""}${brand.address ? `Visit us at ${brand.address}. ` : ""}${brand.location && !brand.address ? `Find us in ${brand.location}. ` : ""}${brand.website ? `Learn more on our website. ` : ""}Use the Google Business contact options to book, enquire, or get directions.`;
       aiHashtags = [];
     } else if (platformLower === "tiktok" || platformLower === "tt") {
-      aiCaption = `${themeText} at ${brandName}.\n\nA quick local update worth checking before your next visit.${brand.location ? ` Near ${brand.location}.` : ""}`;
-      aiHashtags = ["Singapore", "LocalFinds", "SGTikTok", brandName.replace(/\s+/g, "").toLowerCase()].slice(0, 5);
+      const lead = proofText || themeText;
+      aiCaption = `${brandName} in 10 seconds: ${lead}.\n\nSave this for your next ${brand.location ? `${brand.location} ` : ""}stop.`;
+      aiHashtags = tiktokFallbackHashtags(brandName, proofText || themeText, brand.location);
     } else if (platformLower === "facebook" || platformLower === "fb") {
       aiCaption = `Local update from ${brandName}\n\n${themeText}. ${brand.address || brand.location ? `If you are nearby, visit us${brand.address ? ` at ${brand.address}` : ` in ${brand.location}`}. ` : ""}${brand.website ? `Check our website for details, availability, or reservations. ` : ""}Tell us what you would like to try next.`;
       aiHashtags = ["Singapore", "LocalBusiness", brandName.replace(/\s+/g, "").toLowerCase()].slice(0, 3);
@@ -542,6 +545,44 @@ function fallbackEnglishTheme(primary?: string, secondary?: string): string {
     .replace(/\s+/g, " ")
     .trim();
   return englishOnly.length >= 8 ? englishOnly.slice(0, 120) : "a fresh local update";
+}
+
+function fallbackConcreteProof(
+  assets: Array<{ aiTags?: string[]; aiCategory?: string | null; aiCaption?: string | null }>,
+  brandContext?: string,
+  brandDescription?: string | null,
+  location?: string | null,
+): string {
+  const assetText = assets
+    .flatMap((asset) => [
+      asset.aiCaption,
+      asset.aiCategory,
+      ...(asset.aiTags || []),
+    ])
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .join(" ");
+  const source = [assetText, brandContext, brandDescription, location].filter(Boolean).join(" ");
+  const cleaned = source
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+/gu, " ")
+    .replace(/\b(a fresh local update|local update|quick local update|worth checking)\b/gi, " ")
+    .replace(/[^\p{Letter}\p{Number}$%&.,' -]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length < 8) return "";
+  return cleaned.length > 120 ? cleaned.slice(0, 117).trimEnd() + "..." : cleaned;
+}
+
+function tiktokFallbackHashtags(brandName: string, proof: string, location?: string | null): string[] {
+  const normalized = `${proof} ${location || ""}`.toLowerCase();
+  const tags = new Set<string>(["SGTikTok"]);
+  if (/coffee|latte|cafe|kopi|tea|drink/.test(normalized)) tags.add("SGCafe");
+  if (/food|dish|menu|restaurant|dining|noodle|rice|chicken|fish|spicy/.test(normalized)) tags.add("SGFood");
+  if (/fitness|pilates|yoga|class|workout/.test(normalized)) tags.add("SGFitness");
+  if (/beauty|spa|nail|salon|wellness/.test(normalized)) tags.add("SGWellness");
+  if (location) tags.add(location.replace(/[^a-z0-9]+/gi, "").slice(0, 24) || "Singapore");
+  tags.add(brandName.replace(/[^a-z0-9]+/gi, "").slice(0, 24) || "LocalBusiness");
+  return Array.from(tags).slice(0, 5);
 }
 
 function fallbackChineseTheme(primary?: string, secondary?: string): string {
