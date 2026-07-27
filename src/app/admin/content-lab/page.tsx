@@ -13,7 +13,9 @@ type LabTokenPayload = {
 export default async function ContentLabEntryPage() {
   const session = await getSession()
   if (!session?.user?.id) redirect('/')
-  if (session.user.role !== 'ADMIN') redirect('/admin')
+  const roles = session.user.userRoles || []
+  const canAccess = session.user.role === 'ADMIN' || roles.includes('ADMIN') || roles.includes('AMC_PRINCIPAL')
+  if (!canAccess) redirect('/admin')
 
   const isLocal = process.env.NODE_ENV !== 'production'
     || process.env.APP_BASE_URL?.includes('localhost')
