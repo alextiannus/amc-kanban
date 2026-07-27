@@ -896,6 +896,7 @@ model BrandKnowledge {
   reservationUrl String?  // 订座链接
   orderingUrl    String?  // 下单链接 (own website / app)
   deliveryUrls   Json?    // [{platform: "GrabFood", url: "..."}, ...]
+  stores         Json?    // [{name, address, phone, businessHours, reservationUrl, orderingUrl}, ...]
 
   // ── Section 3: 知识库配置 (Knowledge Base Config) ────────────────────────
   market      String?  // 所在市场 e.g. "Singapore", "Kuala Lumpur"

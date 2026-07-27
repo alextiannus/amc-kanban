@@ -21,6 +21,7 @@ const KNOWLEDGE_SELECT_FIELDS = {
   reservationUrl: true,
   orderingUrl: true,
   deliveryUrls: true,
+  stores: true,
   // Section 3: Knowledge Base Config
   market: true,
   district: true,
@@ -46,6 +47,7 @@ function serializeKnowledge(k: any) {
     reservationUrl: k.reservationUrl || '',
     orderingUrl: k.orderingUrl || '',
     deliveryUrls: k.deliveryUrls || [],
+    stores: k.stores || [],
     // Section 3
     market: k.market || '',
     district: k.district || '',
@@ -69,6 +71,7 @@ const EMPTY_KNOWLEDGE = {
   reservationUrl: '',
   orderingUrl: '',
   deliveryUrls: [] as any[],
+  stores: [] as any[],
   market: '',
   district: '',
   competitors: [] as string[],
@@ -170,7 +173,7 @@ export async function PATCH(request: Request, { params }: Params) {
     brandTone, slangDict, negPrompts, voiceId,
     audienceAssumptions, productAssumptions,
     // Section 2
-    businessHours, reservationUrl, orderingUrl, deliveryUrls,
+    businessHours, reservationUrl, orderingUrl, deliveryUrls, stores,
     // Section 3
     market, district, competitors, menuItems,
     // Section 4
@@ -188,6 +191,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (reservationUrl !== undefined) updateData.reservationUrl = reservationUrl
   if (orderingUrl !== undefined) updateData.orderingUrl = orderingUrl
   if (deliveryUrls !== undefined) updateData.deliveryUrls = deliveryUrls
+  if (stores !== undefined) updateData.stores = stores
   if (market !== undefined) updateData.market = market
   if (district !== undefined) updateData.district = district
   if (competitors !== undefined) updateData.competitors = competitors
@@ -221,6 +225,7 @@ export async function PATCH(request: Request, { params }: Params) {
       reservationUrl: reservationUrl || '',
       orderingUrl: orderingUrl || '',
       deliveryUrls: deliveryUrls || [],
+      stores: stores || [],
       market: market || '',
       district: district || '',
       competitors: competitors || [],

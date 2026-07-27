@@ -44,6 +44,15 @@ interface Props {
   subscriptionHref?: string
 }
 
+type StoreInfo = {
+  name: string
+  address: string
+  phone?: string
+  businessHours?: string
+  reservationUrl?: string
+  orderingUrl?: string
+}
+
 
 // ─── Plan badge helper ────────────────────────────────────────────────────────
 
@@ -132,6 +141,7 @@ export default function BrandProfileView({
   const [draftReservationUrl, setDraftReservationUrl] = useState('')
   const [draftOrderingUrl, setDraftOrderingUrl] = useState('')
   const [draftDeliveryUrls, setDraftDeliveryUrls] = useState<Array<{platform: string; url: string}>>([])
+  const [draftStores, setDraftStores] = useState<StoreInfo[]>([])
 
   // Section 3: Knowledge Base
   const [draftMarket, setDraftMarket] = useState('')
@@ -139,7 +149,7 @@ export default function BrandProfileView({
   const [draftCompetitors, setDraftCompetitors] = useState<string[]>([])
   const [newCompetitor, setNewCompetitor] = useState('')
 
-  // Section 4: Promo Plan
+  // Brand Identity extension: promotion focus and publishing frequency
   const [promoPlan, setPromoPlan] = useState<{
     period: string; startDate: string; endDate: string
     direction: string; copywritingRequirements: string
@@ -151,7 +161,6 @@ export default function BrandProfileView({
     brandVoice: '', brandImage: '',
     keyMessages: [], campaigns: [],
   })
-  const [newKeyMessage, setNewKeyMessage] = useState('')
   // Per-brand publishing frequency
   const [publishingFreq, setPublishingFreq] = useState<{
     postsPerDay: number
@@ -162,7 +171,6 @@ export default function BrandProfileView({
   const [editingName, setEditingName] = useState(false)
   const [editingBiz, setEditingBiz] = useState(false)
   const [editingKnowledge, setEditingKnowledge] = useState(false)
-  const [editingPromo, setEditingPromo] = useState(false)
   const [brandAccounts, setBrandAccounts] = useState<Array<{
     id: string; platformId: string; handle: string; displayName?: string | null;
     profileUrl?: string | null; followerCount?: number | null; followerDelta?: number | null;
@@ -200,7 +208,6 @@ export default function BrandProfileView({
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileMarkdown, setProfileMarkdown] = useState('')
-  const [profileViewMode, setProfileViewMode] = useState<'edit' | 'preview'>('preview')
 
   const loadProfile = async () => {
     setProfileLoading(true)
@@ -258,6 +265,7 @@ export default function BrandProfileView({
         setDraftReservationUrl(k.reservationUrl || '')
         setDraftOrderingUrl(k.orderingUrl || '')
         setDraftDeliveryUrls(Array.isArray(k.deliveryUrls) ? k.deliveryUrls : [])
+        setDraftStores(Array.isArray(k.stores) ? k.stores : [])
         // Section 3 — knowledge base
         setDraftMarket(k.market || '')
         setDraftDistrict(k.district || '')
@@ -291,7 +299,7 @@ export default function BrandProfileView({
         // No knowledge record for this brand — reset every section to empty defaults
         setLocalBrandTone(''); setLocalSlangDict({})
         setDraftAudience(''); setDraftProduct(''); setDraftNegPrompts([])
-        setDraftBusinessHours(''); setDraftReservationUrl(''); setDraftOrderingUrl(''); setDraftDeliveryUrls([])
+        setDraftBusinessHours(''); setDraftReservationUrl(''); setDraftOrderingUrl(''); setDraftDeliveryUrls([]); setDraftStores([])
         setDraftMarket(''); setDraftDistrict(''); setDraftCompetitors([])
         setPromoPlan({ period: 'monthly', startDate: '', endDate: '', direction: '', copywritingRequirements: '', brandVoice: '', brandImage: '', keyMessages: [], campaigns: [] })
         setPublishingFreq({ postsPerDay: 1, platforms: {} })
@@ -353,6 +361,60 @@ export default function BrandProfileView({
     } finally {
       setProfileSaving(false)
     }
+  }
+
+  const buildEditableBrandContextMarkdown = () => {
+    const identityLines = [
+      activeBrandTone ? `- 品牌语气：${activeBrandTone}` : '',
+      draftAudience ? `- 目标客群：${draftAudience}` : '',
+      draftProduct ? `- 核心卖点：${draftProduct}` : '',
+      draftLocation ? `- 运营区域：${draftLocation}` : '',
+      promoPlan.brandVoice ? `- 品牌 Voice：${promoPlan.brandVoice}` : '',
+      promoPlan.brandImage ? `- 品牌形象：${promoPlan.brandImage}` : '',
+      promoPlan.direction ? `- 推广重点：${promoPlan.direction}` : '',
+      publishingFreq.postsPerDay ? `- 默认发布频次：${publishingFreq.postsPerDay} 帖/天` : '',
+      ...Object.entries(publishingFreq.platforms)
+        .filter(([, cfg]) => cfg.postsPerDay)
+        .map(([platform, cfg]) => `- ${platform} 发布频次：${cfg.postsPerDay} 帖/天`),
+    ].filter(Boolean).join('\n') || '（暂未填写）'
+
+    const storeLines = draftStores.length
+      ? draftStores
+          .filter((s) => s.name || s.address)
+          .map((s, index) => [
+            `### ${s.name || `门店 ${index + 1}`}`,
+            s.address ? `- 地址：${s.address}` : '',
+            s.phone ? `- 电话：${s.phone}` : '',
+            s.businessHours ? `- 营业时间：${s.businessHours}` : '',
+            s.reservationUrl ? `- 订座链接：${s.reservationUrl}` : '',
+            s.orderingUrl ? `- 下单链接：${s.orderingUrl}` : '',
+          ].filter(Boolean).join('\n'))
+          .join('\n\n')
+      : [
+          draftAddress ? `- 主门店地址：${draftAddress}` : '',
+          draftPhone ? `- 联系电话：${draftPhone}` : '',
+          draftWebsite ? `- 品牌网站：${draftWebsite}` : '',
+          draftBusinessHours ? `- 营业时间：${draftBusinessHours}` : '',
+          draftReservationUrl ? `- 订座链接：${draftReservationUrl}` : '',
+          draftOrderingUrl ? `- 下单链接：${draftOrderingUrl}` : '',
+        ].filter(Boolean).join('\n') || '（暂未填写）'
+
+    return `# ${draftName || brand.name} 品牌上下文
+
+## 品牌介绍
+${draftDesc || '（暂未填写）'}
+
+## 品牌定位与特征
+${identityLines}
+
+## 经营信息
+${storeLines}
+`
+  }
+
+  const openEditableBrandContext = () => {
+    setProfileMarkdown(buildEditableBrandContextMarkdown())
+    setShowContextModal(true)
   }
 
   const handleRefreshProfile = async () => {
@@ -620,10 +682,15 @@ export default function BrandProfileView({
       const res = await fetch(`/api/brands/${brandId}/knowledge`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandTone: activeBrandTone, slangDict: activeSlangDict }),
+        body: JSON.stringify({
+          brandTone: activeBrandTone,
+          slangDict: activeSlangDict,
+          promoPlan,
+          publishingFreq,
+        }),
       })
       if (res.ok) {
-        showToastVal('品牌语气与术语已保存', 'success')
+        showToastVal('品牌定位与特征已保存', 'success')
       } else {
         showToastVal('保存失败，请重试', 'error')
       }
@@ -862,14 +929,11 @@ export default function BrandProfileView({
             品牌配置
           </button>
           <button
-            onClick={() => {
-              setShowContextModal(true)
-              void loadProfile()
-            }}
+            onClick={openEditableBrandContext}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all cursor-pointer active:scale-95"
           >
             <BookOpen className="w-3.5 h-3.5" />
-            品牌上下文
+            编辑品牌上下文
           </button>
         </div>
       </div>
@@ -1169,17 +1233,6 @@ export default function BrandProfileView({
                   </div>
                   <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
                     <div className="flex items-start gap-2 pt-0.5">
-                      <div className="w-6 h-6 rounded-lg bg-violet-50 dark:bg-violet-950/30 flex items-center justify-center flex-shrink-0">
-                        <Goal className="w-3.5 h-3.5 text-violet-500" />
-                      </div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">商业目标<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Founder Vision</span></span>
-                    </div>
-                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
-                      {parsedTargets || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic text-xs">暂无数据。请同步 AMC-Growth 分析。</em>}
-                    </p>
-                  </div>
-                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
-                    <div className="flex items-start gap-2 pt-0.5">
                       <div className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center flex-shrink-0">
                         <Star className="w-3.5 h-3.5 text-emerald-500" />
                       </div>
@@ -1191,32 +1244,6 @@ export default function BrandProfileView({
                   </div>
                   <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
                     <div className="flex items-start gap-2 pt-0.5">
-                      <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center flex-shrink-0">
-                        <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
-                      </div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">本地话术<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Local Slang · {Object.keys(activeSlangDict).length} 条</span></span>
-                    </div>
-                    <div>
-                      {Object.keys(activeSlangDict).length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {Object.entries(activeSlangDict).slice(0, 12).map(([term, meaning]) => (
-                            <span key={term} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800">
-                              <span className="font-black">"{term}"</span>
-                              <span className="text-indigo-400">→</span>
-                              <span>{meaning}</span>
-                            </span>
-                          ))}
-                          {Object.keys(activeSlangDict).length > 12 && (
-                            <span className="text-[10px] text-slate-400 self-center">+{Object.keys(activeSlangDict).length - 12} 条</span>
-                          )}
-                        </div>
-                      ) : (
-                        <em className="text-xs text-slate-300 dark:text-slate-600 font-normal not-italic">尚未配置俚语词条。可在知识库 Tab 添加。</em>
-                      )}
-                    </div>
-                  </div>
-                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
-                    <div className="flex items-start gap-2 pt-0.5">
                       <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
                         <MapPin className="w-3.5 h-3.5 text-slate-500" />
                       </div>
@@ -1225,6 +1252,57 @@ export default function BrandProfileView({
                     <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
                       {draftLocation || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic text-xs">暂无地理区域定位。</em>}
                     </p>
+                  </div>
+                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
+                    <div className="flex items-start gap-2 pt-0.5">
+                      <div className="w-6 h-6 rounded-lg bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center flex-shrink-0">
+                        <Sparkles className="w-3.5 h-3.5 text-rose-500" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">品牌 Voice<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Brand Voice</span></span>
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                      {promoPlan.brandVoice || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic text-xs">暂无品牌 voice。</em>}
+                    </p>
+                  </div>
+                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
+                    <div className="flex items-start gap-2 pt-0.5">
+                      <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center flex-shrink-0">
+                        <Bookmark className="w-3.5 h-3.5 text-indigo-500" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">品牌形象<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Brand Image</span></span>
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                      {promoPlan.brandImage || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic text-xs">暂无品牌形象。</em>}
+                    </p>
+                  </div>
+                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
+                    <div className="flex items-start gap-2 pt-0.5">
+                      <div className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center flex-shrink-0">
+                        <Target className="w-3.5 h-3.5 text-amber-500" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">推广重点<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Promotion Focus</span></span>
+                    </div>
+                    <p className="text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
+                      {promoPlan.direction || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic text-xs">暂无推广重点。</em>}
+                    </p>
+                  </div>
+                  <div className="px-6 py-4 grid grid-cols-[180px_1fr] gap-4">
+                    <div className="flex items-start gap-2 pt-0.5">
+                      <div className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950/30 flex items-center justify-center flex-shrink-0">
+                        <Zap className="w-3.5 h-3.5 text-amber-500" />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">发布频次<br /><span className="text-[9px] font-semibold text-slate-300 dark:text-slate-600 normal-case tracking-normal">Publishing Frequency</span></span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800">
+                        默认 {publishingFreq.postsPerDay} 帖/天
+                      </span>
+                      {Object.entries(publishingFreq.platforms).filter(([, v]) => v.postsPerDay).map(([p, v]) => (
+                        <span key={p} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                          {p} {v.postsPerDay} 帖/天
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1383,6 +1461,49 @@ export default function BrandProfileView({
                           className="w-full min-h-[90px] text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200/70 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
                         />
                       </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label className="block">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">品牌 Voice</span>
+                          <textarea value={promoPlan.brandVoice} onChange={e => setPromoPlan(p => ({ ...p, brandVoice: e.target.value }))} rows={2}
+                            placeholder="自信、温暖、邻家感…"
+                            className="w-full text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200/70 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">品牌形象</span>
+                          <textarea value={promoPlan.brandImage} onChange={e => setPromoPlan(p => ({ ...p, brandImage: e.target.value }))} rows={2}
+                            placeholder="精致但不高冷，有温度的街坊餐厅"
+                            className="w-full text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200/70 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+                        </label>
+                      </div>
+                      <label className="block">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">推广重点</span>
+                        <textarea value={promoPlan.direction} onChange={e => setPromoPlan(p => ({ ...p, direction: e.target.value }))} rows={3}
+                          placeholder="当前重点推广的产品、活动或门店方向…"
+                          className="w-full text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800 border border-slate-200/70 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+                      </label>
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">发布频次</span>
+                        <div className="flex items-center gap-3">
+                          <input type="number" min={0.5} max={10} step={0.5} value={publishingFreq.postsPerDay}
+                            onChange={e => setPublishingFreq(f => ({ ...f, postsPerDay: parseFloat(e.target.value) || 1 }))}
+                            className="w-20 px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none text-center font-bold" />
+                          <span className="text-xs text-slate-500">帖/天（全平台默认）</span>
+                        </div>
+                        {['instagram', 'xiaohongshu', 'tiktok', 'facebook'].map(platform => {
+                          const cfg = publishingFreq.platforms[platform] || {}
+                          return (
+                            <div key={platform} className="flex items-center gap-3">
+                              <span className="text-[11px] font-bold text-slate-500 w-24 capitalize">{platform}</span>
+                              <input type="number" min={0.5} max={10} step={0.5} value={cfg.postsPerDay ?? ''} placeholder="帖/天"
+                                onChange={e => { const v = parseFloat(e.target.value) || undefined; setPublishingFreq(f => ({ ...f, platforms: { ...f.platforms, [platform]: { ...cfg, postsPerDay: v } } })) }}
+                                className="w-20 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none text-center" />
+                              <input value={(cfg.preferredHours ?? []).join(',')} placeholder="首选时段，如 11,18,20"
+                                onChange={e => { const hrs = e.target.value.split(',').map(h => parseInt(h.trim())).filter(h => !isNaN(h) && h >= 0 && h <= 23); setPublishingFreq(f => ({ ...f, platforms: { ...f.platforms, [platform]: { ...cfg, preferredHours: hrs } } })) }}
+                                className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                            </div>
+                          )
+                        })}
+                      </div>
 
                       {/* Local Slang Dict */}
                       <div className="space-y-3 pt-2">
@@ -1465,7 +1586,7 @@ export default function BrandProfileView({
                   setSaving(true)
                   try {
                     const r1 = await fetch(`/api/brands/${brandId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: draftAddress, phone: draftPhone, website: draftWebsite }) })
-                    const r2 = await fetch(`/api/brands/${brandId}/knowledge`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessHours: draftBusinessHours, reservationUrl: draftReservationUrl, orderingUrl: draftOrderingUrl, deliveryUrls: draftDeliveryUrls }) })
+                    const r2 = await fetch(`/api/brands/${brandId}/knowledge`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessHours: draftBusinessHours, reservationUrl: draftReservationUrl, orderingUrl: draftOrderingUrl, deliveryUrls: draftDeliveryUrls, stores: draftStores }) })
                     if (r1.ok && r2.ok) { showToastVal('经营信息已保存', 'success'); setEditingBiz(false) }
                     else showToastVal('保存失败，请重试', 'error')
                   } catch { showToastVal('网络错误', 'error') }
@@ -1510,6 +1631,22 @@ export default function BrandProfileView({
                       <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                         {d.platform}{d.url && <ExternalLink size={9} />}
                       </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {draftStores.length > 0 && (
+                <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">门店列表</span>
+                  <div className="space-y-2">
+                    {draftStores.filter(s => s.name || s.address).map((s, i) => (
+                      <div key={i} className="rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700 p-3">
+                        <p className="text-xs font-black text-slate-700 dark:text-slate-100">{s.name || `门店 ${i + 1}`}</p>
+                        {s.address && <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{s.address}</p>}
+                        {(s.phone || s.businessHours) && (
+                          <p className="text-[10px] text-slate-400 mt-1">{[s.phone, s.businessHours].filter(Boolean).join(' · ')}</p>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1559,298 +1696,48 @@ export default function BrandProfileView({
                   </button>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── SECTION: 调研分析 ───────────────────────────────────────────── */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <span className="w-1 h-4 rounded-full bg-violet-500" />
-              <h2 className="text-xs font-black text-slate-700 dark:text-white flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5 text-violet-500" /> 调研分析
-              </h2>
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">从知识库同步</span>
-            </div>
-            <button
-              onClick={async () => {
-                setResearchSyncing(true)
-                try {
-                  await Promise.all([
-                    loadAllConfig(),
-                    fetch(`/api/brands/${brandId}/accounts`)
-                      .then(r => r.ok ? r.json() : { accounts: [] })
-                      .then(d => setBrandAccounts(Array.isArray(d.accounts) ? d.accounts : []))
-                  ])
-                  showToastVal('调研数据已同步', 'success')
-                } catch { showToastVal('同步失败', 'error') }
-                finally { setResearchSyncing(false) }
-              }}
-              disabled={researchSyncing}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 border border-violet-200 dark:border-violet-800 transition-colors cursor-pointer disabled:opacity-60"
-            >
-              {researchSyncing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-              {researchSyncing ? '同步中…' : '同步'}
-            </button>
-          </div>
-
-          {/* Content — read-only */}
-          <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
-            {/* 商圈信息 */}
-            <div className="px-5 py-4">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">商圈信息</p>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 block mb-1">所在市场</span>
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
-                    {draftMarket || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂无数据</em>}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 block mb-1">商圈</span>
-                  <span className="text-xs font-medium text-slate-700 dark:text-slate-200">
-                    {draftDistrict || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂无数据</em>}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* 竞争对手 */}
-            <div className="px-5 py-4">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">竞争对手</p>
-              {draftCompetitors.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {draftCompetitors.map((c, i) => (
-                    <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800">
-                      {c}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <em className="text-xs text-slate-300 dark:text-slate-600 font-normal not-italic">暂无竞争对手数据</em>
-              )}
-            </div>
-
-            {/* 品牌网络情况 */}
-            <div className="px-5 py-4">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">品牌网络情况</p>
-              {brandAccounts.length > 0 ? (
-                <div className="space-y-2">
-                  {brandAccounts.map(acc => {
-                    const platformNames: Record<string, string> = {
-                      instagram: 'Instagram', xiaohongshu: '小红书', tiktok: 'TikTok',
-                      facebook: 'Facebook', youtube: 'YouTube', twitter: 'X (Twitter)'
-                    }
-                    const platformColors: Record<string, string> = {
-                      instagram: 'from-rose-500 to-pink-500',
-                      xiaohongshu: 'from-red-500 to-rose-400',
-                      tiktok: 'from-slate-800 to-slate-600',
-                      facebook: 'from-blue-600 to-blue-500',
-                      youtube: 'from-red-600 to-red-500',
-                      twitter: 'from-sky-500 to-blue-500',
-                    }
-                    const color = platformColors[acc.platformId] || 'from-slate-500 to-slate-400'
-                    const name = platformNames[acc.platformId] || acc.platformId
-                    return (
-                      <div key={acc.id} className="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-                        <div className="flex items-center gap-2.5">
-                          <span className={`w-6 h-6 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-white text-[9px] font-black`}>
-                            {name[0]}
-                          </span>
-                          <div>
-                            <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200">{name}</p>
-                            <p className="text-[10px] text-slate-400">@{acc.handle}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          {acc.followerCount != null ? (
-                            <div>
-                              <p className="text-[11px] font-black text-slate-700 dark:text-white">
-                                {acc.followerCount >= 1000 ? `${(acc.followerCount / 1000).toFixed(1)}K` : acc.followerCount}
-                              </p>
-                              {acc.followerDelta != null && acc.followerDelta !== 0 && (
-                                <p className={`text-[10px] font-bold ${acc.followerDelta > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                  {acc.followerDelta > 0 ? '+' : ''}{acc.followerDelta}
-                                </p>
-                              )}
-                              <p className="text-[9px] text-slate-400">followers</p>
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-slate-300 dark:text-slate-600">暂无数据</span>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <em className="text-xs text-slate-300 dark:text-slate-600 font-normal not-italic">暂无社媒账号数据</em>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ── SECTION: 推广计划 ─────────────────────────────────────────────── */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <span className="w-1 h-4 rounded-full bg-amber-500" />
-              <h2 className="text-xs font-black text-slate-700 dark:text-white flex items-center gap-1.5">
-                <Target className="w-3.5 h-3.5 text-amber-500" /> 推广计划
-              </h2>
-            </div>
-            {editingPromo ? (
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => setEditingPromo(false)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer">
-                  <X size={11} /> 取消
-                </button>
-                <button onClick={async () => {
-                  const ok = await saveKnowledge({ promoPlan, publishingFreq }, '推广计划已保存')
-                  if (ok) setEditingPromo(false)
-                }} disabled={saving}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60 transition-all cursor-pointer">
-                  {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-                  {saving ? '保存中…' : '保存'}
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setEditingPromo(true)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer">
-                <Edit3 size={11} /> 编辑
-              </button>
-            )}
-          </div>
-
-          {/* View Mode */}
-          {!editingPromo && (
-            <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
-              {[
-                { label: '推广周期', value: `${promoPlan.period === 'monthly' ? '月度' : promoPlan.period === 'weekly' ? '周度' : '半年度'} ${promoPlan.startDate ? `${promoPlan.startDate} → ${promoPlan.endDate}` : ''}`.trim() },
-                { label: '推广方向', value: promoPlan.direction },
-                { label: '文案要求', value: promoPlan.copywritingRequirements },
-                { label: '品牌 Voice', value: promoPlan.brandVoice },
-                { label: '品牌形象', value: promoPlan.brandImage },
-              ].map(({ label, value }) => (
-                <div key={label} className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">{label}</span>
-                  <span className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
-                    {value || <em className="text-slate-300 dark:text-slate-600 font-normal not-italic">暂未填写</em>}
-                  </span>
-                </div>
-              ))}
-              {promoPlan.keyMessages.length > 0 && (
-                <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">核心信息</span>
-                  <div className="flex flex-wrap gap-1">
-                    {promoPlan.keyMessages.map((m, i) => (
-                      <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800">{m}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="grid grid-cols-[160px_1fr] gap-3 px-5 py-3">
-                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 pt-0.5">发布频率</span>
-                <span className="text-xs text-slate-700 dark:text-slate-200">{publishingFreq.postsPerDay} 帖/天（全平台默认）</span>
-              </div>
-            </div>
-          )}
-
-          {/* Edit Mode */}
-          {editingPromo && (
-            <div className="p-5 space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">计划周期</span>
-                  <select value={promoPlan.period} onChange={e => setPromoPlan(p => ({ ...p, period: e.target.value }))}
-                    className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none">
-                    <option value="monthly">月度</option>
-                    <option value="weekly">周度</option>
-                    <option value="biannual">半年度</option>
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">开始日期</span>
-                  <input type="date" value={promoPlan.startDate} onChange={e => setPromoPlan(p => ({ ...p, startDate: e.target.value }))}
-                    className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                </label>
-                <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">结束日期</span>
-                  <input type="date" value={promoPlan.endDate} onChange={e => setPromoPlan(p => ({ ...p, endDate: e.target.value }))}
-                    className="mt-1 w-full px-2 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                </label>
-              </div>
-              <label className="block">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">推广方向</span>
-                <textarea value={promoPlan.direction} onChange={e => setPromoPlan(p => ({ ...p, direction: e.target.value }))} rows={3}
-                  placeholder="本月推广重点：主打夏日新品，配合店庆10周年…"
-                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
-              </label>
-              <label className="block">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">文案要求</span>
-                <textarea value={promoPlan.copywritingRequirements} onChange={e => setPromoPlan(p => ({ ...p, copywritingRequirements: e.target.value }))} rows={3}
-                  placeholder="每篇文案需包含明确 CTA（预约/下单）…"
-                  className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌 Voice</span>
-                  <textarea value={promoPlan.brandVoice} onChange={e => setPromoPlan(p => ({ ...p, brandVoice: e.target.value }))} rows={2}
-                    placeholder="自信、温暖、邻家感…"
-                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
-                </label>
-                <label className="block">
-                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">品牌形象</span>
-                  <textarea value={promoPlan.brandImage} onChange={e => setPromoPlan(p => ({ ...p, brandImage: e.target.value }))} rows={2}
-                    placeholder="精致但不高冷，有温度的街坊餐厅"
-                    className="mt-1 w-full px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none resize-none" />
-                </label>
-              </div>
               <div>
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">核心信息</span>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {promoPlan.keyMessages.map((m, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800">
-                      {m}<button onClick={() => setPromoPlan(p => ({ ...p, keyMessages: p.keyMessages.filter((_, j) => j !== i) }))}><X size={10} /></button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-2 mt-2">
-                  <input value={newKeyMessage} onChange={e => setNewKeyMessage(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && newKeyMessage.trim()) { setPromoPlan(p => ({ ...p, keyMessages: [...p.keyMessages, newKeyMessage.trim()] })); setNewKeyMessage('') }}}
-                    placeholder="核心信息点，按 Enter 添加"
-                    className="flex-1 px-3 py-1.5 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
-                  <button onClick={() => { if (newKeyMessage.trim()) { setPromoPlan(p => ({ ...p, keyMessages: [...p.keyMessages, newKeyMessage.trim()] })); setNewKeyMessage('') }}}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200"><Plus size={12} /></button>
-                </div>
-              </div>
-              <div>
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">⚡ 发布频率方案</span>
-                <p className="text-[10px] text-slate-400 mt-0.5 mb-2">智能排期将优先读取此方案（覆盖全局设置）。</p>
-                <div className="flex items-center gap-3 mb-3">
-                  <input type="number" min={0.5} max={10} step={0.5} value={publishingFreq.postsPerDay}
-                    onChange={e => setPublishingFreq(f => ({ ...f, postsPerDay: parseFloat(e.target.value) || 1 }))}
-                    className="w-20 px-3 py-2 rounded-xl text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none text-center font-bold" />
-                  <span className="text-xs text-slate-500">帖/天（全平台默认）</span>
-                </div>
-                <div className="space-y-2">
-                  {['instagram', 'xiaohongshu', 'tiktok', 'facebook'].map(platform => {
-                    const cfg = publishingFreq.platforms[platform] || {}
-                    return (
-                      <div key={platform} className="flex items-center gap-3">
-                        <span className="text-[11px] font-bold text-slate-500 w-24 capitalize">{platform}</span>
-                        <input type="number" min={0.5} max={10} step={0.5} value={cfg.postsPerDay ?? ''} placeholder="帖/天"
-                          onChange={e => { const v = parseFloat(e.target.value) || undefined; setPublishingFreq(f => ({ ...f, platforms: { ...f.platforms, [platform]: { ...cfg, postsPerDay: v } } })) }}
-                          className="w-20 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none text-center" />
-                        <input value={(cfg.preferredHours ?? []).join(',')} placeholder="首选时段，如 11,18,20"
-                          onChange={e => { const hrs = e.target.value.split(',').map(h => parseInt(h.trim())).filter(h => !isNaN(h) && h >= 0 && h <= 23); setPublishingFreq(f => ({ ...f, platforms: { ...f.platforms, [platform]: { ...cfg, preferredHours: hrs } } })) }}
-                          className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 focus:outline-none" />
+                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2">门店列表</p>
+                <div className="space-y-3">
+                  {draftStores.map((store, i) => (
+                    <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input value={store.name}
+                          onChange={e => { const n = [...draftStores]; n[i] = { ...store, name: e.target.value }; setDraftStores(n) }}
+                          placeholder="门店名称"
+                          className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none" />
+                        <button onClick={() => setDraftStores(draftStores.filter((_, j) => j !== i))} className="p-1 text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
                       </div>
-                    )
-                  })}
+                      <input value={store.address}
+                        onChange={e => { const n = [...draftStores]; n[i] = { ...store, address: e.target.value }; setDraftStores(n) }}
+                        placeholder="门店地址"
+                        className="w-full px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none" />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={store.phone || ''}
+                          onChange={e => { const n = [...draftStores]; n[i] = { ...store, phone: e.target.value }; setDraftStores(n) }}
+                          placeholder="电话"
+                          className="px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none" />
+                        <input value={store.businessHours || ''}
+                          onChange={e => { const n = [...draftStores]; n[i] = { ...store, businessHours: e.target.value }; setDraftStores(n) }}
+                          placeholder="营业时间"
+                          className="px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input value={store.reservationUrl || ''}
+                          onChange={e => { const n = [...draftStores]; n[i] = { ...store, reservationUrl: e.target.value }; setDraftStores(n) }}
+                          placeholder="订座链接"
+                          className="px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none" />
+                        <input value={store.orderingUrl || ''}
+                          onChange={e => { const n = [...draftStores]; n[i] = { ...store, orderingUrl: e.target.value }; setDraftStores(n) }}
+                          placeholder="下单链接"
+                          className="px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none" />
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={() => setDraftStores([...draftStores, { name: '', address: '' }])}
+                    className="flex items-center gap-1.5 text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline">
+                    <Plus size={12} /> 添加门店
+                  </button>
                 </div>
               </div>
             </div>
@@ -2089,8 +1976,8 @@ export default function BrandProfileView({
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                 <div>
-                  <h3 className="text-sm font-black text-slate-800 dark:text-white">📚 品牌推广核心预读上下文</h3>
-                  <p className="text-[10px] text-slate-400 mt-0.5">此 Profile Markdown 是供 AI Copywriter 创作时预读的，仅保留有价值的品牌设定与语境</p>
+                  <h3 className="text-sm font-black text-slate-800 dark:text-white">品牌上下文 Markdown</h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">仅编辑品牌介绍、品牌定位与特征、经营信息三部分。</p>
                 </div>
                 <button
                   onClick={() => setShowContextModal(false)}
@@ -2101,62 +1988,13 @@ export default function BrandProfileView({
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 flex flex-col space-y-3 min-h-0 bg-white dark:bg-slate-900">
-                <div className="flex items-center justify-between flex-shrink-0">
-                  <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800 p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setProfileViewMode('edit')}
-                      className={`text-[10px] font-bold px-3 py-1 rounded-md transition-all ${
-                        profileViewMode === 'edit'
-                          ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-white shadow-sm'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                      }`}
-                    >
-                      编辑内容
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setProfileViewMode('preview')}
-                      className={`text-[10px] font-bold px-3 py-1 rounded-md transition-all ${
-                        profileViewMode === 'preview'
-                          ? 'bg-white dark:bg-slate-950 text-slate-800 dark:text-white shadow-sm'
-                          : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-                      }`}
-                    >
-                      格式预览
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleRefreshProfile}
-                    disabled={profileLoading || profileSaving}
-                    className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60 flex items-center gap-1 cursor-pointer"
-                  >
-                    {profileLoading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                    刷新系统快照
-                  </button>
-                </div>
-
                 <div className="flex-1 min-h-0 flex flex-col">
-                  {profileLoading ? (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-2 py-20">
-                      <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
-                      <p className="text-xs text-slate-400">正在载入品牌上下文 Markdown...</p>
-                    </div>
-                  ) : profileViewMode === 'edit' ? (
-                    <textarea
-                      value={profileMarkdown}
-                      onChange={(e) => setProfileMarkdown(e.target.value)}
-                      placeholder="# 品牌名称..."
-                      className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
-                    />
-                  ) : (
-                    <div className="flex-1 w-full min-h-[380px] p-4 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200/70 text-slate-700 dark:text-slate-200 overflow-y-auto prose prose-slate dark:prose-invert max-w-none leading-relaxed">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {profileMarkdown || '（暂无内容）'}
-                      </ReactMarkdown>
-                    </div>
-                  )}
+                  <textarea
+                    value={profileMarkdown}
+                    onChange={(e) => setProfileMarkdown(e.target.value)}
+                    placeholder="# 品牌名称..."
+                    className="flex-1 w-full min-h-[520px] p-4 rounded-xl text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none"
+                  />
                 </div>
 
                 <button

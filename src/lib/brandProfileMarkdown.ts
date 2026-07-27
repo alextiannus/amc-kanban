@@ -351,8 +351,10 @@ export async function readBrandProfileMarkdown(
 }
 
 export function parseDescriptionFromMarkdown(markdown: string): string | null {
-  const header = '## 2. 品牌介绍（来自系统字段 description）'
-  const nextHeader = '## 3. 品牌推广核心语境'
+  const modernHeader = '## 品牌介绍'
+  const legacyHeader = '## 2. 品牌介绍（来自系统字段 description）'
+  const header = markdown.includes(modernHeader) ? modernHeader : legacyHeader
+  const nextHeader = header === modernHeader ? '## 品牌定位与特征' : '## 3. 品牌推广核心语境'
   
   const idx = markdown.indexOf(header)
   if (idx === -1) return null
