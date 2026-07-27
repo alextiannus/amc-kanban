@@ -42,7 +42,7 @@ async function startMockPostFast() {
     const body = await readBody(req)
     seen.push({ method, url, headers: req.headers, body })
 
-    if (req.headers['pf-api-key'] !== API_KEY && !url.startsWith('/upload/')) {
+    if (req.headers['pf-api-key'] !== API_KEY && !url.startsWith('/upload/') && !url.startsWith('/cdn/')) {
       return json(res, 401, { message: 'missing pf-api-key' })
     }
 
@@ -102,6 +102,12 @@ async function startMockPostFast() {
       return
     }
 
+    if (method === 'GET' && url === '/cdn/octet-video.mp4') {
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream' })
+      res.end(Buffer.from('video'))
+      return
+    }
+
     if (method === 'POST' && url === '/social-posts') {
       const post = body?.posts?.[0]
       if (post.socialMediaId === 'pf_acc_google') {
@@ -133,6 +139,21 @@ async function startMockPostFast() {
               status: 'SCHEDULED',
               scheduledAt: post.scheduledAt,
               url: 'https://postfa.st/posts/pf_post_opaque_video_001',
+            },
+          ],
+        })
+      }
+
+      if (post.content === 'Octet stream video URL') {
+        assert.equal(post.mediaItems[0].key, 'video/reel-key')
+        assert.equal(post.mediaItems[0].type, 'VIDEO')
+        return json(res, 200, {
+          posts: [
+            {
+              id: 'pf_post_octet_video_001',
+              status: 'SCHEDULED',
+              scheduledAt: post.scheduledAt,
+              url: 'https://postfa.st/posts/pf_post_octet_video_001',
             },
           ],
         })
@@ -187,6 +208,7 @@ async function startMockPostFast() {
 async function main() {
   process.env.POSTFAST_BASE_URL = BASE_URL
   const postfast = await import('../src/lib/integrations/postfast.ts')
+  const publishMedia = await import('../src/lib/publishMedia.ts')
   const server = await startMockPostFast()
 
   try {
@@ -203,6 +225,22 @@ async function main() {
 
     const upload = await postfast.postfastUploadFile(uploadSlots.slots[0].uploadUrl, Buffer.from('video'), 'video/mp4')
     assert.equal(upload.success, true)
+
+    const duplicateVideoMedia = publishMedia.buildPostfastMediaItems({
+      mediaUrls: [`${BASE_URL}/cdn/octet-video.mp4`],
+      assetRefs: [
+        {
+          asset: {
+            url: `${BASE_URL}/cdn/octet-video.mp4`,
+            mimeType: 'video/mp4',
+            sourceType: 'huawei_obs',
+          },
+        },
+      ],
+    })
+    assert.equal(duplicateVideoMedia.length, 1)
+    assert.equal(duplicateVideoMedia[0].url, `${BASE_URL}/cdn/octet-video.mp4`)
+    assert.equal(duplicateVideoMedia[0].mimeType, 'video/mp4')
 
     const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
     const publish = await postfast.postfastPublish({
@@ -228,6 +266,17 @@ async function main() {
     })
     assert.equal(opaqueVideoPublish.success, true)
     assert.equal(opaqueVideoPublish.postId, 'pf_post_opaque_video_001')
+
+    const octetVideoPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      caption: 'Octet stream video URL',
+      mediaUrls: [`${BASE_URL}/cdn/octet-video.mp4`],
+      scheduledAt,
+    })
+    assert.equal(octetVideoPublish.success, true)
+    assert.equal(octetVideoPublish.postId, 'pf_post_octet_video_001')
 
     const googlePublish = await postfast.postfastPublish({
       apiKey: API_KEY,

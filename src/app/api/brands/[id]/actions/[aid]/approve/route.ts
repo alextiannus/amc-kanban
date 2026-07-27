@@ -5,6 +5,7 @@ import { eventEmitter } from '@/lib/events'
 import { postfastPublish, postfastReplyReview } from '@/lib/integrations/postfast'
 import { canWriteBrandProject } from '@/lib/brandAccess'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
+import { buildPostfastMediaItems } from '@/lib/publishMedia'
 
 /** Fetch smart schedule recommendation — mirrors the helper in draftSubmission.ts */
 async function fetchRecommendedScheduleTime(brandId: string, platform: string): Promise<Date | null> {
@@ -92,33 +93,10 @@ export async function PATCH(request: Request, { params }: Params) {
         let result: { success: boolean; postId?: string; url?: string; error?: string } = { success: false, error: 'Unknown' }
         let resolvedScheduledAt = draft.scheduledAt ? new Date(draft.scheduledAt) : null
 
-        // Build mediaItems preserving mimeType so videos are not misidentified as images
-        const seenKeys = new Set<string>()
-        const mediaItems: Array<{ storageKey?: string; url?: string; mimeType?: string }> = []
-        for (const url of (draft.mediaUrls || [])) {
-          if (!url || seenKeys.has(url)) continue
-          seenKeys.add(url)
-          // Proxy URLs that encode an S3 key: extract key so PostFast skips re-upload
-          if (url.startsWith('/api/integrations/postfast/file/')) {
-            const key = url.split('/').slice(6).join('/')
-            mediaItems.push({ storageKey: key })
-          } else {
-            mediaItems.push({ url })
-          }
-        }
-        for (const ref of (draft.assetRefs || [])) {
-          const asset = ref.asset
-          if (!asset?.url || seenKeys.has(asset.url)) continue
-          seenKeys.add(asset.url)
-          if (asset.sourceType === 'postfast') {
-            const key = asset.url.startsWith('/api/integrations/postfast/file/')
-              ? asset.url.split('/').slice(6).join('/')
-              : asset.url
-            mediaItems.push({ storageKey: key, mimeType: asset.mimeType ?? undefined })
-          } else {
-            mediaItems.push({ url: asset.url, mimeType: asset.mimeType ?? undefined })
-          }
-        }
+        const mediaItems = buildPostfastMediaItems({
+          mediaUrls: draft.mediaUrls,
+          assetRefs: draft.assetRefs,
+        })
 
         let canProceed = true
         if (draft.platformPostId && !draft.publishedAt) {

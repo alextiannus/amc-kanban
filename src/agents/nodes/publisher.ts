@@ -3,6 +3,7 @@ import path from "path";
 import { prisma } from "../../lib/prisma.ts";
 import { postfastPublish } from "../../lib/integrations/postfast.ts";
 import { extractTopicKeywords } from "../../lib/topicExtractor.ts";
+import { buildPostfastMediaItems } from "../../lib/publishMedia.ts";
 
 /**
  * 萃取草稿主题关键词，写入 topicKeywords 字段。
@@ -234,30 +235,10 @@ export async function publisherNode(state: any) {
           where: { id: existingDraftId },
           include: { assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
         })
-        const seenKeys = new Set<string>()
-        publishMediaItems = []
-        for (const url of (mediaUrls || [])) {
-          if (!url || seenKeys.has(url)) continue
-          seenKeys.add(url)
-          if (url.startsWith('/api/integrations/postfast/file/')) {
-            publishMediaItems.push({ storageKey: url.split('/').slice(6).join('/') })
-          } else {
-            publishMediaItems.push({ url })
-          }
-        }
-        for (const ref of (draftWithAssets?.assetRefs || [])) {
-          const asset = ref.asset
-          if (!asset?.url || seenKeys.has(asset.url)) continue
-          seenKeys.add(asset.url)
-          if (asset.sourceType === 'postfast') {
-            const key = asset.url.startsWith('/api/integrations/postfast/file/')
-              ? asset.url.split('/').slice(6).join('/')
-              : asset.url
-            publishMediaItems.push({ storageKey: key, mimeType: asset.mimeType ?? undefined })
-          } else {
-            publishMediaItems.push({ url: asset.url, mimeType: asset.mimeType ?? undefined })
-          }
-        }
+        publishMediaItems = buildPostfastMediaItems({
+          mediaUrls: mediaUrls || [],
+          assetRefs: draftWithAssets?.assetRefs,
+        })
       }
 
       const publishRes = await postfastPublish({

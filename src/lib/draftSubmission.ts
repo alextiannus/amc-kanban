@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { postfastDeletePost, postfastPublish } from '@/lib/integrations/postfast'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
+import { buildPostfastMediaItems } from '@/lib/publishMedia'
 
 type SubmitDraftInput = {
   brandId: string
@@ -18,36 +19,12 @@ function isFuture(value?: Date | null) {
   return !!value && value.getTime() > Date.now()
 }
 
-function uniq(values: string[]) {
-  return Array.from(new Set(values.filter(Boolean)))
-}
-
-function uniqMediaItems(values: Array<{ storageKey?: string; url?: string; mimeType?: string }>) {
-  const seen = new Set<string>()
-  return values.filter((item) => {
-    const key = item.storageKey || item.url
-    if (!key || seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
-
 function normalizePublishPlatform(platform?: string | null) {
   const normalized = String(platform ?? '').toLowerCase().trim()
   if (['google_business', 'google_maps', 'google_map', 'google_business_profile', 'gbp', 'gmb'].includes(normalized)) {
     return 'google'
   }
   return normalized
-}
-
-function extractPostfastStorageKey(url: string) {
-  if (!url) return ''
-  if (url.startsWith('/api/integrations/postfast/file/')) {
-    const parts = url.split('/')
-    return parts.slice(6).join('/')
-  }
-  if (!url.startsWith('http') && !url.startsWith('/')) return url
-  return ''
 }
 
 /**
@@ -312,28 +289,10 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   // For scheduled posts: only mark as 'scheduled' if the time is genuinely in the future.
   const scheduled = !immediatePublish && isFuture(resolvedScheduledAt)
 
-  const mediaStorageKeys = uniq([
-    ...draft.mediaUrls.map(extractPostfastStorageKey),
-  ])
-
-  const mediaUrls = uniq([
-    ...draft.mediaUrls.filter((url: string) => !extractPostfastStorageKey(url)),
-  ])
-
-  const mediaItems = uniqMediaItems([
-    ...mediaStorageKeys.map((storageKey) => ({ storageKey })),
-    ...mediaUrls.map((url) => ({ url })),
-    ...draft.assetRefs.map((ref: any) => {
-      const asset = ref.asset
-      const storageKey = asset?.sourceType === 'postfast'
-        ? (extractPostfastStorageKey(asset.url) || asset.url)
-        : ''
-      return {
-        ...(storageKey ? { storageKey } : { url: asset?.url }),
-        mimeType: asset?.mimeType,
-      }
-    }),
-  ])
+  const mediaItems = buildPostfastMediaItems({
+    mediaUrls: draft.mediaUrls,
+    assetRefs: draft.assetRefs,
+  })
 
   console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, immediatePublish: ${input.immediatePublish}, draftId: ${draft.id}`)
   const result = await postfastPublish({

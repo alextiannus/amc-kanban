@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastPublish } from '@/lib/integrations/postfast'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { buildPostfastMediaItems } from '@/lib/publishMedia'
 
 type SessionUser = {
   id: string
@@ -86,32 +87,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: { status: 'publishing', agentNote: null },
   })
 
-  // Build mediaItems preserving mimeType so videos are not misidentified as images
-  const seenKeys = new Set<string>()
-  const mediaItems: Array<{ storageKey?: string; url?: string; mimeType?: string }> = []
-  for (const url of (draft.mediaUrls || [])) {
-    if (!url || seenKeys.has(url)) continue
-    seenKeys.add(url)
-    if (url.startsWith('/api/integrations/postfast/file/')) {
-      const key = url.split('/').slice(6).join('/')
-      mediaItems.push({ storageKey: key })
-    } else {
-      mediaItems.push({ url })
-    }
-  }
-  for (const ref of (draft.assetRefs || [])) {
-    const asset = ref.asset
-    if (!asset?.url || seenKeys.has(asset.url)) continue
-    seenKeys.add(asset.url)
-    if (asset.sourceType === 'postfast') {
-      const key = asset.url.startsWith('/api/integrations/postfast/file/')
-        ? asset.url.split('/').slice(6).join('/')
-        : asset.url
-      mediaItems.push({ storageKey: key, mimeType: asset.mimeType ?? undefined })
-    } else {
-      mediaItems.push({ url: asset.url, mimeType: asset.mimeType ?? undefined })
-    }
-  }
+  const mediaItems = buildPostfastMediaItems({
+    mediaUrls: draft.mediaUrls,
+    assetRefs: draft.assetRefs,
+  })
 
   // Attempt publish
   const publish = await postfastPublish({

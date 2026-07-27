@@ -509,6 +509,10 @@ function inferMimeTypeFromExtension(filename: string): string {
   return ''
 }
 
+function isGenericMimeType(mimeType: string): boolean {
+  return !mimeType || mimeType === 'application/octet-stream' || mimeType === 'binary/octet-stream'
+}
+
 function detectMediaType(keyOrUrl: string, mimeType?: string | null, explicitType?: 'IMAGE' | 'VIDEO'): 'IMAGE' | 'VIDEO' {
   if (explicitType === 'VIDEO' || explicitType === 'IMAGE') return explicitType
   const normalizedMimeType = normalizeMimeType(mimeType)
@@ -545,11 +549,18 @@ async function uploadPublicUrlToPostfast(apiKey: string, url: string, mimeTypeHi
     const arrayBuffer = await res.arrayBuffer()
     fileBuffer = Buffer.from(arrayBuffer)
 
-    const responseMimeType = normalizeMimeType(res.headers.get('content-type'))
-    mimeType = normalizeMimeType(mimeTypeHint) || responseMimeType || 'image/jpeg'
-
     const urlParts = url.split('/')
     filename = urlParts[urlParts.length - 1].split('?')[0] || 'file'
+    const inferredMimeType = inferMimeTypeFromExtension(filename)
+    const responseMimeType = normalizeMimeType(res.headers.get('content-type'))
+    const hintedMimeType = normalizeMimeType(mimeTypeHint)
+    if (hintedMimeType) {
+      mimeType = hintedMimeType
+    } else if (inferredMimeType && isGenericMimeType(responseMimeType)) {
+      mimeType = inferredMimeType
+    } else {
+      mimeType = responseMimeType || inferredMimeType || 'image/jpeg'
+    }
     if (!filename.includes('.')) {
       filename += mimeExtension(mimeType)
     }
