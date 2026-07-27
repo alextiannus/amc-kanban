@@ -354,6 +354,7 @@ export default function BrandProfileView({
       if (data.brand && onUpdate) {
         onUpdate(data.brand)
       }
+      await loadAllConfig()
       setTimeout(() => setProfileSaved(false), 2500)
     } catch (e) {
       console.error(e)

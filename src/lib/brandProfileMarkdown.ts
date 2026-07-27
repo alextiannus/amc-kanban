@@ -59,6 +59,43 @@ type RefreshResult = {
   markdown: string
 }
 
+type StoreDraft = {
+  name?: string
+  address?: string
+  phone?: string
+  businessHours?: string
+  reservationUrl?: string
+  orderingUrl?: string
+}
+
+export type ParsedEditableBrandContext = {
+  brand: {
+    description?: string | null
+    location?: string | null
+    address?: string | null
+    phone?: string | null
+    website?: string | null
+  }
+  knowledge: {
+    brandTone?: string
+    audienceAssumptions?: string
+    productAssumptions?: string
+    businessHours?: string | null
+    reservationUrl?: string
+    orderingUrl?: string
+    stores?: StoreDraft[]
+    promoPlan?: {
+      direction?: string
+      brandVoice?: string
+      brandImage?: string
+    }
+    publishingFreq?: {
+      postsPerDay?: number
+      platforms?: Record<string, { postsPerDay?: number }>
+    }
+  }
+}
+
 function profileRelativePath(brandId: string) {
   return `uploads/brand-profiles/${brandId}.md`
 }
@@ -372,4 +409,134 @@ export function parseDescriptionFromMarkdown(markdown: string): string | null {
   }
   
   return remaining.slice(0, nextIdx).trim()
+}
+
+function extractMarkdownSection(markdown: string, heading: string): string | null {
+  const match = markdown.match(new RegExp(`^##\\s+${heading}\\s*$`, 'm'))
+  if (!match || match.index === undefined) return null
+  const start = match.index + match[0].length
+  const rest = markdown.slice(start)
+  const next = rest.search(/^##\s+/m)
+  return (next === -1 ? rest : rest.slice(0, next)).trim()
+}
+
+function cleanMarkdownValue(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim()
+  if (!trimmed || /^（?暂未填写/.test(trimmed) || /^暂无/.test(trimmed)) return null
+  return trimmed
+}
+
+function readLabeledLine(section: string, labels: string[]): string | null {
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const match = section.match(new RegExp(`^\\s*-\\s*${escaped}\\s*[：:]\\s*(.+?)\\s*$`, 'm'))
+    const value = cleanMarkdownValue(match?.[1])
+    if (value !== null) return value
+  }
+  return null
+}
+
+function readFrequency(value: string | null): number | undefined {
+  if (!value) return undefined
+  const match = value.match(/(\d+(?:\.\d+)?)/)
+  if (!match) return undefined
+  const rate = Number(match[1])
+  return Number.isFinite(rate) && rate > 0 ? rate : undefined
+}
+
+function parseStores(section: string): StoreDraft[] {
+  const storeBlocks = section
+    .split(/^###\s+/m)
+    .slice(1)
+    .map((block) => block.trim())
+    .filter(Boolean)
+
+  return storeBlocks
+    .map((block) => {
+      const [nameLine = '', ...rest] = block.split('\n')
+      const body = rest.join('\n')
+      return {
+        name: cleanMarkdownValue(nameLine) ?? undefined,
+        address: readLabeledLine(body, ['地址']) ?? undefined,
+        phone: readLabeledLine(body, ['电话', '联系电话']) ?? undefined,
+        businessHours: readLabeledLine(body, ['营业时间']) ?? undefined,
+        reservationUrl: readLabeledLine(body, ['订座链接']) ?? undefined,
+        orderingUrl: readLabeledLine(body, ['下单链接']) ?? undefined,
+      }
+    })
+    .filter((store) => Object.values(store).some(Boolean))
+}
+
+export function parseEditableBrandContextFromMarkdown(markdown: string): ParsedEditableBrandContext {
+  const intro = extractMarkdownSection(markdown, '品牌介绍')
+  const identity = extractMarkdownSection(markdown, '品牌定位与特征')
+  const business = extractMarkdownSection(markdown, '经营信息')
+
+  const parsed: ParsedEditableBrandContext = {
+    brand: {},
+    knowledge: {},
+  }
+
+  if (intro !== null) {
+    parsed.brand.description = cleanMarkdownValue(intro)
+  }
+
+  if (identity !== null) {
+    const brandTone = readLabeledLine(identity, ['品牌语气'])
+    const audience = readLabeledLine(identity, ['目标客群'])
+    const product = readLabeledLine(identity, ['核心卖点'])
+    const location = readLabeledLine(identity, ['运营区域'])
+    const brandVoice = readLabeledLine(identity, ['品牌 Voice', '品牌Voice'])
+    const brandImage = readLabeledLine(identity, ['品牌形象'])
+    const direction = readLabeledLine(identity, ['推广重点'])
+    const defaultFreq = readFrequency(readLabeledLine(identity, ['默认发布频次', '发布频次']))
+
+    if (brandTone !== null) parsed.knowledge.brandTone = brandTone
+    if (audience !== null) parsed.knowledge.audienceAssumptions = audience
+    if (product !== null) parsed.knowledge.productAssumptions = product
+    if (location !== null) parsed.brand.location = location
+
+    const promoPlan: ParsedEditableBrandContext['knowledge']['promoPlan'] = {}
+    if (brandVoice !== null) promoPlan.brandVoice = brandVoice
+    if (brandImage !== null) promoPlan.brandImage = brandImage
+    if (direction !== null) promoPlan.direction = direction
+    if (Object.keys(promoPlan).length > 0) parsed.knowledge.promoPlan = promoPlan
+
+    const platforms: Record<string, { postsPerDay?: number }> = {}
+    for (const match of identity.matchAll(/^\s*-\s*(.+?)\s*发布频次\s*[：:]\s*(.+?)\s*$/gm)) {
+      const platform = match[1]?.trim()
+      if (!platform || platform === '默认') continue
+      const postsPerDay = readFrequency(match[2] ?? '')
+      if (postsPerDay !== undefined) platforms[platform] = { postsPerDay }
+    }
+    if (defaultFreq !== undefined || Object.keys(platforms).length > 0) {
+      parsed.knowledge.publishingFreq = {
+        ...(defaultFreq !== undefined ? { postsPerDay: defaultFreq } : {}),
+        ...(Object.keys(platforms).length > 0 ? { platforms } : {}),
+      }
+    }
+  }
+
+  if (business !== null) {
+    const stores = parseStores(business)
+    if (stores.length > 0) {
+      parsed.knowledge.stores = stores
+    } else {
+      const address = readLabeledLine(business, ['主门店地址', '地址'])
+      const phone = readLabeledLine(business, ['联系电话', '电话'])
+      const website = readLabeledLine(business, ['品牌网站', '网站'])
+      const businessHours = readLabeledLine(business, ['营业时间'])
+      const reservationUrl = readLabeledLine(business, ['订座链接'])
+      const orderingUrl = readLabeledLine(business, ['下单链接'])
+
+      if (address !== null) parsed.brand.address = address
+      if (phone !== null) parsed.brand.phone = phone
+      if (website !== null) parsed.brand.website = website
+      if (businessHours !== null) parsed.knowledge.businessHours = businessHours
+      if (reservationUrl !== null) parsed.knowledge.reservationUrl = reservationUrl
+      if (orderingUrl !== null) parsed.knowledge.orderingUrl = orderingUrl
+    }
+  }
+
+  return parsed
 }
