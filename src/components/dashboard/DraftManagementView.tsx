@@ -40,6 +40,7 @@ import {
   Star,
   Globe,
   Store,
+  RotateCcw,
 } from 'lucide-react'
 import PostPreviewModal from './PostPreviewModal'
 import QuickPreviewModal, { type QuickPreviewDraft } from './QuickPreviewModal'
@@ -98,6 +99,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending_review: 'Pending approval',
   approved: 'Approved',
   scheduled: 'Scheduled',
+  publishing: '发布中',
   published: 'Published',
   rejected: 'Rejected',
   failed: 'Failed',
@@ -108,6 +110,7 @@ const STATUS_CLASSES: Record<string, string> = {
   pending_review: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900/60',
   approved: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/60',
   scheduled: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/60',
+  publishing: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-300 dark:border-orange-900/60 animate-pulse',
   published: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-900/60',
   rejected: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-900/60',
   failed: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-900/60',
@@ -1174,6 +1177,29 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     setEditorOpen(true)
   }
 
+  const handleResetPublishing = async (draftId: string) => {
+    if (!brandId) return
+    try {
+      const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/reset-publishing`, {
+        method: 'POST',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(data.error || '重置失败，请稍后重试')
+        return
+      }
+      // Refresh draft list so the card updates immediately
+      const refreshRes = await fetch(`/api/brands/${brandId}/drafts`)
+      if (refreshRes.ok) {
+        const json = await refreshRes.json()
+        setDrafts(json.drafts ?? json ?? [])
+      }
+      alert(data.message || '草稿已重置为草稿状态，可重新安排发布。')
+    } catch (err: any) {
+      alert(err?.message || '操作失败')
+    }
+  }
+
   const handleSingleSmartSchedule = async (draftId: string) => {
     if (!brandId) return
     setSaving(true)
@@ -1732,6 +1758,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
                           onOpen={() => handleCardClick(draft.id)}
                           onOpenQuickPreview={() => openQuickPreview(draft.id)}
                           onSmartSchedule={() => handleSingleSmartSchedule(draft.id)}
+                          onResetPublishing={brandId ? () => handleResetPublishing(draft.id) : undefined}
                         />
                       ))}
                     </div>
@@ -1786,7 +1813,8 @@ function DraftCard({
   selected, 
   onOpen,
   onOpenQuickPreview,
-  onSmartSchedule 
+  onSmartSchedule,
+  onResetPublishing,
 }: { 
   draft: DraftItem 
   compact: boolean 
@@ -1794,7 +1822,8 @@ function DraftCard({
   selected: boolean 
   onOpen: () => void
   onOpenQuickPreview: () => void
-  onSmartSchedule?: () => void 
+  onSmartSchedule?: () => void
+  onResetPublishing?: () => void
 }) {
   const media = mediaForDraft(draft)
   const platform = draft.account?.platformId
@@ -1863,6 +1892,21 @@ function DraftCard({
                 className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-1 text-[11px] border border-indigo-100 transition-colors"
               >
                 <Sparkles className="h-3 w-3" /> 智能排期
+              </button>
+            )}
+            {draft.status === 'publishing' && !selectMode && onResetPublishing && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (confirm('确认将此草稿从"发布中"重置为"草稿"状态？发布流程将终止，可重新安排发布。')) {
+                    onResetPublishing()
+                  }
+                }}
+                className="inline-flex items-center gap-1 rounded bg-orange-50 hover:bg-orange-100 text-orange-700 px-2 py-1 text-[11px] border border-orange-200 transition-colors"
+                title="发布流程异常卡住，点击重置为草稿状态"
+              >
+                <RotateCcw className="h-3 w-3" /> 重置发布
               </button>
             )}
             {draft.postUrl && draft.status === 'published' && (
