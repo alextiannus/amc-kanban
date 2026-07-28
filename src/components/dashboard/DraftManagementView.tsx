@@ -95,14 +95,14 @@ type SocialAccountOption = {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  draft: 'Draft',
-  pending_review: 'Pending approval',
-  approved: 'Approved',
-  scheduled: 'Scheduled',
+  draft: '草稿',
+  pending_review: '待审核',
+  approved: '已批准',
+  scheduled: '已排期',
   publishing: '发布中',
-  published: 'Published',
-  rejected: 'Rejected',
-  failed: 'Failed',
+  published: '已发布',
+  rejected: '已拒绝',
+  failed: '发布失败',
 }
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -117,11 +117,11 @@ const STATUS_CLASSES: Record<string, string> = {
 }
 
 const TAB_CONFIG = [
-  { key: 'all', label: 'All' },
-  { key: 'published', label: 'Published' },
-  { key: 'scheduled', label: 'Scheduled' },
-  { key: 'draft', label: 'Draft' },
-  { key: 'pending_review', label: 'Pending approval' },
+  { key: 'all', label: '全部' },
+  { key: 'published', label: '已发布' },
+  { key: 'scheduled', label: '已排期' },
+  { key: 'draft', label: '草稿' },
+  { key: 'pending_review', label: '待审核' },
 ] as const
 
 type TabKey = (typeof TAB_CONFIG)[number]['key']
@@ -155,8 +155,8 @@ function draftTimestamp(draft: DraftItem) {
 
 function formatDateHeading(value: string) {
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Unscheduled'
-  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+  if (Number.isNaN(date.getTime())) return '未安排'
+  return date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
 }
 
 function formatCardTime(value: string) {
@@ -166,9 +166,13 @@ function formatCardTime(value: string) {
 }
 
 function platformLabel(platformId?: string | null) {
-  if (!platformId) return 'Channel'
+  if (!platformId) return '渠道'
   const lower = platformId.toLowerCase()
   if (['red', 'xhs', 'xiaohongshu', 'rednote'].includes(lower)) return '小红书'
+  if (lower.includes('instagram')) return 'Instagram'
+  if (lower.includes('facebook')) return 'Facebook'
+  if (lower.includes('tiktok')) return 'TikTok'
+  if (lower.includes('google')) return 'Google Business'
   return platformId.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
@@ -1645,10 +1649,10 @@ Never include any markdown backticks, conversational preamble, or explanation ou
               />
             </div>
             <button onClick={loadDrafts} className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
-              <RefreshCw className="h-4 w-4" /> Refresh
+              <RefreshCw className="h-4 w-4" /> 刷新
             </button>
             <button onClick={openNewDraft} className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-black text-white hover:bg-emerald-700">
-              <Plus className="h-4 w-4" /> New draft
+              <Plus className="h-4 w-4" /> 新建草稿
             </button>
           </div>
         </div>
@@ -1669,11 +1673,11 @@ Never include any markdown backticks, conversational preamble, or explanation ou
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <FilterSelect icon={<Smartphone className="h-4 w-4" />} value={platformFilter} onChange={setPlatformFilter} options={[['all', 'All platforms'], ...platformOptions.map((platform) => [platform, platformLabel(platform)] as [string, string])]} />
-              <FilterSelect icon={<Users className="h-4 w-4" />} value={accountFilter} onChange={setAccountFilter} options={[['all', 'All accounts'], ...accounts.map((account) => [account.id, account.displayName || account.handle || account.platformId] as [string, string])]} />
-              <FilterSelect icon={<Tag className="h-4 w-4" />} value={tagFilter} onChange={setTagFilter} options={[['all', 'All tags'], ...tagOptions.map((tag) => [tag, `#${tag}`] as [string, string])]} />
-              <button onClick={() => setSelectMode((value) => !value)} className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-bold ${compact ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
-                <Grid2X2 className="h-4 w-4" /> Compact
+              <FilterSelect icon={<Smartphone className="h-4 w-4" />} value={platformFilter} onChange={setPlatformFilter} options={[['all', '全部平台'], ...platformOptions.map((platform) => [platform, platformLabel(platform)] as [string, string])]} />
+              <FilterSelect icon={<Users className="h-4 w-4" />} value={accountFilter} onChange={setAccountFilter} options={[['all', '全部账号'], ...accounts.map((account) => [account.id, account.displayName || account.handle || account.platformId] as [string, string])]} />
+              <FilterSelect icon={<Tag className="h-4 w-4" />} value={tagFilter} onChange={setTagFilter} options={[['all', '全部标签'], ...tagOptions.map((tag) => [tag, `#${tag}`] as [string, string])]} />
+              <button onClick={() => setCompact((value) => !value)} className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-bold ${compact ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+                <Grid2X2 className="h-4 w-4" /> 紧凑视图
               </button>
               <button 
                 onClick={() => {
@@ -1687,7 +1691,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
                 }} 
                 className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-bold ${selectMode ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800'}`}
               >
-                <CheckSquare className="h-4 w-4" /> Select
+                <CheckSquare className="h-4 w-4" /> 多选
               </button>
             </div>
           </div>
@@ -1878,9 +1882,9 @@ function DraftCard({
           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${platformBadgeClass(platform)}`}>{platformLabel(platform)}</span>
           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${STATUS_CLASSES[draft.status] || STATUS_CLASSES.draft}`}>{STATUS_LABELS[draft.status] || draft.status}</span>
         </div>
-        <p className={`${compact ? 'line-clamp-2' : 'line-clamp-3'} text-sm font-semibold leading-6 text-slate-700 dark:text-slate-200`}>{draft.caption || 'Untitled draft'}</p>
+        <p className={`${compact ? 'line-clamp-2' : 'line-clamp-3'} text-sm font-semibold leading-6 text-slate-700 dark:text-slate-200`}>{draft.caption || '无标题草稿'}</p>
         <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-400">
-          <span className="truncate">{draft.hashtags.map((tag) => `#${tag}`).join(' ') || 'No tags'}</span>
+          <span className="truncate">{draft.hashtags.map((tag) => `#${tag}`).join(' ') || '无标签'}</span>
           <div className="flex items-center gap-1.5 shrink-0">
             {['draft', 'failed'].includes(draft.status) && !selectMode && onSmartSchedule && (
               <button

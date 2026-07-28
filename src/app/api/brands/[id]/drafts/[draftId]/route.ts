@@ -320,7 +320,9 @@ export async function DELETE(request: Request, { params }: Params) {
   const draft = await prisma.contentDraft.findFirst({ where: { id: draftId, brandId } })
   if (!draft) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // If scheduled, try to cancel first
+  // If scheduled on PostFast, attempt to cancel first (non-blocking)
+  // A failed cancel (e.g. post in processing/publishing state) should NOT block
+  // local deletion — we log the error and clean up locally.
   if (draft.platformPostId && !draft.publishedAt) {
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
@@ -330,7 +332,9 @@ export async function DELETE(request: Request, { params }: Params) {
       const { postfastDeletePost } = await import('@/lib/integrations/postfast')
       const cancelResult = await postfastDeletePost(brand.postfastApiKey, draft.platformPostId)
       if (!cancelResult.success) {
-        return NextResponse.json({ error: `Failed to cancel scheduled post on board backend — ${cancelResult.error}` }, { status: 400 })
+        // Log but do NOT block — PostFast may have the post in a non-cancelable state
+        // (e.g. stuck publishing). We still need to clean up the local record.
+        console.warn(`[draft-delete] PostFast cancel failed for ${draft.platformPostId}: ${cancelResult.error} — proceeding with local deletion anyway`)
       }
     }
   }
