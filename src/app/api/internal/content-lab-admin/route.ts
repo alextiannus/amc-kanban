@@ -65,11 +65,24 @@ async function getLogs(body: any) {
   const page = Math.max(1, intValue(body.page, 1))
   const limit = Math.min(50, intValue(body.limit, 25))
   const brandId = optionalString(body.brandId)
+  const copywriterId = optionalString(body.copywriterId)
+  const platform = optionalString(body.platform)
   const trainingTag = optionalString(body.trainingTag)
   const isAnnotated = typeof body.isAnnotated === 'boolean' ? body.isAnnotated : undefined
 
   const where = {
     ...(brandId ? { brandId } : {}),
+    ...(platform ? { platform } : {}),
+    ...(copywriterId ? {
+      OR: [
+        { rawOutput: { contains: `"copywriterId":"${copywriterId}"` } },
+        { rawOutput: { contains: `"copywriterId": "${copywriterId}"` } },
+        { systemPrompt: { contains: `"copywriterId":"${copywriterId}"` } },
+        { systemPrompt: { contains: `"copywriterId": "${copywriterId}"` } },
+        { userInput: { contains: `"id":"${copywriterId}"` } },
+        { userInput: { contains: `"id": "${copywriterId}"` } },
+      ],
+    } : {}),
     ...(isAnnotated !== undefined ? { isAnnotated } : {}),
     ...(trainingTag ? { trainingTag } : {}),
   }

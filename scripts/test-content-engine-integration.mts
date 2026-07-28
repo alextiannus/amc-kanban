@@ -140,6 +140,9 @@ function testContentLabStandaloneEntry() {
   assertIncludes(internalAdmin, "body.action === 'logs'", 'internal admin bridge exposes review logs')
   assertIncludes(internalAdmin, "body.action === 'annotateLog'", 'internal admin bridge exposes log annotation')
   assertIncludes(internalAdmin, 'CONTENT_SERVICE_INTERNAL_TOKEN', 'internal admin bridge is service-token protected')
+  assertIncludes(internalAdmin, 'const copywriterId = optionalString(body.copywriterId)', 'internal log bridge accepts agent-specific copywriter filters')
+  assertIncludes(internalAdmin, 'const platform = optionalString(body.platform)', 'internal log bridge accepts platform filters for agent records')
+  assertIncludes(internalAdmin, '{ rawOutput: { contains: `"copywriterId":"${copywriterId}"` } }', 'internal log bridge scopes production records to the selected agent')
 }
 
 function testCopywriterFirstCreativeUi() {
