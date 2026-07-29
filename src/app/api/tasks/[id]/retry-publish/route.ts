@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma'
 import { postfastPublish } from '@/lib/integrations/postfast'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { buildPostfastMediaItems } from '@/lib/publishMedia'
+import { mediaValidationResponse, mediaValidationStatus } from '@/lib/mediaValidation'
+import { validateDraftMediaForPlatform } from '@/lib/publishMediaValidation'
 
 type SessionUser = {
   id: string
@@ -65,6 +67,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const platformName = draft.account?.platformId
   if (!platformName) {
     return NextResponse.json({ error: '草稿未关联发布平台账号' }, { status: 400 })
+  }
+
+  try {
+    const issues = await validateDraftMediaForPlatform({
+      platform: platformName,
+      mediaUrls: draft.mediaUrls,
+      assetRefs: draft.assetRefs,
+    })
+    if (issues.length > 0) {
+      return NextResponse.json(
+        { code: 'MEDIA_VALIDATION_FAILED', error: '素材不符合发布要求', issues },
+        { status: 422 },
+      )
+    }
+  } catch (error) {
+    return NextResponse.json(mediaValidationResponse(error), { status: mediaValidationStatus(error) })
   }
 
   // Write audit log — retry attempt
@@ -132,6 +150,46 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     return NextResponse.json({ success: true, postUrl: publish.url, postId: publish.postId })
   } else {
+    const transientFailure = publish.code === 'MEDIA_VALIDATION_FAILED'
+      || publish.code === 'MEDIA_INSPECTION_UNAVAILABLE'
+      || publish.code === 'POSTFAST_PUBLISH_TIMEOUT'
+    if (transientFailure) {
+      await prisma.contentDraft.update({
+        where: { id: draft.id },
+        data: { status: draft.status, agentNote: draft.agentNote },
+      })
+
+      await prisma.auditLog.create({
+        data: {
+          actorId: session.user.id,
+          actorType: 'HUMAN',
+          actorName: sessionUser.nickname ?? sessionUser.email,
+          action: 'PUBLISH_FAILED',
+          resourceId: task.id,
+          resourceType: 'WorkUnit',
+          reason: publish.error,
+          metadata: {
+            platform: platformName,
+            draftId: draft.id,
+            code: publish.code,
+            issueCount: publish.issues?.length ?? 0,
+          },
+        },
+      })
+
+      const status = publish.code === 'MEDIA_VALIDATION_FAILED'
+        ? 422
+        : publish.code === 'MEDIA_INSPECTION_UNAVAILABLE'
+          ? 503
+          : 504
+      return NextResponse.json({
+        success: false,
+        code: publish.code,
+        error: publish.error,
+        issues: publish.issues,
+      }, { status })
+    }
+
     const errorMsg = `重试发布失败：${publish.error ?? 'unknown error'}`
 
     await prisma.contentDraft.update({

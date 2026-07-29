@@ -550,6 +550,7 @@ model MediaAsset {
   sizeBytes    Int?
   width        Int?
   height       Int?
+  technicalMetadata Json?
   aiTags       String[]  @default([])
   aiCategory   String?
   aiCaption    String?

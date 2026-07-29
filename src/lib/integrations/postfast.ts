@@ -5,7 +5,18 @@
  * Auth: pf-api-key header
  */
 
+import {
+  inspectMediaFile,
+  inspectMediaUrl,
+  mediaValidationResponse,
+  type MediaTechnicalMetadata,
+  type MediaValidationIssue,
+  validatePlatformMedia,
+} from '../mediaValidation.ts'
+
 const POSTFAST_BASE = process.env.POSTFAST_BASE_URL || 'https://api.postfa.st'
+const POSTFAST_PUBLISH_TOTAL_TIMEOUT_MS = 22_000
+const POSTFAST_PREFLIGHT_TIMEOUT_MS = 15_000
 
 type JsonRecord = Record<string, unknown>
 
@@ -116,7 +127,8 @@ function normalizePostStatus(rawStatusInput: unknown): PostFastPost['status'] {
 async function pfFetch(
   apiKey: string,
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeoutMs = 15_000,
 ): Promise<PfFetchResult> {
   try {
     const res = await fetch(`${POSTFAST_BASE}${path}`, {
@@ -126,7 +138,7 @@ async function pfFetch(
         'Content-Type': 'application/json',
         ...(options.headers as Record<string, string> ?? {}),
       },
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(Math.max(1, timeoutMs)),
     })
     let data: unknown = {}
     try { data = await res.json() } catch { /* plain-text response */ }
@@ -222,6 +234,9 @@ export interface PostFastMediaInput {
   url?: string
   mimeType?: string
   type?: 'IMAGE' | 'VIDEO'
+  filename?: string
+  assetId?: string
+  metadata?: MediaTechnicalMetadata
 }
 
 export interface PostFastPublishResult {
@@ -230,6 +245,20 @@ export interface PostFastPublishResult {
   url?: string
   scheduledAt?: string
   error?: string
+  code?: string
+  issues?: MediaValidationIssue[]
+}
+
+function remainingTimeout(deadlineAt: number, capMs: number) {
+  return Math.max(1, Math.min(capMs, deadlineAt - Date.now()))
+}
+
+function postfastPublishTimeout(): PostFastPublishResult {
+  return {
+    success: false,
+    code: 'POSTFAST_PUBLISH_TIMEOUT',
+    error: '发布链路超时，未继续创建帖子，请稍后重试',
+  }
 }
 
 // ── Account Management ─────────────────────────────────────────────────────
@@ -238,12 +267,12 @@ export interface PostFastPublishResult {
  * GET /social-media/my-social-accounts
  * Fetch all connected social accounts for this PostFast workspace.
  */
-export async function postfastFetchAccounts(apiKey: string): Promise<{
+export async function postfastFetchAccounts(apiKey: string, timeoutMs = 15_000): Promise<{
   success: boolean
   accounts: PostFastAccount[]
   error?: string
 }> {
-  const r = await pfFetch(apiKey, '/social-media/my-social-accounts')
+  const r = await pfFetch(apiKey, '/social-media/my-social-accounts', {}, timeoutMs)
   if (!r.ok) return { success: false, accounts: [], error: r.error }
 
   const raw: JsonRecord[] = Array.isArray(r.data) ? (r.data as JsonRecord[]) : []
@@ -293,12 +322,12 @@ export async function postfastGenerateConnectLink(apiKey: string, options?: {
  * GET /social-media/:id/gbp-locations
  * Fetch Google Business Profile locations for an account.
  */
-export async function postfastGetGBPLocations(apiKey: string, accountId: string): Promise<{
+export async function postfastGetGBPLocations(apiKey: string, accountId: string, timeoutMs = 15_000): Promise<{
   success: boolean
   locations: Array<{ id: string; name: string; address?: string; placeId?: string }>
   error?: string
 }> {
-  const r = await pfFetch(apiKey, `/social-media/${accountId}/gbp-locations`)
+  const r = await pfFetch(apiKey, `/social-media/${accountId}/gbp-locations`, {}, timeoutMs)
   if (!r.ok) return { success: false, locations: [], error: r.error }
   const dataObj = asObject(r.data)
   const locSource = Array.isArray(r.data) ? (r.data as JsonRecord[]) : (Array.isArray(dataObj.locations) ? dataObj.locations as JsonRecord[] : [])
@@ -424,7 +453,7 @@ export async function postfastGetSignedUploadUrls(apiKey: string, files: Array<{
   filename: string
   mimeType: string
   sizeBytes: number
-}>): Promise<{ success: boolean; slots: PostFastUploadSlot[]; error?: string }> {
+}>, timeoutMs = 15_000): Promise<{ success: boolean; slots: PostFastUploadSlot[]; error?: string }> {
   // PostFast API accepts one contentType per batch — use the first file's mime type
   const firstMime = files[0]?.mimeType ?? 'image/jpeg'
   const r = await pfFetch(apiKey, '/file/get-signed-upload-urls', {
@@ -462,14 +491,15 @@ export async function postfastGetSignedUploadUrls(apiKey: string, files: Array<{
 export async function postfastUploadFile(
   signedUploadUrl: string,
   fileBuffer: Buffer,
-  mimeType: string
+  mimeType: string,
+  timeoutMs = 60_000,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const res = await fetch(signedUploadUrl, {
       method: 'PUT',
       headers: { 'Content-Type': mimeType },
       body: new Uint8Array(fileBuffer),   // Buffer → Uint8Array satisfies BodyInit
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(Math.max(1, timeoutMs)),
     })
     if (!res.ok) return { success: false, error: `Upload HTTP ${res.status}` }
     return { success: true }
@@ -528,7 +558,18 @@ function detectMediaType(keyOrUrl: string, mimeType?: string | null, explicitTyp
   return 'IMAGE'
 }
 
-async function uploadPublicUrlToPostfast(apiKey: string, url: string, mimeTypeHint?: string | null): Promise<{ storageKey: string; mimeType: string }> {
+async function uploadPublicUrlToPostfast(
+  apiKey: string,
+  url: string,
+  mimeTypeHint: string | null | undefined,
+  metadata: MediaTechnicalMetadata,
+  deadlineAt: number,
+): Promise<{
+  storageKey: string
+  mimeType: string
+  filename: string
+  metadata: MediaTechnicalMetadata
+}> {
   let fileBuffer: Buffer
   let mimeType = normalizeMimeType(mimeTypeHint) || 'image/jpeg'
   let filename = 'file.jpg'
@@ -538,12 +579,16 @@ async function uploadPublicUrlToPostfast(apiKey: string, url: string, mimeTypeHi
     const { join } = await import('node:path')
     const path = await import('node:path')
     const absolutePath = join(process.cwd(), 'public', url.split('?')[0])
+    if (Date.now() >= deadlineAt) throw new Error('POSTFAST_PUBLISH_TIMEOUT')
     fileBuffer = await readFile(absolutePath)
+    if (Date.now() >= deadlineAt) throw new Error('POSTFAST_PUBLISH_TIMEOUT')
     
     filename = path.basename(absolutePath)
     mimeType = normalizeMimeType(mimeTypeHint) || inferMimeTypeFromExtension(absolutePath) || 'image/jpeg'
   } else {
-    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(remainingTimeout(deadlineAt, 8_000)),
+    })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
     const arrayBuffer = await res.arrayBuffer()
@@ -566,23 +611,30 @@ async function uploadPublicUrlToPostfast(apiKey: string, url: string, mimeTypeHi
     }
   }
 
+  mimeType = metadata.mimeType
+
   const signedResult = await postfastGetSignedUploadUrls(apiKey, [{
     filename,
     mimeType,
     sizeBytes: fileBuffer.length
-  }])
+  }], remainingTimeout(deadlineAt, 4_000))
 
   if (!signedResult.success || signedResult.slots.length === 0) {
     throw new Error(signedResult.error || 'Failed to get upload URL')
   }
 
   const slot = signedResult.slots[0]
-  const uploadResult = await postfastUploadFile(slot.uploadUrl, fileBuffer, mimeType)
+  const uploadResult = await postfastUploadFile(
+    slot.uploadUrl,
+    fileBuffer,
+    mimeType,
+    remainingTimeout(deadlineAt, 8_000),
+  )
   if (!uploadResult.success) {
     throw new Error(uploadResult.error || 'Upload failed')
   }
 
-  return { storageKey: slot.storageKey, mimeType }
+  return { storageKey: slot.storageKey, mimeType, filename, metadata }
 }
 
 function extractGoogleLocationId(rawHandle?: string | null): string {
@@ -597,9 +649,14 @@ async function resolveGbpLocationId(input: {
   socialMediaId: string
   requestedLocationId?: string
   accountHandle?: string | null
+  deadlineAt: number
 }): Promise<{ locationId?: string; error?: string }> {
   const wanted = input.requestedLocationId || extractGoogleLocationId(input.accountHandle)
-  const locationsResult = await postfastGetGBPLocations(input.apiKey, input.socialMediaId)
+  const locationsResult = await postfastGetGBPLocations(
+    input.apiKey,
+    input.socialMediaId,
+    remainingTimeout(input.deadlineAt, 5_000),
+  )
   if (!locationsResult.success) {
     return { error: `无法获取 PostFast Google Business locations: ${locationsResult.error || 'unknown error'}` }
   }
@@ -620,6 +677,150 @@ async function resolveGbpLocationId(input: {
   return { locationId: locationsResult.locations[0].id }
 }
 
+type PreparedPostFastMedia = PostFastMediaInput & {
+  metadata: MediaTechnicalMetadata
+}
+
+function postfastStorageKey(item: PostFastMediaInput) {
+  if (item.storageKey) return item.storageKey
+  if (item.url?.startsWith('/api/integrations/postfast/file/')) {
+    return item.url.split('?')[0].split('/').slice(6).join('/')
+  }
+  if (item.url && !item.url.startsWith('http') && !item.url.startsWith('/')) return item.url
+  return ''
+}
+
+async function inspectPostfastMediaSource(
+  item: PostFastMediaInput,
+  storageKey: string,
+  filename: string,
+  deadlineAt: number,
+) {
+  if (storageKey) {
+    const url = new URL(
+      storageKey.replace(/^\/+/, ''),
+      'https://postfast-media-prod.s3.ap-southeast-1.amazonaws.com/',
+    ).toString()
+    return inspectMediaUrl(url, {
+      filename,
+      mimeType: item.mimeType,
+      deadlineAt,
+    })
+  }
+  if (item.url?.startsWith('/')) {
+    const { resolve, sep } = await import('node:path')
+    const publicRoot = resolve(process.cwd(), 'public')
+    const filePath = resolve(publicRoot, `.${item.url.split('?')[0]}`)
+    if (filePath !== publicRoot && !filePath.startsWith(`${publicRoot}${sep}`)) {
+      throw { issues: [{
+        filename,
+        field: 'url',
+        actual: item.url,
+        limit: 'local public media path',
+        message: '本地媒体路径无效，请重新上传',
+      }] }
+    }
+    return inspectMediaFile(filePath, {
+      filename,
+      mimeType: item.mimeType,
+      deadlineAt,
+    })
+  }
+  return inspectMediaUrl(item.url || '', {
+    filename,
+    mimeType: item.mimeType,
+    deadlineAt,
+  })
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>,
+) {
+  const output = new Array<R>(values.length)
+  let cursor = 0
+  let firstError: unknown
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (cursor < values.length && firstError === undefined) {
+      const index = cursor
+      cursor += 1
+      try {
+        output[index] = await mapper(values[index])
+      } catch (error) {
+        firstError ??= error
+      }
+    }
+  })
+  await Promise.all(workers)
+  if (firstError) throw firstError
+  return output
+}
+
+async function preparePostfastMedia(
+  input: PostFastPublishInput,
+  publishDeadlineAt: number,
+): Promise<PreparedPostFastMedia[]> {
+  const startedAt = Date.now()
+  const preflightDeadlineAt = Math.min(
+    publishDeadlineAt,
+    startedAt + POSTFAST_PREFLIGHT_TIMEOUT_MS,
+  )
+  const candidates: PostFastMediaInput[] = [
+    ...(input.mediaItems || []),
+    ...(input.mediaStorageKeys || []).map((storageKey) => ({ storageKey })),
+    ...(input.mediaUrls || []).map((url) => ({ url })),
+  ]
+  const unique: PostFastMediaInput[] = []
+  const seen = new Set<string>()
+  for (const candidate of candidates) {
+    const key = postfastStorageKey(candidate)
+    const identity = key ? `key:${key}` : candidate.url ? `url:${candidate.url}` : ''
+    if (!identity || seen.has(identity)) continue
+    seen.add(identity)
+    unique.push(candidate)
+  }
+
+  const prepared = await mapWithConcurrency(unique, 3, async (item) => {
+    if (item.metadata) return { ...item, metadata: item.metadata }
+    const storageKey = postfastStorageKey(item)
+    const filename = item.filename || (storageKey || item.url || 'unknown').split('/').pop() || 'unknown'
+    const metadata = await inspectPostfastMediaSource(
+      item,
+      storageKey,
+      filename,
+      preflightDeadlineAt,
+    )
+    return {
+      ...item,
+      storageKey: storageKey || undefined,
+      metadata,
+    }
+  })
+  const issues = validatePlatformMedia(
+    normalizePlatform(input.platform),
+    prepared.map((item) => ({
+      filename: item.filename || postfastStorageKey(item) || item.url || 'unknown',
+      assetId: item.assetId,
+      metadata: item.metadata,
+    })),
+  )
+  if (issues.length > 0) {
+    console.warn('[postfast-media-preflight] rejected', {
+      platform: normalizePlatform(input.platform),
+      fields: Array.from(new Set(issues.map((issue) => issue.field))),
+      elapsedMs: Date.now() - startedAt,
+    })
+    throw { issues }
+  }
+  console.info('[postfast-media-preflight] passed', {
+    platform: normalizePlatform(input.platform),
+    mediaCount: prepared.length,
+    elapsedMs: Date.now() - startedAt,
+  })
+  return prepared
+}
+
 /**
  * POST /social-posts
  * Publish or schedule a post.
@@ -638,10 +839,31 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   if (normalizedSchedule.error) {
     return { success: false, error: normalizedSchedule.error }
   }
+  const publishDeadlineAt = Date.now() + POSTFAST_PUBLISH_TOTAL_TIMEOUT_MS
+
+  // Media preflight is intentionally first: no account lookup, upload, or PostFast post
+  // creation may happen before every source has been inspected and platform-validated.
+  let preparedMediaItems: PreparedPostFastMedia[]
+  try {
+    preparedMediaItems = await preparePostfastMedia(input, publishDeadlineAt)
+  } catch (error) {
+    const response = mediaValidationResponse(error)
+    return {
+      success: false,
+      code: response.code,
+      error: response.error,
+      issues: response.issues,
+    }
+  }
+  if (publishDeadlineAt - Date.now() < 2_000) return postfastPublishTimeout()
 
   // 1. Fetch connected accounts from PostFast to resolve the PostFast account ID (socialMediaId)
-  const { success: fetchSuccess, accounts, error: fetchError } = await postfastFetchAccounts(input.apiKey)
+  const { success: fetchSuccess, accounts, error: fetchError } = await postfastFetchAccounts(
+    input.apiKey,
+    remainingTimeout(publishDeadlineAt, 5_000),
+  )
   if (!fetchSuccess) {
+    if (Date.now() >= publishDeadlineAt - 250) return postfastPublishTimeout()
     return { success: false, error: `无法获取 PostFast 账号列表: ${fetchError}` }
   }
 
@@ -692,26 +914,58 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   const isGoogleBusinessPost = normalizePlatform(input.platform) === 'google' || normalizePlatform(matchedAccount.platformId) === 'google'
 
   // 2. Resolve media keys (download & upload public URLs to S3 in the background)
-  const resolvedMediaItems: Array<{ key: string; mimeType?: string; type?: 'IMAGE' | 'VIDEO' }> = []
+  const resolvedMediaItems: Array<{
+    key: string
+    mimeType?: string
+    type?: 'IMAGE' | 'VIDEO'
+    filename?: string
+    assetId?: string
+    metadata?: MediaTechnicalMetadata
+  }> = []
   const seenMediaKeys = new Set<string>()
-  const pushResolvedMedia = (media: { key: string; mimeType?: string; type?: 'IMAGE' | 'VIDEO' }) => {
+  const pushResolvedMedia = (media: {
+    key: string
+    mimeType?: string
+    type?: 'IMAGE' | 'VIDEO'
+    filename?: string
+    assetId?: string
+    metadata?: MediaTechnicalMetadata
+  }) => {
     if (!media.key || seenMediaKeys.has(media.key)) return
     seenMediaKeys.add(media.key)
     resolvedMediaItems.push(media)
   }
 
-  if (input.mediaItems && input.mediaItems.length > 0) {
+  if (preparedMediaItems.length > 0) {
     try {
-      const uploadedItems = await Promise.all(input.mediaItems.map(async (item) => {
-        const storageKey = item.storageKey || (item.url?.startsWith('/api/integrations/postfast/file/')
-          ? item.url.split('/').slice(6).join('/')
-          : (!item.url?.startsWith('http') && !item.url?.startsWith('/') ? item.url : ''))
+      const uploadedItems = await Promise.all(preparedMediaItems.map(async (item) => {
+        const storageKey = postfastStorageKey(item)
         if (storageKey) {
-          return { key: storageKey, mimeType: item.mimeType, type: item.type }
+          return {
+            key: storageKey,
+            mimeType: item.mimeType,
+            type: item.type,
+            filename: item.filename,
+            assetId: item.assetId,
+            metadata: item.metadata,
+          }
         }
         if (item.url) {
-          const uploaded = await uploadPublicUrlToPostfast(input.apiKey, item.url, item.mimeType)
-          return { key: uploaded.storageKey, mimeType: uploaded.mimeType, type: item.type }
+          const uploaded = await uploadPublicUrlToPostfast(
+            input.apiKey,
+            item.url,
+            item.mimeType,
+            item.metadata,
+            publishDeadlineAt,
+          )
+          return {
+            key: uploaded.storageKey,
+            mimeType: uploaded.mimeType,
+            type: item.type,
+            filename: item.filename || uploaded.filename,
+            assetId: item.assetId,
+            metadata: item.metadata || uploaded.metadata,
+          }
         }
         return null
       }))
@@ -719,30 +973,12 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
         if (item) pushResolvedMedia(item)
       })
     } catch (e: unknown) {
-      return { success: false, error: e instanceof Error ? `媒体文件上传失败: ${e.message}` : `媒体文件上传失败: ${String(e)}` }
-    }
-  }
-
-  if (input.mediaStorageKeys && input.mediaStorageKeys.length > 0) {
-    input.mediaStorageKeys.forEach((key) => pushResolvedMedia({ key }))
-  }
-
-  if (input.mediaUrls && input.mediaUrls.length > 0) {
-    try {
-      const uploadedItems = await Promise.all(input.mediaUrls.map(async (url) => {
-        if (url.startsWith('/api/integrations/postfast/file/')) {
-          const parts = url.split('/')
-          return { key: parts.slice(6).join('/') }
-        }
-        if (!url.startsWith('http') && !url.startsWith('/')) {
-          // If it's already a storage key/token (doesn't start with http or /), treat it as a mediaStorageKey directly
-          return { key: url }
-        }
-        const uploaded = await uploadPublicUrlToPostfast(input.apiKey, url)
-        return { key: uploaded.storageKey, mimeType: uploaded.mimeType }
-      }))
-      uploadedItems.forEach(pushResolvedMedia)
-    } catch (e: unknown) {
+      if (
+        Date.now() >= publishDeadlineAt - 250 ||
+        (e instanceof Error && e.message === 'POSTFAST_PUBLISH_TIMEOUT')
+      ) {
+        return postfastPublishTimeout()
+      }
       return { success: false, error: e instanceof Error ? `媒体文件上传失败: ${e.message}` : `媒体文件上传失败: ${String(e)}` }
     }
   }
@@ -759,6 +995,19 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     content,
   }
   const requestControls: Record<string, unknown> = {}
+  const isInstagramPost = normalizePlatform(input.platform) === 'instagram' ||
+    normalizePlatform(matchedAccount.platformId) === 'instagram'
+  if (
+    isInstagramPost &&
+    resolvedMediaItems.length === 1 &&
+    detectMediaType(
+      resolvedMediaItems[0].key,
+      resolvedMediaItems[0].mimeType,
+      resolvedMediaItems[0].type,
+    ) === 'VIDEO'
+  ) {
+    requestControls.instagramPublishType = 'REEL'
+  }
 
   if (isGoogleBusinessPost) {
     const resolvedLocation = await resolveGbpLocationId({
@@ -766,8 +1015,10 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
       socialMediaId,
       requestedLocationId: input.gbpLocationId,
       accountHandle: dbAccountForPublish?.handle,
+      deadlineAt: publishDeadlineAt,
     })
     if (!resolvedLocation.locationId) {
+      if (Date.now() >= publishDeadlineAt - 250) return postfastPublishTimeout()
       return { success: false, error: resolvedLocation.error || '发布失败：Google Business 缺少 gbpLocationId。' }
     }
     post.gbpLocationId = resolvedLocation.locationId
@@ -800,9 +1051,12 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   const r = await pfFetch(input.apiKey, '/social-posts', {
     method: 'POST',
     body,
-  })
+  }, remainingTimeout(publishDeadlineAt, 6_000))
   console.log(`[postfastPublish] RESPONSE ok=${r.ok} status=${r.status} data=${JSON.stringify(r.data).slice(0, 300)}`)
-  if (!r.ok) return { success: false, error: r.error }
+  if (!r.ok) {
+    if (Date.now() >= publishDeadlineAt - 250) return postfastPublishTimeout()
+    return { success: false, error: r.error }
+  }
 
   // Response may be array of created posts or a single object
   const dataObj = asObject(r.data)

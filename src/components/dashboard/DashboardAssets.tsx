@@ -44,6 +44,22 @@ import {
 } from 'lucide-react'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
 
+function inferUploadMimeType(file: File) {
+  const browserMime = file.type.split(';')[0].trim().toLowerCase()
+  if (browserMime) return browserMime
+  const extension = file.name.split('.').pop()?.toLowerCase()
+  return ({
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    webm: 'video/webm',
+  } as Record<string, string>)[extension || ''] || 'application/octet-stream'
+}
+
 // Category definitions
 const CATEGORY_META = [
   { id: 'all', label: '全部', color: 'text-slate-500 bg-slate-100 dark:bg-slate-800' },
@@ -1080,12 +1096,23 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
     const uploadSingleFile = async (file: File) => {
       const filename = file.name
-      const mimeType = file.type || 'application/octet-stream'
+      const mimeType = inferUploadMimeType(file)
 
       try {
+        const normalizedMime = mimeType.split(';')[0].toLowerCase()
+        const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(normalizedMime)
+        const isVideo = ['video/mp4', 'video/quicktime', 'video/webm'].includes(normalizedMime)
+        if (!isImage && !isVideo) {
+          throw new Error('仅支持 JPEG、PNG、GIF、WebP 图片或 MP4、MOV、WebM 视频')
+        }
+        const sizeLimit = isImage ? 10_000_000 : 250_000_000
+        if (file.size > sizeLimit) {
+          throw new Error(`${isImage ? '图片' : '视频'}不能超过 ${sizeLimit / 1_000_000} MB`)
+        }
+
         // 1. Request presigned upload URL from backend
         const presignRes = await fetch(
-          `/api/brands/${brandId}/assets/presign-upload?filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}&folder=${encodeURIComponent(targetFolder)}`
+          `/api/brands/${brandId}/assets/presign-upload?filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}&sizeBytes=${file.size}&folder=${encodeURIComponent(targetFolder)}`
         )
         const presignData = await presignRes.json().catch(() => ({}))
         
@@ -1096,6 +1123,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         let uploadSuccess = false
 
         if (!presignData.useDirectApi) {
+          let obsPutCompleted = false
           try {
             // 2. Perform direct binary upload to Huawei OBS pre-signed PUT URL
             const uploadHeaders: Record<string, string> = {
@@ -1111,6 +1139,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             if (!uploadRes.ok) {
               throw new Error(`直接上传到存储服务失败 (HTTP ${uploadRes.status})`)
             }
+            obsPutCompleted = true
 
             // 3. Confirm the upload with the backend to write the record in database
             const confirmRes = await fetch(`/api/brands/${brandId}/assets/confirm-upload`, {
@@ -1127,12 +1156,23 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               }),
             })
             const confirmData = await confirmRes.json().catch(() => ({}))
+            if (!confirmRes.ok && confirmRes.status === 422) {
+              const issueMessage = Array.isArray(confirmData.issues)
+                ? confirmData.issues.map((issue: { message?: string }) => issue.message).filter(Boolean).join('；')
+                : ''
+              const validationError = new Error(issueMessage || confirmData.error || '素材不符合上传要求') as Error & { noFallback?: boolean }
+              validationError.noFallback = true
+              throw validationError
+            }
             if (!confirmRes.ok) {
-              throw new Error(confirmData.error || '确认素材入库失败')
+              const confirmError = new Error(confirmData.error || '确认素材入库失败') as Error & { noFallback?: boolean }
+              confirmError.noFallback = true
+              throw confirmError
             }
 
             uploadSuccess = true
           } catch (directErr: any) {
+            if (obsPutCompleted || directErr?.noFallback) throw directErr
             console.warn(`Direct OBS upload failed for ${filename}, falling back to server API:`, directErr)
           }
         }

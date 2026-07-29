@@ -1,9 +1,11 @@
 import fs from "fs";
 import path from "path";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.ts";
 import { postfastPublish } from "../../lib/integrations/postfast.ts";
 import { extractTopicKeywords } from "../../lib/topicExtractor.ts";
 import { buildPostfastMediaItems } from "../../lib/publishMedia.ts";
+import { validateDraftMediaForPlatform } from "../../lib/publishMediaValidation.ts";
 
 /**
  * 萃取草稿主题关键词，写入 topicKeywords 字段。
@@ -12,6 +14,14 @@ import { buildPostfastMediaItems } from "../../lib/publishMedia.ts";
 function enrichDraftData(caption: string): { topicKeywords: string[] } {
   return { topicKeywords: extractTopicKeywords(caption) }
 }
+
+type DraftForPublish = Prisma.ContentDraftGetPayload<{
+  include: {
+    assetRefs: {
+      include: { asset: true }
+    }
+  }
+}>
 
 export async function publisherNode(state: any) {
   console.log("=== PublisherNode Running ===");
@@ -203,6 +213,53 @@ export async function publisherNode(state: any) {
 
   // 3. Execute publishing via PostFast if API Key is configured and account is connected and supports auto-publish
   if (brand.postfastApiKey && !isMockAccount && !isManualPlatform) {
+    let draftForPublish: DraftForPublish | null = null
+    let originalDraftStatus: string | null = null
+
+    if (existingDraftId) {
+      draftForPublish = await prisma.contentDraft.findUnique({
+        where: { id: existingDraftId },
+        include: { assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
+      })
+      originalDraftStatus = draftForPublish?.status ?? null
+
+      if (draftForPublish) {
+        try {
+          const issues = await validateDraftMediaForPlatform({
+            platform,
+            mediaUrls: draftForPublish.mediaUrls,
+            assetRefs: draftForPublish.assetRefs,
+          })
+          if (issues.length > 0) {
+            const error = JSON.stringify({
+              code: 'MEDIA_VALIDATION_FAILED',
+              error: '素材不符合发布要求',
+              issues,
+            })
+            await prisma.workUnit.update({
+              where: { id: taskId },
+              data: { status: 'pending', requiredInput: error },
+            })
+            return { error, status: 'failed' }
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          await prisma.workUnit.update({
+            where: { id: taskId },
+            data: {
+              status: 'pending',
+              requiredInput: JSON.stringify({
+                code: 'MEDIA_INSPECTION_UNAVAILABLE',
+                error: message,
+                issues: [],
+              }),
+            },
+          })
+          return { error: message, status: 'failed' }
+        }
+      }
+    }
+
     // ── 原子互斥锁：与 submitDraftForDelivery（人工审批路径）保持完全一致 ──
     // 如果 existingDraftId 已通过其他路径（API approve/submit）进入 'publishing' 或
     // 'published' 状态，则跳过发布，防止 Agent 路径与 API 路径双重发帖。
@@ -229,15 +286,11 @@ export async function publisherNode(state: any) {
     try {
       // Build mediaItems preserving mimeType so videos are not misidentified as images.
       // When existingDraftId is set, read assetRefs from DB; otherwise fall back to plain URLs.
-      let publishMediaItems: Array<{ storageKey?: string; url?: string; mimeType?: string }> | undefined
+      let publishMediaItems: ReturnType<typeof buildPostfastMediaItems> | undefined
       if (existingDraftId) {
-        const draftWithAssets = await prisma.contentDraft.findUnique({
-          where: { id: existingDraftId },
-          include: { assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
-        })
         publishMediaItems = buildPostfastMediaItems({
           mediaUrls: mediaUrls || [],
-          assetRefs: draftWithAssets?.assetRefs,
+          assetRefs: draftForPublish?.assetRefs,
         })
       }
 
@@ -310,6 +363,9 @@ export async function publisherNode(state: any) {
         };
       } else {
         console.error(`PostFast Publish Failed: ${publishRes.error}`);
+        const transientFailure = publishRes.code === 'MEDIA_VALIDATION_FAILED'
+          || publishRes.code === 'MEDIA_INSPECTION_UNAVAILABLE'
+          || publishRes.code === 'POSTFAST_PUBLISH_TIMEOUT'
         
         // Log draft with failed status
         let draftRecord;
@@ -317,22 +373,26 @@ export async function publisherNode(state: any) {
           try {
             draftRecord = await prisma.contentDraft.update({
               where: { id: existingDraftId },
-              data: {
-                accountId: socialAccount.id,
-                caption: fullCaption,
-                mediaUrls: mediaUrls || [],
-                hashtags: cleanHashtags,
-                status: "failed",
-                agentNote: `PostFast Publish Failed: ${publishRes.error || "Unknown error"}`
-              }
+              data: transientFailure
+                ? { status: originalDraftStatus ?? 'draft' }
+                : {
+                    accountId: socialAccount.id,
+                    caption: fullCaption,
+                    mediaUrls: mediaUrls || [],
+                    hashtags: cleanHashtags,
+                    status: "failed",
+                    agentNote: `PostFast Publish Failed: ${publishRes.error || "Unknown error"}`
+                  }
             });
-            console.log(`Updated existing draft ${existingDraftId} to failed.`);
+            console.log(transientFailure
+              ? `Restored existing draft ${existingDraftId} after transient publish failure.`
+              : `Updated existing draft ${existingDraftId} to failed.`)
           } catch (e) {
             console.warn(`Failed to update existing draft ${existingDraftId} to failed, fallback to create.`, e);
           }
         }
 
-        if (!draftRecord) {
+        if (!draftRecord && !transientFailure) {
           const enriched = enrichDraftData(fullCaption)
           await prisma.contentDraft.create({
             data: {

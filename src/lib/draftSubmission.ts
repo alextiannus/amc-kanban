@@ -3,6 +3,8 @@ import { postfastDeletePost, postfastPublish } from '@/lib/integrations/postfast
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 import { buildPostfastMediaItems } from '@/lib/publishMedia'
+import { validateDraftMediaForPlatform } from '@/lib/publishMediaValidation'
+import { shouldValidateMediaForDraftDelivery } from '@/lib/mediaPublishPolicy'
 
 type SubmitDraftInput = {
   brandId: string
@@ -84,6 +86,33 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
       ok: false as const,
       status: 400,
       error: 'AI 正在生成文案中，请稍候再审核。草稿尚未包含真实内容，暂不可发布。',
+    }
+  }
+
+  if (!draft.account?.platformId) {
+    return { ok: false as const, status: 400, error: '请先为草稿选择发布账号。' }
+  }
+
+  const platformId = normalizePublishPlatform(draft.account.platformId)
+  const shouldValidateForPublish = shouldValidateMediaForDraftDelivery({
+    autoPilot: brand.autoPilot,
+    forcePublish: input.forcePublish,
+    accountHandle: draft.account.handle,
+  })
+  if (shouldValidateForPublish) {
+    const mediaIssues = await validateDraftMediaForPlatform({
+      platform: platformId,
+      mediaUrls: draft.mediaUrls,
+      assetRefs: draft.assetRefs,
+    })
+    if (mediaIssues.length > 0) {
+      return {
+        ok: false as const,
+        status: 422,
+        code: 'MEDIA_VALIDATION_FAILED',
+        error: '素材不符合发布要求',
+        issues: mediaIssues,
+      }
     }
   }
 
@@ -206,8 +235,6 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     return { ok: false as const, status: 400, error: '请先为草稿选择发布账号。' }
   }
 
-  const platformId = normalizePublishPlatform(draft.account.platformId)
-
   if (draft.account.handle === 'unconfigured') {
     // Unconfigured accounts (e.g. 小红书/Facebook not yet connected) cannot be
     // auto-published. Content is saved as a plain 'draft' so it does NOT appear
@@ -316,6 +343,12 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
           agentNote: input.note || (scheduled ? '已按最新草稿重新排期。' : '已按最新草稿发布。'),
           rejectionNote: null,
         }
+      : result.code === 'MEDIA_VALIDATION_FAILED' ||
+        result.code === 'MEDIA_INSPECTION_UNAVAILABLE' ||
+        result.code === 'POSTFAST_PUBLISH_TIMEOUT'
+      ? {
+          status: draft.status,
+        }
       : {
           status: 'failed',
           agentNote: `发布失败：${result.error || 'unknown error'}`,
@@ -350,5 +383,18 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
 
   return result.success
     ? { ok: true as const, mode: scheduled ? 'scheduled' as const : 'published' as const, draft: updated, postId: result.postId, url: result.url }
-    : { ok: false as const, status: 400, error: result.error || '发布失败', draft: updated }
+    : {
+        ok: false as const,
+        status: result.code === 'MEDIA_VALIDATION_FAILED'
+          ? 422
+          : result.code === 'MEDIA_INSPECTION_UNAVAILABLE'
+            ? 503
+            : result.code === 'POSTFAST_PUBLISH_TIMEOUT'
+              ? 504
+              : 400,
+        code: result.code,
+        issues: result.issues,
+        error: result.error || '发布失败',
+        draft: updated,
+      }
 }

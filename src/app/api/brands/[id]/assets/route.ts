@@ -21,6 +21,12 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getHuaweiObsConfig, makeBrandAssetKey, uploadHuaweiObsObject } from '@/lib/integrations/huaweiObs'
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
+import {
+  assertUploadMedia,
+  inspectMediaBuffer,
+  mediaValidationResponse,
+  mediaValidationStatus,
+} from '@/lib/mediaValidation'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -127,6 +133,15 @@ export async function POST(request: Request, { params }: Params) {
     }
   }
 
+  let technicalMetadata
+  try {
+    technicalMetadata = await inspectMediaBuffer(fileBuffer, { filename, mimeType: resolvedMimeType })
+    assertUploadMedia(technicalMetadata, { filename })
+    resolvedMimeType = technicalMetadata.mimeType
+  } catch (error) {
+    return NextResponse.json(mediaValidationResponse(error), { status: mediaValidationStatus(error) })
+  }
+
   try {
     const isProduction = process.env.NODE_ENV === 'production'
 
@@ -151,6 +166,9 @@ export async function POST(request: Request, { params }: Params) {
           filename,
           mimeType: resolvedMimeType,
           sizeBytes: fileBuffer.length,
+          width: technicalMetadata.width ?? null,
+          height: technicalMetadata.height ?? null,
+          technicalMetadata,
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
           aiCategory: body.folder || body.aiCategory || '素材库',
           aiCaption: body.aiCaption || null,
@@ -220,6 +238,9 @@ export async function POST(request: Request, { params }: Params) {
           filename,
           mimeType: resolvedMimeType,
           sizeBytes,
+          width: technicalMetadata.width ?? null,
+          height: technicalMetadata.height ?? null,
+          technicalMetadata,
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
           aiCategory: body.folder || body.aiCategory || '素材库',
           aiCaption: body.aiCaption || null,
@@ -258,6 +279,9 @@ export async function POST(request: Request, { params }: Params) {
         filename,
         mimeType: resolvedMimeType,
         sizeBytes: fileBuffer.length,
+        width: technicalMetadata.width ?? null,
+        height: technicalMetadata.height ?? null,
+        technicalMetadata,
         aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
         aiCategory: body.folder || body.aiCategory || '素材库',
         aiCaption: body.aiCaption || null,

@@ -2,10 +2,16 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { eventEmitter } from '@/lib/events'
-import { postfastPublish, postfastReplyReview } from '@/lib/integrations/postfast'
+import {
+  postfastPublish,
+  postfastReplyReview,
+  type PostFastPublishResult,
+} from '@/lib/integrations/postfast'
 import { canWriteBrandProject } from '@/lib/brandAccess'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 import { buildPostfastMediaItems } from '@/lib/publishMedia'
+import { mediaValidationResponse, mediaValidationStatus } from '@/lib/mediaValidation'
+import { validateDraftMediaForPlatform } from '@/lib/publishMediaValidation'
 
 /** Fetch smart schedule recommendation — mirrors the helper in draftSubmission.ts */
 async function fetchRecommendedScheduleTime(brandId: string, platform: string): Promise<Date | null> {
@@ -55,6 +61,7 @@ export async function PATCH(request: Request, { params }: Params) {
     include: {
       draft: {
         include: {
+          account: true,
           assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } }
         }
       },
@@ -65,6 +72,26 @@ export async function PATCH(request: Request, { params }: Params) {
   if (item.status !== 'pending') return NextResponse.json({ error: 'Already resolved' }, { status: 409 })
 
   const body = await request.json().catch(() => ({}))
+
+  const isContentApproval = (item.type === 'content_approval' || item.type === 'content_draft') && item.draft
+  const approvalPlatform = item.account?.platformId || item.draft?.account?.platformId
+  if (isContentApproval && brand.postfastApiKey && approvalPlatform) {
+    try {
+      const issues = await validateDraftMediaForPlatform({
+        platform: approvalPlatform,
+        mediaUrls: item.draft!.mediaUrls,
+        assetRefs: item.draft!.assetRefs,
+      })
+      if (issues.length > 0) {
+        return NextResponse.json(
+          { code: 'MEDIA_VALIDATION_FAILED', error: '素材不符合发布要求', issues },
+          { status: 422 },
+        )
+      }
+    } catch (error) {
+      return NextResponse.json(mediaValidationResponse(error), { status: mediaValidationStatus(error) })
+    }
+  }
 
   // ── Resolve the action item ──────────────────────────────────────────────
   const resolveResult = await prisma.actionItem.updateMany({
@@ -85,12 +112,12 @@ export async function PATCH(request: Request, { params }: Params) {
     const draft = item.draft
     await prisma.contentDraft.update({ where: { id: draft.id }, data: { status: 'publishing' } })
 
-    const platformName = item.account?.platformId
+    const platformName = item.account?.platformId || draft.account?.platformId
 
     if (brand.postfastApiKey && platformName) {
       // Fire-and-forget publish
       ;(async () => {
-        let result: { success: boolean; postId?: string; url?: string; error?: string } = { success: false, error: 'Unknown' }
+        let result: PostFastPublishResult = { success: false, error: 'Unknown' }
         let resolvedScheduledAt = draft.scheduledAt ? new Date(draft.scheduledAt) : null
 
         const mediaItems = buildPostfastMediaItems({
@@ -157,19 +184,37 @@ export async function PATCH(request: Request, { params }: Params) {
         }
 
         const isScheduled = !!resolvedScheduledAt && resolvedScheduledAt > new Date()
+        const transientFailure = result.code === 'MEDIA_VALIDATION_FAILED'
+          || result.code === 'MEDIA_INSPECTION_UNAVAILABLE'
+          || result.code === 'POSTFAST_PUBLISH_TIMEOUT'
 
-        await prisma.contentDraft.update({
-          where: { id: draft.id },
-          data: result.success
-            ? {
-                status: isScheduled ? 'scheduled' : 'published',
-                publishedAt: isScheduled ? null : new Date(),
-                platformPostId: result.postId ?? null,
-                postUrl: isScheduled ? null : (result.url ?? null),
-                scheduledAt: resolvedScheduledAt,
-              }
-            : { status: result.error?.includes('取消') ? 'failed' : 'draft', agentNote: `发布失败: ${result.error}` },
-        })
+        await Promise.all([
+          prisma.contentDraft.update({
+            where: { id: draft.id },
+            data: result.success
+              ? {
+                  status: isScheduled ? 'scheduled' : 'published',
+                  publishedAt: isScheduled ? null : new Date(),
+                  platformPostId: result.postId ?? null,
+                  postUrl: isScheduled ? null : (result.url ?? null),
+                  scheduledAt: resolvedScheduledAt,
+                }
+              : transientFailure
+                ? { status: draft.status }
+                : { status: result.error?.includes('取消') ? 'failed' : 'draft', agentNote: `发布失败: ${result.error}` },
+          }),
+          ...(transientFailure
+            ? [prisma.actionItem.update({
+                where: { id: item.id },
+                data: {
+                  status: 'pending',
+                  resolvedAt: null,
+                  resolvedBy: null,
+                  resolvedNote: result.error ?? null,
+                },
+              })]
+            : []),
+        ])
 
         eventEmitter.emit('board_update')
       })()

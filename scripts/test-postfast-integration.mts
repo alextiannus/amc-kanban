@@ -129,6 +129,7 @@ async function startMockPostFast() {
       }
 
       assert.equal(post.socialMediaId, 'pf_acc_instagram')
+      assert.equal(body.controls.instagramPublishType, 'REEL')
       if (post.content === 'Opaque video key') {
         assert.equal(post.mediaItems[0].key, 'opaque-storage-key')
         assert.equal(post.mediaItems[0].type, 'VIDEO')
@@ -212,6 +213,20 @@ async function main() {
   const server = await startMockPostFast()
 
   try {
+    const validReelMetadata = {
+      kind: 'video' as const,
+      mimeType: 'video/mp4',
+      sizeBytes: 10,
+      width: 1080,
+      height: 1920,
+      container: 'MPEG-4',
+      videoCodec: 'h264',
+      audioCodec: 'aac',
+      frameRate: 30,
+      durationSeconds: 30,
+      videoBitrate: 8_000_000,
+      audioSampleRate: 48_000,
+    }
     const accounts = await postfast.postfastFetchAccounts(API_KEY)
     assert.equal(accounts.success, true)
     assert.equal(accounts.accounts.length, 3)
@@ -226,14 +241,27 @@ async function main() {
     const upload = await postfast.postfastUploadFile(uploadSlots.slots[0].uploadUrl, Buffer.from('video'), 'video/mp4')
     assert.equal(upload.success, true)
 
+    const requestCountBeforeInvalidPublish = seen.length
+    const invalidPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      caption: 'Missing media',
+      scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    })
+    assert.equal(invalidPublish.code, 'MEDIA_VALIDATION_FAILED')
+    assert.equal(seen.length, requestCountBeforeInvalidPublish)
+
     const duplicateVideoMedia = publishMedia.buildPostfastMediaItems({
       mediaUrls: [`${BASE_URL}/cdn/octet-video.mp4`],
       assetRefs: [
         {
           asset: {
+            id: 'asset-reel-1',
             url: `${BASE_URL}/cdn/octet-video.mp4`,
+            filename: 'reel.mp4',
             mimeType: 'video/mp4',
             sourceType: 'huawei_obs',
+            technicalMetadata: validReelMetadata,
           },
         },
       ],
@@ -241,6 +269,9 @@ async function main() {
     assert.equal(duplicateVideoMedia.length, 1)
     assert.equal(duplicateVideoMedia[0].url, `${BASE_URL}/cdn/octet-video.mp4`)
     assert.equal(duplicateVideoMedia[0].mimeType, 'video/mp4')
+    assert.equal(duplicateVideoMedia[0].assetId, 'asset-reel-1')
+    assert.equal(duplicateVideoMedia[0].filename, 'reel.mp4')
+    assert.deepEqual(duplicateVideoMedia[0].metadata, validReelMetadata)
 
     const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
     const publish = await postfast.postfastPublish({
@@ -248,7 +279,7 @@ async function main() {
       platform: 'instagram',
       accountId: 'pf_acc_instagram',
       caption: 'Lunch special',
-      mediaStorageKeys: ['video/reel-key'],
+      mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
       hashtags: ['amc', 'food'],
       scheduledAt,
     })
@@ -261,7 +292,11 @@ async function main() {
       platform: 'instagram',
       accountId: 'pf_acc_instagram',
       caption: 'Opaque video key',
-      mediaItems: [{ storageKey: 'opaque-storage-key', mimeType: 'video/mp4' }],
+      mediaItems: [{
+        storageKey: 'opaque-storage-key',
+        mimeType: 'video/mp4',
+        metadata: validReelMetadata,
+      }],
       scheduledAt,
     })
     assert.equal(opaqueVideoPublish.success, true)
@@ -275,8 +310,8 @@ async function main() {
       mediaUrls: [`${BASE_URL}/cdn/octet-video.mp4`],
       scheduledAt,
     })
-    assert.equal(octetVideoPublish.success, true)
-    assert.equal(octetVideoPublish.postId, 'pf_post_octet_video_001')
+    assert.equal(octetVideoPublish.success, false)
+    assert.ok(octetVideoPublish.error)
 
     const googlePublish = await postfast.postfastPublish({
       apiKey: API_KEY,

@@ -24,7 +24,7 @@ async function handleApprove(request: Request, { params }: Params) {
       immediatePublish: body.publishType === 'immediate',
     })
 
-    if (!result.ok) return NextResponse.json({ error: result.error, draft: result.draft }, { status: result.status })
+    if (!result.ok) return NextResponse.json(result, { status: result.status })
     return NextResponse.json(result)
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '排期通道发生未预期错误'

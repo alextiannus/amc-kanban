@@ -832,7 +832,12 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     const { postfastPublish } = await import('@/lib/integrations/postfast')
     const result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId })
 
-    if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+    if (!result.success) {
+      const payload = result.code
+        ? { code: result.code, error: result.error, issues: result.issues || [] }
+        : { error: result.error }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }], isError: true }
+    }
     const responseContent: Array<{ type: 'text'; text: string }> = [
       { type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform, scheduledAt: scheduledAt ?? 'immediate' }) }
     ]
@@ -1242,7 +1247,12 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           hashtags,
         })
 
-        if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+        if (!result.success) {
+          const payload = result.code
+            ? { code: result.code, error: result.error, issues: result.issues || [] }
+            : { error: result.error }
+          return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }], isError: true }
+        }
         return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform }) }] }
       }
 
@@ -1495,7 +1505,12 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
       const { submitDraftForDelivery } = await import('@/lib/draftSubmission')
       const result = await submitDraftForDelivery({ brandId, draftId, actorId: agent.id, note: note || null })
-      if (!result.ok) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
+      if (!result.ok) {
+        const payload = 'code' in result
+          ? { code: result.code, error: result.error, issues: result.issues || [] }
+          : { error: result.error }
+        return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }], isError: true }
+      }
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] }
     }
   )
@@ -1609,6 +1624,20 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       }
 
       const category = folder || '素材库'
+      let technicalMetadata
+      try {
+        const { assertUploadMedia, inspectMediaBuffer } = await import('@/lib/mediaValidation')
+        technicalMetadata = await inspectMediaBuffer(fileBuffer, { filename, mimeType: resolvedMimeType })
+        assertUploadMedia(technicalMetadata, { filename })
+        resolvedMimeType = technicalMetadata.mimeType
+      } catch (error) {
+        const { mediaValidationResponse } = await import('@/lib/mediaValidation')
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(mediaValidationResponse(error)) }],
+          isError: true,
+        }
+      }
+
       const { getHuaweiObsConfig, makeBrandAssetKey, uploadHuaweiObsObject } = await import('@/lib/integrations/huaweiObs')
       const obsConfig = getHuaweiObsConfig()
 
@@ -1653,6 +1682,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           filename,
           mimeType: resolvedMimeType,
           sizeBytes: fileBuffer.length,
+          width: technicalMetadata.width ?? null,
+          height: technicalMetadata.height ?? null,
+          technicalMetadata,
           aiTags: aiTags ?? [],
           aiCategory: category,
           aiCaption: aiCaption || null,

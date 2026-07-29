@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { uploadToLarkDrive } from '@/lib/integrations/lark'
+import {
+  assertUploadMedia,
+  inspectMediaBuffer,
+  mediaValidationResponse,
+  mediaValidationStatus,
+} from '@/lib/mediaValidation'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -34,13 +40,20 @@ export async function POST(request: Request, { params }: Params) {
 
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
+  let metadata
+  try {
+    metadata = await inspectMediaBuffer(buffer, { filename: file.name, mimeType: file.type })
+    assertUploadMedia(metadata, { filename: file.name })
+  } catch (error) {
+    return NextResponse.json(mediaValidationResponse(error), { status: mediaValidationStatus(error) })
+  }
 
   const result = await uploadToLarkDrive({
     appId: brand.larkAppId,
     appSecret: brand.larkAppSecret,
     folderId: brand.larkDriveFolderId,
     filename: file.name,
-    mimeType: file.type,
+    mimeType: metadata.mimeType,
     fileBuffer: buffer,
   })
 
@@ -54,8 +67,11 @@ export async function POST(request: Request, { params }: Params) {
       brandId,
       url: result.fileToken!,          // Store Lark file token as URL
       filename: file.name,
-      mimeType: file.type,
+      mimeType: metadata.mimeType,
       sizeBytes: buffer.length,
+      width: metadata.width ?? null,
+      height: metadata.height ?? null,
+      technicalMetadata: metadata,
       uploadedBy: session.user.id,
       sourceType: 'upload',
     },

@@ -3,8 +3,25 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
 import { getHuaweiObsConfig, makeBrandAssetKey, getHuaweiObsPresignedPutUrl } from '@/lib/integrations/huaweiObs'
+import { mediaValidationResponse, validateUploadMedia } from '@/lib/mediaValidation'
 
 type Params = { params: Promise<{ id: string }> }
+
+function resolveUploadMimeType(filename: string, hint: string | null) {
+  const normalized = String(hint ?? '').split(';')[0].trim().toLowerCase()
+  if (normalized && !['application/octet-stream', 'binary/octet-stream'].includes(normalized)) return normalized
+  const extension = filename.split('.').pop()?.toLowerCase()
+  return ({
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    webm: 'video/webm',
+  } as Record<string, string>)[extension || ''] || 'application/octet-stream'
+}
 
 /**
  * Fast brand-access check for presign operations.
@@ -90,11 +107,25 @@ export async function GET(request: Request, { params }: Params) {
 
   const url = new URL(request.url)
   const filename = url.searchParams.get('filename')
-  const mimeType = url.searchParams.get('mimeType') || 'application/octet-stream'
+  const sizeBytes = Number(url.searchParams.get('sizeBytes'))
   const folder = url.searchParams.get('folder') || '素材库'
 
   if (!filename) {
     return NextResponse.json({ error: 'filename query parameter is required' }, { status: 400 })
+  }
+  const mimeType = resolveUploadMimeType(filename, url.searchParams.get('mimeType'))
+
+  const earlyIssues = mimeType === 'application/octet-stream'
+    ? []
+    : validateUploadMedia({
+        kind: mimeType.startsWith('video/') ? 'video' : 'image',
+        mimeType,
+        sizeBytes: Number.isFinite(sizeBytes) && sizeBytes >= 0 ? sizeBytes : 0,
+      }, { filename })
+  if (earlyIssues.length > 0) {
+    return NextResponse.json(mediaValidationResponse({ issues: earlyIssues }), {
+      status: 422,
+    })
   }
 
   const obsConfig = getHuaweiObsConfig()

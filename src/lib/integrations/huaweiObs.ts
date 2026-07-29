@@ -134,6 +134,43 @@ export async function uploadHuaweiObsObject(input: {
   }
 }
 
+export async function deleteHuaweiObsObject(key: string) {
+  const config = getHuaweiObsConfig()
+  if (!config) return { ok: false as const, skipped: true as const, error: 'Huawei OBS is not configured' }
+
+  const now = new Date()
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '')
+  const dateStamp = amzDate.slice(0, 8)
+  const host = `${config.bucket}.${config.endpoint}`
+  const objectPath = `/${encodeObjectKey(key)}`
+  const payloadHash = sha256Hex('')
+  const headersToSign: Record<string, string> = {
+    host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+  }
+  const signedHeaders = Object.keys(headersToSign).sort().join(';')
+  const canonicalHeaders = Object.keys(headersToSign).sort().map((header) => `${header}:${headersToSign[header]}\n`).join('')
+  const canonicalRequest = ['DELETE', objectPath, '', canonicalHeaders, signedHeaders, payloadHash].join('\n')
+  const credentialScope = `${dateStamp}/${config.region}/s3/aws4_request`
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, sha256Hex(canonicalRequest)].join('\n')
+  const signature = crypto.createHmac('sha256', signingKey(config.secretAccessKey, dateStamp, config.region)).update(stringToSign).digest('hex')
+  const authorization = `AWS4-HMAC-SHA256 Credential=${config.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+
+  const response = await fetch(`https://${host}${objectPath}`, {
+    method: 'DELETE',
+    headers: {
+      ...headersToSign,
+      Authorization: authorization,
+    },
+  })
+  if (!response.ok && response.status !== 404) {
+    const text = await response.text().catch(() => '')
+    return { ok: false as const, skipped: false as const, error: text || `Huawei OBS delete failed: HTTP ${response.status}` }
+  }
+  return { ok: true as const, skipped: false as const }
+}
+
 export async function ensureHuaweiObsBrandWorkspace(input: { brandId: string; brandName: string }) {
   const safeName = input.brandName.trim().replace(/[/\\:*?"<>|]+/g, '-').replace(/\s+/g, '-').slice(0, 80) || 'brand'
   const basePrefix = `brands/${input.brandId}-${safeName}`

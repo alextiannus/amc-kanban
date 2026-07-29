@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { eventEmitter } from '@/lib/events'
-import { postfastPublish } from '@/lib/integrations/postfast'
+import { postfastPublish, type PostFastPublishResult } from '@/lib/integrations/postfast'
 import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
 import { buildPostfastMediaItems } from '@/lib/publishMedia'
 
@@ -126,14 +126,15 @@ export async function POST(request: Request) {
     },
   })
 
+  let mediaPublishFailure: PostFastPublishResult | null = null
+
   // If brand is in autoPilot and this is content approval with draft — attempt immediate publish
   if (brand.autoPilot && isContentApproval) {
     // If we have draftId, we created an internal draft; attempt to publish it
     if (draftId) {
       const [draft, account] = await Promise.all([
-        prisma.contentDraft.update({
+        prisma.contentDraft.findUniqueOrThrow({
           where: { id: draftId },
-          data: { status: 'publishing' },
         }),
         accountId
           ? prisma.socialAccount.findFirst({
@@ -179,6 +180,13 @@ export async function POST(request: Request) {
 
         if (!publish.success) {
           publishError = `自动发布失败：${publish.error ?? 'unknown error'}`
+          if (
+            publish.code === 'MEDIA_VALIDATION_FAILED' ||
+            publish.code === 'MEDIA_INSPECTION_UNAVAILABLE' ||
+            publish.code === 'POSTFAST_PUBLISH_TIMEOUT'
+          ) {
+            mediaPublishFailure = publish
+          }
         } else {
           publishedUrl = publish.url ?? null
           platformPostId = publish.postId ?? null
@@ -209,7 +217,9 @@ export async function POST(request: Request) {
           await Promise.all([
             prisma.contentDraft.update({
               where: { id: draft.id },
-              data: { status: 'draft', agentNote: publishError },
+              data: mediaPublishFailure
+                ? { status: draft.status }
+                : { status: 'draft', agentNote: publishError },
             }),
             prisma.actionItem.update({
               where: { id: item.id },
@@ -227,6 +237,23 @@ export async function POST(request: Request) {
 
   // Push SSE to connected dashboard clients
   eventEmitter.emit('board_update')
+
+  if (mediaPublishFailure) {
+    return NextResponse.json(
+      {
+        code: mediaPublishFailure.code,
+        error: mediaPublishFailure.error,
+        issues: mediaPublishFailure.issues || [],
+      },
+      {
+        status: mediaPublishFailure.code === 'MEDIA_VALIDATION_FAILED'
+          ? 422
+          : mediaPublishFailure.code === 'MEDIA_INSPECTION_UNAVAILABLE'
+            ? 503
+            : 504,
+      },
+    )
+  }
 
   return NextResponse.json(item, { status: 201 })
 }

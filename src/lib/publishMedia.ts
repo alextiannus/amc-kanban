@@ -1,7 +1,12 @@
+import type { MediaTechnicalMetadata } from './mediaValidation.ts'
+
 type MediaItem = {
   storageKey?: string
   url?: string
   mimeType?: string
+  filename?: string
+  assetId?: string
+  metadata?: MediaTechnicalMetadata
 }
 
 type AssetRefLike = {
@@ -9,6 +14,9 @@ type AssetRefLike = {
     url?: string | null
     mimeType?: string | null
     sourceType?: string | null
+    filename?: string | null
+    id?: string | null
+    technicalMetadata?: unknown
   } | null
 }
 
@@ -45,8 +53,12 @@ function upsertMediaItem(items: MediaItem[], seen: Map<string, number>, item: Me
   }
 
   const existing = items[existingIndex]
-  if (!normalizeMimeType(existing.mimeType) && normalizedMimeType) {
-    items[existingIndex] = { ...existing, mimeType: normalizedMimeType }
+  items[existingIndex] = {
+    ...existing,
+    ...(!normalizeMimeType(existing.mimeType) && normalizedMimeType ? { mimeType: normalizedMimeType } : {}),
+    ...(!existing.filename && item.filename ? { filename: item.filename } : {}),
+    ...(!existing.assetId && item.assetId ? { assetId: item.assetId } : {}),
+    ...(!existing.metadata && item.metadata ? { metadata: item.metadata } : {}),
   }
 }
 
@@ -74,6 +86,11 @@ export function buildPostfastMediaItems(input: {
       {
         ...(storageKey ? { storageKey } : { url: asset.url }),
         mimeType: asset.mimeType ?? undefined,
+        filename: asset.filename ?? undefined,
+        assetId: asset.id ?? undefined,
+        metadata: asset.technicalMetadata && typeof asset.technicalMetadata === 'object'
+          ? asset.technicalMetadata as MediaTechnicalMetadata
+          : undefined,
       },
     )
   }

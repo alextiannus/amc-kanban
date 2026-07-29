@@ -119,6 +119,22 @@ export async function POST(request: Request, { params }: Params) {
 
       if (!result.success) {
         console.error(`[Posts] PostFast publish failed for brand ${brandId}:`, result.error)
+        if (
+          result.code === 'MEDIA_VALIDATION_FAILED' ||
+          result.code === 'MEDIA_INSPECTION_UNAVAILABLE' ||
+          result.code === 'POSTFAST_PUBLISH_TIMEOUT'
+        ) {
+          return NextResponse.json(
+            { code: result.code, error: result.error, issues: result.issues || [] },
+            {
+              status: result.code === 'MEDIA_VALIDATION_FAILED'
+                ? 422
+                : result.code === 'MEDIA_INSPECTION_UNAVAILABLE'
+                  ? 503
+                  : 504,
+            },
+          )
+        }
         return NextResponse.json(
           { error: result.error || 'Failed to publish' },
           { status: 400 }
