@@ -14,6 +14,15 @@
 | v1.2 | 2026-07-02 | 顶部及右侧抽屉导航 UI/UX 优化 | 1. 无品牌时，左上角文案由 "AI Staff" 调整为 "AMC"；2. 右侧菜单中，将信息套餐和品牌信息合并展示于顶部组件；3. 底部原订阅套餐卡片替换为“用户设置”入口，支持点击修改注册信息。 |
 | v1.3 | 2026-07-02 | 优化数据库事务防止 500 异常 | 优化品牌与订阅创建流程中的 Prisma 事务范围，将非核心元数据写入移至事务外部，彻底消除在高网络延迟下的 5 秒事务超时（P2028）报错。 |
 | v1.21 | 2026-07-03 | 修复品牌注册挂起 25 秒根本原因 + 移除 Azure/Maps 依赖 | **根本原因**：`bcryptjs`（纯 JS bcrypt）在 Render 限速 CPU 上 cost=12 阻塞 Node.js 事件循环 15-30 秒，导致 `/api/mm/subscription` POST 全程无响应。修复：cost factor 12→8，临时密码（从不直接使用）用 8 轮已足够安全。**同步移除**：(1) Azure Speech 集成（`/api/mm/speech-token`、useCompanionLive、useVoiceCompanion 改为始终返回 null → 降级 Web Speech API）；(2) Google Maps Places Autocomplete（地址改为纯文本输入，用户自行粘贴 Google Maps 链接）；(3) amc-mm 所有 maps-config/speech-token proxy 路由改为即时 503（Cache-Control: 24h），不再触达 kanban。影响文件：`brandOwnerAccount.ts`、`BrandOwnerDashboard.tsx`、`useCompanionLive.ts`、`useVoiceCompanion.ts`、`proxy.ts`、`api/maps-config/route.ts`、`api/mm/speech-token/route.ts`。 |
+| v1.22 | 2026-07-29 | Growth 统一商家数据中心接入 | MM 继续作为商家 UI/BFF：订阅、工作与审批走 Kanban；商家资料、分类和知识补充按 Kanban 返回的 `growthBrandKey` 读取 Growth，并以候选方式提交 Growth。MM 不保存独立商家知识副本，当前阶段不接 POS。 |
+
+## Growth 商家数据中心边界（当前方案）
+
+- MM 获取品牌列表和访问权限时仍以 Kanban 为准，同时读取品牌的 `growthBrandKey`。
+- 品牌资料和已发布知识分别由 Growth 的 profile、knowledge API 提供；页面可组合显示，但不得把 Growth 响应静默写回 Kanban 形成第二份主数据。
+- 商家编辑资料或补充知识时，MM 将修改作为 `merchant_confirmed` 来源的知识候选提交 Growth。需要审核的字段保持候选态；已发布知识只通过 Growth 的审核/版本机制变化。
+- 若旧品牌尚无 `growthBrandKey`，MM 显示“数据中心未绑定”，由 Kanban 重试绑定或管理员迁移；禁止恢复名称模糊匹配。
+- Content、Kanban、MM 均只通过受控 API 消费 Growth，不直接访问 Growth 数据库。
 
 ---
 

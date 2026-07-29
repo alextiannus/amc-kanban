@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "growth:backfill-links:dry-run": "node scripts/backfill-growth-brand-links.mjs",
+    "growth:backfill-links": "node scripts/backfill-growth-brand-links.mjs --apply",
     "start": "next start",
     "start:direct": "node node_modules/next/dist/cli/next-start.js -p 3000",
     "lint": "eslint",

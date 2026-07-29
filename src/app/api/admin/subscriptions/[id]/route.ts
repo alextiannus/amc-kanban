@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildAdminStatusUpdateData, type SubscriptionStatus } from '@/lib/subscription/workflow'
+import { publishGrowthMerchantEvent } from '@/lib/growthDataCenter'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -27,6 +28,23 @@ export async function PATCH(request: Request, { params }: Params) {
     where: { id },
     data: buildAdminStatusUpdateData(existing, status),
   })
+
+  if (updated.brandId) {
+    publishGrowthMerchantEvent({
+      brandId: updated.brandId,
+      eventType: 'subscription.updated',
+      occurredAt: updated.updatedAt,
+      payload: {
+        subscription_id: updated.id,
+        previous_status: existing.status,
+        status: updated.status,
+        plan_id: updated.planId,
+        plan_name: updated.planName,
+      },
+    }).catch(error => {
+      console.error('[admin subscription] Growth event failed (non-fatal):', error)
+    })
+  }
 
   if (existing.status !== 'ACTIVE' && updated.status === 'ACTIVE') {
     // Agent key provisioning removed — no longer needed

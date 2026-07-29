@@ -20,6 +20,12 @@ To provide deterministic guardrails and consistency checks on content creation w
    - `POST /api/brands/[id]/drafts`: Rejects draft creation with a `400` code and details the violated prohibited words if validation fails.
    - `PATCH /api/brands/[id]/drafts/[draftId]`: Rejects draft updates containing prohibited words when the post caption is edited.
 
+### 1.4 Ownership Boundary
+
+Growth is the canonical merchant data and knowledge center. Merchant identity, classification, locations, menu/product facts, positioning, audience, channels, reputation, evidence and confirmed competitors are read from Growth by stable `Brand.growthBrandKey`.
+
+Kanban continues to own content-execution policy, including prohibited words, required campaign keywords, approval rules and draft validation. These rules are not merchant master data and therefore remain in Kanban. The existing Markdown/`ext.compliance` format is a compatibility representation for these execution rules only; it must not be used to create a second copy of Growth merchant facts.
+
 ---
 
 ## 2. Technical Implementation Details

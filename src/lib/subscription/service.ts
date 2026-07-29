@@ -3,6 +3,10 @@ import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 import { findOrCreateBrandOwnerAccount } from '@/lib/brandOwnerAccount'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { resolveAssignment } from '@/lib/assignmentPool'
+import {
+  ensureGrowthMerchantForBrand,
+  publishGrowthMerchantEvent,
+} from '@/lib/growthDataCenter'
 
 function addMonths(date: Date, months: number) {
   const next = new Date(date)
@@ -35,6 +39,24 @@ export async function activateSubscriptionByPaymentSession(paymentSessionId: str
       contractEndDate: sub.contractEndDate ?? endDate,
     },
   })
+
+  if (updated.brandId) {
+    publishGrowthMerchantEvent({
+      brandId: updated.brandId,
+      eventType: 'subscription.updated',
+      occurredAt: updated.updatedAt,
+      payload: {
+        subscription_id: updated.id,
+        status: updated.status,
+        plan_id: updated.planId,
+        plan_name: updated.planName,
+        contract_start_date: updated.contractStartDate?.toISOString() || null,
+        contract_end_date: updated.contractEndDate?.toISOString() || null,
+      },
+    }).catch(error => {
+      console.error('[subscription] Growth event failed (non-fatal):', error)
+    })
+  }
 
   return { ok: true as const, subscription: updated, alreadyActive: false as const }
 }
@@ -141,6 +163,10 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
   })
   const brand = result.brand
   console.log(`[createBrand] $transaction done, brand.id=${brand.id}, alreadyCreated=${result.alreadyCreated} (${Date.now() - t0}ms)`)
+
+  ensureGrowthMerchantForBrand(brand).catch(error => {
+    console.error('[createBrand] Growth binding failed (non-fatal):', error)
+  })
 
   if (result.alreadyCreated) {
     ensureBrandWorkspace(brand.id).catch((workspaceError) => {

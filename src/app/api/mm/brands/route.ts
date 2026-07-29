@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 import { resolveAssignment } from '@/lib/assignmentPool'
+import { ensureGrowthMerchantForBrand } from '@/lib/growthDataCenter'
 
 export async function POST(request: NextRequest) {
   const session = await getSession()
@@ -30,6 +31,10 @@ export async function POST(request: NextRequest) {
         address: address?.trim() || null,
         status: 'ACTIVE',
       },
+    })
+
+    ensureGrowthMerchantForBrand(brand).catch(growthError => {
+      console.error('[MM-API-Brand-Create] Growth binding failed (non-fatal):', growthError)
     })
 
     try {

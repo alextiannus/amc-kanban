@@ -9,6 +9,7 @@ import { generateInvitationLink } from '@/lib/invitation'
 import { computeEffectiveUserRoles } from '@/lib/userRoles'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
+import { ensureGrowthMerchantForBrand } from '@/lib/growthDataCenter'
 
 // GET /api/brands — list brands for the logged-in user
 export async function GET(request: Request) {
@@ -185,6 +186,10 @@ export async function POST(request: Request) {
       console.error('[POST /api/brands] admin workspace init failed:', workspaceError)
     }
 
+    ensureGrowthMerchantForBrand(brand).catch(growthError => {
+      console.error('[POST /api/brands] Growth binding failed (non-fatal):', growthError)
+    })
+
     resolveAssignment({
       subjectType: 'brand_create',
       subjectId: brand.id,
@@ -337,6 +342,10 @@ export async function POST(request: Request) {
       }
 
       return { brand, subscription }
+    })
+
+    ensureGrowthMerchantForBrand(wizardResult.brand).catch(growthError => {
+      console.error('[POST /api/brands] Growth binding failed (non-fatal):', growthError)
     })
 
     // Outside transaction: perform secondary setups (non-blocking)

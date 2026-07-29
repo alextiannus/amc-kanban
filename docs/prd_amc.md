@@ -1641,7 +1641,31 @@ Admin → AI 模型配置 页面：
 - **API 接口扩展**：在 `amc-growth` 增加 `/v1/merchants/:merchantId/brand-story` 接口及对应的 MCP Tool。
 
 ### 品牌故事与上下文同步及呈现 (amc-kanban)
-- **多维度数据同步**：在 `sync-growth` 接口中，增加对 brand-story 资源的同步拉取，利用 HTML 注释标记块自动将“品牌故事讲述”合流并写入本地品牌 Profile 文件的第 12 章节。
+- **兼容同步（待退役）**：历史 `sync-growth` 接口只作为旧数据迁移与故障回退入口。新流程禁止再用名称/slug 模糊匹配商家，也不把 Growth 品牌知识复制成 Kanban 的第二份主数据；所有调用必须使用 `Brand.growthBrandKey` 精确定位。
+
+## Growth 统一商家数据与知识中心（当前方案）
+
+### 系统边界
+
+- **Growth 是唯一的商家主数据与知识中心**：负责稳定 `brand_key`、外部系统身份映射、门店、行业分类、菜单/产品、品牌与受众、渠道、口碑、证据、知识候选、完整度及竞品关系。
+- **Kanban 是工作与订阅系统**：保留品牌工作区、订阅、任务、审批和执行状态；`Brand.growthBrandKey` 是其连接 Growth 的唯一外键语义。Kanban 不再独立维护商家知识真相。
+- **Content 是内容生产系统**：保留内容草稿、素材、发布记录、平台规则与内容效果知识；生成内容所需的商家事实从 Growth 按 `growthBrandKey` 查询，并记录知识使用事件。
+- **AMC MM 是商家交互层/BFF**：运营与订阅请求进入 Kanban；商家资料和知识补充进入 Growth 的候选审核流。MM 不新增第三份商家知识存储。
+- 当前阶段不接 POS。将来接入时仍以外部身份映射和事件接口进入 Growth，不改变上述主数据归属。
+
+### 数据与接口约束
+
+- 新建或导入品牌时，Kanban 使用自身品牌 ID 调用 Growth `POST /v1/internal/merchants/upsert`，获得并持久化稳定 `growthBrandKey`；Growth 不可用时允许 Kanban 业务创建成功，并进入可重试的未绑定状态。
+- 商家资料读取使用 `GET /v1/merchants/:brandKey/profile`；知识读取使用 `GET /v1/merchants/:brandKey/knowledge`。
+- 商家或内部人员提交的补充信息使用 `POST /v1/merchants/:brandKey/knowledge-candidates`，默认形成带来源的候选，不直接覆盖已发布事实。
+- 下游系统通过 `POST /v1/internal/knowledge/search` 获取受控知识，通过 `POST /v1/internal/knowledge-usage` 回传实际使用记录。
+- Kanban 的订阅等业务变化通过 `POST /v1/internal/merchant-events` 发给 Growth。事件必须包含 `event_id`、`event_type`、`producer`、`brand_key`、`occurred_at` 和 `payload`，并按 `event_id` 幂等。
+
+### 分类、完整度与竞品
+
+- 第一阶段优先覆盖 F&B，但分类模型使用可扩展的一级分类、二级分类和别名表，不把餐饮枚举写死在商家表。
+- 知识完整度按维度计算：分类 15、运营 15、菜单/产品 20、品牌与受众 15、渠道 10、口碑 10、竞争 15；总分仅由已发布且仍有效的知识和有效门店计算，同时返回各维度缺口。
+- 竞品先由系统生成候选，再由人员确认或拒绝。候选分由分类相似度 40、距离 20、经营形态/消费场景 15、价格带 10、菜单重合 10、数据新鲜度 5 组成；未经确认的候选不可作为确定事实对外展示。
 - **UIUX 重组**：重构 `BrandProfileView.tsx` 页面的标签页结构为 `'品牌故事'`（呈现品牌故事、品牌定位、招牌菜、门店信息、用餐攻略）与 `'品牌上下文'`（呈现分析、增长诊断及 30/90/180天计划）。
 
 ## AMC Growth 调研运营后台与单点登录（当前方案）

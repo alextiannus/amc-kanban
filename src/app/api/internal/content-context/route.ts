@@ -65,6 +65,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     brand: {
       id: brand.id,
+      growthBrandKey: brand.growthBrandKey ?? undefined,
       name: brand.name,
       description: brand.description ?? undefined,
       tone: brand.knowledge?.brandTone ?? undefined,

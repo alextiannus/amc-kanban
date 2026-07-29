@@ -339,6 +339,7 @@ model CrewMember {
 
 model Brand {
   id             String   @id @default(cuid())
+  growthBrandKey String?  @unique
   crew           MarketingCrew?
   // Legacy single-owner field — kept for zero-downtime migration,
   // new code uses the BrandOwner join table for multi-owner support.
