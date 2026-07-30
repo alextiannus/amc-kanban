@@ -708,6 +708,7 @@ async function inspectPostfastMediaSource(
       filename,
       mimeType: item.mimeType,
       deadlineAt,
+      enforceUploadLimits: false,
     })
   }
   if (item.url?.startsWith('/')) {
@@ -727,12 +728,14 @@ async function inspectPostfastMediaSource(
       filename,
       mimeType: item.mimeType,
       deadlineAt,
+      enforceUploadLimits: false,
     })
   }
   return inspectMediaUrl(item.url || '', {
     filename,
     mimeType: item.mimeType,
     deadlineAt,
+    enforceUploadLimits: false,
   })
 }
 

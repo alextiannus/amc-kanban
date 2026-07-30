@@ -47,6 +47,8 @@ const instagramIssues = validatePlatformMedia('instagram', [{
 assert(instagramIssues.some((issue) => issue.field === 'sizeBytes'))
 assert(instagramIssues.some((issue) => issue.field === 'width'))
 assert(instagramIssues.some((issue) => issue.field === 'aspectRatio'))
+assert.equal(blockingMediaIssues(instagramIssues).length, 0)
+assert.equal(mediaValidationWarnings(instagramIssues).length, instagramIssues.length)
 
 const tiktokIssues = validatePlatformMedia('tiktok', [{
   assetId: 'cms5sxic600g7qo29p1sile6j',
@@ -55,6 +57,8 @@ const tiktokIssues = validatePlatformMedia('tiktok', [{
 }])
 assert(tiktokIssues.some((issue) => issue.field === 'sizeBytes'))
 assert(tiktokIssues.some((issue) => issue.field === 'dimensions'))
+assert.equal(blockingMediaIssues(tiktokIssues).length, 0)
+assert.equal(mediaValidationWarnings(tiktokIssues).length, tiktokIssues.length)
 assert.equal(validatePlatformMedia('instagram', [])[0]?.field, 'mediaCount')
 
 const validInstagramReel: MediaTechnicalMetadata = {
@@ -96,6 +100,7 @@ assert.equal(blockingMediaIssues(unusualVideoIssues).length, 0)
 assert.equal(mediaValidationWarnings(unusualVideoIssues).length, unusualVideoIssues.length)
 const warningText = formatMediaWarnings({ warnings: unusualVideoIssues })
 assert.match(warningText, /不会阻止提交/)
+assert.match(warningText, /已继续提交/)
 assert.match(warningText, /unusual-reel\.mp4/)
 
 const mixedIssues = validatePlatformMedia('instagram', [
@@ -124,6 +129,27 @@ assert.equal(inspected.width, 1)
 assert.equal(inspected.height, 1)
 assert.deepEqual(validateUploadMedia(inspected, { filename: 'tiny.png' }), [])
 
+const oversizedReadablePng = Buffer.concat([
+  png,
+  Buffer.alloc(10_000_001 - png.length),
+])
+await assert.rejects(
+  () => inspectMediaBuffer(oversizedReadablePng, {
+    filename: 'oversized-history.png',
+    mimeType: 'image/png',
+  }),
+  (error: unknown) => error instanceof MediaValidationError &&
+    error.issues.some((issue) => issue.field === 'sizeBytes'),
+)
+const inspectedHistoricalImage = await inspectMediaBuffer(oversizedReadablePng, {
+  filename: 'oversized-history.png',
+  mimeType: 'image/png',
+  enforceUploadLimits: false,
+})
+assert.equal(inspectedHistoricalImage.kind, 'image')
+assert.equal(inspectedHistoricalImage.sizeBytes, oversizedReadablePng.length)
+assert(validateUploadMedia(inspectedHistoricalImage).some((issue) => issue.field === 'sizeBytes'))
+
 const expiredDeadlineStartedAt = Date.now()
 await assert.rejects(
   () => inspectMediaBuffer(png, {
@@ -140,6 +166,55 @@ const genericIssues = validatePlatformMedia('facebook', [{
   metadata: { ...failingCashmereImage },
 }])
 assert(genericIssues.some((issue) => issue.field === 'sizeBytes'))
+assert.equal(blockingMediaIssues(genericIssues).length, 0)
+assert.equal(mediaValidationWarnings(genericIssues).length, genericIssues.length)
+
+const platformImageFormats: Array<[string, string]> = [
+  ['instagram', 'image/png'],
+  ['instagram', 'image/webp'],
+  ['instagram', 'image/gif'],
+  ['tiktok', 'image/png'],
+  ['tiktok', 'image/gif'],
+]
+for (const [platform, mimeType] of platformImageFormats) {
+  const issues = validatePlatformMedia(platform, [{
+    filename: `supported-${mimeType.split('/')[1]}`,
+    metadata: {
+      ...failingCashmereImage,
+      mimeType,
+      sizeBytes: 1_000_000,
+      width: 1_080,
+      height: 1_080,
+    },
+  }])
+  assert(issues.some((issue) => issue.field === 'mimeType'))
+  assert.equal(blockingMediaIssues(issues).length, 0)
+}
+
+const unsupportedImageIssues = validatePlatformMedia('instagram', [{
+  filename: 'unsupported.bmp',
+  metadata: {
+    ...failingCashmereImage,
+    mimeType: 'image/bmp',
+    sizeBytes: 1_000_000,
+    width: 1_080,
+    height: 1_080,
+  },
+}])
+assert(unsupportedImageIssues.some((issue) => issue.field === 'mimeType' && issue.severity !== 'warning'))
+assert(blockingMediaIssues(unsupportedImageIssues).length > 0)
+
+const tooManyImages = validatePlatformMedia('instagram', Array.from({ length: 11 }, (_, index) => ({
+  filename: `photo-${index + 1}.jpg`,
+  metadata: {
+    ...failingCashmereImage,
+    sizeBytes: 1_000_000,
+    width: 1_080,
+    height: 1_350,
+  },
+})))
+assert(tooManyImages.some((issue) => issue.field === 'mediaCount'))
+assert(blockingMediaIssues(tooManyImages).length > 0)
 
 const wasmStartedAt = Date.now()
 await assert.rejects(

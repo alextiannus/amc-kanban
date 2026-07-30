@@ -129,6 +129,21 @@ async function startMockPostFast() {
       }
 
       assert.equal(post.socialMediaId, 'pf_acc_instagram')
+      if (post.content === 'Relaxed image warning') {
+        assert.equal(body.controls?.instagramPublishType, undefined)
+        assert.equal(post.mediaItems[0].key, 'image/oversized-photo.jpg')
+        assert.equal(post.mediaItems[0].type, 'IMAGE')
+        return json(res, 200, {
+          posts: [
+            {
+              id: 'pf_post_warning_image_001',
+              status: 'SCHEDULED',
+              scheduledAt: post.scheduledAt,
+              url: 'https://postfa.st/posts/pf_post_warning_image_001',
+            },
+          ],
+        })
+      }
       assert.equal(body.controls.instagramPublishType, 'REEL')
       if (post.content === 'Opaque video key') {
         assert.equal(post.mediaItems[0].key, 'opaque-storage-key')
@@ -327,6 +342,30 @@ async function main() {
     assert.equal(relaxedVideoPublish.postId, 'pf_post_warning_video_001')
     assert.ok((relaxedVideoPublish.warnings?.length ?? 0) >= 6)
     assert.ok(relaxedVideoPublish.warnings?.every((warning) => warning.severity === 'warning'))
+
+    const relaxedImagePublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      caption: 'Relaxed image warning',
+      mediaItems: [{
+        storageKey: 'image/oversized-photo.jpg',
+        filename: '2024-07-27 114533.jpg',
+        metadata: {
+          kind: 'image',
+          mimeType: 'image/jpeg',
+          sizeBytes: 23_191_745,
+          width: 5_464,
+          height: 8_192,
+          format: 'jpeg',
+        },
+      }],
+      scheduledAt,
+    })
+    assert.equal(relaxedImagePublish.success, true)
+    assert.equal(relaxedImagePublish.postId, 'pf_post_warning_image_001')
+    assert.ok((relaxedImagePublish.warnings?.length ?? 0) >= 3)
+    assert.ok(relaxedImagePublish.warnings?.every((warning) => warning.severity === 'warning'))
 
     const opaqueVideoPublish = await postfast.postfastPublish({
       apiKey: API_KEY,

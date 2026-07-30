@@ -74,20 +74,21 @@ export async function inspectStoredMedia(input: {
   sourceType?: string | null
   deadlineAt?: number
 }) {
+  const inspectionInput = { ...input, enforceUploadLimits: false }
   const proxyKey = postfastKeyFromProxyUrl(input.url)
   if (proxyKey) {
-    return inspectMediaUrl(postfastStorageUrl(proxyKey), input)
+    return inspectMediaUrl(postfastStorageUrl(proxyKey), inspectionInput)
   }
   if (input.sourceType === 'postfast' && !input.url.startsWith('http') && !input.url.startsWith('/')) {
-    return inspectMediaUrl(postfastStorageUrl(input.url), input)
+    return inspectMediaUrl(postfastStorageUrl(input.url), inspectionInput)
   }
   if (!input.url.startsWith('http') && !input.url.startsWith('/')) {
-    return inspectMediaUrl(postfastStorageUrl(input.url), input)
+    return inspectMediaUrl(postfastStorageUrl(input.url), inspectionInput)
   }
   if (input.url.startsWith('/')) {
-    return inspectMediaFile(localPublicPath(input.url), input)
+    return inspectMediaFile(localPublicPath(input.url), inspectionInput)
   }
-  return inspectMediaUrl(input.url, input)
+  return inspectMediaUrl(input.url, inspectionInput)
 }
 
 function issuesFromInspectionError(error: unknown, input: {

@@ -98,7 +98,7 @@ export function formatMediaWarnings(payloads: unknown | unknown[]) {
   const list = Array.isArray(payloads) ? payloads : [payloads]
   const warnings = uniqueIssues(list.flatMap(mediaWarningsFromPayload))
   if (warnings.length === 0) return ''
-  return `视频参数提示（不会阻止提交）：\n${formatIssues(warnings)}`
+  return `素材参数提示（不会阻止提交，已继续提交）：\n${formatIssues(warnings)}`
 }
 
 export function mediaValidationErrorMessage(payload: unknown, fallback: string) {

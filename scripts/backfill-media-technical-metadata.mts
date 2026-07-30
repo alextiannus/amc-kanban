@@ -42,17 +42,17 @@ async function inspectAsset(asset: {
   sourceType: string
 }) {
   if (asset.url.startsWith('http')) {
-    return inspectMediaUrl(asset.url, asset)
+    return inspectMediaUrl(asset.url, { ...asset, enforceUploadLimits: false })
   }
   if (asset.url.startsWith('/api/integrations/postfast/file/')) {
     const key = asset.url.split('?')[0].split('/').slice(6).join('/')
-    return inspectMediaUrl(postfastUrl(key), asset)
+    return inspectMediaUrl(postfastUrl(key), { ...asset, enforceUploadLimits: false })
   }
   if (asset.url.startsWith('/')) {
-    return inspectMediaFile(localPublicPath(asset.url), asset)
+    return inspectMediaFile(localPublicPath(asset.url), { ...asset, enforceUploadLimits: false })
   }
   if (asset.sourceType === 'postfast') {
-    return inspectMediaUrl(postfastUrl(asset.url), asset)
+    return inspectMediaUrl(postfastUrl(asset.url), { ...asset, enforceUploadLimits: false })
   }
   throw new Error(`Unsupported historical source type: ${asset.sourceType || 'unknown'}`)
 }

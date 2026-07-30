@@ -432,6 +432,7 @@ export async function inspectMediaBuffer(buffer: Buffer, input: {
   filename?: string | null
   mimeType?: string | null
   deadlineAt?: number
+  enforceUploadLimits?: boolean
 }): Promise<MediaTechnicalMetadata> {
   const deadlineAt = input.deadlineAt ?? Date.now() + MEDIA_INSPECTION_TOTAL_TIMEOUT_MS
   ensureDeadline(deadlineAt)
@@ -444,7 +445,7 @@ export async function inspectMediaBuffer(buffer: Buffer, input: {
     ensureDeadline(deadlineAt)
     const mimeType = imageMime(metadata.format)
     if (mimeType) {
-      if (buffer.length > MEDIA_UPLOAD_LIMITS.imageBytes) {
+      if (input.enforceUploadLimits !== false && buffer.length > MEDIA_UPLOAD_LIMITS.imageBytes) {
         throw sizeIssue(filename, buffer.length, MEDIA_UPLOAD_LIMITS.imageBytes)
       }
       return {
@@ -469,6 +470,7 @@ export async function inspectMediaFile(filePath: string, input: {
   filename?: string | null
   mimeType?: string | null
   deadlineAt?: number
+  enforceUploadLimits?: boolean
 } = {}): Promise<MediaTechnicalMetadata> {
   const deadlineAt = input.deadlineAt ?? Date.now() + MEDIA_INSPECTION_TOTAL_TIMEOUT_MS
   ensureDeadline(deadlineAt)
@@ -482,7 +484,7 @@ export async function inspectMediaFile(filePath: string, input: {
     ensureDeadline(deadlineAt)
     const mimeType = imageMime(metadata.format)
     if (mimeType) {
-      if (details.size > MEDIA_UPLOAD_LIMITS.imageBytes) {
+      if (input.enforceUploadLimits !== false && details.size > MEDIA_UPLOAD_LIMITS.imageBytes) {
         throw sizeIssue(filename, details.size, MEDIA_UPLOAD_LIMITS.imageBytes)
       }
       return {
@@ -508,6 +510,7 @@ export async function inspectMediaUrl(url: string, input: {
   mimeType?: string | null
   sizeBytes?: number | null
   deadlineAt?: number
+  enforceUploadLimits?: boolean
 } = {}): Promise<MediaTechnicalMetadata> {
   const deadlineAt = input.deadlineAt ?? Date.now() + MEDIA_INSPECTION_TOTAL_TIMEOUT_MS
   ensureDeadline(deadlineAt)
@@ -516,7 +519,7 @@ export async function inspectMediaUrl(url: string, input: {
   // Client/database size is only a hint. The source response is authoritative.
   const knownSize = await getRemoteSize(url, deadlineAt)
 
-  if (hintedVideo || knownSize > MEDIA_UPLOAD_LIMITS.imageBytes) {
+  if (hintedVideo || (input.enforceUploadLimits !== false && knownSize > MEDIA_UPLOAD_LIMITS.imageBytes)) {
     try {
       return await inspectVideoSource(await httpSource(url, knownSize, deadlineAt), {
         filename,
@@ -525,7 +528,7 @@ export async function inspectMediaUrl(url: string, input: {
     } catch (error) {
       if (error instanceof MediaInspectionUnavailableError) throw error
       if (hintedVideo) throw error
-      if (knownSize > MEDIA_UPLOAD_LIMITS.imageBytes) {
+      if (input.enforceUploadLimits !== false && knownSize > MEDIA_UPLOAD_LIMITS.imageBytes) {
         throw sizeIssue(filename, knownSize, MEDIA_UPLOAD_LIMITS.imageBytes)
       }
     }
@@ -547,8 +550,16 @@ export async function inspectMediaUrl(url: string, input: {
     }])
   }
   const mimeType = normalizeMimeType(input.mimeType) || normalizeMimeType(response.headers.get('content-type'))
-  const buffer = await responseBufferWithLimit(response, MEDIA_UPLOAD_LIMITS.imageBytes, filename)
-  return inspectMediaBuffer(buffer, { filename, mimeType })
+  const inspectionLimit = input.enforceUploadLimits === false
+    ? MEDIA_UPLOAD_LIMITS.videoBytes
+    : MEDIA_UPLOAD_LIMITS.imageBytes
+  const buffer = await responseBufferWithLimit(response, inspectionLimit, filename)
+  return inspectMediaBuffer(buffer, {
+    filename,
+    mimeType,
+    deadlineAt,
+    enforceUploadLimits: input.enforceUploadLimits,
+  })
 }
 
 export function validateUploadMedia(metadata: MediaTechnicalMetadata, input: {
@@ -601,7 +612,17 @@ export function validatePlatformMedia(platform: string, media: Array<{
     assetId: item.assetId,
   })
     .filter((issue) => !(normalized === 'instagram' && item.metadata.kind === 'image' && issue.field === 'sizeBytes'))
-    .map((issue) => ({ ...issue, platform: normalized || undefined })))
+    .map((issue) => {
+      const oversizedHistoricalImage = item.metadata.kind === 'image' && issue.field === 'sizeBytes'
+      return {
+        ...issue,
+        platform: normalized || undefined,
+        severity: oversizedHistoricalImage ? 'warning' as const : issue.severity,
+        message: oversizedHistoricalImage
+          ? '图片超过当前上传建议值 10 MB，仍将继续提交'
+          : issue.message,
+      }
+    }))
   if (!['instagram', 'tiktok'].includes(normalized)) return uploadIssues
   if (media.length === 0) {
     return [{
@@ -652,21 +673,21 @@ export function validatePlatformMedia(platform: string, media: Array<{
   for (const item of media) {
     const metadata = item.metadata
     if (normalized === 'instagram' && metadata.kind === 'image') {
-      if (metadata.mimeType !== 'image/jpeg') add(item, 'mimeType', metadata.mimeType, 'image/jpeg', 'Instagram 图片发布仅接受 JPEG')
-      if (metadata.sizeBytes > 8_000_000) add(item, 'sizeBytes', metadata.sizeBytes, 8_000_000, 'Instagram 图片不能超过 8 MB')
-      if (!metadata.width || metadata.width < 320 || metadata.width > 1440) add(item, 'width', metadata.width ?? null, '320-1440 px', 'Instagram 图片宽度必须为 320 至 1440 像素')
+      if (metadata.mimeType !== 'image/jpeg') add(item, 'mimeType', metadata.mimeType, 'image/jpeg', 'Instagram 建议使用 JPEG 图片，仍将继续提交', 'warning')
+      if (metadata.sizeBytes > 8_000_000) add(item, 'sizeBytes', metadata.sizeBytes, 8_000_000, 'Instagram 建议图片不超过 8 MB，仍将继续提交', 'warning')
+      if (!metadata.width || metadata.width < 320 || metadata.width > 1440) add(item, 'width', metadata.width ?? null, '320-1440 px', 'Instagram 图片宽度超出建议范围，仍将继续提交', 'warning')
       if (metadata.width && metadata.height) {
         const ratio = metadata.width / metadata.height
-        if (ratio < 0.8 || ratio > 1.91) add(item, 'aspectRatio', Number(ratio.toFixed(4)), '0.8-1.91', 'Instagram 图片比例必须在 4:5 至 1.91:1 之间')
+        if (ratio < 0.8 || ratio > 1.91) add(item, 'aspectRatio', Number(ratio.toFixed(4)), '0.8-1.91', 'Instagram 图片比例超出建议范围，仍将继续提交', 'warning')
       }
     }
 
     if (normalized === 'tiktok' && metadata.kind === 'image') {
-      if (!['image/jpeg', 'image/webp'].includes(metadata.mimeType)) add(item, 'mimeType', metadata.mimeType, 'image/jpeg or image/webp', 'TikTok 图片仅接受 JPEG 或 WebP')
+      if (!['image/jpeg', 'image/webp'].includes(metadata.mimeType)) add(item, 'mimeType', metadata.mimeType, 'image/jpeg or image/webp', 'TikTok 建议使用 JPEG 或 WebP 图片，仍将继续提交', 'warning')
       if (metadata.width && metadata.height) {
         const shortSide = Math.min(metadata.width, metadata.height)
         const longSide = Math.max(metadata.width, metadata.height)
-        if (shortSide > 1080 || longSide > 1920) add(item, 'dimensions', `${metadata.width}x${metadata.height}`, 'short side <=1080 and long side <=1920', 'TikTok 图片尺寸超过 1080p 限制')
+        if (shortSide > 1080 || longSide > 1920) add(item, 'dimensions', `${metadata.width}x${metadata.height}`, 'short side <=1080 and long side <=1920', 'TikTok 图片尺寸超出建议范围，仍将继续提交', 'warning')
       }
     }
 
