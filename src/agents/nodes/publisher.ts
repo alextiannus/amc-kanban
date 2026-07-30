@@ -6,6 +6,7 @@ import { postfastPublish } from "../../lib/integrations/postfast.ts";
 import { extractTopicKeywords } from "../../lib/topicExtractor.ts";
 import { buildPostfastMediaItems } from "../../lib/publishMedia.ts";
 import { validateDraftMediaForPlatform } from "../../lib/publishMediaValidation.ts";
+import { blockingMediaIssues } from "../../lib/mediaValidation.ts";
 
 /**
  * 萃取草稿主题关键词，写入 topicKeywords 字段。
@@ -230,11 +231,12 @@ export async function publisherNode(state: any) {
             mediaUrls: draftForPublish.mediaUrls,
             assetRefs: draftForPublish.assetRefs,
           })
-          if (issues.length > 0) {
+          const blockingIssues = blockingMediaIssues(issues)
+          if (blockingIssues.length > 0) {
             const error = JSON.stringify({
               code: 'MEDIA_VALIDATION_FAILED',
               error: '素材不符合发布要求',
-              issues,
+              issues: blockingIssues,
             })
             await prisma.workUnit.update({
               where: { id: taskId },

@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict'
 import {
+  blockingMediaIssues,
   inspectMediaBuffer,
+  mediaValidationWarnings,
   MediaInspectionUnavailableError,
   MediaValidationError,
   type MediaTechnicalMetadata,
   validatePlatformMedia,
   validateUploadMedia,
 } from '../src/lib/mediaValidation.ts'
+import {
+  formatMediaWarnings,
+  mediaValidationErrorMessage,
+} from '../src/lib/mediaValidationClient.ts'
 import { shouldValidateMediaForDraftDelivery } from '../src/lib/mediaPublishPolicy.ts'
 
 const failingCashmereImage: MediaTechnicalMetadata = {
@@ -70,11 +76,42 @@ assert.deepEqual(validatePlatformMedia('instagram', [{
   metadata: validInstagramReel,
 }]), [])
 
+const unusualInstagramVideo: MediaTechnicalMetadata = {
+  ...validInstagramReel,
+  width: 3_840,
+  height: 2_160,
+  videoCodec: 'av1',
+  audioCodec: 'opus',
+  frameRate: 120,
+  durationSeconds: 1_200,
+  videoBitrate: 40_000_000,
+  audioSampleRate: 96_000,
+}
+const unusualVideoIssues = validatePlatformMedia('instagram', [{
+  filename: 'unusual-reel.mp4',
+  metadata: unusualInstagramVideo,
+}])
+assert(unusualVideoIssues.length >= 6)
+assert.equal(blockingMediaIssues(unusualVideoIssues).length, 0)
+assert.equal(mediaValidationWarnings(unusualVideoIssues).length, unusualVideoIssues.length)
+const warningText = formatMediaWarnings({ warnings: unusualVideoIssues })
+assert.match(warningText, /不会阻止提交/)
+assert.match(warningText, /unusual-reel\.mp4/)
+
 const mixedIssues = validatePlatformMedia('instagram', [
   { filename: 'photo.jpg', metadata: { ...failingCashmereImage, sizeBytes: 1_000_000, width: 1_080, height: 1_350 } },
   { filename: 'reel.mp4', metadata: validInstagramReel },
 ])
 assert(mixedIssues.every((issue) => issue.field === 'mediaMix'))
+assert.equal(blockingMediaIssues(mixedIssues).length, mixedIssues.length)
+assert.match(
+  mediaValidationErrorMessage({
+    code: 'MEDIA_VALIDATION_FAILED',
+    error: '素材不符合发布要求',
+    issues: mixedIssues,
+  }, '发布失败'),
+  /mediaMix|图片|视频/,
+)
 
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',

@@ -47,10 +47,19 @@ export type MediaValidationIssue = {
   assetId?: string
   filename: string
   platform?: string
+  severity?: 'error' | 'warning'
   field: string
   actual: string | number | null
   limit: string | number
   message: string
+}
+
+export function blockingMediaIssues(issues: MediaValidationIssue[]) {
+  return issues.filter((issue) => issue.severity !== 'warning')
+}
+
+export function mediaValidationWarnings(issues: MediaValidationIssue[]) {
+  return issues.filter((issue) => issue.severity === 'warning')
 }
 
 export class MediaValidationError extends Error {
@@ -608,11 +617,19 @@ export function validatePlatformMedia(platform: string, media: Array<{
   const issues: MediaValidationIssue[] = [...uploadIssues]
   const imageCount = media.filter((item) => item.metadata.kind === 'image').length
   const videoCount = media.length - imageCount
-  const add = (item: typeof media[number], field: string, actual: string | number | null, limit: string | number, message: string) => {
+  const add = (
+    item: typeof media[number],
+    field: string,
+    actual: string | number | null,
+    limit: string | number,
+    message: string,
+    severity: 'error' | 'warning' = 'error',
+  ) => {
     issues.push({
       assetId: item.assetId,
       filename: item.filename || 'unknown',
       platform: normalized,
+      severity,
       field,
       actual,
       limit,
@@ -657,19 +674,19 @@ export function validatePlatformMedia(platform: string, media: Array<{
       const isInstagram = normalized === 'instagram'
       const codecs = isInstagram ? ['h264', 'hevc'] : ['h264', 'hevc', 'vp8', 'vp9']
       const mimes = isInstagram ? ['video/mp4', 'video/quicktime'] : ['video/mp4', 'video/quicktime', 'video/webm']
-      if (!mimes.includes(metadata.mimeType)) add(item, 'mimeType', metadata.mimeType, mimes.join(', '), `${isInstagram ? 'Instagram' : 'TikTok'} 视频容器格式不受支持`)
-      if (!metadata.videoCodec || !codecs.includes(metadata.videoCodec)) add(item, 'videoCodec', metadata.videoCodec ?? null, codecs.join(', '), '视频编码不受支持')
-      if (metadata.frameRate === undefined || metadata.frameRate < 23 || metadata.frameRate > 60) add(item, 'frameRate', metadata.frameRate ?? null, '23-60 fps', '视频帧率必须为 23 至 60 fps')
+      if (!mimes.includes(metadata.mimeType)) add(item, 'mimeType', metadata.mimeType, mimes.join(', '), `${isInstagram ? 'Instagram' : 'TikTok'} 可能不支持该视频容器格式`, 'warning')
+      if (!metadata.videoCodec || !codecs.includes(metadata.videoCodec)) add(item, 'videoCodec', metadata.videoCodec ?? null, codecs.join(', '), '平台可能不支持该视频编码', 'warning')
+      if (metadata.frameRate === undefined || metadata.frameRate < 23 || metadata.frameRate > 60) add(item, 'frameRate', metadata.frameRate ?? null, '23-60 fps', '视频帧率超出平台建议范围，仍将继续提交', 'warning')
       if (isInstagram) {
-        if (metadata.audioCodec && metadata.audioCodec !== 'aac') add(item, 'audioCodec', metadata.audioCodec, 'aac', 'Instagram 视频音频编码必须为 AAC')
-        if (metadata.durationSeconds === undefined || metadata.durationSeconds < 3 || metadata.durationSeconds > 90) add(item, 'durationSeconds', metadata.durationSeconds ?? null, '3-90 seconds', 'Instagram Reel 时长必须为 3 至 90 秒')
-        if ((metadata.width ?? 0) > 1920 || (metadata.height ?? 0) > 1920) add(item, 'dimensions', `${metadata.width ?? '?'}x${metadata.height ?? '?'}`, 'maximum side <=1920 px', 'Instagram 视频最大边不能超过 1920 像素')
-        if ((metadata.videoBitrate ?? 0) > 25_000_000) add(item, 'videoBitrate', metadata.videoBitrate ?? null, 25_000_000, 'Instagram 视频码率不能超过 25 Mbps')
-        if ((metadata.audioSampleRate ?? 0) > 48_000) add(item, 'audioSampleRate', metadata.audioSampleRate ?? null, 48_000, 'Instagram 音频采样率不能超过 48 kHz')
+        if (metadata.audioCodec && metadata.audioCodec !== 'aac') add(item, 'audioCodec', metadata.audioCodec, 'aac', 'Instagram 建议使用 AAC 音频，仍将继续提交', 'warning')
+        if (metadata.durationSeconds === undefined || metadata.durationSeconds < 3 || metadata.durationSeconds > 900) add(item, 'durationSeconds', metadata.durationSeconds ?? null, '3-900 seconds', 'Instagram 视频时长超出建议范围，仍将继续提交', 'warning')
+        if ((metadata.width ?? 0) > 1920) add(item, 'dimensions', `${metadata.width ?? '?'}x${metadata.height ?? '?'}`, 'width <=1920 px', 'Instagram 视频宽度超过建议值，仍将继续提交', 'warning')
+        if ((metadata.videoBitrate ?? 0) > 25_000_000) add(item, 'videoBitrate', metadata.videoBitrate ?? null, 25_000_000, 'Instagram 视频码率超过建议值，仍将继续提交', 'warning')
+        if ((metadata.audioSampleRate ?? 0) > 48_000) add(item, 'audioSampleRate', metadata.audioSampleRate ?? null, 48_000, 'Instagram 音频采样率超过建议值，仍将继续提交', 'warning')
       } else {
-        if (metadata.durationSeconds === undefined || metadata.durationSeconds > 600) add(item, 'durationSeconds', metadata.durationSeconds ?? null, '<=600 seconds', 'TikTok 视频不能超过 10 分钟')
+        if (metadata.durationSeconds === undefined || metadata.durationSeconds > 600) add(item, 'durationSeconds', metadata.durationSeconds ?? null, '<=600 seconds', 'TikTok 视频时长超出建议范围，仍将继续提交', 'warning')
         if (!metadata.width || !metadata.height || metadata.width < 360 || metadata.width > 4096 || metadata.height < 360 || metadata.height > 4096) {
-          add(item, 'dimensions', `${metadata.width ?? '?'}x${metadata.height ?? '?'}`, 'each side 360-4096 px', 'TikTok 视频宽高必须分别在 360 至 4096 像素之间')
+          add(item, 'dimensions', `${metadata.width ?? '?'}x${metadata.height ?? '?'}`, 'each side 360-4096 px', 'TikTok 视频尺寸超出建议范围，仍将继续提交', 'warning')
         }
       }
     }

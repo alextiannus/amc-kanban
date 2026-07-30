@@ -38,6 +38,10 @@ import {
 import PostPreviewModal from './PostPreviewModal'
 import { callGeminiDirect } from '@/lib/gemini-direct'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter, platformAliases } from '@/lib/copywriters'
+import {
+  formatMediaWarnings,
+  mediaValidationErrorMessage,
+} from '@/lib/mediaValidationClient'
 
 function isVideoUrl(url: string): boolean {
   if (!url) return false
@@ -756,13 +760,13 @@ export default function PostEditDrawer({
         }
       }
 
-      await Promise.all(
+      const responses = await Promise.all(
         createdDrafts.map(async (d) => {
           const cwKey = draftCopywriterMap[d.id] || d.accountId || ''
           const cap = draftCaptions[cwKey] || ''
           const hash = draftHashtags[cwKey] || ''
           
-          await fetch(`/api/brands/${brandId}/drafts/${d.id}`, {
+          const patchRes = await fetch(`/api/brands/${brandId}/drafts/${d.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -771,12 +775,16 @@ export default function PostEditDrawer({
               scheduledAt: targetDateISO
             })
           })
+          if (!patchRes.ok) throw new Error('更新排期时间失败')
 
-          await fetch(`/api/brands/${brandId}/drafts/${d.id}/submit`, {
+          const submitRes = await fetch(`/api/brands/${brandId}/drafts/${d.id}/submit`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ note: agentNote }),
           })
+          const submitJson = await submitRes.json().catch(() => ({}))
+          if (!submitRes.ok) throw new Error(mediaValidationErrorMessage(submitJson, '提交审核排期失败'))
+          return submitJson
         })
       )
 
@@ -784,7 +792,8 @@ export default function PostEditDrawer({
       setCreatedDrafts(null)
       onClose()
       onSuccess()
-      alert('已成功设定时间并提交审核排期！')
+      const warningText = formatMediaWarnings(responses)
+      alert(`已成功设定时间并提交审核排期！${warningText ? `\n\n${warningText}` : ''}`)
     } catch (e: any) {
       alert(e.message || '排期失败')
     } finally {
@@ -837,13 +846,13 @@ export default function PostEditDrawer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: '智能排期发布' }),
       })
+      const submitJson = await submitRes.json().catch(() => ({}))
       if (!submitRes.ok) {
-        const errData = await submitRes.json().catch(() => ({}))
-        const errMsg = errData?.error || `排期通道提交失败 (${submitRes.status})`
-        throw new Error(errMsg)
+        throw new Error(mediaValidationErrorMessage(submitJson, `排期通道提交失败 (${submitRes.status})`))
       }
 
-      alert(`已成功排期发布！排期时间：${new Date(targetDateISO).toLocaleString()}`)
+      const warningText = formatMediaWarnings(submitJson)
+      alert(`已成功排期发布！排期时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
       onClose()
       onSuccess()
     } catch (e: any) {
@@ -877,11 +886,12 @@ export default function PostEditDrawer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: '立即发布', publishType: 'immediate' }),
       })
+      const json = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}))
-        throw new Error(json.error || '发布失败')
+        throw new Error(mediaValidationErrorMessage(json, '发布失败'))
       }
-      alert('已成功发送立即发布指令！')
+      const warningText = formatMediaWarnings(json)
+      alert(`已成功发送立即发布指令！${warningText ? `\n\n${warningText}` : ''}`)
       onClose()
       onSuccess()
     } catch (err: any) {
@@ -914,11 +924,12 @@ export default function PostEditDrawer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: '重新排期发布' }),
       })
+      const json = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}))
-        throw new Error(json.error || '重新排期失败')
+        throw new Error(mediaValidationErrorMessage(json, '重新排期失败'))
       }
-      alert('已重新计算并成功提交排期！')
+      const warningText = formatMediaWarnings(json)
+      alert(`已重新计算并成功提交排期！${warningText ? `\n\n${warningText}` : ''}`)
       onClose()
       onSuccess()
     } catch (err: any) {
@@ -952,11 +963,13 @@ export default function PostEditDrawer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ note: reviewNote || agentNote || (action === 'approve' ? 'Approved' : '') }),
       })
+      const json = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}))
-        throw new Error(json.error || '操作失败')
+        throw new Error(mediaValidationErrorMessage(json, '操作失败'))
       }
-      alert(action === 'approve' ? '审核批准成功！' : '内容已被驳回。')
+      const warningText = formatMediaWarnings(json)
+      const successMessage = action === 'approve' ? '审核批准成功！' : '内容已被驳回。'
+      alert(`${successMessage}${warningText ? `\n\n${warningText}` : ''}`)
       onClose()
       onSuccess()
     } catch (err: any) {

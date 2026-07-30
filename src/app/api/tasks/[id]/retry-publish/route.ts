@@ -4,7 +4,13 @@ import { prisma } from '@/lib/prisma'
 import { postfastPublish } from '@/lib/integrations/postfast'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { buildPostfastMediaItems } from '@/lib/publishMedia'
-import { mediaValidationResponse, mediaValidationStatus } from '@/lib/mediaValidation'
+import {
+  blockingMediaIssues,
+  mediaValidationResponse,
+  mediaValidationStatus,
+  mediaValidationWarnings,
+  type MediaValidationIssue,
+} from '@/lib/mediaValidation'
 import { validateDraftMediaForPlatform } from '@/lib/publishMediaValidation'
 
 type SessionUser = {
@@ -69,15 +75,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: '草稿未关联发布平台账号' }, { status: 400 })
   }
 
+  let validationWarnings: MediaValidationIssue[] = []
   try {
     const issues = await validateDraftMediaForPlatform({
       platform: platformName,
       mediaUrls: draft.mediaUrls,
       assetRefs: draft.assetRefs,
     })
-    if (issues.length > 0) {
+    const blockingIssues = blockingMediaIssues(issues)
+    validationWarnings = mediaValidationWarnings(issues)
+    if (blockingIssues.length > 0) {
       return NextResponse.json(
-        { code: 'MEDIA_VALIDATION_FAILED', error: '素材不符合发布要求', issues },
+        {
+          code: 'MEDIA_VALIDATION_FAILED',
+          error: '素材不符合发布要求',
+          issues: blockingIssues,
+          warnings: validationWarnings,
+        },
         { status: 422 },
       )
     }
@@ -148,7 +162,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       },
     })
 
-    return NextResponse.json({ success: true, postUrl: publish.url, postId: publish.postId })
+    return NextResponse.json({
+      success: true,
+      postUrl: publish.url,
+      postId: publish.postId,
+      warnings: [...validationWarnings, ...(publish.warnings ?? [])],
+    })
   } else {
     const transientFailure = publish.code === 'MEDIA_VALIDATION_FAILED'
       || publish.code === 'MEDIA_INSPECTION_UNAVAILABLE'

@@ -5,6 +5,11 @@ import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 import { buildPostfastMediaItems } from '@/lib/publishMedia'
 import { validateDraftMediaForPlatform } from '@/lib/publishMediaValidation'
 import { shouldValidateMediaForDraftDelivery } from '@/lib/mediaPublishPolicy'
+import {
+  blockingMediaIssues,
+  mediaValidationWarnings,
+  type MediaValidationIssue,
+} from '@/lib/mediaValidation'
 
 type SubmitDraftInput = {
   brandId: string
@@ -27,6 +32,23 @@ function normalizePublishPlatform(platform?: string | null) {
     return 'google'
   }
   return normalized
+}
+
+function mergeMediaWarnings(...groups: Array<MediaValidationIssue[] | undefined>) {
+  const seen = new Set<string>()
+  return groups.flatMap((group) => group ?? []).filter((warning) => {
+    const key = [
+      warning.assetId ?? '',
+      warning.filename,
+      warning.platform ?? '',
+      warning.field,
+      String(warning.actual),
+      String(warning.limit),
+    ].join('|')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /**
@@ -99,19 +121,23 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     forcePublish: input.forcePublish,
     accountHandle: draft.account.handle,
   })
+  let validationWarnings: MediaValidationIssue[] = []
   if (shouldValidateForPublish) {
     const mediaIssues = await validateDraftMediaForPlatform({
       platform: platformId,
       mediaUrls: draft.mediaUrls,
       assetRefs: draft.assetRefs,
     })
-    if (mediaIssues.length > 0) {
+    const blockingIssues = blockingMediaIssues(mediaIssues)
+    validationWarnings = mediaValidationWarnings(mediaIssues)
+    if (blockingIssues.length > 0) {
       return {
         ok: false as const,
         status: 422,
         code: 'MEDIA_VALIDATION_FAILED',
         error: '素材不符合发布要求',
-        issues: mediaIssues,
+        issues: blockingIssues,
+        warnings: validationWarnings,
       }
     }
   }
@@ -228,7 +254,12 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
       console.error('[submitDraftForDelivery] OBS pending snapshot failed:', error)
     })
 
-    return { ok: true as const, mode: 'approval_required' as const, draft: updated }
+    return {
+      ok: true as const,
+      mode: 'approval_required' as const,
+      draft: updated,
+      warnings: validationWarnings,
+    }
   }
 
   if (!draft.account?.platformId) {
@@ -381,8 +412,16 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     console.error('[submitDraftForDelivery] OBS delivered snapshot failed:', error)
   })
 
+  const warnings = mergeMediaWarnings(validationWarnings, result.warnings)
   return result.success
-    ? { ok: true as const, mode: scheduled ? 'scheduled' as const : 'published' as const, draft: updated, postId: result.postId, url: result.url }
+    ? {
+        ok: true as const,
+        mode: scheduled ? 'scheduled' as const : 'published' as const,
+        draft: updated,
+        postId: result.postId,
+        url: result.url,
+        warnings,
+      }
     : {
         ok: false as const,
         status: result.code === 'MEDIA_VALIDATION_FAILED'
@@ -394,6 +433,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
               : 400,
         code: result.code,
         issues: result.issues,
+        warnings,
         error: result.error || '发布失败',
         draft: updated,
       }

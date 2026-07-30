@@ -5,6 +5,10 @@ import PostEditDrawer from './PostEditDrawer'
 import { callGeminiDirect } from '@/lib/gemini-direct'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
 import {
+  formatMediaWarnings,
+  mediaValidationErrorMessage,
+} from '@/lib/mediaValidationClient'
+import {
   Heart,
   MessageCircle,
   Bookmark,
@@ -1019,7 +1023,7 @@ ${contentIdea || 'No details provided.'}`
 
     setSaving(true)
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         draftsList.map(async (draft) => {
           const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}/submit`, {
             method: 'PATCH',
@@ -1027,10 +1031,12 @@ ${contentIdea || 'No details provided.'}`
             body: JSON.stringify({ note: agentNote }),
           })
           const json = await res.json().catch(() => ({}))
-          if (!res.ok) throw new Error(json.error || `提交草稿 ${draft.id} 失败`)
+          if (!res.ok) throw new Error(mediaValidationErrorMessage(json, `提交草稿 ${draft.id} 失败`))
+          return json
         })
       )
-      alert('草稿提交成功！')
+      const warningText = formatMediaWarnings(responses)
+      alert(`草稿提交成功！${warningText ? `\n\n${warningText}` : ''}`)
       setIsCreatingPost(false)
       await refreshCalendar()
     } catch (e: any) {
@@ -1075,7 +1081,7 @@ ${contentIdea || 'No details provided.'}`
       const draftsList = await saveOrUpdateDrafts('scheduled', targetDateISO)
       if (!draftsList || draftsList.length === 0) { setSaving(false); return }
 
-      await Promise.all(
+      const responses = await Promise.all(
         draftsList.map(async (draft) => {
           const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}/submit`, {
             method: 'PATCH',
@@ -1083,7 +1089,8 @@ ${contentIdea || 'No details provided.'}`
             body: JSON.stringify({ note: agentNote }),
           })
           const json = await res.json().catch(() => ({}))
-          if (!res.ok) throw new Error(json.error || `提交草稿 ${draft.id} 失败`)
+          if (!res.ok) throw new Error(mediaValidationErrorMessage(json, `提交草稿 ${draft.id} 失败`))
+          return json
         })
       )
 
@@ -1091,10 +1098,11 @@ ${contentIdea || 'No details provided.'}`
       const timeStr = dt.toLocaleString('zh-CN', {
         month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
       })
+      const warningText = formatMediaWarnings(responses)
       if (customTime) {
-        alert(`排期成功！系统已为您安排在 ${timeStr} 发布。`)
+        alert(`排期成功！系统已为您安排在 ${timeStr} 发布。${warningText ? `\n\n${warningText}` : ''}`)
       } else {
-        alert(`智能排期成功！系统已为您安排在 ${timeStr} 发布。`)
+        alert(`智能排期成功！系统已为您安排在 ${timeStr} 发布。${warningText ? `\n\n${warningText}` : ''}`)
       }
       setIsCreatingPost(false)
       setShowPublishOptionModal(false)
@@ -1120,7 +1128,7 @@ ${contentIdea || 'No details provided.'}`
 
     setSaving(true)
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         draftsList.map(async (draft) => {
           // Use /approve route to bypass autopilot check and force publish
           const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}/approve`, {
@@ -1129,11 +1137,13 @@ ${contentIdea || 'No details provided.'}`
             body: JSON.stringify({ note: agentNote }),
           })
           const json = await res.json().catch(() => ({}))
-          if (!res.ok) throw new Error(json.error || `发布草稿 ${draft.id} 失败`)
+          if (!res.ok) throw new Error(mediaValidationErrorMessage(json, `发布草稿 ${draft.id} 失败`))
+          return json
         })
       )
 
-      alert('立刻发布成功！系统已为您直接发布内容。')
+      const warningText = formatMediaWarnings(responses)
+      alert(`立刻发布成功！系统已为您直接发布内容。${warningText ? `\n\n${warningText}` : ''}`)
       setIsCreatingPost(false)
       setShowPublishOptionModal(false)
       await refreshCalendar()

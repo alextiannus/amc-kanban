@@ -10,7 +10,11 @@ import {
 import { canWriteBrandProject } from '@/lib/brandAccess'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 import { buildPostfastMediaItems } from '@/lib/publishMedia'
-import { mediaValidationResponse, mediaValidationStatus } from '@/lib/mediaValidation'
+import {
+  blockingMediaIssues,
+  mediaValidationResponse,
+  mediaValidationStatus,
+} from '@/lib/mediaValidation'
 import { validateDraftMediaForPlatform } from '@/lib/publishMediaValidation'
 
 /** Fetch smart schedule recommendation — mirrors the helper in draftSubmission.ts */
@@ -82,9 +86,14 @@ export async function PATCH(request: Request, { params }: Params) {
         mediaUrls: item.draft!.mediaUrls,
         assetRefs: item.draft!.assetRefs,
       })
-      if (issues.length > 0) {
+      const blockingIssues = blockingMediaIssues(issues)
+      if (blockingIssues.length > 0) {
         return NextResponse.json(
-          { code: 'MEDIA_VALIDATION_FAILED', error: '素材不符合发布要求', issues },
+          {
+            code: 'MEDIA_VALIDATION_FAILED',
+            error: '素材不符合发布要求',
+            issues: blockingIssues,
+          },
           { status: 422 },
         )
       }

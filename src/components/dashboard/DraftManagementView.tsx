@@ -47,6 +47,10 @@ import QuickPreviewModal, { type QuickPreviewDraft } from './QuickPreviewModal'
 import { callGeminiDirect } from '@/lib/gemini-direct'
 import PostEditDrawer from './PostEditDrawer'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
+import {
+  formatMediaWarnings,
+  mediaValidationErrorMessage,
+} from '@/lib/mediaValidationClient'
 
 function isVideoUrl(url: string): boolean {
   if (!url) return false
@@ -1060,7 +1064,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     setSaving(true)
     setError(null)
     try {
-      await Promise.all(
+      const responses = await Promise.all(
         draftsList.map(async (draft) => {
           const res = await fetch(`/api/brands/${brandId}/drafts/${draft.id}/submit`, {
             method: 'PATCH',
@@ -1068,11 +1072,14 @@ Never include any markdown backticks, conversational preamble, or explanation ou
             body: JSON.stringify({ note: agentNote }),
           })
           const json = await res.json().catch(() => ({}))
-          if (!res.ok) throw new Error(json.error || `提交草稿 ${draft.id} 失败`)
+          if (!res.ok) throw new Error(mediaValidationErrorMessage(json, `提交草稿 ${draft.id} 失败`))
+          return json
         })
       )
       await loadDrafts()
       closeEditor()
+      const warningText = formatMediaWarnings(responses)
+      if (warningText) alert(warningText)
     } catch (e) {
       setError(e instanceof Error ? e.message : '提交草稿失败')
     } finally {
@@ -1091,9 +1098,11 @@ Never include any markdown backticks, conversational preamble, or explanation ou
         body: JSON.stringify({ note: reviewNote || agentNote || (action === 'approve' ? 'Approved' : '') }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || '审核操作失败')
+      if (!res.ok) throw new Error(mediaValidationErrorMessage(json, '审核操作失败'))
       await loadDrafts()
       closeEditor()
+      const warningText = formatMediaWarnings(json)
+      if (warningText) alert(warningText)
     } catch (e) {
       setError(e instanceof Error ? e.message : '审核操作失败')
     } finally {
@@ -1149,9 +1158,11 @@ Never include any markdown backticks, conversational preamble, or explanation ou
       body: JSON.stringify({ note: '主理人快速确认发布' }),
     })
     const json = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(json.error || '批准失败')
+    if (!res.ok) throw new Error(mediaValidationErrorMessage(json, '批准失败'))
     await loadDrafts()
     setActiveTab('scheduled')
+    const warningText = formatMediaWarnings(json)
+    if (warningText) alert(warningText)
   }
 
   const handleQuickRegenerate = async (draftId: string) => {
@@ -1255,9 +1266,10 @@ Never include any markdown backticks, conversational preamble, or explanation ou
         body: JSON.stringify({ note: '智能排期发布' }),
       })
       const submitJson = await submitRes.json().catch(() => ({}))
-      if (!submitRes.ok) throw new Error(submitJson.error || '提交排期发布通道失败')
+      if (!submitRes.ok) throw new Error(mediaValidationErrorMessage(submitJson, '提交排期发布通道失败'))
 
-      alert(`已成功通过通道排期发布！推荐时间：${new Date(targetDateISO).toLocaleString()}`)
+      const warningText = formatMediaWarnings(submitJson)
+      alert(`已成功通过通道排期发布！推荐时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
       await loadDrafts()
       closeEditor()
     } catch (e: any) {
@@ -1284,20 +1296,22 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     setSaving(true)
     setError(null)
     try {
+      const responses: unknown[] = []
       for (const draftId of selectedDraftIds) {
         const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/approve`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ note: '批量批准发布' })
         })
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({}))
-          throw new Error(json.error || `草稿 ${draftId} 批准失败`)
-        }
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(mediaValidationErrorMessage(json, `草稿 ${draftId} 批准失败`))
+        responses.push(json)
       }
       setSelectedDraftIds([])
       setSelectMode(false)
       await loadDrafts()
+      const warningText = formatMediaWarnings(responses)
+      if (warningText) alert(warningText)
     } catch (e) {
       setError(e instanceof Error ? e.message : '批量批准失败')
     } finally {
@@ -1416,7 +1430,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
         }
       }
 
-      await Promise.all(
+      const responses = await Promise.all(
         createdDrafts.map(async (d) => {
           const cap = draftCaptions[d.accountId] || ''
           const hash = draftHashtags[d.accountId] || ''
@@ -1437,7 +1451,9 @@ Never include any markdown backticks, conversational preamble, or explanation ou
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ note: agentNote }),
           })
-          if (!submitRes.ok) throw new Error('提交审核排期失败')
+          const submitJson = await submitRes.json().catch(() => ({}))
+          if (!submitRes.ok) throw new Error(mediaValidationErrorMessage(submitJson, '提交审核排期失败'))
+          return submitJson
         })
       )
 
@@ -1445,10 +1461,11 @@ Never include any markdown backticks, conversational preamble, or explanation ou
       setCreatedDrafts(null)
       closeEditor()
       await loadDrafts()
+      const warningText = formatMediaWarnings(responses)
       if (customTime) {
-        alert(`已成功设定发布时间，并提交排期审核！排期时间：${new Date(targetDateISO).toLocaleString()}`)
+        alert(`已成功设定发布时间，并提交排期审核！排期时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
       } else {
-        alert(`已根据用户活跃度为您自动推荐最佳时间，并提交排期审核！推荐时间：${new Date(targetDateISO).toLocaleString()}`)
+        alert(`已根据用户活跃度为您自动推荐最佳时间，并提交排期审核！推荐时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
       }
     } catch (e: any) {
       alert(e.message || (customTime ? '排期发布失败' : '智能排期失败'))

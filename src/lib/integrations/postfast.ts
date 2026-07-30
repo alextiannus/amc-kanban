@@ -6,8 +6,10 @@
  */
 
 import {
+  blockingMediaIssues,
   inspectMediaFile,
   inspectMediaUrl,
+  mediaValidationWarnings,
   mediaValidationResponse,
   type MediaTechnicalMetadata,
   type MediaValidationIssue,
@@ -247,6 +249,7 @@ export interface PostFastPublishResult {
   error?: string
   code?: string
   issues?: MediaValidationIssue[]
+  warnings?: MediaValidationIssue[]
 }
 
 function remainingTimeout(deadlineAt: number, capMs: number) {
@@ -760,7 +763,10 @@ async function mapWithConcurrency<T, R>(
 async function preparePostfastMedia(
   input: PostFastPublishInput,
   publishDeadlineAt: number,
-): Promise<PreparedPostFastMedia[]> {
+): Promise<{
+  items: PreparedPostFastMedia[]
+  warnings: MediaValidationIssue[]
+}> {
   const startedAt = Date.now()
   const preflightDeadlineAt = Math.min(
     publishDeadlineAt,
@@ -805,20 +811,23 @@ async function preparePostfastMedia(
       metadata: item.metadata,
     })),
   )
-  if (issues.length > 0) {
+  const blockingIssues = blockingMediaIssues(issues)
+  const warnings = mediaValidationWarnings(issues)
+  if (blockingIssues.length > 0) {
     console.warn('[postfast-media-preflight] rejected', {
       platform: normalizePlatform(input.platform),
-      fields: Array.from(new Set(issues.map((issue) => issue.field))),
+      fields: Array.from(new Set(blockingIssues.map((issue) => issue.field))),
       elapsedMs: Date.now() - startedAt,
     })
-    throw { issues }
+    throw { issues: blockingIssues }
   }
   console.info('[postfast-media-preflight] passed', {
     platform: normalizePlatform(input.platform),
     mediaCount: prepared.length,
+    warningFields: Array.from(new Set(warnings.map((warning) => warning.field))),
     elapsedMs: Date.now() - startedAt,
   })
-  return prepared
+  return { items: prepared, warnings }
 }
 
 /**
@@ -844,8 +853,11 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   // Media preflight is intentionally first: no account lookup, upload, or PostFast post
   // creation may happen before every source has been inspected and platform-validated.
   let preparedMediaItems: PreparedPostFastMedia[]
+  let mediaWarnings: MediaValidationIssue[] = []
   try {
-    preparedMediaItems = await preparePostfastMedia(input, publishDeadlineAt)
+    const prepared = await preparePostfastMedia(input, publishDeadlineAt)
+    preparedMediaItems = prepared.items
+    mediaWarnings = prepared.warnings
   } catch (error) {
     const response = mediaValidationResponse(error)
     return {
@@ -1070,6 +1082,7 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     postId: asString(createdObj.post_id) || asString(createdObj.id) || undefined,
     url: asString(createdObj.url) || asString(createdObj.postUrl) || undefined,
     scheduledAt: asString(createdObj.scheduledAt) || normalizedSchedule.value,
+    warnings: mediaWarnings,
   }
 }
 

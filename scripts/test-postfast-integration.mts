@@ -160,6 +160,21 @@ async function startMockPostFast() {
         })
       }
 
+      if (post.content === 'Relaxed video warning') {
+        assert.equal(post.mediaItems[0].key, 'video/reel-key')
+        assert.equal(post.mediaItems[0].type, 'VIDEO')
+        return json(res, 200, {
+          posts: [
+            {
+              id: 'pf_post_warning_video_001',
+              status: 'SCHEDULED',
+              scheduledAt: post.scheduledAt,
+              url: 'https://postfa.st/posts/pf_post_warning_video_001',
+            },
+          ],
+        })
+      }
+
       assert.equal(post.content, 'Lunch special\n\n#amc #food')
       assert.match(post.scheduledAt, /^\d{4}-\d{2}-\d{2}T/)
       assert.equal(post.mediaItems[0].key, 'video/reel-key')
@@ -286,6 +301,32 @@ async function main() {
     assert.equal(publish.success, true)
     assert.equal(publish.postId, 'pf_post_scheduled_001')
     assert.equal(publish.scheduledAt, scheduledAt)
+
+    const relaxedVideoPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      caption: 'Relaxed video warning',
+      mediaItems: [{
+        storageKey: 'video/reel-key',
+        metadata: {
+          ...validReelMetadata,
+          width: 3_840,
+          height: 2_160,
+          videoCodec: 'av1',
+          audioCodec: 'opus',
+          frameRate: 120,
+          durationSeconds: 1_200,
+          videoBitrate: 40_000_000,
+          audioSampleRate: 96_000,
+        },
+      }],
+      scheduledAt,
+    })
+    assert.equal(relaxedVideoPublish.success, true)
+    assert.equal(relaxedVideoPublish.postId, 'pf_post_warning_video_001')
+    assert.ok((relaxedVideoPublish.warnings?.length ?? 0) >= 6)
+    assert.ok(relaxedVideoPublish.warnings?.every((warning) => warning.severity === 'warning'))
 
     const opaqueVideoPublish = await postfast.postfastPublish({
       apiKey: API_KEY,
