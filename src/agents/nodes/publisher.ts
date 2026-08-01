@@ -7,6 +7,7 @@ import { extractTopicKeywords } from "../../lib/topicExtractor.ts";
 import { buildPostfastMediaItems } from "../../lib/publishMedia.ts";
 import { validateDraftMediaForPlatform } from "../../lib/publishMediaValidation.ts";
 import { blockingMediaIssues } from "../../lib/mediaValidation.ts";
+import { cleanupDisposableAiPlaceholderDraft, isAiDraftPlaceholder } from "../../lib/draftCleanup.ts";
 
 /**
  * 萃取草稿主题关键词，写入 topicKeywords 字段。
@@ -119,15 +120,25 @@ export async function publisherNode(state: any) {
           })
           console.log(`Saved rule-based fallback to draft ${existingDraftId} (status: draft).`)
         } else {
-          // No content at all — mark as failed
+          // No content at all. System-created placeholder drafts have no
+          // merchant value, so remove them instead of leaving failed calendar noise.
           const failureReason = state.requireAmcContent
             ? (state.error || state.complianceReason || 'amc-content Copywriter 创作失败，请重新创作或检查内容服务配置。')
             : (state.complianceReason || state.error || 'AI Copywriting failed')
-          await prisma.contentDraft.update({
+          const existingDraft = await prisma.contentDraft.findUnique({
             where: { id: existingDraftId },
-            data: { status: 'failed', agentNote: failureReason }
+            select: { caption: true, platformPostId: true, postUrl: true, publishedAt: true },
           })
-          console.log(`No fallback content; marked draft ${existingDraftId} as failed.`)
+          const cleaned = existingDraft && isAiDraftPlaceholder(existingDraft.caption)
+            ? await cleanupDisposableAiPlaceholderDraft({ brandId, draftId: existingDraftId, reason: failureReason })
+            : false
+          if (!cleaned) {
+            await prisma.contentDraft.update({
+              where: { id: existingDraftId },
+              data: { status: 'failed', agentNote: failureReason }
+            })
+            console.log(`No fallback content; marked draft ${existingDraftId} as failed.`)
+          }
         }
       } catch (e) {
         console.warn(`Failed to update draft ${existingDraftId} on aiFailed:`, e)

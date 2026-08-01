@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
+import { cleanupDisposableAiPlaceholderDraft, isAiDraftPlaceholder } from '@/lib/draftCleanup'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
@@ -86,6 +87,8 @@ export async function POST(request: Request, { params }: Params) {
 
   // 3. Update draft caption in database to indicate AI is writing
   const originalCaption = draft.caption || ''
+  const originalStatus = draft.status || 'draft'
+  const canDeleteOnFailure = isAiDraftPlaceholder(originalCaption) && !draft.platformPostId && !draft.postUrl && !draft.publishedAt
   await prisma.contentDraft.update({
     where: { id: draftId },
     data: { caption: '【AI 正在创作中...】' }
@@ -126,13 +129,20 @@ export async function POST(request: Request, { params }: Params) {
   } catch (err: any) {
     console.error(`Background copywriter trigger failed for draft ${draftId}:`, err);
     try {
-      await prisma.contentDraft.update({
-        where: { id: draftId },
-        data: {
-          status: 'draft',
-          agentNote: `AI generation graph error: ${err.message || String(err)}`
-        }
-      });
+      const reason = `AI generation graph error: ${err.message || String(err)}`
+      const cleaned = canDeleteOnFailure
+        ? await cleanupDisposableAiPlaceholderDraft({ brandId, draftId, reason })
+        : false
+      if (!cleaned) {
+        await prisma.contentDraft.update({
+          where: { id: draftId },
+          data: {
+            caption: originalCaption,
+            status: originalStatus,
+            agentNote: reason
+          }
+        });
+      }
     } catch (dbErr) {
       console.error(`Failed to update draft ${draftId} to failed on error:`, dbErr);
     }
@@ -145,7 +155,7 @@ export async function POST(request: Request, { params }: Params) {
       console.error(`Failed to update task ${task.id} to failed:`, dbErr);
     }
     return NextResponse.json(
-      { error: err.message || 'AI Copywriter failed', taskId: task.id },
+      { error: err.message || 'AI Copywriter failed', taskId: task.id, cleanedPlaceholderDraft: canDeleteOnFailure },
       { status: 500 }
     )
   }
