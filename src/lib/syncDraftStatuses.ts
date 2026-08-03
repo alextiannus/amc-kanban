@@ -1,22 +1,19 @@
 /**
- * syncDraftStatuses — PostFast → ContentDraft status reconciliation
+ * PostFast -> ContentDraft status reconciliation.
  *
- * PostFast publishes scheduled posts automatically at the scheduled time.
- * Our DB does not receive a webhook — the ContentDraft stays in 'scheduled'
- * status indefinitely unless we actively poll.
- *
- * This function:
- *   1. Finds all ContentDrafts in 'scheduled' status with a platformPostId
- *   2. Queries PostFast for their current status (published / failed)
- *   3. Updates the DB records to match
- *
- * Called by:
- *   - /api/cron/postfast-sync-all  (daily, Phase 4)
- *   - /api/brands/[id]/drafts/sync-statuses  (manual trigger from UI)
+ * PostFast publishes scheduled posts asynchronously and does not currently
+ * send this application a webhook. This bounded poll keeps scheduled drafts in
+ * sync and also repairs legacy rows created before the official
+ * `{ postIds: [...] }` create response was parsed.
  */
 
 import { prisma } from '@/lib/prisma'
-import { postfastListPosts } from '@/lib/integrations/postfast'
+import {
+  postfastFetchAccounts,
+  postfastListPosts,
+  type PostFastPost,
+} from '@/lib/integrations/postfast'
+import { findUniqueLegacyPostMatch } from '@/lib/draftStatusReconciliation'
 
 export interface SyncDraftStatusResult {
   checked: number
@@ -26,13 +23,42 @@ export interface SyncDraftStatusResult {
     from: 'scheduled'
     to: 'published' | 'failed'
     publishedAt?: string
+    recoveredPostId?: string
   }>
   errors: string[]
 }
 
+type ScheduledDraft = {
+  id: string
+  platformPostId: string | null
+  scheduledAt: Date | null
+  caption: string
+  hashtags: string[]
+  account: {
+    platformId: string
+    handle: string | null
+    displayName: string | null
+  } | null
+}
+
+const PAGE_LIMIT = 50
+const MAX_PAGES_PER_STATUS = 20
+function normalizeIdentity(value: string | null | undefined) {
+  return (value ?? '').trim().replace(/^@/, '').toLocaleLowerCase()
+}
+
+function validPublishedAt(value: string | undefined) {
+  if (!value) return new Date()
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? new Date() : date
+}
+
 /**
- * Sync scheduled draft statuses for a single brand.
- * Returns a summary of what was checked and updated.
+ * Sync scheduled draft statuses for one brand.
+ *
+ * Rows with a stored platformPostId use an exact ID match. Legacy rows without
+ * an ID are repaired only when one unique provider post matches account,
+ * normalized caption and scheduled time (within two minutes).
  */
 export async function syncBrandDraftStatuses(
   brandId: string,
@@ -40,54 +66,77 @@ export async function syncBrandDraftStatuses(
 ): Promise<SyncDraftStatusResult> {
   const result: SyncDraftStatusResult = { checked: 0, updated: 0, updates: [], errors: [] }
 
-  // 1. Find all 'scheduled' drafts that have a platformPostId (i.e. PostFast knows about them)
   const scheduledDrafts = await prisma.contentDraft.findMany({
     where: {
       brandId,
       status: 'scheduled',
-      platformPostId: { not: null },
     },
-    select: { id: true, platformPostId: true, scheduledAt: true },
-  })
+    select: {
+      id: true,
+      platformPostId: true,
+      scheduledAt: true,
+      caption: true,
+      hashtags: true,
+      account: {
+        select: {
+          platformId: true,
+          handle: true,
+          displayName: true,
+        },
+      },
+    },
+  }) as ScheduledDraft[]
 
   result.checked = scheduledDrafts.length
   if (scheduledDrafts.length === 0) return result
 
-  // 2. Build a lookup set of platformPostIds we care about
-  const wantedIds = new Set(scheduledDrafts.map((d: { id: string; platformPostId: string | null; scheduledAt: Date | null }) => d.platformPostId!))
+  const now = Date.now()
+  const wantedIds = new Set<string>(
+    scheduledDrafts
+      .map((draft) => draft.platformPostId)
+      .filter((postId): postId is string => Boolean(postId)),
+  )
+  const hasLegacyDrafts = scheduledDrafts.some(
+    (draft) => !draft.platformPostId && draft.scheduledAt && draft.scheduledAt.getTime() <= now,
+  )
 
-
-  // 3. Fetch published + failed from PostFast (both may contain our scheduled posts)
-  //    Use full pagination (bounded) to avoid missing older items.
-  const pfStatusMap = new Map<string, { status: 'published' | 'failed'; publishedAt?: string }>()
-  const PAGE_LIMIT = 50
-  const MAX_PAGES_PER_STATUS = 20
+  const providerPosts: PostFastPost[] = []
+  const providerPostsById = new Map<string, PostFastPost>()
 
   const fetchStatusPages = async (status: 'published' | 'failed') => {
-    let page = 1
+    let page = 0
     try {
-      while (page <= MAX_PAGES_PER_STATUS) {
-        const res = await postfastListPosts(postfastApiKey, { status, limit: PAGE_LIMIT, page })
-        if (!res.success) {
-          result.errors.push(`PostFast ${status} fetch failed on page ${page}: ${res.error ?? 'unknown error'}`)
+      while (page < MAX_PAGES_PER_STATUS) {
+        const response = await postfastListPosts(postfastApiKey, {
+          status,
+          limit: PAGE_LIMIT,
+          page,
+        })
+        if (!response.success) {
+          result.errors.push(
+            `PostFast ${status} fetch failed on page ${page}: ${response.error ?? 'unknown error'}`,
+          )
           return
         }
 
-        for (const post of res.posts) {
-          if (wantedIds.has(post.id)) {
-            pfStatusMap.set(post.id, {
-              status,
-              publishedAt: post.publishedAt,
-            })
-          }
+        for (const rawPost of response.posts) {
+          const post: PostFastPost = { ...rawPost, status }
+          providerPosts.push(post)
+          providerPostsById.set(post.id, post)
         }
 
-        // Early stop: all wanted IDs are resolved.
-        if (pfStatusMap.size >= wantedIds.size) return
+        if (
+          !hasLegacyDrafts
+          && wantedIds.size > 0
+          && [...wantedIds].every((postId) => providerPostsById.has(postId))
+        ) {
+          return
+        }
 
-        const noMoreByTotal = typeof res.total === 'number' && page * PAGE_LIMIT >= res.total
-        const noMoreByData = res.posts.length < PAGE_LIMIT
-        if (noMoreByTotal || noMoreByData) return
+        const noMoreByTotal = typeof response.total === 'number'
+          && (page + 1) * PAGE_LIMIT >= response.total
+        const noMoreByData = response.posts.length < PAGE_LIMIT
+        if (response.hasNextPage === false || noMoreByTotal || noMoreByData) return
 
         page += 1
       }
@@ -95,48 +144,106 @@ export async function syncBrandDraftStatuses(
       result.errors.push(
         `PostFast ${status} pagination capped at ${MAX_PAGES_PER_STATUS} pages; sync may be partial for brand ${brandId}`,
       )
-    } catch (e: any) {
-      result.errors.push(`PostFast ${status} fetch failed: ${e?.message ?? String(e)}`)
+    } catch (error: unknown) {
+      result.errors.push(
+        `PostFast ${status} fetch failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
   }
 
   await Promise.all([fetchStatusPages('published'), fetchStatusPages('failed')])
 
-  // 4. Update DB for any drafts whose PostFast status has changed
+  let providerAccountIds = new Map<string, string>()
+  if (hasLegacyDrafts) {
+    const accountsResult = await postfastFetchAccounts(postfastApiKey)
+    if (accountsResult.success) {
+      providerAccountIds = new Map(
+        accountsResult.accounts.map((account) => [
+          `${normalizeIdentity(account.platformId)}:${normalizeIdentity(account.handle || account.displayName)}`,
+          account.id,
+        ]),
+      )
+    } else {
+      result.errors.push(
+        `PostFast account lookup failed during legacy reconciliation: ${accountsResult.error ?? 'unknown error'}`,
+      )
+    }
+  }
+
+  const claimedProviderIds = new Set<string>()
+  const findLegacyMatch = (draft: (typeof scheduledDrafts)[number]) => {
+    if (!draft.scheduledAt || draft.scheduledAt.getTime() > now) return undefined
+
+    const accountKey = draft.account
+      ? `${normalizeIdentity(draft.account.platformId)}:${normalizeIdentity(
+          draft.account.handle || draft.account.displayName,
+        )}`
+      : ''
+    const providerAccountId = accountKey ? providerAccountIds.get(accountKey) : undefined
+    const match = findUniqueLegacyPostMatch({
+      caption: draft.caption,
+      hashtags: draft.hashtags,
+      scheduledAt: draft.scheduledAt,
+      providerAccountId,
+      providerPosts,
+      claimedProviderIds,
+      now,
+    })
+
+    if (match.ambiguousCount > 1) {
+      result.errors.push(
+        `Skipped ambiguous PostFast recovery for draft ${draft.id}: ${match.ambiguousCount} candidates`,
+      )
+    }
+    return match.post
+  }
+
   for (const draft of scheduledDrafts) {
-    if (!draft.platformPostId) continue
-    const pfPost = pfStatusMap.get(draft.platformPostId)
-    if (!pfPost) continue // still scheduled in PostFast — no change needed
+    const providerPost = draft.platformPostId
+      ? providerPostsById.get(draft.platformPostId)
+      : findLegacyMatch(draft)
+    if (!providerPost) continue
+
+    claimedProviderIds.add(providerPost.id)
+    const recoveredPostId = draft.platformPostId ? undefined : providerPost.id
+    const resolvedStatus: 'published' | 'failed' = providerPost.status === 'published'
+      ? 'published'
+      : 'failed'
 
     try {
-      if (pfPost.status === 'published') {
-        await prisma.contentDraft.update({
-          where: { id: draft.id },
-          data: {
-            status: 'published',
-            publishedAt: pfPost.publishedAt ? new Date(pfPost.publishedAt) : new Date(),
-            agentNote: 'PostFast 发布成功，状态已自动同步。',
-          },
-        })
-        result.updates.push({
-          draftId: draft.id,
-          from: 'scheduled',
-          to: 'published',
-          publishedAt: pfPost.publishedAt,
-        })
-      } else if (pfPost.status === 'failed') {
-        await prisma.contentDraft.update({
-          where: { id: draft.id },
-          data: {
-            status: 'failed',
-            agentNote: 'PostFast 报告发布失败，请检查账号连接状态或重新排期。',
-          },
-        })
-        result.updates.push({ draftId: draft.id, from: 'scheduled', to: 'failed' })
-      }
-      result.updated++
-    } catch (e: any) {
-      result.errors.push(`Failed to update draft ${draft.id}: ${e?.message ?? String(e)}`)
+      const update = resolvedStatus === 'published'
+        ? await prisma.contentDraft.updateMany({
+            where: { id: draft.id, status: 'scheduled' },
+            data: {
+              status: 'published',
+              publishedAt: validPublishedAt(providerPost.publishedAt),
+              ...(recoveredPostId ? { platformPostId: recoveredPostId } : {}),
+              agentNote: 'PostFast 发布成功，状态已自动同步。',
+            },
+          })
+        : await prisma.contentDraft.updateMany({
+            where: { id: draft.id, status: 'scheduled' },
+            data: {
+              status: 'failed',
+              ...(recoveredPostId ? { platformPostId: recoveredPostId } : {}),
+              agentNote: 'PostFast 报告发布失败，请检查账号连接状态或重新排期。',
+            },
+          })
+
+      if (update.count === 0) continue
+
+      result.updated += 1
+      result.updates.push({
+        draftId: draft.id,
+        from: 'scheduled',
+        to: resolvedStatus,
+        ...(providerPost.publishedAt ? { publishedAt: providerPost.publishedAt } : {}),
+        ...(recoveredPostId ? { recoveredPostId } : {}),
+      })
+    } catch (error: unknown) {
+      result.errors.push(
+        `Failed to update draft ${draft.id}: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
   }
 

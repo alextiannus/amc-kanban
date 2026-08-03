@@ -1,7 +1,7 @@
 # Multi-Platform Integration Product Requirements Document (PRD)
 
-**Version:** 1.0  
-**Date:** 2026-06-19  
+**Version:** 1.1
+**Date:** 2026-07-31
 **Status:** Approved / In Development  
 **Target Audience:** AMC Kanban AI Employee, Developers, AMC Operator  
 
@@ -50,6 +50,8 @@ This PRD consolidates the design, execution, and integration routes for each pla
 ### 3.3 Instagram, TikTok & Xiaohongshu (RED)
 *   **Content Publishing**:
     *   *Implementation*: Unified under **PostFast**. The Agent calls `postfastPublish` with a specific account ID (`accountId`) and target platform. Captions, hashtags, and media storage keys (uploaded via PostFast's pre-signed URLs) are compiled and sent to PostFast.
+    *   *Post identity contract*: A successful `POST /social-posts` response is `{ postIds: string[] }`. AMC persists `postIds[0]` as `ContentDraft.platformPostId`; a success response without an ID is treated as an integration failure.
+    *   *Scheduled status reconciliation*: The Scheduled view triggers a bounded provider reconciliation before loading. `GET /social-posts` pagination starts at request `page=0`; exact stored IDs are preferred. Legacy rows without an ID are updated only after a unique account + caption + scheduled-time match.
 *   **Review/Comment Replies**:
     *   *Implementation*: **Extension Bridge (浏览器插件中转技术)**.
         *   Since official APIs for comments on TikTok/Xiaohongshu are heavily restricted or require manual commercial reviews, the system utilizes a Chrome extension (`AI Marketing Crew Assistant`) installed on the merchant's browser.
@@ -80,6 +82,8 @@ This PRD consolidates the design, execution, and integration routes for each pla
 *   `get_social_insights`: Returns scraped post performance data.
 
 ### 4.2 REST APIs
+*   `GET /api/brands/[id]/drafts?status=:status` — Fetch server-filtered drafts plus full per-status counts.
+*   `POST /api/brands/[id]/drafts/sync-statuses` — Reconcile PostFast scheduled posts to `published` or `failed` before refreshing the Scheduled view.
 *   `GET /api/brands/[id]/reviews` — Fetch reviews from all active sources.
 *   `POST /api/brands/[id]/reviews/reply` — Post a reply. Automatically routes domestic and social platforms to the browser extension bridge, and international directories to APIs.
 

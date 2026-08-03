@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
   CheckSquare,
@@ -384,6 +384,8 @@ export default function DraftManagementView({
   const closeQuickPreview = () => setQuickPreviewDraftId(null)
 
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
+  const [draftCounts, setDraftCounts] = useState<Partial<Record<TabKey, number>>>({})
+  const loadRequestId = useRef(0)
   const [query, setQuery] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
   const [accountFilter, setAccountFilter] = useState('all')
@@ -740,17 +742,31 @@ Never include any markdown backticks, conversational preamble, or explanation ou
 
   const loadDrafts = async () => {
     if (!brandId) return
+    const requestId = ++loadRequestId.current
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/brands/${brandId}/drafts`)
+      if (activeTab === 'scheduled') {
+        await fetch(`/api/brands/${brandId}/drafts/sync-statuses`, {
+          method: 'POST',
+        }).catch(() => null)
+      }
+
+      const params = new URLSearchParams()
+      if (activeTab !== 'all') params.set('status', activeTab)
+      const queryString = params.toString()
+      const res = await fetch(`/api/brands/${brandId}/drafts${queryString ? `?${queryString}` : ''}`)
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || '草稿加载失败')
+      if (requestId !== loadRequestId.current) return
       setDrafts(json.drafts || [])
+      setDraftCounts(json.counts || {})
     } catch (e) {
-      setError(e instanceof Error ? e.message : '草稿加载失败')
+      if (requestId === loadRequestId.current) {
+        setError(e instanceof Error ? e.message : '草稿加载失败')
+      }
     } finally {
-      setLoading(false)
+      if (requestId === loadRequestId.current) setLoading(false)
     }
   }
 
@@ -778,6 +794,9 @@ Never include any markdown backticks, conversational preamble, or explanation ou
 
   useEffect(() => {
     void loadDrafts()
+  }, [brandId, activeTab])
+
+  useEffect(() => {
     void loadBrandAssets()
   }, [brandId])
 
@@ -889,10 +908,10 @@ Never include any markdown backticks, conversational preamble, or explanation ou
 
   const tabCounts = useMemo(() => {
     return TAB_CONFIG.reduce<Record<TabKey, number>>((acc, tab) => {
-      acc[tab.key] = tab.key === 'all' ? drafts.length : drafts.filter((draft) => draft.status === tab.key).length
+      acc[tab.key] = draftCounts[tab.key] ?? 0
       return acc
     }, {} as Record<TabKey, number>)
-  }, [drafts])
+  }, [draftCounts])
 
   const filteredDrafts = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()

@@ -98,13 +98,16 @@
 3. 若需要审核：创建/更新 `ActionItem(content_approval)`，状态转 `pending_review`。
 4. 审核通过后进入发布执行：调用 `postfastPublish`（或平台直连）。
 5. 发布结果回写草稿：
-   - 成功：`published`，写入 `platformPostId/publishedAt/url`。
+   - 成功：立即发布写入 `published`，定时发布写入 `scheduled`；两者都必须从 PostFast `{ postIds: [...] }` 响应提取并写入非空 `platformPostId`。
    - 失败：`failed`，记录错误并可“一键重试发布”。
+6. 进入“已排期”列表前调用状态对账：PostFast 列表从请求 `page=0` 开始翻页，优先按 `platformPostId` 精确匹配并将最终状态回写为 `published/failed`。
+7. 对历史缺失 `platformPostId` 的已到期记录，只允许按账号、文案和排期时间唯一匹配后回填；歧义结果必须跳过。
 
 成功标准：
 1. 发布结果与看板任务状态一致。
 2. 定时发布可正确反映 `in_progress` 与最终 `done`。
 3. 失败可追踪并可重试。
+4. PostFast 已发布内容刷新后不再显示在“已排期”，且新排期不存在空 `platformPostId`。
 
 ## 6. 信息架构与页面
 1. 素材库页：
@@ -163,7 +166,7 @@
 4. `DELETE /api/brands/:id/assets/:assetId`
    - 用途：素材软删除/归档。
 5. `GET /api/brands/:id/drafts`
-   - 用途：草稿分页列表。
+   - 用途：草稿分页列表；支持 `status` 服务端筛选，并返回品牌全量状态计数。
 6. `POST /api/brands/:id/drafts`
    - 用途：新建草稿（支持 AI Bot）。
 7. `GET /api/brands/:id/drafts/:draftId`
@@ -178,6 +181,8 @@
    - 用途：从草稿发起发布（立即/定时/审核）。
 12. `POST /api/brands/:id/drafts/:draftId/retry-publish`
    - 用途：失败重试。
+13. `POST /api/brands/:id/drafts/sync-statuses`
+   - 用途：按 PostFast 实际状态对账已排期草稿，并安全修复可唯一确认的历史缺失帖子 ID。
 
 ## 9. 状态机设计
 草稿状态建议统一为：

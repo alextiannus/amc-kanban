@@ -180,6 +180,7 @@ export interface PostFastAccount {
 
 export interface PostFastPost {
   id: string
+  socialMediaId?: string
   platform: string
   platformId: string
   caption: string    // mapped from API field 'content'
@@ -387,7 +388,7 @@ export async function postfastListPosts(apiKey: string, options?: {
   platform?: string
   limit?: number
   page?: number
-}): Promise<{ success: boolean; posts: PostFastPost[]; total?: number; error?: string }> {
+}): Promise<{ success: boolean; posts: PostFastPost[]; total?: number; hasNextPage?: boolean; error?: string }> {
   const params = new URLSearchParams()
   if (options?.status) params.set('statuses', options.status.toUpperCase())  // API expects uppercase
   if (options?.platform) params.set('platforms', options.platform.toUpperCase())
@@ -409,6 +410,7 @@ export async function postfastListPosts(apiKey: string, options?: {
 
     return {
       id: asString(p.id),
+      socialMediaId: asString(p.socialMediaId) || undefined,
       platform: pfPlatform,
       platformId: normalizePlatform(p.platform),
       caption: asString(p.content) || asString(p.caption),   // API returns 'content', not 'caption'
@@ -422,7 +424,9 @@ export async function postfastListPosts(apiKey: string, options?: {
     }
   })
   const totalCount = asNumber(dataObj.totalCount)
-  return { success: true, posts, total: totalCount ?? rawPosts.length }
+  const pageInfo = asObject(dataObj.pageInfo)
+  const hasNextPage = typeof pageInfo.hasNextPage === 'boolean' ? pageInfo.hasNextPage : undefined
+  return { success: true, posts, total: totalCount, hasNextPage }
 }
 
 /**
@@ -1073,16 +1077,30 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     return { success: false, error: r.error }
   }
 
-  // Response may be array of created posts or a single object
+  // Official response is { postIds: string[] }. Keep the legacy shapes for
+  // compatibility with older PostFast deployments.
   const dataObj = asObject(r.data)
   const created = Array.isArray(r.data)
     ? r.data[0]
     : (Array.isArray(dataObj.posts) ? dataObj.posts[0] : r.data)
   const createdObj = asObject(created)
+  const postIds = Array.isArray(dataObj.postIds) ? dataObj.postIds : []
+  const postId = asString(createdObj.post_id)
+    || asString(createdObj.id)
+    || asString(postIds[0])
+
+  if (!postId) {
+    return {
+      success: false,
+      code: 'POSTFAST_INVALID_RESPONSE',
+      error: 'PostFast accepted the publish request but did not return a post ID.',
+      warnings: mediaWarnings,
+    }
+  }
 
   return {
     success: true,
-    postId: asString(createdObj.post_id) || asString(createdObj.id) || undefined,
+    postId,
     url: asString(createdObj.url) || asString(createdObj.postUrl) || undefined,
     scheduledAt: asString(createdObj.scheduledAt) || normalizedSchedule.value,
     warnings: mediaWarnings,

@@ -33,6 +33,18 @@ const DRAFT_SELECT = {
   },
 } as const
 
+const DRAFT_STATUSES = new Set([
+  'draft',
+  'pending_review',
+  'approved',
+  'scheduled',
+  'publishing',
+  'published',
+  'rejected',
+  'failed',
+  'archived',
+])
+
 type Params = { params: Promise<{ id: string }> }
 
 async function getActor(request: Request) {
@@ -66,22 +78,37 @@ export async function GET(request: Request, { params }: Params) {
   const url = new URL(request.url)
   const status = url.searchParams.get('status') || ''
   const q = (url.searchParams.get('q') || '').trim()
+  if (status && !DRAFT_STATUSES.has(status)) {
+    return NextResponse.json({ error: 'Invalid draft status' }, { status: 400 })
+  }
 
-  const drafts = await prisma.contentDraft.findMany({
-    where: {
-      brandId,
-      ...(status ? { status } : {}),
-      ...(q ? {
-        OR: [
-          { caption: { contains: q, mode: 'insensitive' } },
-          { hashtags: { has: q } },
-        ],
-      } : {}),
-    },
-    select: DRAFT_SELECT,
-    orderBy: { updatedAt: 'desc' },
-    take: 100,
-  })
+  const [drafts, groupedCounts] = await prisma.$transaction([
+    prisma.contentDraft.findMany({
+      where: {
+        brandId,
+        ...(status ? { status } : {}),
+        ...(q ? {
+          OR: [
+            { caption: { contains: q, mode: 'insensitive' } },
+            { hashtags: { has: q } },
+          ],
+        } : {}),
+      },
+      select: DRAFT_SELECT,
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    }),
+    prisma.contentDraft.groupBy({
+      by: ['status'],
+      where: { brandId },
+      _count: { _all: true },
+    }),
+  ])
+  const countRows = groupedCounts as Array<{ status: string; _count: { _all: number } }>
+  const counts = Object.fromEntries(
+    countRows.map((item) => [item.status, item._count._all]),
+  )
+  counts.all = countRows.reduce((sum, item) => sum + item._count._all, 0)
 
   // Dynamically resolve postUrl for published drafts that don't have it in the database
   const needsUrlResolution = drafts.some((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
@@ -118,7 +145,7 @@ export async function GET(request: Request, { params }: Params) {
   }
 
 
-  return NextResponse.json({ drafts: resolvedDrafts })
+  return NextResponse.json({ drafts: resolvedDrafts, counts })
 }
 
 export async function POST(request: Request, { params }: Params) {

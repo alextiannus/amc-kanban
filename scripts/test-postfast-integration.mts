@@ -190,19 +190,16 @@ async function startMockPostFast() {
         })
       }
 
+      if (post.content === 'Missing provider ID') {
+        return json(res, 201, { postIds: [] })
+      }
+
       assert.equal(post.content, 'Lunch special\n\n#amc #food')
       assert.match(post.scheduledAt, /^\d{4}-\d{2}-\d{2}T/)
       assert.equal(post.mediaItems[0].key, 'video/reel-key')
       assert.equal(post.mediaItems[0].type, 'VIDEO')
-      return json(res, 200, {
-        posts: [
-          {
-            id: 'pf_post_scheduled_001',
-            status: 'SCHEDULED',
-            scheduledAt: post.scheduledAt,
-            url: 'https://postfa.st/posts/pf_post_scheduled_001',
-          },
-        ],
+      return json(res, 201, {
+        postIds: ['pf_post_scheduled_001'],
       })
     }
 
@@ -210,10 +207,12 @@ async function startMockPostFast() {
       const query = new URL(`${BASE_URL}${url}`).searchParams
       assert.equal(query.get('statuses'), 'SCHEDULED')
       assert.equal(query.get('platforms'), 'INSTAGRAM')
+      assert.equal(query.get('page'), '0')
       return json(res, 200, {
-        posts: [
+        data: [
           {
             id: 'pf_post_scheduled_001',
+            socialMediaId: 'pf_acc_instagram',
             platform: 'INSTAGRAM',
             content: 'Lunch special',
             status: 'SCHEDULED',
@@ -222,6 +221,7 @@ async function startMockPostFast() {
           },
         ],
         totalCount: 1,
+        pageInfo: { hasNextPage: false },
       })
     }
 
@@ -317,6 +317,17 @@ async function main() {
     assert.equal(publish.postId, 'pf_post_scheduled_001')
     assert.equal(publish.scheduledAt, scheduledAt)
 
+    const missingProviderId = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      caption: 'Missing provider ID',
+      mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
+      scheduledAt,
+    })
+    assert.equal(missingProviderId.success, false)
+    assert.equal(missingProviderId.code, 'POSTFAST_INVALID_RESPONSE')
+
     const relaxedVideoPublish = await postfast.postfastPublish({
       apiKey: API_KEY,
       platform: 'instagram',
@@ -406,6 +417,8 @@ async function main() {
     assert.equal(list.success, true)
     assert.equal(list.posts.length, 1)
     assert.equal(list.posts[0].platformId, 'instagram')
+    assert.equal(list.posts[0].socialMediaId, 'pf_acc_instagram')
+    assert.equal(list.hasNextPage, false)
 
     const deleted = await postfast.postfastDeletePost(API_KEY, 'pf_post_scheduled_001')
     assert.equal(deleted.success, true)

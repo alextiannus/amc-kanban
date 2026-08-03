@@ -302,6 +302,8 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 **列表排序变更**：
 - 所有 Tab 统一按 `scheduledAt` **升序**排列（最近即将发布的排在最前）；无排期的草稿排末尾。
+- 各状态 Tab 通过 `GET /api/brands/:id/drafts?status=:status` 在服务端按状态过滤；接口同时返回品牌全量状态计数，Tab 数量不依赖当前页的 100 条结果。
+- 进入或刷新 Scheduled Tab 时，前端先调用 `POST /api/brands/:id/drafts/sync-statuses`，完成 PostFast 状态对账后再读取列表。
 
 **Eye Icon 快速预览**：
 - 每张 DraftCard 右下角显示「👁 预览」按钮（不进入编辑器，不触发选择）。
@@ -329,8 +331,17 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 ### Step 6：检查发布情况
 
+- **Scheduled Tab 对账**：PostFast 定时发布完成后，系统将 `scheduled` 自动同步为 `published` 或 `failed`；已发布内容不得继续停留在 Scheduled Tab。
+- **发布标识契约**：`POST /social-posts` 成功响应使用 `{ postIds: string[] }`，首个 PostFast 托管帖子 ID 必须写入 `ContentDraft.platformPostId`；成功响应缺少 ID 时按失败处理，不得写入不可追踪的排期记录。
+- **历史数据安全修复**：仅对已到发布时间且缺少 `platformPostId` 的旧记录，按 PostFast 账号、规范化文案（含发布时拼接的 Hashtags）和两分钟内的排期时间进行唯一匹配；匹配不唯一时跳过并记录错误。
+- **分页契约**：PostFast 帖子列表请求从 `page=0` 开始，并按 `pageInfo/totalCount` 有界翻页。
 - 切换到 **Published Tab**：展示所有已发布帖子。
 - 每张 DraftCard（Published 状态）展示「↗ 查看」外链按钮（`postUrl`），点击可直接跳转至发布平台的原帖。
+
+**验收标准**：
+- PostFast 已发布的排期内容在进入 Scheduled Tab 后从该列表消失，并计入 Published Tab。
+- 同一时间、同一文案但不同账号的帖子通过账号 ID 正确区分；无法唯一确认的历史记录不自动回写。
+- 新建排期必须持久化非空 `platformPostId`，否则发布接口返回失败。
 
 ---
 
@@ -339,6 +350,7 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 | 字段 | 来源 | 用途 |
 |------|------|------|
 | `scheduledAt` | `/scheduling/recommend` 自动填充 | 决定 Draft 列表排序和发布时机 |
+| `platformPostId` | PostFast `postIds[0]` | PostFast 托管帖子 ID，用于取消排期、状态对账和链接解析 |
 | `agentNote` | AIJobModal 用户输入 | 存储用户给 AI 的内容指令 |
 | `assetIds` | DashboardAssets 多选 | 关联创作所用素材 |
 | `postUrl` | 发布成功后回写 | Published Tab 外链查看按钮 |
@@ -1216,7 +1228,7 @@ model LLMConfig {
 ### 已发布内容贴文链接持久化
 - **数据库 Schema 字段扩展**：在 `ContentDraft` 模型中新增可选字段 `postUrl` 用以保存帖文的最终发布链接。
 - **发布路由链接保存**：
-  - 更新自动发布、手动审核通过发布、重试发布等场景的后端逻辑，在发布成功并获得 `postId` 的同时，捕获 PostFast 返回的 `url` 并直接将其作为 `postUrl` 写入 `ContentDraft`。
+  - 更新自动发布、手动审核通过发布、重试发布等场景的后端逻辑：发布成功必须先持久化 PostFast `postIds[0]`；兼容响应若同时返回 `url` 则写入 `postUrl`，否则由后续列表查询解析并缓存链接。
   - 在智能体上报发布状态 `/api/agent/pending-approvals` 时，支持 payload 接收并更新 `postUrl` 字段。
 
 ### 读时缓存与分页容灾机制 (Read-Through Cache)
