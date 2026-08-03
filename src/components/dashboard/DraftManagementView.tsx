@@ -67,6 +67,8 @@ type DraftItem = {
   scheduledAt?: string | null
   platformPostId?: string | null
   publishedAt?: string | null
+  deliveryFailureCode?: string | null
+  deliveryFailureAt?: string | null
   postUrl?: string | null
   createdAt?: string | null
   updatedAt: string
@@ -130,6 +132,8 @@ const TAB_CONFIG = [
   { key: 'all', label: '全部' },
   { key: 'published', label: '已发布' },
   { key: 'scheduled', label: '已排期' },
+  { key: 'publishing', label: '发布中' },
+  { key: 'failed', label: '发布失败' },
   { key: 'draft', label: '草稿' },
   { key: 'pending_review', label: '待审核' },
 ] as const
@@ -419,6 +423,7 @@ export default function DraftManagementView({
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const [draftCounts, setDraftCounts] = useState<Partial<Record<TabKey, number>>>({})
   const loadRequestId = useRef(0)
+  const statusSyncRef = useRef<{ brandId: string; promise: Promise<void> } | null>(null)
   const [query, setQuery] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
   const [accountFilter, setAccountFilter] = useState('all')
@@ -779,11 +784,20 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     setLoading(true)
     setError(null)
     try {
-      if (activeTab === 'scheduled') {
-        await fetch(`/api/brands/${brandId}/drafts/sync-statuses`, {
+      if (!statusSyncRef.current || statusSyncRef.current.brandId !== brandId) {
+        const promise = fetch(`/api/brands/${brandId}/drafts/sync-statuses`, {
           method: 'POST',
-        }).catch(() => null)
+        }).then(async (response) => {
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}))
+            console.warn('[DraftManagementView] status sync failed:', payload.error || response.status)
+          }
+        }).catch((syncError) => {
+          console.warn('[DraftManagementView] status sync failed:', syncError)
+        })
+        statusSyncRef.current = { brandId, promise }
       }
+      await statusSyncRef.current.promise
 
       const params = new URLSearchParams()
       if (activeTab !== 'all') params.set('status', activeTab)
@@ -1255,13 +1269,8 @@ Never include any markdown backticks, conversational preamble, or explanation ou
         alert(data.error || '重置失败，请稍后重试')
         return
       }
-      // Refresh draft list so the card updates immediately
-      const refreshRes = await fetch(`/api/brands/${brandId}/drafts`)
-      if (refreshRes.ok) {
-        const json = await refreshRes.json()
-        setDrafts(json.drafts ?? json ?? [])
-      }
-      alert(data.message || '草稿已重置为草稿状态，可重新安排发布。')
+      await loadDrafts()
+      alert(data.message || 'PostFast 发布结果已完成核对。')
     } catch (err: any) {
       alert(err?.message || '操作失败')
     }
@@ -1269,11 +1278,18 @@ Never include any markdown backticks, conversational preamble, or explanation ou
 
   const handleSingleSmartSchedule = async (draftId: string) => {
     if (!brandId) return
+    const existingDraft = drafts.find(d => d.id === draftId)
+    const confirmedUnknownResult = existingDraft?.deliveryFailureCode === 'POSTFAST_RESULT_UNKNOWN'
+    if (
+      confirmedUnknownResult
+      && !confirm('系统无法确认上次发布结果。请先检查对应社交平台；只有确认内容尚未发布，才能重新排期。是否确认已完成检查？')
+    ) {
+      return
+    }
     setSaving(true)
     setError(null)
     try {
       let targetDateISO: string
-      const existingDraft = drafts.find(d => d.id === draftId)
       const currentManualTime = (selectedDraft && selectedDraft.id === draftId && scheduledAt) 
         ? fromDateTimeLocal(scheduledAt) 
         : null
@@ -1315,7 +1331,10 @@ Never include any markdown backticks, conversational preamble, or explanation ou
       const submitRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/approve`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: '智能排期发布' }),
+        body: JSON.stringify({
+          note: '智能排期发布',
+          confirmedUnknownResult,
+        }),
       })
       const submitJson = await submitRes.json().catch(() => ({}))
       if (!submitRes.ok) throw new Error(mediaValidationErrorMessage(submitJson, '提交排期发布通道失败'))
@@ -1717,7 +1736,10 @@ Never include any markdown backticks, conversational preamble, or explanation ou
                 className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm font-medium outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
               />
             </div>
-            <button onClick={loadDrafts} className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+            <button onClick={() => {
+              statusSyncRef.current = null
+              void loadDrafts()
+            }} className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-bold text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
               <RefreshCw className="h-4 w-4" /> 刷新
             </button>
             <button onClick={openNewDraft} className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-600 px-4 text-sm font-black text-white hover:bg-emerald-700">
@@ -1965,7 +1987,7 @@ function DraftCard({
                 }}
                 className="inline-flex items-center gap-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-1 text-[11px] border border-indigo-100 transition-colors"
               >
-                <Sparkles className="h-3 w-3" /> 智能排期
+                <Sparkles className="h-3 w-3" /> {draft.deliveryFailureCode === 'POSTFAST_RESULT_UNKNOWN' ? '确认后重排' : '智能排期'}
               </button>
             )}
             {draft.status === 'publishing' && !selectMode && onResetPublishing && (
@@ -1973,14 +1995,14 @@ function DraftCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  if (confirm('确认将此草稿从"发布中"重置为"草稿"状态？发布流程将终止，可重新安排发布。')) {
+                  if (confirm('系统将先向 PostFast 核对最终发布结果。只有超过30分钟的发布任务才能执行，是否继续？')) {
                     onResetPublishing()
                   }
                 }}
                 className="inline-flex items-center gap-1 rounded bg-orange-50 hover:bg-orange-100 text-orange-700 px-2 py-1 text-[11px] border border-orange-200 transition-colors"
-                title="发布流程异常卡住，点击重置为草稿状态"
+                title="向 PostFast 核对最终发布结果"
               >
-                <RotateCcw className="h-3 w-3" /> 重置发布
+                <RotateCcw className="h-3 w-3" /> 核对结果
               </button>
             )}
             {draft.postUrl && draft.status === 'published' && (

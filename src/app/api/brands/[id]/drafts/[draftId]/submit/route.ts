@@ -31,6 +31,7 @@ export async function PATCH(request: Request, { params }: Params) {
       actorId: actor.id,
       note: typeof body.note === 'string' ? body.note : null,
       immediatePublish: body.publishType === 'immediate',
+      confirmedUnknownResult: actor.type === 'HUMAN' && body.confirmedUnknownResult === true,
     })
 
     if (!result.ok) return NextResponse.json(result, { status: result.status })

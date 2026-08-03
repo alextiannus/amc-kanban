@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
-import { findUniqueLegacyPostMatch } from '../src/lib/draftStatusReconciliation.ts'
+import {
+  findUniqueLegacyPostMatch,
+  isDraftReconciliationStale,
+  normalizeReconciliationCaption,
+} from '../src/lib/draftStatusReconciliation.ts'
 
 const scheduledAt = new Date('2026-07-31T06:55:00.000Z')
 const providerPosts = [
@@ -67,5 +71,133 @@ const claimed = findUniqueLegacyPostMatch({
   now: Date.parse('2026-07-31T07:00:00.000Z'),
 })
 assert.equal(claimed.post, undefined)
+
+assert.equal(
+  normalizeReconciliationCaption('超级蒜蓉大虾\u200B\u200B：  ＳＧ'),
+  '超级蒜蓉大虾: SG',
+)
+
+const unicodeMatch = findUniqueLegacyPostMatch({
+  caption: '超级蒜蓉大虾\u200B\u200B：新品',
+  scheduledAt,
+  providerAccountId: 'account-instagram',
+  providerPosts: [{
+    id: 'pf-unicode',
+    socialMediaId: 'account-instagram',
+    platform: '',
+    platformId: '',
+    caption: '超级蒜蓉大虾:新品',
+    status: 'published' as const,
+    publishedAt: '2026-07-31T06:55:10.000Z',
+  }],
+  claimedProviderIds: new Set(),
+  now: Date.parse('2026-07-31T07:00:00.000Z'),
+})
+assert.equal(unicodeMatch.post?.id, 'pf-unicode')
+
+const closestTimeMatch = findUniqueLegacyPostMatch({
+  caption: 'Closest campaign',
+  scheduledAt,
+  providerAccountId: 'account-instagram',
+  providerPosts: [
+    {
+      id: 'pf-one-minute-early',
+      socialMediaId: 'account-instagram',
+      platform: '',
+      platformId: '',
+      caption: 'Closest campaign',
+      status: 'published' as const,
+      scheduledAt: '2026-07-31T06:54:00.000Z',
+    },
+    {
+      id: 'pf-exact-time',
+      socialMediaId: 'account-instagram',
+      platform: '',
+      platformId: '',
+      caption: 'Closest campaign',
+      status: 'published' as const,
+      scheduledAt: '2026-07-31T06:55:00.000Z',
+    },
+  ],
+  claimedProviderIds: new Set(),
+  now: Date.parse('2026-07-31T07:00:00.000Z'),
+})
+assert.equal(closestTimeMatch.post?.id, 'pf-exact-time')
+
+const duplicateConsensus = findUniqueLegacyPostMatch({
+  caption: 'Duplicate campaign',
+  scheduledAt,
+  providerAccountId: 'account-instagram',
+  providerPosts: [
+    {
+      id: 'pf-later',
+      socialMediaId: 'account-instagram',
+      platform: '',
+      platformId: '',
+      caption: 'Duplicate campaign',
+      status: 'published' as const,
+      scheduledAt: '2026-07-31T06:55:00.000Z',
+      publishedAt: '2026-07-31T06:55:30.000Z',
+    },
+    {
+      id: 'pf-earlier',
+      socialMediaId: 'account-instagram',
+      platform: '',
+      platformId: '',
+      caption: 'Duplicate campaign',
+      status: 'published' as const,
+      scheduledAt: '2026-07-31T06:55:00.000Z',
+      publishedAt: '2026-07-31T06:55:10.000Z',
+    },
+  ],
+  claimedProviderIds: new Set(),
+  now: Date.parse('2026-07-31T07:00:00.000Z'),
+})
+assert.equal(duplicateConsensus.post?.id, 'pf-earlier')
+assert.equal(duplicateConsensus.equivalentDuplicateCount, 2)
+assert.deepEqual(new Set(duplicateConsensus.matchedPostIds), new Set(['pf-later', 'pf-earlier']))
+
+const conflictingDuplicate = findUniqueLegacyPostMatch({
+  caption: 'Conflicting campaign',
+  scheduledAt,
+  providerAccountId: 'account-instagram',
+  providerPosts: [
+    {
+      id: 'pf-published',
+      socialMediaId: 'account-instagram',
+      platform: '',
+      platformId: '',
+      caption: 'Conflicting campaign',
+      status: 'published' as const,
+      publishedAt: '2026-07-31T06:55:10.000Z',
+    },
+    {
+      id: 'pf-failed',
+      socialMediaId: 'account-instagram',
+      platform: '',
+      platformId: '',
+      caption: 'Conflicting campaign',
+      status: 'failed' as const,
+      scheduledAt: '2026-07-31T06:55:00.000Z',
+    },
+  ],
+  claimedProviderIds: new Set(),
+  now: Date.parse('2026-07-31T07:00:00.000Z'),
+})
+assert.equal(conflictingDuplicate.post, undefined)
+assert.equal(conflictingDuplicate.ambiguousCount, 2)
+
+assert.equal(isDraftReconciliationStale({
+  status: 'publishing',
+  scheduledAt: null,
+  updatedAt: new Date('2026-07-31T06:30:00.000Z'),
+  now: new Date('2026-07-31T07:00:00.000Z'),
+}), true)
+assert.equal(isDraftReconciliationStale({
+  status: 'scheduled',
+  scheduledAt: new Date('2026-07-31T06:31:00.000Z'),
+  updatedAt: new Date('2026-07-31T06:00:00.000Z'),
+  now: new Date('2026-07-31T07:00:00.000Z'),
+}), false)
 
 console.log('Draft status reconciliation tests passed.')

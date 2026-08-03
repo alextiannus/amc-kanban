@@ -22,6 +22,7 @@ async function handleApprove(request: Request, { params }: Params) {
       forcePublish: true,
       note: typeof body.note === 'string' ? body.note.trim() || null : null,
       immediatePublish: body.publishType === 'immediate',
+      confirmedUnknownResult: body.confirmedUnknownResult === true,
     })
 
     if (!result.ok) return NextResponse.json(result, { status: result.status })

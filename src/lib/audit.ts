@@ -1,4 +1,4 @@
-import { prisma } from './prisma'
+import { prisma } from './prisma.ts'
 import type { PrismaClient } from '@prisma/client'
 
 type Actor = {

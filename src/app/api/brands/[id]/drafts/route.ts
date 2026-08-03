@@ -23,6 +23,8 @@ const DRAFT_SELECT = {
   platformPostId: true,
   postUrl: true,
   publishedAt: true,
+  deliveryFailureCode: true,
+  deliveryFailureAt: true,
   creativeHooks: true,
   createdAt: true,
   updatedAt: true,

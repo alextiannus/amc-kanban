@@ -14,7 +14,7 @@ export const GOOGLE_PLATFORM_ALIASES = [
 /**
  * POST /api/cron/postfast-sync-all
  *
- * Daily Render Cron Job entry point. Syncs PostFast data for ALL active brands
+ * Render Cron Job entry point. Syncs PostFast data for ALL active brands
  * that have a postfastApiKey configured. Results are saved to:
  *   - brand.postfastSnapshot  (accounts + operationsReport JSON)
  *   - brand.postfastSyncedAt  (sync timestamp)
@@ -23,7 +23,7 @@ export const GOOGLE_PLATFORM_ALIASES = [
  * Protected by CRON_SECRET env var — set the same value in Render Cron headers.
  *
  * Render Cron setup:
- *   Schedule: 0 2 * * *  (daily at 02:00 UTC)
+ *   Schedule: every 15 minutes (cron expression: 0,15,30,45 * * * *)
  *   Command:  curl -X POST https://amc-kanban.onrender.com/api/cron/postfast-sync-all
  *             -H "x-cron-secret: <CRON_SECRET>"
  */
@@ -58,7 +58,23 @@ export async function POST(req: NextRequest) {
 
   console.log(`[PostFast Cron] Found ${brands.length} brands to sync`)
 
-  const results: Array<{ brandId: string; ok: boolean; accountCount?: number; analyticsPostCount?: number; error?: string }> = []
+  const results: Array<{
+    brandId: string
+    ok: boolean
+    accountCount?: number
+    analyticsPostCount?: number
+    draftSync?: {
+      checked: number
+      updated: number
+      published: number
+      failed: number
+      waiting: number
+      unresolved: number
+      skipped: number
+      providerErrors: number
+    }
+    error?: string
+  }> = []
 
   for (const brand of brands) {
     if (!brand.postfastApiKey) continue
@@ -72,12 +88,28 @@ export async function POST(req: NextRequest) {
           postfastSyncedAt: syncedAt,
         },
       })
-      results.push({ brandId: brand.id, ok: true, accountCount: syncedAccounts.length, analyticsPostCount: analyticsPosts.length })
+      const brandResult: (typeof results)[number] = {
+        brandId: brand.id,
+        ok: true,
+        accountCount: syncedAccounts.length,
+        analyticsPostCount: analyticsPosts.length,
+      }
+      results.push(brandResult)
       console.log(`[PostFast Cron] ✅ brand ${brand.id}: ${syncedAccounts.length} accounts, ${analyticsPosts.length} analytics posts synced`)
 
       // Phase 4: Sync scheduled→published draft statuses
       try {
         const syncResult = await syncBrandDraftStatuses(brand.id, brand.postfastApiKey!)
+        brandResult.draftSync = {
+          checked: syncResult.checked,
+          updated: syncResult.updated,
+          published: syncResult.published,
+          failed: syncResult.failed,
+          waiting: syncResult.waiting,
+          unresolved: syncResult.unresolved,
+          skipped: syncResult.skipped,
+          providerErrors: syncResult.providerErrors,
+        }
         if (syncResult.updated > 0) {
           console.log(`[PostFast Cron] 📬 brand ${brand.id}: synced ${syncResult.updated}/${syncResult.checked} scheduled drafts to published/failed`)
         }

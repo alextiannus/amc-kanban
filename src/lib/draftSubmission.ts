@@ -10,6 +10,8 @@ import {
   mediaValidationWarnings,
   type MediaValidationIssue,
 } from '@/lib/mediaValidation'
+import { writeAuditLog } from '@/lib/audit'
+import { POSTFAST_RESULT_UNKNOWN } from '@/lib/syncDraftStatuses'
 
 type SubmitDraftInput = {
   brandId: string
@@ -20,6 +22,7 @@ type SubmitDraftInput = {
   /** Override auto-scheduling urgency. 'urgent' = publish ASAP; default 'normal' = smart slot */
   urgency?: 'normal' | 'urgent'
   immediatePublish?: boolean
+  confirmedUnknownResult?: boolean
 }
 
 function isFuture(value?: Date | null) {
@@ -93,6 +96,27 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   })
   if (!draft) return { ok: false as const, status: 404, error: 'Draft not found' }
   const immediatePublish = !!(input.immediatePublish || input.note === '立即发布')
+
+  if (draft.deliveryFailureCode === POSTFAST_RESULT_UNKNOWN && !input.confirmedUnknownResult) {
+    return {
+      ok: false as const,
+      status: 409,
+      code: 'POSTFAST_RESULT_CONFIRMATION_REQUIRED',
+      error: 'PostFast 的上次发布结果无法确认。请先检查对应社交平台，确认内容尚未发布后再重新排期。',
+    }
+  }
+
+  if (draft.deliveryFailureCode === POSTFAST_RESULT_UNKNOWN && input.confirmedUnknownResult) {
+    await writeAuditLog({
+      actor: { id: input.actorId, type: 'HUMAN' },
+      action: 'CONFIRM_UNKNOWN_POSTFAST_RESULT_NOT_PUBLISHED',
+      resourceId: draft.id,
+      resourceType: 'ContentDraft',
+      oldValue: { status: draft.status, deliveryFailureCode: draft.deliveryFailureCode },
+      reason: 'User confirmed the social platform was checked before retrying delivery.',
+      metadata: { brandId: input.brandId },
+    })
+  }
 
   // ── 快速校验（在抢锁之前，避免空跑）────────────────────────────────────────
   if (!draft.caption || !draft.caption.trim()) {
@@ -170,6 +194,8 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
           where: { id: draft.id },
           data: {
             status: 'failed',
+            deliveryFailureCode: 'POSTFAST_CANCEL_FAILED',
+            deliveryFailureAt: new Date(),
             agentNote: `当前排期取消失败，无法重新排期。${cancelResult.error || ''}`
           },
         })
@@ -203,7 +229,11 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         brandId: input.brandId,
         status: { not: 'publishing' },
       },
-      data: { status: 'publishing' },
+      data: {
+        status: 'publishing',
+        deliveryFailureCode: null,
+        deliveryFailureAt: null,
+      },
     })
     if (lockResult.count === 0) {
       console.warn(`[submitDraftForDelivery] Draft ${input.draftId} already locked (status=publishing), rejecting concurrent request`)
@@ -276,6 +306,8 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         status: 'draft',
         publishedAt: null,
         scheduledAt: null,
+        deliveryFailureCode: null,
+        deliveryFailureAt: null,
         agentNote: '该平台尚未配置发布渠道，内容已保存为草稿，请手动复制内容发布到对应平台。',
         rejectionNote: null,
       },
@@ -298,7 +330,15 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
 
 
   if (!brand.postfastApiKey) {
-    await prisma.contentDraft.update({ where: { id: draft.id }, data: { status: 'failed', agentNote: '发布失败：品牌尚未配置 PostFast API Key。' } })
+    await prisma.contentDraft.update({
+      where: { id: draft.id },
+      data: {
+        status: 'failed',
+        deliveryFailureCode: 'POSTFAST_NOT_CONFIGURED',
+        deliveryFailureAt: new Date(),
+        agentNote: '发布失败：品牌尚未配置 PostFast API Key。',
+      },
+    })
     return { ok: false as const, status: 400, error: '品牌尚未配置 PostFast API Key。' }
   }
 
@@ -371,6 +411,8 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
           status: scheduled ? 'scheduled' : 'published',
           platformPostId: result.postId || null,
           publishedAt: scheduled ? null : new Date(),
+          deliveryFailureCode: null,
+          deliveryFailureAt: null,
           agentNote: input.note || (scheduled ? '已按最新草稿重新排期。' : '已按最新草稿发布。'),
           rejectionNote: null,
         }
@@ -378,10 +420,19 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         result.code === 'MEDIA_INSPECTION_UNAVAILABLE' ||
         result.code === 'POSTFAST_PUBLISH_TIMEOUT'
       ? {
-          status: draft.status,
+          status: result.code === 'POSTFAST_PUBLISH_TIMEOUT' ? 'publishing' : draft.status,
+          deliveryFailureCode: result.code === 'POSTFAST_PUBLISH_TIMEOUT'
+            ? 'POSTFAST_PUBLISH_TIMEOUT'
+            : null,
+          deliveryFailureAt: result.code === 'POSTFAST_PUBLISH_TIMEOUT' ? new Date() : null,
+          ...(result.code === 'POSTFAST_PUBLISH_TIMEOUT'
+            ? { agentNote: 'PostFast 发布请求超时，系统将在30分钟内自动核对最终结果。' }
+            : {}),
         }
       : {
           status: 'failed',
+          deliveryFailureCode: result.code || 'POSTFAST_PUBLISH_FAILED',
+          deliveryFailureAt: new Date(),
           agentNote: `发布失败：${result.error || 'unknown error'}`,
         },
     include: {

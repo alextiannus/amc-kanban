@@ -60,7 +60,7 @@ WorkUnit 是执行任务；ActionItem 是面向人类的待办、审批、确认
 
 ### 4.6 ContentDraft
 
-品牌内容草稿。支持账号选择、正文、标签、素材引用、排期时间、发布状态、Agent 备注、驳回意见、平台 postId 和发布时间。
+品牌内容草稿。支持账号选择、正文、标签、素材引用、排期时间、发布状态、Agent 备注、驳回意见、平台 postId、发布时间，以及结构化发布失败代码和失败时间。
 
 状态建议：`draft`、`pending_review`、`approved`、`publishing`、`scheduled`、`published`、`failed`。
 
@@ -160,6 +160,8 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 4. 根据 Brand.autoPilot 决定：直接发布/排期，或进入审批。
 5. 发布成功后记录 platformPostId；排期成功则状态为 `scheduled`。
 6. 修改已排期草稿并重新提交时，取消旧排期并重建。
+7. PostFast 每15分钟核对 `scheduled` 和 `publishing`；优先使用 platformPostId，旧数据仅在账号、标准化完整文案和发布时间一致时恢复。
+8. 发布结果超过30分钟仍无法确认时转为 `failed`/`POSTFAST_RESULT_UNKNOWN`，再次发布前必须由用户确认平台上尚未发布。
 
 ### 6.4 Research 写入流程
 
@@ -218,7 +220,7 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 
 ### 8.2 PostFast
 
-用于社媒发布、排期、取消 scheduled post、媒体上传和部分点评回复能力。当前更新 scheduled post 的策略是取消旧 post 后重建。
+用于社媒发布、排期、取消 scheduled post、媒体上传和部分点评回复能力。当前更新 scheduled post 的策略是取消旧 post 后重建。后台每15分钟拉取 scheduled、published、failed 三类结果并同步 ContentDraft；供应商读取失败或结果冲突时不修改本地状态。
 
 ### 8.3 Google Business Profile
 

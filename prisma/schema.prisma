@@ -502,6 +502,8 @@ model ContentDraft {
   platformPostId String?
   postUrl        String?
   publishedAt    DateTime?
+  deliveryFailureCode String?
+  deliveryFailureAt   DateTime?
   creativeHooks  String?
   topicKeywords  String[]       @default([]) // 主题关键词，用于30天重复检测
 
