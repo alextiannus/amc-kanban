@@ -86,9 +86,15 @@ type DraftItem = {
       id: string
       filename?: string | null
       url?: string | null
-      type: string
+      mimeType: string
     }
   }>
+}
+
+type DraftMediaItem = {
+  url: string
+  assetId?: string
+  mimeType?: string | null
 }
 
 type SocialAccountOption = {
@@ -198,9 +204,36 @@ function accountInitial(draft: DraftItem) {
   return name.trim().charAt(0).toUpperCase() || 'P'
 }
 
-function mediaForDraft(draft: DraftItem) {
-  const assetUrls = draft.assetRefs.map((ref) => ref.asset.url).filter((url): url is string => Boolean(url))
-  return Array.from(new Set([...draft.mediaUrls, ...assetUrls].filter((url): url is string => Boolean(url)))).slice(0, 4)
+function mediaForDraft(draft: DraftItem): DraftMediaItem[] {
+  const mediaByUrl = new Map<string, DraftMediaItem>()
+
+  for (const url of draft.mediaUrls) {
+    if (url) mediaByUrl.set(url, { url })
+  }
+
+  for (const ref of draft.assetRefs) {
+    const url = ref.asset.url
+    if (!url) continue
+
+    const existing = mediaByUrl.get(url)
+    mediaByUrl.set(url, {
+      ...existing,
+      url,
+      assetId: ref.asset.id,
+      mimeType: ref.asset.mimeType,
+    })
+  }
+
+  return Array.from(mediaByUrl.values()).slice(0, 4)
+}
+
+function isVideoMedia(media: DraftMediaItem): boolean {
+  return media.mimeType?.toLowerCase().startsWith('video/') || isVideoUrl(media.url)
+}
+
+function videoSource(media: DraftMediaItem, brandId: string): string {
+  if (!media.assetId) return media.url
+  return `/api/brands/${encodeURIComponent(brandId)}/assets/${encodeURIComponent(media.assetId)}/stream`
 }
 
 function getFallbackHooks(businessType: string, hookStyle: string, topic: string) {
@@ -1792,6 +1825,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
                         <DraftCard 
                           key={draft.id} 
                           draft={draft} 
+                          brandId={brandId}
                           compact={compact} 
                           selectMode={selectMode} 
                           selected={selectMode ? selectedDraftIds.includes(draft.id) : selectedId === draft.id} 
@@ -1848,6 +1882,7 @@ function FilterSelect({ icon, value, onChange, options }: { icon: React.ReactNod
 
 function DraftCard({ 
   draft, 
+  brandId,
   compact, 
   selectMode, 
   selected, 
@@ -1857,6 +1892,7 @@ function DraftCard({
   onResetPublishing,
 }: { 
   draft: DraftItem 
+  brandId: string
   compact: boolean 
   selectMode: boolean 
   selected: boolean 
@@ -1892,17 +1928,15 @@ function DraftCard({
 
       {media.length > 0 ? (
         <div className={`grid gap-1 bg-slate-100 p-1 dark:bg-slate-950 ${media.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-          {media.map((url, index) => (
-            <div key={`${url}-${index}`} className={`overflow-hidden rounded bg-slate-200 dark:bg-slate-800 relative ${compact ? 'aspect-[4/3]' : 'aspect-square'}`}>
-              {isVideoUrl(url) ? (
-                <>
-                  <video src={url} className="h-full w-full object-cover" muted />
-                  <div className="absolute bottom-1 right-1 bg-black/50 p-1 rounded">
-                    <Play className="h-3 w-3 text-white fill-white" />
-                  </div>
-                </>
+          {media.map((item, index) => (
+            <div key={`${item.url}-${index}`} className={`overflow-hidden rounded bg-slate-200 dark:bg-slate-800 relative ${compact ? 'aspect-[4/3]' : 'aspect-square'}`}>
+              {isVideoMedia(item) ? (
+                <DraftVideoTile
+                  src={videoSource(item, brandId)}
+                  disabled={selectMode}
+                />
               ) : (
-                <img src={url} alt="" className="h-full w-full object-cover" />
+                <img src={item.url} alt="" className="h-full w-full object-cover" />
               )}
             </div>
           ))}
@@ -1976,6 +2010,76 @@ function DraftCard({
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function DraftVideoTile({ src, disabled }: { src: string; disabled: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
+
+  const togglePlayback = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    const video = videoRef.current
+    if (!video || disabled) return
+
+    if (video.paused) {
+      try {
+        await video.play()
+      } catch {
+        setPlaying(false)
+      }
+    } else {
+      video.pause()
+    }
+  }
+
+  if (loadFailed) {
+    return (
+      <div
+        className="flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-900 px-2 text-center text-white"
+        onClick={disabled ? undefined : (event) => event.stopPropagation()}
+      >
+        <Video className="h-5 w-5 text-slate-400" />
+        <span className="text-[10px] font-bold text-slate-300">视频无法加载</span>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="group/video relative h-full w-full bg-black"
+      onClick={disabled ? undefined : (event) => event.stopPropagation()}
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        className={`h-full w-full object-cover ${disabled ? 'pointer-events-none' : ''}`}
+        controls={!disabled}
+        muted
+        playsInline
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        onError={() => setLoadFailed(true)}
+      />
+      {!disabled && !playing && (
+        <button
+          type="button"
+          aria-label="播放视频"
+          onClick={togglePlayback}
+          className="absolute left-1/2 top-1/2 z-10 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white shadow-lg backdrop-blur-sm transition-transform hover:scale-105"
+        >
+          <Play className="h-5 w-5 translate-x-px fill-white" />
+        </button>
+      )}
+      {disabled && (
+        <div className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/55 p-1">
+          <Play className="h-3 w-3 fill-white text-white" />
+        </div>
+      )}
     </div>
   )
 }
