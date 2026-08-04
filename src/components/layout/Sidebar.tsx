@@ -46,6 +46,12 @@ interface SidebarProps {
 }
 
 const COLLAPSED_KEY = 'amc.sidebar.collapsed'
+const EXTERNAL_WORKSPACE_ITEM_IDS = new Set([
+  'inspiration-library',
+  'viral-copy-scripts',
+  'amc-content-roles',
+  'amc-growth',
+])
 
 const MENU_TRANSLATIONS: Record<string, string> = {
   '主理人': 'Principal',
@@ -219,11 +225,13 @@ export default function Sidebar({
   const { isEn } = useI18n()
   const [collapsed, setCollapsed] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
+  const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true)
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(COLLAPSED_KEY)
       if (saved === 'true') setCollapsed(true)
+      if (saved === 'false') setAutoCollapseEnabled(false)
     } catch {/* ignore */}
   }, [])
 
@@ -236,18 +244,19 @@ export default function Sidebar({
       'game', 'socialInsight', 'dataAnalysis',
       'logs', 'managementOverview'
     ]
-    if (viewsWithSubMenu.includes(currentView) && !collapsed && !isHovered) {
+    if (autoCollapseEnabled && viewsWithSubMenu.includes(currentView) && !collapsed && !isHovered) {
       const timer = setTimeout(() => {
         setCollapsed(true)
         try { localStorage.setItem(COLLAPSED_KEY, 'true') } catch {/* ignore */}
       }, 3000)
       return () => clearTimeout(timer)
     }
-  }, [currentView, collapsed, isHovered])
+  }, [currentView, collapsed, isHovered, autoCollapseEnabled])
 
   const toggleCollapsed = () => {
     setCollapsed(prev => {
       const next = !prev
+      if (!next) setAutoCollapseEnabled(false)
       try { localStorage.setItem(COLLAPSED_KEY, String(next)) } catch {/* ignore */}
       return next
     })
@@ -276,14 +285,10 @@ export default function Sidebar({
     router.refresh()
   }
 
-  const handleItemClick = (item: { view: BoardView; comingSoon?: boolean; href?: string }) => {
+  const handleItemClick = (item: { id: string; view: BoardView; comingSoon?: boolean; href?: string }) => {
     if (item.comingSoon) return
     if (item.href) {
       let targetUrl = item.href
-      if (targetUrl.startsWith('/api/integrations/amc-growth/sso/start')) {
-        window.location.assign(targetUrl)
-        return
-      }
       if (targetUrl.includes('amc-growth.immedi.ai')) {
         const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         if (isLocal) {
@@ -296,8 +301,12 @@ export default function Sidebar({
           targetUrl = 'http://localhost:4010/admin/ai-roles'
         }
       }
+      if (EXTERNAL_WORKSPACE_ITEM_IDS.has(item.id)) {
+        window.open(targetUrl, '_blank', 'noopener,noreferrer')
+        return
+      }
       if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
-        window.open(targetUrl, '_blank')
+        window.open(targetUrl, '_blank', 'noopener,noreferrer')
       } else {
         router.push(targetUrl)
       }
@@ -373,6 +382,7 @@ export default function Sidebar({
                         onAddNewBrand={() => setWizardOpen(true)}
                         onExpand={() => {
                           setCollapsed(false)
+                          setAutoCollapseEnabled(false)
                           try { localStorage.setItem(COLLAPSED_KEY, 'false') } catch {/* ignore */}
                         }}
                       />
