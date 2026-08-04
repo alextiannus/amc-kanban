@@ -58,6 +58,7 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '智能规划': 'Growth Planning',
   'AI 角色库': 'AI Role Library',
   '爆品素材库': 'Viral Inspiration Library',
+  '爆品脚本': 'Viral Copy Scripts',
   '品牌故事': 'Brand Story',
   '发布日历': 'Publishing Calendar',
   '发布内容': 'Post Drafts',
