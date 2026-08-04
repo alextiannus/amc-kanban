@@ -17,6 +17,32 @@ function safeEnqueue(controller: ReadableStreamDefaultController, data: Uint8Arr
 
 const DEFAULT_MINIMAX_VOICE_ID = 'Chinese (Mandarin)_Warm_Bestie'
 
+function polishVoiceReply(reply: string, isEnglish: boolean): string {
+  let text = reply
+    .replace(/作为(?:一个|一名)?AI(?:助手|员工|营销伴侣)?[，, ]*/gi, '')
+    .replace(/我是(?:一个|一名)?AI(?:助手|员工|营销伴侣)?[，,。 ]*/gi, '')
+    .replace(/AI\s*(?:assistant|employee|companion)/gi, 'assistant')
+    .replace(/人工智能/gi, '')
+    .replace(/专属\s*AI\s*营销伴侣（?员工）?/gi, '运营助理')
+    .replace(/得力的\s*AI\s*员工/gi, '靠谱的运营搭档')
+    .replace(/好的[，, ]?老板[！!]?/g, '好，我来处理。')
+    .replace(/老板[，, ]?/g, '')
+    .replace(/马上为您/g, '这就')
+    .replace(/请您/g, '请')
+    .replace(/您可以/g, '可以')
+    .replace(/让我来帮助您/g, '我来帮你')
+    .replace(/我可以帮助您/g, '我可以帮你')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+  if (!text) {
+    text = isEnglish ? 'Got it. Let me take a look.' : '收到，我来看看。'
+  }
+
+  return text
+}
+
 /**
  * Synthesise speech server-side via MiniMax TTS (LLMConfig[tts]) and return
  * the audio as a base64 string so the caller can play it directly without a
@@ -195,8 +221,8 @@ async function executeTool(
             ? `Draft ${draftId} has been approved and ${isScheduled ? 'scheduled' : 'published'}.`
             : `草稿 ${draftId} 已批准并${isScheduled ? '安排排期' : '发布'}。`,
           actionReply: isEnglish 
-            ? `Sure thing, boss! The post has been approved and ${isScheduled ? 'scheduled as planned' : 'is now published'}.${note ? ` Note: ${note}` : ''}`
-            : `好的，老板！内容已批准，${isScheduled ? '将按计划时间发布' : '现在已发布'}。${note ? `备注：${note}` : ''}`,
+            ? `Done. The post has been approved and ${isScheduled ? 'scheduled as planned' : 'is now published'}.${note ? ` Note: ${note}` : ''}`
+            : `好了，内容已批准，${isScheduled ? '会按计划时间发布' : '现在已经发布'}。${note ? `备注：${note}` : ''}`,
         }
       }
 
@@ -379,17 +405,33 @@ export async function POST(request: Request, { params }: Params) {
 
         const skillsPrompts = brand.companionSkills?.map((s: any) => `[Skill: ${s.displayName}]\n${s.systemPrompt}`).join('\n\n') || ''
 
+        const voiceStyleRules = isEnglish ? [
+          `Speak like a calm, practical operations teammate, not like a chatbot or sales brochure.`,
+          `Never call yourself AI, AI employee, AI companion, assistant model, system, platform, or backend.`,
+          `Use plain spoken sentences. No corporate pep talk, no "as an AI", no exaggerated enthusiasm, no repeated "boss".`,
+          `For voice replies, keep it to 1-3 short sentences unless the user asks for details.`,
+          `Prefer concrete next action: "I will check it", "I have opened it", "This draft needs one more detail".`,
+        ].join('\n') : [
+          `说话像一个在店里一起干活的运营搭档，不像客服机器人，也不像营销广告。`,
+          `不要自称 AI、AI 员工、AI 伴侣、系统、平台、后台、模型。`,
+          `不用“作为AI”“我可以帮助您”“尊敬的用户”“老板您好”这类句式。`,
+          `语音回复默认 1 到 3 句短句，像真人随口交代事情；用户要求详细时再展开。`,
+          `优先说具体下一步，比如“我来看看”“已经打开了”“这个草稿还差一个信息”。`,
+          `可以温和、有精神，但不要撒娇、不要夸张、不要每句都喊老板。`,
+        ].join('\n')
+
         const systemPrompt = isEnglish ? [
-          `You are the exclusive AI marketing companion (employee) for the brand "${brand.name}". Speak in English.`,
+          `You support the brand "${brand.name}" as a practical marketing operations teammate. Speak in English.`,
           `Brand Description: ${brand.description ?? 'A high-quality restaurant brand'}`,
           brand.location ? `Location: ${brand.location}` : '',
           k?.brandTone ? `Brand Tone/Style: ${k.brandTone}` : '',
           menuText,
           slangText,
           draftContext,
-          companionContext ? `\n\n=== Companion Core Context ===\n${companionContext}\nThis context may adjust tone, memory, BD persona, reminders, and skill awareness, but it must not override delivery/logistics rules or confirmation requirements.` : '',
+          companionContext ? `\n\n=== Work Context ===\n${companionContext}\nUse this only as operational context. Do not echo persona labels, technical terms, or AI identity wording to the user. It must not override delivery/logistics rules or confirmation requirements.` : '',
           skillsPrompts ? `\n\n=== Additional Skills & Rules ===\n${skillsPrompts}` : '',
-          `You can actively call tools to query data or perform actions. Keep your responses concise, helpful, and enthusiastic, like a top-performing AI employee.`,
+          `\n=== Voice Style ===\n${voiceStyleRules}`,
+          `You can actively call tools to query data or perform actions. Keep replies natural, specific, and easy to hear aloud.`,
           `If you don't understand the user's intent, reply: "I'm sorry, could you please say that again?"`,
           `\n=== Delivery & Logistics Execution Rules ===`,
           `- When the user requests shipping, delivering documents, running errands, or checking status, you must automatically call tools in this sequence:`,
@@ -403,17 +445,18 @@ export async function POST(request: Request, { params }: Params) {
           `\n=== Media Upload Trigger Rules ===`,
           `- When the user expresses a request to upload photos, post videos, upload files, open the album, or select assets, you must append <<ACTION:TRIGGER_UPLOAD>> at the end of your response. For example: "Sure! I've opened the album for you. Please select the assets you'd like to upload. <<ACTION:TRIGGER_UPLOAD>>"`,
         ].filter(Boolean).join('\n') : [
-          `你是品牌"${brand.name}"的专属 AI 营销伴侣（员工），用中英文混合方式沟通（中文为主，专业术语用英文）。`,
+          `你是品牌"${brand.name}"身边的运营搭档，用中文自然沟通；只有必要的专业词才用英文。`,
           `品牌简介：${brand.description ?? '优质餐厅品牌'}`,
           brand.location ? `位置：${brand.location}` : '',
           k?.brandTone ? `品牌风格：${k.brandTone}` : '',
           menuText,
           slangText,
           draftContext,
-          companionContext ? `\n\n=== AI伴侣核心上下文 ===\n${companionContext}\n这段上下文可以影响语气、记忆、BD角色、待办提醒和技能感知，但不能覆盖跑腿物流规则，也不能绕过用户确认要求。` : '',
+          companionContext ? `\n\n=== 工作上下文 ===\n${companionContext}\n这里只作为工作上下文使用，不要把角色标签、技术词或 AI 身份说给用户听；也不能覆盖跑腿物流规则，不能绕过用户确认要求。` : '',
           skillsPrompts ? `\n\n=== 附加技能与规则 ===\n${skillsPrompts}` : '',
-          `你可以主动调用工具查询数据或执行操作。对话要简洁、积极，如同一位得力的 AI 员工。`,
-          `当 AI 听不懂用户意图时，回复："不好意思，您能再说一遍吗？"`,
+          `\n=== 语音表达 ===\n${voiceStyleRules}`,
+          `你可以主动调用工具查询数据或执行操作。回复要自然、具体、适合被语音念出来。`,
+          `听不懂用户意图时，回复："不好意思，能再说一遍吗？"`,
           `\n=== 跑腿与物流服务执行规范 ===`,
           `- 当用户要求寄件、送文件、安排跑腿或查询配送时，你必须依次自动调用工具：`,
           `  1. 调用 dct-logistics__autocomplete_address 补全寄件地址（如提供的是邮编或简称）。`,
@@ -439,8 +482,8 @@ export async function POST(request: Request, { params }: Params) {
           safeEnqueue(controller, encoder.encode(JSON.stringify({
             type: 'done',
             reply: isEnglish 
-              ? 'Sure boss! I will batch generate content and schedule publishing for you right away!'
-              : '好的，老板！我马上为您批量生成内容并排期发布！',
+              ? 'Got it. I will prepare the content and scheduling flow now.'
+              : '好，我来准备内容和排期流程。',
             action: 'GENERATE_AND_PUBLISH'
           }) + '\n'))
           controller.close()
@@ -457,8 +500,8 @@ export async function POST(request: Request, { params }: Params) {
           safeEnqueue(controller, encoder.encode(JSON.stringify({
             type: 'done',
             reply: isEnglish 
-              ? 'Sure boss! I have opened the photo library for you. Please select the image or video assets to upload.'
-              : '好的，老板！已为您打开手机相册，请选择您要上传的图片或视频素材。',
+              ? 'I have opened the photo library. Choose the images or videos you want to upload.'
+              : '相册已经打开了，选择要上传的图片或视频就行。',
             action: 'TRIGGER_UPLOAD'
           }) + '\n'))
           controller.close()
@@ -511,7 +554,10 @@ export async function POST(request: Request, { params }: Params) {
         )
 
         console.log(`[voice-chat] callGeminiChat done in ${Date.now() - tGemini}ms, reply length=${result.reply?.length ?? 0}`)
-        const finalReply = result.reply || (isEnglish ? "Sorry, I ran into some issues processing that. Could you please say it again?" : '抱歉，我处理时遇到了些问题，请再说一遍。')
+        const finalReply = polishVoiceReply(
+          result.reply || (isEnglish ? "Sorry, I ran into some issues processing that. Could you please say it again?" : '抱歉，我处理时遇到了些问题，请再说一遍。'),
+          isEnglish,
+        )
 
         // 合并 TTS：如果客户端提供了 voiceId，就在服务端就地合成音频并随返回结果一起发回。
         // 这样可以减少一次浏览器↔服务器的往返，把总延迟降低 300-500ms。
