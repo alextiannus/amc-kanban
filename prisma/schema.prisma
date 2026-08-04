@@ -506,6 +506,11 @@ model ContentDraft {
   deliveryFailureAt   DateTime?
   creativeHooks  String?
   topicKeywords  String[]       @default([]) // 主题关键词，用于30天重复检测
+  viralCopyScriptId          String?
+  viralCopyScriptVersionId   String?
+  viralCopyScriptName        String?
+  viralCopyScriptSelection   String?
+  viralCopyScriptProvenance  Json?
 
   actionItem     ActionItem?
   assetRefs      ContentAssetRef[]
@@ -514,6 +519,7 @@ model ContentDraft {
   updatedAt      DateTime       @updatedAt
 
   @@index([brandId, status])
+  @@index([viralCopyScriptId])
 }
 
 model ActionItem {

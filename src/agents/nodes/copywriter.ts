@@ -220,6 +220,9 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
         actorId: state.actorId || state.assigneeId,
         actorType: state.actorType || 'AI_AGENT',
         actorRole: state.actorRole || 'USER',
+        copyScriptId: state.copyScriptId || draftObj?.viralCopyScriptId || undefined,
+        copyScriptVersionId: state.copyScriptVersionId || draftObj?.viralCopyScriptVersionId || undefined,
+        scriptSelection: (state.scriptSelection || draftObj?.viralCopyScriptSelection) === 'recommended' ? 'recommended' : 'manual',
       });
 
       if (amcContentResult) {

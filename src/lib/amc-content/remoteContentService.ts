@@ -1,4 +1,4 @@
-import type { ContentGenerationRequest, ContentGenerationResult } from './types.ts'
+import type { ContentGenerationRequest, ContentGenerationResult, ViralCopyScriptRecommendation } from './types.ts'
 
 type RemoteContentResult = {
   success: true
@@ -83,6 +83,9 @@ export async function tryGenerateWithRemoteContentService(
       copywriterName: input.copywriterName,
       draftId: input.draftId,
       taskId: input.taskId,
+      copyScriptId: input.copyScriptId,
+      copyScriptVersionId: input.copyScriptVersionId,
+      scriptSelection: input.scriptSelection,
     }),
     cache: 'no-store',
   })
@@ -101,6 +104,33 @@ export async function tryGenerateWithRemoteContentService(
     quality: remote.result.quality,
     provenance: remote.result.provenance,
   }
+}
+
+export async function recommendRemoteCopyScripts(input: {
+  platform: string
+  market?: string
+  industry?: string
+  primaryCategoryId?: string
+  language?: string
+  contentFormat?: string
+  theme?: string
+  brandId?: string
+}): Promise<ViralCopyScriptRecommendation[]> {
+  const isLocal = process.env.NODE_ENV !== 'production'
+    || process.env.APP_BASE_URL?.includes('localhost')
+    || process.env.JWT_SECRET?.includes('local')
+    || process.env.JWT_SECRET?.includes('change-in-production')
+  const baseUrl = process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/+$/, '') || (isLocal ? 'http://localhost:4010' : undefined)
+  if (!baseUrl || process.env.AMC_CONTENT_REMOTE_ENABLED === 'false') return []
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim() || (isLocal ? 'local-service-token' : undefined)
+  if (token) headers.authorization = `Bearer ${token}`
+  const response = await fetch(`${baseUrl}/v1/copy-scripts/recommend`, {
+    method: 'POST', headers, body: JSON.stringify(input), cache: 'no-store',
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(data?.error || `Copy script recommendation failed with ${response.status}`)
+  return Array.isArray(data?.items) ? data.items : []
 }
 
 export async function createRemoteVideoPlan(input: RemoteVideoCreatorRequest): Promise<unknown> {

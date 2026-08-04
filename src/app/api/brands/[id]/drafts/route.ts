@@ -26,6 +26,11 @@ const DRAFT_SELECT = {
   deliveryFailureCode: true,
   deliveryFailureAt: true,
   creativeHooks: true,
+  viralCopyScriptId: true,
+  viralCopyScriptVersionId: true,
+  viralCopyScriptName: true,
+  viralCopyScriptSelection: true,
+  viralCopyScriptProvenance: true,
   createdAt: true,
   updatedAt: true,
   account: { select: { id: true, platformId: true, handle: true, displayName: true } },
@@ -221,6 +226,10 @@ export async function POST(request: Request, { params }: Params) {
         agentId: actor.type === 'AI_AGENT' ? actor.id : typeof body.agentId === 'string' ? body.agentId : null,
         agentNote: typeof body.agentNote === 'string' ? body.agentNote : null,
         creativeHooks: typeof body.creativeHooks === 'string' ? body.creativeHooks : null,
+        viralCopyScriptId: optionalString(body.viralCopyScriptId),
+        viralCopyScriptVersionId: optionalString(body.viralCopyScriptVersionId),
+        viralCopyScriptName: optionalString(body.viralCopyScriptName),
+        viralCopyScriptSelection: optionalString(body.viralCopyScriptSelection),
       },
       select: { id: true },
     })
@@ -333,4 +342,8 @@ export async function POST(request: Request, { params }: Params) {
   })
 
   return NextResponse.json({ ok: true, draft }, { status: 201 })
+}
+
+function optionalString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
 }

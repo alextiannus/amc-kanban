@@ -21,7 +21,7 @@ export async function POST(request: Request, { params }: Params) {
   const actor = await getActor(request)
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await request.json().catch(() => ({}))
-  const requireAmcContent = body?.requireAmcContent === true
+  let requireAmcContent = body?.requireAmcContent === true
 
   const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -36,6 +36,7 @@ export async function POST(request: Request, { params }: Params) {
   if (!draft) {
     return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
   }
+  requireAmcContent = requireAmcContent || Boolean(draft.viralCopyScriptId)
 
   // 2. Find or create an associated Kanban task (WorkUnit)
   // Look for any existing task that references this draftId in description or materials
@@ -122,6 +123,9 @@ export async function POST(request: Request, { params }: Params) {
       actorType: actor.type,
       actorRole: actor.role,
       assigneeId,
+      copyScriptId: draft.viralCopyScriptId || '',
+      copyScriptVersionId: draft.viralCopyScriptVersionId || '',
+      scriptSelection: draft.viralCopyScriptSelection || '',
     }, config)
     if (requireAmcContent && result?.contentEngine !== 'amc-content') {
       throw new Error(`Expected amc-content copywriter, got ${result?.contentEngine || 'unknown engine'}`)
@@ -160,9 +164,27 @@ export async function POST(request: Request, { params }: Params) {
     )
   }
 
+  const provenance = result?.provenance as any
+  if (provenance?.copyScriptId && provenance?.copyScriptVersionId) {
+    await prisma.contentDraft.update({
+      where: { id: draftId },
+      data: {
+        viralCopyScriptId: provenance.copyScriptId,
+        viralCopyScriptVersionId: provenance.copyScriptVersionId,
+        viralCopyScriptName: provenance.copyScriptName || draft.viralCopyScriptName,
+        viralCopyScriptSelection: provenance.scriptSelection || draft.viralCopyScriptSelection || 'manual',
+        viralCopyScriptProvenance: provenance,
+      },
+    })
+  }
+
   const updatedDraft = await prisma.contentDraft.findUnique({
     where: { id: draftId },
-    select: { id: true, caption: true, hashtags: true, status: true, agentNote: true },
+    select: {
+      id: true, caption: true, hashtags: true, status: true, agentNote: true,
+      viralCopyScriptId: true, viralCopyScriptVersionId: true, viralCopyScriptName: true,
+      viralCopyScriptSelection: true, viralCopyScriptProvenance: true,
+    },
   })
 
   return NextResponse.json({

@@ -111,5 +111,17 @@ export const StateAnnotation = Annotation.Root({
   quality: Annotation<any>({
     reducer: (x, y) => y ?? x,
     default: () => null
+  }),
+  copyScriptId: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
+  }),
+  copyScriptVersionId: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
+  }),
+  scriptSelection: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
   })
 });

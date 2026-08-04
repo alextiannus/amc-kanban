@@ -26,6 +26,11 @@ const DRAFT_SELECT = {
   deliveryFailureCode: true,
   deliveryFailureAt: true,
   creativeHooks: true,
+  viralCopyScriptId: true,
+  viralCopyScriptVersionId: true,
+  viralCopyScriptName: true,
+  viralCopyScriptSelection: true,
+  viralCopyScriptProvenance: true,
   createdAt: true,
   updatedAt: true,
   account: { select: { id: true, platformId: true, handle: true, displayName: true } },
@@ -217,6 +222,10 @@ export async function PATCH(request: Request, { params }: Params) {
         agentNote: typeof body.agentNote === 'string' ? body.agentNote : undefined,
         rejectionNote: nextStatus === 'pending_review' ? null : typeof body.rejectionNote === 'string' ? body.rejectionNote : undefined,
         creativeHooks: typeof body.creativeHooks === 'string' ? body.creativeHooks : undefined,
+        viralCopyScriptId: body.viralCopyScriptId === null ? null : optionalString(body.viralCopyScriptId),
+        viralCopyScriptVersionId: body.viralCopyScriptVersionId === null ? null : optionalString(body.viralCopyScriptVersionId),
+        viralCopyScriptName: body.viralCopyScriptName === null ? null : optionalString(body.viralCopyScriptName),
+        viralCopyScriptSelection: body.viralCopyScriptSelection === null ? null : optionalString(body.viralCopyScriptSelection),
       },
       select: { id: true, caption: true, accountId: true },
     })
@@ -312,6 +321,10 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   return NextResponse.json({ ok: true, draft })
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
 export async function DELETE(request: Request, { params }: Params) {

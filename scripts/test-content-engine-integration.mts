@@ -27,6 +27,7 @@ function testContentGenerateApi() {
   assertIncludes(route, 'canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)', 'content API brand ACL')
   assertIncludes(route, 'generateContentWithFallback({', 'content API service call')
   assertIncludes(route, 'copywriterId: optionalString(body.copywriterId)', 'content API accepts selected copywriter id')
+  assertIncludes(route, 'copyScriptVersionId: optionalString(body.copyScriptVersionId)', 'content API accepts a fixed viral copy script version')
   assertIncludes(route, 'fallbackToLegacy: body.fallbackToLegacy !== false', 'content API fallback flag')
   assertIncludes(route, 'Unsupported industryVertical', 'content API vertical validation')
   assertIncludes(route, "NextResponse.json({ error: 'Unauthorized' }, { status: 401 })", 'content API unauthorized response')
@@ -55,6 +56,8 @@ function testContentGenerationService() {
   assertIncludes(remoteClient, 'AMC_CONTENT_REMOTE_ENABLED', 'remote client feature flag')
   assertIncludes(remoteClient, '/v1/content/generate', 'remote client generate endpoint')
   assertIncludes(remoteClient, 'copywriterId: input.copywriterId', 'remote client forwards selected copywriter id')
+  assertIncludes(remoteClient, 'copyScriptVersionId: input.copyScriptVersionId', 'remote client forwards the fixed viral copy script version')
+  assertIncludes(remoteClient, '/v1/copy-scripts/recommend', 'remote client exposes published script recommendations')
   assertIncludes(remoteClient, "contentEngine: 'amc-content'", 'remote client engine marker')
   assertIncludes(remoteClient, "headers['x-amc-actor-id']", 'remote client forwards actor id')
 
@@ -104,6 +107,8 @@ function testLegacyEntrypointsUseFacade() {
   assertIncludes(state, 'assigneeId: Annotation<string>', 'graph state preserves assignee fallback actor')
   assertIncludes(state, 'assetIds: Annotation<string[]>', 'graph state preserves asset ids for amc-content media context')
   assertIncludes(state, 'skipAmcContent: Annotation<boolean>', 'graph state preserves recursion guard')
+  assertIncludes(state, 'copyScriptVersionId: Annotation<string>', 'graph state preserves fixed viral script versions')
+  assertIncludes(copywriterNode, 'copyScriptVersionId: state.copyScriptVersionId', 'copywriter node forwards fixed viral script versions')
   assertIncludes(triggerRoute, "import { cleanupDisposableAiPlaceholderDraft, isAiDraftPlaceholder }", 'copywriter trigger imports placeholder cleanup helpers')
   assertIncludes(triggerRoute, 'const canDeleteOnFailure = isAiDraftPlaceholder(originalCaption)', 'copywriter trigger identifies disposable placeholder drafts before generation')
   assertIncludes(triggerRoute, 'await cleanupDisposableAiPlaceholderDraft({ brandId, draftId, reason })', 'copywriter trigger deletes failed disposable placeholders')
@@ -164,6 +169,9 @@ function testCopywriterFirstCreativeUi() {
   assertNotIncludes(postEditDrawer, 'PLATFORM_SLOTS', 'post editor no longer uses platform slots as the creative selector')
   assertNotIncludes(postEditDrawer, '创作平台', 'post editor is not platform-slot first')
   assertNotIncludes(postEditDrawer, '请选择发布平台账号', 'post editor does not block creation on publishing accounts')
+  assertIncludes(postEditDrawer, '不使用爆品脚本（使用现有 Copywriter + RAG）', 'post editor keeps an explicit no-script fallback')
+  assertIncludes(postEditDrawer, 'viralCopyScriptVersionId', 'post editor persists a fixed script version on each draft')
+  assertIncludes(postEditDrawer, '重新生成不会自动升级', 'post editor explains fixed-version regeneration')
 
   assertIncludes(dashboardAssets, 'COPYWRITER_ROSTER', 'asset schedule modal exposes copywriter roster')
   assertIncludes(dashboardAssets, 'scheduleSelectedCopywriterIds', 'asset schedule modal stores selected copywriters')
@@ -177,12 +185,27 @@ function testCopywriterFirstCreativeUi() {
   assertIncludes(postPreviewModal, '请选择 Copywriter 以查看预览', 'preview modal empty state names copywriters')
 }
 
+function testViralCopyScriptBridge() {
+  const recommendationRoute = read('src/app/api/content/copy-scripts/recommend/route.ts')
+  const draftSchema = read('prisma/schema.prisma')
+  const draftRoute = read('src/app/api/brands/[id]/drafts/route.ts')
+  const triggerRoute = read('src/app/api/brands/[id]/drafts/[draftId]/trigger-copywriter/route.ts')
+  assertIncludes(recommendationRoute, 'canSessionAccessBrandProject', 'script recommendations enforce brand access')
+  assertIncludes(recommendationRoute, 'recommendRemoteCopyScripts', 'script recommendations are served by amc-content')
+  assertIncludes(draftSchema, 'viralCopyScriptVersionId', 'draft schema stores a fixed script version')
+  assertIncludes(draftSchema, 'viralCopyScriptProvenance', 'draft schema stores generation provenance')
+  assertIncludes(draftRoute, 'viralCopyScriptSelection', 'draft create route stores recommendation/manual selection')
+  assertIncludes(triggerRoute, 'Boolean(draft.viralCopyScriptId)', 'script-backed regeneration requires amc-content')
+  assertIncludes(triggerRoute, 'viralCopyScriptProvenance: provenance', 'trigger persists returned script provenance')
+}
+
 function main() {
   testContentGenerateApi()
   testContentGenerationService()
   testLegacyEntrypointsUseFacade()
   testContentLabStandaloneEntry()
   testCopywriterFirstCreativeUi()
+  testViralCopyScriptBridge()
   console.log('SUCCESS: content engine integration guards passed')
 }
 

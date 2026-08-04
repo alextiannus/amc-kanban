@@ -70,6 +70,28 @@ export type ContentGenerationRequest = {
   actorId?: string
   actorType?: string
   actorRole?: string
+  copyScriptId?: string
+  copyScriptVersionId?: string
+  scriptSelection?: 'recommended' | 'manual'
+}
+
+export type ViralCopyScriptRecommendation = {
+  id: string
+  name: string
+  platform: PlatformType
+  marketCountry: string
+  industry: string
+  primaryCategoryId: string
+  language: string
+  contentFormat: string
+  versionId: string
+  versionNumber: number
+  summary: string
+  framework: Record<string, unknown>
+  sourceCount: number
+  merchantCount: number
+  sourceAssetIds: string[]
+  recommendationReason: string
 }
 
 export type ContentGenerationResult = {

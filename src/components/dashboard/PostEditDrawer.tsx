@@ -149,6 +149,10 @@ interface DraftItem {
   agentNote?: string | null
   rejectionNote?: string | null
   creativeHooks?: string | null
+  viralCopyScriptId?: string | null
+  viralCopyScriptVersionId?: string | null
+  viralCopyScriptName?: string | null
+  viralCopyScriptSelection?: string | null
   accountId?: string | null
   account?: {
     id: string
@@ -165,6 +169,25 @@ interface DraftItem {
       type: string
     }
   }>
+}
+
+function canonicalScriptPlatform(platform?: string): string {
+  const value = (platform || '').toLowerCase()
+  if (['red', 'rednote', 'xhs', 'xiaohongshu'].includes(value)) return 'xiaohongshu'
+  if (['google', 'google_maps', 'google_business', 'gbp'].includes(value)) return 'google_business'
+  return ['instagram', 'facebook', 'tiktok'].includes(value) ? value : ''
+}
+
+interface ViralCopyScriptOption {
+  id: string
+  name: string
+  platform: string
+  versionId: string
+  versionNumber: number
+  summary: string
+  sourceCount: number
+  merchantCount: number
+  recommendationReason: string
 }
 
 interface SocialAccountOption {
@@ -217,6 +240,11 @@ export default function PostEditDrawer({
   const [reviewNote, setReviewNote] = useState('')
   const [contentIdea, setContentIdea] = useState('')
   const [creativeHooks, setCreativeHooks] = useState('')
+  const [viralCopyScripts, setViralCopyScripts] = useState<ViralCopyScriptOption[]>([])
+  const [selectedViralCopyScript, setSelectedViralCopyScript] = useState<ViralCopyScriptOption | null>(null)
+  const [viralScriptSelection, setViralScriptSelection] = useState<'recommended' | 'manual'>('recommended')
+  const [viralScriptLoading, setViralScriptLoading] = useState(false)
+  const [viralScriptChoiceTouched, setViralScriptChoiceTouched] = useState(false)
   const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
   
   // Loading & Action states
@@ -267,6 +295,14 @@ export default function PostEditDrawer({
     return attachedMedia.filter(m => m.type === 'asset').map(m => m.id)
   }, [attachedMedia])
 
+  const selectedScriptPlatform = useMemo(() => {
+    const accountId = selectedAccountIds[0]
+    if (!accountId) return ''
+    const account = accounts.find((item) => item.id === accountId)
+    const raw = account?.platformId || (accountId.startsWith('unconfigured_') ? accountId.replace('unconfigured_', '') : '')
+    return canonicalScriptPlatform(raw)
+  }, [selectedAccountIds, accounts])
+
   const filteredAssets = useMemo(() => {
     const sorted = [...brandAssets].sort((a, b) => {
       const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0
@@ -310,6 +346,43 @@ export default function PostEditDrawer({
     loadBrandAssets()
   }, [isOpen, brandId])
 
+  useEffect(() => {
+    if (!isOpen || !selectedScriptPlatform) {
+      setViralCopyScripts([])
+      if (!selectedDraft?.viralCopyScriptId) setSelectedViralCopyScript(null)
+      return
+    }
+    if (selectedViralCopyScript && selectedViralCopyScript.platform !== selectedScriptPlatform) {
+      setSelectedViralCopyScript(null)
+      setViralScriptChoiceTouched(false)
+      return
+    }
+    const timer = setTimeout(async () => {
+      setViralScriptLoading(true)
+      try {
+        const response = await fetch('/api/content/copy-scripts/recommend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brandId, platform: selectedScriptPlatform, theme: contentIdea.trim() }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error || '爆品脚本推荐失败')
+        const items = Array.isArray(data.items) ? data.items as ViralCopyScriptOption[] : []
+        setViralCopyScripts(items)
+        if (!viralScriptChoiceTouched && !selectedDraft?.viralCopyScriptId) {
+          setSelectedViralCopyScript(items[0] || null)
+          setViralScriptSelection('recommended')
+        }
+      } catch (error) {
+        console.error('Failed to recommend viral copy scripts:', error)
+        setViralCopyScripts([])
+      } finally {
+        setViralScriptLoading(false)
+      }
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [isOpen, brandId, selectedScriptPlatform, contentIdea, selectedDraft?.viralCopyScriptId, selectedViralCopyScript?.platform, viralScriptChoiceTouched])
+
   // Load post details if editing
   useEffect(() => {
     if (!isOpen) return
@@ -325,6 +398,10 @@ export default function PostEditDrawer({
       setReviewNote('')
       setContentIdea('')
       setCreativeHooks('')
+      setViralCopyScripts([])
+      setSelectedViralCopyScript(null)
+      setViralScriptSelection('recommended')
+      setViralScriptChoiceTouched(false)
       // Pre-fill media if coming from asset library
       setAttachedMedia(initialAttachedMedia ?? [])
       setMediaUrlsInput('')
@@ -342,6 +419,19 @@ export default function PostEditDrawer({
         const json = await res.json()
         const draft = json.draft as DraftItem
         setSelectedDraft(draft)
+        setSelectedViralCopyScript(draft.viralCopyScriptId && draft.viralCopyScriptVersionId ? {
+          id: draft.viralCopyScriptId,
+          name: draft.viralCopyScriptName || '已固定爆品脚本',
+          platform: canonicalScriptPlatform(draft.account?.platformId || ''),
+          versionId: draft.viralCopyScriptVersionId,
+          versionNumber: 0,
+          summary: '该草稿已固定使用此版本，重新生成时不会自动升级。',
+          sourceCount: 0,
+          merchantCount: 0,
+          recommendationReason: '草稿固定版本',
+        } : null)
+        setViralScriptSelection(draft.viralCopyScriptSelection === 'recommended' ? 'recommended' : 'manual')
+        setViralScriptChoiceTouched(Boolean(draft.viralCopyScriptId))
 
         // Bind form values
         setCaption(draft.caption || '')
@@ -478,6 +568,18 @@ export default function PostEditDrawer({
   }, [isAiGenerating, createdDrafts, brandId, draftStatuses, draftCopywriterMap])
 
   // Action methods
+  const viralScriptPayloadForAccount = (accountId: string) => {
+    const account = accounts.find((item) => item.id === accountId)
+    const platform = canonicalScriptPlatform(account?.platformId || (accountId.startsWith('unconfigured_') ? accountId.replace('unconfigured_', '') : ''))
+    const script = selectedViralCopyScript && selectedViralCopyScript.platform === platform ? selectedViralCopyScript : null
+    return {
+      viralCopyScriptId: script?.id ?? null,
+      viralCopyScriptVersionId: script?.versionId ?? null,
+      viralCopyScriptName: script?.name ?? null,
+      viralCopyScriptSelection: script ? viralScriptSelection : null,
+    }
+  }
+
   const saveDraft = async (nextStatus?: string, captionOverride?: string, accountIdsOverride?: string[]): Promise<DraftItem[] | null> => {
     let activeCaption = captionOverride !== undefined ? captionOverride : caption
     if (!activeCaption.trim() && contentIdea.trim()) {
@@ -517,6 +619,7 @@ export default function PostEditDrawer({
             mediaUrls,
             assetIds: selectedAssetIds,
             creativeHooks: creativeHooks.trim(),
+            ...viralScriptPayloadForAccount(activeAccountIds[0]),
           }),
         })
         const json = await res.json().catch(() => ({}))
@@ -541,6 +644,7 @@ export default function PostEditDrawer({
                   mediaUrls,
                   assetIds: selectedAssetIds,
                   creativeHooks: creativeHooks.trim(),
+                  ...viralScriptPayloadForAccount(accId),
                 }),
               })
               const jsonCreate = await resCreate.json().catch(() => ({}))
@@ -569,6 +673,7 @@ export default function PostEditDrawer({
                 mediaUrls,
                 assetIds: selectedAssetIds,
                 creativeHooks: creativeHooks.trim(),
+                ...viralScriptPayloadForAccount(accId),
               }),
             })
             const json = await res.json().catch(() => ({}))
@@ -1244,6 +1349,49 @@ Return the output strictly in a valid JSON array format, containing:
                     />
                   </div>
                 </>
+              )}
+
+              {/* Published viral copy script — fixed to a version when the draft is saved */}
+              {!isPublished && selectedScriptPlatform && (
+                <div className="w-full rounded-md border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-900/60 dark:bg-indigo-950/20">
+                  <div className="mb-3 flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-indigo-500">爆品文案脚本</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">按当前主平台自动推荐；保存草稿后固定版本，重新生成不会自动升级。</p>
+                    </div>
+                    {viralScriptLoading && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
+                  </div>
+                  <select
+                    value={selectedViralCopyScript?.versionId || ''}
+                    onChange={(event) => {
+                      const selected = viralCopyScripts.find((script) => script.versionId === event.target.value) || null
+                      setSelectedViralCopyScript(selected)
+                      setViralScriptSelection('manual')
+                      setViralScriptChoiceTouched(true)
+                    }}
+                    className="h-11 w-full rounded-md border border-indigo-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500 dark:border-indigo-900 dark:bg-slate-950 dark:text-slate-100"
+                  >
+                    <option value="">不使用爆品脚本（使用现有 Copywriter + RAG）</option>
+                    {selectedViralCopyScript && !viralCopyScripts.some((script) => script.versionId === selectedViralCopyScript.versionId) && (
+                      <option value={selectedViralCopyScript.versionId}>{selectedViralCopyScript.name} · 固定版本</option>
+                    )}
+                    {viralCopyScripts.map((script) => (
+                      <option key={script.versionId} value={script.versionId}>{script.name} · v{script.versionNumber}</option>
+                    ))}
+                  </select>
+                  {selectedViralCopyScript ? (
+                    <div className="mt-3 rounded-md border border-indigo-100 bg-white/80 p-3 text-xs dark:border-indigo-900/60 dark:bg-slate-950/60">
+                      <div className="flex flex-wrap items-center gap-2 font-bold text-slate-800 dark:text-slate-100">
+                        <span>{selectedViralCopyScript.name}</span>
+                        <span className="rounded bg-indigo-100 px-2 py-0.5 text-[10px] text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">{viralScriptSelection === 'recommended' ? '系统推荐' : '手工选择'}</span>
+                      </div>
+                      <p className="mt-1.5 text-slate-600 dark:text-slate-400">{selectedViralCopyScript.summary}</p>
+                      <p className="mt-1.5 text-slate-400">{selectedViralCopyScript.recommendationReason}{selectedViralCopyScript.sourceCount ? ` · ${selectedViralCopyScript.sourceCount} 条素材 / ${selectedViralCopyScript.merchantCount} 个来源` : ''}</p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-500">未使用爆品脚本，生成将继续使用现有 Copywriter + RAG。</p>
+                  )}
+                </div>
               )}
 
               {/* Copywriter — full width row */}

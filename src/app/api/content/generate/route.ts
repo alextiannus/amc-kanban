@@ -81,6 +81,9 @@ export async function POST(request: Request) {
       actorId: actor.id,
       actorType: actor.type,
       actorRole: actor.role,
+      copyScriptId: optionalString(body.copyScriptId),
+      copyScriptVersionId: optionalString(body.copyScriptVersionId),
+      scriptSelection: body.scriptSelection === 'recommended' ? 'recommended' : body.scriptSelection === 'manual' ? 'manual' : undefined,
     })
 
     return NextResponse.json({
