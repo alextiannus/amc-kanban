@@ -15,6 +15,8 @@ function safeEnqueue(controller: ReadableStreamDefaultController, data: Uint8Arr
   }
 }
 
+const DEFAULT_MINIMAX_VOICE_ID = 'Chinese (Mandarin)_Warm_Bestie'
+
 /**
  * Synthesise speech server-side via MiniMax TTS (LLMConfig[tts]) and return
  * the audio as a base64 string so the caller can play it directly without a
@@ -43,7 +45,7 @@ async function synthesizeSpeechB64(text: string, voiceId: string): Promise<strin
         text: text.slice(0, 600),
         stream: false,
         output_format: 'hex',
-        voice_setting: { voice_id: voiceId || 'female-shaonv', speed: 1.0, vol: 1.0, pitch: 0 },
+        voice_setting: { voice_id: voiceId || DEFAULT_MINIMAX_VOICE_ID, speed: 1.0, vol: 1.0, pitch: 0 },
         audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3' },
       }),
       signal: AbortSignal.timeout(8_000),

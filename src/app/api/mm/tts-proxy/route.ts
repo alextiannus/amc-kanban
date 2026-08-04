@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
 const DEFAULT_ENDPOINT = 'https://api.minimaxi.com/v1/t2a_v2'
+const DEFAULT_MINIMAX_VOICE_ID = 'Chinese (Mandarin)_Warm_Bestie'
 const MAX_TEXT_LENGTH = 600
 const UPSTREAM_TIMEOUT_MS = 8_000
 
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
         stream: false,
         output_format: 'hex',  // tell API to return audio as hex string in data.audio
         voice_setting: {
-          voice_id: voiceId || process.env.MINIMAX_TTS_VOICE_ID || 'female-shaonv',
+          voice_id: voiceId || process.env.MINIMAX_TTS_VOICE_ID || DEFAULT_MINIMAX_VOICE_ID,
           speed: 1,
           vol: 1,
           pitch: 0,
