@@ -72,7 +72,11 @@ export type ContentGenerationRequest = {
   actorRole?: string
   copyScriptId?: string
   copyScriptVersionId?: string
-  scriptSelection?: 'recommended' | 'manual'
+  scriptSelection?: 'recommended' | 'manual' | 'experiment'
+  experimentAssignmentId?: string
+  experimentId?: string
+  experimentArm?: 'treatment' | 'control'
+  experimentOverridden?: boolean
 }
 
 export type ViralCopyScriptRecommendation = {
@@ -92,6 +96,25 @@ export type ViralCopyScriptRecommendation = {
   merchantCount: number
   sourceAssetIds: string[]
   recommendationReason: string
+  evidenceTier?: 'legacy_unverified' | 'emerging' | 'verified' | 'high_confidence'
+  evidenceCoverage?: number
+  evidenceAssetCount?: number
+  evidenceValidationStatus?: string
+  experimentId?: string | null
+  experimentStatus?: string | null
+}
+
+export type ViralCopyScriptExperimentAssignment = {
+  assignment: {
+    id: string
+    experimentId: string
+    arm: 'treatment' | 'control'
+    overridden: boolean
+    excluded: boolean
+  }
+  experiment: { id: string; status: string }
+  useScript: boolean
+  script: { id: string; versionId: string; name: string; evidenceTier?: string; evidenceCoverage?: number } | null
 }
 
 export type ContentGenerationResult = {

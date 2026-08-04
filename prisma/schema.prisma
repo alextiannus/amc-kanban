@@ -511,6 +511,11 @@ model ContentDraft {
   viralCopyScriptName        String?
   viralCopyScriptSelection   String?
   viralCopyScriptProvenance  Json?
+  viralCopyExperimentId           String?
+  viralCopyExperimentAssignmentId String?
+  viralCopyExperimentArm          String?
+  viralCopyExperimentOverridden   Boolean    @default(false)
+  viralCopyExperimentExcluded     Boolean    @default(false)
 
   actionItem     ActionItem?
   assetRefs      ContentAssetRef[]
@@ -520,6 +525,7 @@ model ContentDraft {
 
   @@index([brandId, status])
   @@index([viralCopyScriptId])
+  @@index([viralCopyExperimentAssignmentId])
 }
 
 model ActionItem {

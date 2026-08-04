@@ -1,4 +1,4 @@
-import type { ContentGenerationRequest, ContentGenerationResult, ViralCopyScriptRecommendation } from './types.ts'
+import type { ContentGenerationRequest, ContentGenerationResult, ViralCopyScriptExperimentAssignment, ViralCopyScriptRecommendation } from './types.ts'
 
 type RemoteContentResult = {
   success: true
@@ -86,6 +86,10 @@ export async function tryGenerateWithRemoteContentService(
       copyScriptId: input.copyScriptId,
       copyScriptVersionId: input.copyScriptVersionId,
       scriptSelection: input.scriptSelection,
+      experimentAssignmentId: input.experimentAssignmentId,
+      experimentId: input.experimentId,
+      experimentArm: input.experimentArm,
+      experimentOverridden: input.experimentOverridden,
     }),
     cache: 'no-store',
   })
@@ -131,6 +135,50 @@ export async function recommendRemoteCopyScripts(input: {
   const data = await response.json().catch(() => null)
   if (!response.ok) throw new Error(data?.error || `Copy script recommendation failed with ${response.status}`)
   return Array.isArray(data?.items) ? data.items : []
+}
+
+export async function assignRemoteCopyScriptExperiment(input: {
+  scriptId: string
+  scriptVersionId: string
+  brandId: string
+  draftId: string
+  accountId?: string
+  platform: string
+  contentFormat?: string
+  overrideArm?: 'treatment' | 'control'
+}): Promise<ViralCopyScriptExperimentAssignment> {
+  return callRemoteContentJson('/v1/copy-scripts/experiments/assign', input)
+}
+
+export async function recordRemoteCopyScriptOutcome(input: {
+  assignmentId?: string
+  draftId?: string
+  platformPostId?: string
+  source: 'postfast' | 'manual'
+  observedAt?: string
+  publishedAt?: string
+  windowHours?: number
+  metrics: Record<string, number | undefined>
+  platformMetrics?: Record<string, unknown>
+  idempotencyKey?: string
+}): Promise<unknown> {
+  return callRemoteContentJson('/v1/copy-scripts/outcomes', input)
+}
+
+async function callRemoteContentJson<T>(path: string, body: unknown): Promise<T> {
+  const isLocal = process.env.NODE_ENV !== 'production'
+    || process.env.APP_BASE_URL?.includes('localhost')
+    || process.env.JWT_SECRET?.includes('local')
+    || process.env.JWT_SECRET?.includes('change-in-production')
+  const baseUrl = process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/+$/, '') || (isLocal ? 'http://localhost:4010' : undefined)
+  if (!baseUrl || process.env.AMC_CONTENT_REMOTE_ENABLED === 'false') throw new Error('AMC content service is not configured')
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim() || (isLocal ? 'local-service-token' : undefined)
+  if (token) headers.authorization = `Bearer ${token}`
+  const response = await fetch(`${baseUrl}${path}`, { method: 'POST', headers, body: JSON.stringify(body), cache: 'no-store' })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(data?.error || `AMC content service failed with ${response.status}`)
+  return data as T
 }
 
 export async function createRemoteVideoPlan(input: RemoteVideoCreatorRequest): Promise<unknown> {

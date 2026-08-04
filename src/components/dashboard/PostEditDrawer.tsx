@@ -153,6 +153,11 @@ interface DraftItem {
   viralCopyScriptVersionId?: string | null
   viralCopyScriptName?: string | null
   viralCopyScriptSelection?: string | null
+  viralCopyExperimentId?: string | null
+  viralCopyExperimentAssignmentId?: string | null
+  viralCopyExperimentArm?: string | null
+  viralCopyExperimentOverridden?: boolean
+  viralCopyExperimentExcluded?: boolean
   accountId?: string | null
   account?: {
     id: string
@@ -188,6 +193,10 @@ interface ViralCopyScriptOption {
   sourceCount: number
   merchantCount: number
   recommendationReason: string
+  evidenceTier?: 'legacy_unverified' | 'emerging' | 'verified' | 'high_confidence'
+  evidenceCoverage?: number
+  evidenceAssetCount?: number
+  experimentId?: string | null
 }
 
 interface SocialAccountOption {
@@ -245,6 +254,7 @@ export default function PostEditDrawer({
   const [viralScriptSelection, setViralScriptSelection] = useState<'recommended' | 'manual'>('recommended')
   const [viralScriptLoading, setViralScriptLoading] = useState(false)
   const [viralScriptChoiceTouched, setViralScriptChoiceTouched] = useState(false)
+  const [viralScriptExperimentArm, setViralScriptExperimentArm] = useState<'automatic' | 'treatment' | 'control'>('automatic')
   const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
   
   // Loading & Action states
@@ -402,6 +412,7 @@ export default function PostEditDrawer({
       setSelectedViralCopyScript(null)
       setViralScriptSelection('recommended')
       setViralScriptChoiceTouched(false)
+      setViralScriptExperimentArm('automatic')
       // Pre-fill media if coming from asset library
       setAttachedMedia(initialAttachedMedia ?? [])
       setMediaUrlsInput('')
@@ -432,6 +443,8 @@ export default function PostEditDrawer({
         } : null)
         setViralScriptSelection(draft.viralCopyScriptSelection === 'recommended' ? 'recommended' : 'manual')
         setViralScriptChoiceTouched(Boolean(draft.viralCopyScriptId))
+        setViralScriptExperimentArm(draft.viralCopyExperimentOverridden && (draft.viralCopyExperimentArm === 'treatment' || draft.viralCopyExperimentArm === 'control')
+          ? draft.viralCopyExperimentArm : 'automatic')
 
         // Bind form values
         setCaption(draft.caption || '')
@@ -763,7 +776,11 @@ export default function PostEditDrawer({
         // Trigger AI copywriting in parallel
         await Promise.all(
           saved.map(draft =>
-            fetch(`/api/brands/${brandId}/drafts/${draft.id}/trigger-copywriter`, { method: 'POST' })
+            fetch(`/api/brands/${brandId}/drafts/${draft.id}/trigger-copywriter`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(viralScriptExperimentArm === 'automatic' ? {} : { experimentArm: viralScriptExperimentArm }),
+            })
           )
         )
       }
@@ -796,6 +813,8 @@ export default function PostEditDrawer({
     try {
       const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(viralScriptExperimentArm === 'automatic' ? {} : { experimentArm: viralScriptExperimentArm }),
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
@@ -1376,7 +1395,7 @@ Return the output strictly in a valid JSON array format, containing:
                       <option value={selectedViralCopyScript.versionId}>{selectedViralCopyScript.name} · 固定版本</option>
                     )}
                     {viralCopyScripts.map((script) => (
-                      <option key={script.versionId} value={script.versionId}>{script.name} · v{script.versionNumber}</option>
+                      <option key={script.versionId} value={script.versionId}>{script.name} · v{script.versionNumber} · {script.evidenceTier === 'emerging' ? '探索级' : script.evidenceTier === 'high_confidence' ? '高可信' : '已验证'}</option>
                     ))}
                   </select>
                   {selectedViralCopyScript ? (
@@ -1387,6 +1406,25 @@ Return the output strictly in a valid JSON array format, containing:
                       </div>
                       <p className="mt-1.5 text-slate-600 dark:text-slate-400">{selectedViralCopyScript.summary}</p>
                       <p className="mt-1.5 text-slate-400">{selectedViralCopyScript.recommendationReason}{selectedViralCopyScript.sourceCount ? ` · ${selectedViralCopyScript.sourceCount} 条素材 / ${selectedViralCopyScript.merchantCount} 个来源` : ''}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <span className="rounded bg-indigo-100 px-2 py-1 text-[10px] font-bold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                          {selectedViralCopyScript.evidenceTier === 'emerging' ? '探索级证据' : selectedViralCopyScript.evidenceTier === 'high_confidence' ? '高可信证据' : '已验证证据'}
+                        </span>
+                        <span className="rounded bg-slate-100 px-2 py-1 text-[10px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">证据覆盖 {Math.round((selectedViralCopyScript.evidenceCoverage || 0) * 100)}%</span>
+                        {selectedViralCopyScript.experimentId && <span className="rounded bg-amber-100 px-2 py-1 text-[10px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">实验中</span>}
+                      </div>
+                      <label className="mt-3 block text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                        实验分组
+                        <select
+                          value={viralScriptExperimentArm}
+                          onChange={(event) => setViralScriptExperimentArm(event.target.value as 'automatic' | 'treatment' | 'control')}
+                          className="mt-1 h-9 w-full rounded border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+                        >
+                          <option value="automatic">自动分组（推荐，80% 脚本 / 20% 对照）</option>
+                          <option value="treatment">强制使用脚本（排除统计）</option>
+                          <option value="control">强制不使用脚本（排除统计）</option>
+                        </select>
+                      </label>
                     </div>
                   ) : (
                     <p className="mt-2 text-xs text-slate-500">未使用爆品脚本，生成将继续使用现有 Copywriter + RAG。</p>

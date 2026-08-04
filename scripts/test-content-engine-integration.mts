@@ -190,6 +190,9 @@ function testViralCopyScriptBridge() {
   const draftSchema = read('prisma/schema.prisma')
   const draftRoute = read('src/app/api/brands/[id]/drafts/route.ts')
   const triggerRoute = read('src/app/api/brands/[id]/drafts/[draftId]/trigger-copywriter/route.ts')
+  const remoteContentService = read('src/lib/amc-content/remoteContentService.ts')
+  const postfastCron = read('src/app/api/cron/postfast-sync-all/route.ts')
+  const postEditor = read('src/components/dashboard/PostEditDrawer.tsx')
   assertIncludes(recommendationRoute, 'canSessionAccessBrandProject', 'script recommendations enforce brand access')
   assertIncludes(recommendationRoute, 'recommendRemoteCopyScripts', 'script recommendations are served by amc-content')
   assertIncludes(draftSchema, 'viralCopyScriptVersionId', 'draft schema stores a fixed script version')
@@ -197,6 +200,15 @@ function testViralCopyScriptBridge() {
   assertIncludes(draftRoute, 'viralCopyScriptSelection', 'draft create route stores recommendation/manual selection')
   assertIncludes(triggerRoute, 'Boolean(draft.viralCopyScriptId)', 'script-backed regeneration requires amc-content')
   assertIncludes(triggerRoute, 'viralCopyScriptProvenance: provenance', 'trigger persists returned script provenance')
+  assertIncludes(draftSchema, 'viralCopyExperimentAssignmentId', 'draft schema fixes each generated post to an experiment assignment')
+  assertIncludes(triggerRoute, 'assignRemoteCopyScriptExperiment', 'script-backed generation receives a deterministic treatment/control assignment')
+  assertIncludes(triggerRoute, "if (!experimentAssignment.useScript)", 'control assignments remove the script before generation')
+  assertIncludes(triggerRoute, "effectiveScriptSelection = 'experiment'", 'experiment provenance is explicitly distinguished from manual recommendation selection')
+  assertIncludes(remoteContentService, "'/v1/copy-scripts/experiments/assign'", 'Kanban calls the amc-content experiment assignment API')
+  assertIncludes(remoteContentService, "'/v1/copy-scripts/outcomes'", 'Kanban can send observed post outcomes back to amc-content')
+  assertIncludes(postfastCron, 'syncViralCopyExperimentOutcomes', 'PostFast analytics automatically flow into viral script experiment outcomes')
+  assertIncludes(postEditor, '强制使用脚本（排除统计）', 'human experiment overrides are explicit and excluded from statistics')
+  assertIncludes(postEditor, '证据覆盖', 'script selection displays evidence coverage before generation')
 }
 
 function main() {

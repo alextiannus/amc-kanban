@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
-import { syncBrand } from '@/app/api/cron/postfast-sync-all/route'
+import { syncBrand, syncViralCopyExperimentOutcomes } from '@/app/api/cron/postfast-sync-all/route'
 import { syncBrandDraftStatuses } from '@/lib/syncDraftStatuses'
 
 type Params = { params: Promise<{ id: string }> }
@@ -69,6 +69,10 @@ export async function POST(request: Request, { params }: Params) {
     } catch (syncErr) {
       console.warn(`[sync-postfast] Draft status sync failed (non-fatal):`, syncErr)
     }
+    const experimentOutcomes = await syncViralCopyExperimentOutcomes(brand.id, analyticsPosts).catch((syncErr) => {
+      console.warn('[sync-postfast] Viral script outcome sync failed (non-fatal):', syncErr)
+      return 0
+    })
 
     return NextResponse.json({
       ok: true,
@@ -76,6 +80,7 @@ export async function POST(request: Request, { params }: Params) {
       accountCount: syncedAccounts.length,
       analyticsPostCount: analyticsPosts.length,
       draftStatusSync,
+      experimentOutcomes,
     })
 
   } catch (error: any) {

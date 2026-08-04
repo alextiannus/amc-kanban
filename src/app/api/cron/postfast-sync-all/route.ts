@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts, postfastListPosts, postfastGetAnalytics } from '@/lib/integrations/postfast'
 import { syncBrandDraftStatuses } from '@/lib/syncDraftStatuses'
+import { recordRemoteCopyScriptOutcome } from '@/lib/amc-content/remoteContentService'
 
 // Allow up to 5 minutes for the full batch across all brands
 export const maxDuration = 300
@@ -63,6 +64,7 @@ export async function POST(req: NextRequest) {
     ok: boolean
     accountCount?: number
     analyticsPostCount?: number
+    experimentOutcomes?: number
     draftSync?: {
       checked: number
       updated: number
@@ -97,6 +99,12 @@ export async function POST(req: NextRequest) {
       results.push(brandResult)
       console.log(`[PostFast Cron] ✅ brand ${brand.id}: ${syncedAccounts.length} accounts, ${analyticsPosts.length} analytics posts synced`)
 
+      try {
+        brandResult.experimentOutcomes = await syncViralCopyExperimentOutcomes(brand.id, analyticsPosts)
+      } catch (outcomeError: any) {
+        console.warn(`[PostFast Cron] ⚠️ brand ${brand.id}: experiment outcome sync failed (non-fatal):`, outcomeError?.message ?? outcomeError)
+      }
+
       // Phase 4: Sync scheduled→published draft statuses
       try {
         const syncResult = await syncBrandDraftStatuses(brand.id, brand.postfastApiKey!)
@@ -127,6 +135,60 @@ export async function POST(req: NextRequest) {
   console.log(`[PostFast Cron] Done — ${succeeded} succeeded, ${failed} failed in ${Date.now() - startedAt.getTime()}ms`)
 
   return NextResponse.json({ ok: true, startedAt, succeeded, failed, results })
+}
+
+export async function syncViralCopyExperimentOutcomes(brandId: string, analyticsPosts: any[]) {
+  if (!analyticsPosts.length) return 0
+  const drafts = await prisma.contentDraft.findMany({
+    where: { brandId, viralCopyExperimentAssignmentId: { not: null }, platformPostId: { not: null } },
+    select: {
+      id: true, platformPostId: true, publishedAt: true,
+      viralCopyExperimentAssignmentId: true,
+    },
+  })
+  const analyticsById = new Map<string, any>()
+  for (const post of analyticsPosts) {
+    if (post?.id) analyticsById.set(String(post.id), post)
+    if (post?.platformPostId) analyticsById.set(String(post.platformPostId), post)
+  }
+  let synced = 0
+  for (const draft of drafts) {
+    const post = analyticsById.get(String(draft.platformPostId || ''))
+    if (!post?.latestMetric || !draft.viralCopyExperimentAssignmentId) continue
+    const metric = post.latestMetric
+    const extras = metric.extras && typeof metric.extras === 'object' ? metric.extras : {}
+    const observedAt = metric.fetchedAt || new Date().toISOString()
+    const numeric = (value: unknown) => {
+      const parsed = Number(value)
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
+    }
+    try {
+      await recordRemoteCopyScriptOutcome({
+        assignmentId: draft.viralCopyExperimentAssignmentId,
+        draftId: draft.id,
+        platformPostId: String(post.platformPostId || draft.platformPostId || ''),
+        source: 'postfast',
+        observedAt,
+        publishedAt: post.publishedAt || draft.publishedAt?.toISOString(),
+        metrics: {
+          views: numeric(extras.views ?? extras.viewCount ?? extras.videoViews),
+          impressions: numeric(metric.impressions),
+          reach: numeric(metric.reach),
+          likes: numeric(metric.likes),
+          comments: numeric(metric.comments),
+          shares: numeric(metric.shares),
+          saves: numeric(extras.saves ?? extras.saved ?? extras.bookmarks),
+          clicks: numeric(metric.clicks),
+        },
+        platformMetrics: { ...metric, extras },
+        idempotencyKey: `${draft.viralCopyExperimentAssignmentId}:postfast:${observedAt}`,
+      })
+      synced += 1
+    } catch (error) {
+      console.warn(`[PostFast Cron] draft ${draft.id}: viral script outcome rejected (non-fatal):`, error instanceof Error ? error.message : error)
+    }
+  }
+  return synced
 }
 
 // ── Internal sync logic for a single brand ─────────────────────────────────

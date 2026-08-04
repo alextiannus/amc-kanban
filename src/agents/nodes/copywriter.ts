@@ -222,7 +222,13 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
         actorRole: state.actorRole || 'USER',
         copyScriptId: state.copyScriptId || draftObj?.viralCopyScriptId || undefined,
         copyScriptVersionId: state.copyScriptVersionId || draftObj?.viralCopyScriptVersionId || undefined,
-        scriptSelection: (state.scriptSelection || draftObj?.viralCopyScriptSelection) === 'recommended' ? 'recommended' : 'manual',
+        scriptSelection: (state.scriptSelection || draftObj?.viralCopyScriptSelection) === 'experiment'
+          ? 'experiment'
+          : (state.scriptSelection || draftObj?.viralCopyScriptSelection) === 'recommended' ? 'recommended' : 'manual',
+        experimentAssignmentId: state.experimentAssignmentId || draftObj?.viralCopyExperimentAssignmentId || undefined,
+        experimentId: state.experimentId || draftObj?.viralCopyExperimentId || undefined,
+        experimentArm: (state.experimentArm || draftObj?.viralCopyExperimentArm) as 'treatment' | 'control' | undefined,
+        experimentOverridden: state.experimentOverridden || draftObj?.viralCopyExperimentOverridden || undefined,
       });
 
       if (amcContentResult) {

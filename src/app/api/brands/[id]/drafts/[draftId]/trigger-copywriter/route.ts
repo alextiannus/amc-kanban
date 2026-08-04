@@ -3,6 +3,7 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
 import { cleanupDisposableAiPlaceholderDraft, isAiDraftPlaceholder } from '@/lib/draftCleanup'
+import { assignRemoteCopyScriptExperiment } from '@/lib/amc-content/remoteContentService'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
@@ -36,6 +37,7 @@ export async function POST(request: Request, { params }: Params) {
   if (!draft) {
     return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
   }
+  const platform = draft.account?.platformId || 'instagram'
   requireAmcContent = requireAmcContent || Boolean(draft.viralCopyScriptId)
 
   // 2. Find or create an associated Kanban task (WorkUnit)
@@ -62,8 +64,6 @@ export async function POST(request: Request, { params }: Params) {
     console.log(`No active task found for Draft ${draftId}. Creating a new one...`)
     
     // Determine platform name
-    const platform = draft.account?.platformId || 'instagram'
-    
     task = await prisma.workUnit.create({
       data: {
         title: `AI Copywriting: Complete post creation for draft`,
@@ -86,6 +86,44 @@ export async function POST(request: Request, { params }: Params) {
     })
   }
 
+  let experimentAssignment: Awaited<ReturnType<typeof assignRemoteCopyScriptExperiment>> | null = null
+  let effectiveCopyScriptId = draft.viralCopyScriptId || ''
+  let effectiveCopyScriptVersionId = draft.viralCopyScriptVersionId || ''
+  let effectiveScriptSelection = draft.viralCopyScriptSelection || ''
+  if (effectiveCopyScriptId && effectiveCopyScriptVersionId) {
+    try {
+      const overrideArm = body?.experimentArm === 'treatment' || body?.experimentArm === 'control'
+        ? body.experimentArm as 'treatment' | 'control'
+        : undefined
+      experimentAssignment = await assignRemoteCopyScriptExperiment({
+        scriptId: effectiveCopyScriptId,
+        scriptVersionId: effectiveCopyScriptVersionId,
+        brandId,
+        draftId,
+        accountId: draft.accountId || undefined,
+        platform,
+        overrideArm,
+      })
+      if (!experimentAssignment.useScript) {
+        effectiveCopyScriptId = ''
+        effectiveCopyScriptVersionId = ''
+      }
+      effectiveScriptSelection = 'experiment'
+      await prisma.contentDraft.update({
+        where: { id: draftId },
+        data: {
+          viralCopyExperimentId: experimentAssignment.experiment.id,
+          viralCopyExperimentAssignmentId: experimentAssignment.assignment.id,
+          viralCopyExperimentArm: experimentAssignment.assignment.arm,
+          viralCopyExperimentOverridden: experimentAssignment.assignment.overridden,
+          viralCopyExperimentExcluded: experimentAssignment.assignment.excluded,
+        },
+      })
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : '爆品脚本实验分组失败' }, { status: 409 })
+    }
+  }
+
   // 3. Update draft caption in database to indicate AI is writing
   const originalCaption = draft.caption || ''
   const originalStatus = draft.status || 'draft'
@@ -102,8 +140,6 @@ export async function POST(request: Request, { params }: Params) {
   // This prevents stale state (error, status, aiFailed) from previous runs on the
   // same brand from polluting this draft's copywriting run.
   const config = { configurable: { thread_id: `draft_${draftId}` } }
-  const platform = draft.account?.platformId || 'instagram'
-  
   const { marketingGraph } = await import('@/agents/graph/marketingGraph.ts')
   let result: any = null
   try {
@@ -123,9 +159,13 @@ export async function POST(request: Request, { params }: Params) {
       actorType: actor.type,
       actorRole: actor.role,
       assigneeId,
-      copyScriptId: draft.viralCopyScriptId || '',
-      copyScriptVersionId: draft.viralCopyScriptVersionId || '',
-      scriptSelection: draft.viralCopyScriptSelection || '',
+      copyScriptId: effectiveCopyScriptId,
+      copyScriptVersionId: effectiveCopyScriptVersionId,
+      scriptSelection: effectiveScriptSelection,
+      experimentAssignmentId: experimentAssignment?.assignment.id || '',
+      experimentId: experimentAssignment?.experiment.id || '',
+      experimentArm: experimentAssignment?.assignment.arm || '',
+      experimentOverridden: experimentAssignment?.assignment.overridden || false,
     }, config)
     if (requireAmcContent && result?.contentEngine !== 'amc-content') {
       throw new Error(`Expected amc-content copywriter, got ${result?.contentEngine || 'unknown engine'}`)
@@ -184,6 +224,8 @@ export async function POST(request: Request, { params }: Params) {
       id: true, caption: true, hashtags: true, status: true, agentNote: true,
       viralCopyScriptId: true, viralCopyScriptVersionId: true, viralCopyScriptName: true,
       viralCopyScriptSelection: true, viralCopyScriptProvenance: true,
+      viralCopyExperimentId: true, viralCopyExperimentAssignmentId: true, viralCopyExperimentArm: true,
+      viralCopyExperimentOverridden: true, viralCopyExperimentExcluded: true,
     },
   })
 

@@ -123,5 +123,21 @@ export const StateAnnotation = Annotation.Root({
   scriptSelection: Annotation<string>({
     reducer: (x, y) => y ?? x,
     default: () => ""
+  }),
+  experimentAssignmentId: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
+  }),
+  experimentId: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
+  }),
+  experimentArm: Annotation<string>({
+    reducer: (x, y) => y ?? x,
+    default: () => ""
+  }),
+  experimentOverridden: Annotation<boolean>({
+    reducer: (x, y) => y ?? x,
+    default: () => false
   })
 });
