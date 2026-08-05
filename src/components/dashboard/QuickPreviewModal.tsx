@@ -19,6 +19,10 @@ export interface QuickPreviewDraft {
   caption: string
   hashtags: string[]
   mediaUrls: string[]
+  coverAsset?: {
+    id: string
+    url?: string | null
+  } | null
   scheduledAt?: string | null
   publishedAt?: string | null
   postUrl?: string | null
@@ -88,7 +92,7 @@ function formatDateTime(value?: string | null) {
 
 function allMedia(draft: QuickPreviewDraft): string[] {
   const assetUrls = draft.assetRefs.map((r) => r.asset.url).filter((u): u is string => Boolean(u))
-  return Array.from(new Set([...assetUrls, ...draft.mediaUrls].filter(Boolean)))
+  return Array.from(new Set([draft.coverAsset?.url, ...assetUrls, ...draft.mediaUrls].filter((url): url is string => Boolean(url))))
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────

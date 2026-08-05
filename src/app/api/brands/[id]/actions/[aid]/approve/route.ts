@@ -9,7 +9,7 @@ import {
 } from '@/lib/integrations/postfast'
 import { canWriteBrandProject } from '@/lib/brandAccess'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
-import { buildPostfastMediaItems } from '@/lib/publishMedia'
+import { buildPostfastCoverImage, buildPostfastMediaItems } from '@/lib/publishMedia'
 import {
   blockingMediaIssues,
   mediaValidationResponse,
@@ -66,7 +66,8 @@ export async function PATCH(request: Request, { params }: Params) {
       draft: {
         include: {
           account: true,
-          assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } }
+          assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
+          coverAsset: true,
         }
       },
       account: true,
@@ -85,6 +86,7 @@ export async function PATCH(request: Request, { params }: Params) {
         platform: approvalPlatform,
         mediaUrls: item.draft!.mediaUrls,
         assetRefs: item.draft!.assetRefs,
+        coverAsset: item.draft!.coverAsset,
       })
       const blockingIssues = blockingMediaIssues(issues)
       if (blockingIssues.length > 0) {
@@ -182,6 +184,7 @@ export async function PATCH(request: Request, { params }: Params) {
             platform: platformName!,
             caption: draft.caption,
             mediaItems,
+            coverImage: buildPostfastCoverImage(draft.coverAsset),
             hashtags: draft.hashtags,
             scheduledAt: resolvedScheduledAt?.toISOString(),
           })

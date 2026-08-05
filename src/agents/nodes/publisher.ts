@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.ts";
 import { postfastPublish } from "../../lib/integrations/postfast.ts";
 import { extractTopicKeywords } from "../../lib/topicExtractor.ts";
-import { buildPostfastMediaItems } from "../../lib/publishMedia.ts";
+import { buildPostfastCoverImage, buildPostfastMediaItems } from "../../lib/publishMedia.ts";
 import { validateDraftMediaForPlatform } from "../../lib/publishMediaValidation.ts";
 import { blockingMediaIssues } from "../../lib/mediaValidation.ts";
 import { cleanupDisposableAiPlaceholderDraft, isAiDraftPlaceholder } from "../../lib/draftCleanup.ts";
@@ -19,6 +19,7 @@ function enrichDraftData(caption: string): { topicKeywords: string[] } {
 
 type DraftForPublish = Prisma.ContentDraftGetPayload<{
   include: {
+    coverAsset: true,
     assetRefs: {
       include: { asset: true }
     }
@@ -231,7 +232,7 @@ export async function publisherNode(state: any) {
     if (existingDraftId) {
       draftForPublish = await prisma.contentDraft.findUnique({
         where: { id: existingDraftId },
-        include: { assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
+        include: { coverAsset: true, assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
       })
       originalDraftStatus = draftForPublish?.status ?? null
 
@@ -241,6 +242,7 @@ export async function publisherNode(state: any) {
             platform,
             mediaUrls: draftForPublish.mediaUrls,
             assetRefs: draftForPublish.assetRefs,
+            coverAsset: draftForPublish.coverAsset,
           })
           const blockingIssues = blockingMediaIssues(issues)
           if (blockingIssues.length > 0) {
@@ -312,6 +314,7 @@ export async function publisherNode(state: any) {
         platform,
         caption,
         ...(publishMediaItems ? { mediaItems: publishMediaItems } : { mediaUrls: mediaUrls || [] }),
+        coverImage: buildPostfastCoverImage(draftForPublish?.coverAsset),
         hashtags: cleanHashtags,
         accountId: socialAccount.id
       });

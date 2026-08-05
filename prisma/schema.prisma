@@ -493,6 +493,8 @@ model ContentDraft {
   caption        String
   captionLang    String         @default("en")
   mediaUrls      String[]       @default([])
+  coverAssetId   String?
+  coverAsset     MediaAsset?    @relation("DraftCoverAsset", fields: [coverAssetId], references: [id], onDelete: SetNull)
   hashtags       String[]       @default([])
   scheduledAt    DateTime?
   status         String         @default("draft")
@@ -524,6 +526,7 @@ model ContentDraft {
   updatedAt      DateTime       @updatedAt
 
   @@index([brandId, status])
+  @@index([coverAssetId])
   @@index([viralCopyScriptId])
   @@index([viralCopyExperimentAssignmentId])
 }
@@ -575,6 +578,7 @@ model MediaAsset {
   sourceType   String    @default("upload")
 
   contentRefs  ContentAssetRef[]
+  coverDrafts  ContentDraft[]    @relation("DraftCoverAsset")
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

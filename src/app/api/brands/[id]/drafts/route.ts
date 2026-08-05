@@ -14,6 +14,8 @@ const DRAFT_SELECT = {
   caption: true,
   captionLang: true,
   mediaUrls: true,
+  coverAssetId: true,
+  coverAsset: true,
   hashtags: true,
   scheduledAt: true,
   status: true,
@@ -212,6 +214,19 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const assetIds = normalizeStringArray(body.assetIds)
+  if (body.coverAssetId !== undefined && body.coverAssetId !== null && typeof body.coverAssetId !== 'string') {
+    return NextResponse.json({ error: 'coverAssetId must be a string or null' }, { status: 400 })
+  }
+  const coverAssetId = typeof body.coverAssetId === 'string' ? body.coverAssetId.trim() : ''
+  const coverAsset = coverAssetId
+    ? await prisma.mediaAsset.findFirst({
+        where: { id: coverAssetId, brandId, mimeType: { in: ['image/jpeg', 'image/png'] } },
+        select: { id: true, aiTags: true },
+      })
+    : null
+  if (coverAssetId && !coverAsset) {
+    return NextResponse.json({ error: 'coverAssetId must reference a JPEG or PNG image in this brand' }, { status: 400 })
+  }
   const status = typeof body.status === 'string' ? body.status : 'draft'
   const scheduledAt = typeof body.scheduledAt === 'string' && body.scheduledAt ? new Date(body.scheduledAt) : null
 
@@ -225,6 +240,7 @@ export async function POST(request: Request, { params }: Params) {
         caption,
         captionLang: typeof body.captionLang === 'string' && body.captionLang ? body.captionLang : 'en',
         mediaUrls: normalizeStringArray(body.mediaUrls),
+        coverAssetId: coverAsset?.id ?? null,
         hashtags: normalizeStringArray(body.hashtags),
         scheduledAt,
         status,
@@ -268,6 +284,17 @@ export async function POST(request: Request, { params }: Params) {
           },
         })
       }
+    }
+
+    if (coverAsset && !assetIds.includes(coverAsset.id)) {
+      await tx.mediaAsset.update({
+        where: { id: coverAsset.id },
+        data: {
+          usedCount: { increment: 1 },
+          lastUsedAt: new Date(),
+          aiTags: coverAsset.aiTags.filter((tag: string) => tag !== '排期发布' && tag !== '草稿排期'),
+        },
+      })
     }
 
     if (status === 'pending_review') {

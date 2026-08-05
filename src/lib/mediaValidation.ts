@@ -623,6 +623,34 @@ export function validatePlatformMedia(platform: string, media: Array<{
           : issue.message,
       }
     }))
+  if (['google', 'google_business', 'google_business_profile', 'gbp'].includes(normalized)) {
+    const googleIssues: MediaValidationIssue[] = [...uploadIssues]
+    if (media.length > 1) {
+      googleIssues.push(...media.map((item) => ({
+        assetId: item.assetId,
+        filename: item.filename || 'unknown',
+        platform: 'google',
+        field: 'mediaCount',
+        actual: media.length,
+        limit: 1,
+        message: 'Google Business 每篇帖子只能发布一张图片',
+      })))
+    }
+    for (const item of media) {
+      if (item.metadata.kind === 'video') {
+        googleIssues.push({
+          assetId: item.assetId,
+          filename: item.filename || 'unknown',
+          platform: 'google',
+          field: 'mediaType',
+          actual: 'video',
+          limit: 'image/jpeg or image/png',
+          message: 'Google Business 帖子不支持视频素材',
+        })
+      }
+    }
+    return googleIssues
+  }
   if (!['instagram', 'tiktok'].includes(normalized)) return uploadIssues
   if (media.length === 0) {
     return [{

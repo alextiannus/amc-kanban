@@ -188,7 +188,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [targetFolder, setTargetFolder] = useState('素材库')
   const [moveFolder, setMoveFolder] = useState('')
-  const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '已使用'])
+  const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '封面图', '已使用'])
   const [selectedFolder, setSelectedFolder] = useState<string>('all')
 
   const [previewMedia, setPreviewMedia] = useState<DashboardAsset | null>(null)
@@ -276,7 +276,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       if (res.ok) {
         const data = await res.json()
         const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
-        const defaults = ['产品', '环境', '活动', '已使用']
+        const defaults = ['产品', '环境', '活动', '封面图', '已使用']
         const customFolders = folderNames.filter((name: string) => !['素材库', ...defaults].includes(name))
         setFolders(['素材库', ...defaults, ...customFolders])
       }
@@ -316,7 +316,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const handleDeleteFolder = async (folderName: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!brandId) return
-    if (['素材库', '产品', '环境', '活动', '已使用'].includes(folderName)) {
+    if (['素材库', '产品', '环境', '活动', '封面图', '已使用'].includes(folderName)) {
       alert('系统默认文件夹不可删除')
       return
     }

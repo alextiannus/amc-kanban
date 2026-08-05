@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { eventEmitter } from '@/lib/events'
 import { postfastPublish, type PostFastPublishResult } from '@/lib/integrations/postfast'
 import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
-import { buildPostfastMediaItems } from '@/lib/publishMedia'
+import { buildPostfastCoverImage, buildPostfastMediaItems } from '@/lib/publishMedia'
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -160,7 +160,7 @@ export async function POST(request: Request) {
         // Re-fetch the draft with assetRefs to get mimeType for each media file
         const draftWithAssets = await prisma.contentDraft.findUnique({
           where: { id: draftId },
-          include: { assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
+          include: { coverAsset: true, assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
         })
 
         const mediaItems = buildPostfastMediaItems({
@@ -173,6 +173,7 @@ export async function POST(request: Request) {
           platform: platformName,
           caption: draft.caption,
           mediaItems,
+          coverImage: buildPostfastCoverImage(draftWithAssets?.coverAsset),
           hashtags: draft.hashtags,
           scheduledAt: draft.scheduledAt?.toISOString(),
           accountId: accountId ?? undefined,

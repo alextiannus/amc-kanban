@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastPublish } from '@/lib/integrations/postfast'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
-import { buildPostfastMediaItems } from '@/lib/publishMedia'
+import { buildPostfastCoverImage, buildPostfastMediaItems } from '@/lib/publishMedia'
 import {
   blockingMediaIssues,
   mediaValidationResponse,
@@ -62,6 +62,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     include: {
       account: { select: { platformId: true, handle: true } },
       assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
+      coverAsset: true,
     },
     orderBy: { createdAt: 'desc' },
   })
@@ -81,6 +82,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       platform: platformName,
       mediaUrls: draft.mediaUrls,
       assetRefs: draft.assetRefs,
+      coverAsset: draft.coverAsset,
     })
     const blockingIssues = blockingMediaIssues(issues)
     validationWarnings = mediaValidationWarnings(issues)
@@ -130,6 +132,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     platform: platformName,
     caption: draft.caption,
     mediaItems,
+    coverImage: buildPostfastCoverImage(draft.coverAsset),
     hashtags: draft.hashtags,
     scheduledAt: draft.scheduledAt?.toISOString(),
   })

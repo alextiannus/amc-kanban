@@ -93,6 +93,7 @@ export async function GET(request: Request) {
     include: {
       brand: { select: { id: true, name: true } },
       account: { select: { platformId: true, handle: true, displayName: true } },
+      coverAsset: { select: { id: true, url: true } },
     },
     orderBy: [{ scheduledAt: 'asc' }, { updatedAt: 'desc' }],
   })
@@ -203,8 +204,12 @@ export async function GET(request: Request) {
       ? 'done'
       : 'scheduled'
 
-    const firstMediaUrl = draft.mediaUrls?.[0]
-    const mediaAssetId = firstMediaUrl ? mediaUrlToIdMap.get(firstMediaUrl) : null
+    const eventMediaUrls = Array.from(new Set([
+      draft.coverAsset?.url,
+      ...(draft.mediaUrls || []),
+    ].filter(Boolean))) as string[]
+    const firstMediaUrl = eventMediaUrls[0]
+    const mediaAssetId = draft.coverAsset?.id || (firstMediaUrl ? mediaUrlToIdMap.get(firstMediaUrl) : null)
 
     const draftConversions = conversions.filter((c: any) => c.referPostId === draft.id || (draft.platformPostId && c.referPostId === draft.platformPostId))
     const clicks = draftConversions.length
@@ -223,7 +228,7 @@ export async function GET(request: Request) {
       status,
       time: eventAt.toISOString(),
       scheduledAt: eventAt.toISOString(),
-      mediaUrls: draft.mediaUrls,
+      mediaUrls: eventMediaUrls,
       captionLang: draft.captionLang,
       mediaAssetId: mediaAssetId || null,
       clicks,

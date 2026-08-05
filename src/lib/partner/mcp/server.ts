@@ -1379,6 +1379,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           id: true, caption: true, hashtags: true, scheduledAt: true, status: true, accountId: true,
           agentNote: true, rejectionNote: true, platformPostId: true, publishedAt: true, updatedAt: true,
           account: { select: { id: true, platformId: true, handle: true, displayName: true } },
+          coverAsset: true,
           assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
         },
       })
@@ -1397,11 +1398,12 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       accountId: z.string().optional().describe('Platform account ID. Required when creating a new draft.'),
       mediaUrls: z.array(z.string()).optional(),
       assetIds: z.array(z.string()).optional().describe('MediaAsset IDs to attach to this draft.'),
+      coverAssetId: z.string().nullable().optional().describe('Optional JPEG/PNG MediaAsset ID to use as the draft cover. Pass null to clear it.'),
       agentNote: z.string().optional(),
       captionLang: z.string().optional().default('en'),
       creativeHooks: z.string().optional(),
     },
-    async ({ brandId, draftId, caption, hashtags, accountId, mediaUrls, assetIds, agentNote, captionLang, creativeHooks }) => {
+    async ({ brandId, draftId, caption, hashtags, accountId, mediaUrls, assetIds, coverAssetId, agentNote, captionLang, creativeHooks }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
@@ -1420,6 +1422,16 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         }
         if (!accountId) {
           return { content: [{ type: 'text' as const, text: 'Error: accountId is required when creating a new draft' }], isError: true }
+        }
+      }
+
+      if (coverAssetId) {
+        const coverAsset = await prisma.mediaAsset.findFirst({
+          where: { id: coverAssetId, brandId, mimeType: { in: ['image/jpeg', 'image/png'] } },
+          select: { id: true },
+        })
+        if (!coverAsset) {
+          return { content: [{ type: 'text' as const, text: 'Error: coverAssetId must reference a JPEG or PNG image in this brand' }], isError: true }
         }
       }
 
@@ -1442,6 +1454,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           // scheduledAt intentionally NOT accepted from agent — use board_get_schedule_recommendation
           if (hashtags !== undefined) updateData.hashtags = hashtags
           if (mediaUrls !== undefined) updateData.mediaUrls = mediaUrls
+          if (coverAssetId !== undefined) updateData.coverAssetId = coverAssetId
           if (agentNote !== undefined) updateData.agentNote = agentNote || null
           if (creativeHooks !== undefined) updateData.creativeHooks = creativeHooks || null
 
@@ -1460,6 +1473,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
               accountId: accountId || null,
               scheduledAt: null, // Always null on save — set by board_get_schedule_recommendation
               mediaUrls: mediaUrls ?? [],
+              coverAssetId: coverAssetId ?? null,
               agentNote: agentNote ?? null,
               captionLang: captionLang || 'en',
               creativeHooks: creativeHooks ?? null,
@@ -1481,7 +1495,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
         return tx.contentDraft.findUniqueOrThrow({
           where: { id: savedId },
-          include: { account: { select: { id: true, platformId: true, handle: true, displayName: true } }, assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
+          include: { account: { select: { id: true, platformId: true, handle: true, displayName: true } }, coverAsset: true, assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } } },
         })
       })
 

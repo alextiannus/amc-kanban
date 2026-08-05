@@ -11,18 +11,20 @@ import {
 
 const POSTFAST_MEDIA_BASE = 'https://postfast-media-prod.s3.ap-southeast-1.amazonaws.com/'
 
+type DraftAsset = {
+  id: string
+  url: string
+  filename?: string | null
+  mimeType?: string | null
+  sizeBytes?: number | null
+  width?: number | null
+  height?: number | null
+  sourceType?: string | null
+  technicalMetadata?: unknown
+}
+
 type DraftAssetRef = {
-  asset?: {
-    id: string
-    url: string
-    filename?: string | null
-    mimeType?: string | null
-    sizeBytes?: number | null
-    width?: number | null
-    height?: number | null
-    sourceType?: string | null
-    technicalMetadata?: unknown
-  } | null
+  asset?: DraftAsset | null
 }
 
 function isTechnicalMetadata(value: unknown): value is MediaTechnicalMetadata {
@@ -117,6 +119,7 @@ export async function validateDraftMediaForPlatform(input: {
   platform: string
   mediaUrls?: string[] | null
   assetRefs?: DraftAssetRef[] | null
+  coverAsset?: DraftAsset | null
 }) {
   const media: Array<{
     filename?: string | null
@@ -178,6 +181,66 @@ export async function validateDraftMediaForPlatform(input: {
         filename: url,
         platform: input.platform,
       }))
+    }
+  }
+
+  const coverAsset = input.coverAsset
+  if (coverAsset?.url && !seen.has(coverAsset.url)) {
+    let coverMetadata = isTechnicalMetadata(coverAsset.technicalMetadata)
+      ? coverAsset.technicalMetadata
+      : null
+    if (!coverMetadata) {
+      try {
+        coverMetadata = await inspectStoredMedia(coverAsset)
+        await prisma.mediaAsset.update({
+          where: { id: coverAsset.id },
+          data: {
+            mimeType: coverMetadata.mimeType,
+            sizeBytes: coverMetadata.sizeBytes,
+            width: coverMetadata.width ?? null,
+            height: coverMetadata.height ?? null,
+            technicalMetadata: coverMetadata,
+          },
+        })
+        coverAsset.mimeType = coverMetadata.mimeType
+        coverAsset.sizeBytes = coverMetadata.sizeBytes
+        coverAsset.width = coverMetadata.width ?? null
+        coverAsset.height = coverMetadata.height ?? null
+        coverAsset.technicalMetadata = coverMetadata
+      } catch (error) {
+        issues.push(...issuesFromInspectionError(error, {
+          assetId: coverAsset.id,
+          filename: coverAsset.filename || 'cover',
+          platform: input.platform,
+        }))
+      }
+    }
+
+    if (coverMetadata) {
+      const hasVideo = media.some((item) => item.metadata.kind === 'video')
+      if (!hasVideo) {
+        media.unshift({ filename: coverAsset.filename, assetId: coverAsset.id, metadata: coverMetadata })
+      } else if (coverMetadata.kind !== 'image' || !['image/jpeg', 'image/png'].includes(coverMetadata.mimeType)) {
+        issues.push({
+          assetId: coverAsset.id,
+          filename: coverAsset.filename || 'cover',
+          platform: input.platform,
+          field: 'coverImage',
+          actual: coverMetadata.mimeType,
+          limit: 'image/jpeg or image/png',
+          message: '封面图必须为 JPEG 或 PNG 图片',
+        })
+      } else if (input.platform.toLowerCase() === 'instagram' && coverMetadata.sizeBytes > 8_000_000) {
+        issues.push({
+          assetId: coverAsset.id,
+          filename: coverAsset.filename || 'cover',
+          platform: input.platform,
+          field: 'sizeBytes',
+          actual: coverMetadata.sizeBytes,
+          limit: 8_000_000,
+          message: 'Instagram Reel 封面图不能超过 8 MB',
+        })
+      }
     }
   }
 

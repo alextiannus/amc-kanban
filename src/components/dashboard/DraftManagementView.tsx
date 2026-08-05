@@ -64,6 +64,13 @@ type DraftItem = {
   caption: string
   hashtags: string[]
   mediaUrls: string[]
+  coverAssetId?: string | null
+  coverAsset?: {
+    id: string
+    filename?: string | null
+    url?: string | null
+    mimeType: string
+  } | null
   scheduledAt?: string | null
   platformPostId?: string | null
   publishedAt?: string | null
@@ -210,6 +217,14 @@ function accountInitial(draft: DraftItem) {
 
 function mediaForDraft(draft: DraftItem): DraftMediaItem[] {
   const mediaByUrl = new Map<string, DraftMediaItem>()
+
+  if (draft.coverAsset?.url) {
+    mediaByUrl.set(draft.coverAsset.url, {
+      url: draft.coverAsset.url,
+      assetId: draft.coverAsset.id,
+      mimeType: draft.coverAsset.mimeType,
+    })
+  }
 
   for (const url of draft.mediaUrls) {
     if (url) mediaByUrl.set(url, { url })

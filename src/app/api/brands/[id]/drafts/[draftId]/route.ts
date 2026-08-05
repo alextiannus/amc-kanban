@@ -14,6 +14,8 @@ const DRAFT_SELECT = {
   caption: true,
   captionLang: true,
   mediaUrls: true,
+  coverAssetId: true,
+  coverAsset: true,
   hashtags: true,
   scheduledAt: true,
   status: true,
@@ -113,6 +115,7 @@ export async function PATCH(request: Request, { params }: Params) {
       platformPostId: true,
       publishedAt: true,
       scheduledAt: true,   // needed to detect time changes
+      coverAssetId: true,
     },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -172,6 +175,21 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   const assetIds = Array.isArray(body.assetIds) ? normalizeStringArray(body.assetIds) : null
+  const hasCoverAssetUpdate = Object.prototype.hasOwnProperty.call(body, 'coverAssetId')
+  if (hasCoverAssetUpdate && body.coverAssetId !== null && typeof body.coverAssetId !== 'string') {
+    return NextResponse.json({ error: 'coverAssetId must be a string or null' }, { status: 400 })
+  }
+  const requestedCoverAssetId = typeof body.coverAssetId === 'string' ? body.coverAssetId.trim() : ''
+  const coverAsset = hasCoverAssetUpdate && requestedCoverAssetId
+    ? await prisma.mediaAsset.findFirst({
+        where: { id: requestedCoverAssetId, brandId, mimeType: { in: ['image/jpeg', 'image/png'] } },
+        select: { id: true, aiTags: true },
+      })
+    : null
+  if (hasCoverAssetUpdate && requestedCoverAssetId && !coverAsset) {
+    return NextResponse.json({ error: 'coverAssetId must reference a JPEG or PNG image in this brand' }, { status: 400 })
+  }
+  const coverAssetIdUpdate = hasCoverAssetUpdate ? (coverAsset?.id ?? null) : undefined
   const nextStatus = typeof body.status === 'string' ? body.status : undefined
 
   let platformPostIdUpdate: string | null | undefined = undefined
@@ -220,6 +238,7 @@ export async function PATCH(request: Request, { params }: Params) {
         captionLang: typeof body.captionLang === 'string' ? body.captionLang : undefined,
         accountId: typeof body.accountId === 'string' ? body.accountId : undefined,
         mediaUrls: Array.isArray(body.mediaUrls) ? normalizeStringArray(body.mediaUrls) : undefined,
+        coverAssetId: coverAssetIdUpdate,
         hashtags: Array.isArray(body.hashtags) ? normalizeStringArray(body.hashtags) : undefined,
         scheduledAt: typeof body.scheduledAt === 'string' ? (body.scheduledAt ? new Date(body.scheduledAt) : null) : undefined,
         status: nextStatus,
@@ -271,6 +290,21 @@ export async function PATCH(request: Request, { params }: Params) {
           })
         }
       }
+    }
+
+    if (
+      coverAsset &&
+      coverAsset.id !== existing.coverAssetId &&
+      !(assetIds ?? []).includes(coverAsset.id)
+    ) {
+      await tx.mediaAsset.update({
+        where: { id: coverAsset.id },
+        data: {
+          usedCount: { increment: 1 },
+          lastUsedAt: new Date(),
+          aiTags: coverAsset.aiTags.filter((tag: string) => tag !== '排期发布' && tag !== '草稿排期'),
+        },
+      })
     }
 
     if (nextStatus === 'pending_review') {

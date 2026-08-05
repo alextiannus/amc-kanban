@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { postfastDeletePost, postfastPublish } from '@/lib/integrations/postfast'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
-import { buildPostfastMediaItems } from '@/lib/publishMedia'
+import { buildPostfastCoverImage, buildPostfastMediaItems } from '@/lib/publishMedia'
 import { validateDraftMediaForPlatform } from '@/lib/publishMediaValidation'
 import { shouldValidateMediaForDraftDelivery } from '@/lib/mediaPublishPolicy'
 import {
@@ -92,6 +92,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     include: {
       account: { select: { id: true, platformId: true, handle: true, displayName: true } },
       assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
+      coverAsset: true,
     },
   })
   if (!draft) return { ok: false as const, status: 404, error: 'Draft not found' }
@@ -151,6 +152,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
       platform: platformId,
       mediaUrls: draft.mediaUrls,
       assetRefs: draft.assetRefs,
+      coverAsset: draft.coverAsset,
     })
     const blockingIssues = blockingMediaIssues(mediaIssues)
     validationWarnings = mediaValidationWarnings(mediaIssues)
@@ -250,6 +252,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         include: {
           account: { select: { id: true, platformId: true, handle: true, displayName: true } },
           assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
+          coverAsset: true,
         },
       })
 
@@ -314,6 +317,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
       include: {
         account: { select: { id: true, platformId: true, handle: true, displayName: true } },
         assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
+        coverAsset: true,
       },
     })
 
@@ -391,6 +395,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     mediaUrls: draft.mediaUrls,
     assetRefs: draft.assetRefs,
   })
+  const coverImage = buildPostfastCoverImage(draft.coverAsset)
 
   console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, immediatePublish: ${input.immediatePublish}, draftId: ${draft.id}`)
   const result = await postfastPublish({
@@ -399,6 +404,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     accountId: draft.accountId || undefined,
     caption: draft.caption,
     mediaItems,
+    coverImage,
     hashtags: draft.hashtags,
     scheduledAt: resolvedScheduledAt?.toISOString(),
   })
@@ -438,6 +444,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     include: {
       account: { select: { id: true, platformId: true, handle: true, displayName: true } },
       assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
+      coverAsset: true,
     },
   })
 

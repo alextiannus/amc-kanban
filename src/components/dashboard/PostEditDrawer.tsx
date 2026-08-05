@@ -140,6 +140,15 @@ interface DraftItem {
   caption: string
   hashtags: string[]
   mediaUrls: string[]
+  coverAssetId?: string | null
+  coverAsset?: {
+    id: string
+    filename?: string | null
+    url: string
+    mimeType: string
+    aiCategory?: string | null
+    sizeBytes?: number | null
+  } | null
   scheduledAt?: string | null
   platformPostId?: string | null
   publishedAt?: string | null
@@ -256,6 +265,8 @@ export default function PostEditDrawer({
   const [viralScriptChoiceTouched, setViralScriptChoiceTouched] = useState(false)
   const [viralScriptExperimentArm, setViralScriptExperimentArm] = useState<'automatic' | 'treatment' | 'control'>('automatic')
   const [attachedMedia, setAttachedMedia] = useState<Array<{ id: string; type: 'asset' | 'url'; url: string }>>([])
+  const [coverAssetId, setCoverAssetId] = useState<string | null>(null)
+  const [coverAssetFilter, setCoverAssetFilter] = useState<'cover' | 'all'>('cover')
   
   // Loading & Action states
   const [loading, setLoading] = useState(false)
@@ -284,7 +295,7 @@ export default function PostEditDrawer({
   const [generatedHooks, setGeneratedHooks] = useState<Array<{ visual: string; overlay: string; audio: string }>>([])
 
   // Media assets states
-  const [brandAssets, setBrandAssets] = useState<Array<{ id: string; url: string; filename?: string | null; mimeType: string; usedCount?: number; createdAt?: string | Date }>>([])
+  const [brandAssets, setBrandAssets] = useState<Array<{ id: string; url: string; filename?: string | null; mimeType: string; aiCategory?: string | null; sizeBytes?: number | null; usedCount?: number; createdAt?: string | Date }>>([])
   const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all'>('unused')
   const [mediaUrlsInput, setMediaUrlsInput] = useState('')
   const [newUrlInput, setNewUrlInput] = useState('')
@@ -326,6 +337,40 @@ export default function PostEditDrawer({
       return true
     })
   }, [brandAssets, assetTypeFilter])
+
+  const coverAssets = useMemo(() => {
+    return [...brandAssets]
+      .filter((asset) => ['image/jpeg', 'image/png'].includes((asset.mimeType || '').toLowerCase()))
+      .filter((asset) => coverAssetFilter === 'all' || asset.aiCategory === '封面图')
+      .sort((a, b) => {
+        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        return tB - tA
+      })
+  }, [brandAssets, coverAssetFilter])
+
+  const selectedCoverAsset = useMemo(() => {
+    if (!coverAssetId) return null
+    return brandAssets.find((asset) => asset.id === coverAssetId)
+      || (selectedDraft?.coverAsset?.id === coverAssetId ? selectedDraft.coverAsset : null)
+  }, [brandAssets, coverAssetId, selectedDraft?.coverAsset])
+
+  const previewAttachedMedia = useMemo(() => {
+    if (!selectedCoverAsset?.url) return attachedMedia
+    const withoutDuplicate = attachedMedia.filter((item) => item.id !== selectedCoverAsset.id && item.url !== selectedCoverAsset.url)
+    return [{ id: selectedCoverAsset.id, type: 'asset' as const, url: selectedCoverAsset.url }, ...withoutDuplicate]
+  }, [attachedMedia, selectedCoverAsset])
+
+  const coverCompatibilityText = useMemo(() => {
+    const isSingleVideo = attachedMedia.length === 1 && (() => {
+      const media = attachedMedia[0]
+      if (isVideoUrl(media.url)) return true
+      return media.type === 'asset' && brandAssets.find((asset) => asset.id === media.id)?.mimeType.startsWith('video/')
+    })()
+    if (!isSingleVideo) return '图片帖发布时，封面将作为第一张图片。'
+
+    return 'Instagram/Facebook 单视频将按 Reel 发布并使用自定义封面；其他平台会保留封面记录，但发布时不发送自定义封面。'
+  }, [attachedMedia, brandAssets])
 
   // Load configuration & accounts
   useEffect(() => {
@@ -415,6 +460,8 @@ export default function PostEditDrawer({
       setViralScriptExperimentArm('automatic')
       // Pre-fill media if coming from asset library
       setAttachedMedia(initialAttachedMedia ?? [])
+      setCoverAssetId(null)
+      setCoverAssetFilter('cover')
       setMediaUrlsInput('')
       setNewUrlInput('')
       setCommentsList([])
@@ -486,6 +533,8 @@ export default function PostEditDrawer({
           })
         }
         setAttachedMedia(initialMedia)
+        setCoverAssetId(draft.coverAssetId || draft.coverAsset?.id || null)
+        setCoverAssetFilter('cover')
         setMediaUrlsInput((draft.mediaUrls || []).join(', '))
         setReviewNote('')
 
@@ -631,6 +680,7 @@ export default function PostEditDrawer({
             status: nextStatus || selectedDraft.status || 'draft',
             mediaUrls,
             assetIds: selectedAssetIds,
+            coverAssetId,
             creativeHooks: creativeHooks.trim(),
             ...viralScriptPayloadForAccount(activeAccountIds[0]),
           }),
@@ -656,6 +706,7 @@ export default function PostEditDrawer({
                   status: nextStatus || 'draft',
                   mediaUrls,
                   assetIds: selectedAssetIds,
+                  coverAssetId,
                   creativeHooks: creativeHooks.trim(),
                   ...viralScriptPayloadForAccount(accId),
                 }),
@@ -685,6 +736,7 @@ export default function PostEditDrawer({
                 status: nextStatus || 'draft',
                 mediaUrls,
                 assetIds: selectedAssetIds,
+                coverAssetId,
                 creativeHooks: creativeHooks.trim(),
                 ...viralScriptPayloadForAccount(accId),
               }),
@@ -959,6 +1011,7 @@ export default function PostEditDrawer({
           hashtags: parseTags(hashtags),
           scheduledAt: targetDateISO,
           assetIds: selectedAssetIds,
+          coverAssetId,
           mediaUrls: attachedMedia.filter(m => m.type === 'url').map(m => m.url),
         })
       })
@@ -1000,6 +1053,7 @@ export default function PostEditDrawer({
           caption,
           hashtags: parseTags(hashtags),
           assetIds: selectedAssetIds,
+          coverAssetId,
           mediaUrls: attachedMedia.filter(m => m.type === 'url').map(m => m.url),
         })
       })
@@ -1038,6 +1092,7 @@ export default function PostEditDrawer({
           hashtags: parseTags(hashtags),
           scheduledAt: fromDateTimeLocal(scheduledAt),
           assetIds: selectedAssetIds,
+          coverAssetId,
           mediaUrls: attachedMedia.filter(m => m.type === 'url').map(m => m.url),
         })
       })
@@ -1077,6 +1132,7 @@ export default function PostEditDrawer({
           hashtags: parseTags(hashtags),
           scheduledAt: fromDateTimeLocal(scheduledAt),
           assetIds: selectedAssetIds,
+          coverAssetId,
           mediaUrls: attachedMedia.filter(m => m.type === 'url').map(m => m.url),
         })
       })
@@ -1562,6 +1618,88 @@ Return the output strictly in a valid JSON array format, containing:
                   />
                 </div>
               )}
+
+              {/* Optional cover image */}
+              <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/10">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-800 dark:text-slate-200">封面图 <span className="text-xs font-semibold text-slate-400">（可选）</span></h4>
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{coverCompatibilityText}</p>
+                  </div>
+                  {selectedCoverAsset && !isPublished && (
+                    <button
+                      type="button"
+                      onClick={() => setCoverAssetId(null)}
+                      className="shrink-0 text-xs font-bold text-rose-600 hover:underline dark:text-rose-400"
+                    >
+                      移除封面
+                    </button>
+                  )}
+                </div>
+
+                {selectedCoverAsset ? (
+                  <div className="flex items-center gap-3 rounded-lg border border-indigo-200 bg-white p-2 dark:border-indigo-800 dark:bg-slate-900">
+                    <img src={selectedCoverAsset.url} alt="草稿封面" className="h-20 w-20 rounded-md object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-bold text-slate-700 dark:text-slate-200">{selectedCoverAsset.filename || '封面图'}</p>
+                      <p className="mt-1 text-[10px] text-indigo-600 dark:text-indigo-400">已选为草稿封面</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex h-20 items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white/70 text-xs text-slate-400 dark:border-slate-700 dark:bg-slate-900/50">
+                    <ImageIcon className="h-5 w-5" /> 暂未选择封面
+                  </div>
+                )}
+
+                {!isPublished && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase text-slate-400">从品牌素材库选择</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCoverAssetFilter('cover')}
+                          className={`rounded px-2 py-0.5 text-[9px] font-black ${coverAssetFilter === 'cover' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'text-slate-400'}`}
+                        >
+                          封面图库
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCoverAssetFilter('all')}
+                          className={`rounded px-2 py-0.5 text-[9px] font-black ${coverAssetFilter === 'all' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'text-slate-400'}`}
+                        >
+                          全部图片
+                        </button>
+                      </div>
+                    </div>
+                    {coverAssets.length === 0 ? (
+                      <p className="py-2 text-center text-[11px] italic text-slate-400">暂无可用 JPEG/PNG 图片，请先在素材库上传</p>
+                    ) : (
+                      <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                        {coverAssets.slice(0, 12).map((asset) => {
+                          const selected = coverAssetId === asset.id
+                          return (
+                            <button
+                              key={asset.id}
+                              type="button"
+                              onClick={() => setCoverAssetId(selected ? null : asset.id)}
+                              className={`relative aspect-square overflow-hidden rounded-md border bg-slate-100 transition-all hover:scale-[1.02] ${selected ? 'border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-900' : 'border-slate-200 dark:border-slate-800'}`}
+                              title={asset.filename || '封面图'}
+                            >
+                              <img src={asset.url} alt="" className="h-full w-full object-cover" />
+                              {selected && (
+                                <span className="absolute inset-0 flex items-center justify-center bg-indigo-500/15">
+                                  <span className="rounded-full bg-indigo-600 p-1 text-white"><Check className="h-3 w-3 stroke-[3px]" /></span>
+                                </span>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Media Section */}
               <div className="space-y-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20">
@@ -2137,7 +2275,7 @@ Return the output strictly in a valid JSON array format, containing:
         draftWarnings={draftWarnings}
         isAiGenerating={isAiGenerating}
         saving={saving}
-        attachedMedia={attachedMedia}
+        attachedMedia={previewAttachedMedia}
         onCancel={() => {
           setPreviewModalOpen(false)
           setCreatedDrafts(null)

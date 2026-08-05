@@ -224,6 +224,7 @@ export interface PostFastPublishInput {
   platform: string
   caption: string
   mediaItems?: PostFastMediaInput[] // preferred: preserves MIME/type metadata
+  coverImage?: PostFastMediaInput    // optional custom cover; image posts use it as the first media item
   mediaStorageKeys?: string[]   // keys from signed upload (preferred)
   mediaUrls?: string[]          // public URLs (fallback)
   hashtags?: string[]
@@ -772,6 +773,7 @@ async function preparePostfastMedia(
   publishDeadlineAt: number,
 ): Promise<{
   items: PreparedPostFastMedia[]
+  cover?: PreparedPostFastMedia
   warnings: MediaValidationIssue[]
 }> {
   const startedAt = Date.now()
@@ -794,7 +796,7 @@ async function preparePostfastMedia(
     unique.push(candidate)
   }
 
-  const prepared = await mapWithConcurrency(unique, 3, async (item) => {
+  let prepared = await mapWithConcurrency(unique, 3, async (item) => {
     if (item.metadata) return { ...item, metadata: item.metadata }
     const storageKey = postfastStorageKey(item)
     const filename = item.filename || (storageKey || item.url || 'unknown').split('/').pop() || 'unknown'
@@ -810,6 +812,58 @@ async function preparePostfastMedia(
       metadata,
     }
   })
+  const hasVideo = prepared.some((item) => item.metadata.kind === 'video')
+  let preparedCover: PreparedPostFastMedia | undefined
+  if (input.coverImage) {
+    const coverStorageKey = postfastStorageKey(input.coverImage)
+    const coverFilename = input.coverImage.filename || (coverStorageKey || input.coverImage.url || 'cover.jpg').split('/').pop() || 'cover.jpg'
+    const coverMetadata = input.coverImage.metadata || await inspectPostfastMediaSource(
+      input.coverImage,
+      coverStorageKey,
+      coverFilename,
+      preflightDeadlineAt,
+    )
+    if (coverMetadata.kind !== 'image' || !['image/jpeg', 'image/png'].includes(coverMetadata.mimeType)) {
+      throw { issues: [{
+        assetId: input.coverImage.assetId,
+        filename: coverFilename,
+        platform: normalizePlatform(input.platform),
+        field: 'coverImage',
+        actual: coverMetadata.mimeType,
+        limit: 'image/jpeg or image/png',
+        message: '封面图必须为 JPEG 或 PNG 图片',
+      }] }
+    }
+    const normalizedPlatform = normalizePlatform(input.platform)
+    if (hasVideo && normalizedPlatform === 'instagram' && coverMetadata.sizeBytes > 8_000_000) {
+      throw { issues: [{
+        assetId: input.coverImage.assetId,
+        filename: coverFilename,
+        platform: normalizedPlatform,
+        field: 'sizeBytes',
+        actual: coverMetadata.sizeBytes,
+        limit: 8_000_000,
+        message: 'Instagram Reel 封面图不能超过 8 MB',
+      }] }
+    }
+    preparedCover = {
+      ...input.coverImage,
+      storageKey: coverStorageKey || undefined,
+      filename: coverFilename,
+      mimeType: coverMetadata.mimeType,
+      metadata: coverMetadata,
+    }
+  }
+
+  if (preparedCover && !hasVideo) {
+    const coverIdentity = postfastStorageKey(preparedCover) || preparedCover.url || ''
+    prepared = [
+      preparedCover,
+      ...prepared.filter((item) => (postfastStorageKey(item) || item.url || '') !== coverIdentity),
+    ]
+    preparedCover = undefined
+  }
+
   const issues = validatePlatformMedia(
     normalizePlatform(input.platform),
     prepared.map((item) => ({
@@ -820,6 +874,24 @@ async function preparePostfastMedia(
   )
   const blockingIssues = blockingMediaIssues(issues)
   const warnings = mediaValidationWarnings(issues)
+  const normalizedPlatform = normalizePlatform(input.platform)
+  if (
+    preparedCover &&
+    prepared.length === 1 &&
+    prepared[0].metadata.kind === 'video' &&
+    !['instagram', 'facebook'].includes(normalizedPlatform)
+  ) {
+    warnings.push({
+      assetId: preparedCover.assetId,
+      filename: preparedCover.filename || 'cover',
+      platform: normalizedPlatform,
+      severity: 'warning',
+      field: 'coverImage',
+      actual: 'custom image',
+      limit: `not supported by ${normalizedPlatform || 'this platform'}`,
+      message: `${normalizedPlatform || '当前平台'} 不支持自定义图片封面，本次将发布视频本身并保留 AMC 封面记录`,
+    })
+  }
   if (blockingIssues.length > 0) {
     console.warn('[postfast-media-preflight] rejected', {
       platform: normalizePlatform(input.platform),
@@ -834,7 +906,7 @@ async function preparePostfastMedia(
     warningFields: Array.from(new Set(warnings.map((warning) => warning.field))),
     elapsedMs: Date.now() - startedAt,
   })
-  return { items: prepared, warnings }
+  return { items: prepared, cover: preparedCover, warnings }
 }
 
 /**
@@ -860,10 +932,12 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   // Media preflight is intentionally first: no account lookup, upload, or PostFast post
   // creation may happen before every source has been inspected and platform-validated.
   let preparedMediaItems: PreparedPostFastMedia[]
+  let preparedCoverImage: PreparedPostFastMedia | undefined
   let mediaWarnings: MediaValidationIssue[] = []
   try {
     const prepared = await preparePostfastMedia(input, publishDeadlineAt)
     preparedMediaItems = prepared.items
+    preparedCoverImage = prepared.cover
     mediaWarnings = prepared.warnings
   } catch (error) {
     const response = mediaValidationResponse(error)
@@ -942,6 +1016,7 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     metadata?: MediaTechnicalMetadata
   }> = []
   const seenMediaKeys = new Set<string>()
+  let resolvedCoverImageKey: string | undefined
   const pushResolvedMedia = (media: {
     key: string
     mimeType?: string
@@ -1002,6 +1077,30 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     }
   }
 
+  const normalizedPublishPlatform = normalizePlatform(input.platform)
+  const canUseCustomVideoCover = preparedMediaItems.length === 1 &&
+    preparedMediaItems[0].metadata.kind === 'video' &&
+    ['instagram', 'facebook'].includes(normalizedPublishPlatform)
+  if (preparedCoverImage && canUseCustomVideoCover) {
+    try {
+      const storageKey = postfastStorageKey(preparedCoverImage)
+      if (storageKey) {
+        resolvedCoverImageKey = storageKey
+      } else if (preparedCoverImage.url) {
+        const uploaded = await uploadPublicUrlToPostfast(
+          input.apiKey,
+          preparedCoverImage.url,
+          preparedCoverImage.mimeType,
+          preparedCoverImage.metadata,
+          publishDeadlineAt,
+        )
+        resolvedCoverImageKey = uploaded.storageKey
+      }
+    } catch (e: unknown) {
+      return { success: false, error: e instanceof Error ? `封面图上传失败: ${e.message}` : `封面图上传失败: ${String(e)}` }
+    }
+  }
+
   // 3. Construct post body for PostFast
   let content = input.caption.trim()
   if (input.hashtags && input.hashtags.length > 0) {
@@ -1026,6 +1125,11 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     ) === 'VIDEO'
   ) {
     requestControls.instagramPublishType = 'REEL'
+  }
+  const isFacebookPost = normalizePlatform(input.platform) === 'facebook' ||
+    normalizePlatform(matchedAccount.platformId) === 'facebook'
+  if (isFacebookPost && resolvedCoverImageKey && resolvedMediaItems.length === 1) {
+    requestControls.facebookContentType = 'REEL'
   }
 
   if (isGoogleBusinessPost) {
@@ -1053,11 +1157,15 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   }
 
   if (resolvedMediaItems.length > 0) {
-    post.mediaItems = resolvedMediaItems.map((item, index) => ({
-      key: item.key,
-      type: detectMediaType(item.key, item.mimeType, item.type),
-      sortOrder: index,
-    }))
+    post.mediaItems = resolvedMediaItems.map((item, index) => {
+      const type = detectMediaType(item.key, item.mimeType, item.type)
+      return {
+        key: item.key,
+        type,
+        sortOrder: index,
+        ...(index === 0 && type === 'VIDEO' && resolvedCoverImageKey ? { coverImageKey: resolvedCoverImageKey } : {}),
+      }
+    })
   }
 
   // PostFast requires the post(s) wrapped in a "posts" array (max 15 per request)

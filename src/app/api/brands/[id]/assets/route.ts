@@ -373,7 +373,7 @@ export async function GET(request: Request, { params }: Params) {
   })
   const dbFolderNames = dbFolders.map((f: any) => f.name)
   const assetFolderNames = assets.map((asset: any) => asset.aiCategory || '素材库')
-  const baseFolders = dbFolderNames.length > 0 ? dbFolderNames : ['产品', '环境', '活动']
+  const baseFolders = dbFolderNames.length > 0 ? dbFolderNames : ['产品', '环境', '活动', '封面图']
   const folders = Array.from(new Set(['素材库', ...baseFolders, ...assetFolderNames]))
   const mappedAssets = assets.map((asset: any) => ({
     ...asset,

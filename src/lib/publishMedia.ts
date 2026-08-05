@@ -9,15 +9,17 @@ type MediaItem = {
   metadata?: MediaTechnicalMetadata
 }
 
+type AssetLike = {
+  url?: string | null
+  mimeType?: string | null
+  sourceType?: string | null
+  filename?: string | null
+  id?: string | null
+  technicalMetadata?: unknown
+}
+
 type AssetRefLike = {
-  asset?: {
-    url?: string | null
-    mimeType?: string | null
-    sourceType?: string | null
-    filename?: string | null
-    id?: string | null
-    technicalMetadata?: unknown
-  } | null
+  asset?: AssetLike | null
 }
 
 function normalizeMimeType(value?: string | null) {
@@ -96,4 +98,20 @@ export function buildPostfastMediaItems(input: {
   }
 
   return items
+}
+
+export function buildPostfastCoverImage(asset?: AssetLike | null): MediaItem | undefined {
+  if (!asset?.url) return undefined
+  const storageKey = asset.sourceType === 'postfast'
+    ? (extractPostfastStorageKey(asset.url) || asset.url)
+    : ''
+  return {
+    ...(storageKey ? { storageKey } : { url: asset.url }),
+    mimeType: asset.mimeType ?? undefined,
+    filename: asset.filename ?? undefined,
+    assetId: asset.id ?? undefined,
+    metadata: asset.technicalMetadata && typeof asset.technicalMetadata === 'object'
+      ? asset.technicalMetadata as MediaTechnicalMetadata
+      : undefined,
+  }
 }

@@ -169,6 +169,23 @@ assert(genericIssues.some((issue) => issue.field === 'sizeBytes'))
 assert.equal(blockingMediaIssues(genericIssues).length, 0)
 assert.equal(mediaValidationWarnings(genericIssues).length, genericIssues.length)
 
+const validGoogleImage = {
+  ...failingCashmereImage,
+  sizeBytes: 1_000_000,
+  width: 1_200,
+  height: 675,
+}
+assert.deepEqual(validatePlatformMedia('google', [{ filename: 'cover.jpg', metadata: validGoogleImage }]), [])
+const googleMultipleImageIssues = validatePlatformMedia('google_business', [
+  { filename: 'cover.jpg', metadata: validGoogleImage },
+  { filename: 'content.jpg', metadata: validGoogleImage },
+])
+assert(googleMultipleImageIssues.some((issue) => issue.field === 'mediaCount'))
+assert(blockingMediaIssues(googleMultipleImageIssues).length > 0)
+const googleVideoIssues = validatePlatformMedia('google', [{ filename: 'video.mp4', metadata: validInstagramReel }])
+assert(googleVideoIssues.some((issue) => issue.field === 'mediaType'))
+assert(blockingMediaIssues(googleVideoIssues).length > 0)
+
 const platformImageFormats: Array<[string, string]> = [
   ['instagram', 'image/png'],
   ['instagram', 'image/webp'],

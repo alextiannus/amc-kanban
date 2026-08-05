@@ -5,7 +5,7 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
-const DEFAULT_FOLDERS = ['产品', '环境', '活动']
+const DEFAULT_FOLDERS = ['产品', '环境', '活动', '封面图']
 
 async function checkAuth(request: Request, brandId: string) {
   const session = await getSession()
@@ -50,20 +50,15 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   try {
-    let folders = await prisma.brandFolder.findMany({
+    await prisma.brandFolder.createMany({
+      data: DEFAULT_FOLDERS.map((name) => ({ brandId, name })),
+      skipDuplicates: true,
+    })
+
+    const folders = await prisma.brandFolder.findMany({
       where: { brandId },
       orderBy: { createdAt: 'asc' },
     })
-
-    if (folders.length === 0) {
-      // Auto-seed defaults
-      const data = DEFAULT_FOLDERS.map((name) => ({ brandId, name }))
-      await prisma.brandFolder.createMany({ data })
-      folders = await prisma.brandFolder.findMany({
-        where: { brandId },
-        orderBy: { createdAt: 'asc' },
-      })
-    }
 
     return NextResponse.json({ folders })
   } catch (error) {

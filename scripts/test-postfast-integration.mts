@@ -69,6 +69,13 @@ async function startMockPostFast() {
           displayName: 'AMC Google Business',
           isConnected: true,
         },
+        {
+          id: 'pf_acc_facebook',
+          platform: 'FACEBOOK',
+          platformUsername: 'amc_store_fb',
+          displayName: 'AMC Store Facebook',
+          isConnected: true,
+        },
       ])
     }
 
@@ -110,6 +117,19 @@ async function startMockPostFast() {
 
     if (method === 'POST' && url === '/social-posts') {
       const post = body?.posts?.[0]
+      if (post.content === 'Facebook custom cover') {
+        assert.equal(post.socialMediaId, 'pf_acc_facebook')
+        assert.equal(body.controls.facebookContentType, 'REEL')
+        assert.equal(post.mediaItems[0].key, 'video/reel-key')
+        assert.equal(post.mediaItems[0].coverImageKey, 'image/cover.jpg')
+        return json(res, 201, { postIds: ['pf_post_facebook_cover_001'] })
+      }
+      if (post.content === 'TikTok unsupported cover') {
+        assert.equal(post.socialMediaId, 'pf_acc_video')
+        assert.equal(post.mediaItems[0].key, 'video/reel-key')
+        assert.equal(post.mediaItems[0].coverImageKey, undefined)
+        return json(res, 201, { postIds: ['pf_post_tiktok_cover_001'] })
+      }
       if (post.socialMediaId === 'pf_acc_google') {
         assert.equal(post.content, 'Google map update')
         assert.match(post.scheduledAt, /^\d{4}-\d{2}-\d{2}T/)
@@ -129,6 +149,19 @@ async function startMockPostFast() {
       }
 
       assert.equal(post.socialMediaId, 'pf_acc_instagram')
+      if (post.content === 'Instagram custom cover') {
+        assert.equal(body.controls.instagramPublishType, 'REEL')
+        assert.equal(post.mediaItems[0].key, 'video/reel-key')
+        assert.equal(post.mediaItems[0].coverImageKey, 'image/cover.jpg')
+        return json(res, 201, { postIds: ['pf_post_instagram_cover_001'] })
+      }
+      if (post.content === 'Image cover first') {
+        assert.equal(body.controls?.instagramPublishType, undefined)
+        assert.equal(post.mediaItems.length, 2)
+        assert.equal(post.mediaItems[0].key, 'image/cover.jpg')
+        assert.equal(post.mediaItems[1].key, 'image/content.jpg')
+        return json(res, 201, { postIds: ['pf_post_image_cover_001'] })
+      }
       if (post.content === 'Relaxed image warning') {
         assert.equal(body.controls?.instagramPublishType, undefined)
         assert.equal(post.mediaItems[0].key, 'image/oversized-photo.jpg')
@@ -259,7 +292,7 @@ async function main() {
     }
     const accounts = await postfast.postfastFetchAccounts(API_KEY)
     assert.equal(accounts.success, true)
-    assert.equal(accounts.accounts.length, 3)
+    assert.equal(accounts.accounts.length, 4)
     assert.equal(accounts.accounts[0].platformId, 'instagram')
 
     const uploadSlots = await postfast.postfastGetSignedUploadUrls(API_KEY, [
@@ -304,6 +337,75 @@ async function main() {
     assert.deepEqual(duplicateVideoMedia[0].metadata, validReelMetadata)
 
     const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+    const validCoverMetadata = {
+      kind: 'image' as const,
+      mimeType: 'image/jpeg',
+      sizeBytes: 500_000,
+      width: 1_080,
+      height: 1_350,
+      format: 'jpeg',
+    }
+
+    const builtCover = publishMedia.buildPostfastCoverImage({
+      id: 'asset-cover-1',
+      url: 'image/cover.jpg',
+      mimeType: 'image/jpeg',
+      sourceType: 'postfast',
+      filename: 'cover.jpg',
+      technicalMetadata: validCoverMetadata,
+    })
+    assert.equal(builtCover?.storageKey, 'image/cover.jpg')
+    assert.equal(builtCover?.assetId, 'asset-cover-1')
+
+    const instagramCoverPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      caption: 'Instagram custom cover',
+      mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
+      coverImage: { storageKey: 'image/cover.jpg', metadata: validCoverMetadata },
+      scheduledAt,
+    })
+    assert.equal(instagramCoverPublish.success, true)
+    assert.equal(instagramCoverPublish.postId, 'pf_post_instagram_cover_001')
+
+    const facebookCoverPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'facebook',
+      accountId: 'pf_acc_facebook',
+      caption: 'Facebook custom cover',
+      mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
+      coverImage: { storageKey: 'image/cover.jpg', metadata: validCoverMetadata },
+      scheduledAt,
+    })
+    assert.equal(facebookCoverPublish.success, true)
+    assert.equal(facebookCoverPublish.postId, 'pf_post_facebook_cover_001')
+
+    const tiktokCoverPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'tiktok',
+      accountId: 'pf_acc_video',
+      caption: 'TikTok unsupported cover',
+      mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
+      coverImage: { storageKey: 'image/cover.jpg', metadata: validCoverMetadata },
+      scheduledAt,
+    })
+    assert.equal(tiktokCoverPublish.success, true)
+    assert.equal(tiktokCoverPublish.postId, 'pf_post_tiktok_cover_001')
+    assert.ok(tiktokCoverPublish.warnings?.some((warning) => warning.field === 'coverImage'))
+
+    const imageCoverPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      caption: 'Image cover first',
+      mediaItems: [{ storageKey: 'image/content.jpg', metadata: validCoverMetadata }],
+      coverImage: { storageKey: 'image/cover.jpg', metadata: validCoverMetadata },
+      scheduledAt,
+    })
+    assert.equal(imageCoverPublish.success, true)
+    assert.equal(imageCoverPublish.postId, 'pf_post_image_cover_001')
+
     const publish = await postfast.postfastPublish({
       apiKey: API_KEY,
       platform: 'instagram',
