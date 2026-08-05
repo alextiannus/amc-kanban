@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canOwnBrand, canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -111,7 +111,13 @@ export async function PATCH(request: Request, { params }: Params) {
   const { id: brandId } = await params
 
   if (session?.user) {
-    if (!(await canOwnBrand(brandId, session.user.id))) {
+    const ok = await canSessionAccessBrandProject(
+      brandId,
+      session.user.id,
+      session.user.type ?? 'HUMAN',
+      session.user.role,
+    )
+    if (!ok) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
   } else {
