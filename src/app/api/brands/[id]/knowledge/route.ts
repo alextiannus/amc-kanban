@@ -130,69 +130,37 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const body = await request.json().catch(() => ({}))
 
-  // Validate and normalise publishingFreq before writing to DB.
-  // Prevents postsPerDay: 0 / negative / Infinity from causing 1/postsPerDay = Infinity
-  // in the scheduling algorithm.
-  function normalizePublishingFreq(raw: unknown): Record<string, unknown> | null {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-    const src = raw as Record<string, unknown>
-
-    const clampRate = (v: unknown): number | undefined => {
-      const n = typeof v === 'number' ? v : parseFloat(String(v))
-      if (!isFinite(n) || n <= 0) return undefined
-      return Math.min(Math.max(n, 0.5), 20) // 0.5–20 posts/day or posts/week
-    }
-    const clampHours = (arr: unknown): number[] | undefined => {
-      if (!Array.isArray(arr)) return undefined
-      const valid = arr
-        .map((h) => (typeof h === 'number' ? Math.round(h) : parseInt(String(h), 10)))
-        .filter((h) => isFinite(h) && h >= 0 && h <= 23)
-      return valid.length > 0 ? valid : undefined
-    }
-
-    const normalized: Record<string, unknown> = {}
-    const ppd = clampRate(src.postsPerDay)
-    if (ppd !== undefined) normalized.postsPerDay = ppd
-
-    if (src.platforms && typeof src.platforms === 'object' && !Array.isArray(src.platforms)) {
-      const platforms: Record<string, unknown> = {}
-      for (const [key, val] of Object.entries(src.platforms as Record<string, unknown>)) {
-        if (!val || typeof val !== 'object' || Array.isArray(val)) continue
-        const pCfg = val as Record<string, unknown>
-        const pNorm: Record<string, unknown> = {}
-        const pPpd = clampRate(pCfg.postsPerDay)
-        const pPpw = clampRate(pCfg.postsPerWeek)
-        const pHrs = clampHours(pCfg.preferredHours)
-        if (pPpd !== undefined) pNorm.postsPerDay = pPpd
-        if (pPpw !== undefined) pNorm.postsPerWeek = pPpw
-        if (pHrs !== undefined) pNorm.preferredHours = pHrs
-        if (Object.keys(pNorm).length > 0) platforms[key] = pNorm
-      }
-      if (Object.keys(platforms).length > 0) normalized.platforms = platforms
-    }
-
-    return Object.keys(normalized).length > 0 ? normalized : null
+  const identityKeys = [
+    'brandTone',
+    'audienceAssumptions',
+    'productAssumptions',
+    'promoPlan',
+    'publishingFreq',
+  ]
+  const attemptedIdentityKeys = identityKeys.filter((key) => Object.prototype.hasOwnProperty.call(body, key))
+  if (attemptedIdentityKeys.length) {
+    return NextResponse.json(
+      {
+        error: '品牌定位字段请使用 /api/brands/:id/identity 逐字段保存',
+        fields: attemptedIdentityKeys,
+      },
+      { status: 409 }
+    )
   }
 
   const {
-    // Section 1
-    brandTone, slangDict, negPrompts, voiceId,
-    audienceAssumptions, productAssumptions,
+    // Section 1 (identity fields use /identity)
+    slangDict, negPrompts, voiceId,
     // Section 2
     businessHours, reservationUrl, orderingUrl, deliveryUrls, stores,
     // Section 3
     market, district, competitors, menuItems,
-    // Section 4
-    promoPlan, publishingFreq,
   } = body
 
   const updateData: any = {}
-  if (brandTone !== undefined) updateData.brandTone = brandTone
   if (slangDict !== undefined) updateData.slangDict = slangDict
   if (negPrompts !== undefined) updateData.negPrompts = negPrompts
   if (voiceId !== undefined) updateData.voiceId = voiceId
-  if (audienceAssumptions !== undefined) updateData.audienceAssumptions = audienceAssumptions
-  if (productAssumptions !== undefined) updateData.productAssumptions = productAssumptions
   if (businessHours !== undefined) updateData.businessHours = businessHours
   if (reservationUrl !== undefined) updateData.reservationUrl = reservationUrl
   if (orderingUrl !== undefined) updateData.orderingUrl = orderingUrl
@@ -202,31 +170,16 @@ export async function PATCH(request: Request, { params }: Params) {
   if (district !== undefined) updateData.district = district
   if (competitors !== undefined) updateData.competitors = competitors
   if (menuItems !== undefined) updateData.menuItems = menuItems
-  if (promoPlan !== undefined) updateData.promoPlan = promoPlan
-  if (publishingFreq !== undefined) {
-    const normalized = normalizePublishingFreq(publishingFreq)
-    // Only reject if caller explicitly sent an unparseable non-null value
-    if (publishingFreq !== null && normalized === null) {
-      return NextResponse.json(
-        { error: 'publishingFreq 格式无效：postsPerDay 必须为 0.5–20 之间的正数' },
-        { status: 400 }
-      )
-    }
-    updateData.publishingFreq = normalized
-  }
 
   const knowledge = await prisma.brandKnowledge.upsert({
     where: { brandId },
     update: updateData,
     create: {
       brandId,
-      brandTone: brandTone || '',
       slangDict: slangDict || {},
       negPrompts: negPrompts || [],
       menuItems: menuItems || [],
       voiceId: voiceId || '',
-      audienceAssumptions: audienceAssumptions || '',
-      productAssumptions: productAssumptions || '',
       businessHours: businessHours || null,
       reservationUrl: reservationUrl || '',
       orderingUrl: orderingUrl || '',
@@ -235,8 +188,6 @@ export async function PATCH(request: Request, { params }: Params) {
       market: market || '',
       district: district || '',
       competitors: competitors || [],
-      promoPlan: promoPlan || null,
-      publishingFreq: 'publishingFreq' in updateData ? updateData.publishingFreq : (publishingFreq || null),
     },
   })
 

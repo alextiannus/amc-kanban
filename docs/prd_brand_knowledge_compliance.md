@@ -26,6 +26,8 @@ Growth is the canonical merchant data and knowledge center. Merchant identity, c
 
 Kanban continues to own content-execution policy, including prohibited words, required campaign keywords, approval rules and draft validation. These rules are not merchant master data and therefore remain in Kanban. The existing Markdown/`ext.compliance` format is a compatibility representation for these execution rules only; it must not be used to create a second copy of Growth merchant facts.
 
+The Kanban brand-identity editor reads `brand.tone`, `audience.primary` and `brand.unique_selling_points` from published Growth knowledge. A brand writer may publish an immediate Growth revision through Kanban's authenticated BFF; Growth retains the superseded version and the forwarded actor audit. Kanban-local execution fields such as promotion focus, brand voice/image and publishing frequency remain partial, audited Kanban updates. Markdown profile editing is not an independent write path for these identity fields.
+
 ---
 
 ## 2. Technical Implementation Details

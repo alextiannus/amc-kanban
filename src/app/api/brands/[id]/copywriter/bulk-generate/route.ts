@@ -6,6 +6,7 @@ import { callLLM } from '@/lib/llmRouter'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 import { generateContentWithFallback } from '@/lib/amc-content/contentGenerationService'
 import { COPYWRITER_ROSTER, copywritersFromIds, platformAliases } from '@/lib/copywriters'
+import { resolveBrandIdentity } from '@/lib/brandIdentity'
 
 // Allow enough time for parallel LLM calls across all platforms
 export const maxDuration = 120
@@ -157,12 +158,19 @@ export async function POST(request: Request, { params }: Params) {
       accounts = accounts.filter((a: any) => allowed.includes(a.platformId.toLowerCase()))
     }
 
-    let brandToneText = ""
+    const identity = await resolveBrandIdentity(brandId)
+    const identityTone = identity?.fields.brandTone.value
+    const identityAudience = identity?.fields.targetAudience.value
+    const identitySellingPoints = identity?.fields.sellingPoints.value
+    let brandToneText = typeof identityTone === 'string' && identityTone ? `Brand Tone/Voice: ${identityTone}` : ""
+    const identityContextText = [
+      typeof identityAudience === 'string' && identityAudience ? `Target Audience: ${identityAudience}` : '',
+      Array.isArray(identitySellingPoints) && identitySellingPoints.length ? `Unique Selling Points: ${identitySellingPoints.join('; ')}` : '',
+    ].filter(Boolean).join('\n')
     let menuText = ""
     let slangText = ""
     if (brand.knowledge) {
       const k = brand.knowledge
-      if (k.brandTone) brandToneText = `Brand Tone/Voice: ${k.brandTone}`
       if (k.menuItems) {
         const menu = k.menuItems as any[]
         if (menu.length > 0) {
@@ -241,7 +249,7 @@ User Creative Idea/Theme: "${idea}"
 Number of attached images: ${mediaUrls ? mediaUrls.length : 0}
 ${mediaUrls && mediaUrls.length > 0 ? `Attached Image URLs: ${mediaUrls.join(", ")}` : ""}
 
-${brandToneText ? `${brandToneText}\n` : ""}
+${brandToneText ? `${brandToneText}\n` : ""}${identityContextText ? `${identityContextText}\n` : ""}
 ${menuText ? `${menuText}\n` : ""}
 ${slangText ? `${slangText}\n` : ""}
 ${brand.location ? `Location: ${brand.location}` : ""}

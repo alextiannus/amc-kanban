@@ -6,6 +6,7 @@ import { callGeminiChat, ChatTurn, COMPANION_TOOLS } from '@/lib/gemini-chat'
 import { submitDraftForDelivery } from '@/lib/draftSubmission'
 import { postfastDeletePost } from '@/lib/integrations/postfast'
 import { McpClientManager } from '@/lib/mcp/clientManager'
+import { resolveBrandIdentity } from '@/lib/brandIdentity'
 
 function safeEnqueue(controller: ReadableStreamDefaultController, data: Uint8Array) {
   try {
@@ -365,12 +366,13 @@ export async function POST(request: Request, { params }: Params) {
 
         // ── 并行加载品牌数据 + MCP 工具，节省 100-200ms 串行等待 ─────────────────
         const t0 = Date.now()
-        const [brand, extTools] = await Promise.all([
+        const [brand, extTools, identity] = await Promise.all([
           prisma.brand.findUnique({
             where: { id: brandId },
             include: { knowledge: true, companionSkills: { where: { isEnabled: true } } },
           }),
           McpClientManager.aggregateExternalTools(brandId),
+          resolveBrandIdentity(brandId),
         ])
         console.log(`[voice-chat] brand+MCP loaded in ${Date.now() - t0}ms`)
 
@@ -384,6 +386,9 @@ export async function POST(request: Request, { params }: Params) {
 
         // Build system prompt
         const k = brand.knowledge
+        const identityTone = identity?.fields.brandTone.value
+        const identityAudience = identity?.fields.targetAudience.value
+        const identitySellingPoints = identity?.fields.sellingPoints.value
         const menuText = k?.menuItems
           ? (isEnglish 
               ? `Menu / Products:\n${(k.menuItems as any[]).map((m) => `- ${m.name}: ${m.description ?? ''}`).join('\n')}`
@@ -424,7 +429,9 @@ export async function POST(request: Request, { params }: Params) {
           `You support the brand "${brand.name}" as a practical marketing operations teammate. Speak in English.`,
           `Brand Description: ${brand.description ?? 'A high-quality restaurant brand'}`,
           brand.location ? `Location: ${brand.location}` : '',
-          k?.brandTone ? `Brand Tone/Style: ${k.brandTone}` : '',
+          typeof identityTone === 'string' && identityTone ? `Brand Tone/Style: ${identityTone}` : '',
+          typeof identityAudience === 'string' && identityAudience ? `Target Audience: ${identityAudience}` : '',
+          Array.isArray(identitySellingPoints) && identitySellingPoints.length ? `Unique Selling Points: ${identitySellingPoints.join('; ')}` : '',
           menuText,
           slangText,
           draftContext,
@@ -448,7 +455,9 @@ export async function POST(request: Request, { params }: Params) {
           `你是品牌"${brand.name}"身边的运营搭档，用中文自然沟通；只有必要的专业词才用英文。`,
           `品牌简介：${brand.description ?? '优质餐厅品牌'}`,
           brand.location ? `位置：${brand.location}` : '',
-          k?.brandTone ? `品牌风格：${k.brandTone}` : '',
+          typeof identityTone === 'string' && identityTone ? `品牌风格：${identityTone}` : '',
+          typeof identityAudience === 'string' && identityAudience ? `目标客群：${identityAudience}` : '',
+          Array.isArray(identitySellingPoints) && identitySellingPoints.length ? `核心卖点：${identitySellingPoints.join('；')}` : '',
           menuText,
           slangText,
           draftContext,

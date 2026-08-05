@@ -1685,6 +1685,9 @@ Admin → AI 模型配置 页面：
 - 新建或导入品牌时，Kanban 使用自身品牌 ID 调用 Growth `POST /v1/internal/merchants/upsert`，获得并持久化稳定 `growthBrandKey`；Growth 不可用时允许 Kanban 业务创建成功，并进入可重试的未绑定状态。
 - 商家资料读取使用 `GET /v1/merchants/:brandKey/profile`；知识读取使用 `GET /v1/merchants/:brandKey/knowledge`。
 - 商家或内部人员提交的补充信息使用 `POST /v1/merchants/:brandKey/knowledge-candidates`，默认形成带来源的候选，不直接覆盖已发布事实。
+- Kanban 品牌资料页的“品牌定位与特征”使用统一字段接口：`brand.tone`、`audience.primary`、`brand.unique_selling_points` 读取 Growth 正式版本；运营区域、品牌 Voice、品牌形象、推广重点和发布频次仍属于 Kanban 工作区与内容执行配置。
+- 对该品牌拥有 `WRITE` 权限的 Kanban 用户可在定位区逐行编辑。Growth 所属字段通过受服务令牌保护的内部接口立即发布不可变新版本，旧版本转为 `superseded`；Kanban 所属字段局部更新并写入 `AuditLog`。只读成员只能查看。
+- Kanban 发送 Growth 即时发布请求时必须携带当前 `expected_version` 和可信操作者信息；版本冲突返回 `409`，不得静默覆盖。Growth 不可用时不得把本地兼容值冒充为 Growth 正式值，也不得写入第二份商家知识。
 - 下游系统通过 `POST /v1/internal/knowledge/search` 获取受控知识，通过 `POST /v1/internal/knowledge-usage` 回传实际使用记录。
 - Kanban 的订阅等业务变化通过 `POST /v1/internal/merchant-events` 发给 Growth。事件必须包含 `event_id`、`event_type`、`producer`、`brand_key`、`occurred_at` 和 `payload`，并按 `event_id` 幂等。
 

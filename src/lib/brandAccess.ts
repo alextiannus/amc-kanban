@@ -76,6 +76,15 @@ export async function canWriteBrandProject(
   return canSessionAccessBrand(brandId, userId, 'HUMAN', 'WRITE')
 }
 
+/** Session/API-key aware brand mutation check. */
+export async function canSessionWriteBrandProject(
+  brandId: string,
+  userId: string,
+  userType: string,
+): Promise<boolean> {
+  return canSessionAccessBrand(brandId, userId, userType as 'HUMAN' | 'AI_AGENT', 'WRITE')
+}
+
 /**
  * Session-aware brand read check.
  */

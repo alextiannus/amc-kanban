@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey, encrypt } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { resolveBrandIdentity } from '@/lib/brandIdentity'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -45,6 +46,11 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
     }
 
+    const identity = await resolveBrandIdentity(brandId)
+    const identityTone = identity?.fields.brandTone.value
+    const identityAudience = identity?.fields.targetAudience.value
+    const identitySellingPoints = identity?.fields.sellingPoints.value
+
     // Build unified system prompt containing brand context and skills
     const k = brand.knowledge
     const menuText = k?.menuItems
@@ -60,7 +66,9 @@ export async function POST(request: Request, { params }: Params) {
       `你是品牌"${brand.name}"的专属 AI 营销伴侣（员工），用中英文混合方式沟通（中文为主，专业术语用英文）。`,
       `品牌简介：${brand.description ?? '优质餐厅品牌'}`,
       brand.location ? `位置：${brand.location}` : '',
-      k?.brandTone ? `品牌风格：${k.brandTone}` : '',
+      typeof identityTone === 'string' && identityTone ? `品牌风格：${identityTone}` : '',
+      typeof identityAudience === 'string' && identityAudience ? `目标客群：${identityAudience}` : '',
+      Array.isArray(identitySellingPoints) && identitySellingPoints.length ? `核心卖点：${identitySellingPoints.join('；')}` : '',
       menuText,
       slangText,
       skillsPrompts ? `\n\n=== 附加技能与规则 ===\n${skillsPrompts}` : '',

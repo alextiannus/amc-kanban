@@ -100,7 +100,6 @@ export async function PATCH(request: Request, { params }: Params) {
     const cleanDesc = rawDesc?.includes('（暂无，请在') ? null : rawDesc?.trim() || null
     brandUpdate.description = cleanDesc
   }
-  if (parsedContext.brand.location !== undefined) brandUpdate.location = parsedContext.brand.location
   if (parsedContext.brand.address !== undefined) brandUpdate.address = parsedContext.brand.address
   if (parsedContext.brand.phone !== undefined) brandUpdate.phone = parsedContext.brand.phone
   if (parsedContext.brand.website !== undefined) brandUpdate.website = parsedContext.brand.website
@@ -114,42 +113,10 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const knowledgeUpdate: Record<string, unknown> = {}
   const parsedKnowledge = parsedContext.knowledge
-  if (parsedKnowledge.brandTone !== undefined) knowledgeUpdate.brandTone = parsedKnowledge.brandTone
-  if (parsedKnowledge.audienceAssumptions !== undefined) knowledgeUpdate.audienceAssumptions = parsedKnowledge.audienceAssumptions
-  if (parsedKnowledge.productAssumptions !== undefined) knowledgeUpdate.productAssumptions = parsedKnowledge.productAssumptions
   if (parsedKnowledge.businessHours !== undefined) knowledgeUpdate.businessHours = parsedKnowledge.businessHours
   if (parsedKnowledge.reservationUrl !== undefined) knowledgeUpdate.reservationUrl = parsedKnowledge.reservationUrl
   if (parsedKnowledge.orderingUrl !== undefined) knowledgeUpdate.orderingUrl = parsedKnowledge.orderingUrl
   if (parsedKnowledge.stores !== undefined) knowledgeUpdate.stores = parsedKnowledge.stores
-
-  if (parsedKnowledge.promoPlan || parsedKnowledge.publishingFreq) {
-    const existing = await prisma.brandKnowledge.findUnique({
-      where: { brandId: id },
-      select: { promoPlan: true, publishingFreq: true },
-    })
-    if (parsedKnowledge.promoPlan) {
-      knowledgeUpdate.promoPlan = {
-        ...((existing?.promoPlan as Record<string, unknown> | null) ?? {}),
-        ...parsedKnowledge.promoPlan,
-      }
-    }
-    if (parsedKnowledge.publishingFreq) {
-      const existingFreq = (existing?.publishingFreq as Record<string, unknown> | null) ?? {}
-      const existingPlatforms = (
-        existingFreq.platforms && typeof existingFreq.platforms === 'object' && !Array.isArray(existingFreq.platforms)
-          ? existingFreq.platforms as Record<string, unknown>
-          : {}
-      )
-      knowledgeUpdate.publishingFreq = {
-        ...existingFreq,
-        ...parsedKnowledge.publishingFreq,
-        platforms: {
-          ...existingPlatforms,
-          ...(parsedKnowledge.publishingFreq.platforms ?? {}),
-        },
-      }
-    }
-  }
 
   if (Object.keys(knowledgeUpdate).length > 0) {
     await prisma.brandKnowledge.upsert({
@@ -157,16 +124,11 @@ export async function PATCH(request: Request, { params }: Params) {
       update: knowledgeUpdate,
       create: {
         brandId: id,
-        brandTone: typeof knowledgeUpdate.brandTone === 'string' ? knowledgeUpdate.brandTone : '',
         negPrompts: [],
-        audienceAssumptions: typeof knowledgeUpdate.audienceAssumptions === 'string' ? knowledgeUpdate.audienceAssumptions : '',
-        productAssumptions: typeof knowledgeUpdate.productAssumptions === 'string' ? knowledgeUpdate.productAssumptions : '',
         businessHours: knowledgeUpdate.businessHours ?? null,
         reservationUrl: typeof knowledgeUpdate.reservationUrl === 'string' ? knowledgeUpdate.reservationUrl : '',
         orderingUrl: typeof knowledgeUpdate.orderingUrl === 'string' ? knowledgeUpdate.orderingUrl : '',
         stores: Array.isArray(knowledgeUpdate.stores) ? knowledgeUpdate.stores : [],
-        promoPlan: knowledgeUpdate.promoPlan ?? null,
-        publishingFreq: knowledgeUpdate.publishingFreq ?? null,
       },
     })
   }

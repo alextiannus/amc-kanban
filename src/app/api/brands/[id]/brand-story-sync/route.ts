@@ -69,9 +69,6 @@ export async function POST(request: Request, { params }: Params) {
 
   const payload = {
     story: brand.description || '',
-    tone: knowledge?.brandTone || '',
-    audience_assumptions: (knowledge as any)?.audienceAssumptions || '',
-    product_assumptions: (knowledge as any)?.productAssumptions || '',
     local_slang: ((knowledge?.slangDict as Record<string, string>) || {}),
   }
 

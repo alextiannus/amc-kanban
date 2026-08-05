@@ -13,6 +13,7 @@
  */
 
 import { prisma } from './prisma'
+import { resolveBrandIdentity } from './brandIdentity'
 
 export interface PromoPlan {
   period?: 'monthly' | 'weekly' | 'biannual' | string
@@ -40,12 +41,14 @@ export interface BrandContextResult {
   promoPlan: PromoPlan | null
   publishingFreq: PublishingFreq | null
   brandTone: string
+  audience: string
+  sellingPoints: string[]
   market: string
   district: string
 }
 
 export async function buildBrandContext(brandId: string): Promise<BrandContextResult> {
-  const [brand, knowledge] = await Promise.all([
+  const [brand, knowledge, identity] = await Promise.all([
     prisma.brand.findUnique({
       where: { id: brandId },
       select: {
@@ -59,19 +62,25 @@ export async function buildBrandContext(brandId: string): Promise<BrandContextRe
       },
     }),
     prisma.brandKnowledge.findUnique({ where: { brandId } }),
+    resolveBrandIdentity(brandId),
   ])
 
-  if (!brand) return { contextText: '', promoPlan: null, publishingFreq: null, brandTone: '', market: '', district: '' }
+  if (!brand) return { contextText: '', promoPlan: null, publishingFreq: null, brandTone: '', audience: '', sellingPoints: [], market: '', district: '' }
 
   const k = knowledge as any
+  const brandTone = String(identity?.fields.brandTone.value || k?.brandTone || '')
+  const audience = String(identity?.fields.targetAudience.value || k?.audienceAssumptions || '')
+  const sellingPoints = Array.isArray(identity?.fields.sellingPoints.value)
+    ? identity.fields.sellingPoints.value
+    : (k?.productAssumptions ? [String(k.productAssumptions)] : [])
   const lines: string[] = []
 
   // ── Section 1: Brand Story ────────────────────────────────────────────────
   lines.push(`## Brand: ${brand.name}`)
   if (brand.description) lines.push(`Description: ${brand.description}`)
-  if (k?.audienceAssumptions) lines.push(`Target Audience: ${k.audienceAssumptions}`)
-  if (k?.productAssumptions) lines.push(`Key Selling Points: ${k.productAssumptions}`)
-  if (k?.brandTone) lines.push(`Brand Tone/Voice: ${k.brandTone}`)
+  if (audience) lines.push(`Target Audience: ${audience}`)
+  if (sellingPoints.length) lines.push(`Key Selling Points: ${sellingPoints.join('; ')}`)
+  if (brandTone) lines.push(`Brand Tone/Voice: ${brandTone}`)
 
   // ── Section 2: Business Info ──────────────────────────────────────────────
   const bizLines: string[] = []
@@ -145,7 +154,9 @@ export async function buildBrandContext(brandId: string): Promise<BrandContextRe
     contextText: lines.join('\n'),
     promoPlan,
     publishingFreq: k?.publishingFreq as PublishingFreq | null ?? null,
-    brandTone: k?.brandTone || '',
+    brandTone,
+    audience,
+    sellingPoints,
     market: k?.market || '',
     district: k?.district || '',
   }
