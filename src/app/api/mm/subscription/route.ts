@@ -91,6 +91,23 @@ export async function POST(request: NextRequest) {
           const existingPendingSub = existingBrand.subscriptions[0]
           if (existingPendingSub) {
             console.log(`[MM-Sub] Reusing existing pending subscription: ${existingPendingSub.id}`)
+            const rawRequestedMode = body.paymentMode ?? body.paymentMethod
+            const isBillingRequest = rawRequestedMode === 'BILLING' || rawRequestedMode === 'invoice'
+            if (isMmRequest && isBillingRequest) {
+              const activationData = buildBillingActivationData(existingPendingSub.durationMonths)
+              const activatedSub = await prisma.brandSubscription.update({
+                where: { id: existingPendingSub.id },
+                data: activationData,
+              })
+              return NextResponse.json({
+                success: true,
+                status: 'ACTIVE',
+                message: '品牌已创建并激活，7天试用已开始',
+                subscriptionId: activatedSub.id,
+                subscription: activatedSub,
+                brand: existingBrand,
+              })
+            }
             return NextResponse.json({
               success: true,
               status: 'PENDING',
@@ -254,8 +271,8 @@ export async function POST(request: NextRequest) {
 
     if (paymentMode === 'BILLING') {
       // Kanban-originated requests (admin, brand owner on kanban) → activate immediately.
-      // MM app requests → keep PENDING until Admin confirms payment.
-      const shouldActivate = !isMmRequest
+      // MM new-brand requests also activate immediately so merchants can use their 7-day trial.
+      const shouldActivate = !isMmRequest || Boolean(pendingBrandName)
 
       if (shouldActivate) {
         const activationData = buildBillingActivationData(summary.durationMonths)
@@ -304,7 +321,7 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // Non-admin (MM user): subscription stays PENDING until Admin confirms payment
+      // Existing-brand MM billing requests still stay PENDING until Admin confirms payment.
       console.log(`[MM-Sub] BILLING path — MM user, subscription stays PENDING (${Date.now() - t0}ms)`)
 
       const createdBrand = pendingBrandName
