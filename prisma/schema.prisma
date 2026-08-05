@@ -906,7 +906,7 @@ model SocialAccountSnapshot {
 
 model LLMConfig {
   id          String   @id @default(cuid())
-  provider    String // "openai" | "anthropic" | "google" | "deepseek" | "custom_shim"
+  provider    String // "openai" | "anthropic" | "google" | "deepseek" | "custom_shim" | "minimax"
   displayName String // Page display name (e.g., "GPT-4o")
   modelName   String // Real model ID (e.g., "gpt-4o-2024-05-13")
   apiKey      String // Encrypted API key

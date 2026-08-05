@@ -1030,6 +1030,7 @@ export default function SystemTab({
                           openai: 'gpt-4o',
                           anthropic: 'claude-3-5-sonnet-20241022',
                           deepseek: 'deepseek-chat',
+                          minimax: 'speech-2.8-hd',
                           custom_shim: 'custom-model',
                           seedance: 'dreamina-seedance-2-0-fast-260128',
                           fal: 'bytedance/seedance-2.0/image-to-video',
@@ -1041,6 +1042,7 @@ export default function SystemTab({
                           'gpt-4o',
                           'claude-3-5-sonnet-20241022',
                           'deepseek-chat',
+                          'speech-2.8-hd',
                           'custom-model',
                           'seedance-2.0-fast',
                           'seedance-2-0',
@@ -1055,10 +1057,15 @@ export default function SystemTab({
                           ? (defaults[newProvider] || '')
                           : prev.modelName
 
+                        const taskTagsStr = newProvider === 'minimax' && !prev.taskTagsStr.trim()
+                          ? 'tts'
+                          : prev.taskTagsStr
+
                         return {
                           ...prev,
                           provider: newProvider,
                           modelName,
+                          taskTagsStr,
                         }
                       })
                     }}
@@ -1068,6 +1075,7 @@ export default function SystemTab({
                     <option value="openai">OpenAI compatible</option>
                     <option value="anthropic">Anthropic Claude</option>
                     <option value="deepseek">DeepSeek API</option>
+                    <option value="minimax">MiniMax TTS</option>
                     <option value="custom_shim">自定义格式 (Shim)</option>
                     <option value="seedance">Seedance Video</option>
                     <option value="fal">Fal Video</option>

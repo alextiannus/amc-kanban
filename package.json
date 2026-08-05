@@ -20,6 +20,7 @@
     "postfast:repair-statuses:dry-run": "node --experimental-strip-types scripts/repair-postfast-draft-statuses.mts --dry-run",
     "postfast:repair-statuses": "node --experimental-strip-types scripts/repair-postfast-draft-statuses.mts --apply",
     "test:media-validation": "node --experimental-strip-types scripts/test-media-validation.mts",
+    "test:minimax-llm-config": "node --experimental-strip-types scripts/test-minimax-llm-config.mts",
     "media:backfill:dry-run": "node --experimental-strip-types scripts/backfill-media-technical-metadata.mts --dry-run",
     "media:backfill": "node --experimental-strip-types scripts/backfill-media-technical-metadata.mts --apply",
     "test:llm-routing-policy": "node --experimental-strip-types scripts/test-llm-routing-policy.mts",

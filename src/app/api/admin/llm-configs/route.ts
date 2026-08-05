@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
 import { validateLLMConfig } from '@/lib/llmRouter'
 import { validateVideoProviderConfig } from '@/lib/videoGeneration'
+import { isMiniMaxTtsConfig, validateMiniMaxTtsConfig } from '@/lib/minimaxTtsValidation'
 
 function maskKey(key: string | null | undefined): string | null {
   if (!key) return null
@@ -84,7 +85,16 @@ export async function POST(request: Request) {
 
     const cleanTaskTags = Array.isArray(taskTags) ? taskTags.map(normalizeTaskTag).filter(Boolean) : []
 
-    if (isVideoModelConfig(provider, cleanTaskTags)) {
+    if (isMiniMaxTtsConfig(provider, modelName, baseUrl, cleanTaskTags)) {
+      const validation = await validateMiniMaxTtsConfig({
+        modelName: String(modelName).trim(),
+        apiKey: cleanApiKey,
+        baseUrl: baseUrl ? String(baseUrl).trim() : null,
+      })
+      if (!validation.success) {
+        return NextResponse.json({ error: `MiniMax TTS 配置可用性验证失败: ${validation.error}` }, { status: 400 })
+      }
+    } else if (isVideoModelConfig(provider, cleanTaskTags)) {
       const validation = await validateVideoProviderConfig({
         provider: String(provider).trim(),
         modelName: String(modelName).trim(),
