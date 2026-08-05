@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { calculatePricing, SUBSCRIPTION_PLANS, type PlanId } from '@/lib/subscription/catalog'
 import { addCrewMember } from '@/lib/user-management/crew'
+import { reclaimPostfastKeyForBrandIfUnused } from '@/lib/postfastKeyPool'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -204,6 +205,15 @@ export async function PATCH(request: Request, { params }: Params) {
 
     return brand
   })
+
+  if (subscriptionStatus === 'CANCELLED') {
+    await reclaimPostfastKeyForBrandIfUnused({
+      brandId: id,
+      reason: 'subscription_cancelled',
+    }).catch(error => {
+      console.error('[admin brand update] PostFast key reclaim check failed:', error)
+    })
+  }
 
   return NextResponse.json({ ok: true, brand: updated })
 }

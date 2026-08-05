@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { buildAdminStatusUpdateData, type SubscriptionStatus } from '@/lib/subscription/workflow'
 import { publishGrowthMerchantEvent } from '@/lib/growthDataCenter'
+import { reclaimPostfastKeyForBrandIfUnused } from '@/lib/postfastKeyPool'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -49,6 +50,15 @@ export async function PATCH(request: Request, { params }: Params) {
 
   if (existing.status !== 'ACTIVE' && updated.status === 'ACTIVE') {
     // Agent key provisioning removed — no longer needed
+  }
+
+  if (updated.brandId && updated.status === 'CANCELLED') {
+    await reclaimPostfastKeyForBrandIfUnused({
+      brandId: updated.brandId,
+      reason: 'subscription_cancelled',
+    }).catch(error => {
+      console.error('[admin subscription] PostFast key reclaim check failed:', error)
+    })
   }
 
   return NextResponse.json({ ok: true, subscription: updated })

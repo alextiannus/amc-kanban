@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canWriteBrandProject } from '@/lib/brandAccess'
+import { reclaimPostfastKeyForBrandIfUnused } from '@/lib/postfastKeyPool'
 
 type Params = { params: Promise<{ id: string; aid: string }> }
 
@@ -67,5 +68,10 @@ export async function DELETE(_req: Request, { params }: Params) {
     prisma.contentDraft.deleteMany({ where: { accountId: aid, brandId } }),
     prisma.socialAccount.deleteMany({ where: { id: aid, brandId } }),
   ])
+
+  await reclaimPostfastKeyForBrandIfUnused({ brandId, reason: 'account_deleted' }).catch((error) => {
+    console.error('[account-delete] PostFast key reclaim check failed:', error)
+  })
+
   return NextResponse.json({ ok: true })
 }

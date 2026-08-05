@@ -1,5 +1,6 @@
 import { createHash } from 'crypto'
 import { prisma } from '@/lib/prisma'
+import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 
 type PrismaLike = typeof prisma
 
@@ -139,4 +140,60 @@ export async function provisionPostfastKeyForBrand(input: {
   }
 
   return { ok: false as const, reason: 'assignment_conflict' as const }
+}
+
+export async function reclaimPostfastKeyForBrandIfUnused(input: {
+  brandId: string
+  reason: 'account_deleted' | 'subscription_cancelled' | 'brand_archived' | 'postfast_sync_empty'
+}) {
+  const brand = await prisma.brand.findUnique({
+    where: { id: input.brandId },
+    select: { id: true, postfastApiKey: true },
+  })
+  if (!brand) return { ok: false as const, reason: 'brand_not_found' as const }
+  if (!brand.postfastApiKey) return { ok: true as const, skipped: true as const, reason: 'brand_has_no_key' as const }
+
+  const tokenHash = hashPostfastApiKey(brand.postfastApiKey)
+  const poolRecord = await (prisma as any).postfastApiKeyPool.findFirst({
+    where: {
+      tokenHash,
+      assignedBrandId: brand.id,
+      status: 'ASSIGNED',
+    },
+  })
+  if (!poolRecord) return { ok: true as const, skipped: true as const, reason: 'not_pool_assigned_key' as const }
+
+  const accountsResult = await postfastFetchAccounts(brand.postfastApiKey)
+  if (!accountsResult.success) {
+    return { ok: true as const, skipped: true as const, reason: 'postfast_check_failed' as const, error: accountsResult.error }
+  }
+  if (accountsResult.accounts.length > 0) {
+    return { ok: true as const, skipped: true as const, reason: 'postfast_accounts_still_bound' as const, accountCount: accountsResult.accounts.length }
+  }
+
+  await prisma.$transaction(async (tx: any) => {
+    await tx.brand.update({
+      where: { id: brand.id },
+      data: {
+        postfastApiKey: null,
+        postfastConnectLink: null,
+        postfastConnectLinkUpdatedAt: null,
+      },
+    })
+
+    await tx.postfastApiKeyPool.update({
+      where: { id: poolRecord.id },
+      data: {
+        status: 'AVAILABLE',
+        assignedBrandId: null,
+        assignedUserId: null,
+        assignedAt: null,
+        notes: poolRecord.notes
+          ? `${poolRecord.notes}\nReclaimed after ${input.reason} at ${new Date().toISOString()}`
+          : `Reclaimed after ${input.reason} at ${new Date().toISOString()}`,
+      },
+    })
+  })
+
+  return { ok: true as const, reclaimed: true as const, keyId: poolRecord.id }
 }
