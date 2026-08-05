@@ -22,9 +22,10 @@ export interface SetupNotification {
  *    - Triggered if the user has 0 brands OR none of the user's brands has an active subscription.
  *    - Dismissed/Removed once they have at least one brand with an active subscription.
  * 
- * 2. "Complete Account configuration" (COMPLETE_CONFIG):
- *    - Triggered if a brand has an active subscription and postfastApiKey,
- *      but is missing one or more of: Google Maps, TikTok, Instagram.
+ * 2. "Connect accounts" (COMPLETE_CONFIG):
+ *    - Triggered immediately after a brand has an active subscription,
+ *      while it is missing one or more of: Google Maps, TikTok, Instagram.
+ *    - If a PostFast API key is available, a fresh connect link is attached.
  *    - Dismissed/Removed once all three platforms are connected for that brand.
  */
 export async function syncSetupNotifications(userId: string): Promise<SetupNotification[]> {
@@ -134,20 +135,20 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
     })
   }
 
-  // --- Process Check (b): Complete Account configuration ---
+  // --- Process Check (b): Connect social accounts ---
   for (const brand of brands) {
     const hasSubscription = brand.subscriptions.length > 0
     const hasPostfast = !!brand.postfastApiKey
 
-    if (hasSubscription && hasPostfast) {
+    if (hasSubscription) {
       // Ensure PostFast public connect link is up to date (updated every 7 days)
       let connectLink = brand.postfastConnectLink
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      if (
+      if (hasPostfast && (
         !connectLink || 
         !brand.postfastConnectLinkUpdatedAt || 
         brand.postfastConnectLinkUpdatedAt < sevenDaysAgo
-      ) {
+      )) {
         try {
           const pfLinkResult = await postfastGenerateConnectLink(brand.postfastApiKey!)
           if (pfLinkResult.success && pfLinkResult.connectUrl) {
@@ -189,7 +190,10 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
 
       if (missing.length > 0) {
         const missingStr = missing.join('、')
-        const message = `您的品牌【${brand.name}】已激活订阅，但尚未绑定 ${missingStr} 账号。请绑定以启用 AI 自动发布与数据分析。`
+        const actionUrl = '/dashboard?action=connect_accounts'
+        const message = connectLink
+          ? `您的品牌【${brand.name}】已完成订阅并开通试用。下一步请绑定 ${missingStr} 账号，以启用 AI 自动发布与数据分析。`
+          : `您的品牌【${brand.name}】已完成订阅并开通试用。下一步请绑定 ${missingStr} 账号；连接链接准备好后会在这里显示。`
         
         const existing = await prisma.notification.findFirst({
           where: { userId, brandId: brand.id, type: 'COMPLETE_CONFIG' }
@@ -201,16 +205,16 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
               userId,
               brandId: brand.id,
               type: 'COMPLETE_CONFIG',
-              title: '完善您的账号配置',
+              title: '下一步：绑定账号',
               message,
               status: 'UNREAD',
-              actionUrl: null
+              actionUrl
             }
           })
-        } else if (existing.message !== message || existing.actionUrl !== null) {
+        } else if (existing.title !== '下一步：绑定账号' || existing.message !== message || existing.actionUrl !== actionUrl) {
           await prisma.notification.update({
             where: { id: existing.id },
-            data: { message, status: 'UNREAD', actionUrl: null }
+            data: { title: '下一步：绑定账号', message, status: 'UNREAD', actionUrl }
           })
         }
       } else {
@@ -220,7 +224,7 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
         })
       }
     } else {
-      // Brand is not active/subscribed or missing postfast key, connection notification is not relevant.
+      // Brand is not active/subscribed, so connection notification is not relevant yet.
       await prisma.notification.deleteMany({
         where: { userId, brandId: brand.id, type: 'COMPLETE_CONFIG' }
       })
