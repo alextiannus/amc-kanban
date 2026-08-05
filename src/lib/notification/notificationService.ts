@@ -73,6 +73,8 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
     const orgOwnerIds = orgMemberships.map((m: any) => m.ownerId)
 
     const queryOr: any[] = [
+      { ownerId: userId },
+      { owners: { some: { userId } } },
       { crew: { id: { in: crewIds } } }
     ]
 
