@@ -5,6 +5,7 @@ import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 import { resolveAssignment } from '@/lib/assignmentPool'
 import { ensureGrowthMerchantForBrand } from '@/lib/growthDataCenter'
+import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
 
 export async function POST(request: NextRequest) {
   const session = await getSession()
@@ -36,6 +37,18 @@ export async function POST(request: NextRequest) {
     ensureGrowthMerchantForBrand(brand).catch(growthError => {
       console.error('[MM-API-Brand-Create] Growth binding failed (non-fatal):', growthError)
     })
+
+    try {
+      const keyResult = await provisionPostfastKeyForBrand({
+        brandId: brand.id,
+        userId: session.user.id,
+      })
+      if (!keyResult.ok) {
+        console.warn('[MM-API-Brand-Create] PostFast key auto-allocation skipped:', keyResult.reason)
+      }
+    } catch (postfastKeyError) {
+      console.error('[MM-API-Brand-Create] PostFast key auto-allocation failed (non-fatal):', postfastKeyError)
+    }
 
     try {
       // 2. Initialize new Marketing Crew

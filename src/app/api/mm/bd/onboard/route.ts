@@ -5,6 +5,8 @@ import { isAmcOperator } from '@/lib/amcOperator'
 import { hashPassword } from '@/lib/auth-v2'
 import { sendBrandOnboardingWelcomeEmail } from '@/lib/email'
 import { generateInvitationLink } from '@/lib/invitation'
+import { buildBillingActivationData } from '@/lib/subscription/workflow'
+import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -89,6 +91,7 @@ export async function POST(req: NextRequest) {
       const price = planId === 'premium' ? 999 : 499
       const contractEndDate = new Date()
       contractEndDate.setMonth(contractEndDate.getMonth() + 1) // default 1 month
+      const activationData = buildBillingActivationData(1)
 
       const subscription = await tx.brandSubscription.create({
         data: {
@@ -98,14 +101,15 @@ export async function POST(req: NextRequest) {
           billedMonths: 1,
           monthlyBaseUsd: price,
           totalDueUsd: price,
-          status: 'ACTIVE',
           brandId: brand.id,
           createdById: user.id,
-          contractStartDate: new Date(),
+          ...activationData,
           contractEndDate,
-          paidAt: new Date()
+          paidAt: new Date(),
         }
       })
+
+      await provisionPostfastKeyForBrand({ brandId: brand.id, userId: user.id, tx })
 
       return { user, brand, subscription }
     })

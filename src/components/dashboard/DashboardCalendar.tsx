@@ -199,8 +199,9 @@ function getPostOriginalUrl(platform: string, platformPostId: string | null | un
   if (platformPostId && (platformPostId.startsWith('http://') || platformPostId.startsWith('https://'))) {
     return platformPostId
   }
+  if (!platformPostId) return ''
   const normPlatform = normalizePlatformLabel(platform)
-  const postId = platformPostId || `mock_post_${Date.now()}`
+  const postId = platformPostId
   switch (normPlatform) {
     case 'IG':
       return `https://www.instagram.com/p/${postId}/`

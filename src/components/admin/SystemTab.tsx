@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import {
   Shield, Key, Save, RefreshCw, Layers, ShieldCheck, Mail, CalendarClock, History, Settings,
   Sparkles, Plus, Trash2, Edit3, Loader2, Check, Clock, AlertTriangle, MessageSquare, Volume2
@@ -33,6 +33,23 @@ export interface LLMConfigRecord {
   taskTags: string[]
   createdAt: string
   updatedAt: string
+}
+
+interface PostfastKeyRecord {
+  id: string
+  label: string | null
+  maskedKey: string | null
+  status: 'AVAILABLE' | 'ASSIGNED' | 'RETIRED'
+  assignedBrandId: string | null
+  assignedUserId: string | null
+  assignedAt: string | null
+  notes: string | null
+  createdAt: string
+  assignedBrand?: {
+    id: string
+    name: string
+    owners: { user: { id: string; email: string; nickname: string | null } }[]
+  } | null
 }
 
 interface SystemTabProps {
@@ -89,7 +106,7 @@ export default function SystemTab({
   llmConfigsLoading,
   onFetchLLMConfigs
 }: SystemTabProps) {
-  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'ai' | 'smtp' | 'scheduler' | 'templates' | 'direct_oauth' | ''>('llm')
+  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'ai' | 'postfast' | 'smtp' | 'scheduler' | 'templates' | 'direct_oauth' | ''>('llm')
   
   // LLM Config inner states
   const [llmConfigModalOpen, setLlmConfigModalOpen] = useState(false)
@@ -101,6 +118,79 @@ export default function SystemTab({
   const [testingTts, setTestingTts] = useState(false)
   const [ttsTestResult, setTtsTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null)
+  const [postfastKeys, setPostfastKeys] = useState<PostfastKeyRecord[]>([])
+  const [postfastKeysLoading, setPostfastKeysLoading] = useState(false)
+  const [savingPostfastKeys, setSavingPostfastKeys] = useState(false)
+  const [postfastForm, setPostfastForm] = useState({ label: '', tokensText: '', notes: '' })
+  const [postfastMessage, setPostfastMessage] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const fetchPostfastKeys = async () => {
+    setPostfastKeysLoading(true)
+    try {
+      const res = await fetch('/api/admin/postfast-keys')
+      if (res.ok) {
+        const data = await res.json()
+        setPostfastKeys(data.keys || [])
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setPostfastKeysLoading(false)
+    }
+  }
+
+  const handleSavePostfastKeys = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingPostfastKeys(true)
+    setPostfastMessage(null)
+    try {
+      const res = await fetch('/api/admin/postfast-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(postfastForm),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setPostfastMessage({ ok: false, text: data.error || '保存失败，请检查 key 格式' })
+        return
+      }
+      setPostfastForm({ label: '', tokensText: '', notes: '' })
+      const duplicateNote = data.duplicates?.length ? `，跳过 ${data.duplicates.length} 个重复 key` : ''
+      setPostfastMessage({ ok: true, text: `已新增 ${data.created?.length || 0} 个 PostFast key${duplicateNote}` })
+      await fetchPostfastKeys()
+      await onFetchSystemLogs()
+    } catch (e) {
+      console.error(e)
+      setPostfastMessage({ ok: false, text: '网络错误，请稍后重试' })
+    } finally {
+      setSavingPostfastKeys(false)
+    }
+  }
+
+  const handleRetirePostfastKey = async (key: PostfastKeyRecord) => {
+    if (key.status === 'ASSIGNED') {
+      alert('已分配给品牌的 key 不能直接退役，请先更换该品牌配置。')
+      return
+    }
+    if (!confirm('确认将这个 PostFast key 标记为 RETIRED？')) return
+    try {
+      const res = await fetch('/api/admin/postfast-keys', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: key.id, status: 'RETIRED' }),
+      })
+      if (res.ok) {
+        await fetchPostfastKeys()
+        await onFetchSystemLogs()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || '更新失败')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('网络错误，请稍后重试')
+    }
+  }
 
   const handleTestTts = async () => {
     setTestingTts(true)
@@ -242,6 +332,13 @@ export default function SystemTab({
       console.error(e)
     }
   }
+
+  useEffect(() => {
+    if (activeAccordion === 'postfast' && postfastKeys.length === 0 && !postfastKeysLoading) {
+      void fetchPostfastKeys()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccordion])
 
   const handleToggleLLMEnabled = async (config: LLMConfigRecord) => {
     try {
@@ -416,6 +513,158 @@ export default function SystemTab({
                   AI 语音伴侣：taskTags 含 companion<br/>
                   视频生成：provider=seedance / kieai / fal / volcengine，taskTags 含 video_generation 或 image_to_video
                 </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Section: PostFast API Key Pool */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setActiveAccordion(activeAccordion === 'postfast' ? '' : 'postfast')}
+            className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
+          >
+            <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
+              <Key size={15} className="text-emerald-500" />
+              <span>PostFast API Key 预配置池</span>
+            </span>
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-2.5 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900/30">
+              可用 {postfastKeys.filter(key => key.status === 'AVAILABLE').length} / 已分配 {postfastKeys.filter(key => key.status === 'ASSIGNED').length}
+            </span>
+          </button>
+
+          {activeAccordion === 'postfast' && (
+            <div className="px-6 pb-6 pt-1 space-y-5 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
+              <form onSubmit={handleSavePostfastKeys} className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4 pt-4">
+                <div className="space-y-3">
+                  <label className="space-y-1.5 block">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">批次标签</span>
+                    <input
+                      type="text"
+                      value={postfastForm.label}
+                      onChange={e => setPostfastForm(prev => ({ ...prev, label: e.target.value }))}
+                      placeholder="例：2026-08 新用户池"
+                      className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs dark:text-white focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </label>
+                  <label className="space-y-1.5 block">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">备注</span>
+                    <input
+                      type="text"
+                      value={postfastForm.notes}
+                      onChange={e => setPostfastForm(prev => ({ ...prev, notes: e.target.value }))}
+                      placeholder="来源、采购批次或使用范围"
+                      className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs dark:text-white focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    />
+                  </label>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="space-y-1.5 block">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">PostFast API Keys（每行一个，也支持逗号分隔）</span>
+                    <textarea
+                      value={postfastForm.tokensText}
+                      onChange={e => setPostfastForm(prev => ({ ...prev, tokensText: e.target.value }))}
+                      placeholder="pf_live_xxx..."
+                      rows={4}
+                      className="w-full rounded-xl border border-slate-205 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs dark:text-white focus:ring-1 focus:ring-emerald-500 focus:outline-none font-mono resize-y"
+                    />
+                  </label>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      新品牌创建时会自动领取一个 AVAILABLE key，并写入品牌 PostFast 配置；列表仅显示掩码和分配关系。
+                    </p>
+                    <button
+                      type="submit"
+                      disabled={savingPostfastKeys || !postfastForm.tokensText.trim()}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs transition-all shadow-sm cursor-pointer"
+                    >
+                      {savingPostfastKeys ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                      <span>加入池子</span>
+                    </button>
+                  </div>
+                  {postfastMessage && (
+                    <div className={`rounded-xl border px-3 py-2 text-xs font-bold ${
+                      postfastMessage.ok
+                        ? 'bg-emerald-50 text-emerald-650 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30'
+                        : 'bg-rose-50 text-rose-650 border-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30'
+                    }`}>
+                      {postfastMessage.text}
+                    </div>
+                  )}
+                </div>
+              </form>
+
+              <div className="admin-list">
+                <table className="w-full min-w-[860px] table-fixed text-xs">
+                  <colgroup>
+                    <col className="w-[220px]" />
+                    <col className="w-[120px]" />
+                    <col className="w-[260px]" />
+                    <col className="w-[190px]" />
+                    <col className="w-[110px]" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th className="text-left px-4 py-3">Key</th>
+                      <th className="text-left px-4 py-3">状态</th>
+                      <th className="text-left px-4 py-3">分配品牌</th>
+                      <th className="text-left px-4 py-3">标签 / 备注</th>
+                      <th className="text-right px-4 py-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {postfastKeysLoading ? (
+                      <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">加载 PostFast key 池...</td></tr>
+                    ) : postfastKeys.length === 0 ? (
+                      <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">暂无预配置 key</td></tr>
+                    ) : postfastKeys.map((key) => {
+                      const owner = key.assignedBrand?.owners?.[0]?.user
+                      return (
+                        <tr key={key.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-850/40 transition-all">
+                          <td className="px-4 py-3 font-mono text-slate-700 dark:text-slate-300">{key.maskedKey || '••••••••'}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex px-2 py-1 rounded-lg border text-[10px] font-black ${
+                              key.status === 'AVAILABLE'
+                                ? 'bg-emerald-50 text-emerald-650 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30'
+                                : key.status === 'ASSIGNED'
+                                ? 'bg-blue-50 text-blue-650 border-blue-100 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/30'
+                                : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-850 dark:text-slate-400 dark:border-slate-700'
+                            }`}>
+                              {key.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {key.assignedBrand ? (
+                              <div className="min-w-0">
+                                <p className="font-black text-slate-850 dark:text-white truncate">{key.assignedBrand.name}</p>
+                                <p className="text-[10px] text-slate-400 truncate">{owner?.nickname || owner?.email || key.assignedBrandId}</p>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">未分配</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-bold text-slate-650 dark:text-slate-300 truncate">{key.label || '未命名批次'}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{key.notes || new Date(key.createdAt).toLocaleDateString('zh-CN')}</p>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleRetirePostfastKey(key)}
+                              disabled={key.status === 'ASSIGNED' || key.status === 'RETIRED'}
+                              className="inline-flex items-center justify-center p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 hover:border-rose-200 disabled:opacity-40 disabled:hover:text-slate-500 disabled:hover:border-slate-200 cursor-pointer"
+                              title={key.status === 'ASSIGNED' ? '已分配 key 不能直接退役' : '标记为退役'}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

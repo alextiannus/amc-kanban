@@ -120,15 +120,26 @@ export async function publishGrowthMerchantEvent(input: {
 }
 
 export async function readGrowthMerchantData(brandKey: string) {
-  const [profileResponse, knowledgeResponse] = await Promise.all([
-    growthRequest(`/v1/merchants/${encodeURIComponent(brandKey)}/profile`, { method: 'GET' }),
-    growthRequest(`/v1/merchants/${encodeURIComponent(brandKey)}/knowledge`, { method: 'GET' }),
+  const merchantPath = `/v1/merchants/${encodeURIComponent(brandKey)}`
+  const [profileResponse, brandStoryResponse, growthPlanResponse, contentBriefsResponse] = await Promise.all([
+    growthRequest(`${merchantPath}/profile`, { method: 'GET' }),
+    growthRequest(`${merchantPath}/brand-story`, { method: 'GET' }),
+    growthRequest(`${merchantPath}/growth-plan`, { method: 'GET' }),
+    growthRequest(`${merchantPath}/content-briefs`, { method: 'GET' }),
   ])
-  if (!profileResponse.ok || !knowledgeResponse.ok) {
-    throw new Error(`growth_merchant_read_failed:${profileResponse.status}:${knowledgeResponse.status}`)
+  if (!profileResponse.ok) {
+    throw new Error(`growth_merchant_profile_read_failed:${profileResponse.status}`)
+  }
+  const optionalStatus = {
+    brandStory: brandStoryResponse.status,
+    growthPlan: growthPlanResponse.status,
+    contentBriefs: contentBriefsResponse.status,
   }
   return {
     profile: await profileResponse.json(),
-    knowledge: await knowledgeResponse.json(),
+    brandStory: brandStoryResponse.ok ? await brandStoryResponse.json() : null,
+    growthPlan: growthPlanResponse.ok ? await growthPlanResponse.json() : null,
+    contentBriefs: contentBriefsResponse.ok ? await contentBriefsResponse.json() : null,
+    resourceStatus: optionalStatus,
   }
 }

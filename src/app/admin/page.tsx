@@ -79,7 +79,7 @@ function AdminPageInner() {
   const [poolDrafts, setPoolDrafts] = useState<Record<string, { capacity: number; priority: number; industries: string; regions: string }>>({})
   
   // Brand draft states
-  const [brandDrafts, setBrandDrafts] = useState<Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; agentIds: string[] }>>({})
+  const [brandDrafts, setBrandDrafts] = useState<Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; feeWaived: boolean; agentIds: string[] }>>({})
 
   // LLM Config state
   const [llmConfigs, setLlmConfigs] = useState<LLMConfigRecord[]>([])
@@ -156,6 +156,7 @@ function AdminPageInner() {
             planId: subscription?.planId || '',
             subscriptionStatus: subscription?.status || '',
             durationMonths: subscription?.durationMonths || 12,
+            feeWaived: subscription?.feeWaived || false,
             agentIds: brand.brandAgents.map((link) => link.agentId),
           }]
         })))

@@ -7,12 +7,8 @@ import {
   ensureGrowthMerchantForBrand,
   publishGrowthMerchantEvent,
 } from '@/lib/growthDataCenter'
-
-function addMonths(date: Date, months: number) {
-  const next = new Date(date)
-  next.setMonth(next.getMonth() + months)
-  return next
-}
+import { buildBillingActivationData } from '@/lib/subscription/workflow'
+import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
 
 export async function activateSubscriptionByPaymentSession(paymentSessionId: string) {
   const sub = await prisma.brandSubscription.findFirst({
@@ -28,15 +24,18 @@ export async function activateSubscriptionByPaymentSession(paymentSessionId: str
   }
 
   const now = new Date()
-  const endDate = addMonths(now, sub.durationMonths)
+  const activationData = buildBillingActivationData(sub.durationMonths, now, { feeWaived: sub.feeWaived })
 
   const updated = await prisma.brandSubscription.update({
     where: { id: sub.id },
     data: {
-      status: 'ACTIVE',
+      ...activationData,
       paidAt: sub.paidAt ?? now,
-      contractStartDate: sub.contractStartDate ?? now,
-      contractEndDate: sub.contractEndDate ?? endDate,
+      contractStartDate: sub.contractStartDate ?? activationData.contractStartDate,
+      contractEndDate: sub.contractEndDate ?? activationData.contractEndDate,
+      trialStartsAt: sub.trialStartsAt ?? activationData.trialStartsAt,
+      trialEndsAt: sub.trialEndsAt ?? activationData.trialEndsAt,
+      billingStartsAt: sub.billingStartsAt ?? activationData.billingStartsAt,
     },
   })
 
@@ -112,6 +111,13 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       console.error('[createBrand] existing workspace init failed:', workspaceError)
     })
 
+    provisionPostfastKeyForBrand({
+      brandId: existingBrand.id,
+      userId: existingBrand.ownerId,
+    }).catch(error => {
+      console.error('[createBrand] existing PostFast key allocation failed:', error)
+    })
+
     return { ok: true as const, brand: existingBrand, alreadyCreated: true as const, agentId: null }
   }
 
@@ -154,6 +160,12 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       },
     })
 
+    await provisionPostfastKeyForBrand({
+      brandId: created.id,
+      userId: brandOwnerId,
+      tx,
+    })
+
     await tx.brandSubscription.update({
       where: { id: input.subscriptionId },
       data: { brandId: created.id },
@@ -169,6 +181,12 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
   })
 
   if (result.alreadyCreated) {
+    provisionPostfastKeyForBrand({
+      brandId: brand.id,
+      userId: brand.ownerId,
+    }).catch(error => {
+      console.error('[createBrand] existing PostFast key allocation failed:', error)
+    })
     ensureBrandWorkspace(brand.id).catch((workspaceError) => {
       console.error('[createBrand] existing workspace init failed:', workspaceError)
     })

@@ -129,14 +129,13 @@ export async function getPlaceRating(placeId: string, apiKey: string) {
 
 /**
  * Exchange a Google Refresh Token for a fresh Access Token.
- * If in mock mode, returns a mock access token immediately.
  */
 export async function getGoogleAccessToken(
   refreshToken: string,
   credentials?: { clientId?: string | null; clientSecret?: string | null }
 ): Promise<string> {
   if (refreshToken.startsWith('mock_')) {
-    return 'mock_access_token_' + Date.now();
+    throw new Error('Mock Google refresh tokens are not allowed. Connect a real Google account before using Google sync.')
   }
 
   let clientId = credentials?.clientId || null;
@@ -203,14 +202,10 @@ export async function getGoogleAccessToken(
 
 /**
  * Fetch locations available under the authenticated Google Account.
- * Returns mock locations in mock mode.
  */
 export async function fetchGoogleLocations(accessToken: string): Promise<Array<{ id: string; name: string; address?: string; accountId: string }>> {
   if (accessToken.startsWith('mock_')) {
-    return [
-      { id: 'mock_loc_ziwei', name: '[滋味烤鱼] Google Business', address: '23 Church St, #01-02, Capital Square, Singapore', accountId: 'mock_account_123' },
-      { id: 'mock_loc_cafe', name: 'AMC Coffee Lab', address: 'Funan Mall, #02-15, Singapore', accountId: 'mock_account_123' }
-    ];
+    throw new Error('Mock Google access tokens are not allowed. Connect a real Google account before fetching locations.')
   }
 
   // 1. Fetch Accounts
@@ -243,7 +238,6 @@ export async function fetchGoogleLocations(accessToken: string): Promise<Array<{
 
 /**
  * Fetch reviews directly from Google Business Profile API.
- * Returns mock reviews in mock mode.
  */
 export async function fetchGoogleGBPReviews(
   accountId: string,
@@ -251,8 +245,7 @@ export async function fetchGoogleGBPReviews(
   accessToken: string
 ): Promise<GoogleReviewsResult> {
   if (accessToken.startsWith('mock_') || locationId.startsWith('mock_')) {
-    // Mock/test mode: return empty — never fabricate reviews that don't exist
-    return { reviews: [], error: 'mock_mode' }
+    return { reviews: [], error: 'Mock Google credentials are not allowed. Connect a real Google account before fetching reviews.' }
   }
 
 
@@ -288,7 +281,6 @@ export async function fetchGoogleGBPReviews(
 
 /**
  * Post/Update a reply to a Google Business Profile review directly.
- * Simulates in mock mode.
  */
 export async function replyGoogleGBPReview(input: {
   accountId: string
@@ -298,8 +290,7 @@ export async function replyGoogleGBPReview(input: {
   accessToken: string
 }): Promise<{ success: boolean; error?: string }> {
   if (input.accessToken.startsWith('mock_')) {
-    console.log(`[Google Maps Mock OAuth] Replied to review ${input.reviewId} for location ${input.locationId} with: "${input.replyText}"`);
-    return { success: true };
+    return { success: false, error: 'Mock Google credentials are not allowed. Connect a real Google account before replying to reviews.' }
   }
 
   try {
@@ -328,7 +319,6 @@ export async function replyGoogleGBPReview(input: {
 
 /**
  * Create a Local Post on Google Business Profile directly.
- * Simulates in mock mode.
  */
 export async function createGoogleGBPLocalPost(input: {
   accountId: string
@@ -338,12 +328,7 @@ export async function createGoogleGBPLocalPost(input: {
   accessToken: string
 }): Promise<{ success: boolean; postId?: string; url?: string; error?: string }> {
   if (input.accessToken.startsWith('mock_')) {
-    console.log(`[Google Maps Mock OAuth] Created local post for location ${input.locationId} with: "${input.caption}"`);
-    return {
-      success: true,
-      postId: 'mock_post_' + Date.now(),
-      url: `https://maps.google.com/localposts/mock_${Date.now()}`
-    };
+    return { success: false, error: 'Mock Google credentials are not allowed. Connect a real Google account before publishing Google posts.' }
   }
 
   try {
@@ -389,4 +374,3 @@ export async function createGoogleGBPLocalPost(input: {
     return { success: false, error: e instanceof Error ? e.message : 'Google Business post failed' }
   }
 }
-

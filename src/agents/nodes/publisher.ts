@@ -200,7 +200,8 @@ export async function publisherNode(state: any) {
                      : platform === "google_business" ? "google_maps"
                      : platform;
 
-  // 2. Fetch or create a social account record for logging
+  // 2. Fetch a real social account record for logging/publishing.
+  // Missing accounts should remain explicit; do not create mock accounts.
   let socialAccount = await prisma.socialAccount.findFirst({
     where: {
       brandId,
@@ -208,24 +209,18 @@ export async function publisherNode(state: any) {
     }
   });
 
-  if (!socialAccount) {
-    console.log(`No social account found for brand ${brandId} on ${dbPlatformId}. Creating a mock account.`);
-    socialAccount = await prisma.socialAccount.create({
-      data: {
-        brandId,
-        platformId: dbPlatformId,
-        handle: "mock_" + dbPlatformId + "_handle",
-        displayName: "Mock " + (platform === "red" || platform === "xhs" || platform === "xiaohongshu" ? "小红书" : platform === "google_business" || platform === "google_maps" ? "Google Business" : platform) + " Account",
-        autoPilot: true
-      }
-    });
-  }
-
-  const isMockAccount = socialAccount.handle?.startsWith("mock_") || !brand.postfastApiKey;
+  const accountUnavailableReason = !socialAccount
+    ? `No connected ${dbPlatformId} account found for brand ${brandId}.`
+    : !brand.postfastApiKey
+      ? 'PostFast API key is not configured for this brand.'
+      : socialAccount.handle?.startsWith("mock_")
+        ? `Stored ${dbPlatformId} account ${socialAccount.id} is marked as mock and cannot be used.`
+        : ''
+  const canAutoPublish = Boolean(brand.postfastApiKey && socialAccount && !socialAccount.handle?.startsWith("mock_"));
   const isManualPlatform = platform === "red" || platform === "xiaohongshu";
 
   // 3. Execute publishing via PostFast if API Key is configured and account is connected and supports auto-publish
-  if (brand.postfastApiKey && !isMockAccount && !isManualPlatform) {
+  if (canAutoPublish && !isManualPlatform) {
     let draftForPublish: DraftForPublish | null = null
     let originalDraftStatus: string | null = null
 
@@ -316,11 +311,11 @@ export async function publisherNode(state: any) {
         ...(publishMediaItems ? { mediaItems: publishMediaItems } : { mediaUrls: mediaUrls || [] }),
         coverImage: buildPostfastCoverImage(draftForPublish?.coverAsset),
         hashtags: cleanHashtags,
-        accountId: socialAccount.id
+        accountId: socialAccount!.id
       });
 
       if (publishRes.success) {
-        const publishedUrl = publishRes.url || `https://www.${platform}.com/p/amc_mock_${Date.now()}`;
+        const publishedUrl = publishRes.url || `postfast://${platform}/${publishRes.postId || 'unknown'}`;
         console.log(`PostFast Publish Success! Post ID: ${publishRes.postId}, URL: ${publishedUrl}`);
 
         // Log the published draft
@@ -330,7 +325,7 @@ export async function publisherNode(state: any) {
             draftRecord = await prisma.contentDraft.update({
               where: { id: existingDraftId },
               data: {
-                accountId: socialAccount.id,
+                accountId: socialAccount!.id,
                 caption: fullCaption,
                 mediaUrls: mediaUrls || [],
                 hashtags: cleanHashtags,
@@ -351,7 +346,7 @@ export async function publisherNode(state: any) {
           draftRecord = await prisma.contentDraft.create({
             data: {
               brandId,
-              accountId: socialAccount.id,
+              accountId: socialAccount!.id,
               caption: fullCaption,
               mediaUrls: mediaUrls || [],
               hashtags: cleanHashtags,
@@ -392,7 +387,7 @@ export async function publisherNode(state: any) {
               data: transientFailure
                 ? { status: originalDraftStatus ?? 'draft' }
                 : {
-                    accountId: socialAccount.id,
+                    accountId: socialAccount!.id,
                     caption: fullCaption,
                     mediaUrls: mediaUrls || [],
                     hashtags: cleanHashtags,
@@ -413,7 +408,7 @@ export async function publisherNode(state: any) {
           await prisma.contentDraft.create({
             data: {
               brandId,
-              accountId: socialAccount.id,
+              accountId: socialAccount!.id,
               caption: fullCaption,
               mediaUrls: mediaUrls || [],
               hashtags: cleanHashtags,
@@ -456,7 +451,7 @@ export async function publisherNode(state: any) {
     }
   }
 
-  // 4. Manual / mockup draft generation flow
+  // 4. Manual draft generation flow
   const platformNameMap: Record<string, string> = {
     red: "小红书",
     xiaohongshu: "小红书",
@@ -467,7 +462,7 @@ export async function publisherNode(state: any) {
   };
   const readablePlatform = platformNameMap[platform] || platform;
 
-  console.log(`Platform ${platform} is unlinked or requires manual publishing. Generating draft.`);
+  console.log(`Platform ${platform} is unlinked or requires manual publishing. Generating draft. ${accountUnavailableReason}`);
   
   let draft;
   if (existingDraftId) {
@@ -475,12 +470,12 @@ export async function publisherNode(state: any) {
       draft = await prisma.contentDraft.update({
         where: { id: existingDraftId },
         data: {
-          accountId: socialAccount.id,
+          accountId: socialAccount?.id ?? null,
           caption: fullCaption,
           mediaUrls: mediaUrls || [],
           hashtags: cleanHashtags,
           status: "draft",
-          agentNote: `【手动发布提醒】此内容已更新。由于 ${readablePlatform} 账号未联通，请在草稿中手动复制发布。`
+          agentNote: `【手动发布提醒】此内容已更新。由于 ${readablePlatform} 账号未联通，请在草稿中手动复制发布。${accountUnavailableReason ? ` 详细原因：${accountUnavailableReason}` : ''}`
         }
       });
       console.log(`ContentDraft ${existingDraftId} updated in-place successfully.`);
@@ -491,11 +486,11 @@ export async function publisherNode(state: any) {
 
   if (!draft) {
     const enriched = enrichDraftData(fullCaption)
-    const manualNote = `【手动发布提醒】此内容已生成。由于 ${readablePlatform} 账号未联通，请在草稿中手动复制发布。`
+    const manualNote = `【手动发布提醒】此内容已生成。由于 ${readablePlatform} 账号未联通，请在草稿中手动复制发布。${accountUnavailableReason ? ` 详细原因：${accountUnavailableReason}` : ''}`
     draft = await prisma.contentDraft.create({
       data: {
         brandId,
-        accountId: socialAccount.id,
+        accountId: socialAccount?.id ?? null,
         caption: fullCaption,
         mediaUrls: mediaUrls || [],
         hashtags: cleanHashtags,
@@ -510,7 +505,7 @@ export async function publisherNode(state: any) {
     where: { id: taskId },
     data: {
       status: "done",
-      requiredInput: `Draft generated for manual publishing on ${readablePlatform}. Please review and copy it from the Drafts page: ${draft.id}`
+      requiredInput: `Draft generated for manual publishing on ${readablePlatform}. Please review and copy it from the Drafts page: ${draft.id}${accountUnavailableReason ? `. Details: ${accountUnavailableReason}` : ''}`
     }
   });
 

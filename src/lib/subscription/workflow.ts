@@ -3,6 +3,10 @@ export type MutableSubscriptionDates = {
   contractStartDate: Date | null
   contractEndDate: Date | null
   durationMonths: number
+  trialStartsAt?: Date | null
+  trialEndsAt?: Date | null
+  billingStartsAt?: Date | null
+  feeWaived?: boolean | null
 }
 
 export type SubscriptionStatus = 'PENDING' | 'ACTIVE' | 'FAILED' | 'CANCELLED'
@@ -12,6 +16,14 @@ function addMonths(date: Date, months: number) {
   next.setMonth(next.getMonth() + months)
   return next
 }
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+export const DEFAULT_TRIAL_DAYS = 7
 
 export function buildOfflineInvoiceResponse(params: {
   subscriptionId: string
@@ -42,21 +54,32 @@ export function buildBillingActivatedResponse(params: {
   }
 }
 
-export function buildBillingActivationData(durationMonths: number, now = new Date()) {
+export function buildBillingActivationData(durationMonths: number, now = new Date(), options?: { feeWaived?: boolean }) {
+  const feeWaived = Boolean(options?.feeWaived)
+  const trialStartsAt = feeWaived ? null : now
+  const trialEndsAt = feeWaived ? null : addDays(now, DEFAULT_TRIAL_DAYS)
   return {
     status: 'ACTIVE' as SubscriptionStatus,
     paidAt: null,
     contractStartDate: now,
     contractEndDate: addMonths(now, durationMonths),
+    trialStartsAt,
+    trialEndsAt,
+    billingStartsAt: feeWaived ? null : trialEndsAt,
+    feeWaived,
   }
 }
 
 export function buildAdminStatusUpdateData(
   existing: MutableSubscriptionDates,
   status: SubscriptionStatus,
-  now = new Date()
+  now = new Date(),
+  options?: { feeWaived?: boolean }
 ) {
   const shouldActivate = status === 'ACTIVE'
+  const feeWaived = options?.feeWaived ?? Boolean(existing.feeWaived)
+  const trialStartsAt = shouldActivate && !feeWaived ? existing.trialStartsAt ?? now : existing.trialStartsAt ?? null
+  const trialEndsAt = shouldActivate && !feeWaived ? existing.trialEndsAt ?? addDays(now, DEFAULT_TRIAL_DAYS) : existing.trialEndsAt ?? null
 
   return {
     status,
@@ -65,5 +88,9 @@ export function buildAdminStatusUpdateData(
     contractEndDate: shouldActivate
       ? existing.contractEndDate ?? addMonths(existing.contractStartDate ?? now, existing.durationMonths)
       : existing.contractEndDate,
+    trialStartsAt,
+    trialEndsAt,
+    billingStartsAt: shouldActivate && !feeWaived ? existing.billingStartsAt ?? trialEndsAt : null,
+    feeWaived,
   }
 }

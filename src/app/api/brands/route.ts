@@ -10,6 +10,7 @@ import { computeEffectiveUserRoles } from '@/lib/userRoles'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { ensureGrowthMerchantForBrand } from '@/lib/growthDataCenter'
+import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
 
 // GET /api/brands — list brands for the logged-in user
 export async function GET(request: Request) {
@@ -316,6 +317,7 @@ export async function POST(request: Request) {
           ...(googlePlaceId ? { googlePlaceId } : {}),
         },
       })
+      await provisionPostfastKeyForBrand({ brandId: brand.id, userId: owner.id, tx })
 
       // Create PENDING subscription — Admin activates after offline payment
       const subscription = await tx.brandSubscription.create({
@@ -487,6 +489,7 @@ export async function POST(request: Request) {
         ...(googlePlaceId ? { googlePlaceId } : {}),
       },
     })
+    await provisionPostfastKeyForBrand({ brandId: brand.id, userId: sessionUser.id, tx })
 
     // 1. Write to new Crew models inside transaction
     const crew = await createMarketingCrew(brand.id, tx)

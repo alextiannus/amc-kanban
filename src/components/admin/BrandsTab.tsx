@@ -16,7 +16,7 @@ export interface BrandRecord {
   autoPilot: boolean
   owners: { userId: string; role: string; user: { id: string; email: string; nickname: string | null } }[]
   brandAgents: { agentId: string; role: string; agent: { id: string; email: string; nickname: string | null } }[]
-  subscriptions: { id: string; planId: string; planName: string; status: string; durationMonths: number; contractStartDate: string | null; contractEndDate: string | null; totalDueUsd: number }[]
+  subscriptions: { id: string; planId: string; planName: string; status: string; durationMonths: number; contractStartDate: string | null; contractEndDate: string | null; trialEndsAt: string | null; billingStartsAt: string | null; feeWaived: boolean; totalDueUsd: number }[]
   _count: { actionItems: number; contents: number }
   updatedAt: string
 }
@@ -26,7 +26,7 @@ interface BrandsTabProps {
   brandsLoading: boolean
   humans: UserRecord[]
   agents: UserRecord[]
-  brandDrafts: Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; agentIds: string[] }>
+  brandDrafts: Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; feeWaived: boolean; agentIds: string[] }>
   actionLoading: Record<string, string>
   onUpdateBrandDraft: (brandId: string, patch: any) => void
   onSaveBrandDraft: (brand: BrandRecord) => Promise<void>
@@ -490,8 +490,8 @@ export default function BrandsTab({
                         className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
                         <option value="essential">ESSENTIAL（品牌建设）</option>
-                        <option value="growth">GROWTH（稳健增长）</option>
-                        <option value="scale">SCALE（全速扩张）</option>
+                        <option value="starter">STARTER（自媒体基础）</option>
+                        <option value="advanced">ADVANCED（全域增长）</option>
                       </select>
                     </div>
                     <div>
@@ -743,6 +743,33 @@ export default function BrandsTab({
                           <option value={12}>12 个月</option>
                         </select>
                       </label>
+                      <div className="md:col-span-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-955 px-3.5 py-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-slate-750 dark:text-slate-250">无需支付订阅费计划</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            开启后该订阅不计算收费开始日；关闭时 ACTIVE 订阅默认保留 7 天免费试用。
+                          </p>
+                          {subscription && (
+                            <p className="text-[10px] text-slate-500 mt-1">
+                              {subscription.feeWaived
+                                ? '当前：免订阅费'
+                                : `当前收费开始：${subscription.billingStartsAt ? new Date(subscription.billingStartsAt).toLocaleDateString('zh-CN') : '待激活后生成'}`}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateBrandDraft(editingBrand.id, { feeWaived: !draft.feeWaived })}
+                          className="flex items-center gap-1.5 focus:outline-none shrink-0"
+                        >
+                          {draft.feeWaived ? (
+                            <ToggleRight className="w-8 h-8 text-emerald-600 cursor-pointer" />
+                          ) : (
+                            <ToggleLeft className="w-8 h-8 text-slate-400 cursor-pointer" />
+                          )}
+                          <span className="text-xs font-semibold text-slate-650 dark:text-slate-350">{draft.feeWaived ? '已免订阅费' : '正常收费'}</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* AI Agents binding */}

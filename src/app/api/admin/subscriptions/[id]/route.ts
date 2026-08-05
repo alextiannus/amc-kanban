@@ -16,6 +16,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const { id } = await params
   const body = await request.json()
   const status = String(body.status ?? '') as SubscriptionStatus
+  const feeWaived = typeof body.feeWaived === 'boolean' ? body.feeWaived : undefined
 
   if (!['PENDING', 'ACTIVE', 'FAILED', 'CANCELLED'].includes(status)) {
     return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
@@ -26,7 +27,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const updated = await prisma.brandSubscription.update({
     where: { id },
-    data: buildAdminStatusUpdateData(existing, status),
+    data: buildAdminStatusUpdateData(existing, status, new Date(), { feeWaived }),
   })
 
   if (updated.brandId) {

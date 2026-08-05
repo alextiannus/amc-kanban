@@ -4,6 +4,7 @@ import { authenticateRequest } from '@/lib/auth-v2'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject, canOwnBrand } from '@/lib/brandAccess'
 import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
+import { buildBillingActivationData } from '@/lib/subscription/workflow'
 import { POST as humanPost } from '../../../subscription/route'
 
 type Params = { params: Promise<{ id: string }> }
@@ -115,6 +116,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   // If no subscription is active (e.g. initial dev environment), auto-provision a default plan subscription
   if (!subscription) {
+    const activationData = buildBillingActivationData(12)
     subscription = await prisma.brandSubscription.create({
       data: {
         brandId,
@@ -124,9 +126,7 @@ export async function PATCH(request: Request, { params }: Params) {
         billedMonths: 1,
         monthlyBaseUsd: 199,
         totalDueUsd: 199,
-        status: 'ACTIVE',
-        contractStartDate: new Date(),
-        contractEndDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        ...activationData,
         selectedAddons: {},
       },
     })

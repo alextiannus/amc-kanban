@@ -43,6 +43,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const planId = body.planId
   const subscriptionStatus = normalizeString(body.subscriptionStatus)
   const durationMonths = Number(body.durationMonths || 12)
+  const feeWaived = Boolean(body.feeWaived)
 
   if (name !== undefined && !name) return NextResponse.json({ error: 'Brand name is required' }, { status: 400 })
   if (status !== undefined && !BRAND_STATUSES.includes(status as (typeof BRAND_STATUSES)[number])) {
@@ -166,14 +167,18 @@ export async function PATCH(request: Request, { params }: Params) {
         planName: plan.name,
         durationMonths: pricing.durationMonths,
         billedMonths: pricing.billedMonths,
-        monthlyBaseUsd: pricing.monthlyBaseUsd,
+        monthlyBaseUsd: feeWaived ? 0 : pricing.monthlyBaseUsd,
         recurringAddonsUsd: pricing.recurringAddonsUsd,
         oneTimeAddonsUsd: pricing.oneTimeAddonsUsd,
-        totalDueUsd: pricing.totalDueUsd,
+        totalDueUsd: feeWaived ? 0 : pricing.totalDueUsd,
         currency: 'USD',
         status: (subscriptionStatus || 'ACTIVE'),
         contractStartDate: startDate,
         contractEndDate: endDate,
+        trialStartsAt: feeWaived ? null : startDate,
+        trialEndsAt: feeWaived ? null : new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000),
+        billingStartsAt: feeWaived ? null : new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000),
+        feeWaived,
         paidAt: subscriptionStatus === 'ACTIVE' || subscriptionStatus === undefined ? startDate : null,
         selectedAddons: [],
         brandId: id,

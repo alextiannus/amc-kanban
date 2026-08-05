@@ -111,7 +111,7 @@ async function resolveAndSaveRealAccountId(brandId: string, accessToken: string,
     return currentAccountId
   }
   if (accessToken.startsWith('mock_')) {
-    return 'mock_account_123'
+    throw new Error('Mock Google access tokens are not allowed. Connect a real Google account before resolving account ID.')
   }
   try {
     const accRes = await fetch('https://mybusiness.googleapis.com/v1/accounts', {
