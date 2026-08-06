@@ -2,11 +2,11 @@
 
 ## 1. Executive Summary & Goals
 
-The AMC Interactive Lucky Wheel Game (AI-Vue) is an on-the-spot, offline-to-online marketing widget integrated directly into the AMC platform. It allows retail merchants (e.g., cafés, restaurants, retail shops) to display QR codes in-store, driving customers to complete simple actions (uploading shop photos, posting social media reviews) to earn points and spin a digital lucky wheel for instant rewards.
+The AMC Interactive Lucky Wheel Game (AI-Vue) is an on-the-spot customer engagement widget. Customers submit brief, genuine visit feedback for clerk-confirmed points and may optionally use an AI assistant to create editable sharing drafts for enabled external platforms. Public posting is never required for points or prizes.
 
 ### Key Objectives:
-- **UGC Collection**: Drive authentic in-store customer photo uploads (UGC) and automatically ingest them into AMC's AI Agent workflow for automated social publishing.
-- **Social Review Booster**: Motivate high-quality Google Maps and Yelp reviews in real-time.
+- **Genuine Visit Feedback**: Collect lightweight, structured visit feedback without requiring public posting.
+- **Optional Sharing Assistant**: Turn customer-selected experience details into editable, platform-specific drafts without fabricating claims or influencing ratings.
 - **Zero Friction**: Eliminate login barriers. Customer participation is session-based and instantaneous.
 - **Clerk-Oriented Controls**: Simplify task validation and prize claiming with a direct 6-digit PIN entry on the customer's device.
 
@@ -20,35 +20,35 @@ The AMC Interactive Lucky Wheel Game (AI-Vue) is an on-the-spot, offline-to-onli
 graph TD
     A[Scan QR Code in Store] --> B[Enter Game Homepage]
     B --> C[Select Language: ZH / EN]
-    B --> D[Complete Task A: Upload 3 Photos]
-    B --> E[Complete Task B: Leave Social Review]
-    D --> F[Submit and compute MD5]
-    E --> G[Redirect to Google Maps / Copy Review text]
-    G --> H[Upload Review Screenshot]
-    F --> I[AI Auto-Verification]
-    H --> I
-    I -- Approved --> J[Receive +5 Points]
-    I -- Review Flagged / Failed --> K[Prompt Clerk 6-Digit PIN Modal]
-    K -- Clerk Enters PIN --> J
-    J --> L[Spin Wheel - Cost 5 Points]
-    L --> M[Win Reward & Display 6-Character Code]
-    M --> N[Show Clerk to Claim Reward]
+    B --> D[Select 1-3 Experience Tags]
+    D --> E[Optional: Add Visit Detail]
+    E --> F[Submit On-page Feedback]
+    F --> G[Clerk Enters PIN]
+    G --> H[Receive +5 Points Once Per Business Day]
+    E --> I[Optional: Generate AI Sharing Drafts]
+    I --> J[Preview and Edit Platform Versions]
+    J --> K[Copy and Open External Platform]
+    K --> L[Optional Public Sharing]
+    H --> M[Spin Wheel - Cost 5 Points]
+    M --> N[Win Reward & Display 6-Character Code]
+    N --> O[Show Clerk to Claim Reward]
 ```
 
-- **H5 Visual Mockup**:
-  ![Customer Lucky Wheel H5 Mockup](/Users/alextian/.gemini/antigravity/brain/da825061-242a-4f41-8ef4-dfea47ddf906/customer_wheel_h5_mockup_1779454160038.png)
-  
-- **UI Details**: Dark-mode glassmorphic interface with neon glow indicators. Custom CSS-based bezier transition wheel with confetti overlays on win, and device haptic vibrations.
+- **UI Details**: Mobile-first white cards on a neutral background, with a merchant-colored header and game accents. The wheel/grid, feedback input, platform drafts, PIN confirmation, and prize pool remain readable at a 390 px viewport without horizontal scrolling.
+- **Experience Input**: Customers choose one to three tags from food/drink, service, ambience, value, speed, and other. An optional detail is limited to 240 characters; selecting other requires a detail.
+- **Independent Actions**: “Generate sharing drafts” is available without a clerk PIN and never awards points. “Submit feedback and receive 5 points” creates a pending feedback task for clerk PIN confirmation. Neither action depends on opening or publishing to an external platform.
+- **Editable Platform Drafts**: One generation returns versions only for enabled Google Review, Xiaohongshu, and Instagram channels. Each version is editable before a full-width “Copy and open” action. Google drafts contain no hashtags, requested rating, or promotional reward language; social drafts use at most five relevant hashtags.
+- **Return Continuity**: Server-generated drafts can be restored after refresh. Customer edits and the opened platform are stored in `brandId`-scoped `sessionStorage`; customer edits are not written back to the server.
+- **Accessibility and Failure Handling**: The generator, tags, editors, and platform actions provide bilingual labels, ARIA state, visible keyboard focus, and touch feedback. Clipboard failure keeps the customer on the page and exposes manual-copy guidance instead of navigating away.
 
 ### 2.2 Merchant Dashboard & Table Tent QR Poster
-
-- **Poster Mockup**:
-  ![Merchant Poster Mockup](/Users/alextian/.gemini/antigravity/brain/da825061-242a-4f41-8ef4-dfea47ddf906/merchant_poster_mockup_1779454177779.png)
 
 - **Merchant Controls**:
   - Customize and download printable PDF table tents with brand logos and call-to-actions.
   - Set game configuration: customize wheel segments, win probabilities, and Clerk PIN.
   - Track prize inventory and claimed coupons.
+  - Use one permanent QR code per brand. The QR payload is always `https://amc-kanban.immedi.ai/game/{brandId}` and never contains a prize ID, configuration ID, timestamp, or version.
+  - Saving reward, probability, inventory, poster copy, or poster theme changes takes effect immediately for future visits without requiring the merchant to reprint the QR sticker.
 
 ---
 
@@ -56,38 +56,28 @@ graph TD
 
 ### 3.1 Session & Auth Management (Zero Login)
 - No email, phone, or password inputs required for the customer.
-- H5 generates a random UUID client-side and stores it in `localStorage` under `amc_game_session`.
-- Points, uploaded tasks, and spin logs are bound to the `sessionId` + `brandId`.
+- H5 generates a random UUID client-side and stores it in `localStorage` under `amc-game-session:{brandId}`.
+- Points, feedback tasks, AI share drafts, and spin logs are bound to the `sessionId` + `brandId`.
 - Session is transient. Clearing browser cache deletes points and uncollected prizes.
 
-### 3.2 Points Task & AI Validation
-#### Task A: Store Photo Upload
-- Customers upload exactly 3 photos of the store.
-- **Copyright Consent**: A checkbox stating *"I authorize the merchant to use these images for AI content generation and marketing purposes"* is displayed and pre-checked. Users cannot submit without consenting.
-- **Client-Side Image Compression**: H5 scales down uploaded images using HTML5 Canvas to <1MB and converts to WebP before transmission to optimize bandwidth.
+### 3.2 Genuine Feedback Points Task
+- The customer submits one to three normalized experience tags and an optional detail. The task type is `EXPERIENCE_FEEDBACK` and starts as `PENDING`.
+- A valid clerk PIN changes the task to `APPROVED` and grants exactly 5 points. The same game session can receive this reward only once per brand business day.
+- Cached clients may still submit `REVIEW_SUBMIT`; the server normalizes it to the same once-per-day feedback reward and ignores `reviewPlatform` when determining eligibility.
+- `/api/game/status` returns the current business day's feedback task so pending PIN and already-awarded states survive refresh.
 
-#### Task B: Google Maps & Social Review
-- User clicks "Write a Review", which opens:
-  `https://search.google.com/local/writereview?placeid=<Google_Place_Id>`
-  This deep link opens Google Maps app directly to the 5-star review page.
-- **Clipboard integration**: Automatically copy brand's recommended review text/tags to the customer's clipboard.
-- User takes a screenshot of the review and uploads it.
-
-#### Verification & Clerk Overrides:
-1. **AI OCR Analysis**: System reads screenshot using **Gemini Vision API**. It validates:
-   - Platform name (Google Maps, Yelp, etc.).
-   - Brand name matching the store.
-   - Review timing (flags if the review is older than 3 days, checking for phrases like "1 year ago").
-2. **AI Approved**: Points are granted immediately.
-3. **AI Rejected/Flagged**: Instead of rejecting, the screen presents a 6-digit PIN input panel. The customer hands their phone to the clerk, who physically enters the brand's store PIN (e.g. `123456`) to manually override and issue points.
-
-### 3.3 Anti-Cheating & Image Deduplication
-- **MD5 Hash Check**: Server checks the MD5 hashes of uploaded images against the **latest 30 submissions** for this brand. If duplicate found, reject submission.
-- **Review Date Match**: AI validation checks relative date context. Old reviews cannot be reused.
+### 3.3 AI Sharing Drafts & Abuse Protection
+- The public draft endpoint validates an existing game session, enabled platforms, locale, one-to-three allowed tags, and the 240-character detail limit.
+- One model call returns structured drafts for all enabled platforms. The prompt uses only customer-provided experience and minimal public brand facts; invalid output or unavailable AI falls back to deterministic editable templates.
+- Google output must remain neutral and must never request a rating or mention incentives, discounts, free goods, or rewards. This follows the [Google Maps policy on incentivized reviews](https://support.google.com/contributionpolicy/answer/16597558?hl=en) and [Google Maps contributed-content policy](https://support.google.com/contributionpolicy/answer/7400114?hl=en-GB).
+- Limits are three generation attempts per session/business day, 60 AI calls per HMAC-anonymized IP/business day, and 300 AI calls per brand/business day. Quota reservation is atomic; raw IP addresses are never stored.
+- Reaching the session limit returns the latest draft without another model call. IP/brand limits or model failure return a template fallback so the customer never reaches a dead end.
 
 ### 3.4 Spin Resilience & Guardrails
 - **Spin Crash Protection**: If the browser reloads or crashes mid-spin, the server has already committed the spin event. Upon remounting, the H5 queries `/api/game/status`. If an unclaimed (`UNCLAIMED`) prize exists, it bypasses the spin animation and directly shows the redemption card.
 - **Infinite/Limited Inventories**: Prize inventories support numeric limits or `Null` representing infinite supply. The server enforces transactional inventory decrements on spin.
+- **Reward Identity**: Changing a reward name or type creates a new reward definition with fresh inventory and claim counters. Probability or inventory-limit-only edits retain the existing reward identity and counters.
+- **Issued Reward Preservation**: Every spin log snapshots the reward name, type, and image at win time. Later reward edits or deletion never change an issued reward, its redemption terms, or its expiry.
 
 ---
 
@@ -141,6 +131,7 @@ model GameSession {
   
   tasks              CustomerTaskSubmission[]
   spinLogs           GameSpinLog[]
+  shareDrafts        GameShareDraft[]
 
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
@@ -157,6 +148,9 @@ model CustomerTaskSubmission {
   taskType           String           
   status             String           @default("PENDING") 
   pointsAwarded      Int              @default(0)
+  experienceTags     String[]         @default([])
+  experienceNote     String?
+  rewardDate         String?
   
   images             String[]         
   imageMd5s          String[]         
@@ -169,14 +163,43 @@ model CustomerTaskSubmission {
   reviewedAt         DateTime?
   
   createdAt          DateTime         @default(now())
+
+  @@unique([sessionId, taskType, rewardDate])
+}
+
+model GameShareDraft {
+  id                 String           @id @default(cuid())
+  brandId            String
+  sessionId          String
+  session            GameSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  activityDate       String
+  locale             String
+  experienceTags     String[]         @default([])
+  experienceNote     String?
+  drafts             Json?
+  generationSource   String           @default("fallback")
+  generationCount    Int              @default(0)
+  aiCallCount        Int              @default(0)
+  ipHash             String?
+  lastLimitReason    String?
+  generatedAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([sessionId, activityDate])
+  @@index([brandId, activityDate])
+  @@index([ipHash, activityDate])
 }
 
 model GameSpinLog {
   id                 String           @id @default(cuid())
   sessionId          String
   session            GameSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  prizeId            String
-  prize              GamePrize        @relation(fields: [prizeId], references: [id])
+  prizeId            String?
+  prize              GamePrize?       @relation(fields: [prizeId], references: [id], onDelete: SetNull)
+  prizeNameSnapshot  String
+  prizeTypeSnapshot  String
+  prizeImageSnapshot String?
   
   pointsDeducted     Int              @default(5)
   redemptionCode     String           @unique 
@@ -194,13 +217,10 @@ model GameSpinLog {
 ## 5. Security & Operation Safeguards
 
 ### 5.1 Rate Limiting & API Shielding
-To prevent bad actors from script-spamming routes (e.g. generating infinite Sessions or Mock Photo Uploads):
-1. **IP Rate Limit**: Limit creation of `GameSession` records to 5 per IP address per hour.
-2. **File Size and Type Restraints**: Upload endpoints validate magic bytes of images to prevent uploading malicious executable files disguised as screenshots.
-3. **Spin Signature Verification**: The spinning logic deducts points and calculates rewards on the server-side only. Client cannot supply "chosen" prizes.
+1. **AI quota reservation**: A serializable database transaction atomically reserves at most 3 generations per brand/session/business day, 60 model calls per HMAC-anonymized IP/day, and 300 model calls per brand/day.
+2. **IP privacy**: The server stores only a one-way HMAC of a trusted client IP. If no trusted IP is available, session and brand limits still apply.
+3. **Safe fallback**: Model unavailability, invalid structured output, or IP/brand exhaustion returns deterministic editable templates with `source: "fallback"`; session exhaustion returns the latest draft without another model call.
+4. **Spin integrity**: Point deduction and prize selection remain server-side; the client cannot supply a chosen prize.
 
-### 5.2 UGC Asset Ingestion Pipeline
-Once a customer's photo submission is approved:
-1. AMC transfers the WebP image files asynchronously to the merchant's **Lark Drive Folder**.
-2. AMC registers them in the `MediaAsset` catalog labeled `customer_ugc`.
-3. Gemini triggers automated tagging, aesthetic rating, and pre-writes social copy, queueing it up as a draft in the merchant dashboard.
+### 5.2 Experience Data Boundary
+Experience tags, the optional note, and the latest generated server draft are retained for task audit and refresh recovery. Customer edits remain only in brand-scoped `sessionStorage`. AMC does not track publication, request screenshots, or ingest public posts as proof for points. Draft generation may use only customer-provided experience and published merchant facts; the UI continuously asks the customer to verify truthfulness before sharing.

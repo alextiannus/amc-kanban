@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Save, Loader2, Plus, Trash2, HelpCircle, Check, Copy, Printer, RefreshCw, Eye, Search, TicketCheck } from 'lucide-react'
 import QRCode from 'qrcode'
+import { getPermanentGameUrl, getPermanentPosterUrl, PERMANENT_GAME_QR_OPTIONS } from '@/lib/gameQr'
 
 interface Prize {
   id?: string
@@ -36,7 +37,6 @@ interface GameConfig {
 interface Props {
   brandId: string
   brandName: string
-  kanbanBaseUrl?: string
 }
 
 function allocateGridSlots(prizesList: Prize[]): Prize[] {
@@ -116,16 +116,7 @@ function allocateGridSlots(prizesList: Prize[]): Prize[] {
   }
 }
 
-export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUrl }: Props) {
-  const getBase = () => {
-    if (kanbanBaseUrl) return kanbanBaseUrl
-    if (typeof window === 'undefined') return ''
-    const { protocol, hostname, port, origin } = window.location
-    if (port || hostname === 'localhost' || hostname === '127.0.0.1') return origin
-    if (hostname === 'amc-kanban.immedi.ai') return origin
-    return `${protocol}//amc-kanban.immedi.ai`
-  }
-
+export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   const [config, setConfig] = useState<GameConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -138,7 +129,7 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
 
   // Poster customizations
   const [posterTitle, setPosterTitle] = useState('Scan & Win!')
-  const [posterDesc, setPosterDesc] = useState('Leave a review or share store photos to get free drinks and rewards!')
+  const [posterDesc, setPosterDesc] = useState('Share your visit feedback to earn points. Public posting is optional.')
   const [stickerTheme, setStickerTheme] = useState<'black' | 'blue' | 'green' | 'purple' | 'gold'>('black')
   const [googlePlaceId, setGooglePlaceId] = useState('')
   const [googleReviewUrl, setGoogleReviewUrl] = useState('')
@@ -180,17 +171,6 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
       if (data.brand?.googleReviewUrl) setGoogleReviewUrl(data.brand.googleReviewUrl)
       if (data.brand?.googleBusinessUrl) setGoogleBusinessUrl(data.brand.googleBusinessUrl)
 
-      // Generate QR Code
-      const gameUrl = `${getBase()}/game/${brandId}`
-      const qrDataUrl = await QRCode.toDataURL(gameUrl, {
-        width: 300,
-        margin: 1,
-        color: {
-          dark: '#000000',
-          light: '#ffffff',
-        },
-      })
-      setQrCodeUrl(qrDataUrl)
     } catch (err: unknown) {
       console.error(err)
       setError(err instanceof Error ? err.message : 'Failed to load game configuration')
@@ -204,6 +184,18 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
       void fetchConfig()
     })
   }, [fetchConfig])
+
+  useEffect(() => {
+    let active = true
+    void QRCode.toDataURL(getPermanentGameUrl(brandId), PERMANENT_GAME_QR_OPTIONS)
+      .then((dataUrl) => {
+        if (active) setQrCodeUrl(dataUrl)
+      })
+      .catch((err: unknown) => console.error('Failed to generate permanent game QR code', err))
+    return () => {
+      active = false
+    }
+  }, [brandId])
 
   const handleSave = async () => {
     if (!config) return
@@ -300,14 +292,14 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
   }
 
   const copyGameLink = () => {
-    const gameUrl = `${getBase()}/game/${brandId}`
+    const gameUrl = getPermanentGameUrl(brandId)
     navigator.clipboard.writeText(gameUrl)
     setCopiedLink(true)
     setTimeout(() => setCopiedLink(false), 2000)
   }
 
   const openPosterPrint = () => {
-    const printUrl = `${getBase()}/board/game/poster/${brandId}?title=${encodeURIComponent(posterTitle)}&desc=${encodeURIComponent(posterDesc)}&theme=${stickerTheme}`
+    const printUrl = `${getPermanentPosterUrl(brandId)}?title=${encodeURIComponent(posterTitle)}&desc=${encodeURIComponent(posterDesc)}&theme=${stickerTheme}`
     window.open(printUrl, '_blank')
   }
 
@@ -436,7 +428,7 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
         <div className="min-w-0">
           <h2 className="text-base font-black text-slate-800 dark:text-slate-100 leading-tight">店内活动设置</h2>
           <p className="text-[10px] text-slate-400 mt-0.5 hidden sm:block">
-            配置扫码抽奖游戏，顾客发布后由员工确认加积分。
+            配置扫码抽奖游戏。顾客提交真实体验后由员工确认积分，公开分享完全自愿。
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -448,7 +440,7 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
             <span className="hidden sm:inline">{copiedLink ? '已复制' : '复制链接'}</span>
           </button>
           <a
-            href={`${getBase()}/game/${brandId}`}
+            href={getPermanentGameUrl(brandId)}
 
             target="_blank"
             rel="noopener noreferrer"
@@ -568,7 +560,7 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
                   <span className="group relative text-slate-400 cursor-help">
                     <HelpCircle size={11} />
                     <span className="absolute bottom-full left-0 mb-1.5 hidden group-hover:block w-44 p-2 rounded bg-slate-950 text-[10px] text-white leading-normal z-50 shadow-xl">
-                      AI无法核实截图时，店员输入此密码可人工发放积分
+                      顾客提交站内真实体验后，店员输入此密码确认并发放积分
                     </span>
                   </span>
                 </label>
@@ -596,7 +588,7 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
 
             {/* Platform toggles — compact chips */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">可做任务平台</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">可选分享平台</label>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { key: 'taskGoogleMapsEnabled' as const, label: 'Google Maps', icon: '📍' },
@@ -1074,6 +1066,11 @@ export default function GameSettingsDashboard({ brandId, brandName, kanbanBaseUr
                   </div>
                 )
               })()}
+            </div>
+
+            <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-bold leading-4 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
+              <Check size={13} className="mt-0.5 shrink-0" />
+              <span>固定二维码：更换奖品、概率或库存后无需重新打印。</span>
             </div>
 
             <button

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getBusinessDate } from '@/lib/gameShareDrafts'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -36,8 +37,12 @@ export async function GET(request: Request) {
         sessionId: session.id,
         status: 'UNCLAIMED',
       },
-      include: {
-        prize: true,
+      select: {
+        id: true,
+        prizeNameSnapshot: true,
+        prizeTypeSnapshot: true,
+        redemptionCode: true,
+        createdAt: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -46,7 +51,26 @@ export async function GET(request: Request) {
 
     const config = await prisma.gameConfig.findUnique({
       where: { brandId },
-      select: { maxSpinsPerUserDay: true },
+      select: {
+        maxSpinsPerUserDay: true,
+        brand: { select: { timezone: true } },
+      },
+    })
+
+    const rewardDate = getBusinessDate(config?.brand.timezone)
+    const todayFeedbackSubmission = await prisma.customerTaskSubmission.findUnique({
+      where: {
+        sessionId_taskType_rewardDate: {
+          sessionId: session.id,
+          taskType: 'EXPERIENCE_FEEDBACK',
+          rewardDate,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+        pointsAwarded: true,
+      },
     })
 
     const startOfDay = new Date()
@@ -64,10 +88,21 @@ export async function GET(request: Request) {
       spinsTodayCount,
       maxSpinsPerUserDay,
       spinsRemainingToday: Math.max(maxSpinsPerUserDay - spinsTodayCount, 0),
-      unclaimedPrizes: unclaimedSpins.map((log: any) => ({
+      todayFeedbackSubmission: todayFeedbackSubmission ? {
+        submissionId: todayFeedbackSubmission.id,
+        status: todayFeedbackSubmission.status,
+        pointsAwarded: todayFeedbackSubmission.pointsAwarded,
+      } : null,
+      unclaimedPrizes: unclaimedSpins.map((log: {
+        id: string
+        prizeNameSnapshot: string
+        prizeTypeSnapshot: string
+        redemptionCode: string
+        createdAt: Date
+      }) => ({
         logId: log.id,
-        prizeName: log.prize.name,
-        prizeType: log.prize.type,
+        prizeName: log.prizeNameSnapshot,
+        prizeType: log.prizeTypeSnapshot,
         redemptionCode: log.redemptionCode,
         createdAt: log.createdAt,
       })),

@@ -404,6 +404,7 @@ model Brand {
   subscriptions     BrandSubscription[]
   gameConfig        GameConfig?
   gameSessions      GameSession[]
+  gameShareDrafts   GameShareDraft[]
   folders           BrandFolder[]
   knowledge         BrandKnowledge?
   corrections       UserCorrectionFeedback[]
@@ -684,7 +685,7 @@ model GameConfig {
   templateType           String  @default("WHEEL")
 
   posterTitle String @default("Scan & Win!")
-  posterDesc  String @default("Leave a review to spin and win rewards instantly!")
+  posterDesc  String @default("Share your visit feedback to earn points. Public posting is optional.")
   posterTheme String @default("black")
 
   prizes    GamePrize[]
@@ -718,8 +719,9 @@ model GameSession {
   sessionId     String
   pointsBalance Int    @default(0)
 
-  tasks    CustomerTaskSubmission[]
-  spinLogs GameSpinLog[]
+  tasks       CustomerTaskSubmission[]
+  spinLogs    GameSpinLog[]
+  shareDrafts GameShareDraft[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -745,19 +747,54 @@ model CustomerTaskSubmission {
   reviewPlatform String?
   reviewTimeRaw  String?
   aiReason       String?
+  experienceTags String[] @default([])
+  experienceNote String?
+  rewardDate     String?
 
   isManualOverride Boolean   @default(false)
   reviewedAt       DateTime?
 
   createdAt DateTime @default(now())
+
+  @@unique([sessionId, taskType, rewardDate])
+  @@index([brandId, rewardDate])
+}
+
+model GameShareDraft {
+  id               String      @id @default(cuid())
+  brandId          String
+  brand            Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  sessionId        String
+  session          GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  activityDate     String
+  locale           String
+  experienceTags   String[]    @default([])
+  experienceNote   String?
+  drafts           Json?
+  generationSource String      @default("fallback")
+  generationCount  Int         @default(0)
+  aiCallCount      Int         @default(0)
+  ipHash           String?
+  lastLimitReason  String?
+  generatedAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@unique([sessionId, activityDate])
+  @@index([brandId, activityDate])
+  @@index([ipHash, activityDate])
 }
 
 model GameSpinLog {
   id        String      @id @default(cuid())
   sessionId String
   session   GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  prizeId   String
-  prize     GamePrize   @relation(fields: [prizeId], references: [id])
+  prizeId   String?
+  prize     GamePrize?  @relation(fields: [prizeId], references: [id], onDelete: SetNull)
+
+  prizeNameSnapshot  String
+  prizeTypeSnapshot  String
+  prizeImageSnapshot String?
 
   pointsDeducted Int    @default(5)
   redemptionCode String @unique

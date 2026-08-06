@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(request: Request) {
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'submissionId and pinCode required' }, { status: 400 })
     }
 
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Fetch the submission
       const submission = await tx.customerTaskSubmission.findUnique({
         where: { id: submissionId },
@@ -20,8 +21,8 @@ export async function POST(request: Request) {
         throw new Error('Task submission not found')
       }
 
-      if (submission.status === 'APPROVED') {
-        throw new Error('This submission has already been approved and points awarded.')
+      if (submission.taskType !== 'EXPERIENCE_FEEDBACK') {
+        throw new Error('This task is not eligible for visit-feedback points.')
       }
 
       // 2. Fetch the game config to verify the PIN
@@ -36,9 +37,19 @@ export async function POST(request: Request) {
         throw new Error('Incorrect staff PIN code. Please try again.')
       }
 
+      if (submission.status === 'APPROVED') {
+        return {
+          success: true,
+          pointsBalance: submission.session.pointsBalance,
+          pointsAwarded: submission.pointsAwarded,
+          status: submission.status,
+          alreadyApproved: true,
+        }
+      }
+
       // 3. Update submission status to APPROVED and mark as manually overridden
-      const updatedSubmission = await tx.customerTaskSubmission.update({
-        where: { id: submissionId },
+      const approval = await tx.customerTaskSubmission.updateMany({
+        where: { id: submissionId, status: { not: 'APPROVED' } },
         data: {
           status: 'APPROVED',
           isManualOverride: true,
@@ -46,6 +57,18 @@ export async function POST(request: Request) {
           reviewedAt: new Date(),
         },
       })
+
+      if (approval.count === 0) {
+        const currentSession = await tx.gameSession.findUniqueOrThrow({ where: { id: submission.session.id } })
+        const currentSubmission = await tx.customerTaskSubmission.findUniqueOrThrow({ where: { id: submissionId } })
+        return {
+          success: true,
+          pointsBalance: currentSession.pointsBalance,
+          pointsAwarded: currentSubmission.pointsAwarded,
+          status: currentSubmission.status,
+          alreadyApproved: true,
+        }
+      }
 
       // 4. Grant 5 points to the customer's session balance
       const updatedSession = await tx.gameSession.update({
@@ -58,7 +81,9 @@ export async function POST(request: Request) {
       return {
         success: true,
         pointsBalance: updatedSession.pointsBalance,
-        status: updatedSubmission.status,
+        pointsAwarded: 5,
+        status: 'APPROVED',
+        alreadyApproved: false,
       }
     })
 

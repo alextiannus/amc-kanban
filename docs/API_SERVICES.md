@@ -350,15 +350,29 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 
 ## 3.14 Game Marketing Service
 
+Permanent QR contract:
+
+- Each brand uses only `https://amc-kanban.immedi.ai/game/{brandId}`. The QR payload never includes a prize/configuration ID, timestamp, or version.
+- Prize, probability, inventory, poster-copy, and theme saves take effect for new visits without invalidating printed QR stickers.
+- `GameSpinLog` snapshots the winning prize name, type, and image. Status and redemption responses use the snapshots so later configuration changes cannot alter issued rewards.
+- Changing a prize name or type creates a new prize identity with fresh counters; probability or inventory-limit-only changes retain the identity.
+
 职责：店内扫码活动、抽奖配置、任务配置、海报和参与状态。
+
+顾客积分依据是站内真实体验反馈经店员 PIN 确认；公开平台分享完全自愿，不追踪、不截图验证，也不影响积分或奖品。AI 分享助手使用匿名公开接口一次返回所有已启用平台的可编辑草稿；每个游戏 session 和品牌营业日最多生成 3 次，并以 HMAC 匿名 IP 和品牌日额度防刷。缓存客户端的 `REVIEW_SUBMIT` 会按当日 `EXPERIENCE_FEEDBACK` 处理，`reviewPlatform` 不参与奖励资格判断。
 
 接口：
 
 - `GET/POST /api/game/config`
 - `POST /api/game/spin`
 - `GET /api/game/status`
+- `GET/POST /api/game/share-drafts`
 - `POST /api/game/tasks`
 - `POST /api/game/tasks/override`
+
+`POST /api/game/share-drafts` 接收 `brandId`、`sessionId`、`locale`、`experienceTags[]` 和可选 `experienceNote`，返回 `draftId`、按启用平台组织的 `drafts`、`source`、生成次数/剩余额度、可选 `limitReason` 与 `generatedAt`。`GET` 使用 `brandId`、`sessionId` 查询当日最新草稿；无草稿时返回字段稳定的空结果。
+
+`POST /api/game/tasks` 接受 `EXPERIENCE_FEEDBACK` 及兼容输入 `REVIEW_SUBMIT`；公开分享平台不参与奖励判断。`GET /api/game/status` 额外返回 `todayFeedbackSubmission`，其他既有响应字段保持兼容。
 
 前端页面：
 
@@ -651,6 +665,7 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 | GET, POST | `/api/game/redemptions` |
 | POST | `/api/game/spin` |
 | GET | `/api/game/status` |
+| GET, POST | `/api/game/share-drafts` |
 | POST | `/api/game/tasks` |
 | POST | `/api/game/tasks/override` |
 | GET | `/api/integrations/amc-growth/sso/start` |

@@ -1,5 +1,16 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
+## 店内抽奖“一店一码”（当前规则）
+
+- 每个品牌的扫码入口永久固定为 `https://amc-kanban.immedi.ai/game/{brandId}`，不把奖品、配置、活动版本或时间写入二维码。
+- 商家保存奖品、中奖率、库存或海报设置后立即对新访问生效，已经打印的贴纸无需更换。
+- 更换奖品名称或类型视为新奖品，库存和计数从 0 开始；仅修改概率或库存上限时保留原奖品统计。
+- 已经抽中的奖品按中奖时快照展示和核销，后续奖品配置修改或删除不得改变旧券内容与有效期。
+- 顾客选择 1–3 个真实体验标签并可补充细节；提交站内体验反馈、由店员 PIN 确认后获得 5 积分。同一品牌和浏览器 session 每个商家营业日只奖励一次，公开发布不是积分或奖品条件。
+- AI 分享助手无需 PIN 即可为所有已启用平台一次生成可编辑草稿；顾客可选择“复制并打开平台”，也可完全不公开分享。页面不得使用“AI 好评”或“发布后兑奖”等引导性表述。
+- Google 草稿不得要求星级，也不得包含折扣、免费商品、奖励或其他激励评价话术，遵循 [Google 激励评价政策](https://support.google.com/contributionpolicy/answer/16597558?hl=en) 与 [Google Maps 内容政策](https://support.google.com/contributionpolicy/answer/7400114?hl=en-GB)。
+- Google Review、小红书和 Instagram 使用纵向操作卡，不默认选择渠道。草稿、编辑内容和“已打开”状态按 `brandId` 隔离；复制成功后沿用现有 App deep link 与 900ms 网页 fallback，公开发布行为不追踪、不验证。
+
 > **PRD 维护原则（2026-07-04 起生效）**：本文件只描述当前有效的产品与架构理解。决策变化时必须直接改写所有受影响章节并清除冲突描述；历史版本由 Git 保存，不在 PRD 正文中保留已废止方案。用户、组织与权限的执行级规范以 [`prd_user_organization_permissions.md`](./prd_user_organization_permissions.md) 为准。
 
 ## 目标用户：中小出海中餐商家老板
@@ -1437,9 +1448,7 @@ model LLMConfig {
 |----------|------|
 | `src/app/mock-merchant/` (5 files) | 本地测试 mock，无生产入口 |
 | `src/app/faq/page.tsx` (1,025行) | 无内部导航链接 |
-| `src/app/game/[brandId]/page.tsx` (1,386行) | 已由 `/board/game` 替代 |
 | `src/app/board/agents/page.tsx` | 无引用 |
-| `src/app/board/game/poster/[brandId]/page.tsx` | 无引用 |
 
 **构建配置优化**：
 - `next.config.js`：移除 8 个多余的 `micromark-*` transpilePackages

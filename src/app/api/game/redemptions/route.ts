@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 function normalizeCode(code: string): string {
@@ -31,21 +32,40 @@ export async function GET(request: Request) {
       session: { brandId },
       ...(code ? { redemptionCode: normalizeCode(code) } : {}),
     },
-    include: {
-      prize: true,
-      session: true,
+    select: {
+      id: true,
+      redemptionCode: true,
+      status: true,
+      prizeNameSnapshot: true,
+      prizeTypeSnapshot: true,
+      pointsDeducted: true,
+      createdAt: true,
+      claimedAt: true,
+      expiresAt: true,
+      session: { select: { sessionId: true } },
     },
     orderBy: { createdAt: 'desc' },
     take: code ? 1 : 50,
   })
 
   return NextResponse.json({
-    redemptions: logs.map((log: any) => ({
+    redemptions: logs.map((log: {
+      id: string
+      redemptionCode: string
+      status: string
+      prizeNameSnapshot: string
+      prizeTypeSnapshot: string
+      pointsDeducted: number
+      createdAt: Date
+      claimedAt: Date | null
+      expiresAt: Date | null
+      session: { sessionId: string }
+    }) => ({
       id: log.id,
       redemptionCode: log.redemptionCode,
       status: log.status,
-      prizeName: log.prize.name,
-      prizeType: log.prize.type,
+      prizeName: log.prizeNameSnapshot,
+      prizeType: log.prizeTypeSnapshot,
       pointsDeducted: log.pointsDeducted,
       createdAt: log.createdAt,
       claimedAt: log.claimedAt,
@@ -62,7 +82,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'brandId, redemptionCode, and pinCode are required' }, { status: 400 })
     }
 
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const config = await tx.gameConfig.findUnique({
         where: { brandId },
         select: { clerkPin: true },
@@ -72,12 +92,12 @@ export async function POST(request: Request) {
 
       const log = await tx.gameSpinLog.findUnique({
         where: { redemptionCode: normalizeCode(redemptionCode) },
-        include: { prize: true, session: true },
+        include: { session: true },
       })
       if (!log || log.session.brandId !== brandId) {
         throw new Error('Redemption code not found for this brand.')
       }
-      if (log.prize.type === 'THANKS') {
+      if (log.prizeTypeSnapshot === 'THANKS') {
         throw new Error('This is a thank-you result and does not need redemption.')
       }
       if (log.status === 'CLAIMED') {
@@ -97,15 +117,15 @@ export async function POST(request: Request) {
           status: 'CLAIMED',
           claimedAt: new Date(),
         },
-        include: { prize: true, session: true },
+        include: { session: true },
       })
 
       return {
         id: updated.id,
         redemptionCode: updated.redemptionCode,
         status: updated.status,
-        prizeName: updated.prize.name,
-        prizeType: updated.prize.type,
+        prizeName: updated.prizeNameSnapshot,
+        prizeType: updated.prizeTypeSnapshot,
         createdAt: updated.createdAt,
         claimedAt: updated.claimedAt,
         sessionId: updated.session.sessionId,

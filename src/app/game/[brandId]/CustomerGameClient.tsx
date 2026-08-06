@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ComponentType } from 'react'
+import { BookOpen, CheckCircle2, Copy, ExternalLink, MapPin, Sparkles } from 'lucide-react'
 
 type Prize = {
   id?: string
@@ -43,6 +44,11 @@ type GameStatus = {
     prizeType: string
     redemptionCode: string
   }[]
+  todayFeedbackSubmission?: {
+    submissionId: string
+    status: 'PENDING' | 'APPROVED' | 'REJECTED'
+    pointsAwarded: number
+  } | null
 }
 
 type SpinResult = {
@@ -58,13 +64,29 @@ type Platform = 'GOOGLE' | 'XIAOHONGSHU' | 'INSTAGRAM'
 
 type PendingSubmission = {
   submissionId: string
-  platform: Platform
 }
 
 type Locale = 'zh' | 'en'
+type ExperienceTag = 'FOOD_DRINK' | 'SERVICE' | 'AMBIENCE' | 'VALUE' | 'SPEED' | 'OTHER'
+type ShareDrafts = Partial<Record<Platform, string>>
+
+type ShareDraftResponse = {
+  draftId: string | null
+  locale: Locale | null
+  experienceTags: ExperienceTag[]
+  experienceNote: string | null
+  drafts: ShareDrafts
+  source: 'ai' | 'fallback' | null
+  generationsUsed: number
+  generationsRemaining: number
+  limitReason?: string | null
+  generatedAt: string | null
+}
 
 const copy = {
   en: {
+    openPlatform: 'Open platform',
+    opened: 'Opened',
     loading: 'Loading activity...',
     unavailableTitle: 'Activity unavailable',
     defaultBrand: 'AMC Activity',
@@ -86,11 +108,7 @@ const copy = {
     noCodeNeeded: 'No redemption code needed.',
     unclaimedRewards: 'Unclaimed rewards',
     earnPoints: 'Earn points',
-    earnPointsBody: 'Publish on one channel, then ask store staff to confirm with the PIN. Each confirmed task adds 5 points.',
-    published: 'I published it',
-    recording: 'Recording...',
     staffConfirmation: 'Staff confirmation',
-    waitingConfirmation: (platform: string) => `${platform} is waiting for staff PIN confirmation.`,
     staffPin: 'Staff PIN',
     checking: 'Checking',
     confirm: 'Confirm',
@@ -106,14 +124,39 @@ const copy = {
     submitFailed: 'Submission failed.',
     confirmationFailed: 'Staff confirmation failed.',
     spinFailed: 'Spin failed.',
-    taskSubmitted: 'Completed. Please ask staff to enter the PIN and confirm your points.',
     taskConfirmed: 'Confirmed. 5 points have been added. You can play now.',
     googleReview: 'Google review',
     xiaohongshu: 'Xiaohongshu',
     instagram: 'Instagram',
     noPrize: 'No prize',
+    experienceTitle: 'Share your real experience',
+    experienceBody: 'Choose 1–3 topics and add an optional detail. Public sharing is always your choice.',
+    chooseTopics: 'What stood out?',
+    detailLabel: 'Add one real detail (optional)',
+    detailPlaceholder: 'For example: what you enjoyed or what could be improved',
+    otherNeedsDetail: 'Please add a detail when “Other” is selected.',
+    draftLanguage: 'Draft language',
+    aiGenerate: 'AI helps me write sharing drafts',
+    aiRegenerate: 'Generate new drafts',
+    generating: 'Generating...',
+    generationsLeft: (count: number) => `${count} AI generation${count === 1 ? '' : 's'} left today`,
+    truthNotice: 'AI draft: please check that every detail matches your real experience before sharing.',
+    fallbackNotice: 'AI is temporarily unavailable or a usage limit was reached. Editable basic templates are shown instead.',
+    optionalSharing: 'Optional public sharing',
+    optionalSharingBody: 'Sharing publicly is voluntary and does not affect points or prizes.',
+    copyAndOpen: (platform: string) => `Copy and open ${platform}`,
+    copyFailed: 'Could not copy automatically. Your draft is still here—please press and hold to copy it manually.',
+    copiedOpening: (platform: string) => `Copied. Opening ${platform}...`,
+    submitFeedback: 'Submit experience and claim 5 points',
+    submittingFeedback: 'Submitting experience...',
+    feedbackRewardBody: 'Store staff confirms this in-store feedback with the PIN. Public posting is not required.',
+    feedbackPending: 'Experience submitted. Ask store staff to enter the PIN.',
+    feedbackRewarded: 'Today’s 5 experience points have been received.',
+    waitingFeedbackConfirmation: 'This experience is waiting for store staff PIN confirmation.',
   },
   zh: {
+    openPlatform: '打开平台',
+    opened: '已打开',
     loading: '活动加载中...',
     unavailableTitle: '活动暂不可用',
     defaultBrand: 'AMC 活动',
@@ -135,11 +178,7 @@ const copy = {
     noCodeNeeded: '无需兑换码。',
     unclaimedRewards: '待领取奖品',
     earnPoints: '赚取积分',
-    earnPointsBody: '选择一个平台发布后，请店员输入 PIN 确认。每次确认可获得 5 积分。',
-    published: '我已发布',
-    recording: '提交中...',
     staffConfirmation: '员工确认',
-    waitingConfirmation: (platform: string) => `${platform} 等待员工输入 PIN 确认。`,
     staffPin: '员工 PIN',
     checking: '确认中',
     confirm: '确认',
@@ -155,13 +194,46 @@ const copy = {
     submitFailed: '提交失败。',
     confirmationFailed: '员工确认失败。',
     spinFailed: '抽奖失败。',
-    taskSubmitted: '已提交，请让店员输入 PIN 确认积分。',
     taskConfirmed: '确认成功，已增加 5 积分。现在可以抽奖了。',
     googleReview: 'Google 评价',
     xiaohongshu: '小红书',
     instagram: 'Instagram',
     noPrize: '谢谢参与',
+    experienceTitle: '分享你的真实体验',
+    experienceBody: '选择 1–3 个体验主题，也可以补充一句细节。公开分享始终由你自愿决定。',
+    chooseTopics: '哪些方面让你印象深刻？',
+    detailLabel: '补充一句真实细节（选填）',
+    detailPlaceholder: '例如：你喜欢的地方，或希望改进的地方',
+    otherNeedsDetail: '选择“其他”后，请填写补充内容。',
+    draftLanguage: '文案语言',
+    aiGenerate: 'AI 帮我写分享文案',
+    aiRegenerate: '重新生成文案',
+    generating: '生成中...',
+    generationsLeft: (count: number) => `今日还可生成 ${count} 次`,
+    truthNotice: 'AI 草稿：发布前请确认每一项内容都符合你的真实体验。',
+    fallbackNotice: 'AI 暂时不可用或已达到调用额度，当前展示可编辑的基础模板。',
+    optionalSharing: '自愿公开分享',
+    optionalSharingBody: '是否公开分享完全自愿，不影响积分或奖品。',
+    copyAndOpen: (platform: string) => `复制并打开 ${platform}`,
+    copyFailed: '自动复制失败，文案仍已保留；请长按文案手动复制。',
+    copiedOpening: (platform: string) => `已复制，正在打开 ${platform}…`,
+    submitFeedback: '提交体验，领取 5 积分',
+    submittingFeedback: '体验提交中...',
+    feedbackRewardBody: '站内体验由店员输入 PIN 确认，公开发布不是领取积分的条件。',
+    feedbackPending: '体验已提交，请让店员输入 PIN 确认。',
+    feedbackRewarded: '今日 5 体验积分已领取。',
+    waitingFeedbackConfirmation: '本次体验正在等待店员输入 PIN 确认。',
   },
+}
+
+const experienceTags: ExperienceTag[] = ['FOOD_DRINK', 'SERVICE', 'AMBIENCE', 'VALUE', 'SPEED', 'OTHER']
+
+function experienceTagLabel(tag: ExperienceTag, locale: Locale): string {
+  const labels: Record<Locale, Record<ExperienceTag, string>> = {
+    en: { FOOD_DRINK: 'Food & drinks', SERVICE: 'Service', AMBIENCE: 'Ambience', VALUE: 'Value', SPEED: 'Speed', OTHER: 'Other' },
+    zh: { FOOD_DRINK: '菜品饮品', SERVICE: '服务', AMBIENCE: '环境', VALUE: '性价比', SPEED: '出餐速度', OTHER: '其他' },
+  }
+  return labels[locale][tag]
 }
 
 function detectLocale(): Locale {
@@ -181,11 +253,98 @@ function getSessionId(brandId: string): string {
   return next
 }
 
-function platformLabel(platform: Platform, locale: Locale): string {
-  if (platform === 'GOOGLE') return copy[locale].googleReview
-  if (platform === 'XIAOHONGSHU') return copy[locale].xiaohongshu
-  return copy[locale].instagram
+function openedPlatformStorageKey(brandId: string): string {
+  return `amc-game-opened-platform:${brandId}`
 }
+
+function draftEditsStorageKey(brandId: string): string {
+  return `amc-game-share-draft-edits:${brandId}`
+}
+
+function parseDraftEdits(value: string | null): { draftId: string; drafts: ShareDrafts } | null {
+  if (!value) return null
+  try {
+    const parsed = JSON.parse(value) as { draftId?: unknown; drafts?: unknown }
+    if (typeof parsed.draftId !== 'string' || !parsed.drafts || typeof parsed.drafts !== 'object') return null
+    const drafts: ShareDrafts = {}
+    for (const platform of ['GOOGLE', 'XIAOHONGSHU', 'INSTAGRAM'] as const) {
+      const text = (parsed.drafts as Record<string, unknown>)[platform]
+      if (typeof text === 'string') drafts[platform] = text
+    }
+    return { draftId: parsed.draftId, drafts }
+  } catch {
+    return null
+  }
+}
+
+function isPlatform(value: string | null): value is Platform {
+  return value === 'GOOGLE' || value === 'XIAOHONGSHU' || value === 'INSTAGRAM'
+}
+
+function platformLabel(platform: Platform, locale: Locale): string {
+  const labels: Record<Locale, Record<Platform, string>> = {
+    en: {
+      GOOGLE: 'Google Review',
+      XIAOHONGSHU: 'Xiaohongshu',
+      INSTAGRAM: 'Instagram',
+    },
+    zh: {
+      GOOGLE: 'Google 评价',
+      XIAOHONGSHU: '小红书',
+      INSTAGRAM: 'Instagram',
+    },
+  }
+  return labels[locale][platform]
+}
+
+type PlatformIconProps = {
+  className?: string
+  strokeWidth?: number
+}
+
+function InstagramIcon({ className, strokeWidth = 2 }: PlatformIconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+const platformVisuals = {
+  GOOGLE: {
+    Icon: MapPin,
+    idle: 'border-blue-100 bg-blue-50/40 hover:border-blue-300 hover:bg-blue-50',
+    active: 'border-blue-500 bg-blue-50 shadow-sm shadow-blue-100',
+    icon: 'bg-blue-600 text-white',
+    text: 'text-blue-700',
+    focus: 'focus-visible:ring-blue-500',
+  },
+  XIAOHONGSHU: {
+    Icon: BookOpen,
+    idle: 'border-rose-100 bg-rose-50/40 hover:border-rose-300 hover:bg-rose-50',
+    active: 'border-rose-500 bg-rose-50 shadow-sm shadow-rose-100',
+    icon: 'bg-rose-600 text-white',
+    text: 'text-rose-700',
+    focus: 'focus-visible:ring-rose-500',
+  },
+  INSTAGRAM: {
+    Icon: InstagramIcon,
+    idle: 'border-fuchsia-100 bg-gradient-to-r from-pink-50/50 to-violet-50/50 hover:border-fuchsia-300',
+    active: 'border-fuchsia-500 bg-gradient-to-r from-pink-50 to-violet-50 shadow-sm shadow-fuchsia-100',
+    icon: 'bg-gradient-to-br from-pink-500 via-fuchsia-500 to-violet-600 text-white',
+    text: 'text-fuchsia-700',
+    focus: 'focus-visible:ring-fuchsia-500',
+  },
+} satisfies Record<Platform, {
+  Icon: ComponentType<PlatformIconProps>
+  idle: string
+  active: string
+  icon: string
+  text: string
+  focus: string
+}>
 
 function platformUrl(config: GameConfig | null, platform: Platform): string | undefined {
   if (!config) return undefined
@@ -530,7 +689,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const [selectedPlatform, setSelectedPlatform] = useState<Platform>('GOOGLE')
+  const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null)
   const [pendingSubmission, setPendingSubmission] = useState<PendingSubmission | null>(null)
   const [staffPin, setStaffPin] = useState('')
   const [submittingTask, setSubmittingTask] = useState(false)
@@ -540,12 +699,24 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [wheelRotation, setWheelRotation] = useState(0)
   const [gridActiveSlot, setGridActiveSlot] = useState<number | null>(null)
   const [locale, setLocale] = useState<Locale>('en')
+  const [draftLocale, setDraftLocale] = useState<Locale>('en')
+  const [selectedExperienceTags, setSelectedExperienceTags] = useState<ExperienceTag[]>([])
+  const [experienceNote, setExperienceNote] = useState('')
+  const [shareDraftId, setShareDraftId] = useState<string | null>(null)
+  const [shareDrafts, setShareDrafts] = useState<ShareDrafts>({})
+  const [shareSource, setShareSource] = useState<'ai' | 'fallback' | null>(null)
+  const [generationsRemaining, setGenerationsRemaining] = useState(3)
+  const [generatingDrafts, setGeneratingDrafts] = useState(false)
+  const [copiedPlatform, setCopiedPlatform] = useState<Platform | null>(null)
 
   const accent = config?.themeColor || '#2563eb'
   const t = copy[locale]
   const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
   const dailyLimit = status?.maxSpinsPerUserDay ?? config?.maxSpinsPerUserDay ?? null
   const spinsRemaining = status?.spinsRemainingToday ?? dailyLimit
+  const experienceIsValid = selectedExperienceTags.length > 0
+    && selectedExperienceTags.length <= 3
+    && (!selectedExperienceTags.includes('OTHER') || Boolean(experienceNote.trim()))
   const activePlatforms = useMemo<Platform[]>(() => {
     if (!config) return []
     const platforms: Platform[] = []
@@ -556,15 +727,31 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }, [config])
 
   useEffect(() => {
-    if (activePlatforms.length > 0 && !activePlatforms.includes(selectedPlatform)) {
-      setSelectedPlatform(activePlatforms[0])
-    }
-  }, [activePlatforms, selectedPlatform])
+    if (!config) return
+
+    const storageKey = openedPlatformStorageKey(brandId)
+    const storedPlatform = window.sessionStorage.getItem(storageKey)
+    const restoreTimer = window.setTimeout(() => {
+      if (isPlatform(storedPlatform) && activePlatforms.includes(storedPlatform)) {
+        setSelectedPlatform(storedPlatform)
+        return
+      }
+
+      setSelectedPlatform(null)
+      if (storedPlatform) window.sessionStorage.removeItem(storageKey)
+    }, 0)
+
+    return () => window.clearTimeout(restoreTimer)
+  }, [activePlatforms, brandId, config])
 
   useEffect(() => {
-    setLocale(detectLocale())
+    const detectedLocale = detectLocale()
     const id = getSessionId(brandId)
-    setSessionId(id)
+    const initializeTimer = window.setTimeout(() => {
+      setLocale(detectedLocale)
+      setDraftLocale(detectedLocale)
+      setSessionId(id)
+    }, 0)
 
     async function load() {
       setLoading(true)
@@ -576,8 +763,32 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         ])
         if (!configRes.ok) throw new Error(copy[detectLocale()].activityNotReady)
         if (!statusRes.ok) throw new Error(copy[detectLocale()].statusLoadFailed)
-        setConfig(await configRes.json())
-        setStatus(await statusRes.json())
+        const configData = await configRes.json() as GameConfig
+        const statusData = await statusRes.json() as GameStatus
+        setConfig(configData)
+        setStatus(statusData)
+        if (statusData.todayFeedbackSubmission?.status === 'PENDING') {
+          setPendingSubmission({ submissionId: statusData.todayFeedbackSubmission.submissionId })
+        }
+
+        if (configData.taskReviewEnabled !== false) {
+          const draftRes = await fetch(`/api/game/share-drafts?brandId=${encodeURIComponent(brandId)}&sessionId=${encodeURIComponent(id)}`, { cache: 'no-store' })
+          if (draftRes.ok) {
+            const draftData = await draftRes.json() as ShareDraftResponse
+            setShareDraftId(draftData.draftId)
+            setShareSource(draftData.source)
+            setGenerationsRemaining(draftData.generationsRemaining)
+            if (draftData.locale) setDraftLocale(draftData.locale)
+            if (draftData.experienceTags?.length) setSelectedExperienceTags(draftData.experienceTags)
+            setExperienceNote(draftData.experienceNote || '')
+
+            const localEdits = parseDraftEdits(window.sessionStorage.getItem(draftEditsStorageKey(brandId)))
+            setShareDrafts(localEdits?.draftId === draftData.draftId ? { ...draftData.drafts, ...localEdits.drafts } : draftData.drafts)
+            if (localEdits && localEdits.draftId !== draftData.draftId) {
+              window.sessionStorage.removeItem(draftEditsStorageKey(brandId))
+            }
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : copy[detectLocale()].openFailed)
       } finally {
@@ -586,18 +797,21 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     }
 
     void load()
+    return () => window.clearTimeout(initializeTimer)
   }, [brandId])
 
-  async function submitReview(platform: Platform) {
+  async function submitFeedback() {
     if (!sessionId || submittingTask) return
+    if (!experienceIsValid) return
     setError('')
     setMessage('')
     setSubmittingTask(true)
     const form = new FormData()
     form.set('brandId', brandId)
     form.set('sessionId', sessionId)
-    form.set('taskType', 'REVIEW_SUBMIT')
-    form.set('reviewPlatform', platform)
+    form.set('taskType', 'EXPERIENCE_FEEDBACK')
+    form.set('experienceTags', JSON.stringify(selectedExperienceTags))
+    form.set('experienceNote', experienceNote.trim())
     const response = await fetch('/api/game/tasks', { method: 'POST', body: form })
     const data = await response.json().catch(() => ({}))
     setSubmittingTask(false)
@@ -605,9 +819,21 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       setError(data.error || t.submitFailed)
       return
     }
-    setPendingSubmission({ submissionId: data.submissionId, platform })
-    setStaffPin('')
-    setMessage(t.taskSubmitted)
+    if (data.status === 'APPROVED') {
+      setStatus((prev) => prev ? {
+        ...prev,
+        todayFeedbackSubmission: { submissionId: data.submissionId, status: 'APPROVED', pointsAwarded: data.pointsAwarded || 5 },
+      } : prev)
+      setMessage(t.feedbackRewarded)
+    } else {
+      setPendingSubmission({ submissionId: data.submissionId })
+      setStatus((prev) => prev ? {
+        ...prev,
+        todayFeedbackSubmission: { submissionId: data.submissionId, status: 'PENDING', pointsAwarded: 0 },
+      } : prev)
+      setStaffPin('')
+      setMessage(t.feedbackPending)
+    }
   }
 
   async function confirmSubmission() {
@@ -626,24 +852,109 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       setError(data.error || t.confirmationFailed)
       return
     }
-    setStatus((prev) => prev ? { ...prev, pointsBalance: data.pointsBalance } : { pointsBalance: data.pointsBalance, unclaimedPrizes: [] })
+    setStatus((prev) => prev ? {
+      ...prev,
+      pointsBalance: data.pointsBalance,
+      todayFeedbackSubmission: { submissionId: pendingSubmission.submissionId, status: 'APPROVED', pointsAwarded: data.pointsAwarded || 5 },
+    } : { pointsBalance: data.pointsBalance, unclaimedPrizes: [], todayFeedbackSubmission: { submissionId: pendingSubmission.submissionId, status: 'APPROVED', pointsAwarded: data.pointsAwarded || 5 } })
     setPendingSubmission(null)
     setStaffPin('')
     setMessage(t.taskConfirmed)
   }
 
   function openPlatform(platform: Platform) {
+    window.sessionStorage.setItem(openedPlatformStorageKey(brandId), platform)
     setSelectedPlatform(platform)
     const target = buildPlatformOpenTarget(config, platform)
 
     const fallbackTimer = window.setTimeout(() => {
-      window.location.href = target.webUrl
+      window.location.assign(target.webUrl)
     }, 900)
 
     const clearFallback = () => window.clearTimeout(fallbackTimer)
     window.addEventListener('pagehide', clearFallback, { once: true })
     window.addEventListener('blur', clearFallback, { once: true })
-    window.location.href = target.appUrl
+    window.location.assign(target.appUrl)
+  }
+
+  function toggleExperienceTag(tag: ExperienceTag) {
+    setSelectedExperienceTags((current) => {
+      if (current.includes(tag)) return current.filter((item) => item !== tag)
+      if (current.length >= 3) return current
+      return [...current, tag]
+    })
+  }
+
+  async function generateShareDrafts() {
+    if (!sessionId || !experienceIsValid || generatingDrafts || generationsRemaining <= 0) return
+    setGeneratingDrafts(true)
+    setError('')
+    setMessage('')
+    const response = await fetch('/api/game/share-drafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        brandId,
+        sessionId,
+        locale: draftLocale,
+        experienceTags: selectedExperienceTags,
+        experienceNote: experienceNote.trim() || undefined,
+      }),
+    })
+    const data = await response.json().catch(() => ({})) as Partial<ShareDraftResponse> & { error?: string }
+    setGeneratingDrafts(false)
+    if (!response.ok) {
+      setError(data.error || t.submitFailed)
+      return
+    }
+    const nextDrafts = data.drafts || {}
+    setShareDraftId(data.draftId || null)
+    setShareDrafts(nextDrafts)
+    setShareSource(data.source || null)
+    setGenerationsRemaining(data.generationsRemaining ?? 0)
+    if (data.draftId) {
+      window.sessionStorage.setItem(draftEditsStorageKey(brandId), JSON.stringify({ draftId: data.draftId, drafts: nextDrafts }))
+    }
+  }
+
+  function updateDraft(platform: Platform, value: string) {
+    const nextDrafts = { ...shareDrafts, [platform]: value }
+    setShareDrafts(nextDrafts)
+    if (shareDraftId) {
+      window.sessionStorage.setItem(draftEditsStorageKey(brandId), JSON.stringify({ draftId: shareDraftId, drafts: nextDrafts }))
+    }
+  }
+
+  async function copyAndOpenPlatform(platform: Platform) {
+    const text = shareDrafts[platform]?.trim()
+    if (!text) return
+    setError('')
+    let copied = false
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        copied = true
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        copied = document.execCommand('copy')
+        textarea.remove()
+      }
+    } catch {
+      copied = false
+    }
+    if (!copied) {
+      setError(t.copyFailed)
+      return
+    }
+    setCopiedPlatform(platform)
+    setMessage(t.copiedOpening(platformLabel(platform, locale)))
+    openPlatform(platform)
   }
 
   async function spin() {
@@ -790,39 +1101,175 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
           {config?.taskReviewEnabled !== false && activePlatforms.length > 0 && (
             <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-black">{t.earnPoints}</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-500">{t.earnPointsBody}</p>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {activePlatforms.map((platform) => (
-                  <button
-                    key={platform}
-                    onClick={() => openPlatform(platform)}
-                    className="rounded-xl border px-2 py-2 text-xs font-black"
-                    style={{
-                      borderColor: selectedPlatform === platform ? accent : 'rgb(226 232 240)',
-                      color: selectedPlatform === platform ? accent : 'rgb(51 65 85)',
-                      backgroundColor: selectedPlatform === platform ? `${accent}14` : '#ffffff',
-                    }}
-                  >
-                    {platformLabel(platform, locale)}
-                  </button>
-                ))}
+              <h2 className="text-sm font-black">{t.experienceTitle}</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{t.experienceBody}</p>
+
+              <fieldset className="mt-4">
+                <legend className="text-xs font-black text-slate-800">{t.chooseTopics}</legend>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {experienceTags.map((tag) => {
+                    const selected = selectedExperienceTags.includes(tag)
+                    const disabled = !selected && selectedExperienceTags.length >= 3
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        aria-pressed={selected}
+                        disabled={disabled}
+                        onClick={() => toggleExperienceTag(tag)}
+                        className="min-h-10 rounded-full border px-3 py-2 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+                        style={selected ? { borderColor: accent, backgroundColor: `${accent}14`, color: accent } : undefined}
+                      >
+                        {selected && <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />}
+                        {experienceTagLabel(tag, locale)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </fieldset>
+
+              <label className="mt-4 block text-xs font-black text-slate-800" htmlFor="experience-note">{t.detailLabel}</label>
+              <textarea
+                id="experience-note"
+                value={experienceNote}
+                onChange={(event) => setExperienceNote(event.target.value.slice(0, 240))}
+                maxLength={240}
+                rows={3}
+                placeholder={t.detailPlaceholder}
+                aria-invalid={selectedExperienceTags.includes('OTHER') && !experienceNote.trim()}
+                className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-5 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              />
+              <div className="mt-1 flex items-start justify-between gap-2">
+                <span className="text-[11px] font-semibold text-rose-600">
+                  {selectedExperienceTags.includes('OTHER') && !experienceNote.trim() ? t.otherNeedsDetail : ''}
+                </span>
+                <span className="shrink-0 text-[11px] font-bold text-slate-400">{experienceNote.length}/240</span>
               </div>
-              <div className="mt-3 grid gap-2">
-                <button
-                  onClick={() => submitReview(selectedPlatform)}
-                  disabled={submittingTask}
-                  className="rounded-xl px-3 py-3 text-sm font-black text-white disabled:opacity-60"
-                  style={{ background: accent }}
-                >
-                  {submittingTask ? t.recording : t.published}
-                </button>
+
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <span className="text-xs font-black text-slate-800">{t.draftLanguage}</span>
+                <div className="flex rounded-lg bg-slate-100 p-1" role="group" aria-label={t.draftLanguage}>
+                  {(['zh', 'en'] as const).map((language) => (
+                    <button
+                      key={language}
+                      type="button"
+                      aria-pressed={draftLocale === language}
+                      onClick={() => setDraftLocale(language)}
+                      className={`rounded-md px-3 py-1.5 text-xs font-black transition ${draftLocale === language ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                    >
+                      {language === 'zh' ? '中文' : 'EN'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={generateShareDrafts}
+                disabled={!experienceIsValid || generatingDrafts || generationsRemaining <= 0}
+                className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 px-3 py-3 text-sm font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                style={experienceIsValid && generationsRemaining > 0 ? { borderColor: accent, color: accent } : undefined}
+              >
+                <Sparkles className="h-4 w-4" aria-hidden="true" />
+                {generatingDrafts ? t.generating : Object.keys(shareDrafts).length ? t.aiRegenerate : t.aiGenerate}
+              </button>
+              <p className="mt-1 text-center text-[11px] font-bold text-slate-400">{t.generationsLeft(generationsRemaining)}</p>
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">{t.truthNotice}</p>
+              {shareSource === 'fallback' && (
+                <p role="status" className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">{t.fallbackNotice}</p>
+              )}
+
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <p className="text-xs font-black text-slate-800">{t.optionalSharing}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{t.optionalSharingBody}</p>
+                <div className="mt-3 space-y-3">
+                  {activePlatforms.map((platform) => {
+                    const isOpened = selectedPlatform === platform
+                    const visual = platformVisuals[platform]
+                    const PlatformIcon = visual.Icon
+                    const label = platformLabel(platform, locale)
+                    const draft = shareDrafts[platform]
+
+                    if (draft !== undefined) {
+                      return (
+                        <section key={platform} aria-label={label} className={`rounded-xl border-2 p-3 ${isOpened ? visual.active : visual.idle}`}>
+                          <div className="flex items-center gap-3">
+                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${visual.icon}`} aria-hidden="true">
+                              <PlatformIcon className="h-4.5 w-4.5" strokeWidth={2.25} />
+                            </span>
+                            <span className="min-w-0 flex-1 text-sm font-black text-slate-900">{label}</span>
+                            {isOpened && <span className={`flex items-center gap-1 text-xs font-bold ${visual.text}`}><CheckCircle2 className="h-4 w-4" />{t.opened}</span>}
+                          </div>
+                          <textarea
+                            value={draft}
+                            onChange={(event) => updateDraft(platform, event.target.value)}
+                            rows={5}
+                            aria-label={`${label} AI draft`}
+                            className="mt-3 w-full resize-y rounded-lg border border-white/80 bg-white px-3 py-2.5 text-sm leading-5 text-slate-800 outline-none focus:border-slate-400 focus:ring-2 focus:ring-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => copyAndOpenPlatform(platform)}
+                            disabled={!draft.trim()}
+                            className={`mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-black text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.99] disabled:opacity-50 ${visual.icon} ${visual.focus}`}
+                          >
+                            {copiedPlatform === platform ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            {t.copyAndOpen(label)}
+                          </button>
+                        </section>
+                      )
+                    }
+
+                    return (
+                      <button
+                        key={platform}
+                        type="button"
+                        aria-pressed={isOpened}
+                        aria-label={`${t.openPlatform}: ${label}`}
+                        onClick={() => openPlatform(platform)}
+                        className={`group flex min-h-[56px] w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-left transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.99] ${visual.focus} ${isOpened ? visual.active : visual.idle}`}
+                      >
+                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${visual.icon}`} aria-hidden="true">
+                          <PlatformIcon className="h-5 w-5" strokeWidth={2.25} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-black text-slate-900">{label}</span>
+                          <span className={`mt-0.5 block text-xs font-bold ${isOpened ? visual.text : 'text-slate-500'}`}>{isOpened ? t.opened : t.openPlatform}</span>
+                        </span>
+                        <span className={isOpened ? visual.text : 'text-slate-400'} aria-hidden="true">
+                          {isOpened ? <CheckCircle2 className="h-5 w-5" /> : <ExternalLink className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <p className="text-xs font-black text-slate-800">{t.earnPoints}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{t.feedbackRewardBody}</p>
+                {status?.todayFeedbackSubmission?.status === 'APPROVED' ? (
+                  <div role="status" className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-3 text-sm font-black text-emerald-700">
+                    <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+                    {t.feedbackRewarded}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={submitFeedback}
+                    disabled={submittingTask || !experienceIsValid || Boolean(pendingSubmission)}
+                    className="mt-3 min-h-12 w-full rounded-xl px-3 py-3 text-sm font-black text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                    style={experienceIsValid && !pendingSubmission ? { background: accent } : undefined}
+                  >
+                    {submittingTask ? t.submittingFeedback : pendingSubmission ? t.feedbackPending : t.submitFeedback}
+                  </button>
+                )}
               </div>
 
               {pendingSubmission && (
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-black uppercase text-slate-400">{t.staffConfirmation}</p>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{t.waitingConfirmation(platformLabel(pendingSubmission.platform, locale))}</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{t.waitingFeedbackConfirmation}</p>
                   <div className="mt-3 flex gap-2">
                     <input
                       value={staffPin}

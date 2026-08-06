@@ -219,6 +219,9 @@ async function runTests() {
         data: {
           sessionId: s.id,
           prizeId: selectedPrize.id,
+          prizeNameSnapshot: selectedPrize.name,
+          prizeTypeSnapshot: selectedPrize.type,
+          prizeImageSnapshot: selectedPrize.imageUrl,
           pointsDeducted: 5,
           redemptionCode: code,
           status: 'UNCLAIMED',

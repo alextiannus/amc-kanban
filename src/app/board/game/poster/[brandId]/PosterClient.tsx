@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import QRCode from 'qrcode'
-
-const KANBAN_BASE_URL = 'https://amc-kanban.immedi.ai'
+import { getPermanentGameUrl, PERMANENT_GAME_QR_OPTIONS } from '@/lib/gameQr'
 
 type PosterTheme = 'black' | 'blue' | 'green' | 'purple' | 'gold'
 
@@ -30,12 +29,8 @@ export default function PosterClient({
   const colors = themeMap[theme] || themeMap.black
 
   useEffect(() => {
-    void QRCode.toDataURL(`${KANBAN_BASE_URL}/game/${brandId}`, {
-      width: 640,
-      margin: 1,
-      color: { dark: colors.accent, light: '#ffffff' },
-    }).then(setQrCodeUrl)
-  }, [brandId, colors.accent])
+    void QRCode.toDataURL(getPermanentGameUrl(brandId), PERMANENT_GAME_QR_OPTIONS).then(setQrCodeUrl)
+  }, [brandId])
 
   return (
     <main className="min-h-screen bg-slate-100 p-6 text-slate-950 print:bg-white print:p-0">

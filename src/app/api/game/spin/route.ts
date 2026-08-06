@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { buildPrizeSnapshot } from '@/lib/gamePrizes'
 
 function generateRedemptionCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // Omit confusing chars: O, I, 1, 0, Z/2 (optional, kept easy)
@@ -19,7 +21,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'brandId and sessionId required' }, { status: 400 })
     }
 
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Fetch GameSession
       const session = await tx.gameSession.findUnique({
         where: { brandId_sessionId: { brandId, sessionId } },
@@ -57,7 +59,7 @@ export async function POST(request: Request) {
       }
 
       // 5. Select active prizes (filter out out-of-stock items)
-      const activePrizes = config.prizes.filter((prize: any) => {
+      const activePrizes = config.prizes.filter((prize) => {
         if (prize.totalInventory === null) return true // Infinite
         return prize.claimedCount < prize.totalInventory // In stock
       })
@@ -67,7 +69,7 @@ export async function POST(request: Request) {
       }
 
       // 6. Server-side weighted random selection
-      const totalProb = activePrizes.reduce((sum: any, p: any) => sum + p.probability, 0)
+      const totalProb = activePrizes.reduce((sum, prize) => sum + prize.probability, 0)
       if (totalProb <= 0) {
         throw new Error('Prize configuration error: total probability is zero.')
       }
@@ -124,6 +126,7 @@ export async function POST(request: Request) {
         data: {
           sessionId: session.id,
           prizeId: selectedPrize.id,
+          ...buildPrizeSnapshot(selectedPrize),
           pointsDeducted: 5,
           redemptionCode,
           status: isThanks ? 'RECORDED' : 'UNCLAIMED',

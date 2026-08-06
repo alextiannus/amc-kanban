@@ -1,9 +1,11 @@
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canHumanAccessBrandProject, canOwnBrand } from '@/lib/brandAccess'
+import { hasPrizeIdentityChanged } from '@/lib/gamePrizes'
 
 type GamePrizeInput = {
   id?: string
@@ -65,7 +67,7 @@ export async function GET(request: Request) {
         data: {
           brandId,
           title: '幸运大轮盘',
-          description: '在社交媒体（Google Maps、小红书、Instagram）发表好评并上传截图即可获得5积分。每次抽奖消耗5积分。快来试试您的手气吧！',
+          description: '提交本次到店真实体验并由店员确认即可获得 5 积分；AI 分享文案和公开发布完全自愿。每次抽奖消耗 5 积分。',
           themeColor: '#3b82f6',
           taskPhotoEnabled: false,
           taskReviewEnabled: true,
@@ -76,7 +78,7 @@ export async function GET(request: Request) {
           maxSpinsPerUserDay: 3,
           templateType: 'WHEEL',
           posterTitle: 'Scan & Win!',
-          posterDesc: 'Leave a review to spin and win rewards instantly!',
+          posterDesc: 'Share your visit feedback to earn points. Public posting is optional.',
           posterTheme: 'black',
           prizes: {
             create: [
@@ -166,7 +168,7 @@ export async function POST(request: Request) {
     } = body
 
     // We do a database transaction to update game config and upsert/delete its prizes
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Upsert GameConfig
       const config = await tx.gameConfig.upsert({
         where: { brandId },
@@ -184,7 +186,7 @@ export async function POST(request: Request) {
           maxSpinsPerUserDay: maxSpinsPerUserDay ?? 3,
           templateType: templateType ?? 'WHEEL',
           posterTitle: posterTitle ?? 'Scan & Win!',
-          posterDesc: posterDesc ?? 'Leave a review to spin and win rewards instantly!',
+          posterDesc: posterDesc ?? 'Share your visit feedback to earn points. Public posting is optional.',
           posterTheme: posterTheme ?? 'black',
         },
         update: {
@@ -205,23 +207,16 @@ export async function POST(request: Request) {
         },
       })
 
-      // 2. Fetch current prizes to see which ones to delete
+      // 2. Fetch current prizes to preserve identity only when name/type is unchanged.
       const currentPrizes = await tx.gamePrize.findMany({
         where: { gameConfigId: config.id },
-        select: { id: true },
+        select: { id: true, name: true, type: true },
       })
       const typedPrizes: GamePrizeInput[] = Array.isArray(prizes) ? prizes : []
-      const incomingIds = typedPrizes
-        .map((p) => (typeof p.id === 'string' ? p.id : null))
-        .filter((id): id is string => Boolean(id))
-      const toDeleteIds = currentPrizes.map((p: any) => p.id).filter((id: any) => !incomingIds.includes(id))
-
-      // Delete removed prizes
-      if (toDeleteIds.length > 0) {
-        await tx.gamePrize.deleteMany({
-          where: { id: { in: toDeleteIds } },
-        })
-      }
+      const currentPrizeById = new Map<string, { id: string; name: string; type: string }>(
+        currentPrizes.map((prize) => [prize.id, prize]),
+      )
+      const retainedPrizeIds = new Set<string>()
 
       // 3. Upsert incoming prizes
       const updatedPrizes = []
@@ -235,11 +230,27 @@ export async function POST(request: Request) {
         }
 
         if (p.id) {
-          const updated = await tx.gamePrize.update({
-            where: { id: p.id },
-            data: prizeData,
-          })
-          updatedPrizes.push(updated)
+          const existingPrize = currentPrizeById.get(p.id)
+          if (!existingPrize) {
+            throw new Error('Prize does not belong to this game configuration.')
+          }
+
+          if (hasPrizeIdentityChanged(existingPrize, prizeData)) {
+            const created = await tx.gamePrize.create({
+              data: {
+                ...prizeData,
+                gameConfigId: config.id,
+              },
+            })
+            updatedPrizes.push(created)
+          } else {
+            const updated = await tx.gamePrize.update({
+              where: { id: p.id },
+              data: prizeData,
+            })
+            retainedPrizeIds.add(p.id)
+            updatedPrizes.push(updated)
+          }
         } else {
           const created = await tx.gamePrize.create({
             data: {
@@ -249,6 +260,16 @@ export async function POST(request: Request) {
           })
           updatedPrizes.push(created)
         }
+      }
+
+      // Replaced and removed prizes can now be deleted safely. Issued rewards use spin snapshots.
+      const toDeleteIds = currentPrizes
+        .map((prize) => prize.id)
+        .filter((id: string) => !retainedPrizeIds.has(id))
+      if (toDeleteIds.length > 0) {
+        await tx.gamePrize.deleteMany({
+          where: { id: { in: toDeleteIds } },
+        })
       }
 
       return {
