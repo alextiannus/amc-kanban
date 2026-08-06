@@ -6,6 +6,8 @@ import {
   GAME_SHARE_BRAND_DAILY_AI_LIMIT,
   GAME_SHARE_IP_DAILY_AI_LIMIT,
   GAME_SHARE_SESSION_LIMIT,
+  buildBrandIntroFallbackDrafts,
+  buildBrandIntroPrompt,
   buildFallbackDrafts,
   buildGameSharePrompt,
   enabledSharePlatforms,
@@ -226,17 +228,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'brandId and sessionId are required' }, { status: 400 })
     }
 
-    const normalized = normalizeExperienceInput(body)
-    if (normalized.error) return NextResponse.json({ error: normalized.error }, { status: 400 })
+    const draftMode = body.mode === 'BRAND_INTRO' ? 'BRAND_INTRO' : 'EXPERIENCE'
+    const normalized = draftMode === 'BRAND_INTRO'
+      ? {
+          locale: body.locale === 'zh' ? 'zh' as const : 'en' as const,
+          experienceTags: [],
+          experienceNote: null,
+        }
+      : normalizeExperienceInput(body)
+    if ('error' in normalized && normalized.error) {
+      return NextResponse.json({ error: normalized.error }, { status: 400 })
+    }
 
     const context = await getGameContext(brandId, publicSessionId)
     const config = context?.brand.gameConfig
     if (!context || !config || config.taskReviewEnabled === false) {
       return NextResponse.json({ error: 'Game sharing assistant is unavailable' }, { status: 404 })
     }
-    const platforms = enabledSharePlatforms(config)
+    const platforms = enabledSharePlatforms(config).filter((platform) => draftMode === 'EXPERIENCE' || platform !== 'GOOGLE')
     if (platforms.length === 0) {
-      return NextResponse.json({ error: 'No sharing platform is enabled' }, { status: 409 })
+      return NextResponse.json(emptyResponse())
     }
 
     const activityDate = getBusinessDate(context.brand.timezone)
@@ -258,28 +269,43 @@ export async function POST(request: Request) {
       }))
     }
 
-    const fallbackDrafts = buildFallbackDrafts({
-      brandName: context.brand.name,
-      locale: normalized.locale,
-      experienceTags: normalized.experienceTags,
-      experienceNote: normalized.experienceNote,
-      platforms,
-    })
+    const fallbackDrafts = draftMode === 'BRAND_INTRO'
+      ? buildBrandIntroFallbackDrafts({
+          brandName: context.brand.name,
+          brandLocation: context.brand.location,
+          locale: normalized.locale,
+          platforms,
+        })
+      : buildFallbackDrafts({
+          brandName: context.brand.name,
+          locale: normalized.locale,
+          experienceTags: normalized.experienceTags,
+          experienceNote: normalized.experienceNote,
+          platforms,
+        })
 
     let drafts = fallbackDrafts
     let source = 'fallback'
     let limitReason: string | null = reservation.limitReason
     if (reservation.allowAi) {
       try {
-        const prompt = buildGameSharePrompt({
-          brandName: context.brand.name,
-          brandLocation: context.brand.location,
-          menuNames: menuNames(context.brand.knowledge?.menuItems),
-          locale: normalized.locale,
-          experienceTags: normalized.experienceTags,
-          experienceNote: normalized.experienceNote,
-          platforms,
-        })
+        const prompt = draftMode === 'BRAND_INTRO'
+          ? buildBrandIntroPrompt({
+              brandName: context.brand.name,
+              brandLocation: context.brand.location,
+              menuNames: menuNames(context.brand.knowledge?.menuItems),
+              locale: normalized.locale,
+              platforms,
+            })
+          : buildGameSharePrompt({
+              brandName: context.brand.name,
+              brandLocation: context.brand.location,
+              menuNames: menuNames(context.brand.knowledge?.menuItems),
+              locale: normalized.locale,
+              experienceTags: normalized.experienceTags,
+              experienceNote: normalized.experienceNote,
+              platforms,
+            })
         const result = await callLLM('copywriting', prompt, 700)
         const parsed = result.text ? parseGeneratedDrafts(result.text, platforms) : null
         if (parsed) {
@@ -307,6 +333,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       draftId: reservation.draft.id,
+      mode: draftMode,
       locale: normalized.locale,
       experienceTags: normalized.experienceTags,
       experienceNote: normalized.experienceNote,

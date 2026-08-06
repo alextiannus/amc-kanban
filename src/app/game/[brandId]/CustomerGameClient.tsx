@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ComponentType } from 'react'
-import { BookOpen, CheckCircle2, Copy, ExternalLink, MapPin, Sparkles } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { BookOpen, CheckCircle2, Copy, ExternalLink, MapPin } from 'lucide-react'
 
 type Prize = {
   id?: string
@@ -67,13 +67,13 @@ type PendingSubmission = {
 }
 
 type Locale = 'zh' | 'en'
-type ExperienceTag = 'FOOD_DRINK' | 'SERVICE' | 'AMBIENCE' | 'VALUE' | 'SPEED' | 'OTHER'
 type ShareDrafts = Partial<Record<Platform, string>>
+type ShareDraftMode = 'BRAND_INTRO' | 'EXPERIENCE'
 
 type ShareDraftResponse = {
   draftId: string | null
   locale: Locale | null
-  experienceTags: ExperienceTag[]
+  experienceTags: string[]
   experienceNote: string | null
   drafts: ShareDrafts
   source: 'ai' | 'fallback' | null
@@ -129,18 +129,15 @@ const copy = {
     xiaohongshu: 'Xiaohongshu',
     instagram: 'Instagram',
     noPrize: 'No prize',
-    experienceTitle: 'Share your real experience',
-    experienceBody: 'Choose 1–3 topics and add an optional detail. Public sharing is always your choice.',
-    chooseTopics: 'What stood out?',
-    detailLabel: 'Add one real detail (optional)',
-    detailPlaceholder: 'For example: what you enjoyed or what could be improved',
-    otherNeedsDetail: 'Please add a detail when “Other” is selected.',
-    draftLanguage: 'Draft language',
-    aiGenerate: 'AI helps me write sharing drafts',
-    aiRegenerate: 'Generate new drafts',
-    generating: 'Generating...',
+    experienceLabel: 'One real detail for your Google Review',
+    feedbackExperienceLabel: 'One real detail about your visit',
+    experiencePlaceholder: 'For example: what you genuinely enjoyed or what could be improved',
+    experienceHelp: 'Your Google draft is generated automatically after you stop typing.',
+    feedbackExperienceHelp: 'Store staff can confirm this private feedback for points.',
+    generatingGoogle: 'Creating your Google Review draft...',
+    generatingSocial: 'Preparing platform drafts from the merchant’s published information...',
     generationsLeft: (count: number) => `${count} AI generation${count === 1 ? '' : 's'} left today`,
-    truthNotice: 'AI draft: please check that every detail matches your real experience before sharing.',
+    truthNotice: 'AI draft: review it before sharing and keep only information that is accurate.',
     fallbackNotice: 'AI is temporarily unavailable or a usage limit was reached. Editable basic templates are shown instead.',
     optionalSharing: 'Optional public sharing',
     optionalSharingBody: 'Sharing publicly is voluntary and does not affect points or prizes.',
@@ -199,18 +196,15 @@ const copy = {
     xiaohongshu: '小红书',
     instagram: 'Instagram',
     noPrize: '谢谢参与',
-    experienceTitle: '分享你的真实体验',
-    experienceBody: '选择 1–3 个体验主题，也可以补充一句细节。公开分享始终由你自愿决定。',
-    chooseTopics: '哪些方面让你印象深刻？',
-    detailLabel: '补充一句真实细节（选填）',
-    detailPlaceholder: '例如：你喜欢的地方，或希望改进的地方',
-    otherNeedsDetail: '选择“其他”后，请填写补充内容。',
-    draftLanguage: '文案语言',
-    aiGenerate: 'AI 帮我写分享文案',
-    aiRegenerate: '重新生成文案',
-    generating: '生成中...',
+    experienceLabel: '写一句用于 Google Review 的真实体验',
+    feedbackExperienceLabel: '写一句真实到店体验',
+    experiencePlaceholder: '例如：你真实喜欢的地方，或希望改进的地方',
+    experienceHelp: '停止输入后会自动生成 Google Review 草稿。',
+    feedbackExperienceHelp: '这条站内体验可由店员确认并领取积分。',
+    generatingGoogle: '正在生成 Google Review 草稿…',
+    generatingSocial: '正在根据商家公开资料准备各平台草稿…',
     generationsLeft: (count: number) => `今日还可生成 ${count} 次`,
-    truthNotice: 'AI 草稿：发布前请确认每一项内容都符合你的真实体验。',
+    truthNotice: 'AI 草稿：分享前请检查内容，只保留准确的信息。',
     fallbackNotice: 'AI 暂时不可用或已达到调用额度，当前展示可编辑的基础模板。',
     optionalSharing: '自愿公开分享',
     optionalSharingBody: '是否公开分享完全自愿，不影响积分或奖品。',
@@ -226,21 +220,8 @@ const copy = {
   },
 }
 
-const experienceTags: ExperienceTag[] = ['FOOD_DRINK', 'SERVICE', 'AMBIENCE', 'VALUE', 'SPEED', 'OTHER']
-
-function experienceTagLabel(tag: ExperienceTag, locale: Locale): string {
-  const labels: Record<Locale, Record<ExperienceTag, string>> = {
-    en: { FOOD_DRINK: 'Food & drinks', SERVICE: 'Service', AMBIENCE: 'Ambience', VALUE: 'Value', SPEED: 'Speed', OTHER: 'Other' },
-    zh: { FOOD_DRINK: '菜品饮品', SERVICE: '服务', AMBIENCE: '环境', VALUE: '性价比', SPEED: '出餐速度', OTHER: '其他' },
-  }
-  return labels[locale][tag]
-}
-
 function detectLocale(): Locale {
   if (typeof window === 'undefined') return 'en'
-  const lang = new URLSearchParams(window.location.search).get('lang')?.toLowerCase()
-  if (lang?.startsWith('zh')) return 'zh'
-  if (lang?.startsWith('en')) return 'en'
   return window.navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
 }
 
@@ -699,24 +680,22 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [wheelRotation, setWheelRotation] = useState(0)
   const [gridActiveSlot, setGridActiveSlot] = useState<number | null>(null)
   const [locale, setLocale] = useState<Locale>('en')
-  const [draftLocale, setDraftLocale] = useState<Locale>('en')
-  const [selectedExperienceTags, setSelectedExperienceTags] = useState<ExperienceTag[]>([])
   const [experienceNote, setExperienceNote] = useState('')
+  const [lastGeneratedExperienceNote, setLastGeneratedExperienceNote] = useState('')
   const [shareDraftId, setShareDraftId] = useState<string | null>(null)
   const [shareDrafts, setShareDrafts] = useState<ShareDrafts>({})
   const [shareSource, setShareSource] = useState<'ai' | 'fallback' | null>(null)
   const [generationsRemaining, setGenerationsRemaining] = useState(3)
-  const [generatingDrafts, setGeneratingDrafts] = useState(false)
+  const [generatingMode, setGeneratingMode] = useState<ShareDraftMode | null>(null)
   const [copiedPlatform, setCopiedPlatform] = useState<Platform | null>(null)
+  const generationRequestInFlight = useRef(false)
 
   const accent = config?.themeColor || '#2563eb'
   const t = copy[locale]
   const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
   const dailyLimit = status?.maxSpinsPerUserDay ?? config?.maxSpinsPerUserDay ?? null
   const spinsRemaining = status?.spinsRemainingToday ?? dailyLimit
-  const experienceIsValid = selectedExperienceTags.length > 0
-    && selectedExperienceTags.length <= 3
-    && (!selectedExperienceTags.includes('OTHER') || Boolean(experienceNote.trim()))
+  const experienceIsValid = Boolean(experienceNote.trim())
   const activePlatforms = useMemo<Platform[]>(() => {
     if (!config) return []
     const platforms: Platform[] = []
@@ -725,6 +704,67 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     if (config.taskInstagramEnabled) platforms.push('INSTAGRAM')
     return platforms
   }, [config])
+
+  const requestShareDrafts = useCallback(async ({
+    requestedSessionId,
+    requestLocale,
+    mode,
+    note,
+  }: {
+    requestedSessionId: string
+    requestLocale: Locale
+    mode: ShareDraftMode
+    note?: string
+  }) => {
+    if (!requestedSessionId || generationRequestInFlight.current) return
+    if (mode === 'EXPERIENCE' && !note?.trim()) return
+    generationRequestInFlight.current = true
+    setGeneratingMode(mode)
+    setError('')
+    setMessage('')
+    try {
+      const response = await fetch('/api/game/share-drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brandId,
+          sessionId: requestedSessionId,
+          locale: requestLocale,
+          mode,
+          experienceTags: mode === 'EXPERIENCE' ? ['OTHER'] : [],
+          experienceNote: mode === 'EXPERIENCE' ? note?.trim() : undefined,
+        }),
+      })
+      const data = await response.json().catch(() => ({})) as Partial<ShareDraftResponse> & { error?: string }
+      if (!response.ok) {
+        setError(data.error || copy[requestLocale].submitFailed)
+        return
+      }
+      const returnedDrafts = data.drafts || {}
+      setShareDraftId(data.draftId || null)
+      setShareSource(data.source || null)
+      setGenerationsRemaining(data.generationsRemaining ?? 0)
+      if (mode === 'EXPERIENCE' && returnedDrafts.GOOGLE) setLastGeneratedExperienceNote(note?.trim() || '')
+      setShareDrafts((currentDrafts) => {
+        const nextDrafts = mode === 'BRAND_INTRO'
+          ? { ...currentDrafts, ...returnedDrafts }
+          : {
+              ...returnedDrafts,
+              ...(currentDrafts.XIAOHONGSHU ? { XIAOHONGSHU: currentDrafts.XIAOHONGSHU } : {}),
+              ...(currentDrafts.INSTAGRAM ? { INSTAGRAM: currentDrafts.INSTAGRAM } : {}),
+            }
+        if (data.draftId) {
+          window.sessionStorage.setItem(draftEditsStorageKey(brandId), JSON.stringify({ draftId: data.draftId, drafts: nextDrafts }))
+        }
+        return nextDrafts
+      })
+    } catch {
+      setError(copy[requestLocale].submitFailed)
+    } finally {
+      generationRequestInFlight.current = false
+      setGeneratingMode(null)
+    }
+  }, [brandId])
 
   useEffect(() => {
     if (!config) return
@@ -749,7 +789,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     const id = getSessionId(brandId)
     const initializeTimer = window.setTimeout(() => {
       setLocale(detectedLocale)
-      setDraftLocale(detectedLocale)
       setSessionId(id)
     }, 0)
 
@@ -778,14 +817,28 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             setShareDraftId(draftData.draftId)
             setShareSource(draftData.source)
             setGenerationsRemaining(draftData.generationsRemaining)
-            if (draftData.locale) setDraftLocale(draftData.locale)
-            if (draftData.experienceTags?.length) setSelectedExperienceTags(draftData.experienceTags)
             setExperienceNote(draftData.experienceNote || '')
+            setLastGeneratedExperienceNote(draftData.drafts.GOOGLE ? (draftData.experienceNote || '') : '')
 
             const localEdits = parseDraftEdits(window.sessionStorage.getItem(draftEditsStorageKey(brandId)))
             setShareDrafts(localEdits?.draftId === draftData.draftId ? { ...draftData.drafts, ...localEdits.drafts } : draftData.drafts)
             if (localEdits && localEdits.draftId !== draftData.draftId) {
               window.sessionStorage.removeItem(draftEditsStorageKey(brandId))
+            }
+
+            const socialPlatforms = [
+              configData.taskXiaohongshuEnabled ? 'XIAOHONGSHU' : null,
+              configData.taskInstagramEnabled ? 'INSTAGRAM' : null,
+            ].filter((platform): platform is Platform => Boolean(platform))
+            const needsSocialDrafts = !draftData.experienceNote
+              && socialPlatforms.some((platform) => !draftData.drafts[platform])
+              && draftData.generationsRemaining > 0
+            if (needsSocialDrafts) {
+              void requestShareDrafts({
+                requestedSessionId: id,
+                requestLocale: detectedLocale,
+                mode: 'BRAND_INTRO',
+              })
             }
           }
         }
@@ -798,7 +851,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
     void load()
     return () => window.clearTimeout(initializeTimer)
-  }, [brandId])
+  }, [brandId, requestShareDrafts])
 
   async function submitFeedback() {
     if (!sessionId || submittingTask) return
@@ -810,7 +863,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     form.set('brandId', brandId)
     form.set('sessionId', sessionId)
     form.set('taskType', 'EXPERIENCE_FEEDBACK')
-    form.set('experienceTags', JSON.stringify(selectedExperienceTags))
+    form.set('experienceTags', JSON.stringify(['OTHER']))
     form.set('experienceNote', experienceNote.trim())
     const response = await fetch('/api/game/tasks', { method: 'POST', body: form })
     const data = await response.json().catch(() => ({}))
@@ -877,44 +930,28 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     window.location.assign(target.appUrl)
   }
 
-  function toggleExperienceTag(tag: ExperienceTag) {
-    setSelectedExperienceTags((current) => {
-      if (current.includes(tag)) return current.filter((item) => item !== tag)
-      if (current.length >= 3) return current
-      return [...current, tag]
-    })
-  }
+  useEffect(() => {
+    const note = experienceNote.trim()
+    if (!sessionId || !config?.taskGoogleMapsEnabled || !note || note === lastGeneratedExperienceNote || generationsRemaining <= 0) return
+    const timer = window.setTimeout(() => {
+      void requestShareDrafts({ requestedSessionId: sessionId, requestLocale: locale, mode: 'EXPERIENCE', note })
+    }, 800)
+    return () => window.clearTimeout(timer)
+  }, [config?.taskGoogleMapsEnabled, experienceNote, generatingMode, generationsRemaining, lastGeneratedExperienceNote, locale, requestShareDrafts, sessionId])
 
-  async function generateShareDrafts() {
-    if (!sessionId || !experienceIsValid || generatingDrafts || generationsRemaining <= 0) return
-    setGeneratingDrafts(true)
-    setError('')
-    setMessage('')
-    const response = await fetch('/api/game/share-drafts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        brandId,
-        sessionId,
-        locale: draftLocale,
-        experienceTags: selectedExperienceTags,
-        experienceNote: experienceNote.trim() || undefined,
-      }),
+  function updateExperienceNote(value: string) {
+    const nextValue = value.slice(0, 240)
+    setExperienceNote(nextValue)
+    if (nextValue.trim() === lastGeneratedExperienceNote) return
+    setShareDrafts((currentDrafts) => {
+      if (!currentDrafts.GOOGLE) return currentDrafts
+      const nextDrafts = { ...currentDrafts }
+      delete nextDrafts.GOOGLE
+      if (shareDraftId) {
+        window.sessionStorage.setItem(draftEditsStorageKey(brandId), JSON.stringify({ draftId: shareDraftId, drafts: nextDrafts }))
+      }
+      return nextDrafts
     })
-    const data = await response.json().catch(() => ({})) as Partial<ShareDraftResponse> & { error?: string }
-    setGeneratingDrafts(false)
-    if (!response.ok) {
-      setError(data.error || t.submitFailed)
-      return
-    }
-    const nextDrafts = data.drafts || {}
-    setShareDraftId(data.draftId || null)
-    setShareDrafts(nextDrafts)
-    setShareSource(data.source || null)
-    setGenerationsRemaining(data.generationsRemaining ?? 0)
-    if (data.draftId) {
-      window.sessionStorage.setItem(draftEditsStorageKey(brandId), JSON.stringify({ draftId: data.draftId, drafts: nextDrafts }))
-    }
   }
 
   function updateDraft(platform: Platform, value: string) {
@@ -1101,87 +1138,40 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
           {config?.taskReviewEnabled !== false && activePlatforms.length > 0 && (
             <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-black">{t.experienceTitle}</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-500">{t.experienceBody}</p>
+              <p className="text-xs font-black text-slate-800">{t.optionalSharing}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{t.optionalSharingBody}</p>
 
-              <fieldset className="mt-4">
-                <legend className="text-xs font-black text-slate-800">{t.chooseTopics}</legend>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {experienceTags.map((tag) => {
-                    const selected = selectedExperienceTags.includes(tag)
-                    const disabled = !selected && selectedExperienceTags.length >= 3
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        aria-pressed={selected}
-                        disabled={disabled}
-                        onClick={() => toggleExperienceTag(tag)}
-                        className="min-h-10 rounded-full border px-3 py-2 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
-                        style={selected ? { borderColor: accent, backgroundColor: `${accent}14`, color: accent } : undefined}
-                      >
-                        {selected && <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />}
-                        {experienceTagLabel(tag, locale)}
-                      </button>
-                    )
-                  })}
-                </div>
-              </fieldset>
-
-              <label className="mt-4 block text-xs font-black text-slate-800" htmlFor="experience-note">{t.detailLabel}</label>
+              <label className="mt-4 block text-xs font-black text-slate-800" htmlFor="experience-note">
+                {activePlatforms.includes('GOOGLE') ? t.experienceLabel : t.feedbackExperienceLabel}
+              </label>
               <textarea
                 id="experience-note"
                 value={experienceNote}
-                onChange={(event) => setExperienceNote(event.target.value.slice(0, 240))}
+                onChange={(event) => updateExperienceNote(event.target.value)}
                 maxLength={240}
                 rows={3}
-                placeholder={t.detailPlaceholder}
-                aria-invalid={selectedExperienceTags.includes('OTHER') && !experienceNote.trim()}
+                placeholder={t.experiencePlaceholder}
                 className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-5 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
               />
-              <div className="mt-1 flex items-start justify-between gap-2">
-                <span className="text-[11px] font-semibold text-rose-600">
-                  {selectedExperienceTags.includes('OTHER') && !experienceNote.trim() ? t.otherNeedsDetail : ''}
+              <div className="mt-1 flex items-start justify-between gap-3">
+                <span className="text-[11px] font-semibold leading-4 text-slate-500">
+                  {activePlatforms.includes('GOOGLE') ? t.experienceHelp : t.feedbackExperienceHelp}
                 </span>
                 <span className="shrink-0 text-[11px] font-bold text-slate-400">{experienceNote.length}/240</span>
               </div>
 
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <span className="text-xs font-black text-slate-800">{t.draftLanguage}</span>
-                <div className="flex rounded-lg bg-slate-100 p-1" role="group" aria-label={t.draftLanguage}>
-                  {(['zh', 'en'] as const).map((language) => (
-                    <button
-                      key={language}
-                      type="button"
-                      aria-pressed={draftLocale === language}
-                      onClick={() => setDraftLocale(language)}
-                      className={`rounded-md px-3 py-1.5 text-xs font-black transition ${draftLocale === language ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-                    >
-                      {language === 'zh' ? '中文' : 'EN'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={generateShareDrafts}
-                disabled={!experienceIsValid || generatingDrafts || generationsRemaining <= 0}
-                className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border-2 px-3 py-3 text-sm font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
-                style={experienceIsValid && generationsRemaining > 0 ? { borderColor: accent, color: accent } : undefined}
-              >
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
-                {generatingDrafts ? t.generating : Object.keys(shareDrafts).length ? t.aiRegenerate : t.aiGenerate}
-              </button>
-              <p className="mt-1 text-center text-[11px] font-bold text-slate-400">{t.generationsLeft(generationsRemaining)}</p>
+              {generatingMode && (
+                <p role="status" aria-live="polite" className="mt-3 rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold leading-5 text-blue-700">
+                  {generatingMode === 'EXPERIENCE' ? t.generatingGoogle : t.generatingSocial}
+                </p>
+              )}
+              <p className="mt-2 text-center text-[11px] font-bold text-slate-400">{t.generationsLeft(generationsRemaining)}</p>
               <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">{t.truthNotice}</p>
               {shareSource === 'fallback' && (
                 <p role="status" className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">{t.fallbackNotice}</p>
               )}
 
-              <div className="mt-5 border-t border-slate-100 pt-4">
-                <p className="text-xs font-black text-slate-800">{t.optionalSharing}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{t.optionalSharingBody}</p>
+              <div className="mt-4">
                 <div className="mt-3 space-y-3">
                   {activePlatforms.map((platform) => {
                     const isOpened = selectedPlatform === platform

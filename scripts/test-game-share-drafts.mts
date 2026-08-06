@@ -5,6 +5,8 @@ import {
   GAME_SHARE_BRAND_DAILY_AI_LIMIT,
   GAME_SHARE_IP_DAILY_AI_LIMIT,
   GAME_SHARE_SESSION_LIMIT,
+  buildBrandIntroFallbackDrafts,
+  buildBrandIntroPrompt,
   buildFallbackDrafts,
   enabledSharePlatforms,
   getBusinessDate,
@@ -39,6 +41,21 @@ assert.doesNotMatch(fallback.GOOGLE || '', /#|reward|discount|free item/i)
 assert.ok(((fallback.XIAOHONGSHU || '').match(/#/g) || []).length <= 5)
 assert.ok(((fallback.INSTAGRAM || '').match(/#/g) || []).length <= 5)
 
+const brandIntroFallback = buildBrandIntroFallbackDrafts({
+  brandName: 'Test Cafe',
+  brandLocation: 'Singapore',
+  locale: 'en',
+  platforms: ['GOOGLE', 'XIAOHONGSHU', 'INSTAGRAM'],
+})
+assert.equal(brandIntroFallback.GOOGLE, undefined, 'brand facts must never generate a Google customer review')
+assert.ok(brandIntroFallback.XIAOHONGSHU)
+assert.ok(brandIntroFallback.INSTAGRAM)
+assert.doesNotMatch(`${brandIntroFallback.XIAOHONGSHU} ${brandIntroFallback.INSTAGRAM}`, /I (?:visited|ordered|tried|recommend)/i)
+assert.match(
+  buildBrandIntroPrompt({ brandName: 'Test Cafe', brandLocation: null, menuNames: [], locale: 'en', platforms: ['XIAOHONGSHU'] }),
+  /Do not write a customer review/,
+)
+
 assert.deepEqual(
   parseGeneratedDrafts(JSON.stringify({ drafts: {
     GOOGLE: 'A concise description #RemoveThis',
@@ -70,6 +87,9 @@ assert.match(shareRoute, /TransactionIsolationLevel\.Serializable/)
 assert.match(shareRoute, /callLLM\('copywriting'/)
 assert.match(shareRoute, /sessionLimited[\s\S]*?draftResponse/)
 assert.match(shareRoute, /source = 'fallback'/)
+assert.match(shareRoute, /body\.mode === 'BRAND_INTRO'/)
+assert.match(shareRoute, /platform !== 'GOOGLE'/)
+assert.match(shareRoute, /buildBrandIntroPrompt/)
 assert.match(taskRoute, /requestedTaskType === 'REVIEW_SUBMIT'/)
 assert.match(taskRoute, /const taskType = 'EXPERIENCE_FEEDBACK'/)
 assert.match(taskRoute, /sessionId_taskType_rewardDate/)
@@ -78,11 +98,18 @@ assert.match(overrideRoute, /status: \{ not: 'APPROVED' \}/)
 assert.match(statusRoute, /todayFeedbackSubmission/)
 assert.match(client, /amc-game-share-draft-edits:\$\{brandId\}/)
 assert.match(client, /setShareDrafts\(localEdits\?\.draftId === draftData\.draftId/)
+assert.match(client, /window\.navigator\.language/)
+assert.match(client, /mode: 'BRAND_INTRO'/)
+assert.match(client, /mode: 'EXPERIENCE'/)
+assert.match(client, /window\.setTimeout\(\(\) => \{[\s\S]*?\}, 800\)/)
+assert.doesNotMatch(client, /Draft language|文案语言/)
+assert.doesNotMatch(client, /AI helps me write sharing drafts|AI 帮我写分享文案/)
 assert.match(client, /Public posting is not required|公开发布不是领取积分的条件/)
 assert.match(schema, /model GameShareDraft/)
 assert.match(schema, /@@unique\(\[sessionId, taskType, rewardDate\]\)/)
 assert.match(migration, /ROW_NUMBER\(\) OVER/)
 assert.match(migration, /merchant-authored poster copy is preserved/)
 assert.doesNotMatch(prd, /uploading photo evidence|review screenshot/i)
+assert.match(prd, /Google Review is generated only after the customer writes one genuine visit detail/)
 
 console.log('Game experience feedback and AI sharing-draft contract passed.')
