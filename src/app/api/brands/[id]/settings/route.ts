@@ -65,6 +65,7 @@ export async function GET(_req: Request, { params }: Params) {
     googleLocationId: brand.googleLocationId,
     googleBusinessUrl: brand.googleBusinessUrl,
     googleReviewUrl: brand.googleReviewUrl,
+    googleLinksMeta: brand.googleLinksMeta,
     googlePreferOAuth: brand.googlePreferOAuth,
     googleConfigured: !!(brand.googleRefreshToken || (brand.googlePlaceId && brand.googleApiKey)),
 

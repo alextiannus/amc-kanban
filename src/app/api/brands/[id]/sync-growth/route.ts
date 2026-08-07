@@ -7,6 +7,14 @@ import {
   ensureGrowthMerchantForBrand,
   readGrowthMerchantData,
 } from '@/lib/growthDataCenter'
+import {
+  expiredGrowthLegacyClearPatch,
+  normalizeGrowthStores,
+  preserveExistingGoogleValues,
+  primaryGoogleMirror,
+  selectPrimaryGrowthLocation,
+  type GrowthMerchantLocation,
+} from '@/lib/growthGooglePlaces'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -44,6 +52,11 @@ export async function POST(request: Request, { params }: Params) {
       address: true,
       description: true,
       growthBrandKey: true,
+      googlePlaceId: true,
+      googleBusinessUrl: true,
+      googleReviewUrl: true,
+      googleLinksMeta: true,
+      knowledge: { select: { stores: true } },
     },
   })
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
@@ -51,7 +64,7 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const growthBrandKey = await ensureGrowthMerchantForBrand(brand)
     const data = await readGrowthMerchantData(growthBrandKey)
-    const copied = await copyGrowthFactsToKanban(id, data)
+    const copied = await copyGrowthFactsToKanban(id, data, brand)
     return NextResponse.json({
       ok: true,
       source: 'growth',
@@ -71,12 +84,17 @@ export async function POST(request: Request, { params }: Params) {
   }
 }
 
-async function copyGrowthFactsToKanban(brandId: string, data: any) {
+async function copyGrowthFactsToKanban(brandId: string, data: any, existingBrand: any) {
   const value = (key: string) => knowledgeValue(data?.knowledge, key)
   const profile = data?.profile || {}
   const story = data?.brandStory || {}
   const plan = data?.growthPlan || {}
   const briefs = data?.contentBriefs || {}
+  const merchant360 = data?.merchant360 || {}
+  const growthLocations: GrowthMerchantLocation[] = Array.isArray(merchant360.locations) ? merchant360.locations : []
+  const primary360Location = selectPrimaryGrowthLocation(growthLocations)
+  const freshGrowthStores = normalizeGrowthStores(growthLocations)
+  const primaryGoogle = primaryGoogleMirror(freshGrowthStores)
 
   const brandName = firstText([
     profile.canonical_name,
@@ -131,11 +149,15 @@ async function copyGrowthFactsToKanban(brandId: string, data: any) {
 
   const address = firstText([
     value('location.address'),
+    primary360Location?.address,
     firstActiveLocation(profile)?.address,
     firstStoreField(story.stores_info, 'address'),
   ])
   const phone = firstText([
     value('contact.phone'),
+    primary360Location?.phone,
+    primary360Location?.google?.profile?.nationalPhoneNumber,
+    primary360Location?.google?.profile?.internationalPhoneNumber,
     firstActiveLocation(profile)?.phone,
   ])
   const website = firstText([
@@ -158,12 +180,15 @@ async function copyGrowthFactsToKanban(brandId: string, data: any) {
     value('operations.delivery'),
     value('contact.delivery_urls'),
   ])
-  const explicitStores = firstArray([
-    value('operations.store_details'),
-    story.stores,
-    story.stores_info,
-    profile.locations,
-  ])
+  const fallbackStores = firstArray([
+      value('operations.store_details'),
+      story.stores,
+      story.stores_info,
+      profile.locations,
+    ])
+  const explicitStores = freshGrowthStores.length
+    ? preserveExistingGoogleValues(freshGrowthStores, existingBrand?.knowledge?.stores)
+    : fallbackStores
   const stores = buildStores(explicitStores, {
     name: brandName,
     address,
@@ -209,7 +234,7 @@ async function copyGrowthFactsToKanban(brandId: string, data: any) {
     value('operations.publishing_frequency'),
   ]))
   const growthSyncHash = createHash('sha256')
-    .update(JSON.stringify({ profile, story, plan, briefs }))
+    .update(JSON.stringify({ profile, story, plan, briefs, merchant360 }))
     .digest('hex')
 
   const brandUpdate: any = {}
@@ -219,6 +244,21 @@ async function copyGrowthFactsToKanban(brandId: string, data: any) {
   if (address) brandUpdate.address = address
   if (phone) brandUpdate.phone = phone
   if (website) brandUpdate.website = website
+  if (primaryGoogle) {
+    brandUpdate.googlePlaceId = primaryGoogle.placeId
+    if (primaryGoogle.businessUrl) brandUpdate.googleBusinessUrl = primaryGoogle.businessUrl
+    if (primaryGoogle.reviewUrl) brandUpdate.googleReviewUrl = primaryGoogle.reviewUrl
+    brandUpdate.googleLinksMeta = {
+      reviewsUrl: primaryGoogle.reviewsUrl || null,
+      directionsUrl: primaryGoogle.directionsUrl || null,
+      photosUrl: primaryGoogle.photosUrl || null,
+      source: primaryGoogle.source,
+      observedAt: primaryGoogle.observedAt,
+      expiresAt: primaryGoogle.expiresAt,
+    }
+  } else {
+    Object.assign(brandUpdate, expiredGrowthLegacyClearPatch(existingBrand?.googleLinksMeta) || {})
+  }
 
   const knowledgeUpdate: any = { growthSyncHash }
   if (menuItems.length > 0) knowledgeUpdate.menuItems = menuItems
@@ -276,6 +316,7 @@ async function copyGrowthFactsToKanban(brandId: string, data: any) {
       brandStory: Boolean(data?.brandStory),
       growthPlan: Boolean(data?.growthPlan),
       contentBriefs: Boolean(data?.contentBriefs),
+      merchant360: Boolean(data?.merchant360),
       resourceStatus: data?.resourceStatus || null,
     },
     category,

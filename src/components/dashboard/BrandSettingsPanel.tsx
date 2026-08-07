@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
-import { X, Save, Loader2, CheckCircle2 } from 'lucide-react'
+import { X, Save, Loader2, CheckCircle2, Copy, ExternalLink } from 'lucide-react'
 
 // ── Integration field types ──────────────────────────────────────────────────
 interface IntegrationField {
@@ -102,6 +102,16 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
 
   const googleLocationName = asText(initialSettings?.googleLocationName)
   const googlePreferOAuth = asBool(initialSettings?.googlePreferOAuth, true)
+  const googleLinksMeta = initialSettings?.googleLinksMeta && typeof initialSettings.googleLinksMeta === 'object' && !Array.isArray(initialSettings.googleLinksMeta)
+    ? initialSettings.googleLinksMeta as Record<string, unknown>
+    : {}
+  const growthGoogleLinks = [
+    ['商家主页', asText(initialSettings?.googleBusinessUrl)],
+    ['写评价', asText(initialSettings?.googleReviewUrl)],
+    ['查看评论', asText(googleLinksMeta.reviewsUrl)],
+    ['路线', asText(googleLinksMeta.directionsUrl)],
+    ['照片', asText(googleLinksMeta.photosUrl)],
+  ].filter((entry): entry is [string, string] => Boolean(entry[1]))
 
   useEffect(() => {
     if (!open) return
@@ -365,6 +375,27 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
                 <span>⚡</span>
                 连接 Google 商家账号 (直接授权)
               </button>
+            )}
+
+            {/* Manual fallback fields for developers / place ID custom debugging */}
+            {googleLinksMeta.source === 'amc-growth:google-places' && growthGoogleLinks.length > 0 && (
+              <div className="mt-4 border border-blue-100 dark:border-blue-900/40 rounded-2xl bg-blue-50/60 dark:bg-blue-950/20 p-3.5 space-y-3">
+                <div>
+                  <p className="text-xs font-extrabold text-blue-800 dark:text-blue-300">Growth 已确认的 Google Maps 链接</p>
+                  <p className="mt-1 text-[10px] text-blue-600/80 dark:text-blue-400/80">
+                    观测于 {asText(googleLinksMeta.observedAt) || '未知'} · 到期于 {asText(googleLinksMeta.expiresAt) || '未知'}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {growthGoogleLinks.map(([label, url]) => (
+                    <div key={label} className="flex items-center gap-2 rounded-xl bg-white dark:bg-slate-900 border border-blue-100 dark:border-blue-900/30 p-2.5">
+                      <div className="min-w-0 flex-1"><p className="text-[10px] font-bold text-slate-700 dark:text-slate-200">{label}</p><p className="truncate text-[9px] text-slate-400">{url}</p></div>
+                      <a href={url} target="_blank" rel="noreferrer" aria-label={`打开${label}`} className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"><ExternalLink size={13} /></a>
+                      <button type="button" aria-label={`复制${label}`} onClick={() => void navigator.clipboard.writeText(url)} className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950"><Copy size={13} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             {/* Manual fallback fields for developers / place ID custom debugging */}

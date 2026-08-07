@@ -378,6 +378,7 @@ model Brand {
   googleRedirectUri     String?
   googleBusinessUrl     String?
   googleReviewUrl       String?
+  googleLinksMeta       Json? // Additional Growth-confirmed Google Maps links and freshness metadata
   googlePreferOAuth     Boolean @default(true)
   larkAppId             String?
   larkAppSecret         String?

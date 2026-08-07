@@ -133,12 +133,13 @@ export async function publishGrowthMerchantEvent(input: {
 
 export async function readGrowthMerchantData(brandKey: string) {
   const merchantPath = `/v1/merchants/${encodeURIComponent(brandKey)}`
-  const [profileResponse, knowledgeResponse, brandStoryResponse, growthPlanResponse, contentBriefsResponse] = await Promise.all([
+  const [profileResponse, knowledgeResponse, brandStoryResponse, growthPlanResponse, contentBriefsResponse, merchant360Response] = await Promise.all([
     growthRequest(`${merchantPath}/profile`, { method: 'GET' }),
     growthRequest(`${merchantPath}/knowledge`, { method: 'GET' }),
     growthRequest(`${merchantPath}/brand-story`, { method: 'GET' }),
     growthRequest(`${merchantPath}/growth-plan`, { method: 'GET' }),
     growthRequest(`${merchantPath}/content-briefs`, { method: 'GET' }),
+    growthRequest(`/v1/internal/merchants/${encodeURIComponent(brandKey)}/360`, { method: 'GET' }),
   ])
   if (!profileResponse.ok) {
     throw new Error(`growth_merchant_profile_read_failed:${profileResponse.status}`)
@@ -146,11 +147,15 @@ export async function readGrowthMerchantData(brandKey: string) {
   if (!knowledgeResponse.ok) {
     throw new Error(`growth_merchant_knowledge_read_failed:${knowledgeResponse.status}`)
   }
+  if (!merchant360Response.ok) {
+    throw new Error(`growth_merchant_360_read_failed:${merchant360Response.status}`)
+  }
   const optionalStatus = {
     knowledge: knowledgeResponse.status,
     brandStory: brandStoryResponse.status,
     growthPlan: growthPlanResponse.status,
     contentBriefs: contentBriefsResponse.status,
+    merchant360: merchant360Response.status,
   }
   return {
     profile: await profileResponse.json(),
@@ -158,6 +163,7 @@ export async function readGrowthMerchantData(brandKey: string) {
     brandStory: brandStoryResponse.ok ? await brandStoryResponse.json() : null,
     growthPlan: growthPlanResponse.ok ? await growthPlanResponse.json() : null,
     contentBriefs: contentBriefsResponse.ok ? await contentBriefsResponse.json() : null,
+    merchant360: await merchant360Response.json(),
     resourceStatus: optionalStatus,
   }
 }

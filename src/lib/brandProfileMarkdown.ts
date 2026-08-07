@@ -30,6 +30,7 @@ type BrandSnapshot = {
   googleLocationName: string | null
   googleBusinessUrl: string | null
   googleReviewUrl: string | null
+  googleLinksMeta: unknown
   postfastApiKey: string | null
   googleApiKey: string | null
   larkAppId: string | null
@@ -66,6 +67,17 @@ type StoreDraft = {
   businessHours?: string
   reservationUrl?: string
   orderingUrl?: string
+  googleBusiness?: {
+    placeId?: string
+    businessUrl?: string
+    reviewUrl?: string
+    reviewsUrl?: string
+    directionsUrl?: string
+    photosUrl?: string
+    source?: string
+    observedAt?: string
+    expiresAt?: string
+  }
 }
 
 export type ParsedEditableBrandContext = {
@@ -170,6 +182,9 @@ function ensureManualSection(existing?: string) {
 }
 
 function buildStores(snapshot: BrandSnapshot) {
+  const googleLinksMeta = snapshot.googleLinksMeta && typeof snapshot.googleLinksMeta === 'object' && !Array.isArray(snapshot.googleLinksMeta)
+    ? snapshot.googleLinksMeta as Record<string, unknown>
+    : {}
   const primaryStore = {
     storeId: 'main',
     name: snapshot.googleLocationName || `${snapshot.name} 主门店`,
@@ -188,6 +203,12 @@ function buildStores(snapshot: BrandSnapshot) {
       locationName: snapshot.googleLocationName,
       businessUrl: snapshot.googleBusinessUrl,
       reviewUrl: snapshot.googleReviewUrl,
+      reviewsUrl: googleLinksMeta.reviewsUrl || null,
+      directionsUrl: googleLinksMeta.directionsUrl || null,
+      photosUrl: googleLinksMeta.photosUrl || null,
+      source: googleLinksMeta.source || null,
+      observedAt: googleLinksMeta.observedAt || null,
+      expiresAt: googleLinksMeta.expiresAt || null,
     },
     ext: {},
   }
@@ -279,6 +300,7 @@ export async function loadBrandProfileSnapshot(brandId: string): Promise<BrandSn
       googleLocationName: true,
       googleBusinessUrl: true,
       googleReviewUrl: true,
+      googleLinksMeta: true,
       postfastApiKey: true,
       googleApiKey: true,
       larkAppId: true,

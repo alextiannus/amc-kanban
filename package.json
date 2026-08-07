@@ -43,6 +43,7 @@
     "audit:auth-v2-debt": "node scripts/audit-auth-v2-debt.mjs",
     "test:auth-v2": "node --experimental-strip-types scripts/test-auth-v2.mts",
     "test:brand-identity": "node --experimental-strip-types scripts/test-brand-identity-contract.mts",
+    "test:growth-google-sync": "node --experimental-strip-types scripts/test-growth-google-sync.mts",
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",
     "test:e2e-basic": "node --experimental-strip-types scripts/test-e2e-basic-flows.mts",
     "test:game-permanent-qr": "node --experimental-strip-types scripts/test-game-permanent-qr.mts",

@@ -1693,7 +1693,9 @@ Admin → AI 模型配置 页面：
 ### 数据与接口约束
 
 - 新建或导入品牌时，Kanban 使用自身品牌 ID 调用 Growth `POST /v1/internal/merchants/upsert`，获得并持久化稳定 `growthBrandKey`；Growth 不可用时允许 Kanban 业务创建成功，并进入可重试的未绑定状态。
-- 商家资料读取使用 `GET /v1/merchants/:brandKey/profile`；知识读取使用 `GET /v1/merchants/:brandKey/knowledge`。
+- 商家基础资料读取继续使用 `GET /v1/merchants/:brandKey/profile`，知识读取使用 `GET /v1/merchants/:brandKey/knowledge`；门店级 Google Places 资料、动作链接、来源和新鲜度通过受服务令牌保护的 `GET /v1/internal/merchants/:brandKey/360` 读取，不向公开 profile 暴露 Provider 原始资料。
+- Growth 在人工确认 Google Place 后按 Place ID 完成全量详情采集，按门店返回 Google 商家主页、查看评论、写评价、路线和照片链接。Kanban 不调用 Places API，只在用户主动执行 Growth 同步时将每门店链接复制到 `BrandKnowledge.stores[].googleBusiness`，并把最近观测的有效主门店镜像到 `Brand.googlePlaceId`、`Brand.googleBusinessUrl`、`Brand.googleReviewUrl`；其余链接、来源和有效期保存在 `Brand.googleLinksMeta`。
+- Google 同步值必须带 `observedAt`、`expiresAt` 和来源。已确认且未过期的 Growth 值可以在主动同步时覆盖旧的 Growth 镜像；缺失或过期值不得冒充最新资料，也不得清空无关人工资料。Kanban 的邀评、门店资料和 Agent 上下文优先使用门店级链接，并保持现有主门店字段兼容。
 - 商家或内部人员提交的补充信息使用 `POST /v1/merchants/:brandKey/knowledge-candidates`，默认形成带来源的候选，不直接覆盖已发布事实。
 - Kanban 品牌资料页的“品牌定位与特征”使用统一字段接口：`brand.tone`、`audience.primary`、`brand.unique_selling_points` 读取 Growth 正式版本；运营区域、品牌 Voice、品牌形象、推广重点和发布频次仍属于 Kanban 工作区与内容执行配置。
 - 对该品牌拥有 `WRITE` 权限的 Kanban 用户可在定位区逐行编辑。Growth 所属字段通过受服务令牌保护的内部接口立即发布不可变新版本，旧版本转为 `superseded`；Kanban 所属字段局部更新并写入 `AuditLog`。只读成员只能查看。
