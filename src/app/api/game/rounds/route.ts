@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { getSession } from '@/lib/auth'
 import { canHumanAccessBrandProject, canOwnBrand } from '@/lib/brandAccess'
@@ -10,8 +10,10 @@ import {
   parseRoundDate,
 } from '@/lib/gameActivityRounds'
 import { prisma } from '@/lib/prisma'
+import { requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 async function authorizedBrand(brandId: string, write: boolean) {
   const session = await getSession()
@@ -81,6 +83,9 @@ export async function POST(request: Request) {
         select: { id: true, startsAt: true, endsAt: true, createdAt: true, updatedAt: true },
       })
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+    after(async () => {
+      await requestGameShareDraftPoolRefill(config.id)
+    })
     return NextResponse.json({ round }, { status: 201 })
   } catch (error) {
     console.error('[POST /api/game/rounds]', error)

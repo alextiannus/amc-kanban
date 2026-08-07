@@ -689,10 +689,12 @@ model GameConfig {
   posterDesc  String @default("Open any sharing platform once per activity round to receive 5 points.")
   posterTheme String @default("black")
 
-  prizes         GamePrize[]
-  activityRounds GameActivityRound[]
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  prizes               GamePrize[]
+  activityRounds       GameActivityRound[]
+  shareDraftPoolItems  GameShareDraftPoolItem[]
+  shareDraftPoolStates GameShareDraftPoolState[]
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
 }
 
 model GameActivityRound {
@@ -816,6 +818,51 @@ model GameShareDraft {
   @@unique([sessionId, activityDate])
   @@index([brandId, activityDate])
   @@index([ipHash, activityDate])
+}
+
+model GameShareDraftPoolItem {
+  id           String     @id @default(cuid())
+  gameConfigId String
+  gameConfig   GameConfig @relation(fields: [gameConfigId], references: [id], onDelete: Cascade)
+
+  locale            String
+  drafts            Json
+  configFingerprint String
+  status            String    @default("AVAILABLE") // AVAILABLE | RESERVED | USED
+  reservedSessionId String?
+  reservedRoundId   String?
+  reservedUntil     DateTime?
+  usedPlatform      String?
+  usedAt            DateTime?
+  generationSource  String    @default("ai")
+  generatedAt       DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([gameConfigId, locale, configFingerprint, status])
+  @@index([reservedSessionId, reservedRoundId, status])
+  @@index([reservedUntil, status])
+}
+
+model GameShareDraftPoolState {
+  id           String     @id @default(cuid())
+  gameConfigId String
+  gameConfig   GameConfig @relation(fields: [gameConfigId], references: [id], onDelete: Cascade)
+
+  locale            String
+  configFingerprint String
+  targetSize        Int       @default(5)
+  availableCount    Int       @default(0)
+  reservedCount     Int       @default(0)
+  generationStatus  String    @default("PENDING") // IDLE | PENDING | GENERATING | ERROR
+  taskLeaseUntil    DateTime?
+  lastGeneratedAt   DateTime?
+  lastError         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([gameConfigId, locale])
+  @@index([generationStatus, taskLeaseUntil])
 }
 
 model GameSpinLog {

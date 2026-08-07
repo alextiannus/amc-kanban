@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react'
 import { BookOpen, CheckCircle2, Copy, MapPin } from 'lucide-react'
 
 type Prize = {
@@ -78,13 +78,8 @@ type ShareDrafts = Partial<Record<Platform, string>>
 type ShareDraftResponse = {
   draftId: string | null
   locale: Locale | null
-  experienceTags: string[]
-  experienceNote: string | null
   drafts: ShareDrafts
   source: 'ai' | 'fallback' | null
-  generationsUsed: number
-  generationsRemaining: number
-  limitReason?: string | null
   generatedAt: string | null
 }
 
@@ -114,9 +109,7 @@ const copy = {
     unclaimedRewards: 'Unclaimed rewards',
     activityPaused: 'This activity is currently paused.',
     nextRoundStarts: (value: string) => `Next round starts ${value}.`,
-    prepareSharing: 'Prepare your sharing draft',
-    entryRewardBody: 'The first time you copy and open any platform in this activity round, 5 points are added automatically.',
-    truthConfirm: 'I reviewed these drafts and will keep only details that match my genuine experience.',
+    heroCta: 'Review now, earn points, and spin to win',
     rewardAndOpen: (platform: string) => `Get 5 points and open ${platform}`,
     rewarding: 'Adding 5 points...',
     prizePool: 'Prize pool',
@@ -136,10 +129,6 @@ const copy = {
     xiaohongshu: 'Xiaohongshu',
     instagram: 'Instagram',
     noPrize: 'No prize',
-    generatingSocial: 'Preparing all platform drafts from the merchant’s published information...',
-    generationsLeft: (count: number) => `${count} AI generation${count === 1 ? '' : 's'} left today`,
-    truthNotice: 'AI draft: review it before sharing and keep only information that is accurate.',
-    fallbackNotice: 'AI is temporarily unavailable or a usage limit was reached. Editable basic templates are shown instead.',
     copyAndOpen: (platform: string) => `Copy and open ${platform}`,
     copyFailed: 'Could not copy automatically. Your draft is still here—please press and hold to copy it manually.',
     copiedOpening: (platform: string) => `Copied. Opening ${platform}...`,
@@ -170,9 +159,7 @@ const copy = {
     unclaimedRewards: '待领取奖品',
     activityPaused: '当前活动暂停中。',
     nextRoundStarts: (value: string) => `下一轮将在 ${value} 开始。`,
-    prepareSharing: '准备你的分享文案',
-    entryRewardBody: '本轮首次复制并打开任意一个平台时，系统自动增加 5 积分。',
-    truthConfirm: '我已检查草稿，分享时只保留符合本人真实体验的内容。',
+    heroCta: '立即评价，获取积分抽奖',
     rewardAndOpen: (platform: string) => `领取 5 积分并打开 ${platform}`,
     rewarding: '正在增加 5 积分...',
     prizePool: '奖品池',
@@ -192,10 +179,6 @@ const copy = {
     xiaohongshu: '小红书',
     instagram: 'Instagram',
     noPrize: '谢谢参与',
-    generatingSocial: '正在根据商家公开资料准备全部平台草稿…',
-    generationsLeft: (count: number) => `今日还可生成 ${count} 次`,
-    truthNotice: 'AI 草稿：分享前请检查内容，只保留准确的信息。',
-    fallbackNotice: 'AI 暂时不可用或已达到调用额度，当前展示可编辑的基础模板。',
     copyAndOpen: (platform: string) => `复制并打开 ${platform}`,
     copyFailed: '自动复制失败，文案仍已保留；请长按文案手动复制。',
     copiedOpening: (platform: string) => `已复制，正在打开 ${platform}…`,
@@ -679,13 +662,9 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [locale, setLocale] = useState<Locale>('en')
   const [shareDraftId, setShareDraftId] = useState<string | null>(null)
   const [shareDrafts, setShareDrafts] = useState<ShareDrafts>({})
-  const [shareSource, setShareSource] = useState<'ai' | 'fallback' | null>(null)
-  const [generationsRemaining, setGenerationsRemaining] = useState(3)
-  const [generatingDrafts, setGeneratingDrafts] = useState(false)
+  const [loadingDrafts, setLoadingDrafts] = useState(false)
   const [copiedPlatform, setCopiedPlatform] = useState<Platform | null>(null)
-  const [truthConfirmed, setTruthConfirmed] = useState(false)
   const [rewardingPlatform, setRewardingPlatform] = useState<Platform | null>(null)
-  const generationRequestInFlight = useRef(false)
 
   const accent = config?.themeColor || '#2563eb'
   const t = copy[locale]
@@ -714,44 +693,34 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     }
   }
 
-  const requestShareDrafts = useCallback(async (requestedSessionId: string, requestLocale: Locale) => {
-    if (!requestedSessionId || generationRequestInFlight.current) return
-    generationRequestInFlight.current = true
-    setGeneratingDrafts(true)
-    setError('')
-    setMessage('')
+  const requestShareDrafts = useCallback(async (requestedSessionId: string, requestLocale: Locale, silent = false) => {
+    if (!requestedSessionId) return
+    if (!silent) setLoadingDrafts(true)
     try {
-      const response = await fetch('/api/game/share-drafts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brandId,
-          sessionId: requestedSessionId,
-          locale: requestLocale,
-          mode: 'AUTO',
-        }),
-      })
+      const response = await fetch(`/api/game/share-drafts?brandId=${encodeURIComponent(brandId)}&sessionId=${encodeURIComponent(requestedSessionId)}&locale=${requestLocale}`, { cache: 'no-store' })
       const data = await response.json().catch(() => ({})) as Partial<ShareDraftResponse> & { error?: string }
       if (!response.ok) {
-        setError(data.error || copy[requestLocale].submitFailed)
+        if (!silent) setError(data.error || copy[requestLocale].submitFailed)
         return
       }
       const returnedDrafts = data.drafts || {}
       setShareDraftId(data.draftId || null)
-      setShareSource(data.source || null)
-      setGenerationsRemaining(data.generationsRemaining ?? 0)
       setShareDrafts(() => {
-        const nextDrafts = returnedDrafts
+        const localEdits = parseDraftEdits(window.sessionStorage.getItem(draftEditsStorageKey(brandId)))
+        const nextDrafts = localEdits && localEdits.draftId === data.draftId
+          ? { ...returnedDrafts, ...localEdits.drafts }
+          : returnedDrafts
         if (data.draftId) {
           window.sessionStorage.setItem(draftEditsStorageKey(brandId), JSON.stringify({ draftId: data.draftId, drafts: nextDrafts }))
+        } else if (localEdits) {
+          window.sessionStorage.removeItem(draftEditsStorageKey(brandId))
         }
         return nextDrafts
       })
     } catch {
-      setError(copy[requestLocale].submitFailed)
+      if (!silent) setError(copy[requestLocale].submitFailed)
     } finally {
-      generationRequestInFlight.current = false
-      setGeneratingDrafts(false)
+      if (!silent) setLoadingDrafts(false)
     }
   }, [brandId])
 
@@ -813,43 +782,26 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
     void load()
     return () => window.clearTimeout(initializeTimer)
-  }, [brandId, requestShareDrafts])
+  }, [brandId])
 
   useEffect(() => {
     const activeRoundId = status?.activeRound?.id
     if (!sessionId || !config || !activeRoundId || status.entryRewardClaimed || config.taskReviewEnabled === false) return
-    let cancelled = false
+    queueMicrotask(() => void requestShareDrafts(sessionId, locale))
+  }, [config, locale, requestShareDrafts, sessionId, status?.activeRound?.id, status?.entryRewardClaimed])
 
-    async function loadRoundDrafts() {
-      try {
-        const response = await fetch(`/api/game/share-drafts?brandId=${encodeURIComponent(brandId)}&sessionId=${encodeURIComponent(sessionId)}`, { cache: 'no-store' })
-        if (!response.ok || cancelled) return
-        const draftData = await response.json() as ShareDraftResponse
-        if (cancelled) return
-        setTruthConfirmed(false)
-        setShareDraftId(draftData.draftId)
-        setShareSource(draftData.source)
-        setGenerationsRemaining(draftData.generationsRemaining)
-
-        const localEdits = parseDraftEdits(window.sessionStorage.getItem(draftEditsStorageKey(brandId)))
-        const nextDrafts = localEdits?.draftId === draftData.draftId
-          ? { ...draftData.drafts, ...localEdits.drafts }
-          : draftData.drafts
-        setShareDrafts(nextDrafts)
-        if (localEdits && localEdits.draftId !== draftData.draftId) {
-          window.sessionStorage.removeItem(draftEditsStorageKey(brandId))
-        }
-        if (activePlatforms.some((platform) => !nextDrafts[platform]) && draftData.generationsRemaining > 0) {
-          void requestShareDrafts(sessionId, locale)
-        }
-      } catch {
-        if (!cancelled) setError(copy[locale].submitFailed)
-      }
+  useEffect(() => {
+    if (!sessionId || !status?.activeRound || status.entryRewardClaimed || !shareDraftId) return
+    const renew = () => {
+      if (document.visibilityState === 'visible') void requestShareDrafts(sessionId, locale, true)
     }
-
-    void loadRoundDrafts()
-    return () => { cancelled = true }
-  }, [activePlatforms, brandId, config, locale, requestShareDrafts, sessionId, status?.activeRound?.id, status?.entryRewardClaimed])
+    const timer = window.setInterval(renew, 5 * 60 * 1000)
+    document.addEventListener('visibilitychange', renew)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', renew)
+    }
+  }, [locale, requestShareDrafts, sessionId, shareDraftId, status?.activeRound, status?.entryRewardClaimed])
 
   useEffect(() => {
     if (!sessionId) return
@@ -922,7 +874,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
   async function copyAndOpenPlatform(platform: Platform) {
     const text = shareDrafts[platform]?.trim()
-    if (!text || !truthConfirmed || rewardingPlatform) return
+    if (!text || rewardingPlatform) return
     setError('')
     let copied = false
     try {
@@ -952,10 +904,11 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       const response = await fetch('/api/game/entry-reward', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandId, sessionId, platform }),
+        body: JSON.stringify({ brandId, sessionId, platform, draftId: shareDraftId }),
       })
       const data = await response.json().catch(() => ({})) as {
         error?: string
+        code?: string
         pointsBalance?: number
         pointsAwarded?: number
         platform?: Platform
@@ -963,6 +916,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       }
       if (!response.ok) {
         setError(data.error || t.rewardFailed)
+        if (data.code === 'DRAFT_RESERVATION_INVALID') void requestShareDrafts(sessionId, locale)
         return
       }
       setStatus((current) => current ? {
@@ -1069,7 +1023,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         <header className="px-5 pb-8 pt-8 text-white" style={{ background: accent }}>
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-white/70">{config?.brand?.name || t.defaultBrand}</p>
           <h1 className="mt-3 text-3xl font-black leading-tight">{config?.title || t.defaultTitle}</h1>
-          {config?.description && <p className="mt-3 text-sm leading-6 text-white/85">{config.description}</p>}
+          <p className="mt-3 text-sm font-semibold leading-6 text-white/90">{t.heroCta}</p>
         </header>
 
         <div className="-mt-5 flex-1 space-y-4 rounded-t-[28px] bg-slate-50 px-5 pb-8 pt-5">
@@ -1148,33 +1102,9 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
           ) : null}
 
           {activityActive && !status?.entryRewardClaimed && config?.taskReviewEnabled !== false && activePlatforms.length > 0 && (
-            <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-xs font-black text-slate-800">{t.prepareSharing}</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">{t.entryRewardBody}</p>
-
-              {generatingDrafts && (
-                <p role="status" aria-live="polite" className="mt-3 rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold leading-5 text-blue-700">
-                  {t.generatingSocial}
-                </p>
-              )}
-              <p className="mt-2 text-center text-[11px] font-bold text-slate-400">{t.generationsLeft(generationsRemaining)}</p>
-              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-800">{t.truthNotice}</p>
-              {shareSource === 'fallback' && (
-                <p role="status" className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">{t.fallbackNotice}</p>
-              )}
-
-              <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs font-semibold leading-5 text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={truthConfirmed}
-                  onChange={(event) => setTruthConfirmed(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0"
-                />
-                <span>{t.truthConfirm}</span>
-              </label>
-
-              <div className="mt-4">
-                <div className="mt-3 space-y-3">
+            <div className="space-y-3">
+              <div>
+                <div className="space-y-3">
                   {activePlatforms.map((platform) => {
                     const isOpened = selectedPlatform === platform
                     const visual = platformVisuals[platform]
@@ -1196,13 +1126,13 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                             value={draft}
                             onChange={(event) => updateDraft(platform, event.target.value)}
                             rows={5}
-                            aria-label={`${label} AI draft`}
+                            aria-label={`${label} draft`}
                             className="mt-3 w-full resize-y rounded-lg border border-white/80 bg-white px-3 py-2.5 text-sm leading-5 text-slate-800 outline-none focus:border-slate-400 focus:ring-2 focus:ring-white"
                           />
                           <button
                             type="button"
                             onClick={() => copyAndOpenPlatform(platform)}
-                            disabled={!draft.trim() || !truthConfirmed || Boolean(rewardingPlatform)}
+                            disabled={!draft.trim() || Boolean(rewardingPlatform)}
                             className={`mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-black text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.99] disabled:opacity-50 ${visual.icon} ${visual.focus}`}
                           >
                             {copiedPlatform === platform ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -1223,9 +1153,9 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-black text-slate-900">{label}</span>
-                          <span className="mt-0.5 block text-xs font-bold text-slate-500">{t.generatingSocial}</span>
+                          <span className="mt-1 block h-3 w-32 animate-pulse rounded bg-slate-200" aria-hidden="true" />
                         </span>
-                        <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-500" aria-hidden="true" />
+                        {loadingDrafts && <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-500" aria-hidden="true" />}
                       </div>
                     )
                   })}

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -6,6 +6,9 @@ import { canOwnBrand } from '@/lib/brandAccess'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 import { assertValidTimeZone } from '@/lib/gameActivityRounds'
+import { requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
+
+export const maxDuration = 60
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -326,6 +329,13 @@ export async function PATCH(request: Request, { params }: Params) {
     await refreshBrandProfileMarkdown(id)
   } catch {
     // non-fatal — settings save should not fail because profile file refresh fails
+  }
+
+  if (body.name !== undefined || body.location !== undefined || body.description !== undefined) {
+    after(async () => {
+      const gameConfig = await prisma.gameConfig.findUnique({ where: { brandId: id }, select: { id: true } })
+      if (gameConfig) await requestGameShareDraftPoolRefill(gameConfig.id)
+    })
   }
 
   return NextResponse.json({

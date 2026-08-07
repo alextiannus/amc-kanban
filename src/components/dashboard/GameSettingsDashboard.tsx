@@ -47,6 +47,17 @@ interface ActivityRound {
   updatedAt: string
 }
 
+interface ShareDraftPoolStatus {
+  targetSize: number
+  locales: Record<'zh' | 'en', {
+    available: number
+    reserved: number
+    status: string
+    lastGeneratedAt: string | null
+    lastError: string | null
+  }>
+}
+
 function zonedDateParts(value: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -182,6 +193,9 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   const [newRoundEndsAt, setNewRoundEndsAt] = useState('')
   const [roundEdits, setRoundEdits] = useState<Record<string, { startsAt: string; endsAt: string }>>({})
   const [roundBusy, setRoundBusy] = useState<string | null>(null)
+  const [shareDraftPool, setShareDraftPool] = useState<ShareDraftPoolStatus | null>(null)
+  const [poolLoading, setPoolLoading] = useState(false)
+  const [poolError, setPoolError] = useState('')
 
   // QR code state
   const [qrCodeUrl, setQrCodeUrl] = useState('')
@@ -212,6 +226,21 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   const [wheelRotation, setWheelRotation] = useState(0)
   const [isPreviewSpinning, setIsPreviewSpinning] = useState(false)
   const [previewActiveSlot, setPreviewActiveSlot] = useState<number | null>(null)
+
+  const fetchShareDraftPool = useCallback(async (showLoading = false) => {
+    if (showLoading) setPoolLoading(true)
+    try {
+      const response = await fetch(`/api/game/share-draft-pool?brandId=${encodeURIComponent(brandId)}`, { cache: 'no-store' })
+      const data = await response.json().catch(() => ({})) as { pool?: ShareDraftPoolStatus; error?: string }
+      if (!response.ok || !data.pool) throw new Error(data.error || '无法读取 AI 评价文案池')
+      setShareDraftPool(data.pool)
+      setPoolError('')
+    } catch (err) {
+      setPoolError(err instanceof Error ? err.message : '无法读取 AI 评价文案池')
+    } finally {
+      if (showLoading) setPoolLoading(false)
+    }
+  }, [brandId])
 
   const fetchConfig = useCallback(async () => {
     setLoading(true)
@@ -246,6 +275,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       if (data.brand?.googleReviewUrl) setGoogleReviewUrl(data.brand.googleReviewUrl)
       if (data.brand?.googleReviewAppUrl) setGoogleReviewAppUrl(data.brand.googleReviewAppUrl)
       if (data.brand?.googleBusinessUrl) setGoogleBusinessUrl(data.brand.googleBusinessUrl)
+      await fetchShareDraftPool()
 
     } catch (err: unknown) {
       console.error(err)
@@ -253,13 +283,20 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [brandId])
+  }, [brandId, fetchShareDraftPool])
 
   useEffect(() => {
     queueMicrotask(() => {
       void fetchConfig()
     })
   }, [fetchConfig])
+
+  useEffect(() => {
+    const generating = shareDraftPool && Object.values(shareDraftPool.locales).some((item) => ['PENDING', 'GENERATING'].includes(item.status))
+    if (!generating) return
+    const timer = window.setInterval(() => void fetchShareDraftPool(), 3000)
+    return () => window.clearInterval(timer)
+  }, [fetchShareDraftPool, shareDraftPool])
 
   useEffect(() => {
     let active = true
@@ -271,7 +308,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
     return () => {
       active = false
     }
-  }, [brandId])
+  }, [brandId, fetchShareDraftPool])
 
   const upsertRound = useCallback((round: ActivityRound) => {
     setActivityRounds((current) => [...current.filter((item) => item.id !== round.id), round]
@@ -301,6 +338,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       upsertRound(data.round)
       setNewRoundStartsAt('')
       setNewRoundEndsAt('')
+      window.setTimeout(() => void fetchShareDraftPool(), 1000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create activity round')
     } finally {
@@ -416,11 +454,38 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       setConfig(savedData)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+      window.setTimeout(() => void fetchShareDraftPool(), 1000)
     } catch (err: unknown) {
       console.error(err)
       setError(err instanceof Error ? err.message : 'Failed to save configuration')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const refillShareDraftPool = async () => {
+    setPoolLoading(true)
+    setPoolError('')
+    try {
+      const response = await fetch('/api/game/share-draft-pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId }),
+      })
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) throw new Error(data.error || '无法提交文案补充任务')
+      setShareDraftPool((current) => current ? {
+        ...current,
+        locales: {
+          zh: { ...current.locales.zh, status: 'PENDING', lastError: null },
+          en: { ...current.locales.en, status: 'PENDING', lastError: null },
+        },
+      } : current)
+      window.setTimeout(() => void fetchShareDraftPool(), 1000)
+    } catch (err) {
+      setPoolError(err instanceof Error ? err.message : '无法提交文案补充任务')
+    } finally {
+      setPoolLoading(false)
     }
   }
 
@@ -957,6 +1022,61 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                 })}
               </div>
             )}
+          </div>
+
+          {/* AI review draft pool */}
+          <div className="space-y-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">
+                  <RefreshCw size={15} className="text-violet-500" />
+                  AI 评价文案池
+                </h3>
+                <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                  顾客直接领取预生成文案；中文、英文各维持 {shareDraftPool?.targetSize || 5} 组，使用后自动补充。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void refillShareDraftPool()}
+                disabled={poolLoading}
+                className="flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl bg-violet-50 px-3 py-2 text-[10px] font-black text-violet-700 transition hover:bg-violet-100 disabled:opacity-50 dark:bg-violet-950/30 dark:text-violet-300"
+              >
+                <RefreshCw size={12} className={poolLoading ? 'animate-spin' : ''} />
+                补充至 5 组
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(['zh', 'en'] as const).map((localeKey) => {
+                const item = shareDraftPool?.locales[localeKey]
+                const statusCopy = item?.status === 'GENERATING' ? '生成中' : item?.status === 'PENDING' ? '待生成' : item?.status === 'ERROR' ? '生成失败' : '库存正常'
+                const statusStyle = item?.status === 'ERROR' ? 'bg-red-50 text-red-700' : ['PENDING', 'GENERATING'].includes(item?.status || '') ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'
+                return (
+                  <div key={localeKey} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-800/40">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-black text-slate-800 dark:text-slate-100">{localeKey === 'zh' ? '中文文案' : 'English drafts'}</p>
+                      <span className={`rounded-full px-2 py-1 text-[9px] font-black ${statusStyle}`}>{statusCopy}</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-white px-2.5 py-2 dark:bg-slate-900">
+                        <p className="text-[9px] font-bold text-slate-400">可用</p>
+                        <p className="mt-0.5 text-lg font-black text-slate-900 dark:text-white">{item?.available ?? 0}</p>
+                      </div>
+                      <div className="rounded-lg bg-white px-2.5 py-2 dark:bg-slate-900">
+                        <p className="text-[9px] font-bold text-slate-400">已锁定</p>
+                        <p className="mt-0.5 text-lg font-black text-slate-900 dark:text-white">{item?.reserved ?? 0}</p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[9px] leading-4 text-slate-400">
+                      最近生成：{item?.lastGeneratedAt ? new Date(item.lastGeneratedAt).toLocaleString('zh-CN') : '尚未生成'}
+                    </p>
+                    {item?.lastError && <p className="mt-1 break-words text-[9px] leading-4 text-red-600">{item.lastError}</p>}
+                  </div>
+                )
+              })}
+            </div>
+            {poolError && <p className="rounded-xl bg-red-50 px-3 py-2 text-[10px] font-bold text-red-700">{poolError}</p>}
           </div>
 
           {/* Section 2: Prizes */}

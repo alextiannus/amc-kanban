@@ -1,11 +1,13 @@
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canHumanAccessBrandProject, canOwnBrand } from '@/lib/brandAccess'
 import { hasPrizeIdentityChanged } from '@/lib/gamePrizes'
+import { requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
 
 type GamePrizeInput = {
   id?: string
@@ -301,6 +303,9 @@ export async function POST(request: Request) {
       }
     })
 
+    after(async () => {
+      await requestGameShareDraftPoolRefill(result.id)
+    })
     return NextResponse.json(result)
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Internal Server Error'

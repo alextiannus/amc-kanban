@@ -1,9 +1,12 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { findActiveAndNextGameRounds, publicGameRound } from '@/lib/gameActivityRounds'
+import { getGameSharePoolContext, requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
+import type { GameShareLocale } from '@/lib/gameShareDrafts'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 const platforms = ['GOOGLE', 'XIAOHONGSHU', 'INSTAGRAM'] as const
 type Platform = typeof platforms[number]
@@ -34,6 +37,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'sessionId is too long' }, { status: 400 })
     }
     const platform = body.platform.toUpperCase() as Platform
+    const draftId = typeof body?.draftId === 'string' && body.draftId.trim() ? body.draftId.trim() : null
+    if (draftId && draftId.length > 128) {
+      return NextResponse.json({ error: 'draftId is too long' }, { status: 400 })
+    }
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
@@ -71,7 +78,44 @@ export async function POST(request: Request) {
               pointsAwarded: existing.pointsAwarded,
               platform: existing.platform,
               activeRound,
+              gameConfigId: config.id,
+              consumedLocale: null,
             }
+          }
+
+          let consumedLocale: GameShareLocale | null = null
+          if (draftId) {
+            const poolContext = await getGameSharePoolContext(tx, config.id)
+            if (!poolContext) return { kind: 'DRAFT_INVALID' as const }
+            const draft = await tx.gameShareDraftPoolItem.findFirst({
+              where: {
+                id: draftId,
+                gameConfigId: config.id,
+                configFingerprint: poolContext.fingerprint,
+                status: 'RESERVED',
+                reservedSessionId: session.id,
+                reservedRoundId: activeRound.id,
+                reservedUntil: { gt: new Date() },
+              },
+              select: { locale: true },
+            })
+            if (!draft || (draft.locale !== 'zh' && draft.locale !== 'en')) return { kind: 'DRAFT_INVALID' as const }
+            const consumed = await tx.gameShareDraftPoolItem.updateMany({
+              where: {
+                id: draftId,
+                status: 'RESERVED',
+                reservedSessionId: session.id,
+                reservedRoundId: activeRound.id,
+              },
+              data: {
+                status: 'USED',
+                usedPlatform: platform,
+                usedAt: new Date(),
+                reservedUntil: null,
+              },
+            })
+            if (consumed.count !== 1) return { kind: 'DRAFT_INVALID' as const }
+            consumedLocale = draft.locale
           }
 
           await tx.gameEntryReward.create({
@@ -89,13 +133,23 @@ export async function POST(request: Request) {
             pointsAwarded: 5,
             platform,
             activeRound,
+            gameConfigId: config.id,
+            consumedLocale,
           }
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
         if (result.kind === 'NOT_FOUND') return NextResponse.json({ error: 'Game config not found' }, { status: 404 })
         if (result.kind === 'PLATFORM_DISABLED') return NextResponse.json({ error: 'This platform is not enabled' }, { status: 409 })
+        if (result.kind === 'DRAFT_INVALID') {
+          return NextResponse.json({ error: 'This draft reservation expired. Please reload and try again.', code: 'DRAFT_RESERVATION_INVALID' }, { status: 409 })
+        }
         if (result.kind === 'INACTIVE') {
           return NextResponse.json({ error: 'This activity is not currently active.', code: 'ACTIVITY_INACTIVE' }, { status: 409 })
+        }
+        if (!result.alreadyClaimed && result.consumedLocale) {
+          after(async () => {
+            await requestGameShareDraftPoolRefill(result.gameConfigId, [result.consumedLocale as GameShareLocale])
+          })
         }
         return NextResponse.json({
           success: true,

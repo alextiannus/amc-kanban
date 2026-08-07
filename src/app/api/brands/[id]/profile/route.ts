@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canOwnBrand, canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
@@ -9,6 +9,9 @@ import {
   parseDescriptionFromMarkdown,
   parseEditableBrandContextFromMarkdown,
 } from '@/lib/brandProfileMarkdown'
+import { requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
+
+export const maxDuration = 60
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -130,6 +133,13 @@ export async function PATCH(request: Request, { params }: Params) {
         orderingUrl: typeof knowledgeUpdate.orderingUrl === 'string' ? knowledgeUpdate.orderingUrl : '',
         stores: Array.isArray(knowledgeUpdate.stores) ? knowledgeUpdate.stores : [],
       },
+    })
+  }
+
+  if (brandUpdate.description !== undefined) {
+    after(async () => {
+      const gameConfig = await prisma.gameConfig.findUnique({ where: { brandId: id }, select: { id: true } })
+      if (gameConfig) await requestGameShareDraftPoolRefill(gameConfig.id)
     })
   }
 

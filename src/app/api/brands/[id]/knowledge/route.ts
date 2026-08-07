@@ -1,7 +1,10 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
+
+export const maxDuration = 60
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -190,6 +193,13 @@ export async function PATCH(request: Request, { params }: Params) {
       competitors: competitors || [],
     },
   })
+
+  if (menuItems !== undefined) {
+    after(async () => {
+      const gameConfig = await prisma.gameConfig.findUnique({ where: { brandId }, select: { id: true } })
+      if (gameConfig) await requestGameShareDraftPoolRefill(gameConfig.id)
+    })
+  }
 
   return NextResponse.json({ ok: true, ...serializeKnowledge(knowledge) })
 }
