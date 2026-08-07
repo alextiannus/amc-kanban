@@ -249,6 +249,7 @@ async function copyGrowthFactsToKanban(brandId: string, data: any, existingBrand
     if (primaryGoogle.businessUrl) brandUpdate.googleBusinessUrl = primaryGoogle.businessUrl
     if (primaryGoogle.reviewUrl) brandUpdate.googleReviewUrl = primaryGoogle.reviewUrl
     brandUpdate.googleLinksMeta = {
+      appReviewUrl: primaryGoogle.appReviewUrl || null,
       reviewsUrl: primaryGoogle.reviewsUrl || null,
       directionsUrl: primaryGoogle.directionsUrl || null,
       photosUrl: primaryGoogle.photosUrl || null,

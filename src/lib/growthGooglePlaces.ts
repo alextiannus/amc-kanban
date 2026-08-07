@@ -2,6 +2,7 @@ export type GrowthGoogleLinks = {
   place?: string | null
   reviews?: string | null
   write_review?: string | null
+  provider_write_review?: string | null
   directions?: string | null
   photos?: string | null
 }
@@ -45,6 +46,7 @@ export type KanbanGrowthStore = {
     placeId: string
     businessUrl?: string
     reviewUrl?: string
+    appReviewUrl?: string
     reviewsUrl?: string
     directionsUrl?: string
     photosUrl?: string
@@ -111,6 +113,7 @@ export function normalizeGrowthStores(locations: GrowthMerchantLocation[], now =
         placeId: google.place_id!,
         ...(google.links?.place ? { businessUrl: google.links.place } : {}),
         ...(reviewUrl ? { reviewUrl } : {}),
+        ...(google.links?.provider_write_review ? { appReviewUrl: google.links.provider_write_review } : {}),
         ...(google.links?.reviews ? { reviewsUrl: google.links.reviews } : {}),
         ...(google.links?.directions ? { directionsUrl: google.links.directions } : {}),
         ...(google.links?.photos ? { photosUrl: google.links.photos } : {}),

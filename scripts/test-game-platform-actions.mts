@@ -3,8 +3,10 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
-const [customerGameClient, modulePrd] = await Promise.all([
+const [customerGameClient, gameSettingsDashboard, gameConfigRoute, modulePrd] = await Promise.all([
   readFile(`${repoRoot}/src/app/game/[brandId]/CustomerGameClient.tsx`, 'utf8'),
+  readFile(`${repoRoot}/src/components/dashboard/GameSettingsDashboard.tsx`, 'utf8'),
+  readFile(`${repoRoot}/src/app/api/game/config/route.ts`, 'utf8'),
   readFile(`${repoRoot}/docs/prd-aivue.md`, 'utf8'),
 ])
 
@@ -47,9 +49,15 @@ assert.doesNotMatch(
   'Google review URLs must not be converted into Google Maps text-search queries',
 )
 assert.match(customerGameClient, /if \(!target\.appUrl\) \{[\s\S]*?window\.location\.assign\(target\.webUrl\)[\s\S]*?return/)
+assert.match(customerGameClient, /comgooglemapsurl:\/\//, 'iOS must pass the original Google Maps review URL to the app')
+assert.match(customerGameClient, /googleReviewAppUrl/, 'the customer game must consume the provider review action URL')
 assert.match(customerGameClient, /xhsdiscover:\/\//)
 assert.match(customerGameClient, /instagram:\/\//)
 assert.match(customerGameClient, /window\.setTimeout\(\(\) => \{[\s\S]*?\}, 900\)/)
+assert.match(gameSettingsDashboard, /Google Maps App 写评 URL/)
+assert.match(gameSettingsDashboard, /googleReviewAppUrl: googleReviewAppUrl\.trim\(\)/)
+assert.match(gameConfigRoute, /googleReviewAppUrlFromMeta/)
+assert.match(gameConfigRoute, /googleLinksMeta: undefined|const \{ googleLinksMeta, \.\.\.brand \}/, 'public game config must not expose complete Google metadata')
 
 assert.match(modulePrd, /Public (?:sharing|posting) is (?:optional|never required)/)
 assert.match(modulePrd, /Google Review input is hidden/)

@@ -133,6 +133,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   const [stickerTheme, setStickerTheme] = useState<'black' | 'blue' | 'green' | 'purple' | 'gold'>('black')
   const [googlePlaceId, setGooglePlaceId] = useState('')
   const [googleReviewUrl, setGoogleReviewUrl] = useState('')
+  const [googleReviewAppUrl, setGoogleReviewAppUrl] = useState('')
   const [googleBusinessUrl, setGoogleBusinessUrl] = useState('')
   const [redemptionCode, setRedemptionCode] = useState('')
   const [redemptionLoading, setRedemptionLoading] = useState(false)
@@ -169,6 +170,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       if (data.posterTheme) setStickerTheme(data.posterTheme)
       if (data.brand?.googlePlaceId) setGooglePlaceId(data.brand.googlePlaceId)
       if (data.brand?.googleReviewUrl) setGoogleReviewUrl(data.brand.googleReviewUrl)
+      if (data.brand?.googleReviewAppUrl) setGoogleReviewAppUrl(data.brand.googleReviewAppUrl)
       if (data.brand?.googleBusinessUrl) setGoogleBusinessUrl(data.brand.googleBusinessUrl)
 
     } catch (err: unknown) {
@@ -226,6 +228,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
         body: JSON.stringify({
           googlePlaceId: googlePlaceId.trim(),
           googleReviewUrl: googleReviewUrl.trim(),
+          googleReviewAppUrl: googleReviewAppUrl.trim(),
           googleBusinessUrl: googleBusinessUrl.trim(),
         }),
       })
@@ -620,7 +623,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
             {config.taskGoogleMapsEnabled && (
               <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Review URL</label>
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Review URL（Web 兜底）</label>
                   <input
                     type="url"
                     placeholder="https://search.google.com/local/writereview?placeid=..."
@@ -628,6 +631,17 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                     onChange={(e) => setGoogleReviewUrl(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
                   />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Maps App 写评 URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://www.google.com/maps/..."
+                    value={googleReviewAppUrl}
+                    onChange={(e) => setGoogleReviewAppUrl(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
+                  />
+                  <p className="text-[9px] text-slate-400">优先由 Growth 同步 Google Places 原始 writeAReviewUri；也可从 Growth 手工复制。</p>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">Google Place ID</label>

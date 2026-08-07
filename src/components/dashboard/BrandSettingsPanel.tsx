@@ -22,7 +22,8 @@ const GOOGLE_FIELDS: IntegrationField[] = [
   { key: 'googlePlaceId', label: 'Google Place ID', placeholder: 'ChIJ...', type: 'text', helpText: '在 Google Maps 中找到您的 Place ID' },
   { key: 'googleApiKey', label: 'Google API Key', placeholder: '••••••••', type: 'password', helpText: '启用 Places API + My Business API' },
   { key: 'googleBusinessUrl', label: 'Google 商家主页 URL', placeholder: 'https://maps.google.com/...', type: 'url', helpText: '扫码失败时回退到商家主页（建议配置）' },
-  { key: 'googleReviewUrl', label: 'Google 写评 URL', placeholder: 'https://search.google.com/local/writereview?placeid=...', type: 'url', helpText: '优先跳转链接；未配置时会按 Place ID 自动生成' },
+  { key: 'googleReviewUrl', label: 'Google 写评 URL（Web 兜底）', placeholder: 'https://search.google.com/local/writereview?placeid=...', type: 'url', helpText: 'Google Maps App 无法打开时使用；未配置时会按 Place ID 自动生成' },
+  { key: 'googleReviewAppUrl', label: 'Google Maps App 写评 URL', placeholder: 'https://www.google.com/maps/...', type: 'url', helpText: '优先使用 Growth 同步的 Google Places 原始 writeAReviewUri，也可从 Growth 手工复制' },
 ]
 
 
@@ -57,6 +58,7 @@ function buildInitialForm(initialSettings?: Record<string, unknown>): Record<str
       googleRedirectUri: '',
       googleBusinessUrl: '',
       googleReviewUrl: '',
+      googleReviewAppUrl: '',
     }
   }
 
@@ -69,6 +71,7 @@ function buildInitialForm(initialSettings?: Record<string, unknown>): Record<str
     googleRedirectUri: asText(initialSettings.googleRedirectUri),
     googleBusinessUrl: asText(initialSettings.googleBusinessUrl),
     googleReviewUrl: asText(initialSettings.googleReviewUrl),
+    googleReviewAppUrl: asText(initialSettings.googleReviewAppUrl),
   }
 }
 function StatusBadge({ ok }: { ok?: boolean }) {
@@ -107,7 +110,8 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
     : {}
   const growthGoogleLinks = [
     ['商家主页', asText(initialSettings?.googleBusinessUrl)],
-    ['写评价', asText(initialSettings?.googleReviewUrl)],
+    ['写评价（Web）', asText(initialSettings?.googleReviewUrl)],
+    ['写评价（Google Maps App）', asText(initialSettings?.googleReviewAppUrl)],
     ['查看评论', asText(googleLinksMeta.reviewsUrl)],
     ['路线', asText(googleLinksMeta.directionsUrl)],
     ['照片', asText(googleLinksMeta.photosUrl)],

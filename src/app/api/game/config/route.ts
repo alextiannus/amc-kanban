@@ -16,6 +16,24 @@ type GamePrizeInput = {
   imageUrl?: string | null
 }
 
+function googleReviewAppUrlFromMeta(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const appReviewUrl = (value as Record<string, unknown>).appReviewUrl
+  return typeof appReviewUrl === 'string' ? appReviewUrl : null
+}
+
+function exposeGoogleReviewAppUrl(config: any) {
+  if (!config?.brand) return config
+  const { googleLinksMeta, ...brand } = config.brand
+  return {
+    ...config,
+    brand: {
+      ...brand,
+      googleReviewAppUrl: googleReviewAppUrlFromMeta(googleLinksMeta),
+    },
+  }
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const brandId = url.searchParams.get('brandId')
@@ -49,6 +67,7 @@ export async function GET(request: Request) {
             googlePlaceId: true,
             googleBusinessUrl: true,
             googleReviewUrl: true,
+            googleLinksMeta: true,
             accounts: {
               select: {
                 platformId: true,
@@ -98,6 +117,7 @@ export async function GET(request: Request) {
               googlePlaceId: true,
               googleBusinessUrl: true,
               googleReviewUrl: true,
+              googleLinksMeta: true,
               accounts: {
                 select: {
                   platformId: true,
@@ -115,16 +135,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Game config not found' }, { status: 404 })
     }
 
-    // Security: Do not expose clerkPin on public API
+    const responseConfig = exposeGoogleReviewAppUrl(config)
+
+    // Security: Do not expose clerkPin or the complete Google metadata on public API
     if (isPublic) {
       const publicConfig = {
-        ...config,
+        ...responseConfig,
         clerkPin: undefined,
       }
       return NextResponse.json(publicConfig)
     }
 
-    return NextResponse.json(config)
+    return NextResponse.json(responseConfig)
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Internal Server Error'
     console.error('[GET /api/game/config]', e)

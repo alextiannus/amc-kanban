@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canOwnBrand } from '@/lib/brandAccess'
@@ -22,6 +23,15 @@ const GOOGLE_PLATFORM_ALIASES = [
 function maskKey(key: string | null) {
   if (!key) return null
   return `••••••${key.slice(-4)}`
+}
+
+function jsonObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? { ...value } : {}
+}
+
+function appReviewUrlFromMeta(value: unknown) {
+  const appReviewUrl = jsonObject(value).appReviewUrl
+  return typeof appReviewUrl === 'string' ? appReviewUrl : null
 }
 
 // GET /api/brands/[id]/settings
@@ -65,6 +75,7 @@ export async function GET(_req: Request, { params }: Params) {
     googleLocationId: brand.googleLocationId,
     googleBusinessUrl: brand.googleBusinessUrl,
     googleReviewUrl: brand.googleReviewUrl,
+    googleReviewAppUrl: appReviewUrlFromMeta(brand.googleLinksMeta),
     googleLinksMeta: brand.googleLinksMeta,
     googlePreferOAuth: brand.googlePreferOAuth,
     googleConfigured: !!(brand.googleRefreshToken || (brand.googlePlaceId && brand.googleApiKey)),
@@ -93,6 +104,16 @@ export async function PATCH(request: Request, { params }: Params) {
     return val === '' ? null : (val as string)
   }
 
+  const nextGoogleLinksMeta = body.googleReviewAppUrl !== undefined
+    ? (() => {
+        const value = jsonObject(brand.googleLinksMeta)
+        const appReviewUrl = opt(body.googleReviewAppUrl)
+        if (appReviewUrl) value.appReviewUrl = appReviewUrl
+        else delete value.appReviewUrl
+        return value as Prisma.InputJsonObject
+      })()
+    : undefined
+
   const updated = await prisma.brand.update({
     where: { id },
     data: {
@@ -114,6 +135,7 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(body.googleRedirectUri !== undefined && { googleRedirectUri: opt(body.googleRedirectUri) }),
       ...(body.googleBusinessUrl !== undefined && { googleBusinessUrl: opt(body.googleBusinessUrl) }),
       ...(body.googleReviewUrl !== undefined && { googleReviewUrl: opt(body.googleReviewUrl) }),
+      ...(nextGoogleLinksMeta !== undefined && { googleLinksMeta: nextGoogleLinksMeta }),
       ...(body.googlePreferOAuth !== undefined && { googlePreferOAuth: body.googlePreferOAuth }),
 
     },

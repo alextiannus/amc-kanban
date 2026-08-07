@@ -28,6 +28,7 @@ type GameConfig = {
     name?: string
     location?: string | null
     googleReviewUrl?: string | null
+    googleReviewAppUrl?: string | null
     googleBusinessUrl?: string | null
     accounts?: { platformId: string; profileUrl?: string | null; handle?: string | null }[]
   }
@@ -328,6 +329,24 @@ function platformUrl(config: GameConfig | null, platform: Platform): string | un
   return account?.profileUrl || undefined
 }
 
+function isIosDevice() {
+  if (typeof navigator === 'undefined') return false
+  return /iPad|iPhone|iPod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
+
+function iosGoogleMapsUrl(value: string) {
+  try {
+    const url = new URL(value)
+    const supportedHost = url.hostname === 'maps.google.com'
+      || (url.hostname === 'www.google.com' && url.pathname.startsWith('/maps/'))
+    if (!supportedHost || !['http:', 'https:'].includes(url.protocol)) return value
+    return `comgooglemapsurl://${url.host}${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return value
+  }
+}
+
 function getPlatformAccount(config: GameConfig | null, platform: Platform) {
   if (!config || platform === 'GOOGLE') return undefined
   return config.brand?.accounts?.find((item) => item.platformId.toLowerCase() === platform.toLowerCase())
@@ -352,8 +371,10 @@ function buildPlatformOpenTarget(config: GameConfig | null, platform: Platform):
   const webUrl = platformUrl(config, platform)
 
   if (platform === 'GOOGLE') {
-    const fallback = webUrl || 'https://www.google.com/maps'
+    const providerAppUrl = config?.brand?.googleReviewAppUrl?.trim() || undefined
+    const fallback = webUrl || providerAppUrl || 'https://www.google.com/maps'
     return {
+      ...(providerAppUrl ? { appUrl: isIosDevice() ? iosGoogleMapsUrl(providerAppUrl) : providerAppUrl } : {}),
       webUrl: fallback,
     }
   }
