@@ -202,6 +202,7 @@ export function buildBrandIntroFallbackDrafts(input: {
 export function buildGameSharePrompt(input: {
   brandName: string
   brandLocation: string | null
+  brandDescription: string | null
   menuNames: string[]
   locale: GameShareLocale
   experienceTags: ExperienceTag[]
@@ -222,7 +223,12 @@ SECURITY AND TRUTH RULES:
 - Return JSON only, exactly in this shape: ${JSON.stringify({ drafts: requestedDrafts })}
 
 PUBLIC BRAND FACTS:
-${JSON.stringify({ name: input.brandName, location: input.brandLocation, menuNames: input.menuNames.slice(0, 10) })}
+${JSON.stringify({
+  name: input.brandName,
+  location: input.brandLocation,
+  description: input.brandDescription?.slice(0, 500) || null,
+  menuNames: input.menuNames.slice(0, 10),
+})}
 
 CUSTOMER EXPERIENCE:
 ${JSON.stringify({ tags: input.experienceTags, detail: input.experienceNote })}`
@@ -231,6 +237,7 @@ ${JSON.stringify({ tags: input.experienceTags, detail: input.experienceNote })}`
 export function buildBrandIntroPrompt(input: {
   brandName: string
   brandLocation: string | null
+  brandDescription: string | null
   menuNames: string[]
   locale: GameShareLocale
   platforms: GameSharePlatform[]
@@ -249,7 +256,12 @@ SECURITY AND TRUTH RULES:
 - Return JSON only, exactly in this shape: ${JSON.stringify({ drafts: requestedDrafts })}
 
 PUBLIC BRAND FACTS:
-${JSON.stringify({ name: input.brandName, location: input.brandLocation, menuNames: input.menuNames.slice(0, 10) })}`
+${JSON.stringify({
+  name: input.brandName,
+  location: input.brandLocation,
+  description: input.brandDescription?.slice(0, 500) || null,
+  menuNames: input.menuNames.slice(0, 10),
+})}`
 }
 
 function trimHashtags(text: string, max: number): string {

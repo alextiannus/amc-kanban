@@ -52,6 +52,7 @@ async function getGameContext(brandId: string, publicSessionId: string) {
         select: {
           name: true,
           location: true,
+          description: true,
           timezone: true,
           knowledge: { select: { menuItems: true } },
           gameConfig: {
@@ -293,6 +294,7 @@ export async function POST(request: Request) {
           ? buildBrandIntroPrompt({
               brandName: context.brand.name,
               brandLocation: context.brand.location,
+              brandDescription: context.brand.description,
               menuNames: menuNames(context.brand.knowledge?.menuItems),
               locale: normalized.locale,
               platforms,
@@ -300,6 +302,7 @@ export async function POST(request: Request) {
           : buildGameSharePrompt({
               brandName: context.brand.name,
               brandLocation: context.brand.location,
+              brandDescription: context.brand.description,
               menuNames: menuNames(context.brand.knowledge?.menuItems),
               locale: normalized.locale,
               experienceTags: normalized.experienceTags,

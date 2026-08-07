@@ -47,7 +47,7 @@ assert.match(customerGameClient, /instagram:\/\//)
 assert.match(customerGameClient, /window\.setTimeout\(\(\) => \{[\s\S]*?\}, 900\)/)
 
 assert.match(modulePrd, /Public (?:sharing|posting) is (?:optional|never required)/)
-assert.match(modulePrd, /automatically generates the Google version/)
+assert.match(modulePrd, /Google Review input is hidden/)
 assert.match(modulePrd, /brandId.*sessionStorage/)
 
 console.log('Customer game platform action-card contract passed.')

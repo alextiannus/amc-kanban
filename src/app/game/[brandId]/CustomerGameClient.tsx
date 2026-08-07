@@ -129,11 +129,6 @@ const copy = {
     xiaohongshu: 'Xiaohongshu',
     instagram: 'Instagram',
     noPrize: 'No prize',
-    experienceLabel: 'One real detail for your Google Review',
-    feedbackExperienceLabel: 'One real detail about your visit',
-    experiencePlaceholder: 'For example: what you genuinely enjoyed or what could be improved',
-    experienceHelp: 'Your Google draft is generated automatically after you stop typing.',
-    feedbackExperienceHelp: 'Store staff can confirm this private feedback for points.',
     generatingGoogle: 'Creating your Google Review draft...',
     generatingSocial: 'Preparing platform drafts from the merchant’s published information...',
     generationsLeft: (count: number) => `${count} AI generation${count === 1 ? '' : 's'} left today`,
@@ -196,11 +191,6 @@ const copy = {
     xiaohongshu: '小红书',
     instagram: 'Instagram',
     noPrize: '谢谢参与',
-    experienceLabel: '写一句用于 Google Review 的真实体验',
-    feedbackExperienceLabel: '写一句真实到店体验',
-    experiencePlaceholder: '例如：你真实喜欢的地方，或希望改进的地方',
-    experienceHelp: '停止输入后会自动生成 Google Review 草稿。',
-    feedbackExperienceHelp: '这条站内体验可由店员确认并领取积分。',
     generatingGoogle: '正在生成 Google Review 草稿…',
     generatingSocial: '正在根据商家公开资料准备各平台草稿…',
     generationsLeft: (count: number) => `今日还可生成 ${count} 次`,
@@ -223,6 +213,10 @@ const copy = {
 function detectLocale(): Locale {
   if (typeof window === 'undefined') return 'en'
   return window.navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
+function defaultExperienceNote(locale: Locale): string {
+  return locale === 'zh' ? '这个商家不错' : 'This business is good.'
 }
 
 function getSessionId(brandId: string): string {
@@ -790,6 +784,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     const initializeTimer = window.setTimeout(() => {
       setLocale(detectedLocale)
       setSessionId(id)
+      setExperienceNote(defaultExperienceNote(detectedLocale))
     }, 0)
 
     async function load() {
@@ -817,8 +812,11 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             setShareDraftId(draftData.draftId)
             setShareSource(draftData.source)
             setGenerationsRemaining(draftData.generationsRemaining)
-            setExperienceNote(draftData.experienceNote || '')
-            setLastGeneratedExperienceNote(draftData.drafts.GOOGLE ? (draftData.experienceNote || '') : '')
+            const defaultNote = defaultExperienceNote(detectedLocale)
+            setExperienceNote(defaultNote)
+            setLastGeneratedExperienceNote(
+              draftData.drafts.GOOGLE && draftData.experienceNote === defaultNote ? defaultNote : '',
+            )
 
             const localEdits = parseDraftEdits(window.sessionStorage.getItem(draftEditsStorageKey(brandId)))
             setShareDrafts(localEdits?.draftId === draftData.draftId ? { ...draftData.drafts, ...localEdits.drafts } : draftData.drafts)
@@ -938,21 +936,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     }, 800)
     return () => window.clearTimeout(timer)
   }, [config?.taskGoogleMapsEnabled, experienceNote, generatingMode, generationsRemaining, lastGeneratedExperienceNote, locale, requestShareDrafts, sessionId])
-
-  function updateExperienceNote(value: string) {
-    const nextValue = value.slice(0, 240)
-    setExperienceNote(nextValue)
-    if (nextValue.trim() === lastGeneratedExperienceNote) return
-    setShareDrafts((currentDrafts) => {
-      if (!currentDrafts.GOOGLE) return currentDrafts
-      const nextDrafts = { ...currentDrafts }
-      delete nextDrafts.GOOGLE
-      if (shareDraftId) {
-        window.sessionStorage.setItem(draftEditsStorageKey(brandId), JSON.stringify({ draftId: shareDraftId, drafts: nextDrafts }))
-      }
-      return nextDrafts
-    })
-  }
 
   function updateDraft(platform: Platform, value: string) {
     const nextDrafts = { ...shareDrafts, [platform]: value }
@@ -1140,25 +1123,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             <div className="rounded-2xl bg-white p-4 shadow-sm">
               <p className="text-xs font-black text-slate-800">{t.optionalSharing}</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">{t.optionalSharingBody}</p>
-
-              <label className="mt-4 block text-xs font-black text-slate-800" htmlFor="experience-note">
-                {activePlatforms.includes('GOOGLE') ? t.experienceLabel : t.feedbackExperienceLabel}
-              </label>
-              <textarea
-                id="experience-note"
-                value={experienceNote}
-                onChange={(event) => updateExperienceNote(event.target.value)}
-                maxLength={240}
-                rows={3}
-                placeholder={t.experiencePlaceholder}
-                className="mt-2 w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-5 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              />
-              <div className="mt-1 flex items-start justify-between gap-3">
-                <span className="text-[11px] font-semibold leading-4 text-slate-500">
-                  {activePlatforms.includes('GOOGLE') ? t.experienceHelp : t.feedbackExperienceHelp}
-                </span>
-                <span className="shrink-0 text-[11px] font-bold text-slate-400">{experienceNote.length}/240</span>
-              </div>
 
               {generatingMode && (
                 <p role="status" aria-live="polite" className="mt-3 rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold leading-5 text-blue-700">

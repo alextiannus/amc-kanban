@@ -2,11 +2,11 @@
 
 ## 1. Executive Summary & Goals
 
-The AMC Interactive Lucky Wheel Game (AI-Vue) is an on-the-spot customer engagement widget. It follows the browser language and automatically prepares editable social sharing drafts. Xiaohongshu and Instagram receive neutral brand-introduction drafts from published merchant facts; Google Review is generated only after the customer writes one genuine visit detail. Public posting is never required for points or prizes.
+The AMC Interactive Lucky Wheel Game (AI-Vue) is an on-the-spot customer engagement widget. It follows the browser language and automatically prepares editable sharing drafts. The customer input is hidden: Google starts from a localized internal seed (Chinese: `这个商家不错`; English: `This business is good.`), while all platform versions are expanded with the brand name, description, location, and published menu facts. Public posting is never required for points or prizes.
 
 ### Key Objectives:
-- **Genuine Visit Feedback**: Collect one brief customer-written visit detail without requiring tags or public posting.
-- **Automatic Sharing Assistant**: Prepare social brand-introduction drafts on entry and turn the customer-written detail into an editable Google Review draft without a generate button.
+- **Hidden Default Seed**: Do not show experience tags or a Google input field; initialize a localized default sentence automatically.
+- **Automatic Sharing Assistant**: Prepare social brand-introduction drafts and expand the default Google seed with published merchant facts without a generate button.
 - **Zero Friction**: Eliminate login barriers. Customer participation is session-based and instantaneous.
 - **Clerk-Oriented Controls**: Simplify task validation and prize claiming with a direct 6-digit PIN entry on the customer's device.
 
@@ -21,8 +21,8 @@ graph TD
     A[Scan QR Code in Store] --> B[Enter Game Homepage]
     B --> C[Use Browser Language]
     B --> D[Auto-generate Xiaohongshu and Instagram Brand Drafts]
-    B --> E[Customer Writes One Genuine Visit Detail]
-    E --> F[Auto-generate Google Review Draft]
+    B --> E[Use Hidden Localized Default Seed]
+    E --> F[Auto-generate Google Review With Brand Facts]
     E --> G[Submit On-page Feedback]
     G --> H[Clerk Enters PIN]
     H --> I[Receive +5 Points Once Per Business Day]
@@ -35,13 +35,13 @@ graph TD
     N --> O[Show Clerk to Claim Reward]
 ```
 
-- **UI Details**: Mobile-first white cards on a neutral background, with a merchant-colored header and game accents. The wheel/grid, feedback input, platform drafts, PIN confirmation, and prize pool remain readable at a 390 px viewport without horizontal scrolling.
+- **UI Details**: Mobile-first white cards on a neutral background, with a merchant-colored header and game accents. The wheel/grid, platform drafts, PIN confirmation, and prize pool remain readable at a 390 px viewport without horizontal scrolling.
 - **Automatic Locale**: Draft language follows the browser/page locale. The customer page has no separate language selector.
 - **Automatic Social Drafts**: On the first visit of the business day, enabled Xiaohongshu and Instagram cards are populated automatically from published merchant facts. These drafts use neutral brand-introduction wording and must not claim the customer visited, purchased, or recommends the business.
-- **Google Experience Input**: There are no experience tags. Google Review requires one customer-written real detail of at most 240 characters; after a short typing pause the page automatically generates the Google version. The same detail enables the independent clerk-confirmed feedback reward.
+- **Google Hidden Seed**: Google Review input is hidden. The page supplies `这个商家不错` for Chinese browsers or `This business is good.` for other browsers and automatically expands it with the merchant's published brand name, description, location, and menu facts. The draft remains editable and continues to show the accuracy reminder before copying.
 - **Editable Platform Drafts**: Each version remains editable before a full-width “Copy and open” action. Google drafts contain no hashtags, requested rating, or promotional reward language; social drafts use at most five relevant hashtags.
 - **Return Continuity**: Server-generated drafts can be restored after refresh. Customer edits and the opened platform are stored in `brandId`-scoped `sessionStorage`; customer edits are not written back to the server.
-- **Accessibility and Failure Handling**: The experience input, automatic-generation status, editors, and platform actions provide bilingual labels, ARIA live status, visible keyboard focus, and touch feedback. Clipboard failure keeps the customer on the page and exposes manual-copy guidance instead of navigating away.
+- **Accessibility and Failure Handling**: The automatic-generation status, editors, and platform actions provide bilingual labels, ARIA live status, visible keyboard focus, and touch feedback. Clipboard failure keeps the customer on the page and exposes manual-copy guidance instead of navigating away.
 
 ### 2.2 Merchant Dashboard & Table Tent QR Poster
 
@@ -62,15 +62,15 @@ graph TD
 - Points, feedback tasks, AI share drafts, and spin logs are bound to the `sessionId` + `brandId`.
 - Session is transient. Clearing browser cache deletes points and uncollected prizes.
 
-### 3.2 Genuine Feedback Points Task
-- The customer submits the one genuine experience detail. The client maps it to the compatibility tag `OTHER`; the task type is `EXPERIENCE_FEEDBACK` and starts as `PENDING`.
+### 3.2 Feedback Points Task
+- The customer submits the localized default sentence. The client maps it to the compatibility tag `OTHER`; the task type is `EXPERIENCE_FEEDBACK` and starts as `PENDING`.
 - A valid clerk PIN changes the task to `APPROVED` and grants exactly 5 points. The same game session can receive this reward only once per brand business day.
 - Cached clients may still submit `REVIEW_SUBMIT`; the server normalizes it to the same once-per-day feedback reward and ignores `reviewPlatform` when determining eligibility.
 - `/api/game/status` returns the current business day's feedback task so pending PIN and already-awarded states survive refresh.
 
 ### 3.3 AI Sharing Drafts & Abuse Protection
 - The public draft endpoint validates an existing game session, enabled platforms, browser locale, draft mode, and the 240-character detail limit.
-- `BRAND_INTRO` mode returns only enabled Xiaohongshu/Instagram drafts from published merchant facts and explicitly forbids fabricated customer experience. `EXPERIENCE` mode requires the real customer detail and may return Google plus enabled social versions. Invalid output or unavailable AI falls back to deterministic editable templates.
+- `BRAND_INTRO` mode returns only enabled Xiaohongshu/Instagram drafts from published merchant facts. `EXPERIENCE` mode receives the client-provided localized default sentence and returns Google plus enabled social versions using the brand name, description, location, and menu facts. Invalid output or unavailable AI falls back to deterministic editable templates.
 - Google output must remain neutral and must never request a rating or mention incentives, discounts, free goods, or rewards. This follows the [Google Maps policy on incentivized reviews](https://support.google.com/contributionpolicy/answer/16597558?hl=en) and [Google Maps contributed-content policy](https://support.google.com/contributionpolicy/answer/7400114?hl=en-GB).
 - Limits are three generation attempts per session/business day, 60 AI calls per HMAC-anonymized IP/business day, and 300 AI calls per brand/business day. Quota reservation is atomic; raw IP addresses are never stored.
 - Reaching the session limit returns the latest draft without another model call. IP/brand limits or model failure return a template fallback so the customer never reaches a dead end.

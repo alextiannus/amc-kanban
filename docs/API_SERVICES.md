@@ -370,7 +370,7 @@ Permanent QR contract:
 - `POST /api/game/tasks`
 - `POST /api/game/tasks/override`
 
-`POST /api/game/share-drafts` 接收 `brandId`、`sessionId`、浏览器 `locale` 与 `mode`。`BRAND_INTRO` 无需体验输入，只为启用的小红书/Instagram 生成基于商家公开资料的中性品牌介绍；`EXPERIENCE` 需提交 `experienceTags[]` 和最长 240 字的真实 `experienceNote`，才允许生成 Google Review。响应返回 `draftId`、按实际生成平台组织的 `drafts`、`source`、生成次数/剩余额度、可选 `limitReason` 与 `generatedAt`。`GET` 使用 `brandId`、`sessionId` 查询当日最新草稿；无草稿时返回字段稳定的空结果。
+`POST /api/game/share-drafts` 接收 `brandId`、`sessionId`、浏览器 `locale` 与 `mode`。`BRAND_INTRO` 无需体验输入，只为启用的小红书/Instagram 生成基于商家公开资料的中性品牌介绍；`EXPERIENCE` 接收客户端按浏览器语言提供的默认 `experienceNote`（中文“这个商家不错”，英文 `This business is good.`），结合品牌名称、品牌介绍、门店地点和公开菜单信息生成 Google Review 及已启用平台版本。响应返回 `draftId`、按实际生成平台组织的 `drafts`、`source`、生成次数/剩余额度、可选 `limitReason` 与 `generatedAt`。`GET` 使用 `brandId`、`sessionId` 查询当日最新草稿；无草稿时返回字段稳定的空结果。
 
 `POST /api/game/tasks` 接受 `EXPERIENCE_FEEDBACK` 及兼容输入 `REVIEW_SUBMIT`；公开分享平台不参与奖励判断。`GET /api/game/status` 额外返回 `todayFeedbackSubmission`，其他既有响应字段保持兼容。
 
